@@ -7,8 +7,8 @@ CREATE TABLE "clubs" (
     "name" TEXT NOT NULL,
     "address" TEXT NOT NULL,
     "timezone" TEXT NOT NULL DEFAULT 'Europe/Paris',
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "clubs_pkey" PRIMARY KEY ("id")
 );
 
@@ -22,8 +22,8 @@ CREATE TABLE "courts" (
     "price_per_hour" DECIMAL(10,2) NOT NULL,
     "open_hour" INTEGER NOT NULL DEFAULT 8,
     "close_hour" INTEGER NOT NULL DEFAULT 22,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "courts_pkey" PRIMARY KEY ("id")
 );
 
@@ -35,8 +35,8 @@ CREATE TABLE "users" (
     "first_name" TEXT NOT NULL,
     "last_name" TEXT NOT NULL,
     "phone" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
@@ -50,9 +50,9 @@ CREATE TABLE "reservations" (
     "status" "ReservationStatus" NOT NULL DEFAULT 'PENDING',
     "total_price" DECIMAL(10,2) NOT NULL,
     "notes" TEXT,
-    "cancelled_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "cancelled_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "reservations_pkey" PRIMARY KEY ("id")
 );
 
