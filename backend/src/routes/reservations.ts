@@ -1,0 +1,61 @@
+import { Router, Response, NextFunction } from 'express';
+import { ReservationService } from '../services/reservation.service';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+const reservationService = new ReservationService();
+
+const ERROR_STATUS: Record<string, number> = {
+  SLOT_ALREADY_HELD:        409,
+  SLOT_NOT_AVAILABLE:       409,
+  RESERVATION_NOT_FOUND:    404,
+  RESERVATION_NOT_PENDING:  409,
+  SLOT_NO_LONGER_AVAILABLE: 409,
+  UNAUTHORIZED:             403,
+  ALREADY_CANCELLED:        409,
+};
+
+/** Normalize a route param value to a plain string. */
+function asString(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
+  return '';
+}
+
+const handleError = (err: unknown, res: Response, next: NextFunction) => {
+  const message = (err as Error).message;
+  const status  = ERROR_STATUS[message];
+  if (status) return void res.status(status).json({ error: message });
+  next(err);
+};
+
+router.post('/hold', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courtId, startTime, endTime } = req.body;
+    if (!courtId || !startTime || !endTime) {
+      return void res.status(400).json({ error: 'courtId, startTime, endTime requis' });
+    }
+    const reservation = await reservationService.holdSlot({
+      courtId, userId: req.user!.id,
+      startTime: new Date(startTime),
+      endTime:   new Date(endTime),
+    });
+    res.status(201).json(reservation);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const confirmed = await reservationService.confirmReservation(asString(req.params.id), req.user!.id);
+    res.json(confirmed);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const cancelled = await reservationService.cancelReservation(asString(req.params.id), req.user!.id);
+    res.json(cancelled);
+  } catch (err) { handleError(err, res, next); }
+});
+
+export default router;
