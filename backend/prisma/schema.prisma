@@ -6,6 +6,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  CLIENT
+  CLUB_ADMIN
+}
+
 model Club {
   id        String   @id @default(cuid())
   name      String
@@ -15,6 +20,7 @@ model Club {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   courts Court[]
+  users  User[]
 
   @@map("clubs")
 }
@@ -45,11 +51,15 @@ model User {
   firstName String   @map("first_name")
   lastName  String   @map("last_name")
   phone     String?
+  role      Role     @default(CLIENT)
+  clubId    String?  @map("club_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  club         Club?         @relation(fields: [clubId], references: [id], onDelete: SetNull)
   reservations Reservation[]
 
+  @@index([clubId])
   @@map("users")
 }
 

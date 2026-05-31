@@ -29,12 +29,15 @@ async function main() {
   const hashedPassword = await bcrypt.hash('password123', 10);
   await prisma.user.upsert({
     where: { email: 'test@padelconnect.fr' },
-    update: {},
+    // update corrige aussi les bases déjà seedées avant l'ajout du rôle.
+    update: { role: 'CLUB_ADMIN', clubId: club.id },
     create: {
       email: 'test@padelconnect.fr',
       password: hashedPassword,
       firstName: 'Jean',
       lastName: 'Dupont',
+      role: 'CLUB_ADMIN',
+      clubId: club.id,
     },
   });
 

@@ -138,4 +138,86 @@ describe('ReservationService', () => {
       await expect(service.cancelReservation('res-99', 'user-1')).rejects.toThrow('RESERVATION_NOT_FOUND');
     });
   });
+
+  describe('adminCancelReservation', () => {
+    it('annule une résa d un AUTRE user du même club + redis.del + broadcast slot_released', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', courtId: 'court-1', userId: 'autre-user', status: 'CONFIRMED',
+        startTime: baseParams.startTime, endTime: baseParams.endTime,
+        court: { clubId: 'club-demo' },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', status: 'CANCELLED', courtId: 'court-1',
+        startTime: baseParams.startTime, endTime: baseParams.endTime,
+      } as any);
+      redisMock.del.mockResolvedValue(1);
+
+      await service.adminCancelReservation('res-1', 'club-demo');
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith({
+        where: { id: 'res-1' },
+        data: { status: 'CANCELLED', cancelledAt: expect.any(Date) },
+      });
+      expect(redisMock.del).toHaveBeenCalled();
+      expect(sseBroadcast()).toHaveBeenCalledWith(
+        'court-1', expect.objectContaining({ type: 'slot_released' }),
+      );
+    });
+
+    it('lève CLUB_MISMATCH si la résa appartient à un autre club', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', courtId: 'court-1', status: 'CONFIRMED', court: { clubId: 'autre-club' },
+      } as any);
+
+      await expect(service.adminCancelReservation('res-1', 'club-demo')).rejects.toThrow('CLUB_MISMATCH');
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('lève ALREADY_CANCELLED si déjà annulée', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', status: 'CANCELLED', court: { clubId: 'club-demo' },
+      } as any);
+
+      await expect(service.adminCancelReservation('res-1', 'club-demo')).rejects.toThrow('ALREADY_CANCELLED');
+    });
+
+    it('lève RESERVATION_NOT_FOUND si inexistante', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(null);
+
+      await expect(service.adminCancelReservation('res-x', 'club-demo')).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+  });
+
+  describe('listClubReservations', () => {
+    it('filtre par club/terrain/statut et calcule le résumé (total + payé)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        { id: 'r1', status: 'CONFIRMED', totalPrice: 25 },
+        { id: 'r2', status: 'PENDING',   totalPrice: 37.5 },
+        { id: 'r3', status: 'CANCELLED', totalPrice: 20 },
+      ] as any);
+
+      const result = await service.listClubReservations({
+        clubId: 'club-demo', courtId: 'court-1', status: 'CONFIRMED',
+      });
+
+      expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          court: { clubId: 'club-demo' }, courtId: 'court-1', status: 'CONFIRMED',
+        }),
+      }));
+      // total = 25 + 37.5 + 20 ; payé = CONFIRMED uniquement
+      expect(result.summary.total).toBe('82.50');
+      expect(result.summary.paidTotal).toBe('25.00');
+    });
+
+    it('applique le filtre de jour quand date est fournie', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([] as any);
+
+      await service.listClubReservations({ clubId: 'club-demo', date: '2026-06-01' });
+
+      const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      expect(arg.where.startTime).toBeDefined();
+      expect(arg.where.endTime).toBeDefined();
+    });
+  });
 });
