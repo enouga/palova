@@ -9,6 +9,8 @@ import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
 import { TopBar, Chip, LiveDot, Placeholder, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { courtType, courtFormat } from '@/lib/courtType';
+import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -38,7 +40,7 @@ function CourtBooking() {
   const [token, setToken]               = useState<string | null>(null);
   const [resource, setResource]         = useState<PublicResource | null>(null);
   const [date, setDate]                 = useState(todayISO());
-  const [duration, setDuration]         = useState<60 | 90 | 120>(60);
+  const [duration, setDuration]         = useState<number>(90);
   const [slots, setSlots]               = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [showModal, setShowModal]       = useState(false);
@@ -60,7 +62,17 @@ function CourtBooking() {
     api.getResource(resourceId).then(setResource).catch(() => setResource(null));
   }, [resourceId]);
 
-  const loadSlots = useCallback(async (d: string, dur: 60 | 90 | 120) => {
+  const durations = resource
+    ? effectiveDurations(resource.clubSport.durationsMin, resource.clubSport.sport.defaultDurationsMin)
+    : [90];
+
+  // À l'arrivée de la ressource, caler la durée sur celles proposées (défaut 1h30).
+  useEffect(() => {
+    if (resource && !durations.includes(duration)) setDuration(defaultDuration(durations));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource]);
+
+  const loadSlots = useCallback(async (d: string, dur: number) => {
     if (!resourceId) return;
     setLoading(true);
     setSelectedSlot(null);
@@ -87,8 +99,8 @@ function CourtBooking() {
   useCourtSSE(resourceId || null, handleSSE);
 
   const freeCount = slots.filter((s) => s.available).length;
-  const indoor = resource ? resource.attributes?.surface !== 'outdoor' : true;
-  const format = typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined;
+  const ct = courtType(typeof resource?.attributes?.surface === 'string' ? resource.attributes.surface : undefined);
+  const isSingle = courtFormat(typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined);
   const backTo = resource?.club.slug ? `/c/${resource.club.slug}` : '/clubs';
 
   return (
@@ -99,8 +111,8 @@ function CourtBooking() {
           onBack={() => router.push(backTo)}
           right={resource ? (
             <div style={{ display: 'flex', gap: 6 }}>
-              <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip>
-              {format && <Chip tone="line">{format === 'single' ? 'Single' : 'Double'}</Chip>}
+              <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>
+              {isSingle && <Chip tone="line">Single</Chip>}
             </div>
           ) : undefined}
         />
@@ -139,8 +151,8 @@ function CourtBooking() {
         </div>
 
         <div style={{ padding: '16px 16px 0' }}>
-          <Segmented<60 | 90 | 120> value={duration} onChange={setDuration}
-            options={[{ value: 60, label: '1 h' }, { value: 90, label: '1 h 30' }, { value: 120, label: '2 h' }]} />
+          <Segmented<number> value={duration} onChange={setDuration}
+            options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 12px' }}>

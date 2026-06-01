@@ -63,6 +63,21 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
   } catch (err) { handleError(err, res, next); }
 });
 
+// Abonnement d'un joueur à un club (accès anticipé).
+router.post('/:clubId/subscribe', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await clubService.subscribe(req.user!.id, asString(req.params.clubId));
+    res.status(201).json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/:clubId/subscribe', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await clubService.unsubscribe(req.user!.id, asString(req.params.clubId));
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Détail public d'un club par slug.
 router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {

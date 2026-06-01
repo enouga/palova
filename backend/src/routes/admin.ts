@@ -20,6 +20,7 @@ const ERROR_STATUS: Record<string, number> = {
   CLUB_MISMATCH:         403,
   RESERVATION_NOT_FOUND: 404,
   ALREADY_CANCELLED:     409,
+  USER_NOT_FOUND:        404,
 };
 
 function asString(v: unknown): string {
@@ -73,6 +74,15 @@ router.post('/sports', async (req: ClubScopedRequest, res: Response, next: NextF
   } catch (err) { handleError(err, res, next); }
 });
 
+// Durées proposées pour un sport du club.
+router.patch('/sports/:clubSportId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!Array.isArray(req.body.durationsMin)) return void res.status(400).json({ error: 'durationsMin (number[]) requis' });
+    const cs = await clubService.updateClubSport(asString(req.params.clubSportId), req.membership!.clubId, req.body.durationsMin.map(Number));
+    res.json(cs);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // --- Ressources ---
 
 router.get('/resources', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
@@ -111,6 +121,29 @@ router.patch('/resources/:id/active', async (req: ClubScopedRequest, res: Respon
       asString(req.params.id), req.membership!.clubId, req.body.isActive,
     );
     res.json(resource);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- Abonnés ---
+
+router.get('/subscribers', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await clubService.listSubscribers(req.membership!.clubId));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/subscribers', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.body.email) return void res.status(400).json({ error: 'email requis' });
+    const sub = await clubService.addSubscriberByEmail(req.membership!.clubId, req.body.email);
+    res.status(201).json(sub);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/subscribers/:userId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await clubService.removeSubscriber(req.membership!.clubId, asString(req.params.userId));
+    res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
 });
 

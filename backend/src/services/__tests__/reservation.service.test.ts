@@ -31,7 +31,7 @@ describe('ReservationService', () => {
     it('crée une PENDING reservation si le lock Redis est libre et le créneau disponible', async () => {
       redisMock.set.mockResolvedValue('OK');
       prismaMock.reservation.count.mockResolvedValue(0);
-      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25 } as any);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
       prismaMock.reservation.create.mockResolvedValue({
         id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 25,
         createdAt: new Date(),
@@ -60,6 +60,7 @@ describe('ReservationService', () => {
 
     it('lève SLOT_NOT_AVAILABLE et supprime le lock si conflit DB', async () => {
       redisMock.set.mockResolvedValue('OK');
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
       prismaMock.reservation.count.mockResolvedValue(1);
 
       await expect(service.holdSlot(baseParams)).rejects.toThrow('SLOT_NOT_AVAILABLE');
@@ -68,10 +69,22 @@ describe('ReservationService', () => {
       );
     });
 
+    it('lève BOOKING_TOO_FAR si la date dépasse la fenêtre publique', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.clubSubscriber.findUnique.mockResolvedValue(null as any);
+
+      const far = new Date(Date.now() + 60 * 24 * 3600 * 1000); // +60 jours
+      await expect(service.holdSlot({
+        resourceId: 'court-1', userId: 'user-1', startTime: far, endTime: new Date(far.getTime() + 3_600_000),
+      })).rejects.toThrow('BOOKING_TOO_FAR');
+      expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+    });
+
     it('broadcast slot_held après création réussie', async () => {
       redisMock.set.mockResolvedValue('OK');
       prismaMock.reservation.count.mockResolvedValue(0);
-      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25 } as any);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
       prismaMock.reservation.create.mockResolvedValue({
         id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 25,
         createdAt: new Date(),

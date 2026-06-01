@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, CSSProperties } from 'react';
 import { api, AdminResource, AdminClubSport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { SURFACE_TYPES, COURT_FORMATS } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 
 const STEP_OPTIONS = [15, 30, 45, 60, 90, 120];
@@ -108,7 +109,7 @@ export default function AdminResourcesPage() {
                     <div style={{ fontWeight: 600 }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: th.textFaint }}>
                       {typeof r.attributes?.surface === 'string' ? r.attributes.surface : '—'}
-                      {r.attributes?.format === 'single' ? ' · single' : r.attributes?.format === 'double' ? ' · double' : ''}
+                      {r.attributes?.format === 'single' ? ' · single' : ''}
                     </div>
                   </td>
                   <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
@@ -150,14 +151,12 @@ export default function AdminResourcesPage() {
           </label>
           <label style={label}>Surface
             <select value={nr.surface} onChange={(e) => setNr({ ...nr, surface: e.target.value })} style={input}>
-              <option value="indoor">indoor</option>
-              <option value="outdoor">outdoor</option>
+              {SURFACE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </label>
           <label style={label}>Format
             <select value={nr.format} onChange={(e) => setNr({ ...nr, format: e.target.value })} style={input}>
-              <option value="double">Double</option>
-              <option value="single">Single</option>
+              {COURT_FORMATS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </label>
           <label style={label}>Tarif €/h

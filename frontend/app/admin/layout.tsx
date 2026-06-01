@@ -33,6 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/courts',       label: 'Ressources',      icon: 'indoor' as const },
     { href: '/admin/sports',       label: 'Sports',          icon: 'bolt' as const },
     { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },
+    { href: '/admin/subscribers',  label: 'Abonnés',         icon: 'users' as const },
     { href: '/admin/settings',     label: 'Réglages',        icon: 'settings' as const },
   ];
 

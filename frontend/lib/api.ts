@@ -52,6 +52,14 @@ export const api = {
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
+  getMySubscriptions: (token: string) => request<string[]>('/api/me/subscriptions', {}, token),
+
+  subscribeClub: (clubId: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/subscribe`, { method: 'POST' }, token),
+
+  unsubscribeClub: (clubId: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/subscribe`, { method: 'DELETE' }, token),
+
   createClub: (body: CreateClubBody, token: string) =>
     request<ClubAdminDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -69,6 +77,15 @@ export const api = {
   adminGetClub: (clubId: string, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, {}, token),
 
+  adminGetSubscribers: (clubId: string, token: string) =>
+    request<Subscriber[]>(`/api/clubs/${clubId}/admin/subscribers`, {}, token),
+
+  adminAddSubscriber: (clubId: string, email: string, token: string) =>
+    request<Subscriber>(`/api/clubs/${clubId}/admin/subscribers`, { method: 'POST', body: JSON.stringify({ email }) }, token),
+
+  adminRemoveSubscriber: (clubId: string, userId: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/subscribers/${userId}`, { method: 'DELETE' }, token),
+
   adminUpdateClub: (clubId: string, body: UpdateClubBody, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, { method: 'PATCH', body: JSON.stringify(body) }, token),
 
@@ -77,6 +94,9 @@ export const api = {
 
   adminAddSport: (clubId: string, sportId: string, token: string) =>
     request<AdminClubSport>(`/api/clubs/${clubId}/admin/sports`, { method: 'POST', body: JSON.stringify({ sportId }) }, token),
+
+  adminUpdateClubSport: (clubId: string, clubSportId: string, durationsMin: number[], token: string) =>
+    request<AdminClubSport>(`/api/clubs/${clubId}/admin/sports/${clubSportId}`, { method: 'PATCH', body: JSON.stringify({ durationsMin }) }, token),
 
   adminGetResources: (clubId: string, token: string) =>
     request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources`, {}, token),
@@ -176,7 +196,17 @@ export interface ClubDetail {
   accentColor: string;
   defaultThemeMode: string;
   status: string;
+  publicBookingDays: number;
+  memberBookingDays: number;
   clubSports: ClubSportPublic[];
+}
+
+export interface Subscriber {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  since?: string;
 }
 
 export interface PublicResource {
@@ -259,6 +289,8 @@ export interface ClubAdminDetail {
   accentColor: string;
   defaultThemeMode: string;
   status: string;
+  publicBookingDays: number;
+  memberBookingDays: number;
 }
 
 export type UpdateClubBody = Partial<{
@@ -270,6 +302,8 @@ export type UpdateClubBody = Partial<{
   logoUrl: string;
   accentColor: string;
   defaultThemeMode: string;
+  publicBookingDays: number;
+  memberBookingDays: number;
 }>;
 
 // --- Types back-office ---
@@ -278,7 +312,7 @@ export interface AdminClubSport {
   id: string;
   slotStepMin: number | null;
   durationsMin: number[];
-  sport: { id: string; key: string; name: string; resourceNoun: string };
+  sport: { id: string; key: string; name: string; resourceNoun: string; defaultDurationsMin: number[] };
 }
 
 export interface AdminResource {

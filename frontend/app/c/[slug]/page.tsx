@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot } from '@/lib/api';
 import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { ThemeMode } from '@/lib/theme';
+import { courtType, courtFormat } from '@/lib/courtType';
+import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
 import { Chip, LiveDot, Placeholder, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -33,17 +35,36 @@ function formatHour(iso: string, tz: string): string {
 function ClubContent({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const router = useRouter();
+  const allDurations = Array.from(new Set(
+    club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
+  )).sort((a, b) => a - b);
   const [tab, setTab]           = useState<'book' | 'courts'>('book');
   const [date, setDate]         = useState(todayISO());
-  const [duration, setDuration] = useState<60 | 90 | 120>(60);
+  const [duration, setDuration] = useState<number>(defaultDuration(allDurations));
   const [avail, setAvail]       = useState<ClubAvailability[]>([]);
   const [loadingA, setLoadingA] = useState(true);
   const [token, setToken]       = useState<string | null>(null);
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
-  const days = nextDays(9);
+  const [isSub, setIsSub]       = useState(false);
+
+  const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
+  const days = nextDays(Math.max(1, windowDays + 1));
 
   useEffect(() => { setToken(localStorage.getItem('token')); }, []);
+
+  useEffect(() => {
+    if (!token) { setIsSub(false); return; }
+    api.getMySubscriptions(token).then((ids) => setIsSub(ids.includes(club.id))).catch(() => {});
+  }, [token, club.id]);
+
+  const toggleSub = async () => {
+    if (!token) { router.push('/login'); return; }
+    try {
+      if (isSub) { await api.unsubscribeClub(club.id, token); setIsSub(false); }
+      else { await api.subscribeClub(club.id, token); setIsSub(true); }
+    } catch { /* ignore */ }
+  };
 
   const loadAvail = useCallback(async () => {
     setLoadingA(true);
@@ -76,6 +97,10 @@ function ClubContent({ club }: { club: ClubDetail }) {
               <Icon name="chevL" size={19} color={th.text} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={toggleSub}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, border: isSub ? 'none' : `1px solid ${th.lineStrong}`, cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: isSub ? th.accent : 'transparent', color: isSub ? th.onAccent : th.text, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
+                <Icon name={isSub ? 'check' : 'plus'} size={15} color={isSub ? th.onAccent : th.text} />{isSub ? 'Abonné' : "S'abonner"}
+              </button>
               <ThemeToggle />
               <LogoutButton />
             </div>
@@ -123,8 +148,13 @@ function ClubContent({ club }: { club: ClubDetail }) {
                 );
               })}
             </div>
+            {!isSub && club.memberBookingDays > club.publicBookingDays && (
+              <div style={{ padding: '8px 20px 0', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
+                Abonnez-vous pour réserver jusqu'à <b style={{ color: th.text }}>{club.memberBookingDays} j</b> à l'avance (au lieu de {club.publicBookingDays} j).
+              </div>
+            )}
             <div style={{ padding: '14px 20px 0' }}>
-              <Segmented<60 | 90 | 120> value={duration} onChange={setDuration} options={[{ value: 60, label: '1 h' }, { value: 90, label: '1 h 30' }, { value: 120, label: '2 h' }]} />
+              <Segmented<number> value={duration} onChange={setDuration} options={allDurations.map((d) => ({ value: d, label: durationLabel(d) }))} />
             </div>
 
             {/* grille : par sport, chaque terrain + ses créneaux libres */}
@@ -139,24 +169,29 @@ function ClubContent({ club }: { club: ClubDetail }) {
                     <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{sportName}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(({ resource, slots }) => {
-                        const free = slots.filter((s) => s.available);
-                        const fmt = resource.attributes?.format;
+                        const ct = courtType(typeof resource.attributes?.surface === 'string' ? resource.attributes.surface : undefined);
                         return (
                           <div key={resource.id} style={{ background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                               <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{resource.name}</span>
-                              {fmt === 'single' && <Chip tone="line">Single</Chip>}
+                              <Chip tone="line">{ct.label}</Chip>
+                              {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip tone="line">Single</Chip>}
                               <span style={{ marginLeft: 'auto', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.pricePerHour)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}>/h</span></span>
                             </div>
-                            {free.length === 0 ? (
-                              <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Complet ce jour.</div>
+                            {slots.length === 0 ? (
+                              <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau ce jour.</div>
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                                {free.map((s) => (
+                                {slots.map((s) => s.available ? (
                                   <button key={s.startTime} onClick={() => onSlot(resource.id, resource.pricePerHour, s)}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500 }}>
                                     {formatHour(s.startTime, club.timezone)}
                                   </button>
+                                ) : (
+                                  <span key={s.startTime} title="Réservé"
+                                    style={{ borderRadius: 9, padding: '7px 11px', background: th.takenBg, color: th.takenText, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, textDecoration: `line-through ${th.takenText}`, cursor: 'not-allowed' }}>
+                                    {formatHour(s.startTime, club.timezone)}
+                                  </span>
                                 ))}
                               </div>
                             )}
@@ -176,16 +211,15 @@ function ClubContent({ club }: { club: ClubDetail }) {
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                 {cs.resources.map((r) => {
-                  const indoor = r.attributes?.surface !== 'outdoor';
-                  const fmt = typeof r.attributes?.format === 'string' ? r.attributes.format : undefined;
+                  const ct = courtType(typeof r.attributes?.surface === 'string' ? r.attributes.surface : undefined);
                   return (
                     <Link key={r.id} href={`/courts/${r.id}`} style={{ textDecoration: 'none' }}>
                       <div style={{ background: th.surface, borderRadius: 18, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
                         <div style={{ position: 'relative' }}>
                           <Placeholder label={r.name} height={92} radius={0} />
                           <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6 }}>
-                            <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip>
-                            {fmt && <Chip tone="line">{fmt === 'single' ? 'Single' : 'Double'}</Chip>}
+                            <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>
+                            {courtFormat(typeof r.attributes?.format === 'string' ? r.attributes.format : undefined) && <Chip tone="line">Single</Chip>}
                           </div>
                         </div>
                         <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

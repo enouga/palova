@@ -39,6 +39,7 @@ export default function AdminSettingsPage() {
         name: club.name, description: club.description ?? '', address: club.address,
         city: club.city ?? '', timezone: club.timezone, logoUrl: club.logoUrl ?? '',
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
+        publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
       };
       await api.adminUpdateClub(clubId, body, token);
       setSaved(true);
@@ -94,6 +95,15 @@ export default function AdminSettingsPage() {
               <option value="daylight">Clair (daylight)</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      <div style={card}>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Réservation à l'avance</h2>
+        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Nombre de jours pendant lesquels les joueurs peuvent réserver à l'avance. Les abonnés bénéficient d'une fenêtre élargie (réservent plus tôt).</p>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}><span style={label}>Public (jours)</span><input type="number" min={0} max={365} value={club.publicBookingDays} onChange={(e) => set('publicBookingDays', Number(e.target.value))} style={field} /></div>
+          <div style={{ flex: 1 }}><span style={label}>Abonnés (jours)</span><input type="number" min={0} max={365} value={club.memberBookingDays} onChange={(e) => set('memberBookingDays', Number(e.target.value))} style={field} /></div>
         </div>
       </div>
 

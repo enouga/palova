@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { api, TimeSlot, Reservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { durationLabel } from '@/lib/duration';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 
@@ -9,7 +10,7 @@ interface BookingModalProps {
   slot: TimeSlot;
   resourceId: string;
   pricePerHour: string;
-  duration: 60 | 90 | 120;
+  duration: number;
   token: string;
   timezone?: string;
   onClose: () => void;
@@ -46,7 +47,7 @@ export default function BookingModal({
   const [errorMsg, setErrorMsg]       = useState('');
 
   const totalPrice = (Number(pricePerHour) * (duration / 60)).toFixed(0);
-  const durationLabel = duration === 60 ? '1 heure' : duration === 90 ? '1 h 30' : '2 heures';
+  const durLabel = durationLabel(duration);
 
   useEffect(() => {
     if (phase !== 'pending') return;
@@ -110,7 +111,7 @@ export default function BookingModal({
           <>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 52, lineHeight: 1, color: th.text, letterSpacing: -1 }}>{totalPrice}€</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durationLabel} · {Number(pricePerHour)}€/h</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durLabel} · {Number(pricePerHour)}€/h</span>
             </div>
             <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0' }}>

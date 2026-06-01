@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, AdminClubSport, Sport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ALLOWED_DURATIONS, durationLabel, effectiveDurations } from '@/lib/duration';
 
 export default function AdminSportsPage() {
   const { th } = useTheme();
@@ -38,6 +39,15 @@ export default function AdminSportsPage() {
   const enabledIds = new Set(enabled.map((e) => e.sport.id));
   const available = catalog.filter((s) => !enabledIds.has(s.id));
 
+  const toggleDuration = async (cs: AdminClubSport, min: number) => {
+    if (!token || !clubId) return;
+    const cur = new Set(effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin));
+    if (cur.has(min)) cur.delete(min); else cur.add(min);
+    if (cur.size === 0) return; // au moins une durée
+    try { setError(null); await api.adminUpdateClubSport(clubId, cs.id, Array.from(cur).sort((a, b) => a - b), token); await load(); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   return (
     <div style={{ maxWidth: 640 }}>
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 24px', color: th.text }}>Sports</h1>
@@ -53,13 +63,27 @@ export default function AdminSportsPage() {
             {enabled.length === 0 ? (
               <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: 0 }}>Aucun sport activé pour l'instant.</p>
             ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                {enabled.map((e) => (
-                  <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: th.surface2, borderRadius: 12, padding: '9px 14px', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text }}>
-                    {e.sport.name}
-                    <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 500, color: th.textMute }}>· {e.sport.resourceNoun}</span>
-                  </span>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {enabled.map((e) => {
+                  const eff = effectiveDurations(e.durationsMin, e.sport.defaultDurationsMin);
+                  return (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, color: th.text, minWidth: 110 }}>{e.sport.name}</span>
+                      <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>Durées proposées :</span>
+                      <div style={{ display: 'flex', gap: 7 }}>
+                        {ALLOWED_DURATIONS.map((m) => {
+                          const on = eff.includes(m);
+                          return (
+                            <button key={m} onClick={() => toggleDuration(e, m)}
+                              style={{ border: on ? 'none' : `1px solid ${th.line}`, cursor: 'pointer', borderRadius: 9, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, background: on ? th.accent : 'transparent', color: on ? th.onAccent : th.textMute }}>
+                              {durationLabel(m)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -61,12 +61,15 @@ model Club {
   accentColor      String     @default("#d6ff3f") @map("accent_color")
   defaultThemeMode String     @default("floodlit") @map("default_theme_mode")
   status           ClubStatus @default(ACTIVE)
+  publicBookingDays Int       @default(7)  @map("public_booking_days")  // fenêtre de résa grand public
+  memberBookingDays Int       @default(14) @map("member_booking_days")  // fenêtre élargie pour les abonnés
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
-  clubSports ClubSport[]
-  resources  Resource[]
-  members    ClubMember[]
+  clubSports  ClubSport[]
+  resources   Resource[]
+  members     ClubMember[]
+  subscribers ClubSubscriber[]
 
   @@map("clubs")
 }
@@ -125,10 +128,26 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  reservations Reservation[]
-  memberships  ClubMember[]
+  reservations  Reservation[]
+  memberships   ClubMember[]
+  subscriptions ClubSubscriber[]
 
   @@map("users")
+}
+
+/// Abonnement d'un joueur à un club (accès anticipé aux réservations).
+model ClubSubscriber {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  clubId    String   @map("club_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clubId])
+  @@index([clubId])
+  @@map("club_subscribers")
 }
 
 /// Rattachement d'un utilisateur (staff/admin) à un club, avec un rôle.

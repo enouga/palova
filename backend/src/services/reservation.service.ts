@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { SSEService } from './sse.service';
@@ -18,6 +19,22 @@ export class ReservationService {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
   }
 
+  /** Vérifie que la date demandée est dans la fenêtre de réservation (élargie si abonné). */
+  private async assertWithinBookingWindow(
+    resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number } },
+    userId: string,
+    startTime: Date,
+  ) {
+    const sub = await prisma.clubSubscriber.findUnique({
+      where: { userId_clubId: { userId, clubId: resource.clubId } },
+    });
+    const windowDays = sub ? resource.club.memberBookingDays : resource.club.publicBookingDays;
+    const tz = resource.club.timezone;
+    const maxDate = DateTime.now().setZone(tz).startOf('day').plus({ days: windowDays }).endOf('day');
+    const startLocal = DateTime.fromJSDate(startTime).setZone(tz);
+    if (startLocal > maxDate) throw new Error('BOOKING_TOO_FAR');
+  }
+
   async holdSlot({ resourceId, userId, startTime, endTime }: HoldSlotParams) {
     const lockKey = this.lockKey(resourceId, startTime);
 
@@ -25,6 +42,17 @@ export class ReservationService {
     if (!acquired) throw new Error('SLOT_ALREADY_HELD');
 
     try {
+      const resource = await prisma.resource.findUniqueOrThrow({
+        where: { id: resourceId },
+        select: {
+          pricePerHour: true,
+          clubId: true,
+          club: { select: { timezone: true, publicBookingDays: true, memberBookingDays: true } },
+        },
+      });
+
+      await this.assertWithinBookingWindow(resource, userId, startTime);
+
       const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
 
       const conflicts = await prisma.reservation.count({
@@ -43,11 +71,6 @@ export class ReservationService {
         await redis.del(lockKey);
         throw new Error('SLOT_NOT_AVAILABLE');
       }
-
-      const resource = await prisma.resource.findUniqueOrThrow({
-        where: { id: resourceId },
-        select: { pricePerHour: true },
-      });
 
       const durationHours = (endTime.getTime() - startTime.getTime()) / 3_600_000;
       const totalPrice = new Prisma.Decimal(Number(resource.pricePerHour) * durationHours);

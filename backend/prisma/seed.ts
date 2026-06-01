@@ -8,7 +8,7 @@ const prisma = new PrismaClient({ adapter });
 
 // Catalogue de sports géré par la plateforme.
 const SPORTS = [
-  { key: 'padel',      name: 'Padel',          resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90, 120], icon: '🎾' },
+  { key: 'padel',      name: 'Padel',          resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾' },
   { key: 'tennis',     name: 'Tennis',         resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [60, 90, 120], icon: '🎾' },
   { key: 'pickleball', name: 'Pickleball',     resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [60, 90],      icon: '🥒' },
   { key: 'squash',     name: 'Squash',         resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [45, 60],      icon: '🟦' },
@@ -56,8 +56,8 @@ async function main() {
     { id: 'court-1', name: 'Terrain 1',           attributes: { surface: 'indoor',  format: 'double' }, pricePerHour: 25 },
     { id: 'court-2', name: 'Terrain 2',           attributes: { surface: 'indoor',  format: 'double' }, pricePerHour: 25 },
     { id: 'court-3', name: 'Terrain 3 (outdoor)', attributes: { surface: 'outdoor', format: 'double' }, pricePerHour: 20 },
-    { id: 'court-4', name: 'Single 1',            attributes: { surface: 'indoor',  format: 'single' }, pricePerHour: 18 },
-    { id: 'court-5', name: 'Single 2 (outdoor)',  attributes: { surface: 'outdoor', format: 'single' }, pricePerHour: 16 },
+    { id: 'court-4', name: 'Single indoor',       attributes: { surface: 'indoor',  format: 'single' }, pricePerHour: 18 },
+    { id: 'court-5', name: 'Single plein air',    attributes: { surface: 'outdoor', format: 'single' }, pricePerHour: 16 },
   ];
   for (const r of resources) {
     await prisma.resource.upsert({

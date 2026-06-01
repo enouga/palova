@@ -13,6 +13,7 @@ const ERROR_STATUS: Record<string, number> = {
   SLOT_NO_LONGER_AVAILABLE: 409,
   UNAUTHORIZED:             403,
   ALREADY_CANCELLED:        409,
+  BOOKING_TOO_FAR:          409,
 };
 
 function asString(v: unknown): string {

@@ -21,6 +21,14 @@ router.get('/clubs', authMiddleware, async (req: AuthRequest, res: Response, nex
   } catch (err) { next(err); }
 });
 
+// Clubs auxquels le joueur est abonné (ids).
+router.get('/subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const subs = await prisma.clubSubscriber.findMany({ where: { userId: req.user!.id }, select: { clubId: true } });
+    res.json(subs.map((s) => s.clubId));
+  } catch (err) { next(err); }
+});
+
 // Réservations du joueur connecté.
 router.get('/reservations', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

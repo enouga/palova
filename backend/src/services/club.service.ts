@@ -83,6 +83,7 @@ export class ClubService {
       select: {
         id: true, slug: true, name: true, address: true, city: true, country: true,
         description: true, timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        publicBookingDays: true, memberBookingDays: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -107,15 +108,18 @@ export class ClubService {
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
         timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        publicBookingDays: true, memberBookingDays: true,
       },
     });
   }
 
-  /** Met à jour profil/branding d'un club (déjà scopé par requireClubMember). */
+  /** Met à jour profil/branding/fenêtres d'un club (déjà scopé par requireClubMember). */
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
     timezone?: string; logoUrl?: string; accentColor?: string; defaultThemeMode?: string;
+    publicBookingDays?: number; memberBookingDays?: number;
   }) {
+    const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     return prisma.club.update({
       where: { id: clubId },
       data: {
@@ -127,8 +131,49 @@ export class ClubService {
         ...(params.logoUrl !== undefined ? { logoUrl: params.logoUrl } : {}),
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
+        ...(typeof params.publicBookingDays === 'number' ? { publicBookingDays: clamp(params.publicBookingDays) } : {}),
+        ...(typeof params.memberBookingDays === 'number' ? { memberBookingDays: clamp(params.memberBookingDays) } : {}),
       },
     });
+  }
+
+  // --- Abonnés (joueurs avec accès anticipé) ---
+
+  async subscribe(userId: string, clubId: string) {
+    return prisma.clubSubscriber.upsert({
+      where: { userId_clubId: { userId, clubId } },
+      update: {},
+      create: { userId, clubId },
+    });
+  }
+
+  async unsubscribe(userId: string, clubId: string) {
+    await prisma.clubSubscriber.deleteMany({ where: { userId, clubId } });
+  }
+
+  async listSubscribers(clubId: string) {
+    const subs = await prisma.clubSubscriber.findMany({
+      where: { clubId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    });
+    return subs.map((s) => ({ ...s.user, since: s.createdAt }));
+  }
+
+  /** Ajoute un abonné par email (le compte joueur doit déjà exister). */
+  async addSubscriberByEmail(clubId: string, email: string) {
+    const user = await prisma.user.findFirst({ where: { email: { equals: (email || '').trim(), mode: 'insensitive' } } });
+    if (!user) throw new Error('USER_NOT_FOUND');
+    await prisma.clubSubscriber.upsert({
+      where: { userId_clubId: { userId: user.id, clubId } },
+      update: {},
+      create: { userId: user.id, clubId },
+    });
+    return { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email };
+  }
+
+  async removeSubscriber(clubId: string, userId: string) {
+    await prisma.clubSubscriber.deleteMany({ where: { clubId, userId } });
   }
 
   /** Sports activés par un club (avec leurs ressources, y compris inactives). */
@@ -137,10 +182,23 @@ export class ClubService {
       where: { clubId },
       select: {
         id: true, slotStepMin: true, durationsMin: true,
-        sport: { select: { id: true, key: true, name: true, resourceNoun: true } },
+        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /** Met à jour les durées proposées pour un sport du club (ex. padel: 1h30 par défaut). */
+  async updateClubSport(clubSportId: string, clubId: string, durationsMin: number[]) {
+    const cs = await prisma.clubSport.findUnique({ where: { id: clubSportId }, select: { clubId: true } });
+    if (!cs || cs.clubId !== clubId) throw new Error('CLUB_SPORT_NOT_FOUND');
+
+    const valid = Array.from(new Set(durationsMin))
+      .filter((d) => Number.isInteger(d) && d >= 15 && d <= 240 && d % 15 === 0)
+      .sort((a, b) => a - b);
+    if (valid.length === 0) throw new Error('VALIDATION_ERROR');
+
+    return prisma.clubSport.update({ where: { id: clubSportId }, data: { durationsMin: valid } });
   }
 
   /** Active un sport pour un club (idempotent). */
