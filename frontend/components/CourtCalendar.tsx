@@ -1,56 +1,61 @@
 'use client';
 import { TimeSlot } from '@/lib/api';
+import { useTheme } from '@/lib/ThemeProvider';
 
 interface CourtCalendarProps {
   slots: TimeSlot[];
   onSelectSlot: (slot: TimeSlot) => void;
   selectedSlot: TimeSlot | null;
+  timezone?: string;
 }
 
-function formatHour(isoString: string): string {
-  const date = new Date(isoString);
-  // Paris time = UTC+2 (summer) — TODO: use proper timezone library for production
-  const parisHour   = (date.getUTCHours() + 2) % 24;
-  const parisMinute = date.getUTCMinutes();
-  return `${String(parisHour).padStart(2, '0')}h${String(parisMinute).padStart(2, '0')}`;
+function formatHour(isoString: string, timezone = 'Europe/Paris'): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+    .format(new Date(isoString))
+    .replace(':', 'h');
 }
 
-export default function CourtCalendar({
-  slots,
-  onSelectSlot,
-  selectedSlot,
-}: CourtCalendarProps) {
+export default function CourtCalendar({ slots, onSelectSlot, selectedSlot, timezone }: CourtCalendarProps) {
+  const { th } = useTheme();
+
   return (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
       {slots.map((slot) => {
         const isSelected = selectedSlot?.startTime === slot.startTime;
+        const time = formatHour(slot.startTime, timezone);
+        const taken = !slot.available;
 
-        if (!slot.available) {
-          return (
-            <div
-              key={slot.startTime}
-              className="rounded-lg bg-gray-100 p-3 text-center text-sm text-gray-400 cursor-not-allowed"
-            >
-              <div className="font-medium">{formatHour(slot.startTime)}</div>
-              <div className="text-xs">Indisponible</div>
-            </div>
-          );
+        let bg = th.surface2, fg = th.text, sub = 'Libre', subColor = th.textMute, ring = 'none';
+        if (taken)      { bg = th.takenBg; fg = th.takenText; sub = 'Réservé'; subColor = th.takenText; }
+        if (isSelected) { bg = th.accent;  fg = th.onAccent;  sub = 'Sélection'; subColor = th.onAccent; }
+
+        const content = (
+          <>
+            <span style={{ fontFamily: th.fontMono, fontWeight: 500, fontSize: 15, color: fg, letterSpacing: -0.3, textDecoration: taken ? `line-through ${th.takenText}` : 'none' }}>{time}</span>
+            <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 10.5, letterSpacing: 0.3, textTransform: 'uppercase', color: subColor }}>{sub}</span>
+          </>
+        );
+
+        const cellStyle: React.CSSProperties = {
+          border: 'none', borderRadius: 13, padding: '11px 6px',
+          background: bg, boxShadow: ring, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+        };
+
+        if (taken) {
+          return <div key={slot.startTime} style={{ ...cellStyle, cursor: 'default' }}>{content}</div>;
         }
 
         return (
           <button
             key={slot.startTime}
             onClick={() => onSelectSlot(slot)}
-            aria-label={`Réserver ${formatHour(slot.startTime)}`}
-            className={[
-              'rounded-lg p-3 text-center text-sm transition-all',
-              isSelected
-                ? 'bg-green-600 text-white ring-2 ring-green-800 ring-offset-1'
-                : 'bg-green-100 text-green-800 hover:bg-green-200',
-            ].join(' ')}
+            aria-label={`Réserver ${time}`}
+            aria-pressed={isSelected}
+            className={isSelected ? 'ring-2' : undefined}
+            style={{ ...cellStyle, cursor: 'pointer', transition: 'background .2s' }}
           >
-            <div className="font-medium">{formatHour(slot.startTime)}</div>
-            <div className="text-xs">Réserver</div>
+            {content}
           </button>
         );
       })}

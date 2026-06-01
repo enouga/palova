@@ -2,49 +2,71 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/lib/useAuth';
+import { useAuth, logout } from '@/lib/useAuth';
+import { useTheme } from '@/lib/ThemeProvider';
+import { Logotype, ThemeToggle } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, role, ready } = useAuth();
+  const { th } = useTheme();
+  const { token, clubId, ready } = useAuth();
 
   useEffect(() => {
     if (!ready) return;
     if (!token) { router.replace('/login'); return; }
-    if (role !== 'CLUB_ADMIN') { router.replace('/courts'); return; }
-  }, [ready, token, role, router]);
+    if (!clubId) { router.replace('/courts'); return; }
+  }, [ready, token, clubId, router]);
 
-  // Tant qu'on n'a pas validé le rôle, on n'affiche rien (évite le flash de contenu admin).
-  if (!ready || !token || role !== 'CLUB_ADMIN') {
-    return <div className="p-8 text-gray-400">Chargement…</div>;
+  if (!ready || !token || !clubId) {
+    return (
+      <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
+        Chargement…
+      </div>
+    );
   }
 
   const links = [
-    { href: '/admin',              label: 'Tableau de bord' },
-    { href: '/admin/courts',       label: 'Terrains' },
-    { href: '/admin/reservations', label: 'Réservations' },
+    { href: '/admin',              label: 'Tableau de bord', icon: 'grid' as const },
+    { href: '/admin/courts',       label: 'Ressources',      icon: 'indoor' as const },
+    { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
-          <span className="font-bold text-gray-800">PadelConnect · Admin</span>
-          <nav className="flex gap-4 text-sm">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={pathname === l.href ? 'font-semibold text-blue-600' : 'text-gray-600 hover:text-gray-900'}
-              >
-                {l.label}
-              </Link>
-            ))}
+    <div style={{ minHeight: '100vh', background: th.bg, color: th.text, fontFamily: th.fontUI }}>
+      <header style={{ position: 'sticky', top: 0, zIndex: 20, background: th.bgElev, borderBottom: `1px solid ${th.line}`, backdropFilter: 'blur(8px)' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 20, padding: '14px 24px' }}>
+          <Logotype size={20} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute }}>Espace club</span>
+
+          <nav style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+            {links.map((l) => {
+              const active = pathname === l.href;
+              return (
+                <Link key={l.href} href={l.href} style={{
+                  display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 11, textDecoration: 'none',
+                  fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
+                  background: active ? th.surface2 : 'transparent',
+                  color: active ? th.text : th.textMute,
+                }}>
+                  <Icon name={l.icon} size={17} color={active ? th.accent : th.textMute} />{l.label}
+                </Link>
+              );
+            })}
           </nav>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ThemeToggle />
+            <button onClick={logout}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 11, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+              <Icon name="logout" size={16} color={th.textMute} />Se déconnecter
+            </button>
+          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+
+      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 24px 48px' }}>{children}</main>
     </div>
   );
 }

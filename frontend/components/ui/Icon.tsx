@@ -4,7 +4,7 @@ export type IconName =
   | 'calendar' | 'clock' | 'pin' | 'check' | 'bolt' | 'user' | 'lock' | 'mail'
   | 'chevL' | 'chevR' | 'arrowR' | 'plus' | 'card' | 'x' | 'search' | 'bell'
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
-  | 'moon';
+  | 'moon' | 'logout';
 
 interface IconProps {
   name: IconName;
@@ -38,6 +38,7 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     indoor: <><rect x="4" y="4" width="16" height="16" rx="2" {...p} /><path d="M12 4v16M4 12h16" {...p} /></>,
     sun: <><circle cx="12" cy="12" r="4.5" {...p} /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19" {...p} /></>,
     moon: <path d="M20 14.5A8 8 0 019.5 4 7 7 0 1020 14.5z" {...p} />,
+    logout: <><path d="M15 4h2.5A2.5 2.5 0 0120 6.5v11a2.5 2.5 0 01-2.5 2.5H15" {...p} /><path d="M10 16.5L14.5 12 10 7.5M14.5 12H3.5" {...p} /></>,
     users: <><circle cx="9" cy="8" r="3.5" {...p} /><path d="M3 20c1-3.5 11-3.5 12 0M16 5a3.5 3.5 0 010 6.5M17 14c3 .5 4.5 2.5 4.5 4.5" {...p} /></>,
     euro: <><path d="M18 7.5A6.5 6.5 0 1018 16.5M5 10.5h8M5 13.5h7" {...p} /></>,
     grid: <><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" {...p} /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" {...p} /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" {...p} /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" {...p} /></>,

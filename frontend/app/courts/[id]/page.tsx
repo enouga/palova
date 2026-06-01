@@ -1,29 +1,54 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, TimeSlot, Reservation, SSEEvent } from '@/lib/api';
+import { api, TimeSlot, Reservation, SSEEvent, PublicResource } from '@/lib/api';
 import CourtCalendar from '@/components/CourtCalendar';
 import BookingModal from '@/components/BookingModal';
 import { useCourtSSE } from '@/lib/useCourtSSE';
+import { useTheme } from '@/lib/ThemeProvider';
+import { Screen } from '@/components/ui/Screen';
+import { TopBar, Chip, LiveDot, Placeholder, Segmented, Btn } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 
-function getTodayDate(): string {
+function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Génère les N prochains jours (clé YYYY-MM-DD + libellés localisés).
+function nextDays(count: number) {
+  const out: { key: string; dow: string; day: string }[] = [];
+  const base = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    out.push({
+      key: d.toISOString().slice(0, 10),
+      dow: new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(d).replace('.', ''),
+      day: new Intl.DateTimeFormat('fr-FR', { day: 'numeric' }).format(d),
+    });
+  }
+  return out;
 }
 
 export default function CourtPage() {
   const params = useParams();
   const router = useRouter();
-  const courtId = typeof params.id === 'string' ? params.id : '';
+  const { th } = useTheme();
+  const resourceId = typeof params.id === 'string' ? params.id : '';
 
-  const [token, setToken]                 = useState<string | null>(null);
-  const [date, setDate]                   = useState(getTodayDate());
-  const [duration, setDuration]           = useState<60 | 90 | 120>(60);
-  const [slots, setSlots]                 = useState<TimeSlot[]>([]);
-  const [selectedSlot, setSelectedSlot]   = useState<TimeSlot | null>(null);
-  const [showModal, setShowModal]         = useState(false);
-  const [confirmed, setConfirmed]         = useState<Reservation | null>(null);
-  const [loading, setLoading]             = useState(true);
-  const [error, setError]                 = useState<string | null>(null);
+  const [token, setToken]               = useState<string | null>(null);
+  const [resource, setResource]         = useState<PublicResource | null>(null);
+  const [date, setDate]                 = useState(todayISO());
+  const [duration, setDuration]         = useState<60 | 90 | 120>(60);
+  const [slots, setSlots]               = useState<TimeSlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [showModal, setShowModal]       = useState(false);
+  const [confirmed, setConfirmed]       = useState<Reservation | null>(null);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+
+  const days = nextDays(9);
+  const tz = resource?.club.timezone;
 
   useEffect(() => {
     const t = localStorage.getItem('token');
@@ -31,103 +56,130 @@ export default function CourtPage() {
     setToken(t);
   }, [router]);
 
+  useEffect(() => {
+    if (!resourceId) return;
+    api.getResource(resourceId).then(setResource).catch(() => setResource(null));
+  }, [resourceId]);
+
   const loadSlots = useCallback(async (d: string, dur: 60 | 90 | 120) => {
-    if (!courtId) return;
+    if (!resourceId) return;
     setLoading(true);
     setSelectedSlot(null);
     try {
       setError(null);
-      const data = await api.getAvailability(courtId, d, dur);
-      setSlots(data);
+      setSlots(await api.getAvailability(resourceId, d, dur));
     } catch (e) {
       setSlots([]);
       setError((e as Error).message || 'Impossible de charger les créneaux.');
     } finally {
       setLoading(false);
     }
-  }, [courtId]);
+  }, [resourceId]);
 
-  useEffect(() => {
-    loadSlots(date, duration);
-  }, [loadSlots, date, duration]);
+  useEffect(() => { loadSlots(date, duration); }, [loadSlots, date, duration]);
 
   const handleSSE = useCallback((event: SSEEvent) => {
     if (!event.startTime || event.type === 'connected') return;
-    setSlots((prev) =>
-      prev.map((slot) => {
-        if (slot.startTime !== event.startTime) return slot;
-        return { ...slot, available: event.type === 'slot_released' };
-      }),
-    );
+    setSlots((prev) => prev.map((slot) =>
+      slot.startTime !== event.startTime ? slot : { ...slot, available: event.type === 'slot_released' },
+    ));
   }, []);
 
-  useCourtSSE(courtId || null, handleSSE);
+  useCourtSSE(resourceId || null, handleSSE);
 
-  const handleSelectSlot = (slot: TimeSlot) => {
-    setSelectedSlot(slot);
-    setShowModal(true);
-  };
-
-  const handleConfirmed = (reservation: Reservation) => {
-    setShowModal(false);
-    setConfirmed(reservation);
-    loadSlots(date, duration);
-  };
+  const freeCount = slots.filter((s) => s.available).length;
+  const indoor = resource ? resource.attributes?.surface !== 'outdoor' : true;
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 text-xl font-bold">Réservation</h1>
+    <Screen>
+      <div style={{ paddingBottom: 30 }}>
+        <TopBar
+          title={resource ? resource.name : 'Réservation'}
+          onBack={() => router.push('/courts')}
+          right={resource ? <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip> : undefined}
+        />
 
-      {confirmed && (
-        <div className="mb-6 rounded-xl bg-green-50 p-4 text-green-800">
-          Réservation confirmée — {confirmed.id}
+        <div style={{ padding: '0 16px' }}>
+          <Placeholder label={`photo · ${resource?.name ?? 'terrain'}`} height={132} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <LiveDot />
+              <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>Disponibilités en direct</span>
+            </div>
+            <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>maj. en direct</span>
+          </div>
         </div>
-      )}
 
-      <div className="mb-6 flex flex-wrap gap-4">
-        <input
-          type="date"
-          value={date}
-          min={getTodayDate()}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
-        />
+        {confirmed && (
+          <div style={{ margin: '16px 16px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
+            <Icon name="check" size={18} color={th.onAccent} stroke={2.4} />
+            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+          </div>
+        )}
 
-        <select
-          value={duration}
-          onChange={(e) => setDuration(parseInt(e.target.value, 10) as 60 | 90 | 120)}
-          className="rounded-lg border px-3 py-2 text-sm"
-        >
-          <option value={60}>1 heure</option>
-          <option value={90}>1h30</option>
-          <option value={120}>2 heures</option>
-        </select>
+        {/* day pills */}
+        <div className="sp-noscroll" style={{ display: 'flex', gap: 9, overflowX: 'auto', padding: '18px 16px 4px' }}>
+          {days.map((d) => {
+            const on = d.key === date;
+            return (
+              <button key={d.key} onClick={() => setDate(d.key)} style={{
+                border: 'none', cursor: 'pointer', flexShrink: 0, width: 58, padding: '11px 0', borderRadius: 16,
+                background: on ? th.ink : th.surface2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, color: on ? (th.mode === 'floodlit' ? th.textMute : '#cfccc0') : th.textMute }}>{d.dow}</span>
+                <span style={{ fontFamily: th.fontDisplay, fontSize: 24, fontWeight: 600, lineHeight: 1, color: on ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.text }}>{d.day}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: '16px 16px 0' }}>
+          <Segmented<60 | 90 | 120> value={duration} onChange={setDuration}
+            options={[{ value: 60, label: '1 h' }, { value: 90, label: '1 h 30' }, { value: 120, label: '2 h' }]} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 12px' }}>
+          <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, color: th.text }}>
+            Créneaux <span style={{ color: th.textMute, fontWeight: 500 }}>· {freeCount} libres</span>
+          </span>
+          <div style={{ display: 'flex', gap: 14 }}>
+            {([['Libre', th.surface2], ['Réservé', th.takenBg]] as const).map(([l, c]) => (
+              <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>
+                <span style={{ width: 11, height: 11, borderRadius: 4, background: c }} />{l}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px' }}>
+          {error && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 12 }}>{error}</div>
+          )}
+          {loading ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+          ) : (
+            <CourtCalendar
+              slots={slots}
+              onSelectSlot={(slot) => { setSelectedSlot(slot); setShowModal(true); }}
+              selectedSlot={selectedSlot}
+              timezone={tz}
+            />
+          )}
+        </div>
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>
-      )}
-      {loading ? (
-        <div className="py-12 text-center text-gray-400">Chargement...</div>
-      ) : (
-        <CourtCalendar
-          slots={slots}
-          onSelectSlot={handleSelectSlot}
-          selectedSlot={selectedSlot}
-        />
-      )}
 
       {showModal && selectedSlot && (
         <BookingModal
           slot={selectedSlot}
-          courtId={courtId}
-          pricePerHour="25"
+          resourceId={resourceId}
+          pricePerHour={resource?.pricePerHour ?? '0'}
           duration={duration}
           token={token ?? ''}
+          timezone={tz}
           onClose={() => { setShowModal(false); setSelectedSlot(null); }}
-          onConfirmed={handleConfirmed}
+          onConfirmed={(reservation) => { setShowModal(false); setConfirmed(reservation); loadSlots(date, duration); }}
         />
       )}
-    </main>
+    </Screen>
   );
 }

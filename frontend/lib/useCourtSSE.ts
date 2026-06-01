@@ -5,16 +5,16 @@ import type { SSEEvent } from './api';
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function useCourtSSE(
-  courtId: string | null,
+  resourceId: string | null,
   onEvent: (event: SSEEvent) => void,
 ) {
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
   useEffect(() => {
-    if (!courtId) return;
+    if (!resourceId) return;
 
-    const es = new EventSource(`${BASE_URL}/api/courts/${courtId}/stream`);
+    const es = new EventSource(`${BASE_URL}/api/resources/${resourceId}/stream`);
 
     es.onmessage = (e: MessageEvent) => {
       try {
@@ -27,9 +27,9 @@ export function useCourtSSE(
 
     es.onerror = () => {
       // EventSource auto-reconnects on error
-      console.warn(`[SSE] Reconnecting for court ${courtId}`);
+      console.warn(`[SSE] Reconnecting for resource ${resourceId}`);
     };
 
     return () => es.close();
-  }, [courtId]);
+  }, [resourceId]);
 }

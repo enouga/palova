@@ -2,6 +2,7 @@
 
 import { CSSProperties, ReactNode, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useAuth, logout } from '@/lib/useAuth';
 import { Icon, IconName } from './Icon';
 
 // ── Logotype: serif wordmark with the accent ball standing in for the "o".
@@ -166,6 +167,38 @@ export function Placeholder({ label, height = 150, radius = 18 }: { label: strin
     }}>
       <span style={{ fontFamily: th.fontMono, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: th.textFaint }}>{label}</span>
     </div>
+  );
+}
+
+// Barre de titre avec bouton retour optionnel et zone droite.
+export function TopBar({ title, onBack, right }: { title: ReactNode; onBack?: () => void; right?: ReactNode }) {
+  const { th } = useTheme();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '28px 16px 12px' }}>
+      {onBack && (
+        <button onClick={onBack} aria-label="Retour" style={{ border: 'none', cursor: 'pointer', width: 40, height: 40, borderRadius: 12, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name="chevL" size={20} color={th.text} />
+        </button>
+      )}
+      <div style={{ flex: 1, fontFamily: th.fontUI, fontWeight: 700, fontSize: 17, color: th.text }}>{title}</div>
+      {right}
+    </div>
+  );
+}
+
+// Bouton de déconnexion — ne s'affiche que si l'utilisateur est connecté.
+export function LogoutButton() {
+  const { th } = useTheme();
+  const { token, ready } = useAuth();
+  if (!ready || !token) return null;
+  return (
+    <button onClick={logout} aria-label="Se déconnecter"
+      style={{
+        width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', flexShrink: 0,
+        background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+      <Icon name="logout" size={19} color={th.text} />
+    </button>
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
@@ -29,9 +30,17 @@ export default function LoginPage() {
         return;
       }
       localStorage.setItem('token', data.token);
-      localStorage.setItem('role', data.user.role);
-      localStorage.setItem('clubId', data.user.clubId ?? '');
-      router.push(data.user.role === 'CLUB_ADMIN' ? '/admin' : '/courts');
+
+      // Le rôle n'est plus dans le token : on regarde les clubs où l'utilisateur est membre.
+      const clubs = await api.getMyClubs(data.token).catch(() => []);
+      const managed = clubs[0]; // tout membre (OWNER/ADMIN/STAFF) accède au back-office
+      if (managed) {
+        localStorage.setItem('clubId', managed.clubId);
+        router.push('/admin');
+      } else {
+        localStorage.removeItem('clubId');
+        router.push('/courts');
+      }
     } catch {
       setError('Impossible de contacter le serveur');
     } finally {

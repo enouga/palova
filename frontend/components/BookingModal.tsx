@@ -1,35 +1,52 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { api, TimeSlot, Reservation } from '@/lib/api';
+import { useTheme } from '@/lib/ThemeProvider';
+import { Btn } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 
 interface BookingModalProps {
   slot: TimeSlot;
-  courtId: string;
+  resourceId: string;
   pricePerHour: string;
   duration: 60 | 90 | 120;
   token: string;
+  timezone?: string;
   onClose: () => void;
   onConfirmed: (reservation: Reservation) => void;
 }
 
 const HOLD_SECONDS = 600;
 
-function formatHour(iso: string): string {
-  const d = new Date(iso);
-  const h = (d.getUTCHours() + 2) % 24;
-  const m = d.getUTCMinutes();
-  return `${String(h).padStart(2, '0')}h${String(m).padStart(2, '0')}`;
+function formatHour(iso: string, tz = 'Europe/Paris'): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+    .format(new Date(iso)).replace(':', 'h');
+}
+
+function ProgressRing({ frac, size = 132 }: { frac: number; size?: number }) {
+  const { th } = useTheme();
+  const r = (size - 12) / 2;
+  const C = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={th.surface2} strokeWidth="6" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={th.accent} strokeWidth="6" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: 'stroke-dashoffset 1s linear' }} />
+    </svg>
+  );
 }
 
 export default function BookingModal({
-  slot, courtId, pricePerHour, duration, token, onClose, onConfirmed,
+  slot, resourceId, pricePerHour, duration, token, timezone, onClose, onConfirmed,
 }: BookingModalProps) {
+  const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
 
-  const totalPrice = (Number(pricePerHour) * (duration / 60)).toFixed(2);
+  const totalPrice = (Number(pricePerHour) * (duration / 60)).toFixed(0);
+  const durationLabel = duration === 60 ? '1 heure' : duration === 90 ? '1 h 30' : '2 heures';
 
   useEffect(() => {
     if (phase !== 'pending') return;
@@ -44,10 +61,7 @@ export default function BookingModal({
 
   const handleHold = async () => {
     try {
-      const res = await api.holdSlot(
-        { courtId, startTime: slot.startTime, endTime: slot.endTime },
-        token,
-      );
+      const res = await api.holdSlot({ resourceId, startTime: slot.startTime, endTime: slot.endTime }, token);
       setReservation(res);
       setSecondsLeft(HOLD_SECONDS);
       setPhase('pending');
@@ -55,7 +69,7 @@ export default function BookingModal({
       setPhase('error');
       setErrorMsg(
         (err as Error).message === 'SLOT_ALREADY_HELD'
-          ? "Ce créneau vient d'être pris. Choisissez un autre."
+          ? "Ce créneau vient d'être pris. Choisissez-en un autre."
           : (err as Error).message,
       );
     }
@@ -76,93 +90,69 @@ export default function BookingModal({
     }
   };
 
-  // En phase "pending", un hold (réservation PENDING + lock Redis) existe :
-  // l'annuler avant de fermer libère le créneau immédiatement (SSE slot_released),
-  // sinon il reste bloqué jusqu'à expiration du lock (10 min) + cleanup job.
   const handleClose = async () => {
     if (phase === 'pending' && reservation) {
-      try {
-        await api.cancelReservation(reservation.id, token);
-      } catch {
-        // On ferme quand même : le cleanup job récupèrera la réservation expirée.
-      }
+      try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ }
     }
     onClose();
   };
 
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold">Réservation</h2>
-
-        <div className="mb-4 rounded-lg bg-gray-50 p-4 text-sm">
-          <div>{formatHour(slot.startTime)} → {formatHour(slot.endTime)}</div>
-          <div className="mt-1 text-lg font-bold text-green-700">{totalPrice} €</div>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', background: th.bgElev, borderRadius: '28px 28px 0 0', padding: '12px 20px 36px', boxShadow: '0 -10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in .34s cubic-bezier(.2,.8,.2,1)' }}>
+        <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '0 auto 18px' }} />
 
         {phase === 'confirm' && (
           <>
-            <p className="mb-4 text-sm text-gray-600">
-              En cliquant sur "Pré-réserver", ce créneau sera bloqué 10 minutes pour vous.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleClose}
-                className="flex-1 rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleHold}
-                aria-label="Pré-réserver"
-                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                Pré-réserver
-              </button>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 52, lineHeight: 1, color: th.text, letterSpacing: -1 }}>{totalPrice}€</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durationLabel} · {Number(pricePerHour)}€/h</span>
+            </div>
+            <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0' }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Horaire</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)}</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
+              <Icon name="clock" size={15} color={th.textMute} />
+              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.</span>
+            </div>
+            <div style={{ display: 'flex', gap: 11 }}>
+              <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
+              <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>
             </div>
           </>
         )}
 
         {phase === 'pending' && (
           <>
-            <div className="mb-4 rounded-lg bg-amber-50 p-3 text-center">
-              <div className="text-sm text-amber-700">Confirmez dans</div>
-              <div className="text-3xl font-bold text-amber-800">
-                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            <div style={{ position: 'relative', width: 132, height: 132, margin: '6px auto 4px' }}>
+              <ProgressRing frac={secondsLeft / HOLD_SECONDS} />
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontFamily: th.fontMono, fontWeight: 700, fontSize: 30, color: th.text, letterSpacing: -1 }}>{mm}:{ss}</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 10.5, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, marginTop: 2 }}>Confirmez dans</span>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleClose}
-                className="flex-1 rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-              >
-                Abandonner
-              </button>
-              <button
-                onClick={handleConfirm}
-                aria-label="Confirmer et payer"
-                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                Confirmer et payer
-              </button>
+            <div style={{ textAlign: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.3 }}>Créneau bloqué pour vous</div>
+            <div style={{ textAlign: 'center', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 6 }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {totalPrice}€</div>
+            <div style={{ display: 'flex', gap: 11, marginTop: 22 }}>
+              <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
+              <Btn icon="arrowR" onClick={handleConfirm} style={{ flex: 1 }}>Confirmer et payer</Btn>
             </div>
           </>
         )}
 
         {phase === 'error' && (
           <>
-            <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-              {errorMsg}
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.onAccent, background: th.accent, padding: '12px 14px', borderRadius: 12, fontWeight: 600 }}>{errorMsg}</div>
+            <div style={{ marginTop: 14 }}>
+              <Btn full variant="surface" onClick={onClose}>Fermer</Btn>
             </div>
-            <button
-              onClick={onClose}
-              className="w-full rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-            >
-              Fermer
-            </button>
           </>
         )}
       </div>

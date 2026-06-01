@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BookingModal from '../components/BookingModal';
+import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot } from '../lib/api';
 
 jest.mock('../lib/api', () => ({
@@ -16,35 +17,38 @@ const mockSlot: TimeSlot = {
   available: true,
 };
 
-describe('BookingModal', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('appelle holdSlot et affiche le countdown après clic Pré-réserver', async () => {
-    (api.holdSlot as jest.Mock).mockResolvedValue({
-      id: 'res-1', status: 'PENDING', totalPrice: '25',
-    });
-
-    render(
+function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {
+  return render(
+    <ThemeProvider>
       <BookingModal
         slot={mockSlot}
-        courtId="court-1"
+        resourceId="court-1"
         pricePerHour="25"
         duration={60}
         token="jwt-token"
         onClose={jest.fn()}
         onConfirmed={jest.fn()}
+        {...overrides}
       />
-    );
+    </ThemeProvider>
+  );
+}
 
+describe('BookingModal', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('appelle holdSlot et affiche le countdown après clic Pré-réserver', async () => {
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
+
+    renderModal();
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
 
     await waitFor(() =>
       expect(api.holdSlot).toHaveBeenCalledWith(
-        { courtId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
+        { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
         'jwt-token',
       )
     );
-
     expect(await screen.findByText(/Confirmez dans/)).toBeInTheDocument();
   });
 
@@ -53,17 +57,7 @@ describe('BookingModal', () => {
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
 
     const onConfirmed = jest.fn();
-    render(
-      <BookingModal
-        slot={mockSlot}
-        courtId="court-1"
-        pricePerHour="25"
-        duration={60}
-        token="jwt-token"
-        onClose={jest.fn()}
-        onConfirmed={onConfirmed}
-      />
-    );
+    renderModal({ onConfirmed });
 
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
     await screen.findByText(/Confirmez dans/);
@@ -77,47 +71,22 @@ describe('BookingModal', () => {
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
 
     const onClose = jest.fn();
-    render(
-      <BookingModal
-        slot={mockSlot}
-        courtId="court-1"
-        pricePerHour="25"
-        duration={60}
-        token="jwt-token"
-        onClose={onClose}
-        onConfirmed={jest.fn()}
-      />
-    );
+    renderModal({ onClose });
 
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
     await screen.findByText(/Confirmez dans/);
     fireEvent.click(screen.getByRole('button', { name: /Abandonner/ }));
 
-    await waitFor(() =>
-      expect(api.cancelReservation).toHaveBeenCalledWith('res-1', 'jwt-token')
-    );
+    await waitFor(() => expect(api.cancelReservation).toHaveBeenCalledWith('res-1', 'jwt-token'));
     expect(onClose).toHaveBeenCalled();
   });
 
   it('affiche un message d erreur si holdSlot échoue', async () => {
     (api.holdSlot as jest.Mock).mockRejectedValue(new Error('SLOT_ALREADY_HELD'));
 
-    render(
-      <BookingModal
-        slot={mockSlot}
-        courtId="court-1"
-        pricePerHour="25"
-        duration={60}
-        token="jwt-token"
-        onClose={jest.fn()}
-        onConfirmed={jest.fn()}
-      />
-    );
-
+    renderModal();
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/vient d'être pris/)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText(/vient d'être pris/)).toBeInTheDocument());
   });
 });

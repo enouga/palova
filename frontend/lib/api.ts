@@ -22,75 +22,125 @@ async function request<T>(
 }
 
 export const api = {
-  getCourts: (clubId: string) =>
-    request<Court[]>(`/api/courts?clubId=${clubId}`),
+  // --- Public ---
+  getSports: () => request<Sport[]>('/api/sports'),
 
-  getAvailability: (courtId: string, date: string, duration: 60 | 90 | 120) =>
-    request<TimeSlot[]>(`/api/courts/${courtId}/availability?date=${date}&duration=${duration}`),
+  getClub: (slug: string) => request<ClubDetail>(`/api/clubs/${slug}`),
 
+  getResource: (resourceId: string) => request<PublicResource>(`/api/resources/${resourceId}`),
+
+  getAvailability: (resourceId: string, date: string, duration: number) =>
+    request<TimeSlot[]>(`/api/resources/${resourceId}/availability?date=${date}&duration=${duration}`),
+
+  // --- Compte ---
+  getMyClubs: (token: string) => request<Membership[]>('/api/me/clubs', {}, token),
+
+  createClub: (body: CreateClubBody, token: string) =>
+    request<ClubDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
+
+  // --- Réservation joueur ---
   holdSlot: (params: HoldParams, token: string) =>
-    request<Reservation>('/api/reservations/hold', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }, token),
+    request<Reservation>('/api/reservations/hold', { method: 'POST', body: JSON.stringify(params) }, token),
 
   confirmReservation: (reservationId: string, token: string) =>
-    request<Reservation>(`/api/reservations/${reservationId}/confirm`, {
-      method: 'POST',
-    }, token),
+    request<Reservation>(`/api/reservations/${reservationId}/confirm`, { method: 'POST' }, token),
 
   cancelReservation: (reservationId: string, token: string) =>
-    request<Reservation>(`/api/reservations/${reservationId}`, {
-      method: 'DELETE',
-    }, token),
+    request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
 
-  // --- Espace admin club ---
+  // --- Back-office club (scopé par clubId) ---
+  adminGetSports: (clubId: string, token: string) =>
+    request<AdminClubSport[]>(`/api/clubs/${clubId}/admin/sports`, {}, token),
 
-  adminGetCourts: (token: string) =>
-    request<AdminCourt[]>('/api/admin/courts', {}, token),
+  adminAddSport: (clubId: string, sportId: string, token: string) =>
+    request<AdminClubSport>(`/api/clubs/${clubId}/admin/sports`, { method: 'POST', body: JSON.stringify({ sportId }) }, token),
 
-  adminCreateCourt: (body: CreateCourtBody, token: string) =>
-    request<AdminCourt>('/api/admin/courts', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }, token),
+  adminGetResources: (clubId: string, token: string) =>
+    request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources`, {}, token),
 
-  adminUpdateCourt: (id: string, body: UpdateCourtBody, token: string) =>
-    request<AdminCourt>(`/api/admin/courts/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }, token),
+  adminCreateResource: (clubId: string, body: CreateResourceBody, token: string) =>
+    request<AdminResource>(`/api/clubs/${clubId}/admin/resources`, { method: 'POST', body: JSON.stringify(body) }, token),
 
-  adminSetCourtActive: (id: string, isActive: boolean, token: string) =>
-    request<AdminCourt>(`/api/admin/courts/${id}/active`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isActive }),
-    }, token),
+  adminUpdateResource: (clubId: string, id: string, body: UpdateResourceBody, token: string) =>
+    request<AdminResource>(`/api/clubs/${clubId}/admin/resources/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
 
-  adminGetReservations: (filters: AdminReservationFilters, token: string) => {
+  adminSetResourceActive: (clubId: string, id: string, isActive: boolean, token: string) =>
+    request<AdminResource>(`/api/clubs/${clubId}/admin/resources/${id}/active`, { method: 'PATCH', body: JSON.stringify({ isActive }) }, token),
+
+  adminGetReservations: (clubId: string, filters: AdminReservationFilters, token: string) => {
     const qs = new URLSearchParams();
-    if (filters.date)    qs.set('date', filters.date);
-    if (filters.courtId) qs.set('courtId', filters.courtId);
-    if (filters.status)  qs.set('status', filters.status);
+    if (filters.date)       qs.set('date', filters.date);
+    if (filters.resourceId) qs.set('resourceId', filters.resourceId);
+    if (filters.status)     qs.set('status', filters.status);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
-    return request<ClubReservationsResponse>(`/api/admin/reservations${suffix}`, {}, token);
+    return request<ClubReservationsResponse>(`/api/clubs/${clubId}/admin/reservations${suffix}`, {}, token);
   },
 
-  adminCancelReservation: (reservationId: string, token: string) =>
-    request<Reservation>(`/api/admin/reservations/${reservationId}`, {
-      method: 'DELETE',
-    }, token),
+  adminCancelReservation: (clubId: string, reservationId: string, token: string) =>
+    request<Reservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}`, { method: 'DELETE' }, token),
 };
 
-// Types
-export interface Court {
+// --- Types ---
+
+export interface Sport {
+  id: string;
+  key: string;
+  name: string;
+  resourceNoun: string;
+  defaultSlotStepMin: number;
+  defaultDurationsMin: number[];
+  icon: string | null;
+}
+
+export interface Membership {
+  clubId: string;
+  slug: string;
+  name: string;
+  role: 'OWNER' | 'ADMIN' | 'STAFF';
+}
+
+export interface Resource {
   id: string;
   name: string;
-  surface: string;
+  attributes: { surface?: string } & Record<string, unknown>;
   pricePerHour: string;
   openHour: number;
   closeHour: number;
-  club: { name: string; timezone: string };
+}
+
+export interface ClubSportPublic {
+  id: string;
+  slotStepMin: number | null;
+  durationsMin: number[];
+  sport: Sport;
+  resources: Resource[];
+}
+
+export interface ClubDetail {
+  id: string;
+  slug: string;
+  name: string;
+  address: string;
+  city: string | null;
+  country: string | null;
+  description: string | null;
+  timezone: string;
+  logoUrl: string | null;
+  accentColor: string;
+  defaultThemeMode: string;
+  status: string;
+  clubSports: ClubSportPublic[];
+}
+
+export interface PublicResource {
+  id: string;
+  name: string;
+  attributes: { surface?: string } & Record<string, unknown>;
+  pricePerHour: string;
+  openHour: number;
+  closeHour: number;
+  club: { slug: string; name: string; timezone: string; status: string; accentColor: string };
+  clubSport: { durationsMin: number[]; sport: { name: string; resourceNoun: string; defaultDurationsMin: number[] } };
 }
 
 export interface TimeSlot {
@@ -101,7 +151,7 @@ export interface TimeSlot {
 
 export interface Reservation {
   id: string;
-  courtId: string;
+  resourceId: string;
   userId: string;
   startTime: string;
   endTime: string;
@@ -111,49 +161,64 @@ export interface Reservation {
 }
 
 export interface HoldParams {
-  courtId: string;
+  resourceId: string;
   startTime: string;
   endTime: string;
 }
 
-// --- Types admin club ---
+export interface CreateClubBody {
+  name: string;
+  slug?: string;
+  address?: string;
+  city?: string;
+  timezone?: string;
+}
 
-export type UserRole = 'CLIENT' | 'CLUB_ADMIN';
+// --- Types back-office ---
 
-export interface AdminCourt {
+export interface AdminClubSport {
+  id: string;
+  slotStepMin: number | null;
+  durationsMin: number[];
+  sport: { id: string; key: string; name: string; resourceNoun: string };
+}
+
+export interface AdminResource {
   id: string;
   name: string;
-  surface: string;
+  attributes: { surface?: string } & Record<string, unknown>;
   isActive: boolean;
   pricePerHour: string;
   openHour: number;
   closeHour: number;
+  clubSport: { id: string; sport: { key: string; name: string; resourceNoun: string } };
 }
 
-export interface CreateCourtBody {
+export interface CreateResourceBody {
+  clubSportId: string;
   name: string;
-  surface?: string;
+  attributes?: Record<string, unknown>;
   pricePerHour: number;
   openHour?: number;
   closeHour?: number;
 }
 
-export type UpdateCourtBody = Partial<CreateCourtBody>;
+export type UpdateResourceBody = Partial<Omit<CreateResourceBody, 'clubSportId'>>;
 
 export interface AdminReservationFilters {
   date?: string;
-  courtId?: string;
+  resourceId?: string;
   status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
 }
 
 export interface ClubReservation {
   id: string;
-  courtId: string;
+  resourceId: string;
   startTime: string;
   endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
-  court: { id: string; name: string };
+  resource: { id: string; name: string };
   user: { firstName: string; lastName: string; email: string };
 }
 
@@ -166,7 +231,7 @@ export type SSEEventType = 'slot_held' | 'slot_confirmed' | 'slot_released' | 'c
 
 export interface SSEEvent {
   type: SSEEventType;
-  courtId: string;
+  resourceId: string;
   reservationId?: string;
   startTime?: string;
   endTime?: string;

@@ -1,135 +1,115 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
-import { api, AdminCourt } from '@/lib/api';
+import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import { api, AdminResource, AdminClubSport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
+import { useTheme } from '@/lib/ThemeProvider';
+import { Btn } from '@/components/ui/atoms';
 
-export default function AdminCourtsPage() {
-  const { token, ready } = useAuth();
-  const [courts, setCourts]   = useState<AdminCourt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+export default function AdminResourcesPage() {
+  const { th } = useTheme();
+  const { token, clubId, ready } = useAuth();
+  const [resources, setResources] = useState<AdminResource[]>([]);
+  const [sports, setSports]       = useState<AdminClubSport[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
 
-  const [newCourt, setNewCourt] = useState({ name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' });
+  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' });
   const [creating, setCreating] = useState(false);
 
+  const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+  const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
+  const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
+
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !clubId) return;
     setLoading(true);
     try {
       setError(null);
-      setCourts(await api.adminGetCourts(token));
+      const [res, sp] = await Promise.all([api.adminGetResources(clubId, token), api.adminGetSports(clubId, token)]);
+      setResources(res);
+      setSports(sp);
+      setNr((n) => (n.clubSportId || sp.length === 0 ? n : { ...n, clubSportId: sp[0].id }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, clubId]);
 
-  useEffect(() => { if (ready && token) load(); }, [ready, token, load]);
+  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
-  // Édition en place d'un champ d'un terrain.
-  const editField = (id: string, field: keyof AdminCourt, value: string | number) => {
-    setCourts((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
-  };
+  const editField = (id: string, field: 'pricePerHour' | 'openHour' | 'closeHour', value: string) =>
+    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
-  const saveCourt = async (court: AdminCourt) => {
-    if (!token) return;
+  const save = async (r: AdminResource) => {
+    if (!token || !clubId) return;
     try {
       setError(null);
-      await api.adminUpdateCourt(court.id, {
-        pricePerHour: Number(court.pricePerHour),
-        openHour:     Number(court.openHour),
-        closeHour:    Number(court.closeHour),
-      }, token);
+      await api.adminUpdateResource(clubId, r.id, { pricePerHour: Number(r.pricePerHour), openHour: Number(r.openHour), closeHour: Number(r.closeHour) }, token);
       await load();
-    } catch (e) {
-      setError(`Terrain ${court.name} : ${(e as Error).message}`);
-    }
+    } catch (e) { setError(`${r.name} : ${(e as Error).message}`); }
   };
 
-  const toggleActive = async (court: AdminCourt) => {
-    if (!token) return;
-    try {
-      setError(null);
-      await api.adminSetCourtActive(court.id, !court.isActive, token);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+  const toggleActive = async (r: AdminResource) => {
+    if (!token || !clubId) return;
+    try { setError(null); await api.adminSetResourceActive(clubId, r.id, !r.isActive, token); await load(); }
+    catch (e) { setError((e as Error).message); }
   };
 
-  const createCourt = async () => {
-    if (!token) return;
+  const create = async () => {
+    if (!token || !clubId || !nr.clubSportId) return;
     setCreating(true);
     try {
       setError(null);
-      await api.adminCreateCourt({
-        name:         newCourt.name,
-        surface:      newCourt.surface,
-        pricePerHour: Number(newCourt.pricePerHour),
-        openHour:     Number(newCourt.openHour),
-        closeHour:    Number(newCourt.closeHour),
+      await api.adminCreateResource(clubId, {
+        clubSportId: nr.clubSportId, name: nr.name, attributes: { surface: nr.surface },
+        pricePerHour: Number(nr.pricePerHour), openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
       }, token);
-      setNewCourt({ name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' });
+      setNr((n) => ({ ...n, name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' }));
       await load();
     } catch (e) {
-      setError(`Création : ${(e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture)' : (e as Error).message}`);
-    } finally {
-      setCreating(false);
-    }
+      const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture)' : (e as Error).message;
+      setError(`Création : ${msg}`);
+    } finally { setCreating(false); }
   };
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">Terrains</h1>
+      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 24px', color: th.text }}>Ressources</h1>
 
-      {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
       {loading ? (
-        <div className="py-8 text-gray-400">Chargement…</div>
+        <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
       ) : (
-        <div className="mb-8 overflow-x-auto rounded-2xl border bg-white">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-gray-50 text-left text-gray-500">
-              <tr>
-                <th className="px-4 py-3">Terrain</th>
-                <th className="px-4 py-3">Tarif €/h</th>
-                <th className="px-4 py-3">Ouverture</th>
-                <th className="px-4 py-3">Fermeture</th>
-                <th className="px-4 py-3">Statut</th>
-                <th className="px-4 py-3"></th>
+        <div style={{ marginBottom: 28, overflowX: 'auto', borderRadius: 18, background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
+                {['Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Statut', ''].map((h, i) => (
+                  <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {courts.map((c) => (
-                <tr key={c.id} className={`border-b last:border-0 ${c.isActive ? '' : 'opacity-50'}`}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{c.name}<div className="text-xs text-gray-400">{c.surface}</div></td>
-                  <td className="px-4 py-3">
-                    <input type="number" min={1} step="0.5" value={c.pricePerHour}
-                      onChange={(e) => editField(c.id, 'pricePerHour', e.target.value)}
-                      className="w-20 rounded border px-2 py-1" />
+              {resources.map((r) => (
+                <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: r.isActive ? 1 : 0.5 }}>
+                  <td style={cell}>
+                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: th.textFaint }}>{typeof r.attributes?.surface === 'string' ? r.attributes.surface : '—'}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <input type="number" min={0} max={24} value={c.openHour}
-                      onChange={(e) => editField(c.id, 'openHour', e.target.value)}
-                      className="w-16 rounded border px-2 py-1" />
+                  <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
+                  <td style={cell}><input type="number" min={1} step="0.5" value={r.pricePerHour} onChange={(e) => editField(r.id, 'pricePerHour', e.target.value)} style={{ ...input, width: 80 }} /></td>
+                  <td style={cell}><input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
+                  <td style={cell}><input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
+                  <td style={cell}>
+                    <button onClick={() => toggleActive(r)} style={{
+                      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 12px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600,
+                      background: r.isActive ? `${th.accent}22` : th.surface2, color: r.isActive ? (th.mode === 'floodlit' ? th.accent : th.ink) : th.textMute,
+                    }}>{r.isActive ? 'Actif' : 'Inactif'}</button>
                   </td>
-                  <td className="px-4 py-3">
-                    <input type="number" min={0} max={24} value={c.closeHour}
-                      onChange={(e) => editField(c.id, 'closeHour', e.target.value)}
-                      className="w-16 rounded border px-2 py-1" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => toggleActive(c)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                      {c.isActive ? 'Actif' : 'Inactif'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => saveCourt(c)}
-                      className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700">
-                      Enregistrer
-                    </button>
+                  <td style={cell}>
+                    <button onClick={() => save(r)} style={{ border: 'none', cursor: 'pointer', borderRadius: 10, padding: '7px 14px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, background: th.accent, color: th.onAccent }}>Enregistrer</button>
                   </td>
                 </tr>
               ))}
@@ -138,36 +118,33 @@ export default function AdminCourtsPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold text-gray-800">Ajouter un terrain</h2>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm">Nom
-            <input value={newCourt.name} onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })}
-              className="mt-1 block w-44 rounded border px-2 py-1" placeholder="Terrain 4" />
+      <div style={{ background: th.surface, borderRadius: 18, padding: 22, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 16px', color: th.text }}>Ajouter une ressource</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 14 }}>
+          <label style={label}>Sport
+            <select value={nr.clubSportId} onChange={(e) => setNr({ ...nr, clubSportId: e.target.value })} style={input}>
+              {sports.map((s) => <option key={s.id} value={s.id}>{s.sport.name}</option>)}
+            </select>
           </label>
-          <label className="text-sm">Surface
-            <select value={newCourt.surface} onChange={(e) => setNewCourt({ ...newCourt, surface: e.target.value })}
-              className="mt-1 block rounded border px-2 py-1">
+          <label style={label}>Nom
+            <input value={nr.name} onChange={(e) => setNr({ ...nr, name: e.target.value })} placeholder="Terrain 4" style={{ ...input, width: 170 }} />
+          </label>
+          <label style={label}>Surface
+            <select value={nr.surface} onChange={(e) => setNr({ ...nr, surface: e.target.value })} style={input}>
               <option value="indoor">indoor</option>
               <option value="outdoor">outdoor</option>
             </select>
           </label>
-          <label className="text-sm">Tarif €/h
-            <input type="number" min={1} step="0.5" value={newCourt.pricePerHour} onChange={(e) => setNewCourt({ ...newCourt, pricePerHour: e.target.value })}
-              className="mt-1 block w-24 rounded border px-2 py-1" />
+          <label style={label}>Tarif €/h
+            <input type="number" min={1} step="0.5" value={nr.pricePerHour} onChange={(e) => setNr({ ...nr, pricePerHour: e.target.value })} style={{ ...input, width: 90 }} />
           </label>
-          <label className="text-sm">Ouv.
-            <input type="number" min={0} max={24} value={newCourt.openHour} onChange={(e) => setNewCourt({ ...newCourt, openHour: e.target.value })}
-              className="mt-1 block w-16 rounded border px-2 py-1" />
+          <label style={label}>Ouv.
+            <input type="number" min={0} max={24} value={nr.openHour} onChange={(e) => setNr({ ...nr, openHour: e.target.value })} style={{ ...input, width: 60 }} />
           </label>
-          <label className="text-sm">Ferm.
-            <input type="number" min={0} max={24} value={newCourt.closeHour} onChange={(e) => setNewCourt({ ...newCourt, closeHour: e.target.value })}
-              className="mt-1 block w-16 rounded border px-2 py-1" />
+          <label style={label}>Ferm.
+            <input type="number" min={0} max={24} value={nr.closeHour} onChange={(e) => setNr({ ...nr, closeHour: e.target.value })} style={{ ...input, width: 60 }} />
           </label>
-          <button onClick={createCourt} disabled={creating || !newCourt.name.trim()}
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
-            {creating ? 'Création…' : 'Créer'}
-          </button>
+          <Btn onClick={create} disabled={creating || !nr.name.trim() || !nr.clubSportId} icon="plus">{creating ? 'Création…' : 'Créer'}</Btn>
         </div>
       </div>
     </div>
