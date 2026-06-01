@@ -81,7 +81,7 @@ export default function ClubsDirectory() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
             <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville" style={inputStyle} />
           </div>
-          <div className="sp-noscroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
             {sports.map((s) => (
               <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>

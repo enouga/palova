@@ -20,13 +20,15 @@ export class AvailabilityService {
       select: {
         openHour: true,
         closeHour: true,
+        slotStepMin: true,
         club: { select: { timezone: true } },
         clubSport: { select: { slotStepMin: true, sport: { select: { defaultSlotStepMin: true } } } },
       },
     });
 
     const tz = resource.club.timezone;
-    const slotStepMin = resource.clubSport.slotStepMin ?? resource.clubSport.sport.defaultSlotStepMin;
+    // Pas du créneau : priorité au réglage de la ressource, puis du sport-du-club, puis défaut du sport.
+    const slotStepMin = resource.slotStepMin ?? resource.clubSport.slotStepMin ?? resource.clubSport.sport.defaultSlotStepMin;
 
     // Ouverture/fermeture exprimées en heure LOCALE du club, converties en instants UTC.
     const dayStartLocal = DateTime.fromISO(date, { zone: tz }).startOf('day');
@@ -70,5 +72,29 @@ export class AvailabilityService {
     }
 
     return slots;
+  }
+
+  /** Disponibilités de TOUS les terrains actifs d'un club (vue planning joueur). */
+  async getClubAvailability(clubId: string, date: string, durationMinutes: number) {
+    const resources = await prisma.resource.findMany({
+      where: { clubId, isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true, name: true, attributes: true, pricePerHour: true,
+        clubSport: { select: { id: true, sport: { select: { key: true, name: true } } } },
+      },
+    });
+
+    const result = [];
+    for (const r of resources) {
+      result.push({
+        resource: {
+          id: r.id, name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour,
+          sport: r.clubSport.sport, clubSportId: r.clubSport.id,
+        },
+        slots: await this.getAvailableSlots(r.id, date, durationMinutes),
+      });
+    }
+    return result;
   }
 }

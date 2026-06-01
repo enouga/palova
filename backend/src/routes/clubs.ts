@@ -1,9 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { ClubService } from '../services/club.service';
+import { AvailabilityService } from '../services/availability.service';
+import { prisma } from '../db/prisma';
 
 const router = Router();
 const clubService = new ClubService();
+const availabilityService = new AvailabilityService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR: 400,
@@ -42,6 +45,21 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       q:     asString(req.query.q) || undefined,
     });
     res.json(clubs);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Disponibilités de tous les terrains du club pour une date+durée (vue planning).
+router.get('/:slug/availability', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const date = asString(req.query.date);
+    const duration = parseInt(asString(req.query.duration), 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
+    if (isNaN(duration) || duration <= 0 || duration > 240) return void res.status(400).json({ error: 'duration invalide' });
+
+    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
+
+    res.json(await availabilityService.getClubAvailability(club.id, date, duration));
   } catch (err) { handleError(err, res, next); }
 });
 

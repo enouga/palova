@@ -183,6 +183,17 @@ export class ReservationService {
     return this.performCancel(reservation);
   }
 
+  /** Réservations d'un joueur (les siennes), pour l'espace « Mes réservations ». */
+  async listUserReservations(userId: string) {
+    return prisma.reservation.findMany({
+      where: { userId },
+      orderBy: { startTime: 'desc' },
+      include: {
+        resource: { select: { id: true, name: true, club: { select: { name: true, slug: true, timezone: true } } } },
+      },
+    });
+  }
+
   /** Planning club : toutes les réservations d'un club, filtrables. */
   async listClubReservations(params: {
     clubId: string;

@@ -9,6 +9,7 @@ interface CreateResourceParams {
   pricePerHour: number;
   openHour?: number;
   closeHour?: number;
+  slotStepMin?: number | null;
 }
 
 interface UpdateResourceParams {
@@ -17,6 +18,7 @@ interface UpdateResourceParams {
   pricePerHour?: number;
   openHour?: number;
   closeHour?: number;
+  slotStepMin?: number | null;
 }
 
 /** Valide les horaires/tarif. Lève VALIDATION_ERROR si invalide. */
@@ -29,6 +31,14 @@ function validateHoursAndPrice(open: number, close: number, price: number): void
   }
 }
 
+/** Le pas du créneau, si fourni, doit être un multiple de 15 entre 15 et 240. */
+function validateSlotStep(step?: number | null): void {
+  if (step === undefined || step === null) return;
+  if (!Number.isInteger(step) || step < 15 || step > 240 || step % 15 !== 0) {
+    throw new Error('VALIDATION_ERROR');
+  }
+}
+
 export class ResourceService {
   /** Liste toutes les ressources d'un club (y compris désactivées). */
   async listClubResources(clubId: string) {
@@ -37,8 +47,8 @@ export class ResourceService {
       orderBy: { name: 'asc' },
       select: {
         id: true, name: true, attributes: true, isActive: true,
-        pricePerHour: true, openHour: true, closeHour: true,
-        clubSport: { select: { id: true, sport: { select: { key: true, name: true, resourceNoun: true } } } },
+        pricePerHour: true, openHour: true, closeHour: true, slotStepMin: true,
+        clubSport: { select: { id: true, slotStepMin: true, sport: { select: { key: true, name: true, resourceNoun: true, defaultSlotStepMin: true } } } },
       },
     });
   }
@@ -58,6 +68,7 @@ export class ResourceService {
     const openHour = params.openHour ?? 8;
     const closeHour = params.closeHour ?? 22;
     validateHoursAndPrice(openHour, closeHour, params.pricePerHour);
+    validateSlotStep(params.slotStepMin);
 
     return prisma.resource.create({
       data: {
@@ -68,6 +79,7 @@ export class ResourceService {
         pricePerHour: params.pricePerHour,
         openHour,
         closeHour,
+        slotStepMin: params.slotStepMin ?? null,
       },
     });
   }
@@ -82,6 +94,7 @@ export class ResourceService {
     const closeHour = params.closeHour ?? resource.closeHour;
     const price = params.pricePerHour ?? Number(resource.pricePerHour);
     validateHoursAndPrice(openHour, closeHour, price);
+    validateSlotStep(params.slotStepMin);
 
     if (params.name !== undefined && !params.name.trim()) throw new Error('VALIDATION_ERROR');
 
@@ -93,6 +106,7 @@ export class ResourceService {
         ...(params.pricePerHour !== undefined ? { pricePerHour: params.pricePerHour } : {}),
         ...(params.openHour !== undefined ? { openHour: params.openHour } : {}),
         ...(params.closeHour !== undefined ? { closeHour: params.closeHour } : {}),
+        ...(params.slotStepMin !== undefined ? { slotStepMin: params.slotStepMin } : {}),
       },
     });
   }

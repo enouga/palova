@@ -5,6 +5,8 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 
+const STEP_OPTIONS = [15, 30, 45, 60, 90, 120];
+
 export default function AdminResourcesPage() {
   const { th } = useTheme();
   const { token, clubId, ready } = useAuth();
@@ -13,7 +15,7 @@ export default function AdminResourcesPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
-  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' });
+  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', format: 'double', pricePerHour: '25', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
@@ -41,11 +43,18 @@ export default function AdminResourcesPage() {
   const editField = (id: string, field: 'pricePerHour' | 'openHour' | 'closeHour', value: string) =>
     setResources((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
+  const editStep = (id: string, value: string) =>
+    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, slotStepMin: value === '' ? null : Number(value) } : r)));
+
+  const defaultStep = (r: AdminResource) => r.clubSport.slotStepMin ?? r.clubSport.sport.defaultSlotStepMin;
+
   const save = async (r: AdminResource) => {
     if (!token || !clubId) return;
     try {
       setError(null);
-      await api.adminUpdateResource(clubId, r.id, { pricePerHour: Number(r.pricePerHour), openHour: Number(r.openHour), closeHour: Number(r.closeHour) }, token);
+      await api.adminUpdateResource(clubId, r.id, {
+        pricePerHour: Number(r.pricePerHour), openHour: Number(r.openHour), closeHour: Number(r.closeHour), slotStepMin: r.slotStepMin,
+      }, token);
       await load();
     } catch (e) { setError(`${r.name} : ${(e as Error).message}`); }
   };
@@ -62,13 +71,14 @@ export default function AdminResourcesPage() {
     try {
       setError(null);
       await api.adminCreateResource(clubId, {
-        clubSportId: nr.clubSportId, name: nr.name, attributes: { surface: nr.surface },
+        clubSportId: nr.clubSportId, name: nr.name, attributes: { surface: nr.surface, format: nr.format },
         pricePerHour: Number(nr.pricePerHour), openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
+        slotStepMin: nr.slotStepMin ? Number(nr.slotStepMin) : undefined,
       }, token);
-      setNr((n) => ({ ...n, name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22' }));
+      setNr((n) => ({ ...n, name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22', slotStepMin: '' }));
       await load();
     } catch (e) {
-      const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture)' : (e as Error).message;
+      const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture, créneau multiple de 15)' : (e as Error).message;
       setError(`Création : ${msg}`);
     } finally { setCreating(false); }
   };
@@ -86,7 +96,7 @@ export default function AdminResourcesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Statut', ''].map((h, i) => (
+                {['Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Créneau', 'Statut', ''].map((h, i) => (
                   <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
                 ))}
               </tr>
@@ -96,12 +106,21 @@ export default function AdminResourcesPage() {
                 <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: r.isActive ? 1 : 0.5 }}>
                   <td style={cell}>
                     <div style={{ fontWeight: 600 }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: th.textFaint }}>{typeof r.attributes?.surface === 'string' ? r.attributes.surface : '—'}</div>
+                    <div style={{ fontSize: 12, color: th.textFaint }}>
+                      {typeof r.attributes?.surface === 'string' ? r.attributes.surface : '—'}
+                      {r.attributes?.format === 'single' ? ' · single' : r.attributes?.format === 'double' ? ' · double' : ''}
+                    </div>
                   </td>
                   <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
                   <td style={cell}><input type="number" min={1} step="0.5" value={r.pricePerHour} onChange={(e) => editField(r.id, 'pricePerHour', e.target.value)} style={{ ...input, width: 80 }} /></td>
                   <td style={cell}><input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
                   <td style={cell}><input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
+                  <td style={cell}>
+                    <select value={r.slotStepMin ?? ''} onChange={(e) => editStep(r.id, e.target.value)} style={{ ...input, width: 110 }}>
+                      <option value="">Défaut ({defaultStep(r)} min)</option>
+                      {STEP_OPTIONS.map((s) => <option key={s} value={s}>{s} min</option>)}
+                    </select>
+                  </td>
                   <td style={cell}>
                     <button onClick={() => toggleActive(r)} style={{
                       border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 12px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600,
@@ -135,6 +154,12 @@ export default function AdminResourcesPage() {
               <option value="outdoor">outdoor</option>
             </select>
           </label>
+          <label style={label}>Format
+            <select value={nr.format} onChange={(e) => setNr({ ...nr, format: e.target.value })} style={input}>
+              <option value="double">Double</option>
+              <option value="single">Single</option>
+            </select>
+          </label>
           <label style={label}>Tarif €/h
             <input type="number" min={1} step="0.5" value={nr.pricePerHour} onChange={(e) => setNr({ ...nr, pricePerHour: e.target.value })} style={{ ...input, width: 90 }} />
           </label>
@@ -143,6 +168,12 @@ export default function AdminResourcesPage() {
           </label>
           <label style={label}>Ferm.
             <input type="number" min={0} max={24} value={nr.closeHour} onChange={(e) => setNr({ ...nr, closeHour: e.target.value })} style={{ ...input, width: 60 }} />
+          </label>
+          <label style={label}>Créneau
+            <select value={nr.slotStepMin} onChange={(e) => setNr({ ...nr, slotStepMin: e.target.value })} style={input}>
+              <option value="">Défaut</option>
+              {STEP_OPTIONS.map((s) => <option key={s} value={s}>{s} min</option>)}
+            </select>
           </label>
           <Btn onClick={create} disabled={creating || !nr.name.trim() || !nr.clubSportId} icon="plus">{creating ? 'Création…' : 'Créer'}</Btn>
         </div>

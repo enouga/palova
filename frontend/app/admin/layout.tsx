@@ -29,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const links = [
     { href: '/admin',              label: 'Tableau de bord', icon: 'grid' as const },
+    { href: '/admin/planning',     label: 'Planning',        icon: 'calendar' as const },
     { href: '/admin/courts',       label: 'Ressources',      icon: 'indoor' as const },
     { href: '/admin/sports',       label: 'Sports',          icon: 'bolt' as const },
     { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },

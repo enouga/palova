@@ -1,29 +1,35 @@
 'use client';
 
 import { CSSProperties, ReactNode, useState } from 'react';
+import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth, logout } from '@/lib/useAuth';
 import { Icon, IconName } from './Icon';
 
 // ── Logotype: serif wordmark with the accent ball standing in for the "o".
 //    Rendered as Sl●tpadel.
-export function Logotype({ size = 26, color }: { size?: number; color?: string }) {
+export function Logotype({ size = 26, color, href }: { size?: number; color?: string; href?: string }) {
   const { th } = useTheme();
+  const { token, clubId, ready } = useAuth();
   const c = color || th.text;
   const ball = Math.round(size * 0.56);
+  // Destination contextuelle : club → back-office, joueur → ses réservations, sinon accueil.
+  const target = href ?? (!ready ? '/' : clubId ? '/admin' : token ? '/me/reservations' : '/');
   return (
-    <span style={{
-      fontFamily: th.fontDisplay, fontWeight: 600, fontSize: size, color: c,
-      letterSpacing: -0.5, display: 'inline-flex', alignItems: 'baseline', lineHeight: 1, userSelect: 'none',
-    }}>
-      Sl
+    <Link href={target} aria-label="Accueil" style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <span style={{
-        display: 'inline-block', width: ball, height: ball, borderRadius: '50%',
-        background: th.accent, margin: `0 ${size * 0.03}px`, transform: `translateY(${size * 0.04}px)`,
-        boxShadow: th.neon ? `0 0 ${size * 0.5}px ${th.accent}55` : 'none',
-      }} />
-      tpadel
-    </span>
+        fontFamily: th.fontDisplay, fontWeight: 600, fontSize: size, color: c,
+        letterSpacing: -0.5, display: 'inline-flex', alignItems: 'baseline', lineHeight: 1, userSelect: 'none', cursor: 'pointer',
+      }}>
+        Sl
+        <span style={{
+          display: 'inline-block', width: ball, height: ball, borderRadius: '50%',
+          background: th.accent, margin: `0 ${size * 0.03}px`, transform: `translateY(${size * 0.04}px)`,
+          boxShadow: th.neon ? `0 0 ${size * 0.5}px ${th.accent}55` : 'none',
+        }} />
+        tpadel
+      </span>
+    </Link>
   );
 }
 

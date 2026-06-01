@@ -88,6 +88,7 @@ function CourtBooking() {
 
   const freeCount = slots.filter((s) => s.available).length;
   const indoor = resource ? resource.attributes?.surface !== 'outdoor' : true;
+  const format = typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined;
   const backTo = resource?.club.slug ? `/c/${resource.club.slug}` : '/clubs';
 
   return (
@@ -96,7 +97,12 @@ function CourtBooking() {
         <TopBar
           title={resource ? resource.name : 'Réservation'}
           onBack={() => router.push(backTo)}
-          right={resource ? <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip> : undefined}
+          right={resource ? (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip>
+              {format && <Chip tone="line">{format === 'single' ? 'Single' : 'Double'}</Chip>}
+            </div>
+          ) : undefined}
         />
 
         <div style={{ padding: '0 16px' }}>

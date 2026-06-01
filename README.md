@@ -17,11 +17,15 @@ Monorepo découplé : une **API Express** (`backend/`) et un **frontend Next.js*
 - **Marketplace joueur** : annuaire `/clubs` (recherche sport/ville), pages club brandées `/c/{slug}`, inscription `/register`.
 - **Réservation temps réel** : créneaux configurables, hold Redis 10 min + confirmation PostgreSQL Serializable, SSE, fuseau horaire par club.
 - **Paiements (encaissement manuel)** : registre par réservation (montant, moyen, payeur) + payé / reste dû, côté back-office.
+- **Pas de créneau par terrain** : chaque ressource choisit sa granularité (multiple de 15 min), repli sur le réglage du sport.
+- **Formats de terrain** : single / double (padel), affiché côté joueur et back-office.
+- **Vues planning** : grille de réservation multi-terrains côté joueur (page club, onglet « Réserver ») + planning du jour côté admin (`/admin/planning`, terrains × heures).
+- **Espace joueur** : page « Mes réservations » (à venir / passées, annulation). Logo contextuel (joueur → ses résas, club → back-office).
 - **Design system SlotPadel** : thème clair/sombre + accent par club, sur toutes les pages.
 
 ### ⏳ À faire
 - **Paiement en ligne** (Stripe) + **paiement partagé** entre joueurs (part par joueur).
-- **Espace joueur** : « Mes réservations », historique, profil.
+- **Espace joueur** : profil, historique enrichi, favoris.
 - **Sous-domaines par club** (`monclub.slotpadel.com`) + branding poussé.
 - **Monétisation** : abonnement club (B2B) / premium joueur.
 - Cours & coachs, parties publiques (matchmaking), notifications/e-mails.

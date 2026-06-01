@@ -4,7 +4,8 @@
 
 export type ThemeMode = 'floodlit' | 'daylight';
 
-const FONT_DISPLAY = 'var(--font-display), Georgia, serif';
+// Geist sur tout le site : titres + UI en Geist Sans, données en Geist Mono.
+const FONT_DISPLAY = 'var(--font-ui), -apple-system, system-ui, sans-serif';
 const FONT_UI = 'var(--font-ui), -apple-system, system-ui, sans-serif';
 const FONT_MONO = 'var(--font-mono), ui-monospace, monospace';
 

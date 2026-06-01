@@ -41,11 +41,16 @@ export const api = {
   getAvailability: (resourceId: string, date: string, duration: number) =>
     request<TimeSlot[]>(`/api/resources/${resourceId}/availability?date=${date}&duration=${duration}`),
 
+  getClubAvailability: (slug: string, date: string, duration: number) =>
+    request<ClubAvailability[]>(`/api/clubs/${slug}/availability?date=${date}&duration=${duration}`),
+
   // --- Compte ---
   register: (body: RegisterBody) =>
     request<AuthResponse>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
 
   getMyClubs: (token: string) => request<Membership[]>('/api/me/clubs', {}, token),
+
+  getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
   createClub: (body: CreateClubBody, token: string) =>
     request<ClubAdminDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
@@ -120,6 +125,15 @@ export interface Membership {
   role: 'OWNER' | 'ADMIN' | 'STAFF';
 }
 
+export interface MyReservation {
+  id: string;
+  startTime: string;
+  endTime: string;
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+  totalPrice: string;
+  resource: { id: string; name: string; club: { name: string; slug: string; timezone: string } };
+}
+
 export interface Resource {
   id: string;
   name: string;
@@ -180,6 +194,18 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
+}
+
+export interface ClubAvailability {
+  resource: {
+    id: string;
+    name: string;
+    attributes: { surface?: string; format?: string } & Record<string, unknown>;
+    pricePerHour: string;
+    sport: { key: string; name: string };
+    clubSportId: string;
+  };
+  slots: TimeSlot[];
 }
 
 export interface Reservation {
@@ -263,7 +289,8 @@ export interface AdminResource {
   pricePerHour: string;
   openHour: number;
   closeHour: number;
-  clubSport: { id: string; sport: { key: string; name: string; resourceNoun: string } };
+  slotStepMin: number | null;
+  clubSport: { id: string; slotStepMin: number | null; sport: { key: string; name: string; resourceNoun: string; defaultSlotStepMin: number } };
 }
 
 export interface CreateResourceBody {
@@ -273,6 +300,7 @@ export interface CreateResourceBody {
   pricePerHour: number;
   openHour?: number;
   closeHour?: number;
+  slotStepMin?: number | null;
 }
 
 export type UpdateResourceBody = Partial<Omit<CreateResourceBody, 'clubSportId'>>;
