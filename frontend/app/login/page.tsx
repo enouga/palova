@@ -39,7 +39,7 @@ export default function LoginPage() {
         router.push('/admin');
       } else {
         localStorage.removeItem('clubId');
-        router.push('/courts');
+        router.push('/clubs');
       }
     } catch {
       setError('Impossible de contacter le serveur');
@@ -81,9 +81,13 @@ export default function LoginPage() {
           <Btn type="submit" full icon="arrowR" disabled={loading}>
             {loading ? 'Connexion…' : 'Se connecter'}
           </Btn>
-          <button type="button" onClick={() => router.push('/clubs/new')}
+          <button type="button" onClick={() => router.push('/register')}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
-            Vous gérez un club ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
+            Pas encore de compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créer un compte</span>
+          </button>
+          <button type="button" onClick={() => router.push('/clubs/new')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '2px 0' }}>
+            Vous gérez un club ? <span style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
           </button>
         </div>
       </form>

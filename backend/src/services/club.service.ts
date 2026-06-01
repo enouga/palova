@@ -51,6 +51,31 @@ export class ClubService {
     }
   }
 
+  /** Annuaire public : clubs actifs, filtrable par sport (key), ville, texte. */
+  async listClubs(filters: { sport?: string; city?: string; q?: string }) {
+    const where: Prisma.ClubWhereInput = { status: 'ACTIVE' };
+    if (filters.city) where.city = { contains: filters.city, mode: 'insensitive' };
+    if (filters.q)    where.name = { contains: filters.q, mode: 'insensitive' };
+    if (filters.sport) where.clubSports = { some: { sport: { key: filters.sport } } };
+
+    const clubs = await prisma.club.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true, slug: true, name: true, city: true, description: true, accentColor: true, logoUrl: true,
+        clubSports: { select: { sport: { select: { key: true, name: true, icon: true } } } },
+        _count: { select: { resources: true } },
+      },
+    });
+
+    return clubs.map((c) => ({
+      id: c.id, slug: c.slug, name: c.name, city: c.city, description: c.description,
+      accentColor: c.accentColor, logoUrl: c.logoUrl,
+      sports: c.clubSports.map((cs) => cs.sport),
+      resourceCount: c._count.resources,
+    }));
+  }
+
   /** Détail public d'un club : sports activés + ressources actives. */
   async getClubBySlug(slug: string) {
     const club = await prisma.club.findUnique({

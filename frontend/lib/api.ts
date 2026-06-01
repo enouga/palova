@@ -25,6 +25,15 @@ export const api = {
   // --- Public ---
   getSports: () => request<Sport[]>('/api/sports'),
 
+  listClubs: (filters: { sport?: string; city?: string; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (filters.sport) qs.set('sport', filters.sport);
+    if (filters.city)  qs.set('city', filters.city);
+    if (filters.q)     qs.set('q', filters.q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<ClubSummary[]>(`/api/clubs${suffix}`);
+  },
+
   getClub: (slug: string) => request<ClubDetail>(`/api/clubs/${slug}`),
 
   getResource: (resourceId: string) => request<PublicResource>(`/api/resources/${resourceId}`),
@@ -123,6 +132,18 @@ export interface ClubSportPublic {
   durationsMin: number[];
   sport: Sport;
   resources: Resource[];
+}
+
+export interface ClubSummary {
+  id: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  description: string | null;
+  accentColor: string;
+  logoUrl: string | null;
+  sports: { key: string; name: string; icon: string | null }[];
+  resourceCount: number;
 }
 
 export interface ClubDetail {

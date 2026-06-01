@@ -33,6 +33,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: N
   } catch (err) { handleError(err, res, next); }
 });
 
+// Annuaire public — filtres optionnels sport (key), city, q (nom).
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const clubs = await clubService.listClubs({
+      sport: asString(req.query.sport) || undefined,
+      city:  asString(req.query.city) || undefined,
+      q:     asString(req.query.q) || undefined,
+    });
+    res.json(clubs);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Détail public d'un club par slug.
 router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {

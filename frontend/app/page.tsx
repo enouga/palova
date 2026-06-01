@@ -49,7 +49,7 @@ export default function HomePage() {
 
         {/* CTAs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 48 }}>
-          <Btn full icon="arrowR" onClick={() => router.push('/courts')}>Réserver un terrain</Btn>
+          <Btn full icon="arrowR" onClick={() => router.push('/clubs')}>Trouver un club</Btn>
           <Btn full variant="ghost" icon="user" onClick={() => router.push('/login')}>Se connecter</Btn>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', marginTop: 8 }}>

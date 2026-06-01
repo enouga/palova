@@ -14,10 +14,10 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = 'slotpadel-theme';
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Default to floodlit (the design's primary direction). Real value is read
-  // from localStorage after mount to avoid SSR/client mismatch.
-  const [mode, setModeState] = useState<ThemeMode>('floodlit');
+export function ThemeProvider({ children, accent, defaultMode }: { children: React.ReactNode; accent?: string; defaultMode?: ThemeMode }) {
+  // Default to floodlit (or club's defaultMode). Real value is read from
+  // localStorage after mount to avoid SSR/client mismatch.
+  const [mode, setModeState] = useState<ThemeMode>(defaultMode ?? 'floodlit');
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
@@ -29,7 +29,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, m);
   };
 
-  const th = useMemo(() => makeTheme(mode, { accent: undefined, neon: true }), [mode]);
+  // accent override (branding par club) — défaut lime si non fourni.
+  const th = useMemo(() => makeTheme(mode, { accent, neon: true }), [mode, accent]);
 
   // Paint the document background so areas outside the app shell match the theme.
   useEffect(() => {

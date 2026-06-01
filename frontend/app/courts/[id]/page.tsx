@@ -5,16 +5,15 @@ import { api, TimeSlot, Reservation, SSEEvent, PublicResource } from '@/lib/api'
 import CourtCalendar from '@/components/CourtCalendar';
 import BookingModal from '@/components/BookingModal';
 import { useCourtSSE } from '@/lib/useCourtSSE';
-import { useTheme } from '@/lib/ThemeProvider';
+import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
-import { TopBar, Chip, LiveDot, Placeholder, Segmented, Btn } from '@/components/ui/atoms';
+import { TopBar, Chip, LiveDot, Placeholder, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Génère les N prochains jours (clé YYYY-MM-DD + libellés localisés).
 function nextDays(count: number) {
   const out: { key: string; dow: string; day: string }[] = [];
   const base = new Date();
@@ -30,7 +29,7 @@ function nextDays(count: number) {
   return out;
 }
 
-export default function CourtPage() {
+function CourtBooking() {
   const params = useParams();
   const router = useRouter();
   const { th } = useTheme();
@@ -89,13 +88,14 @@ export default function CourtPage() {
 
   const freeCount = slots.filter((s) => s.available).length;
   const indoor = resource ? resource.attributes?.surface !== 'outdoor' : true;
+  const backTo = resource?.club.slug ? `/c/${resource.club.slug}` : '/clubs';
 
   return (
     <Screen>
       <div style={{ paddingBottom: 30 }}>
         <TopBar
           title={resource ? resource.name : 'Réservation'}
-          onBack={() => router.push('/courts')}
+          onBack={() => router.push(backTo)}
           right={resource ? <Chip tone="accent" icon={indoor ? 'indoor' : 'sun'}>{indoor ? 'Indoor' : 'Plein air'}</Chip> : undefined}
         />
 
@@ -117,7 +117,6 @@ export default function CourtPage() {
           </div>
         )}
 
-        {/* day pills */}
         <div className="sp-noscroll" style={{ display: 'flex', gap: 9, overflowX: 'auto', padding: '18px 16px 4px' }}>
           {days.map((d) => {
             const on = d.key === date;
@@ -181,5 +180,23 @@ export default function CourtPage() {
         />
       )}
     </Screen>
+  );
+}
+
+// Applique l'accent du club autour du parcours de réservation (branding).
+export default function CourtPage() {
+  const params = useParams();
+  const resourceId = typeof params.id === 'string' ? params.id : '';
+  const [accent, setAccent] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!resourceId) return;
+    api.getResource(resourceId).then((r) => setAccent(r.club.accentColor)).catch(() => {});
+  }, [resourceId]);
+
+  return (
+    <ThemeProvider accent={accent}>
+      <CourtBooking />
+    </ThemeProvider>
   );
 }
