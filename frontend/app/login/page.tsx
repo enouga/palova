@@ -81,6 +81,10 @@ export default function LoginPage() {
           <Btn type="submit" full icon="arrowR" disabled={loading}>
             {loading ? 'Connexion…' : 'Se connecter'}
           </Btn>
+          <button type="button" onClick={() => router.push('/clubs/new')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
+            Vous gérez un club ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
+          </button>
         </div>
       </form>
     </Screen>

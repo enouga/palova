@@ -75,6 +75,17 @@ export class ClubService {
     return club;
   }
 
+  /** Détail d'un club pour le back-office (préremplissage des réglages). */
+  async getClubForAdmin(clubId: string) {
+    return prisma.club.findUniqueOrThrow({
+      where: { id: clubId },
+      select: {
+        id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
+        timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+      },
+    });
+  }
+
   /** Met à jour profil/branding d'un club (déjà scopé par requireClubMember). */
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;

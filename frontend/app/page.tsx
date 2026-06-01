@@ -56,9 +56,9 @@ export default function HomePage() {
             <Icon name="indoor" size={15} color={th.textFaint} />
             <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
               Vous gérez un club ?{' '}
-              <button onClick={() => router.push('/login')}
+              <button onClick={() => router.push('/clubs/new')}
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
-                Espace club
+                Créer mon club
               </button>
             </span>
           </div>

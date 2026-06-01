@@ -33,10 +33,13 @@ export const api = {
     request<TimeSlot[]>(`/api/resources/${resourceId}/availability?date=${date}&duration=${duration}`),
 
   // --- Compte ---
+  register: (body: RegisterBody) =>
+    request<AuthResponse>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+
   getMyClubs: (token: string) => request<Membership[]>('/api/me/clubs', {}, token),
 
   createClub: (body: CreateClubBody, token: string) =>
-    request<ClubDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
+    request<ClubAdminDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
 
   // --- Réservation joueur ---
   holdSlot: (params: HoldParams, token: string) =>
@@ -49,6 +52,12 @@ export const api = {
     request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
 
   // --- Back-office club (scopé par clubId) ---
+  adminGetClub: (clubId: string, token: string) =>
+    request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, {}, token),
+
+  adminUpdateClub: (clubId: string, body: UpdateClubBody, token: string) =>
+    request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+
   adminGetSports: (clubId: string, token: string) =>
     request<AdminClubSport[]>(`/api/clubs/${clubId}/admin/sports`, {}, token),
 
@@ -173,6 +182,45 @@ export interface CreateClubBody {
   city?: string;
   timezone?: string;
 }
+
+export interface RegisterBody {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: { id: string; email: string; firstName: string; lastName: string };
+}
+
+export interface ClubAdminDetail {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  address: string;
+  city: string | null;
+  country: string | null;
+  timezone: string;
+  logoUrl: string | null;
+  accentColor: string;
+  defaultThemeMode: string;
+  status: string;
+}
+
+export type UpdateClubBody = Partial<{
+  name: string;
+  description: string;
+  address: string;
+  city: string;
+  timezone: string;
+  logoUrl: string;
+  accentColor: string;
+  defaultThemeMode: string;
+}>;
 
 // --- Types back-office ---
 

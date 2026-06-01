@@ -44,6 +44,12 @@ router.use(authMiddleware, requireClubMember('STAFF'));
 
 // --- Profil & branding du club ---
 
+router.get('/', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await clubService.getClubForAdmin(req.membership!.clubId));
+  } catch (err) { handleError(err, res, next); }
+});
+
 router.patch('/', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const club = await clubService.updateClub(req.membership!.clubId, req.body);
