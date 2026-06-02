@@ -38,7 +38,7 @@ export default function AdminAnnouncementsPage() {
   const resetForm = () => { setForm(EMPTY); setEditId(null); };
 
   const submit = async () => {
-    if (!token || !clubId || !form.title.trim()) return;
+    if (!token || !clubId || !form.title.trim() || !form.body.trim()) return;
     setSaving(true);
     const body: AnnouncementBody = {
       title: form.title.trim(),
@@ -113,7 +113,7 @@ export default function AdminAnnouncementsPage() {
             </label>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <Btn onClick={submit} icon={editId ? 'check' : 'plus'} disabled={saving || !form.title.trim()}>{saving ? '…' : editId ? 'Enregistrer' : 'Publier'}</Btn>
+            <Btn onClick={submit} icon={editId ? 'check' : 'plus'} disabled={saving || !form.title.trim() || !form.body.trim()}>{saving ? '…' : editId ? 'Enregistrer' : 'Publier'}</Btn>
             {editId && <Btn variant="ghost" onClick={resetForm} disabled={saving}>Annuler</Btn>}
           </div>
         </div>

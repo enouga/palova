@@ -5,7 +5,8 @@ import { api, TimeSlot, Reservation, SSEEvent, PublicResource } from '@/lib/api'
 import CourtCalendar from '@/components/CourtCalendar';
 import BookingModal from '@/components/BookingModal';
 import { useCourtSSE } from '@/lib/useCourtSSE';
-import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
+import { useTheme } from '@/lib/ThemeProvider';
+import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { TopBar, Chip, LiveDot, Placeholder, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -36,8 +37,8 @@ function CourtBooking() {
   const router = useRouter();
   const { th } = useTheme();
   const resourceId = typeof params.id === 'string' ? params.id : '';
+  const { token, ready } = useAuth();
 
-  const [token, setToken]               = useState<string | null>(null);
   const [resource, setResource]         = useState<PublicResource | null>(null);
   const [date, setDate]                 = useState(todayISO());
   const [duration, setDuration]         = useState<number>(90);
@@ -51,11 +52,7 @@ function CourtBooking() {
   const days = nextDays(9);
   const tz = resource?.club.timezone;
 
-  useEffect(() => {
-    const t = localStorage.getItem('token');
-    if (!t) { router.replace('/login'); return; }
-    setToken(t);
-  }, [router]);
+  useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
   useEffect(() => {
     if (!resourceId) return;
@@ -101,7 +98,7 @@ function CourtBooking() {
   const freeCount = slots.filter((s) => s.available).length;
   const ct = courtType(typeof resource?.attributes?.surface === 'string' ? resource.attributes.surface : undefined);
   const isSingle = courtFormat(typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined);
-  const backTo = resource?.club.slug ? `/c/${resource.club.slug}` : '/clubs';
+  const backTo = '/';
 
   return (
     <Screen>
@@ -201,20 +198,6 @@ function CourtBooking() {
   );
 }
 
-// Applique l'accent du club autour du parcours de réservation (branding).
 export default function CourtPage() {
-  const params = useParams();
-  const resourceId = typeof params.id === 'string' ? params.id : '';
-  const [accent, setAccent] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    if (!resourceId) return;
-    api.getResource(resourceId).then((r) => setAccent(r.club.accentColor)).catch(() => {});
-  }, [resourceId]);
-
-  return (
-    <ThemeProvider accent={accent}>
-      <CourtBooking />
-    </ThemeProvider>
-  );
+  return <CourtBooking />;
 }

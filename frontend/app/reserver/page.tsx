@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
+import { useAuth } from '@/lib/useAuth';
 import { courtType, courtFormat } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
@@ -35,6 +36,7 @@ function formatHour(iso: string, tz: string): string {
 function ClubContent({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const router = useRouter();
+  const { token } = useAuth();
   const allDurations = Array.from(new Set(
     club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
   )).sort((a, b) => a - b);
@@ -43,15 +45,12 @@ function ClubContent({ club }: { club: ClubDetail }) {
   const [duration, setDuration] = useState<number>(defaultDuration(allDurations));
   const [avail, setAvail]       = useState<ClubAvailability[]>([]);
   const [loadingA, setLoadingA] = useState(true);
-  const [token, setToken]       = useState<string | null>(null);
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [isSub, setIsSub]       = useState(false);
 
   const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
   const days = nextDays(Math.max(1, windowDays + 1));
-
-  useEffect(() => { setToken(localStorage.getItem('token')); }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'courts') setTab('courts');

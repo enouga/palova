@@ -22,7 +22,7 @@ app.use(cors({
       const host = new URL(origin).hostname;
       if (host === FRONTEND_ROOT || host.endsWith(`.${FRONTEND_ROOT}`)) return cb(null, true);
     } catch { /* origine illisible */ }
-    cb(new Error('Not allowed by CORS'));
+    cb(null, false);
   },
 }));
 app.use(express.json());

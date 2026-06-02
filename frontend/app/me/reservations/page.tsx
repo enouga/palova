@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -20,7 +21,7 @@ const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED:
 export default function MyReservationsPage() {
   const router = useRouter();
   const { th } = useTheme();
-  const [token, setToken]     = useState<string | null>(null);
+  const { token, ready } = useAuth();
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [tab, setTab]         = useState<'upcoming' | 'past'>('upcoming');
   const [loading, setLoading] = useState(true);
@@ -28,11 +29,7 @@ export default function MyReservationsPage() {
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
 
-  useEffect(() => {
-    const t = localStorage.getItem('token');
-    if (!t) { router.replace('/login'); return; }
-    setToken(t);
-  }, [router]);
+  useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
