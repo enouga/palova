@@ -67,6 +67,18 @@ async function main() {
     });
   }
 
+  // 4b. Annonces & sponsors de démo (idempotent : on repart de zéro pour le club démo)
+  await prisma.announcement.deleteMany({ where: { clubId: club.id } });
+  await prisma.announcement.createMany({ data: [
+    { clubId: club.id, title: 'Tournoi interne samedi', body: 'Inscriptions ouvertes au club-house. Niveau loisir, lots à gagner !', pinned: true },
+    { clubId: club.id, title: 'Nouveaux créneaux le matin', body: 'Le club ouvre désormais dès 8h en semaine.' },
+  ] });
+  await prisma.sponsor.deleteMany({ where: { clubId: club.id } });
+  await prisma.sponsor.createMany({ data: [
+    { clubId: club.id, name: 'Babolat', logoUrl: 'https://dummyimage.com/120x44/111/fff&text=Babolat', sortOrder: 1 },
+    { clubId: club.id, name: 'Decathlon', logoUrl: 'https://dummyimage.com/120x44/111/fff&text=Decathlon', sortOrder: 2 },
+  ] });
+
   // 5. Comptes de démo — un par rôle (mot de passe commun : password123)
   const hashedPassword = await bcrypt.hash('password123', 10);
 
