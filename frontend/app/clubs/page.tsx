@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { api, ClubSummary, Sport } from '@/lib/api';
+import { clubUrl } from '@/lib/clubUrl';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Chip, Placeholder, ThemeToggle, LogoutButton, MyBookingsButton } from '@/components/ui/atoms';
@@ -10,7 +10,7 @@ import { Icon } from '@/components/ui/Icon';
 function ClubCard({ club }: { club: ClubSummary }) {
   const { th } = useTheme();
   return (
-    <Link href={`/c/${club.slug}`} style={{ textDecoration: 'none', display: 'block' }}>
+    <a href={clubUrl(club.slug)} style={{ textDecoration: 'none', display: 'block' }}>
       <div style={{ background: th.surface, borderRadius: 22, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
         <div style={{ position: 'relative' }}>
           <Placeholder label={club.name} height={104} radius={0} />
@@ -33,7 +33,7 @@ function ClubCard({ club }: { club: ClubSummary }) {
           </div>
         </div>
       </div>
-    </Link>
+    </a>
   );
 }
 
