@@ -18,7 +18,7 @@ interface ConfirmDialogProps {
 }
 
 /**
- * Confirmation bottom-sheet thémée, calquée sur le BookingModal.
+ * Confirmation top-sheet thémée, calquée sur le BookingModal.
  * Le bouton d'action est en variante `danger` (action destructive).
  */
 export function ConfirmDialog({
