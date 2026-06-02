@@ -4,6 +4,7 @@ import { CSSProperties, ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth, logout } from '@/lib/useAuth';
+import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
 
 // ── Logotype: serif wordmark with the accent ball standing in for the "o".
@@ -11,11 +12,12 @@ import { Icon, IconName } from './Icon';
 export function Logotype({ size = 26, color, href }: { size?: number; color?: string; href?: string }) {
   const { th } = useTheme();
   const { token, clubId, ready } = useAuth();
+  const { slug } = useClub();
   const c = color || th.text;
   const ball = Math.round(size * 0.56);
-  // Destination contextuelle : club → back-office, joueur → annuaire, sinon accueil.
-  // (Dans un club, on passe href={`/c/${slug}`} pour rester sur la page d'accueil du club.)
-  const target = href ?? (!ready ? '/' : clubId ? '/admin' : token ? '/clubs' : '/');
+  // Destination contextuelle : sur un sous-domaine club, le logo ramène à la home du club (/).
+  // Sinon (plateforme) : membre → back-office, joueur → annuaire, visiteur → accueil.
+  const target = href ?? (slug ? '/' : (!ready ? '/' : clubId ? '/admin' : token ? '/clubs' : '/'));
   return (
     <Link href={target} aria-label="Accueil" style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <span style={{
