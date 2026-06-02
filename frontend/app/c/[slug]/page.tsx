@@ -8,7 +8,7 @@ import { ThemeMode } from '@/lib/theme';
 import { courtType, courtFormat } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
-import { Chip, LiveDot, Placeholder, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { Chip, LiveDot, Placeholder, Segmented, ThemeToggle, LogoutButton, MyBookingsButton } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import BookingModal from '@/components/BookingModal';
 
@@ -53,18 +53,12 @@ function ClubContent({ club }: { club: ClubDetail }) {
 
   useEffect(() => { setToken(localStorage.getItem('token')); }, []);
 
+  // Statut d'abonné en lecture seule : l'abonnement est attribué par le club
+  // (back-office). Sert à connaître la fenêtre de réservation du joueur.
   useEffect(() => {
     if (!token) { setIsSub(false); return; }
     api.getMySubscriptions(token).then((ids) => setIsSub(ids.includes(club.id))).catch(() => {});
   }, [token, club.id]);
-
-  const toggleSub = async () => {
-    if (!token) { router.push('/login'); return; }
-    try {
-      if (isSub) { await api.unsubscribeClub(club.id, token); setIsSub(false); }
-      else { await api.subscribeClub(club.id, token); setIsSub(true); }
-    } catch { /* ignore */ }
-  };
 
   const loadAvail = useCallback(async () => {
     setLoadingA(true);
@@ -97,10 +91,8 @@ function ClubContent({ club }: { club: ClubDetail }) {
               <Icon name="chevL" size={19} color={th.text} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={toggleSub}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, border: isSub ? 'none' : `1px solid ${th.lineStrong}`, cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: isSub ? th.accent : 'transparent', color: isSub ? th.onAccent : th.text, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
-                <Icon name={isSub ? 'check' : 'plus'} size={15} color={isSub ? th.onAccent : th.text} />{isSub ? 'Abonné' : "S'abonner"}
-              </button>
+              {isSub && <Chip tone="accent" icon="check">Abonné</Chip>}
+              <MyBookingsButton />
               <ThemeToggle />
               <LogoutButton />
             </div>
@@ -150,7 +142,7 @@ function ClubContent({ club }: { club: ClubDetail }) {
             </div>
             {!isSub && club.memberBookingDays > club.publicBookingDays && (
               <div style={{ padding: '8px 20px 0', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
-                Abonnez-vous pour réserver jusqu'à <b style={{ color: th.text }}>{club.memberBookingDays} j</b> à l'avance (au lieu de {club.publicBookingDays} j).
+                Les abonnés du club réservent jusqu'à <b style={{ color: th.text }}>{club.memberBookingDays} j</b> à l'avance (vous : {club.publicBookingDays} j). Contactez le club pour devenir abonné.
               </div>
             )}
             <div style={{ padding: '14px 20px 0' }}>

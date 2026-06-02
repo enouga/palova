@@ -52,13 +52,8 @@ export const api = {
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
+  // Clubs auxquels le joueur est abonné (statut attribué par le club, lecture seule côté joueur).
   getMySubscriptions: (token: string) => request<string[]>('/api/me/subscriptions', {}, token),
-
-  subscribeClub: (clubId: string, token: string) =>
-    request<{ ok: boolean }>(`/api/clubs/${clubId}/subscribe`, { method: 'POST' }, token),
-
-  unsubscribeClub: (clubId: string, token: string) =>
-    request<{ ok: boolean }>(`/api/clubs/${clubId}/subscribe`, { method: 'DELETE' }, token),
 
   createClub: (body: CreateClubBody, token: string) =>
     request<ClubAdminDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),

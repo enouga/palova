@@ -5,6 +5,7 @@ import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
 
 function fmtDate(iso: string, tz: string): string {
@@ -24,6 +25,8 @@ export default function MyReservationsPage() {
   const [tab, setTab]         = useState<'upcoming' | 'past'>('upcoming');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
+  const [cancelling, setCancelling]       = useState(false);
 
   useEffect(() => {
     const t = localStorage.getItem('token');
@@ -48,8 +51,10 @@ export default function MyReservationsPage() {
 
   const cancel = async (r: MyReservation) => {
     if (!token) return;
-    try { setError(null); await api.cancelReservation(r.id, token); await load(token); }
+    setCancelling(true);
+    try { setError(null); await api.cancelReservation(r.id, token); setConfirmCancel(null); await load(token); }
     catch (e) { setError((e as Error).message); }
+    finally { setCancelling(false); }
   };
 
   return (
@@ -111,7 +116,7 @@ export default function MyReservationsPage() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
                       <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
                       {upcoming && (
-                        <button onClick={() => cancel(r)} style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
+                        <button onClick={() => setConfirmCancel(r)} style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
                       )}
                     </div>
                   </div>
@@ -121,6 +126,25 @@ export default function MyReservationsPage() {
           )}
         </div>
       </div>
+
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Annuler la réservation ?"
+          detail={
+            <>
+              {confirmCancel.resource.name} · {fmtDate(confirmCancel.startTime, confirmCancel.resource.club.timezone)}
+              {' · '}
+              {fmtHour(confirmCancel.startTime, confirmCancel.resource.club.timezone)}–{fmtHour(confirmCancel.endTime, confirmCancel.resource.club.timezone)}
+            </>
+          }
+          message="Cette action est définitive : le créneau sera remis à disposition des autres joueurs."
+          confirmLabel="Annuler la réservation"
+          cancelLabel="Retour"
+          busy={cancelling}
+          onConfirm={() => cancel(confirmCancel)}
+          onCancel={() => setConfirmCancel(null)}
+        />
+      )}
     </Screen>
   );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { api, ClubSummary, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, Chip, Placeholder, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { Logotype, Chip, Placeholder, ThemeToggle, LogoutButton, MyBookingsButton } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 
 function ClubCard({ club }: { club: ClubSummary }) {
@@ -66,6 +66,7 @@ export default function ClubsDirectory() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Logotype size={22} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <MyBookingsButton />
               <ThemeToggle />
               <LogoutButton />
             </div>

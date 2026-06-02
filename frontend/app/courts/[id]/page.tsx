@@ -108,7 +108,7 @@ function CourtBooking() {
       <div style={{ paddingBottom: 30 }}>
         <TopBar
           title={resource ? resource.name : 'Réservation'}
-          onBack={() => router.push(backTo)}
+          logoHref={backTo}
           right={resource ? (
             <div style={{ display: 'flex', gap: 6 }}>
               <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>

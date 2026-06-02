@@ -4,6 +4,7 @@ import { api, ClubReservation, ClubReservationsResponse, PaymentMethod } from '@
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -22,6 +23,8 @@ export default function AdminReservationsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<{ amount: string; method: PaymentMethod; payerName: string }>({ amount: '', method: 'CASH', payerName: '' });
   const [saving, setSaving] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState<ClubReservation | null>(null);
+  const [cancelling, setCancelling]       = useState(false);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
@@ -44,8 +47,10 @@ export default function AdminReservationsPage() {
 
   const cancel = async (r: ClubReservation) => {
     if (!token || !clubId) return;
-    try { setError(null); await api.adminCancelReservation(clubId, r.id, token); await load(); }
+    setCancelling(true);
+    try { setError(null); await api.adminCancelReservation(clubId, r.id, token); setConfirmCancel(null); await load(); }
     catch (e) { setError((e as Error).message); }
+    finally { setCancelling(false); }
   };
 
   const openPanel = (r: ClubReservation) => {
@@ -131,7 +136,7 @@ export default function AdminReservationsPage() {
                           </button>
                         )}
                         {r.status !== 'CANCELLED' && (
-                          <button onClick={() => cancel(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
+                          <button onClick={() => setConfirmCancel(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
                         )}
                       </td>
                     </tr>
@@ -182,6 +187,24 @@ export default function AdminReservationsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Annuler la réservation ?"
+          detail={
+            <>
+              {confirmCancel.resource.name} · {confirmCancel.user.firstName} {confirmCancel.user.lastName}
+              {' · '}{fmt(confirmCancel.startTime)}
+            </>
+          }
+          message="Cette action est définitive et libère le créneau. Le client n'est pas notifié automatiquement."
+          confirmLabel="Annuler la réservation"
+          cancelLabel="Retour"
+          busy={cancelling}
+          onConfirm={() => cancel(confirmCancel)}
+          onCancel={() => setConfirmCancel(null)}
+        />
       )}
     </div>
   );

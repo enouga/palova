@@ -139,18 +139,6 @@ export class ClubService {
 
   // --- Abonnés (joueurs avec accès anticipé) ---
 
-  async subscribe(userId: string, clubId: string) {
-    return prisma.clubSubscriber.upsert({
-      where: { userId_clubId: { userId, clubId } },
-      update: {},
-      create: { userId, clubId },
-    });
-  }
-
-  async unsubscribe(userId: string, clubId: string) {
-    await prisma.clubSubscriber.deleteMany({ where: { userId, clubId } });
-  }
-
   async listSubscribers(clubId: string) {
     const subs = await prisma.clubSubscriber.findMany({
       where: { clubId },

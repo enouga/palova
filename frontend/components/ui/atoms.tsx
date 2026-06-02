@@ -13,8 +13,9 @@ export function Logotype({ size = 26, color, href }: { size?: number; color?: st
   const { token, clubId, ready } = useAuth();
   const c = color || th.text;
   const ball = Math.round(size * 0.56);
-  // Destination contextuelle : club → back-office, joueur → ses réservations, sinon accueil.
-  const target = href ?? (!ready ? '/' : clubId ? '/admin' : token ? '/me/reservations' : '/');
+  // Destination contextuelle : club → back-office, joueur → annuaire, sinon accueil.
+  // (Dans un club, on passe href={`/c/${slug}`} pour rester sur la page d'accueil du club.)
+  const target = href ?? (!ready ? '/' : clubId ? '/admin' : token ? '/clubs' : '/');
   return (
     <Link href={target} aria-label="Accueil" style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <span style={{
@@ -33,7 +34,7 @@ export function Logotype({ size = 26, color, href }: { size?: number; color?: st
   );
 }
 
-type BtnVariant = 'primary' | 'dark' | 'ghost' | 'surface';
+type BtnVariant = 'primary' | 'dark' | 'ghost' | 'surface' | 'danger';
 
 export function Btn({
   children, variant = 'primary', full, onClick, icon, style, disabled, type,
@@ -60,6 +61,7 @@ export function Btn({
     dark: { background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee' },
     ghost: { background: 'transparent', color: th.text, boxShadow: `inset 0 0 0 1.5px ${th.lineStrong}` },
     surface: { background: th.surface2, color: th.text },
+    danger: { background: '#ff7a4d', color: '#fff' },
   };
   const iconColor = variant === 'primary' ? th.onAccent : (skins[variant].color as string);
   return (
@@ -176,19 +178,38 @@ export function Placeholder({ label, height = 150, radius = 18 }: { label: strin
   );
 }
 
-// Barre de titre avec bouton retour optionnel et zone droite.
-export function TopBar({ title, onBack, right }: { title: ReactNode; onBack?: () => void; right?: ReactNode }) {
+// Barre de titre. `logoHref` affiche le logotype (lien d'accueil) à gauche ;
+// sinon `onBack` affiche une flèche retour.
+export function TopBar({ title, onBack, logoHref, right }: { title: ReactNode; onBack?: () => void; logoHref?: string; right?: ReactNode }) {
   const { th } = useTheme();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '28px 16px 12px' }}>
-      {onBack && (
+      {logoHref ? (
+        <Logotype href={logoHref} size={20} />
+      ) : onBack ? (
         <button onClick={onBack} aria-label="Retour" style={{ border: 'none', cursor: 'pointer', width: 40, height: 40, borderRadius: 12, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Icon name="chevL" size={20} color={th.text} />
         </button>
-      )}
+      ) : null}
       <div style={{ flex: 1, fontFamily: th.fontUI, fontWeight: 700, fontSize: 17, color: th.text }}>{title}</div>
       {right}
     </div>
+  );
+}
+
+// Accès « Mes réservations » — icône ticket, ne s'affiche que si connecté.
+export function MyBookingsButton() {
+  const { th } = useTheme();
+  const { token, ready } = useAuth();
+  if (!ready || !token) return null;
+  return (
+    <Link href="/me/reservations" aria-label="Mes réservations"
+      style={{
+        width: 38, height: 38, borderRadius: 12, flexShrink: 0, textDecoration: 'none',
+        background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+      <Icon name="ticket" size={19} color={th.text} />
+    </Link>
   );
 }
 

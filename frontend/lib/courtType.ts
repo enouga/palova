@@ -3,7 +3,7 @@ import { IconName } from '@/components/ui/Icon';
 /** Surface du terrain (attributes.surface) : indoor / outdoor. */
 export function courtType(surface?: string): { label: string; icon: IconName } {
   return surface === 'outdoor'
-    ? { label: 'Plein air', icon: 'sun' }
+    ? { label: 'Outdoor', icon: 'sun' }
     : { label: 'Indoor', icon: 'indoor' };
 }
 
@@ -14,7 +14,7 @@ export function courtFormat(format?: string): string | null {
 
 export const SURFACE_TYPES = [
   { value: 'indoor', label: 'Indoor' },
-  { value: 'outdoor', label: 'Plein air' },
+  { value: 'outdoor', label: 'Outdoor' },
 ] as const;
 
 export const COURT_FORMATS = [
