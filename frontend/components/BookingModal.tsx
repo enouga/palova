@@ -102,11 +102,9 @@ export default function BookingModal({
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
       <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', background: th.bgElev, borderRadius: '28px 28px 0 0', padding: '12px 20px 36px', boxShadow: '0 -10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in .34s cubic-bezier(.2,.8,.2,1)' }}>
-        <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '0 auto 18px' }} />
-
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', background: th.bgElev, borderRadius: '0 0 28px 28px', padding: '12px 20px 36px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
         {phase === 'confirm' && (
           <>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -156,6 +154,8 @@ export default function BookingModal({
             </div>
           </>
         )}
+
+        <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '18px auto 0' }} />
       </div>
     </div>
   );
