@@ -2,11 +2,15 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { ClubService } from '../services/club.service';
 import { AvailabilityService } from '../services/availability.service';
+import { AnnouncementService } from '../services/announcement.service';
+import { SponsorService } from '../services/sponsor.service';
 import { prisma } from '../db/prisma';
 
 const router = Router();
 const clubService = new ClubService();
 const availabilityService = new AvailabilityService();
+const announcementService = new AnnouncementService();
+const sponsorService = new SponsorService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR: 400,
@@ -65,6 +69,18 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
 
 // NB : l'abonnement d'un joueur est attribué par le club (back-office,
 // /:clubId/admin/subscribers). Pas d'auto-abonnement en ligne côté joueur.
+
+// Annonces publiées d'un club (mur d'annonces public).
+router.get('/:slug/announcements', async (req, res, next) => {
+  try { res.json(await announcementService.listPublic(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Sponsors actifs d'un club (affichage public).
+router.get('/:slug/sponsors', async (req, res, next) => {
+  try { res.json(await sponsorService.listPublic(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
 
 // Détail public d'un club par slug.
 router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {

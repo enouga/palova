@@ -4,12 +4,16 @@ import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubM
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
+import { AnnouncementService } from '../services/announcement.service';
+import { SponsorService } from '../services/sponsor.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
 const resourceService = new ResourceService();
 const reservationService = new ReservationService();
 const clubService = new ClubService();
+const announcementService = new AnnouncementService();
+const sponsorService = new SponsorService();
 
 const ERROR_STATUS: Record<string, number> = {
   FORBIDDEN:             403,
@@ -21,6 +25,8 @@ const ERROR_STATUS: Record<string, number> = {
   RESERVATION_NOT_FOUND: 404,
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
+  ANNOUNCEMENT_NOT_FOUND: 404,
+  SPONSOR_NOT_FOUND:      404,
 };
 
 function asString(v: unknown): string {
@@ -193,6 +199,34 @@ router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Re
     });
     res.status(201).json(payment);
   } catch (err) { handleError(err, res, next); }
+});
+
+// --- Annonces ---
+router.get('/announcements', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await announcementService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/announcements', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await announcementService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/announcements/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await announcementService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/announcements/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await announcementService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Sponsors ---
+router.get('/sponsors', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await sponsorService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/sponsors', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await sponsorService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await sponsorService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await sponsorService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 
 export default router;
