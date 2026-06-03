@@ -6,6 +6,7 @@ import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
+import { TournamentService } from '../services/tournament.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -14,6 +15,7 @@ const reservationService = new ReservationService();
 const clubService = new ClubService();
 const announcementService = new AnnouncementService();
 const sponsorService = new SponsorService();
+const tournamentService = new TournamentService();
 
 const ERROR_STATUS: Record<string, number> = {
   FORBIDDEN:             403,
@@ -28,6 +30,9 @@ const ERROR_STATUS: Record<string, number> = {
   MEMBER_NOT_FOUND:      404,
   ANNOUNCEMENT_NOT_FOUND: 404,
   SPONSOR_NOT_FOUND:      404,
+  TOURNAMENT_NOT_FOUND:   404,
+  HAS_REGISTRATIONS:      409,
+  REGISTRATION_NOT_FOUND: 404,
 };
 
 function asString(v: unknown): string {
@@ -277,6 +282,29 @@ router.patch('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next
 });
 router.delete('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await sponsorService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Tournois ---
+router.get('/tournaments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.listForAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/tournaments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await tournamentService.createTournament(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.get('/tournaments/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.getForAdmin(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/tournaments/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.updateTournament(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/tournaments/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await tournamentService.deleteTournament(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.adminPromoteRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.adminRemoveRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 export default router;

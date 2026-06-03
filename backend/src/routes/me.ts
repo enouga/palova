@@ -2,9 +2,11 @@ import { Router, Response, NextFunction } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
+import { TournamentService } from '../services/tournament.service';
 
 const router = Router();
 const reservationService = new ReservationService();
+const tournamentService = new TournamentService();
 
 // Clubs gérés par l'utilisateur connecté (pour le gating UX du back-office).
 router.get('/clubs', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -37,6 +39,41 @@ router.get('/reservations', authMiddleware, async (req: AuthRequest, res: Respon
   try {
     res.json(await reservationService.listUserReservations(req.user!.id));
   } catch (err) { next(err); }
+});
+
+// Profil du joueur connecté (pour savoir si tél/sexe sont renseignés).
+router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { id: true, email: true, firstName: true, lastName: true, phone: true, sex: true },
+    });
+    res.json(user);
+  } catch (err) { next(err); }
+});
+
+// Mise à jour du profil : téléphone et/ou sexe (pré-requis d'inscription tournoi).
+router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { phone, sex } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null } = {};
+    if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
+    if (sex !== undefined) {
+      if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
+      data.sex = sex;
+    }
+    const user = await prisma.user.update({
+      where: { id: req.user!.id }, data,
+      select: { id: true, email: true, firstName: true, lastName: true, phone: true, sex: true },
+    });
+    res.json(user);
+  } catch (err) { next(err); }
+});
+
+// Inscriptions tournois du joueur connecté.
+router.get('/tournaments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.listUserRegistrations(req.user!.id)); }
+  catch (err) { next(err); }
 });
 
 export default router;

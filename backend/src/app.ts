@@ -8,6 +8,7 @@ import clubsRouter from './routes/clubs';
 import adminRouter from './routes/admin';
 import resourcesRouter from './routes/resources';
 import reservationsRouter from './routes/reservations';
+import tournamentsRouter from './routes/tournaments';
 import { startCleanupJob } from './jobs/cleanup.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
@@ -32,6 +33,7 @@ app.use('/api/me',            meRouter);
 app.use('/api/sports',        sportsRouter);
 app.use('/api/resources',     resourcesRouter);
 app.use('/api/reservations',  reservationsRouter);
+app.use('/api/tournaments',   tournamentsRouter);
 // Admin scopé par club — monté AVANT /api/clubs (plus spécifique).
 app.use('/api/clubs/:clubId/admin', adminRouter);
 app.use('/api/clubs',         clubsRouter);

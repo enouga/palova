@@ -4,6 +4,7 @@ import { ClubService } from '../services/club.service';
 import { AvailabilityService } from '../services/availability.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
+import { TournamentService } from '../services/tournament.service';
 import { prisma } from '../db/prisma';
 
 const router = Router();
@@ -11,6 +12,7 @@ const clubService = new ClubService();
 const availabilityService = new AvailabilityService();
 const announcementService = new AnnouncementService();
 const sponsorService = new SponsorService();
+const tournamentService = new TournamentService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR: 400,
@@ -89,6 +91,12 @@ router.get('/:slug/announcements', async (req, res, next) => {
 // Sponsors actifs d'un club (affichage public).
 router.get('/:slug/sponsors', async (req, res, next) => {
   try { res.json(await sponsorService.listPublic(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Tournois publiés d'un club (à venir).
+router.get('/:slug/tournaments', async (req, res, next) => {
+  try { res.json(await tournamentService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
 });
 
