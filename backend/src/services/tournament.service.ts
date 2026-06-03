@@ -113,6 +113,172 @@ export class TournamentService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
   }
 
+  // --------------------------------------------------------- Lectures publiques
+
+  /** Tournois PUBLISHED à venir d'un club (par slug), avec compteurs de places. */
+  async listPublicByClubSlug(slug: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const tournaments = await prisma.tournament.findMany({
+      where: { clubId: club.id, status: 'PUBLISHED' },
+      orderBy: { startTime: 'asc' },
+    });
+    return this.withCounts(tournaments);
+  }
+
+  /** Détail public d'un tournoi (DRAFT masqué) + compteurs. */
+  async getById(tournamentId: string) {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } },
+    });
+    if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
+    const [withCount] = await this.withCounts([t]);
+    return withCount;
+  }
+
+  /** Inscriptions actives du joueur connecté (capitaine OU partenaire), tous clubs. */
+  async listUserRegistrations(userId: string) {
+    return prisma.tournamentRegistration.findMany({
+      where: { status: { not: 'CANCELLED' }, OR: [{ captainUserId: userId }, { partnerUserId: userId }] },
+      orderBy: { tournament: { startTime: 'asc' } },
+      include: {
+        tournament: { include: { club: { select: { slug: true, name: true, timezone: true } } } },
+        captain: { select: { id: true, firstName: true, lastName: true, email: true } },
+        partner: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+  }
+
+  /** Ajoute confirmedCount / waitlistCount à une liste de tournois. */
+  private async withCounts<T extends { id: string }>(tournaments: T[]) {
+    if (tournaments.length === 0) return [] as (T & { confirmedCount: number; waitlistCount: number })[];
+    const grouped = await prisma.tournamentRegistration.groupBy({
+      by: ['tournamentId', 'status'],
+      where: { tournamentId: { in: tournaments.map((t) => t.id) }, status: { not: 'CANCELLED' } },
+      _count: { _all: true },
+    });
+    const count = (id: string, status: string) =>
+      grouped.find((g) => g.tournamentId === id && g.status === status)?._count._all ?? 0;
+    return tournaments.map((t) => ({ ...t, confirmedCount: count(t.id, 'CONFIRMED'), waitlistCount: count(t.id, 'WAITLISTED') }));
+  }
+
+  // ----------------------------------------------------------- Admin (club)
+
+  /** Tous les tournois du club (DRAFT inclus) + compteurs. */
+  async listForAdmin(clubId: string) {
+    const tournaments = await prisma.tournament.findMany({ where: { clubId }, orderBy: { startTime: 'desc' } });
+    return this.withCounts(tournaments);
+  }
+
+  /** Détail admin : tournoi + inscriptions actives avec coordonnées (nom/tél/sexe/licence). */
+  async getForAdmin(tournamentId: string, clubId: string) {
+    const t = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId } });
+    if (!t) throw new Error('TOURNAMENT_NOT_FOUND');
+    const registrations = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        captain: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, sex: true } },
+        partner: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, sex: true } },
+      },
+    });
+    const userIds = [...new Set(registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]))];
+    const memberships = userIds.length
+      ? await prisma.clubMembership.findMany({ where: { clubId, userId: { in: userIds } }, select: { userId: true, membershipNo: true } })
+      : [];
+    const licenseByUser = new Map(memberships.map((m) => [m.userId, m.membershipNo]));
+    return {
+      tournament: t,
+      registrations: registrations.map((r) => ({
+        ...r,
+        captainLicense: licenseByUser.get(r.captainUserId) ?? null,
+        partnerLicense: licenseByUser.get(r.partnerUserId) ?? null,
+      })),
+    };
+  }
+
+  async createTournament(clubId: string, input: CreateTournamentInput) {
+    const data = this.validateTournamentInput(input, true);
+    const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId }, select: { id: true } });
+    if (!cs) throw new Error('CLUB_SPORT_NOT_FOUND');
+    return prisma.tournament.create({ data: { clubId, clubSportId: input.clubSportId, ...data } as Prisma.TournamentUncheckedCreateInput });
+  }
+
+  async updateTournament(tournamentId: string, clubId: string, input: UpdateTournamentInput) {
+    const found = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId }, select: { id: true } });
+    if (!found) throw new Error('TOURNAMENT_NOT_FOUND');
+    const data = this.validateTournamentInput(input, false);
+    if (input.status !== undefined) {
+      if (!['DRAFT', 'PUBLISHED', 'CANCELLED'].includes(input.status as string)) throw new Error('VALIDATION_ERROR');
+      (data as Record<string, unknown>).status = input.status;
+    }
+    return prisma.tournament.update({ where: { id: tournamentId }, data });
+  }
+
+  async deleteTournament(tournamentId: string, clubId: string) {
+    const found = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId }, select: { id: true } });
+    if (!found) throw new Error('TOURNAMENT_NOT_FOUND');
+    const active = await prisma.tournamentRegistration.count({ where: { tournamentId, status: { not: 'CANCELLED' } } });
+    if (active > 0) throw new Error('HAS_REGISTRATIONS'); // utiliser status=CANCELLED pour annuler à la place
+    await prisma.tournament.delete({ where: { id: tournamentId } });
+  }
+
+  /** Promotion manuelle d'un binôme en attente par le club (override, sans contrôle de place). */
+  async adminPromoteRegistration(tournamentId: string, regId: string, clubId: string) {
+    const reg = await this.findClubRegistration(tournamentId, regId, clubId);
+    if (reg.status !== 'WAITLISTED') throw new Error('VALIDATION_ERROR');
+    return prisma.tournamentRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
+  }
+
+  /** Désinscription manuelle par le club (promeut le 1er en attente si c'était un CONFIRMED). */
+  async adminRemoveRegistration(tournamentId: string, regId: string, clubId: string) {
+    const reg = await this.findClubRegistration(tournamentId, regId, clubId);
+    return this.cancelAndPromote(tournamentId, regId, reg.status === 'CONFIRMED');
+  }
+
+  private async findClubRegistration(tournamentId: string, regId: string, clubId: string) {
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { id: regId, tournamentId, tournament: { clubId } },
+      select: { id: true, status: true },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    return reg;
+  }
+
+  /** Valide + normalise les champs d'un tournoi. `requireAll` pour la création. */
+  private validateTournamentInput(input: UpdateTournamentInput, requireAll: boolean) {
+    const data: Record<string, unknown> = {};
+    const setStr = (key: 'name' | 'category', value?: string) => {
+      const v = (value ?? '').trim();
+      if (requireAll && !v) throw new Error('VALIDATION_ERROR');
+      if (value !== undefined) { if (!v) throw new Error('VALIDATION_ERROR'); data[key] = v; }
+    };
+    setStr('name', input.name);
+    setStr('category', input.category);
+
+    if (requireAll || input.gender !== undefined) {
+      if (!['MEN', 'WOMEN', 'MIXED'].includes(input.gender as string)) throw new Error('VALIDATION_ERROR');
+      data.gender = input.gender;
+    }
+    if (input.description !== undefined) data.description = (input.description ?? '')?.toString().trim() || null;
+
+    const parseDate = (v: string | Date) => { const d = new Date(v); if (isNaN(d.getTime())) throw new Error('VALIDATION_ERROR'); return d; };
+    if (requireAll || input.startTime !== undefined) data.startTime = parseDate(input.startTime as string | Date);
+    if (requireAll || input.registrationDeadline !== undefined) data.registrationDeadline = parseDate(input.registrationDeadline as string | Date);
+    if (input.endTime !== undefined) data.endTime = input.endTime ? parseDate(input.endTime) : null;
+
+    if (input.maxTeams !== undefined) {
+      if (input.maxTeams === null) data.maxTeams = null;
+      else { const n = Math.trunc(Number(input.maxTeams)); if (isNaN(n) || n < 1) throw new Error('VALIDATION_ERROR'); data.maxTeams = n; }
+    }
+    if (input.entryFee !== undefined) {
+      if (input.entryFee === null) data.entryFee = null;
+      else { const f = Number(input.entryFee); if (isNaN(f) || f < 0) throw new Error('VALIDATION_ERROR'); data.entryFee = new Prisma.Decimal(f); }
+    }
+    return data;
+  }
+
   // ----------------------------------------------------------------- Helpers
 
   /** Vérifie l'éligibilité des 2 joueurs et renvoie l'id résolu du coéquipier. */

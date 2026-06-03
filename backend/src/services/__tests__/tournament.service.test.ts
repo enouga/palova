@@ -201,3 +201,56 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
     await expect(service.cancelRegistration('t1', 'captain')).rejects.toThrow('REGISTRATION_NOT_FOUND');
   });
 });
+
+describe('TournamentService — admin & lectures', () => {
+  let service: TournamentService;
+  beforeEach(() => { service = new TournamentService(); });
+
+  it('createTournament refuse un genre invalide', async () => {
+    await expect(service.createTournament('club-demo', {
+      clubSportId: 'cs1', name: 'Open', category: 'P100', gender: 'XXX' as any,
+      startTime: FUTURE, registrationDeadline: FUTURE,
+    })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('createTournament refuse un clubSport d un autre club', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue(null as any);
+    await expect(service.createTournament('club-demo', {
+      clubSportId: 'cs-autre', name: 'Open', category: 'P100', gender: 'MEN',
+      startTime: FUTURE, registrationDeadline: FUTURE,
+    })).rejects.toThrow('CLUB_SPORT_NOT_FOUND');
+  });
+
+  it('createTournament crée avec entryFee en Decimal et maxTeams entier', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.tournament.create.mockResolvedValue({ id: 't1' } as any);
+    await service.createTournament('club-demo', {
+      clubSportId: 'cs1', name: '  Open P100  ', category: 'P100', gender: 'MIXED',
+      startTime: FUTURE, registrationDeadline: FUTURE, maxTeams: 16, entryFee: 20,
+    });
+    const arg = (prismaMock.tournament.create as jest.Mock).mock.calls[0][0];
+    expect(arg.data.name).toBe('Open P100');
+    expect(arg.data.maxTeams).toBe(16);
+    expect(arg.data.gender).toBe('MIXED');
+  });
+
+  it('deleteTournament refuse si des inscriptions actives existent', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1' } as any);
+    prismaMock.tournamentRegistration.count.mockResolvedValue(2 as any);
+    await expect(service.deleteTournament('t1', 'club-demo')).rejects.toThrow('HAS_REGISTRATIONS');
+  });
+
+  it('listPublicByClubSlug attache les compteurs de places', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.tournament.findMany.mockResolvedValue([{ id: 't1' }, { id: 't2' }] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([
+      { tournamentId: 't1', status: 'CONFIRMED', _count: { _all: 5 } },
+      { tournamentId: 't1', status: 'WAITLISTED', _count: { _all: 2 } },
+    ]);
+
+    const result = await service.listPublicByClubSlug('club-demo');
+
+    expect(result[0]).toMatchObject({ id: 't1', confirmedCount: 5, waitlistCount: 2 });
+    expect(result[1]).toMatchObject({ id: 't2', confirmedCount: 0, waitlistCount: 0 });
+  });
+});
