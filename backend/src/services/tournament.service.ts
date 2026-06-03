@@ -36,10 +36,10 @@ export class TournamentService {
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_CLOSED');
 
     const { partnerUserId } = await this.resolveAndAssertEligible(tournament, captainUserId, partnerEmail);
-    await this.assertNoActiveRegistration(tournamentId, [captainUserId, partnerUserId]);
 
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+      await this.assertNoActiveRegistration(tx, tournamentId, [captainUserId, partnerUserId]);
       const confirmed = await tx.tournamentRegistration.count({ where: { tournamentId, status: 'CONFIRMED' } });
       const status = tournament.maxTeams == null || confirmed < tournament.maxTeams ? 'CONFIRMED' : 'WAITLISTED';
       return tx.tournamentRegistration.create({
@@ -55,22 +55,21 @@ export class TournamentService {
       select: { id: true, clubId: true, gender: true, status: true, registrationDeadline: true },
     });
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
-    if (tournament.status === 'CANCELLED') throw new Error('TOURNAMENT_NOT_OPEN');
+    if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    const reg = await prisma.tournamentRegistration.findFirst({
-      where: { tournamentId, captainUserId, status: { not: 'CANCELLED' } },
-      select: { id: true },
-    });
-    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-
     const { partnerUserId } = await this.resolveAndAssertEligible(tournament, captainUserId, partnerEmail);
-    await this.assertNoActiveRegistration(tournamentId, [captainUserId, partnerUserId], reg.id);
 
-    return prisma.tournamentRegistration.update({
-      where: { id: reg.id },
-      data: { partnerUserId },
-    });
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+      const reg = await tx.tournamentRegistration.findFirst({
+        where: { tournamentId, captainUserId, status: { not: 'CANCELLED' } },
+        select: { id: true },
+      });
+      if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+      await this.assertNoActiveRegistration(tx, tournamentId, [captainUserId, partnerUserId], reg.id);
+      return tx.tournamentRegistration.update({ where: { id: reg.id }, data: { partnerUserId } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
   }
 
   /** Le capitaine se désinscrit avant la deadline ; promotion auto du 1er en attente. */
@@ -82,35 +81,34 @@ export class TournamentService {
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    const reg = await prisma.tournamentRegistration.findFirst({
-      where: { tournamentId, captainUserId, status: { not: 'CANCELLED' } },
-      select: { id: true, status: true },
-    });
-    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-
-    return this.cancelAndPromote(tournamentId, reg.id, reg.status === 'CONFIRMED');
-  }
-
-  /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. */
-  private async cancelAndPromote(tournamentId: string, regId: string, wasConfirmed: boolean) {
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
-      const cancelled = await tx.tournamentRegistration.update({
-        where: { id: regId },
-        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      const reg = await tx.tournamentRegistration.findFirst({
+        where: { tournamentId, captainUserId, status: { not: 'CANCELLED' } },
+        select: { id: true, status: true },
       });
-      if (wasConfirmed) {
-        const next = await tx.tournamentRegistration.findFirst({
-          where: { tournamentId, status: 'WAITLISTED' },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true },
-        });
-        if (next) {
-          await tx.tournamentRegistration.update({ where: { id: next.id }, data: { status: 'CONFIRMED' } });
-        }
-      }
-      return cancelled;
+      if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+      return this.cancelAndPromoteTx(tx, tournamentId, reg.id, reg.status === 'CONFIRMED');
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+  }
+
+  /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. À appeler dans une transaction qui détient déjà le verrou du tournoi. */
+  private async cancelAndPromoteTx(tx: Prisma.TransactionClient, tournamentId: string, regId: string, wasConfirmed: boolean) {
+    const cancelled = await tx.tournamentRegistration.update({
+      where: { id: regId },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    if (wasConfirmed) {
+      const next = await tx.tournamentRegistration.findFirst({
+        where: { tournamentId, status: 'WAITLISTED' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (next) {
+        await tx.tournamentRegistration.update({ where: { id: next.id }, data: { status: 'CONFIRMED' } });
+      }
+    }
+    return cancelled;
   }
 
   // --------------------------------------------------------- Lectures publiques
@@ -233,8 +231,16 @@ export class TournamentService {
 
   /** Désinscription manuelle par le club (promeut le 1er en attente si c'était un CONFIRMED). */
   async adminRemoveRegistration(tournamentId: string, regId: string, clubId: string) {
-    const reg = await this.findClubRegistration(tournamentId, regId, clubId);
-    return this.cancelAndPromote(tournamentId, regId, reg.status === 'CONFIRMED');
+    await this.findClubRegistration(tournamentId, regId, clubId); // vérifie l'appartenance au club
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+      const reg = await tx.tournamentRegistration.findFirst({
+        where: { id: regId, status: { not: 'CANCELLED' } },
+        select: { id: true, status: true },
+      });
+      if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+      return this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED');
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
   }
 
   private async findClubRegistration(tournamentId: string, regId: string, clubId: string) {
@@ -330,8 +336,8 @@ export class TournamentService {
   }
 
   /** Aucun des userIds donnés ne doit déjà figurer dans un binôme actif du tournoi. */
-  private async assertNoActiveRegistration(tournamentId: string, userIds: string[], excludeRegId?: string): Promise<void> {
-    const dup = await prisma.tournamentRegistration.findFirst({
+  private async assertNoActiveRegistration(client: Prisma.TransactionClient, tournamentId: string, userIds: string[], excludeRegId?: string): Promise<void> {
+    const dup = await client.tournamentRegistration.findFirst({
       where: {
         tournamentId,
         status: { not: 'CANCELLED' },

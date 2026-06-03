@@ -146,6 +146,8 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
       return Promise.resolve(null) as any;
     });
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', membershipNo: 'L' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
     prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-1', partnerUserId: 'newp' } as any);
 
     await service.changePartner('t1', 'captain', 'new@x.fr');
@@ -197,6 +199,8 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
 
   it('lève REGISTRATION_NOT_FOUND si le capitaine n a pas d inscription active', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
     prismaMock.tournamentRegistration.findFirst.mockResolvedValueOnce(null as any);
     await expect(service.cancelRegistration('t1', 'captain')).rejects.toThrow('REGISTRATION_NOT_FOUND');
   });

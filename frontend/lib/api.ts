@@ -167,13 +167,13 @@ export const api = {
   getTournament: (id: string) => request<TournamentDetail>(`/api/tournaments/${id}`),
 
   registerTournament: (id: string, partnerEmail: string, token: string) =>
-    request<MyTournamentRegistration>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerEmail }) }, token),
+    request<TournamentRegistrationRecord>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerEmail }) }, token),
 
   changeTournamentPartner: (id: string, partnerEmail: string, token: string) =>
-    request<MyTournamentRegistration>(`/api/tournaments/${id}/registration`, { method: 'PATCH', body: JSON.stringify({ partnerEmail }) }, token),
+    request<TournamentRegistrationRecord>(`/api/tournaments/${id}/registration`, { method: 'PATCH', body: JSON.stringify({ partnerEmail }) }, token),
 
   cancelTournamentRegistration: (id: string, token: string) =>
-    request<MyTournamentRegistration>(`/api/tournaments/${id}/registration`, { method: 'DELETE' }, token),
+    request<TournamentRegistrationRecord>(`/api/tournaments/${id}/registration`, { method: 'DELETE' }, token),
 
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
@@ -546,6 +546,17 @@ export interface Tournament {
 export interface TournamentDetail extends Tournament {
   club: { slug: string; name: string; timezone: string };
   clubSport: { sport: { key: string; name: string } };
+}
+
+export interface TournamentRegistrationRecord {
+  id: string;
+  tournamentId: string;
+  captainUserId: string;
+  partnerUserId: string;
+  status: RegistrationStatus;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MyTournamentRegistration {
