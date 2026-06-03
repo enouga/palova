@@ -44,6 +44,29 @@ enum MembershipStatus {
   BLOCKED
 }
 
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum TournamentGender {
+  MEN     // Messieurs
+  WOMEN   // Dames
+  MIXED   // Mixte (1 MALE + 1 FEMALE)
+}
+
+enum TournamentStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  CONFIRMED
+  WAITLISTED
+  CANCELLED
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -86,6 +109,7 @@ model Club {
   clubMemberships ClubMembership[]
   announcements Announcement[]
   sponsors      Sponsor[]
+  tournaments Tournament[]
 
   @@map("clubs")
 }
@@ -103,6 +127,7 @@ model ClubSport {
   club      Club       @relation(fields: [clubId], references: [id], onDelete: Cascade)
   sport     Sport      @relation(fields: [sportId], references: [id], onDelete: Restrict)
   resources Resource[]
+  tournaments Tournament[]
 
   @@unique([clubId, sportId])
   @@index([clubId])
@@ -141,12 +166,15 @@ model User {
   firstName String   @map("first_name")
   lastName  String   @map("last_name")
   phone     String?
+  sex       Sex?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   reservations    Reservation[]
   staffRoles      ClubMember[]
   clubMemberships ClubMembership[]
+  captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
+  partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
 
   @@map("users")
 }
@@ -263,4 +291,52 @@ model Sponsor {
 
   @@index([clubId])
   @@map("sponsors")
+}
+
+/// Tournoi de padel d'un club. v1 : inscriptions (pas de tableaux/scores).
+model Tournament {
+  id                   String           @id @default(cuid())
+  clubId               String           @map("club_id")
+  clubSportId          String           @map("club_sport_id")
+  name                 String
+  category             String                                   // "P25","P50","P100",…
+  gender               TournamentGender
+  description          String?
+  startTime            DateTime         @map("start_time") @db.Timestamptz
+  endTime              DateTime?        @map("end_time") @db.Timestamptz
+  registrationDeadline DateTime         @map("registration_deadline") @db.Timestamptz
+  maxTeams             Int?             @map("max_teams")        // null = illimité
+  entryFee             Decimal?         @map("entry_fee") @db.Decimal(10, 2)
+  status               TournamentStatus @default(DRAFT)
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  club          Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubSport     ClubSport                @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
+  registrations TournamentRegistration[]
+
+  @@index([clubId])
+  @@index([clubId, status, startTime])
+  @@map("tournaments")
+}
+
+/// Un binôme inscrit à un tournoi (capitaine + coéquipier, tous deux membres du club).
+model TournamentRegistration {
+  id            String             @id @default(cuid())
+  tournamentId  String             @map("tournament_id")
+  captainUserId String             @map("captain_user_id")
+  partnerUserId String             @map("partner_user_id")
+  status        RegistrationStatus @default(CONFIRMED)
+  cancelledAt   DateTime?          @map("cancelled_at")
+  createdAt     DateTime           @default(now()) @map("created_at") // = ordre liste d'attente
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  captain    User       @relation("CaptainRegistrations", fields: [captainUserId], references: [id], onDelete: Restrict)
+  partner    User       @relation("PartnerRegistrations", fields: [partnerUserId], references: [id], onDelete: Restrict)
+
+  @@index([tournamentId, status, createdAt])
+  @@index([captainUserId])
+  @@index([partnerUserId])
+  @@map("tournament_registrations")
 }
