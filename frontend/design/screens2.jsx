@@ -126,7 +126,7 @@ function PaymentScreen({ th, court, dayLabel, time, end, amount, onBack, onPaid 
 function QRish({ th, size = 130 }) {
   const cells = 19;
   const px = size / cells;
-  const rnd = seeded('slotpadel-qr');
+  const rnd = seeded('palova-qr');
   const on = [];
   for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) {
     const finder = (x < 7 && y < 7) || (x >= cells - 7 && y < 7) || (x < 7 && y >= cells - 7);
@@ -232,7 +232,7 @@ function ProfileScreen({ th, onLogout }) {
           <div style={{ width: 56, height: 56, borderRadius: '50%', background: th.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, color: th.onAccent }}>JD</div>
           <div>
             <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 17, color: th.text }}>Julien Dubois</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 2 }}>test@slotpadel.fr</div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 2 }}>test@palova.fr</div>
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'center' }}>
             <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.accent, lineHeight: 1 }}>24</div>

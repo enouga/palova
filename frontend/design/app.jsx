@@ -1,9 +1,9 @@
-// app.jsx — SlotPadelApp: orchestrates screens, navigation, the live engine
+// app.jsx — PalovaApp: orchestrates screens, navigation, the live engine
 // (slots flipping in real time, watcher counts, toasts) and the booking flow.
 // Renders inside an <IOSDevice>. Props: th (theme), seed (string to vary the
 // two instances so their live activity differs).
 
-function SlotPadelApp({ th, seed = '' }) {
+function PalovaApp({ th, seed = '' }) {
   const days = React.useMemo(() => dayPills(9), []);
   const [authed, setAuthed] = React.useState(true);
   const [tab, setTab] = React.useState('courts');
@@ -145,4 +145,4 @@ function SlotPadelApp({ th, seed = '' }) {
   );
 }
 
-Object.assign(window, { SlotPadelApp });
+Object.assign(window, { PalovaApp });

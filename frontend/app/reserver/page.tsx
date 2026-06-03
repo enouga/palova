@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/useAuth';
 import { courtType, courtFormat } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, Chip, Placeholder, Segmented, ThemeToggle, LogoutButton, MyBookingsButton } from '@/components/ui/atoms';
+import { BackButton, Chip, Placeholder, Segmented, ThemeToggle, LogoutButton, MyBookingsButton } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import BookingModal from '@/components/BookingModal';
 
@@ -60,7 +60,7 @@ function ClubContent({ club }: { club: ClubDetail }) {
   // (back-office). Sert à connaître la fenêtre de réservation du joueur.
   useEffect(() => {
     if (!token) { setIsSub(false); return; }
-    api.getMySubscriptions(token).then((ids) => setIsSub(ids.includes(club.id))).catch(() => {});
+    api.getMyMemberships(token).then((ms) => setIsSub(ms.some((m) => m.clubId === club.id && m.isSubscriber))).catch(() => {});
   }, [token, club.id]);
 
   const loadAvail = useCallback(async () => {
@@ -90,7 +90,7 @@ function ClubContent({ club }: { club: ClubDetail }) {
       <div style={{ paddingBottom: 40 }}>
         <div style={{ padding: '24px 20px 6px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Logotype size={20} />
+            <BackButton href="/" />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isSub && <Chip tone="accent" icon="check">Abonné</Chip>}
               <MyBookingsButton />
@@ -141,14 +141,11 @@ function ClubContent({ club }: { club: ClubDetail }) {
                 );
               })}
             </div>
-            {!isSub && club.memberBookingDays > club.publicBookingDays && (
-              <div style={{ padding: '8px 20px 0', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
-                Les abonnés du club réservent jusqu'à <b style={{ color: th.text }}>{club.memberBookingDays} j</b> à l'avance (vous : {club.publicBookingDays} j). Contactez le club pour devenir abonné.
+            {allDurations.length > 1 && (
+              <div style={{ padding: '14px 20px 0' }}>
+                <Segmented<number> value={duration} onChange={setDuration} options={allDurations.map((d) => ({ value: d, label: durationLabel(d) }))} />
               </div>
             )}
-            <div style={{ padding: '14px 20px 0' }}>
-              <Segmented<number> value={duration} onChange={setDuration} options={allDurations.map((d) => ({ value: d, label: durationLabel(d) }))} />
-            </div>
 
             {/* grille : par sport, chaque terrain + ses créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>

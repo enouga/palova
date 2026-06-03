@@ -1,6 +1,6 @@
 {
-  "name": "PadelConnect",
-  "short_name": "PadelConnect",
+  "name": "Palova",
+  "short_name": "Palova",
   "description": "Réservez vos terrains de padel",
   "start_url": "/courts",
   "display": "standalone",

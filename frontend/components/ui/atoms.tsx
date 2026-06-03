@@ -2,6 +2,7 @@
 
 import { CSSProperties, ReactNode, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth, logout } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -74,6 +75,28 @@ export function Btn({
       style={{ ...base, ...skins[variant] }}>
       {icon && <Icon name={icon} size={19} color={iconColor} />}
       {children}
+    </button>
+  );
+}
+
+// Bouton retour — pilule discrète « ‹ Retour ». Va sur `href` si fourni,
+// sinon revient à la page précédente (historique). Léger décalage au survol.
+export function BackButton({ href, label = 'Retour' }: { href?: string; label?: string }) {
+  const { th } = useTheme();
+  const router = useRouter();
+  const [hover, setHover] = useState(false);
+  const go = () => (href ? router.push(href) : router.back());
+  return (
+    <button onClick={go} aria-label={label}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+        height: 38, padding: '0 14px 0 10px', borderRadius: 999, border: 'none', cursor: 'pointer',
+        background: th.surface2, color: th.text, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600,
+        transition: 'transform .14s, filter .15s', transform: hover ? 'translateX(-2px)' : 'none',
+        filter: hover ? 'brightness(1.06)' : 'none', WebkitTapHighlightColor: 'transparent',
+      }}>
+      <Icon name="chevL" size={18} color={th.text} />{label}
     </button>
   );
 }

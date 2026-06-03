@@ -84,11 +84,11 @@ async function main() {
 
   // role = null → simple joueur (CLIENT), sans rattachement à un club.
   const demoAccounts: Array<{ email: string; firstName: string; lastName: string; role: 'OWNER' | 'ADMIN' | 'STAFF' | null }> = [
-    { email: 'test@padelconnect.fr', firstName: 'Jean',   lastName: 'Dupont',   role: 'OWNER' }, // compte historique
-    { email: 'owner@slotpadel.fr',   firstName: 'Olivia', lastName: 'Martin',   role: 'OWNER' },
-    { email: 'admin@slotpadel.fr',   firstName: 'Adam',   lastName: 'Bernard',  role: 'ADMIN' },
-    { email: 'staff@slotpadel.fr',   firstName: 'Sarah',  lastName: 'Petit',    role: 'STAFF' },
-    { email: 'joueur@slotpadel.fr',  firstName: 'Lucas',  lastName: 'Moreau',   role: null },
+    { email: 'test@palova.fr', firstName: 'Jean',   lastName: 'Dupont',   role: 'OWNER' }, // compte historique
+    { email: 'owner@palova.fr',   firstName: 'Olivia', lastName: 'Martin',   role: 'OWNER' },
+    { email: 'admin@palova.fr',   firstName: 'Adam',   lastName: 'Bernard',  role: 'ADMIN' },
+    { email: 'staff@palova.fr',   firstName: 'Sarah',  lastName: 'Petit',    role: 'STAFF' },
+    { email: 'joueur@palova.fr',  firstName: 'Lucas',  lastName: 'Moreau',   role: null },
   ];
 
   for (const acc of demoAccounts) {

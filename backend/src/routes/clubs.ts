@@ -67,8 +67,18 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
   } catch (err) { handleError(err, res, next); }
 });
 
-// NB : l'abonnement d'un joueur est attribué par le club (back-office,
-// /:clubId/admin/subscribers). Pas d'auto-abonnement en ligne côté joueur.
+// Auto-inscription du joueur connecté à un club (adhésion automatique, idempotente).
+router.post('/:slug/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
+    await clubService.ensureMembership(req.user!.id, club.id);
+    res.status(201).json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// NB : l'abonnement (fenêtre élargie) est un attribut de la fiche-membre, géré par
+// le club (back-office, /:clubId/admin/members). Pas d'auto-abonnement côté joueur.
 
 // Annonces publiées d'un club (mur d'annonces public).
 router.get('/:slug/announcements', async (req, res, next) => {

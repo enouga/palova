@@ -459,7 +459,7 @@ window.location.assign(clubUrl(club.slug, '/admin')); // bascule sur le sous-dom
 ```
 
 - [ ] **Step 4 — Vérifier** : `npx tsc --noEmit` propre. Manuel :
-  - login sur `http://padel-arena-paris.localhost:3000/login` (owner@slotpadel.fr / password123) → `/admin`.
+  - login sur `http://padel-arena-paris.localhost:3000/login` (owner@palova.fr / password123) → `/admin`.
   - ouvrir `http://localhost:3000/me/reservations`… (note : `localhost` n'a pas de club ; tester plutôt) ouvrir un **autre** sous-domaine, ex un 2e club créé, et vérifier que `getCookie('token')` est présent (DevTools → Application → Cookies → `localhost`).
 - [ ] **Step 5 — Commit** : `git add frontend/app/login frontend/app/register frontend/app/clubs/new && git commit -m "feat(auth): écrire la session cookie + redirection sous-domaine au login/register/onboarding"`
 

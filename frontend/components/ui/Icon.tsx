@@ -4,7 +4,7 @@ export type IconName =
   | 'calendar' | 'clock' | 'pin' | 'check' | 'bolt' | 'user' | 'lock' | 'mail'
   | 'chevL' | 'chevR' | 'arrowR' | 'plus' | 'card' | 'x' | 'search' | 'bell'
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
-  | 'moon' | 'logout';
+  | 'moon' | 'logout' | 'grip';
 
 interface IconProps {
   name: IconName;
@@ -45,6 +45,7 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     chart: <><path d="M4 20V4M4 20h16" {...p} /><path d="M8 16l4-5 3 3 4-7" {...p} /></>,
     ticket: <><path d="M3 8a2 2 0 012-2h14a2 2 0 012 2 2 2 0 000 4 2 2 0 000 4 2 2 0 01-2 2H5a2 2 0 01-2-2 2 2 0 000-4 2 2 0 000-4z" {...p} /><path d="M14 6v12" {...p} strokeDasharray="2 2.5" /></>,
     settings: <><circle cx="12" cy="12" r="3" {...p} /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" {...p} /></>,
+    grip: <g fill={color} stroke="none"><circle cx="9" cy="6" r="1.5" /><circle cx="9" cy="12" r="1.5" /><circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="15" cy="18" r="1.5" /></g>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0, ...style }}>

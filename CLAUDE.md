@@ -1,4 +1,4 @@
-# PadelConnect — Instructions pour Claude
+# Palova — Instructions pour Claude
 
 Application de réservation de terrains de padel. Backend API séparé du frontend Next.js.
 
@@ -22,7 +22,7 @@ npm run dev
 ## Architecture
 
 ```
-padelconnect/
+palova/
 ├── docker-compose.yml       postgres:16 (5432) + redis:7 (6379)
 ├── backend/                 Express 5 + Prisma 7 + ioredis, port 3001
 │   ├── .env                 DATABASE_URL, REDIS_HOST, JWT_SECRET, PORT=3001
@@ -67,7 +67,7 @@ Incompatible avec Turbopack. Ne pas l'activer dans next.config.ts.
 |-------|---------|
 | Club  | id=`club-demo`, "Padel Arena Paris", 12 rue du Padel Paris |
 | Courts | `court-1` indoor 25€/h, `court-2` indoor 25€/h, `court-3` outdoor 20€/h |
-| User  | `test@padelconnect.fr` / `password123` |
+| User  | `test@palova.fr` / `password123` |
 
 ## Logique métier clé
 

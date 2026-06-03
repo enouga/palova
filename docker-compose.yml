@@ -5,15 +5,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: padelconnect
-      POSTGRES_USER: padeluser
-      POSTGRES_PASSWORD: padelpass
+      POSTGRES_DB: palova
+      POSTGRES_USER: palovauser
+      POSTGRES_PASSWORD: palovapass
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U padeluser -d padelconnect"]
+      test: ["CMD-SHELL", "pg_isready -U palovauser -d palova"]
       interval: 10s
       timeout: 5s
       retries: 5

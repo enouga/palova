@@ -1,4 +1,4 @@
-# PadelConnect / SlotPadel — Stack technique complet
+# Palova / Palova — Stack technique complet
 
 Application de réservation de terrains de padel : **zéro double-réservation** + **temps réel**.
 Architecture découplée : un frontend Next.js et une API Express, plus PostgreSQL et Redis.
@@ -73,7 +73,7 @@ App Next.js (App Router) en TypeScript. Port **3000**.
 **Tests** : Jest 30 + React Testing Library.
 **Lint** : ESLint 9 + eslint-config-next.
 
-### Design system « SlotPadel » (`frontend/lib`, `frontend/components/ui`)
+### Design system « Palova » (`frontend/lib`, `frontend/components/ui`)
 - **2 thèmes** : `floodlit` (sombre, défaut) et `daylight` (clair), bascule persistée (localStorage).
 - Accent lime `#d6ff3f`. Système porté depuis la maquette `frontend/design/` (prototype React autonome, hors build).
 - `lib/theme.ts`, `lib/ThemeProvider.tsx`, `components/ui/{Icon,atoms,Screen}.tsx`.
@@ -90,7 +90,7 @@ App Next.js (App Router) en TypeScript. Port **3000**.
 
 | Service | Image | Port | Données |
 |---------|-------|------|---------|
-| PostgreSQL | `postgres:16` | 5432 | padelconnect / padeluser / padelpass |
+| PostgreSQL | `postgres:16` | 5432 | palova / palovauser / palovapass |
 | Redis | `redis:7` | 6379 | verrous éphémères |
 
 Orchestration : `docker-compose.yml`.

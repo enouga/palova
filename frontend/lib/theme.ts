@@ -1,4 +1,4 @@
-// theme.ts — SlotPadel design system ported to the real app.
+// theme.ts — Palova design system ported to the real app.
 // Two directions: "floodlit" (dark, night-match) and "daylight" (light, paper).
 // Fonts are loaded by next/font (see app/layout.tsx) and exposed as CSS vars.
 

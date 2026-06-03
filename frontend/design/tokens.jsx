@@ -1,4 +1,4 @@
-// tokens.jsx — SlotPadel design system: themes, accents, icons.
+// tokens.jsx — Palova design system: themes, accents, icons.
 // Two directions: "floodlit" (dark, night-match) and "daylight" (light, editorial paper).
 // Shared type system: Cormorant Garamond (display serif), Hanken Grotesk (UI),
 // JetBrains Mono (data / countdowns / codes).

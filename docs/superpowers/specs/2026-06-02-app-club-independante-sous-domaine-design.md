@@ -1,14 +1,14 @@
 # App club indépendante par sous-domaine + home club + pop-ups vers le haut
 
 **Date** : 2026-06-02
-**Projet** : PadelConnect / SlotPadel (frontend Next.js 16 + backend Express/Prisma 7)
+**Projet** : Palova / Palova (frontend Next.js 16 + backend Express/Prisma 7)
 **Statut** : design validé, en attente de relecture utilisateur avant plan d'implémentation
 
 ## 1. Objectif
 
 Trois demandes utilisateur :
 
-1. **Dissocier l'annuaire/recherche de clubs de l'app par club.** Chaque club doit avoir une application **vraiment indépendante**, servie (à terme) sur son propre **sous-domaine** (`<slug>.slotpadel.fr`). L'annuaire et la recherche appartiennent à la plateforme, jamais à l'app club.
+1. **Dissocier l'annuaire/recherche de clubs de l'app par club.** Chaque club doit avoir une application **vraiment indépendante**, servie (à terme) sur son propre **sous-domaine** (`<slug>.palova.fr`). L'annuaire et la recherche appartiennent à la plateforme, jamais à l'app club.
 2. **Ajouter une page d'accueil par club** (sur `/` du sous-domaine) avec des sections **annonces**, **notifications**, **sponsors**, et un **hub de liens** vers toutes les pages.
 3. **Aligner les pop-ups de réservation et d'annulation vers le haut** (top-sheet au lieu de bottom-sheet).
 

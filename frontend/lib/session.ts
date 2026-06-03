@@ -2,7 +2,8 @@ const COOKIE_DOMAIN = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || 'localhost';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 jours, aligné sur l'expiry JWT
 
 function writeCookie(name: string, value: string, maxAge: number) {
-  document.cookie = `${name}=${encodeURIComponent(value)}; domain=${COOKIE_DOMAIN}; path=/; SameSite=Lax; max-age=${maxAge}`;
+  const domainAttr = COOKIE_DOMAIN === 'localhost' ? '' : `; domain=${COOKIE_DOMAIN}`;
+  document.cookie = `${name}=${encodeURIComponent(value)}${domainAttr}; path=/; SameSite=Lax; max-age=${maxAge}`;
 }
 
 export function getCookie(name: string): string | null {

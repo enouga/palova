@@ -1,4 +1,4 @@
-// screens.jsx — SlotPadel mobile screens. Globals: Icon, Btn, Chip, LiveDot,
+// screens.jsx — Palova mobile screens. Globals: Icon, Btn, Chip, LiveDot,
 // Field, Segmented, BottomNav, Placeholder, Logotype + data helpers.
 
 // Top safe-area inset (status bar + dynamic island).
@@ -20,7 +20,7 @@ function TopBar({ th, title, onBack, right }) {
 
 // ── LOGIN ───────────────────────────────────────────────────
 function LoginScreen({ th, onAuth }) {
-  const [email, setEmail] = React.useState('test@slotpadel.fr');
+  const [email, setEmail] = React.useState('test@palova.fr');
   const [pw, setPw] = React.useState('••••••••');
   const [mode, setMode] = React.useState('login');
   return (

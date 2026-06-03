@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'SlotPadel',
+  title: 'Palova',
   description: 'Réservez votre terrain de padel en quelques secondes',
   manifest: '/manifest.json',
 };

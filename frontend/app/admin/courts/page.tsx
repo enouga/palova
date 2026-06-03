@@ -6,6 +6,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { SURFACE_TYPES, COURT_FORMATS } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 
 const STEP_OPTIONS = [15, 30, 45, 60, 90, 120];
 
@@ -21,6 +22,7 @@ export default function AdminResourcesPage() {
 
   const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', format: 'double', pricePerHour: '25', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
+  const [dragId, setDragId]     = useState<string | null>(null);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
@@ -63,6 +65,19 @@ export default function AdminResourcesPage() {
     } catch (e) { setError(`${r.name} : ${(e as Error).message}`); }
   };
 
+  const onDropRow = (targetId: string) => {
+    if (!dragId || dragId === targetId) { setDragId(null); return; }
+    const arr = [...resources];
+    const from = arr.findIndex((r) => r.id === dragId);
+    const to = arr.findIndex((r) => r.id === targetId);
+    setDragId(null);
+    if (from < 0 || to < 0) return;
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    setResources(arr); // optimiste
+    if (token && clubId) api.adminReorderResources(clubId, arr.map((r) => r.id), token).catch((e) => setError((e as Error).message));
+  };
+
   const toggleActive = async (r: AdminResource) => {
     if (!token || !clubId) return;
     try { setError(null); await api.adminSetResourceActive(clubId, r.id, !r.isActive, token); await load(); }
@@ -100,14 +115,24 @@ export default function AdminResourcesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Créneau', 'Statut', ''].map((h, i) => (
+                {['', 'Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Créneau', 'Statut', ''].map((h, i) => (
                   <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {resources.map((r) => (
-                <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: r.isActive ? 1 : 0.5 }}>
+                <tr key={r.id}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => onDropRow(r.id)}
+                  style={{ borderBottom: `1px solid ${th.line}`, opacity: dragId === r.id ? 0.4 : (r.isActive ? 1 : 0.5), background: dragId === r.id ? th.surface2 : 'transparent' }}>
+                  <td style={{ ...cell, width: 30, paddingRight: 0, cursor: 'grab' }}
+                    draggable
+                    onDragStart={() => setDragId(r.id)}
+                    onDragEnd={() => setDragId(null)}
+                    title="Glisser pour réordonner">
+                    <Icon name="grip" size={18} color={th.textFaint} />
+                  </td>
                   <td style={cell}>
                     <div style={{ fontWeight: 600 }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: th.textFaint }}>

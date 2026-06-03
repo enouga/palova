@@ -27,6 +27,7 @@ export default function RegisterPage() {
     try {
       const { token } = await api.register({ email, password, firstName, lastName });
       setSession(token, null);
+      if (slug) await api.joinClub(slug, token).catch(() => {}); // adhésion auto au club du host
       router.push(slug ? '/' : '/clubs'); // host club → home club ; plateforme → annuaire
     } catch (err) {
       const msg = (err as Error).message;

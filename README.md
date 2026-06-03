@@ -1,4 +1,4 @@
-# SlotPadel
+# Palova
 
 **Plateforme SaaS multi-sports / multi-clubs** de réservation de terrains : un club s'inscrit et gère tout en autonomie ; un joueur (compte unique) trouve un club et réserve en temps réel. Garanties : **zéro double-booking** + **disponibilités en direct** (SSE).
 
@@ -22,15 +22,15 @@ Monorepo découplé : une **API Express** (`backend/`) et un **frontend Next.js*
 - **Vues planning** : grille de réservation multi-terrains côté joueur (page club, onglet « Réserver », créneaux réservés grisés/barrés) + planning du jour côté admin (`/admin/planning`, terrains × heures).
 - **Abonnés & fenêtres de réservation** : le club fixe le nombre de jours de réservation à l'avance (public / abonnés) ; les **abonnés** réservent plus tôt. L'abonnement est attribué par le club (`/admin/subscribers`) — pas d'auto-abonnement en ligne ; le joueur voit son statut (badge « Abonné ») en lecture seule. Fenêtre appliquée côté serveur (`BOOKING_TOO_FAR`) et dans les jours proposés.
 - **Espace joueur** : page « Mes réservations » (à venir / passées, annulation). Logo contextuel (joueur → ses résas, club → back-office).
-- **Design system SlotPadel** : thème clair/sombre + accent par club, sur toutes les pages.
+- **Design system Palova** : thème clair/sombre + accent par club, sur toutes les pages.
 
 ### ⏳ À faire
 - **Paiement en ligne** (Stripe) + **paiement partagé** entre joueurs (part par joueur).
 - **Espace joueur** : profil, historique enrichi, favoris.
-- **Sous-domaines par club** (`monclub.slotpadel.com`) + branding poussé.
+- **Sous-domaines par club** (`monclub.palova.com`) + branding poussé.
 - **Monétisation** : abonnement club (B2B) / premium joueur.
 - Cours & coachs, parties publiques (matchmaking), notifications/e-mails.
-- Décision **rebrand** éventuel (« Palova ») — l'UI actuelle est « SlotPadel ».
+- Décision **rebrand** éventuel (« Palova ») — l'UI actuelle est « Palova ».
 
 ---
 
@@ -52,7 +52,7 @@ Trois terminaux (ou trois étapes successives).
 "C:\Program Files\Docker\Docker\resources\bin\docker-compose-v1.exe" up -d
 ```
 
-Vérifier : `docker ps` → `padelconnect_postgres_1` et `padelconnect_redis_1` en `(healthy)`.
+Vérifier : `docker ps` → `palova_postgres_1` et `palova_redis_1` en `(healthy)`.
 
 ### 2. Backend (API — port 3001)
 
@@ -82,7 +82,7 @@ npm run dev
 |---------|-----------|-------|
 | Frontend | http://localhost:3000 | Next.js |
 | API backend | http://localhost:3001 | Express — `GET /health` → `{"status":"ok"}` |
-| PostgreSQL | `localhost:5432` | base `padelconnect` |
+| PostgreSQL | `localhost:5432` | base `palova` |
 | Redis | `localhost:6379` | verrous de réservation |
 | Prisma Studio | port affiché au lancement | `npx prisma studio` (depuis `backend/`) — ou `--port 5555` pour le fixer |
 
@@ -94,11 +94,11 @@ Mot de passe commun : **`password123`**. Tous rattachés au club de démo *Padel
 
 | Rôle | Email | Type |
 |------|-------|------|
-| **Owner** (propriétaire) | `owner@slotpadel.fr` | membre du club |
-| **Admin** (gestionnaire) | `admin@slotpadel.fr` | membre du club |
-| **Staff** (équipe) | `staff@slotpadel.fr` | membre du club |
-| **Joueur** (client) | `joueur@slotpadel.fr` | compte simple, aucun club |
-| Owner (compte historique) | `test@padelconnect.fr` | membre du club |
+| **Owner** (propriétaire) | `owner@palova.fr` | membre du club |
+| **Admin** (gestionnaire) | `admin@palova.fr` | membre du club |
+| **Staff** (équipe) | `staff@palova.fr` | membre du club |
+| **Joueur** (client) | `joueur@palova.fr` | compte simple, aucun club |
+| Owner (compte historique) | `test@palova.fr` | membre du club |
 
 > Les rôles club sont portés par `ClubMember` (`OWNER` > `ADMIN` > `STAFF`). Un compte sans rattachement à un club est un **joueur**.
 
@@ -136,10 +136,10 @@ Mot de passe commun : **`password123`**. Tous rattachés au club de démo *Padel
 | Paramètre | Valeur |
 |-----------|--------|
 | Hôte / Port | `localhost` / `5432` |
-| Base | `padelconnect` |
-| Utilisateur | `padeluser` |
-| Mot de passe | `padelpass` |
-| URL | `postgresql://padeluser:padelpass@localhost:5432/padelconnect` |
+| Base | `palova` |
+| Utilisateur | `palovauser` |
+| Mot de passe | `palovapass` |
+| URL | `postgresql://palovauser:palovapass@localhost:5432/palova` |
 
 **Interface graphique (recommandé)** — depuis `backend/` :
 ```bash
@@ -149,7 +149,7 @@ npx prisma studio --port 5555     # pour fixer le port à 5555
 
 **En ligne de commande** (psql est dans le conteneur Docker) :
 ```bash
-docker exec -it padelconnect_postgres_1 psql -U padeluser -d padelconnect
+docker exec -it palova_postgres_1 psql -U palovauser -d palova
 # \dt  lister les tables · \d courts  décrire · \q  quitter
 ```
 
@@ -158,7 +158,7 @@ docker exec -it padelconnect_postgres_1 psql -U padeluser -d padelconnect
 ### Redis
 
 ```bash
-docker exec -it padelconnect_redis_1 redis-cli
+docker exec -it palova_redis_1 redis-cli
 # KEYS lock:*   voir les verrous de réservation actifs
 ```
 
@@ -191,7 +191,7 @@ npm run lint         # ESLint
 ## Structure du projet
 
 ```
-padelconnect/
+palova/
 ├── docker-compose.yml      PostgreSQL 16 + Redis 7
 ├── README.md               ce fichier
 ├── STACK.md                stack technique complète + hébergement
@@ -202,7 +202,7 @@ padelconnect/
 │   └── src/                routes, services, middlewares, jobs
 └── frontend/               Next.js 16 + React 19 + Tailwind 4 (port 3000)
     ├── app/                pages (App Router)
-    ├── components/ui/      design system SlotPadel
+    ├── components/ui/      design system Palova
     ├── lib/                thème, API client, hooks
     └── design/             maquette source (prototype, hors build)
 ```

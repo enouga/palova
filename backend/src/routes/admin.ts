@@ -25,6 +25,7 @@ const ERROR_STATUS: Record<string, number> = {
   RESERVATION_NOT_FOUND: 404,
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
+  MEMBER_NOT_FOUND:      404,
   ANNOUNCEMENT_NOT_FOUND: 404,
   SPONSOR_NOT_FOUND:      404,
 };
@@ -108,6 +109,18 @@ router.post('/resources', async (req: ClubScopedRequest, res: Response, next: Ne
   } catch (err) { handleError(err, res, next); }
 });
 
+// Réordonne les ressources — placé AVANT /resources/:id pour ne pas être capturé.
+router.patch('/resources/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || !orderedIds.every((x) => typeof x === 'string')) {
+      return void res.status(400).json({ error: 'orderedIds (string[]) requis' });
+    }
+    await resourceService.reorderResources(req.membership!.clubId, orderedIds);
+    res.json(await resourceService.listClubResources(req.membership!.clubId));
+  } catch (err) { handleError(err, res, next); }
+});
+
 router.patch('/resources/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { name, attributes, pricePerHour, openHour, closeHour, slotStepMin } = req.body;
@@ -130,25 +143,47 @@ router.patch('/resources/:id/active', async (req: ClubScopedRequest, res: Respon
   } catch (err) { handleError(err, res, next); }
 });
 
-// --- Abonnés ---
+// --- Membres (fichier-membres du club) ---
 
-router.get('/subscribers', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/members', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    res.json(await clubService.listSubscribers(req.membership!.clubId));
+    res.json(await clubService.listMembers(req.membership!.clubId));
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/subscribers', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Ajout d'un membre par email (compte joueur existant requis).
+router.post('/members', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.body.email) return void res.status(400).json({ error: 'email requis' });
-    const sub = await clubService.addSubscriberByEmail(req.membership!.clubId, req.body.email);
-    res.status(201).json(sub);
+    res.status(201).json(await clubService.addMemberByEmail(req.membership!.clubId, req.body.email));
   } catch (err) { handleError(err, res, next); }
 });
 
-router.delete('/subscribers/:userId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Création directe d'un membre (crée le compte + l'adhésion ; renvoie un mdp temporaire).
+router.post('/members/create', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    await clubService.removeSubscriber(req.membership!.clubId, asString(req.params.userId));
+    const { firstName, lastName, email, phone, membershipNo } = req.body;
+    res.status(201).json(await clubService.createMember(req.membership!.clubId, { firstName, lastName, email, phone, membershipNo }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.patch('/members/:id/blocked', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (typeof req.body.blocked !== 'boolean') return void res.status(400).json({ error: 'blocked (boolean) requis' });
+    res.json(await clubService.setMemberBlocked(req.membership!.clubId, asString(req.params.id), req.body.blocked));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.patch('/members/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { isSubscriber, membershipNo, status, note, phone } = req.body;
+    res.json(await clubService.updateMembership(req.membership!.clubId, asString(req.params.id), { isSubscriber, membershipNo, status, note, phone }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/members/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await clubService.removeMember(req.membership!.clubId, asString(req.params.id));
     res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
 });

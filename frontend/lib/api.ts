@@ -52,8 +52,12 @@ export const api = {
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
-  // Clubs auxquels le joueur est abonné (statut attribué par le club, lecture seule côté joueur).
-  getMySubscriptions: (token: string) => request<string[]>('/api/me/subscriptions', {}, token),
+  // Adhésions du joueur (clubs dont il est membre + statut abonné).
+  getMyMemberships: (token: string) => request<Membership[]>('/api/me/memberships', {}, token),
+
+  // Auto-inscription du joueur connecté à un club (adhésion automatique, idempotente).
+  joinClub: (slug: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${slug}/join`, { method: 'POST' }, token),
 
   createClub: (body: CreateClubBody, token: string) =>
     request<ClubAdminDetail>('/api/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
@@ -72,14 +76,23 @@ export const api = {
   adminGetClub: (clubId: string, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, {}, token),
 
-  adminGetSubscribers: (clubId: string, token: string) =>
-    request<Subscriber[]>(`/api/clubs/${clubId}/admin/subscribers`, {}, token),
+  adminGetMembers: (clubId: string, token: string) =>
+    request<Member[]>(`/api/clubs/${clubId}/admin/members`, {}, token),
 
-  adminAddSubscriber: (clubId: string, email: string, token: string) =>
-    request<Subscriber>(`/api/clubs/${clubId}/admin/subscribers`, { method: 'POST', body: JSON.stringify({ email }) }, token),
+  adminAddMemberByEmail: (clubId: string, email: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/members`, { method: 'POST', body: JSON.stringify({ email }) }, token),
 
-  adminRemoveSubscriber: (clubId: string, userId: string, token: string) =>
-    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/subscribers/${userId}`, { method: 'DELETE' }, token),
+  adminCreateMember: (clubId: string, body: CreateMemberBody, token: string) =>
+    request<{ tempPassword: string | null; existed: boolean }>(`/api/clubs/${clubId}/admin/members/create`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminUpdateMember: (clubId: string, id: string, body: UpdateMemberBody, token: string) =>
+    request<Member>(`/api/clubs/${clubId}/admin/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+
+  adminSetMemberBlocked: (clubId: string, id: string, blocked: boolean, token: string) =>
+    request<Member>(`/api/clubs/${clubId}/admin/members/${id}/blocked`, { method: 'PATCH', body: JSON.stringify({ blocked }) }, token),
+
+  adminRemoveMember: (clubId: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/members/${id}`, { method: 'DELETE' }, token),
 
   adminUpdateClub: (clubId: string, body: UpdateClubBody, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, { method: 'PATCH', body: JSON.stringify(body) }, token),
@@ -104,6 +117,9 @@ export const api = {
 
   adminSetResourceActive: (clubId: string, id: string, isActive: boolean, token: string) =>
     request<AdminResource>(`/api/clubs/${clubId}/admin/resources/${id}/active`, { method: 'PATCH', body: JSON.stringify({ isActive }) }, token),
+
+  adminReorderResources: (clubId: string, orderedIds: string[], token: string) =>
+    request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
 
   adminGetReservations: (clubId: string, filters: AdminReservationFilters, token: string) => {
     const qs = new URLSearchParams();
@@ -218,13 +234,29 @@ export interface ClubDetail {
   clubSports: ClubSportPublic[];
 }
 
-export interface Subscriber {
-  id: string;
+export interface Member {
+  id: string;          // id de l'adhésion (ClubMembership)
+  userId: string;
   firstName: string;
   lastName: string;
   email: string;
+  phone: string | null;
+  isSubscriber: boolean;
+  membershipNo: string | null;
+  status: 'ACTIVE' | 'BLOCKED';
+  note: string | null;
   since?: string;
 }
+
+export interface Membership {
+  clubId: string;
+  slug: string;
+  isSubscriber: boolean;
+  status: 'ACTIVE' | 'BLOCKED';
+}
+
+export type CreateMemberBody = { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string };
+export type UpdateMemberBody = Partial<{ isSubscriber: boolean; membershipNo: string | null; status: 'ACTIVE' | 'BLOCKED'; note: string | null; phone: string | null }>;
 
 export interface PublicResource {
   id: string;

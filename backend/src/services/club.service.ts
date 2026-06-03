@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
+import { bySortOrder } from './resource.service';
 
 /** Transforme un nom en slug URL (minuscules, tirets, sans accents). */
 export function slugify(input: string): string {
@@ -98,6 +100,7 @@ export class ClubService {
       },
     });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    for (const cs of club.clubSports) cs.resources.sort(bySortOrder); // ordre manuel
     return club;
   }
 
@@ -138,31 +141,103 @@ export class ClubService {
     });
   }
 
-  // --- Abonnés (joueurs avec accès anticipé) ---
+  // --- Membres (fichier-membres du club ; être membre non bloqué = pouvoir réserver) ---
 
-  async listSubscribers(clubId: string) {
-    const subs = await prisma.clubSubscriber.findMany({
+  async listMembers(clubId: string) {
+    const members = await prisma.clubMembership.findMany({
       where: { clubId },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+      select: {
+        id: true, isSubscriber: true, membershipNo: true, status: true, note: true, createdAt: true,
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      },
     });
-    return subs.map((s) => ({ ...s.user, since: s.createdAt }));
+    return members.map((m) => ({
+      id: m.id, userId: m.user.id,
+      firstName: m.user.firstName, lastName: m.user.lastName, email: m.user.email, phone: m.user.phone,
+      isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, status: m.status, note: m.note, since: m.createdAt,
+    }));
   }
 
-  /** Ajoute un abonné par email (le compte joueur doit déjà exister). */
-  async addSubscriberByEmail(clubId: string, email: string) {
+  /** Adhésion idempotente d'un user à un club (ACTIVE si absente ; garde le statut existant, BLOCKED inclus). */
+  async ensureMembership(userId: string, clubId: string) {
+    const existing = await prisma.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } } });
+    if (existing) return existing;
+    return prisma.clubMembership.create({ data: { userId, clubId } });
+  }
+
+  /** Ajoute un membre par email (le compte joueur doit déjà exister). */
+  async addMemberByEmail(clubId: string, email: string) {
     const user = await prisma.user.findFirst({ where: { email: { equals: (email || '').trim(), mode: 'insensitive' } } });
     if (!user) throw new Error('USER_NOT_FOUND');
-    await prisma.clubSubscriber.upsert({
+    await prisma.clubMembership.upsert({
       where: { userId_clubId: { userId: user.id, clubId } },
-      update: {},
+      update: { status: 'ACTIVE' },
       create: { userId: user.id, clubId },
     });
-    return { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email };
+    return { ok: true };
   }
 
-  async removeSubscriber(clubId: string, userId: string) {
-    await prisma.clubSubscriber.deleteMany({ where: { clubId, userId } });
+  /**
+   * Crée un membre directement (compte + adhésion). Pas d'emailing : renvoie un
+   * mot de passe temporaire à transmettre au joueur (durcir plus tard via invitation).
+   */
+  async createMember(clubId: string, params: { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string }) {
+    const firstName = (params.firstName || '').trim();
+    const lastName  = (params.lastName || '').trim();
+    const email     = (params.email || '').trim();
+    if (!firstName || !lastName || !email) throw new Error('VALIDATION_ERROR');
+    const membershipNo = params.membershipNo?.trim() || null;
+
+    const existing = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (existing) {
+      await prisma.clubMembership.upsert({
+        where: { userId_clubId: { userId: existing.id, clubId } },
+        update: { status: 'ACTIVE', membershipNo },
+        create: { userId: existing.id, clubId, membershipNo },
+      });
+      return { tempPassword: null as string | null, existed: true };
+    }
+
+    const tempPassword = Math.random().toString(36).slice(2, 10);
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashed, firstName, lastName, phone: params.phone?.trim() || null },
+    });
+    await prisma.clubMembership.create({ data: { userId: user.id, clubId, membershipNo } });
+    return { tempPassword, existed: false };
+  }
+
+  async updateMembership(
+    clubId: string, membershipId: string,
+    params: { isSubscriber?: boolean; membershipNo?: string | null; status?: 'ACTIVE' | 'BLOCKED'; note?: string | null; phone?: string | null },
+  ) {
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
+    if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    if (params.phone !== undefined) {
+      await prisma.user.update({ where: { id: m.userId }, data: { phone: params.phone?.toString().trim() || null } });
+    }
+    return prisma.clubMembership.update({
+      where: { id: membershipId },
+      data: {
+        ...(params.isSubscriber !== undefined ? { isSubscriber: params.isSubscriber } : {}),
+        ...(params.membershipNo !== undefined ? { membershipNo: params.membershipNo?.toString().trim() || null } : {}),
+        ...(params.status !== undefined ? { status: params.status } : {}),
+        ...(params.note !== undefined ? { note: params.note?.toString().trim() || null } : {}),
+      },
+    });
+  }
+
+  async setMemberBlocked(clubId: string, membershipId: string, blocked: boolean) {
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true } });
+    if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    return prisma.clubMembership.update({ where: { id: membershipId }, data: { status: blocked ? 'BLOCKED' : 'ACTIVE' } });
+  }
+
+  async removeMember(clubId: string, membershipId: string) {
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true } });
+    if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    await prisma.clubMembership.delete({ where: { id: membershipId } });
   }
 
   /** Sports activés par un club (avec leurs ressources, y compris inactives). */

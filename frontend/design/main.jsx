@@ -12,7 +12,7 @@ function Phone({ th, dark, seed }) {
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: th.canvas }}>
       <IOSDevice width={390} height={844} dark={dark}>
-        <SlotPadelApp th={th} seed={seed} />
+        <PalovaApp th={th} seed={seed} />
       </IOSDevice>
     </div>
   );
@@ -42,7 +42,7 @@ function App() {
           subtitle="Tableau de bord administrateur — planning et activité en temps réel.">
           <DCArtboard id="dashboard" label="Tableau de bord (desktop)" width={1240} height={772} style={{ background: thA.canvas }}>
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ChromeWindow width={1180} height={712} url="admin.slotpadel.com">
+              <ChromeWindow width={1180} height={712} url="admin.palova.com">
                 <AdminDashboard accent={t.accent} serif={serifKey} neon={t.neon} />
               </ChromeWindow>
             </div>

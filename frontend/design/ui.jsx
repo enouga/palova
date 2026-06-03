@@ -1,4 +1,4 @@
-// ui.jsx — shared themed atoms for the SlotPadel mobile app.
+// ui.jsx — shared themed atoms for the Palova mobile app.
 // Every component takes a theme object `th` (from makeTheme).
 
 // ── Logotype: serif wordmark with the accent ball standing in for the "o".

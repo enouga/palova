@@ -13,7 +13,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { slug } = useClub();
-  const [email, setEmail] = useState('test@padelconnect.fr');
+  const [email, setEmail] = useState('test@palova.fr');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,9 +35,10 @@ export default function LoginPage() {
       }
       const memberships = await api.getMyClubs(data.token).catch(() => []);
       if (slug) {
+        await api.joinClub(slug, data.token).catch(() => {}); // adhésion automatique au club du host
         const m = memberships.find((x) => x.slug === slug);
         setSession(data.token, m?.clubId ?? null);
-        router.push(m ? '/admin' : '/'); // membre du club du host → back-office, sinon home club
+        router.push(m ? '/admin' : '/'); // membre staff du club du host → back-office, sinon home club
       } else {
         const managed = memberships[0];
         setSession(data.token, managed?.clubId ?? null);

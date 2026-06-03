@@ -42,46 +42,57 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/courts',       label: 'Ressources',      icon: 'indoor' as const },
     { href: '/admin/sports',       label: 'Sports',          icon: 'bolt' as const },
     { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },
-    { href: '/admin/subscribers',  label: 'Abonnés',         icon: 'users' as const },
+    { href: '/admin/members',      label: 'Membres',         icon: 'users' as const },
     { href: '/admin/announcements', label: 'Annonces',       icon: 'bolt' as const },
     { href: '/admin/sponsors',     label: 'Partenaires',     icon: 'users' as const },
     { href: '/admin/settings',     label: 'Réglages',        icon: 'settings' as const },
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: th.bg, color: th.text, fontFamily: th.fontUI }}>
-      <header style={{ position: 'sticky', top: 0, zIndex: 20, background: th.bgElev, borderBottom: `1px solid ${th.line}`, backdropFilter: 'blur(8px)' }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 20, padding: '14px 24px' }}>
-          <Logotype size={20} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute }}>Espace club</span>
-
-          <nav style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
-            {links.map((l) => {
-              const active = pathname === l.href;
-              return (
-                <Link key={l.href} href={l.href} style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 11, textDecoration: 'none',
-                  fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
-                  background: active ? th.surface2 : 'transparent',
-                  color: active ? th.text : th.textMute,
-                }}>
-                  <Icon name={l.icon} size={17} color={active ? th.accent : th.textMute} />{l.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ThemeToggle />
-            <button onClick={logout}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 11, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
-              <Icon name="logout" size={16} color={th.textMute} />Se déconnecter
-            </button>
-          </div>
+    <div style={{ minHeight: '100vh', background: th.bg, color: th.text, fontFamily: th.fontUI, display: 'flex' }}>
+      <aside style={{
+        position: 'sticky', top: 0, alignSelf: 'flex-start', height: '100vh',
+        width: 244, flexShrink: 0, boxSizing: 'border-box',
+        background: th.bgElev, borderRight: `1px solid ${th.line}`,
+        display: 'flex', flexDirection: 'column', padding: '20px 14px',
+      }}>
+        {/* marque + identité club */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 6px' }}>
+          {club.logoUrl
+            ? <img src={club.logoUrl} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+            : <Logotype size={22} />}
+          {club.logoUrl && (
+            <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
+          )}
         </div>
-      </header>
+        <div style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textFaint, padding: '6px 10px 14px' }}>Espace club</div>
 
-      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 24px 48px' }}>{children}</main>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
+          {links.map((l) => {
+            const active = pathname === l.href;
+            return (
+              <Link key={l.href} href={l.href} style={{
+                display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', borderRadius: 11, textDecoration: 'none',
+                fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
+                background: active ? th.surface2 : 'transparent',
+                color: active ? th.text : th.textMute,
+              }}>
+                <Icon name={l.icon} size={18} color={active ? th.accent : th.textMute} />{l.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
+          <ThemeToggle />
+          <button onClick={logout}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 11, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+            <Icon name="logout" size={16} color={th.textMute} />Se déconnecter
+          </button>
+        </div>
+      </aside>
+
+      <main style={{ flex: 1, minWidth: 0, maxWidth: 1080, padding: '28px 32px 48px' }}>{children}</main>
     </div>
   );
 }

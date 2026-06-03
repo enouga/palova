@@ -1,4 +1,4 @@
-# PadelConnect — Backend API
+# Palova — Backend API
 
 API REST pour la réservation de terrains de padel, avec garantie **zéro double-réservation** et mises à jour **temps réel** (Server-Sent Events).
 
@@ -59,7 +59,7 @@ curl "http://localhost:3001/api/courts?clubId=club-demo"
 
 | Variable       | Exemple                                                            | Rôle |
 |----------------|-------------------------------------------------------------------|------|
-| `DATABASE_URL` | `postgresql://padeluser:padelpass@localhost:5432/padelconnect`    | Connexion PostgreSQL (utilisée par l'adapter Prisma `PrismaPg`) |
+| `DATABASE_URL` | `postgresql://palovauser:palovapass@localhost:5432/palova`    | Connexion PostgreSQL (utilisée par l'adapter Prisma `PrismaPg`) |
 | `REDIS_HOST`   | `localhost`                                                       | Hôte Redis (défaut `localhost`) |
 | `REDIS_PORT`   | `6379`                                                            | Port Redis (défaut `6379`) |
 | `JWT_SECRET`   | `une-chaîne-secrète-longue`                                       | Clé de signature des tokens JWT (**obligatoire**) |
@@ -142,14 +142,14 @@ Le middleware `requireClubAdmin` (appliqué après `authMiddleware`) refuse l'ac
 
 | Email                    | Mot de passe  | Rôle         | Club        |
 |--------------------------|---------------|--------------|-------------|
-| `test@padelconnect.fr`   | `password123` | `CLUB_ADMIN` | `club-demo` |
+| `test@palova.fr`   | `password123` | `CLUB_ADMIN` | `club-demo` |
 
 Exemple de login :
 
 ```bash
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@padelconnect.fr","password":"password123"}'
+  -d '{"email":"test@palova.fr","password":"password123"}'
 # → { "token": "...", "user": { ... } }
 ```
 

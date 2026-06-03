@@ -39,18 +39,50 @@ function validateSlotStep(step?: number | null): void {
   }
 }
 
+/** Ordre d'affichage stocké dans attributes.sortOrder (0 par défaut). */
+function sortOrderOf(attributes: unknown): number {
+  const v = (attributes as { sortOrder?: unknown } | null)?.sortOrder;
+  return typeof v === 'number' ? v : 0;
+}
+
+/** Trie une liste de ressources par sortOrder, puis par nom (stable). */
+export function bySortOrder<T extends { attributes: unknown; name: string }>(a: T, b: T): number {
+  return sortOrderOf(a.attributes) - sortOrderOf(b.attributes) || a.name.localeCompare(b.name, 'fr', { numeric: true });
+}
+
 export class ResourceService {
-  /** Liste toutes les ressources d'un club (y compris désactivées). */
+  /** Liste toutes les ressources d'un club (y compris désactivées), ordre manuel. */
   async listClubResources(clubId: string) {
-    return prisma.resource.findMany({
+    const resources = await prisma.resource.findMany({
       where: { clubId },
-      orderBy: { name: 'asc' },
       select: {
         id: true, name: true, attributes: true, isActive: true,
         pricePerHour: true, openHour: true, closeHour: true, slotStepMin: true,
         clubSport: { select: { id: true, slotStepMin: true, sport: { select: { key: true, name: true, resourceNoun: true, defaultSlotStepMin: true } } } },
       },
     });
+    return resources.sort(bySortOrder);
+  }
+
+  /** Réordonne les ressources d'un club selon la liste d'ids fournie. */
+  async reorderResources(clubId: string, orderedIds: string[]) {
+    const resources = await prisma.resource.findMany({
+      where: { clubId },
+      select: { id: true, attributes: true },
+    });
+    const byId = new Map(resources.map((r) => [r.id, r]));
+    // Tous les ids doivent appartenir au club (sinon 404, on ne divulgue pas).
+    for (const id of orderedIds) {
+      if (!byId.has(id)) throw new Error('RESOURCE_NOT_FOUND');
+    }
+    await prisma.$transaction(
+      orderedIds.map((id, i) =>
+        prisma.resource.update({
+          where: { id },
+          data: { attributes: { ...(byId.get(id)!.attributes as Record<string, unknown>), sortOrder: i } as Prisma.InputJsonValue },
+        }),
+      ),
+    );
   }
 
   /** Vérifie qu'un clubSport appartient bien au club. */
@@ -70,12 +102,15 @@ export class ResourceService {
     validateHoursAndPrice(openHour, closeHour, params.pricePerHour);
     validateSlotStep(params.slotStepMin);
 
+    // Nouveau terrain ajouté en fin de liste (sortOrder = nombre actuel).
+    const sortOrder = await prisma.resource.count({ where: { clubId: params.clubId } });
+
     return prisma.resource.create({
       data: {
         clubId: params.clubId,
         clubSportId: params.clubSportId,
         name,
-        attributes: params.attributes ?? {},
+        attributes: { ...((params.attributes as Record<string, unknown>) ?? {}), sortOrder } as Prisma.InputJsonValue,
         pricePerHour: params.pricePerHour,
         openHour,
         closeHour,

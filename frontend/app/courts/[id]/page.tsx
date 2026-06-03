@@ -147,10 +147,12 @@ function CourtBooking() {
           })}
         </div>
 
-        <div style={{ padding: '16px 16px 0' }}>
-          <Segmented<number> value={duration} onChange={setDuration}
-            options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
-        </div>
+        {durations.length > 1 && (
+          <div style={{ padding: '16px 16px 0' }}>
+            <Segmented<number> value={duration} onChange={setDuration}
+              options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 12px' }}>
           <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, color: th.text }}>

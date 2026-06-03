@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
+import { bySortOrder } from './resource.service';
 
 export interface TimeSlot {
   startTime: string;
@@ -76,14 +77,13 @@ export class AvailabilityService {
 
   /** Disponibilités de TOUS les terrains actifs d'un club (vue planning joueur). */
   async getClubAvailability(clubId: string, date: string, durationMinutes: number) {
-    const resources = await prisma.resource.findMany({
+    const resources = (await prisma.resource.findMany({
       where: { clubId, isActive: true },
-      orderBy: { name: 'asc' },
       select: {
         id: true, name: true, attributes: true, pricePerHour: true,
         clubSport: { select: { id: true, sport: { select: { key: true, name: true } } } },
       },
-    });
+    })).sort(bySortOrder);
 
     const result = [];
     for (const r of resources) {

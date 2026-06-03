@@ -1,4 +1,4 @@
-// admin.jsx — SlotPadel club admin dashboard (desktop). Lives in a ChromeWindow.
+// admin.jsx — Palova club admin dashboard (desktop). Lives in a ChromeWindow.
 // Floodlit (dark) theme. Has its own small live engine: the planning grid
 // updates in real time and the activity feed grows.
 

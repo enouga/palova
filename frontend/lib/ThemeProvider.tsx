@@ -12,7 +12,7 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const STORAGE_KEY = 'slotpadel-theme';
+const STORAGE_KEY = 'palova-theme';
 
 export function ThemeProvider({ children, accent, defaultMode }: { children: React.ReactNode; accent?: string; defaultMode?: ThemeMode }) {
   // Default to floodlit (or club's defaultMode). Real value is read from

@@ -1,4 +1,4 @@
-// data.jsx — mock domain data + helpers for SlotPadel.
+// data.jsx — mock domain data + helpers for Palova.
 
 const CLUB = {
   id: 'club-demo',

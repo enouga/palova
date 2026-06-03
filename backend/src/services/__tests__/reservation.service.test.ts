@@ -72,13 +72,37 @@ describe('ReservationService', () => {
     it('lève BOOKING_TOO_FAR si la date dépasse la fenêtre publique', async () => {
       redisMock.set.mockResolvedValue('OK');
       prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
-      prismaMock.clubSubscriber.findUnique.mockResolvedValue(null as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
 
       const far = new Date(Date.now() + 60 * 24 * 3600 * 1000); // +60 jours
       await expect(service.holdSlot({
         resourceId: 'court-1', userId: 'user-1', startTime: far, endTime: new Date(far.getTime() + 3_600_000),
       })).rejects.toThrow('BOOKING_TOO_FAR');
       expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+    });
+
+    it('lève MEMBERSHIP_BLOCKED si le membre est bloqué par le club', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED', isSubscriber: false } as any);
+
+      await expect(service.holdSlot(baseParams)).rejects.toThrow('MEMBERSHIP_BLOCKED');
+      expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+      expect(prismaMock.clubMembership.create).not.toHaveBeenCalled();
+    });
+
+    it('crée une adhésion ACTIVE automatiquement au 1er créneau (membre absent)', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ pricePerHour: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 25, createdAt: new Date() } as any);
+
+      await service.holdSlot(baseParams);
+
+      expect(prismaMock.clubMembership.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: 'user-1', clubId: 'club-demo' }) }),
+      );
     });
 
     it('broadcast slot_held après création réussie', async () => {

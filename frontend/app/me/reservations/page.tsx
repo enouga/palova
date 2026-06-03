@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
+import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { BackButton, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
 
@@ -22,6 +23,9 @@ export default function MyReservationsPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { token, ready } = useAuth();
+  const { slug } = useClub();
+  // Sur un sous-domaine club, réserver dans CE club (même host) ; sur la plateforme, l'annuaire.
+  const reserveHref = slug ? '/reserver' : '/clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [tab, setTab]         = useState<'upcoming' | 'past'>('upcoming');
   const [loading, setLoading] = useState(true);
@@ -59,9 +63,9 @@ export default function MyReservationsPage() {
       <div style={{ paddingBottom: 40 }}>
         <div style={{ padding: '28px 20px 6px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Logotype size={22} />
+            <BackButton href={slug ? '/' : '/clubs'} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => router.push('/clubs')}
+              <button onClick={() => router.push(reserveHref)}
                 style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
                 <Icon name="plus" size={16} color={th.onAccent} />Réserver
               </button>
@@ -89,7 +93,7 @@ export default function MyReservationsPage() {
               {tab === 'upcoming' ? 'Aucune réservation à venir.' : 'Aucune réservation passée.'}
               {tab === 'upcoming' && (
                 <div style={{ marginTop: 12 }}>
-                  <button onClick={() => router.push('/clubs')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text, textDecoration: 'underline', textUnderlineOffset: 3 }}>Trouver un club</button>
+                  <button onClick={() => router.push(reserveHref)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text, textDecoration: 'underline', textUnderlineOffset: 3 }}>{slug ? 'Réserver un créneau' : 'Trouver un club'}</button>
                 </div>
               )}
             </div>

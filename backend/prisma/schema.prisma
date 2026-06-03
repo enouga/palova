@@ -31,6 +31,11 @@ enum PaymentMethod {
   OTHER
 }
 
+enum MembershipStatus {
+  ACTIVE
+  BLOCKED
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -70,7 +75,7 @@ model Club {
   clubSports  ClubSport[]
   resources   Resource[]
   members     ClubMember[]
-  subscribers ClubSubscriber[]
+  clubMemberships ClubMembership[]
   announcements Announcement[]
   sponsors      Sponsor[]
 
@@ -131,19 +136,26 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  reservations  Reservation[]
-  memberships   ClubMember[]
-  subscriptions ClubSubscriber[]
+  reservations    Reservation[]
+  staffRoles      ClubMember[]
+  clubMemberships ClubMembership[]
 
   @@map("users")
 }
 
-/// Abonnement d'un joueur à un club (accès anticipé aux réservations).
-model ClubSubscriber {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  clubId    String   @map("club_id")
-  createdAt DateTime @default(now()) @map("created_at")
+/// Adhésion d'un joueur à un club : la base du fichier-membres géré par le club.
+/// Être membre (non BLOCKED) conditionne la réservation dans ce club.
+/// NB: table physique historiquement nommée `club_subscribers` (conservée via @@map
+/// pour une migration purement additive — l'ancien « abonné » devient isSubscriber).
+model ClubMembership {
+  id           String           @id @default(cuid())
+  userId       String           @map("user_id")
+  clubId       String           @map("club_id")
+  isSubscriber Boolean          @default(false) @map("is_subscriber") // fenêtre de résa élargie
+  membershipNo String?          @map("membership_no")                 // n° adhérent / licence
+  status       MembershipStatus @default(ACTIVE)
+  note         String?
+  createdAt    DateTime         @default(now()) @map("created_at")    // = date d'adhésion
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)

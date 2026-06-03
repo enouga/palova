@@ -19,20 +19,31 @@ export class ReservationService {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
   }
 
-  /** Vérifie que la date demandée est dans la fenêtre de réservation (élargie si abonné). */
-  private async assertWithinBookingWindow(
+  /**
+   * Gating « membre = peut réserver » + fenêtre de réservation.
+   * - Membership BLOCKED → refus (MEMBERSHIP_BLOCKED).
+   * - Fenêtre élargie si le membre est abonné (isSubscriber).
+   * - Adhésion automatique (ACTIVE) au 1er accès/réservation si absente.
+   */
+  private async assertMembershipAndWindow(
     resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number } },
     userId: string,
     startTime: Date,
   ) {
-    const sub = await prisma.clubSubscriber.findUnique({
-      where: { userId_clubId: { userId, clubId: resource.clubId } },
-    });
-    const windowDays = sub ? resource.club.memberBookingDays : resource.club.publicBookingDays;
+    const where = { userId_clubId: { userId, clubId: resource.clubId } };
+    const membership = await prisma.clubMembership.findUnique({ where });
+    if (membership?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
+
+    const isSubscriber = membership?.isSubscriber ?? false;
+    const windowDays = isSubscriber ? resource.club.memberBookingDays : resource.club.publicBookingDays;
     const tz = resource.club.timezone;
     const maxDate = DateTime.now().setZone(tz).startOf('day').plus({ days: windowDays }).endOf('day');
     const startLocal = DateTime.fromJSDate(startTime).setZone(tz);
     if (startLocal > maxDate) throw new Error('BOOKING_TOO_FAR');
+
+    if (!membership) {
+      await prisma.clubMembership.create({ data: { userId, clubId: resource.clubId } });
+    }
   }
 
   async holdSlot({ resourceId, userId, startTime, endTime }: HoldSlotParams) {
@@ -51,7 +62,7 @@ export class ReservationService {
         },
       });
 
-      await this.assertWithinBookingWindow(resource, userId, startTime);
+      await this.assertMembershipAndWindow(resource, userId, startTime);
 
       const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
 

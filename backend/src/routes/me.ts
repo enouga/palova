@@ -21,11 +21,14 @@ router.get('/clubs', authMiddleware, async (req: AuthRequest, res: Response, nex
   } catch (err) { next(err); }
 });
 
-// Clubs auxquels le joueur est abonné (ids).
-router.get('/subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+// Adhésions du joueur connecté (clubs dont il est membre, + statut abonné).
+router.get('/memberships', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const subs = await prisma.clubSubscriber.findMany({ where: { userId: req.user!.id }, select: { clubId: true } });
-    res.json(subs.map((s) => s.clubId));
+    const memberships = await prisma.clubMembership.findMany({
+      where: { userId: req.user!.id },
+      select: { isSubscriber: true, status: true, club: { select: { id: true, slug: true } } },
+    });
+    res.json(memberships.map((m) => ({ clubId: m.club.id, slug: m.club.slug, isSubscriber: m.isSubscriber, status: m.status })));
   } catch (err) { next(err); }
 });
 
