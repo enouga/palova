@@ -54,6 +54,7 @@ export default function ClubHome({ club }: { club: ClubDetail }) {
 
   const links: { label: string; icon: IconName; href: string; show: boolean }[] = [
     { label: 'Réserver', icon: 'arrowR', href: '/reserver', show: true },
+    { label: 'Tournois', icon: 'trophy', href: '/tournois', show: true },
     { label: 'Terrains', icon: 'indoor', href: '/reserver?tab=courts', show: true },
     { label: 'Mes réservations', icon: 'ticket', href: '/me/reservations', show: !!token },
     { label: 'Connexion', icon: 'user', href: '/login', show: ready && !token },
