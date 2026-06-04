@@ -22,7 +22,11 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     if (!token) return;
-    api.platformStats(token).then(setStats).catch(() => setStats(null));
+    let cancelled = false;
+    api.platformStats(token)
+      .then((s) => { if (!cancelled) setStats(s); })
+      .catch(() => { if (!cancelled) setStats(null); });
+    return () => { cancelled = true; };
   }, [token]);
 
   return (

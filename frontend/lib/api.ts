@@ -211,7 +211,7 @@ export const api = {
   platformClubs: (token: string) => request<PlatformClub[]>('/api/platform/clubs', {}, token),
 
   platformSetClubStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED', token: string) =>
-    request<{ id: string; status: string }>(`/api/platform/clubs/${id}`, {
+    request<{ id: string; status: 'ACTIVE' | 'SUSPENDED' }>(`/api/platform/clubs/${id}`, {
       method: 'PATCH', body: JSON.stringify({ status }),
     }, token),
 

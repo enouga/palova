@@ -10,6 +10,8 @@ export default function SuperAdminClubs() {
   const { token } = useAuth();
   const [clubs, setClubs] = useState<PlatformClub[]>([]);
   const [pending, setPending] = useState<PlatformClub | null>(null); // club dont on confirme le changement
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -21,9 +23,16 @@ export default function SuperAdminClubs() {
   async function applyStatus() {
     if (!pending || !token) return;
     const next = pending.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    await api.platformSetClubStatus(pending.id, next, token).catch(() => {});
-    setPending(null);
-    load();
+    setBusy(true); setError(null);
+    try {
+      await api.platformSetClubStatus(pending.id, next, token);
+      setPending(null);
+      load();
+    } catch {
+      setError('Échec de la mise à jour du statut. Réessayez.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const cell: React.CSSProperties = { padding: '12px 14px', borderBottom: `1px solid ${th.line}`, fontSize: 14, color: th.text };
@@ -31,7 +40,10 @@ export default function SuperAdminClubs() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: th.fontUI, fontSize: 28, fontWeight: 700, color: th.text, marginBottom: 20 }}>Clubs</h1>
+      <h1 style={{ fontFamily: th.fontDisplay, fontSize: 28, fontWeight: 700, color: th.text, marginBottom: 20 }}>Clubs</h1>
+      {error && (
+        <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 16 }}>{error}</div>
+      )}
       <div style={{ background: th.bgElev, border: `1px solid ${th.line}`, borderRadius: 14, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
@@ -72,9 +84,10 @@ export default function SuperAdminClubs() {
         <ConfirmDialog
           title={pending.status === 'ACTIVE' ? `Suspendre ${pending.name} ?` : `Réactiver ${pending.name} ?`}
           message={pending.status === 'ACTIVE'
-            ? 'Le club disparaîtra de l’annuaire public et sa page ne sera plus accessible.'
-            : 'Le club redeviendra visible dans l’annuaire et sa page sera de nouveau accessible.'}
+            ? "Le club disparaîtra de l'annuaire public et sa page ne sera plus accessible."
+            : "Le club redeviendra visible dans l'annuaire et sa page sera de nouveau accessible."}
           confirmLabel={pending.status === 'ACTIVE' ? 'Suspendre' : 'Réactiver'}
+          busy={busy}
           onConfirm={applyStatus}
           onCancel={() => setPending(null)}
         />

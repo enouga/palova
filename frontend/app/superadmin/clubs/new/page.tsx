@@ -41,7 +41,7 @@ export default function NewClubByPlatform() {
 
   return (
     <div style={{ maxWidth: 520 }}>
-      <h1 style={{ fontFamily: th.fontUI, fontSize: 28, fontWeight: 700, color: th.text, marginBottom: 20 }}>Créer un club</h1>
+      <h1 style={{ fontFamily: th.fontDisplay, fontSize: 28, fontWeight: 700, color: th.text, marginBottom: 20 }}>Créer un club</h1>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {error && <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>}
         <div style={{ fontSize: 12.5, color: th.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Club</div>
