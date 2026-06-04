@@ -1,0 +1,77 @@
+# Blueprint Render — déploiement 1-clic de palova (frontend + backend + Postgres + Redis).
+# Utilisation : Render → New + → Blueprint → sélectionner le repo. Render lit ce fichier et
+# crée les 4 ressources. Il demandera SITE_USER / SITE_PASS (accès privé) au moment du déploiement.
+# Après création : ajouter les enregistrements DNS chez OVH (cf. docs/deploiement-render.md, étape 5).
+#
+# NB : si le parseur refuse `type: keyvalue`, remplace-le par `type: redis` (2 endroits).
+
+services:
+  # --- Backend Express (API) ---
+  - type: web
+    name: palova-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    domains:
+      - api.palova.fr
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: palova-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: palova-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ROOT_DOMAIN
+        value: palova.fr
+      - key: FRONTEND_URL
+        value: https://palova.fr
+      - key: NODE_ENV
+        value: production
+
+  # --- Frontend Next.js ---
+  - type: web
+    name: palova-web
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npx next start -p $PORT
+    domains:
+      - palova.fr
+      - padel-arena-paris.palova.fr
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.palova.fr
+      - key: NEXT_PUBLIC_ROOT_DOMAIN
+        value: palova.fr
+      - key: NEXT_PUBLIC_COOKIE_DOMAIN
+        value: .palova.fr
+      # Accès privé (Basic Auth) — Render demande ces valeurs au déploiement (non versionnées).
+      - key: SITE_USER
+        sync: false
+      - key: SITE_PASS
+        sync: false
+
+  # --- Redis / Key Value ---
+  - type: keyvalue
+    name: palova-redis
+    region: frankfurt
+    plan: free
+    ipAllowList: []        # vide = accessible uniquement par les services internes Render
+    maxmemoryPolicy: noeviction
+
+databases:
+  # --- Postgres ---
+  - name: palova-db
+    region: frankfurt
+    plan: free

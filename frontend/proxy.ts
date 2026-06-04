@@ -20,6 +20,24 @@ function portSuffix(host: string): string {
 }
 
 export function proxy(request: NextRequest) {
+  // Verrou d'accès privé (Basic Auth) — actif uniquement si SITE_USER/SITE_PASS sont définis
+  // (donc inactif en local, et trivial à retirer en supprimant ces variables d'env).
+  const U = process.env.SITE_USER, P = process.env.SITE_PASS;
+  if (U && P) {
+    const [scheme, encoded] = (request.headers.get('authorization') || '').split(' ');
+    let okAuth = false;
+    if (scheme === 'Basic' && encoded) {
+      const [user, pass] = atob(encoded).split(':');
+      okAuth = user === U && pass === P;
+    }
+    if (!okAuth) {
+      return new NextResponse('Authentification requise', {
+        status: 401,
+        headers: { 'WWW-Authenticate': 'Basic realm="palova", charset="UTF-8"' },
+      });
+    }
+  }
+
   const host = request.headers.get('host') || '';
   const url = request.nextUrl;
   const slug = clubSlugFromHost(host);
