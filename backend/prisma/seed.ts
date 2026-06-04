@@ -107,6 +107,20 @@ async function main() {
     }
   }
 
+  // 5b. Super-admin plateforme (idempotent). Mot de passe via env en prod, défaut dev.
+  const superPassword = await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'password123', 10);
+  await prisma.user.upsert({
+    where: { email: 'super@palova.fr' },
+    update: { isSuperAdmin: true },
+    create: {
+      email: 'super@palova.fr',
+      password: superPassword,
+      firstName: 'Super',
+      lastName: 'Admin',
+      isSuperAdmin: true,
+    },
+  });
+
   console.log('Seed terminé.');
 }
 
