@@ -204,6 +204,20 @@ export const api = {
 
   adminRemoveRegistration: (clubId: string, tournamentId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
+
+  // --- Plateforme (super-admin) ---
+  platformStats: (token: string) => request<PlatformStats>('/api/platform/stats', {}, token),
+
+  platformClubs: (token: string) => request<PlatformClub[]>('/api/platform/clubs', {}, token),
+
+  platformSetClubStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED', token: string) =>
+    request<{ id: string; status: string }>(`/api/platform/clubs/${id}`, {
+      method: 'PATCH', body: JSON.stringify({ status }),
+    }, token),
+
+  platformCreateClub: (body: CreateClubByPlatformBody, token: string) =>
+    request<{ club: { id: string; slug: string; name: string }; owner: { id: string; email: string } }>(
+      '/api/platform/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
 };
 
 // --- Types ---
@@ -369,7 +383,7 @@ export interface RegisterBody {
 
 export interface AuthResponse {
   token: string;
-  user: { id: string; email: string; firstName: string; lastName: string };
+  user: { id: string; email: string; firstName: string; lastName: string; isSuperAdmin: boolean };
 }
 
 export interface ClubAdminDetail {
@@ -605,3 +619,26 @@ export type CreateTournamentBody = {
   entryFee?: number | null;
 };
 export type UpdateTournamentBody = Partial<CreateTournamentBody & { status: TournamentStatus }>;
+
+export interface PlatformStats {
+  clubs: { total: number; active: number; suspended: number };
+  users: number;
+  reservations: number;
+  tournaments: number;
+}
+
+export interface PlatformClub {
+  id: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  status: 'ACTIVE' | 'SUSPENDED';
+  createdAt: string;
+  owners: { id: string; email: string; firstName: string; lastName: string }[];
+  counts: { adherents: number; resources: number };
+}
+
+export interface CreateClubByPlatformBody {
+  club: { name: string; city?: string; timezone?: string; sportKey?: string };
+  owner: { firstName: string; lastName: string; email: string; password: string };
+}
