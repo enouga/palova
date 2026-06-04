@@ -33,6 +33,11 @@ export default function LoginPage() {
         setError(data.error || 'Erreur de connexion');
         return;
       }
+      if (!slug && data.user?.isSuperAdmin) {
+        setSession(data.token, null);
+        router.push('/superadmin');
+        return;
+      }
       const memberships = await api.getMyClubs(data.token).catch(() => []);
       if (slug) {
         await api.joinClub(slug, data.token).catch(() => {}); // adhésion automatique au club du host
