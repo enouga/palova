@@ -20,4 +20,28 @@ export class PlatformService {
     ]);
     return { clubs: { total, active, suspended }, users, reservations, tournaments };
   }
+
+  /** Tous les clubs (tous statuts), avec gérants OWNER et compteurs. */
+  async listClubs() {
+    const clubs = await prisma.club.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        members: {
+          where: { role: 'OWNER' },
+          include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        },
+        _count: { select: { clubMemberships: true, resources: true } },
+      },
+    });
+    return clubs.map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      name: c.name,
+      city: c.city,
+      status: c.status,
+      createdAt: c.createdAt,
+      owners: c.members.map((m) => m.user),
+      counts: { adherents: c._count.clubMemberships, resources: c._count.resources },
+    }));
+  }
 }

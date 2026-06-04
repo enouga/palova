@@ -24,3 +24,29 @@ describe('PlatformService.getStats', () => {
     });
   });
 });
+
+describe('PlatformService.listClubs', () => {
+  const service = new PlatformService();
+
+  it('renvoie tous les clubs (tous statuts) avec gérants et compteurs', async () => {
+    prismaMock.club.findMany.mockResolvedValue([
+      {
+        id: 'club-demo', slug: 'padel-arena-paris', name: 'Padel Arena Paris',
+        city: 'Paris', status: 'SUSPENDED', createdAt: new Date('2026-01-01'),
+        members: [{ user: { id: 'u1', email: 'owner@palova.fr', firstName: 'O', lastName: 'M' } }],
+        _count: { clubMemberships: 48, resources: 5 },
+      },
+    ] as any);
+
+    const clubs = await service.listClubs();
+    expect(prismaMock.club.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: { createdAt: 'desc' },
+    }));
+    expect(clubs[0]).toEqual({
+      id: 'club-demo', slug: 'padel-arena-paris', name: 'Padel Arena Paris',
+      city: 'Paris', status: 'SUSPENDED', createdAt: new Date('2026-01-01'),
+      owners: [{ id: 'u1', email: 'owner@palova.fr', firstName: 'O', lastName: 'M' }],
+      counts: { adherents: 48, resources: 5 },
+    });
+  });
+});
