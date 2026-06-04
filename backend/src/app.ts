@@ -9,6 +9,9 @@ import adminRouter from './routes/admin';
 import resourcesRouter from './routes/resources';
 import reservationsRouter from './routes/reservations';
 import tournamentsRouter from './routes/tournaments';
+import platformRouter from './routes/platform';
+import { authMiddleware } from './middleware/auth';
+import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
@@ -34,6 +37,7 @@ app.use('/api/sports',        sportsRouter);
 app.use('/api/resources',     resourcesRouter);
 app.use('/api/reservations',  reservationsRouter);
 app.use('/api/tournaments',   tournamentsRouter);
+app.use('/api/platform', authMiddleware, requireSuperAdmin, platformRouter);
 // Admin scopé par club — monté AVANT /api/clubs (plus spécifique).
 app.use('/api/clubs/:clubId/admin', adminRouter);
 app.use('/api/clubs',         clubsRouter);
