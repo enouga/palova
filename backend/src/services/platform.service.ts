@@ -18,6 +18,7 @@ export interface PlatformStats {
 export class PlatformService {
   /** Statistiques globales de la plateforme. */
   async getStats(): Promise<PlatformStats> {
+    // Compteurs indépendants (pas de transaction) : sous forte charge, active+suspended peut différer de total. Acceptable pour un tableau de bord.
     const [total, active, suspended, users, reservations, tournaments] = await Promise.all([
       prisma.club.count(),
       prisma.club.count({ where: { status: 'ACTIVE' } }),
@@ -55,6 +56,7 @@ export class PlatformService {
 
   /** Bascule le statut d'un club (ACTIVE/SUSPENDED). */
   async setClubStatus(id: string, status: 'ACTIVE' | 'SUSPENDED') {
+    // Le routeur passe le body JSON brut : on revalide le statut à l'exécution.
     if (status !== 'ACTIVE' && status !== 'SUSPENDED') throw new Error('VALIDATION_ERROR');
     try {
       return await prisma.club.update({ where: { id }, data: { status } });
@@ -112,6 +114,8 @@ export class PlatformService {
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = (err.meta?.target as string[] | undefined) ?? [];
+        if (target.includes('email')) throw new Error('EMAIL_TAKEN');
         throw new Error('SLUG_TAKEN');
       }
       throw err;

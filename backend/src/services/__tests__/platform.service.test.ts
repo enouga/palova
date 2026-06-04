@@ -99,6 +99,21 @@ describe('PlatformService.createClubWithOwner', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
+  it('rejette SLUG_TAKEN si le slug est déjà pris (P2002 sur slug)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null as any);
+    const tx = {
+      user: { create: jest.fn().mockResolvedValue({ id: 'u-new', email: 'lea@nantes.fr', firstName: 'Léa', lastName: 'Roux' }) },
+      club: { create: jest.fn().mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x', meta: { target: ['slug'] } }),
+      ) },
+      clubMember: { create: jest.fn() },
+      sport: { findUnique: jest.fn() },
+      clubSport: { create: jest.fn() },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
+    await expect(service.createClubWithOwner(validBody)).rejects.toThrow('SLUG_TAKEN');
+  });
+
   it('crée le gérant, le club, le ClubMember OWNER et le ClubSport', async () => {
     prismaMock.user.findFirst.mockResolvedValue(null as any);
     const tx = {
