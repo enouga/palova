@@ -223,6 +223,83 @@ describe('ReservationService', () => {
     });
   });
 
+  describe('adminCreateReservation', () => {
+    const base = {
+      clubId: 'club-demo', resourceId: 'court-1', date: '2026-06-15',
+      startTime: '18:00', endTime: '19:00', type: 'EVENT' as const,
+    };
+    const mockResource = () => prismaMock.resource.findUnique.mockResolvedValue(
+      { clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+
+    it('crée un événement CONFIRMED sans membre (userId null) + broadcast slot_confirmed', async () => {
+      mockResource();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'r-new', resourceId: 'court-1', startTime: new Date(), endTime: new Date() } as any);
+
+      const res = await service.adminCreateReservation({ ...base, title: 'Maintenance' });
+
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'CONFIRMED', type: 'EVENT', userId: null, title: 'Maintenance', resourceId: 'court-1' }),
+      }));
+      expect(sseBroadcast()).toHaveBeenCalledWith('court-1', expect.objectContaining({ type: 'slot_confirmed', reservationId: 'r-new' }));
+      expect(res.id).toBe('r-new');
+    });
+
+    it('rattache le membre quand memberUserId est fourni et membre du club', async () => {
+      mockResource();
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1', status: 'ACTIVE' } as any);
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'r-new', resourceId: 'court-1', startTime: new Date(), endTime: new Date() } as any);
+
+      await service.adminCreateReservation({ ...base, type: 'COURT', memberUserId: 'user-9' });
+
+      expect(prismaMock.reservation.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ userId: 'user-9', type: 'COURT' }),
+      }));
+    });
+
+    it('lève VALIDATION_ERROR si le membre n appartient pas au club', async () => {
+      mockResource();
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+      await expect(service.adminCreateReservation({ ...base, memberUserId: 'user-x' })).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('lève RESOURCE_NOT_FOUND si la ressource n existe pas', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue(null as any);
+      await expect(service.adminCreateReservation(base)).rejects.toThrow('RESOURCE_NOT_FOUND');
+    });
+
+    it('lève CLUB_MISMATCH si la ressource est d un autre club', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'autre', club: { timezone: 'Europe/Paris' } } as any);
+      await expect(service.adminCreateReservation(base)).rejects.toThrow('CLUB_MISMATCH');
+    });
+
+    it('lève VALIDATION_ERROR si fin <= début', async () => {
+      mockResource();
+      await expect(service.adminCreateReservation({ ...base, startTime: '19:00', endTime: '18:00' })).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('lève SLOT_NOT_AVAILABLE si chevauchement', async () => {
+      mockResource();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(1 as any);
+      await expect(service.adminCreateReservation(base)).rejects.toThrow('SLOT_NOT_AVAILABLE');
+      expect(prismaMock.reservation.create).not.toHaveBeenCalled();
+    });
+
+    it('lève VALIDATION_ERROR si le prix est négatif', async () => {
+      mockResource();
+      await expect(service.adminCreateReservation({ ...base, price: -5 })).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('lève VALIDATION_ERROR si début == fin', async () => {
+      mockResource();
+      await expect(service.adminCreateReservation({ ...base, startTime: '18:00', endTime: '18:00' })).rejects.toThrow('VALIDATION_ERROR');
+    });
+  });
+
   describe('listClubReservations', () => {
     it('filtre par club/ressource/statut et calcule le résumé (total dû / encaissé / reste)', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([

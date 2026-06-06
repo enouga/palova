@@ -33,6 +33,7 @@ const ERROR_STATUS: Record<string, number> = {
   TOURNAMENT_NOT_FOUND:   404,
   HAS_REGISTRATIONS:      409,
   REGISTRATION_NOT_FOUND: 404,
+  SLOT_NOT_AVAILABLE:    409,
 };
 
 function asString(v: unknown): string {
@@ -216,6 +217,30 @@ router.get('/reservations', async (req: ClubScopedRequest, res: Response, next: 
       status:     (status || undefined) as typeof STATUSES[number] | undefined,
     });
     res.json(result);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/reservations', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { resourceId, date, startTime, endTime, title, memberUserId, price } = req.body;
+    const type = asString(req.body.type);
+    if (typeof resourceId !== 'string' || !resourceId) return void res.status(400).json({ error: 'resourceId requis' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(asString(date)))    return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
+    if (!/^\d{2}:\d{2}$/.test(asString(startTime)) || !/^\d{2}:\d{2}$/.test(asString(endTime))) {
+      return void res.status(400).json({ error: 'heures HH:mm requises' });
+    }
+    if (!RESERVATION_TYPES.includes(type as typeof RESERVATION_TYPES[number])) {
+      return void res.status(400).json({ error: 'type invalide' });
+    }
+    const created = await reservationService.adminCreateReservation({
+      clubId:       req.membership!.clubId,
+      resourceId, date, startTime, endTime,
+      type:         type as typeof RESERVATION_TYPES[number],
+      title:        typeof title === 'string' ? title : undefined,
+      memberUserId: typeof memberUserId === 'string' && memberUserId ? memberUserId : undefined,
+      price:        price !== undefined && price !== null ? Number(price) : undefined,
+    });
+    res.status(201).json(created);
   } catch (err) { handleError(err, res, next); }
 });
 
