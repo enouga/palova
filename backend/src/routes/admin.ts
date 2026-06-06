@@ -222,7 +222,8 @@ router.get('/reservations', async (req: ClubScopedRequest, res: Response, next: 
 
 router.post('/reservations', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { resourceId, date, startTime, endTime, type, title, memberUserId, price } = req.body;
+    const { resourceId, date, startTime, endTime, title, memberUserId, price } = req.body;
+    const type = asString(req.body.type);
     if (typeof resourceId !== 'string' || !resourceId) return void res.status(400).json({ error: 'resourceId requis' });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(asString(date)))    return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
     if (!/^\d{2}:\d{2}$/.test(asString(startTime)) || !/^\d{2}:\d{2}$/.test(asString(endTime))) {
