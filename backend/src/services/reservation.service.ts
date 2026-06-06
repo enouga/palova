@@ -217,6 +217,93 @@ export class ReservationService {
     return this.performCancel(reservation);
   }
 
+  /**
+   * Création par un gestionnaire depuis le planning : réservation CONFIRMED qui bloque
+   * le créneau. Type libre (Terrain/Coaching/Tournoi/Événement), membre optionnel
+   * (sinon userId = null), intitulé optionnel. Non soumise aux limites joueur.
+   */
+  async adminCreateReservation(params: {
+    clubId: string;
+    resourceId: string;
+    date: string;       // YYYY-MM-DD (heure locale du club)
+    startTime: string;  // HH:mm
+    endTime: string;    // HH:mm
+    type: ReservationType;
+    title?: string;
+    memberUserId?: string;
+    price?: number;
+  }) {
+    const { clubId, resourceId, date, startTime, endTime, type, title, memberUserId, price } = params;
+
+    const resource = await prisma.resource.findUnique({
+      where: { id: resourceId },
+      select: { clubId: true, club: { select: { timezone: true } } },
+    });
+    if (!resource)                  throw new Error('RESOURCE_NOT_FOUND');
+    if (resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const tz = resource.club.timezone;
+    const start = DateTime.fromISO(`${date}T${startTime}`, { zone: tz });
+    const end   = DateTime.fromISO(`${date}T${endTime}`, { zone: tz });
+    if (!start.isValid || !end.isValid || end <= start) throw new Error('VALIDATION_ERROR');
+    if (price !== undefined && (Number.isNaN(price) || price < 0)) throw new Error('VALIDATION_ERROR');
+
+    const startUtc = start.toUTC().toJSDate();
+    const endUtc   = end.toUTC().toJSDate();
+    const totalPrice = new Prisma.Decimal(price && price > 0 ? price : 0);
+
+    let userId: string | null = null;
+    if (memberUserId) {
+      const membership = await prisma.clubMembership.findUnique({
+        where: { userId_clubId: { userId: memberUserId, clubId } },
+      });
+      if (!membership) throw new Error('VALIDATION_ERROR');
+      userId = memberUserId;
+    }
+
+    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+    const created = await prisma.$transaction(async (tx) => {
+      const conflicts = await tx.reservation.count({
+        where: {
+          resourceId,
+          OR: [
+            { status: 'CONFIRMED' },
+            { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+          ],
+          startTime: { lt: endUtc },
+          endTime:   { gt: startUtc },
+        },
+      });
+      if (conflicts > 0) throw new Error('SLOT_NOT_AVAILABLE');
+
+      return tx.reservation.create({
+        data: {
+          resourceId,
+          userId,
+          startTime: startUtc,
+          endTime: endUtc,
+          status: 'CONFIRMED',
+          type,
+          title: title?.trim() || null,
+          totalPrice,
+        },
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 10_000,
+    });
+
+    SSEService.getInstance().broadcast(resourceId, {
+      type: 'slot_confirmed',
+      resourceId,
+      reservationId: created.id,
+      startTime: startUtc.toISOString(),
+      endTime: endUtc.toISOString(),
+    });
+
+    return created;
+  }
+
   /** Change le type d'une réservation (Terrain/Coaching/Tournoi/Événement). Vérifie le club. */
   async setReservationType(reservationId: string, adminClubId: string, type: ReservationType) {
     const reservation = await prisma.reservation.findUnique({
