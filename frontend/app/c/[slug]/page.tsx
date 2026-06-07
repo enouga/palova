@@ -3,6 +3,6 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 export default function LegacyClubRedirect() {
   const router = useRouter();
-  useEffect(() => { router.replace('/reserver'); }, [router]);
+  useEffect(() => { router.replace('/'); }, [router]);
   return null;
 }

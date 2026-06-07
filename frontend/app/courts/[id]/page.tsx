@@ -8,9 +8,11 @@ import DateSelector from '@/components/DateSelector';
 import { useCourtSSE } from '@/lib/useCourtSSE';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
+import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { TopBar, Chip, LiveDot, Placeholder, Segmented } from '@/components/ui/atoms';
+import { Chip, LiveDot, Placeholder, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ClubNav } from '@/components/ClubNav';
 import { courtType, courtFormat } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 
@@ -22,6 +24,7 @@ function CourtBooking() {
   const params = useParams();
   const router = useRouter();
   const { th } = useTheme();
+  const { club } = useClub();
   const resourceId = typeof params.id === 'string' ? params.id : '';
   const { token, ready } = useAuth();
 
@@ -83,21 +86,17 @@ function CourtBooking() {
   const freeCount = slots.filter((s) => s.available).length;
   const ct = courtType(typeof resource?.attributes?.surface === 'string' ? resource.attributes.surface : undefined);
   const isSingle = courtFormat(typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined);
-  const backTo = '/';
 
   return (
     <Screen style={{ maxWidth: 760 }}>
       <div style={{ paddingBottom: 30 }}>
-        <TopBar
-          title={resource ? resource.name : 'Réservation'}
-          logoHref={backTo}
-          right={resource ? (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>
-              {isSingle && <Chip tone="line">Single</Chip>}
-            </div>
-          ) : undefined}
-        />
+        {club && <ClubNav club={club} />}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '16px 16px 0' }}>
+          <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.4 }}>{resource ? resource.name : 'Réservation'}</span>
+          {resource && <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>}
+          {resource && isSingle && <Chip tone="line">Single</Chip>}
+        </div>
 
         <div style={{ padding: '0 16px' }}>
           <Placeholder label={`photo · ${resource?.name ?? 'terrain'}`} height={132} />

@@ -6,8 +6,9 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { api, TournamentDetail, MyProfile, MyTournamentRegistration } from '@/lib/api';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, ThemeToggle, Chip } from '@/components/ui/atoms';
+import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ClubNav } from '@/components/ClubNav';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
@@ -118,15 +119,16 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   return (
     <Screen style={{ maxWidth: 640 }}>
       <div style={{ paddingBottom: 48 }}>
-        <div style={{ padding: '24px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={() => router.push('/tournois')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="chevL" size={18} color={th.textMute} /><Logotype size={20} />
+        <ClubNav club={club} />
+
+        <div style={{ padding: '14px 20px 0' }}>
+          <button onClick={() => router.push('/tournois')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute, padding: 0 }}>
+            <Icon name="chevL" size={16} color={th.textMute} />Tous les tournois
           </button>
-          <ThemeToggle />
         </div>
 
         {/* En-tête tournoi */}
-        <div style={{ padding: '14px 20px 0' }}>
+        <div style={{ padding: '12px 20px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Chip tone="accent">{t.category}</Chip><Chip>{GENDER_LABEL[t.gender]}</Chip>
           </div>

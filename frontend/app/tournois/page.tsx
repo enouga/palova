@@ -5,8 +5,9 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament } from '@/lib/api';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, ThemeToggle, Chip } from '@/components/ui/atoms';
+import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ClubNav } from '@/components/ClubNav';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
@@ -32,14 +33,9 @@ export default function TournoisPage() {
   return (
     <Screen style={{ maxWidth: 760 }}>
       <div style={{ paddingBottom: 40 }}>
-        <div style={{ padding: '24px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={() => router.push('/')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="chevL" size={18} color={th.textMute} /><Logotype size={20} />
-          </button>
-          <ThemeToggle />
-        </div>
+        <ClubNav club={club} />
 
-        <div style={{ padding: '14px 20px 0' }}>
+        <div style={{ padding: '18px 20px 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Tournois</div>
           <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 4 }}>{club.name}</div>
         </div>

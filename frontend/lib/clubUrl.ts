@@ -8,3 +8,14 @@ export function clubUrl(slug: string, path = '/'): string {
   }
   return `https://${slug}.${root}${p}`;
 }
+
+/** URL absolue de la plateforme (domaine racine, sans sous-domaine club). En SSR, repli https://. */
+export function platformUrl(path = '/'): string {
+  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost';
+  const p = path.startsWith('/') ? path : `/${path}`;
+  if (typeof window !== 'undefined') {
+    const port = window.location.port ? `:${window.location.port}` : '';
+    return `${window.location.protocol}//${root}${port}${p}`;
+  }
+  return `https://${root}${p}`;
+}

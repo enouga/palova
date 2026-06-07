@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { BackButton, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
+import { ClubNav } from '@/components/ClubNav';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -23,7 +24,7 @@ export default function MyReservationsPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { token, ready } = useAuth();
-  const { slug } = useClub();
+  const { slug, club } = useClub();
   // Sur un sous-domaine club, réserver dans CE club (même host) ; sur la plateforme, l'annuaire.
   const reserveHref = slug ? '/reserver' : '/clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
@@ -61,21 +62,25 @@ export default function MyReservationsPage() {
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
-        <div style={{ padding: '28px 20px 6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <BackButton href={slug ? '/' : '/clubs'} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => router.push(reserveHref)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
-                <Icon name="plus" size={16} color={th.onAccent} />Réserver
-              </button>
-              <ThemeToggle />
-              <LogoutButton />
+        {slug && club ? (
+          <ClubNav club={club} />
+        ) : (
+          <div style={{ padding: '28px 20px 6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <BackButton href="/clubs" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => router.push('/clubs')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
+                  <Icon name="plus" size={16} color={th.onAccent} />Réserver
+                </button>
+                <ThemeToggle />
+                <LogoutButton />
+              </div>
             </div>
           </div>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, marginTop: 22, letterSpacing: -0.5 }}>
-            Mes réservations
-          </div>
+        )}
+        <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
+          Mes réservations
         </div>
 
         <div style={{ padding: '16px 20px 0' }}>
