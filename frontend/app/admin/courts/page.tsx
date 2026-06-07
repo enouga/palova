@@ -20,13 +20,13 @@ export default function AdminResourcesPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
-  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', format: 'double', pricePerHour: '25', openHour: '8', closeHour: '22', slotStepMin: '' });
+  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: 'indoor', format: 'double', pricePerHour: '25', offPeakPricePerHour: '', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
   const [dragId, setDragId]     = useState<string | null>(null);
   const [dirty, setDirty]       = useState<Set<string>>(new Set());
   const [saving, setSaving]     = useState(false);
 
-  const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+  const cell: CSSProperties = { padding: '14px 18px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
 
@@ -50,8 +50,14 @@ export default function AdminResourcesPage() {
 
   const markDirty = (id: string) => setDirty((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
 
-  const editField = (id: string, field: 'name' | 'pricePerHour' | 'openHour' | 'closeHour', value: string) => {
+  const editField = (id: string, field: 'name' | 'pricePerHour' | 'offPeakPricePerHour' | 'openHour' | 'closeHour', value: string) => {
     setResources((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+    markDirty(id);
+  };
+
+  // Édite un sous-champ d'attributes (surface/format) en préservant les autres clés (dont sortOrder).
+  const editAttr = (id: string, key: 'surface' | 'format', value: string) => {
+    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, attributes: { ...r.attributes, [key]: value } } : r)));
     markDirty(id);
   };
 
@@ -72,7 +78,10 @@ export default function AdminResourcesPage() {
     const results = await Promise.allSettled(toSave.map((r) =>
       api.adminUpdateResource(clubId, r.id, {
         name: r.name.trim(),
-        pricePerHour: Number(r.pricePerHour), openHour: Number(r.openHour), closeHour: Number(r.closeHour), slotStepMin: r.slotStepMin,
+        attributes: r.attributes,
+        pricePerHour: Number(r.pricePerHour),
+        offPeakPricePerHour: r.offPeakPricePerHour === null || r.offPeakPricePerHour === '' ? null : Number(r.offPeakPricePerHour),
+        openHour: Number(r.openHour), closeHour: Number(r.closeHour), slotStepMin: r.slotStepMin,
       }, token),
     ));
     const failed = results.map((res, i) => ({ res, r: toSave[i] })).filter((x) => x.res.status === 'rejected');
@@ -116,10 +125,12 @@ export default function AdminResourcesPage() {
       setError(null);
       await api.adminCreateResource(clubId, {
         clubSportId: nr.clubSportId, name: nr.name, attributes: { surface: nr.surface, format: nr.format },
-        pricePerHour: Number(nr.pricePerHour), openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
+        pricePerHour: Number(nr.pricePerHour),
+        offPeakPricePerHour: nr.offPeakPricePerHour ? Number(nr.offPeakPricePerHour) : null,
+        openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
         slotStepMin: nr.slotStepMin ? Number(nr.slotStepMin) : undefined,
       }, token);
-      setNr((n) => ({ ...n, name: '', surface: 'indoor', pricePerHour: '25', openHour: '8', closeHour: '22', slotStepMin: '' }));
+      setNr((n) => ({ ...n, name: '', surface: 'indoor', pricePerHour: '25', offPeakPricePerHour: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
       await load();
     } catch (e) {
       const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture, créneau multiple de 15)' : (e as Error).message;
@@ -147,8 +158,8 @@ export default function AdminResourcesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['', 'Ressource', 'Sport', 'Tarif €/h', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
-                  <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
+                {['', 'Ressource', 'Sport', 'Surface', 'Format', '€/h pleines', '€/h creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
+                  <th key={i} style={{ padding: '14px 18px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -166,14 +177,21 @@ export default function AdminResourcesPage() {
                     <Icon name="grip" size={18} color={th.textFaint} />
                   </td>
                   <td style={cell}>
-                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 160, fontWeight: 600 }} />
-                    <div style={{ fontSize: 12, color: th.textFaint, marginTop: 4 }}>
-                      {typeof r.attributes?.surface === 'string' ? r.attributes.surface : '—'}
-                      {r.attributes?.format === 'single' ? ' · single' : ''}
-                    </div>
+                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 200, fontWeight: 600 }} />
                   </td>
                   <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
-                  <td style={cell}><input type="number" min={1} step="0.5" value={r.pricePerHour} onChange={(e) => editField(r.id, 'pricePerHour', e.target.value)} style={{ ...input, width: 80 }} /></td>
+                  <td style={cell}>
+                    <select value={typeof r.attributes?.surface === 'string' ? r.attributes.surface : 'indoor'} onChange={(e) => editAttr(r.id, 'surface', e.target.value)} style={{ ...input, width: 110 }}>
+                      {SURFACE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </td>
+                  <td style={cell}>
+                    <select value={typeof r.attributes?.format === 'string' ? r.attributes.format : 'double'} onChange={(e) => editAttr(r.id, 'format', e.target.value)} style={{ ...input, width: 100 }}>
+                      {COURT_FORMATS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </td>
+                  <td style={cell}><input type="number" min={1} step="0.5" value={r.pricePerHour} onChange={(e) => editField(r.id, 'pricePerHour', e.target.value)} style={{ ...input, width: 90 }} /></td>
+                  <td style={cell}><input type="number" min={1} step="0.5" placeholder="—" value={r.offPeakPricePerHour ?? ''} onChange={(e) => editField(r.id, 'offPeakPricePerHour', e.target.value)} style={{ ...input, width: 90 }} /></td>
                   <td style={cell}><input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
                   <td style={cell}><input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
                   <td style={cell}>
@@ -217,8 +235,11 @@ export default function AdminResourcesPage() {
               {COURT_FORMATS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </label>
-          <label style={label}>Tarif €/h
+          <label style={label}>€/h pleines
             <input type="number" min={1} step="0.5" value={nr.pricePerHour} onChange={(e) => setNr({ ...nr, pricePerHour: e.target.value })} style={{ ...input, width: 90 }} />
+          </label>
+          <label style={label}>€/h creux
+            <input type="number" min={1} step="0.5" placeholder="—" value={nr.offPeakPricePerHour} onChange={(e) => setNr({ ...nr, offPeakPricePerHour: e.target.value })} style={{ ...input, width: 90 }} />
           </label>
           <label style={label}>Ouv.
             <input type="number" min={0} max={24} value={nr.openHour} onChange={(e) => setNr({ ...nr, openHour: e.target.value })} style={{ ...input, width: 60 }} />

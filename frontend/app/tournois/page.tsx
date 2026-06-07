@@ -31,7 +31,7 @@ export default function TournoisPage() {
   }
 
   return (
-    <Screen style={{ maxWidth: 760 }}>
+    <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
 

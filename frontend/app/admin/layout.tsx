@@ -104,7 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
       )}
 
-      <main style={{ flex: 1, minWidth: 0, maxWidth: collapsed ? '100%' : 1080, padding: collapsed ? '22px 30px 48px' : '28px 32px 48px' }}>{children}</main>
+      <main style={{ flex: 1, minWidth: 0, maxWidth: collapsed ? '100%' : 1280, padding: collapsed ? '22px 30px 48px' : '28px 32px 48px' }}>{children}</main>
     </div>
     </AdminChromeContext.Provider>
   );

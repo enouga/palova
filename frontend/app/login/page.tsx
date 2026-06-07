@@ -1,13 +1,14 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, AuthResponse } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { setSession } from '@/lib/session';
 import { useClub } from '@/lib/ClubProvider';
 import { clubUrl } from '@/lib/clubUrl';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
+import { VerifyCodeForm } from '@/components/VerifyCodeForm';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +18,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verify, setVerify] = useState<{ email: string; devCode?: string } | null>(null);
+
+  // Routation post-authentification (login réussi OU code validé) selon le rôle.
+  async function finishAuth(auth: AuthResponse) {
+    if (!slug && auth.user?.isSuperAdmin) {
+      setSession(auth.token, null);
+      router.push('/superadmin');
+      return;
+    }
+    const memberships = await api.getMyClubs(auth.token).catch(() => []);
+    if (slug) {
+      await api.joinClub(slug, auth.token).catch(() => {}); // adhésion automatique au club du host
+      const m = memberships.find((x) => x.slug === slug);
+      setSession(auth.token, m?.clubId ?? null);
+      router.push(m ? '/admin' : '/'); // staff du club → back-office, sinon réservation
+    } else {
+      const managed = memberships[0];
+      setSession(auth.token, managed?.clubId ?? null);
+      if (managed) window.location.assign(clubUrl(managed.slug, '/admin'));
+      else router.push('/clubs');
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,26 +53,16 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 403 && data.error === 'EMAIL_NOT_VERIFIED') {
+          // Compte non vérifié : (re)déclencher un code et basculer sur l'étape de validation.
+          const r = await api.resendCode(data.email).catch(() => null);
+          setVerify({ email: data.email, devCode: r?.devCode });
+          return;
+        }
         setError(data.error || 'Erreur de connexion');
         return;
       }
-      if (!slug && data.user?.isSuperAdmin) {
-        setSession(data.token, null);
-        router.push('/superadmin');
-        return;
-      }
-      const memberships = await api.getMyClubs(data.token).catch(() => []);
-      if (slug) {
-        await api.joinClub(slug, data.token).catch(() => {}); // adhésion automatique au club du host
-        const m = memberships.find((x) => x.slug === slug);
-        setSession(data.token, m?.clubId ?? null);
-        router.push(m ? '/admin' : '/'); // membre staff du club du host → back-office, sinon home club
-      } else {
-        const managed = memberships[0];
-        setSession(data.token, managed?.clubId ?? null);
-        if (managed) window.location.assign(clubUrl(managed.slug, '/admin'));
-        else router.push('/clubs');
-      }
+      await finishAuth(data);
     } catch {
       setError('Impossible de contacter le serveur');
     } finally {
@@ -59,47 +72,56 @@ export default function LoginPage() {
 
   return (
     <Screen>
-      <form onSubmit={handleSubmit} style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '0 24px 40px' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '0 24px 40px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 28 }}>
           <Logotype size={26} />
           <ThemeToggle />
         </div>
 
-        {/* hero */}
-        <div style={{ paddingTop: 48, paddingBottom: 40 }}>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 46, lineHeight: 1.04, color: th.text, letterSpacing: -0.5 }}>
-            Réservez votre<br />terrain en<br /><span style={{ fontStyle: 'italic' }}>quelques</span> secondes.
+        {verify ? (
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={finishAuth} />
+            <button type="button" onClick={() => setVerify(null)}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
+              Retour à la connexion
+            </button>
           </div>
-          <div style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 16, lineHeight: 1.5, maxWidth: 300 }}>
-            Disponibilités en direct, créneaux bloqués 10 minutes le temps de confirmer.
-          </div>
-        </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+            {/* hero */}
+            <div style={{ paddingTop: 48, paddingBottom: 40 }}>
+              <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 46, lineHeight: 1.04, color: th.text, letterSpacing: -0.5 }}>
+                Réservez votre<br />terrain en<br /><span style={{ fontStyle: 'italic' }}>quelques</span> secondes.
+              </div>
+              <div style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 16, lineHeight: 1.5, maxWidth: 300 }}>
+                Disponibilités en direct, créneaux bloqués 10 minutes le temps de confirmer.
+              </div>
+            </div>
 
-        {/* form */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 'auto' }}>
-          {error && (
-            <div style={{
-              fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent,
-              padding: '11px 14px', borderRadius: 12, fontWeight: 600,
-            }}>{error}</div>
-          )}
-          <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
-          <Field label="Mot de passe" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
-          <div style={{ height: 4 }} />
-          <Btn type="submit" full icon="arrowR" disabled={loading}>
-            {loading ? 'Connexion…' : 'Se connecter'}
-          </Btn>
-          <button type="button" onClick={() => router.push('/register')}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
-            Pas encore de compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créer un compte</span>
-          </button>
-          <button type="button" onClick={() => router.push('/clubs/new')}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '2px 0' }}>
-            Vous gérez un club ? <span style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
-          </button>
-        </div>
-      </form>
+            {/* form */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 'auto' }}>
+              {error && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+              )}
+              <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
+              <Field label="Mot de passe" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
+              <div style={{ height: 4 }} />
+              <Btn type="submit" full icon="arrowR" disabled={loading}>
+                {loading ? 'Connexion…' : 'Se connecter'}
+              </Btn>
+              <button type="button" onClick={() => router.push('/register')}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
+                Pas encore de compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créer un compte</span>
+              </button>
+              <button type="button" onClick={() => router.push('/clubs/new')}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '2px 0' }}>
+                Vous gérez un club ? <span style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </Screen>
   );
 }

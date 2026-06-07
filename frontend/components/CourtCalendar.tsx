@@ -19,7 +19,7 @@ export default function CourtCalendar({ slots, onSelectSlot, selectedSlot, timez
   const { th } = useTheme();
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 9 }}>
       {slots.map((slot) => {
         const isSelected = selectedSlot?.startTime === slot.startTime;
         const time = formatHour(slot.startTime, timezone);
@@ -27,6 +27,7 @@ export default function CourtCalendar({ slots, onSelectSlot, selectedSlot, timez
 
         let bg = th.surface2, fg = th.text, sub = 'Libre', subColor = th.textMute, ring = 'none';
         if (taken)      { bg = th.takenBg; fg = th.takenText; sub = 'Réservé'; subColor = th.takenText; }
+        if (!taken && slot.offPeak) { sub = 'Creux'; subColor = th.accentWarm; }
         if (isSelected) { bg = th.accent;  fg = th.onAccent;  sub = 'Sélection'; subColor = th.onAccent; }
 
         const content = (

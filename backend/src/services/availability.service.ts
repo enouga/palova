@@ -1,11 +1,14 @@
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
+import { effectiveRate, PeakHours } from './pricing';
 
 export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
+  pricePerHour: string; // tarif €/h effectif de ce créneau (pleines ou creuses)
+  offPeak: boolean;     // true si le créneau est en heures creuses
 }
 
 const HOLD_EXPIRY_MINUTES = 10;
@@ -21,11 +24,16 @@ export class AvailabilityService {
       select: {
         openHour: true,
         closeHour: true,
-        club: { select: { timezone: true } },
+        pricePerHour: true,
+        offPeakPricePerHour: true,
+        club: { select: { timezone: true, peakHours: true } },
       },
     });
 
     const tz = resource.club.timezone;
+    const peak = resource.club.peakHours as PeakHours | null;
+    const basePrice = Number(resource.pricePerHour);
+    const offPrice = resource.offPeakPricePerHour != null ? Number(resource.offPeakPricePerHour) : null;
 
     // Ouverture/fermeture exprimées en heure LOCALE du club, converties en instants UTC.
     const dayStartLocal = DateTime.fromISO(date, { zone: tz }).startOf('day');
@@ -59,10 +67,15 @@ export class AvailabilityService {
         (r) => r.startTime < slotEnd && r.endTime > slotStart,
       );
 
+      const local = cursor.setZone(tz);
+      const { rate, offPeak } = effectiveRate(peak, local.weekday, local.hour, basePrice, offPrice);
+
       slots.push({
         startTime: cursor.toISO()!,
         endTime: cursor.plus({ minutes: durationMinutes }).toISO()!,
         available: !hasConflict,
+        pricePerHour: String(rate),
+        offPeak,
       });
 
       // Créneaux fixes consécutifs : on avance d'une durée pleine (et non d'une
@@ -78,7 +91,7 @@ export class AvailabilityService {
     const resources = (await prisma.resource.findMany({
       where: { clubId, isActive: true },
       select: {
-        id: true, name: true, attributes: true, pricePerHour: true,
+        id: true, name: true, attributes: true, pricePerHour: true, offPeakPricePerHour: true,
         clubSport: { select: { id: true, sport: { select: { key: true, name: true } } } },
       },
     })).sort(bySortOrder);
@@ -87,7 +100,7 @@ export class AvailabilityService {
     for (const r of resources) {
       result.push({
         resource: {
-          id: r.id, name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour,
+          id: r.id, name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour, offPeakPricePerHour: r.offPeakPricePerHour,
           sport: r.clubSport.sport, clubSportId: r.clubSport.id,
         },
         slots: await this.getAvailableSlots(r.id, date, durationMinutes),

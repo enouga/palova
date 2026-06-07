@@ -95,8 +95,8 @@ async function main() {
   for (const acc of demoAccounts) {
     const u = await prisma.user.upsert({
       where: { email: acc.email },
-      update: {},
-      create: { email: acc.email, password: hashedPassword, firstName: acc.firstName, lastName: acc.lastName },
+      update: { emailVerified: true },
+      create: { email: acc.email, password: hashedPassword, firstName: acc.firstName, lastName: acc.lastName, emailVerified: true },
     });
     if (acc.role) {
       await prisma.clubMember.upsert({
@@ -115,13 +115,14 @@ async function main() {
   const superPassword = await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'password123', 10);
   await prisma.user.upsert({
     where: { email: 'super@palova.fr' },
-    update: { isSuperAdmin: true, password: superPassword },
+    update: { isSuperAdmin: true, password: superPassword, emailVerified: true },
     create: {
       email: 'super@palova.fr',
       password: superPassword,
       firstName: 'Super',
       lastName: 'Admin',
       isSuperAdmin: true,
+      emailVerified: true,
     },
   });
 

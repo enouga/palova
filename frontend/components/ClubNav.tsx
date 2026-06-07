@@ -6,7 +6,7 @@ import { api, ClubDetail } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
-import { Chip, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { Logotype, Chip, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { Icon, IconName } from '@/components/ui/Icon';
 
 type Tab = { label: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean };
@@ -40,23 +40,10 @@ export function ClubNav({ club }: { club: ClubDetail }) {
       {/* Onglets : scrollbar masquée (mobile) sans dépendre d'un autre composant */}
       <style>{`.cn-tabs{scrollbar-width:none;-ms-overflow-style:none}.cn-tabs::-webkit-scrollbar{display:none}`}</style>
 
-      {/* Rangée 1 : retour plateforme · identité club · actions */}
+      {/* Rangée 1 : marque Palova (→ accueil plateforme) · nom du club (titre) · actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <a href={platformUrl('/')} aria-label="Retour à Palova"
-           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', flexShrink: 0,
-                    fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>
-          <Icon name="chevL" size={16} color={th.textMute} />Palova
-        </a>
-        <Link href="/" aria-label={club.name}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', flex: 1, minWidth: 0 }}>
-          {club.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={club.logoUrl} alt="" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 34, height: 34, borderRadius: 9, background: th.accent, color: th.onAccent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 16, flexShrink: 0 }}>{club.name.slice(0, 1)}</div>
-          )}
-          <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
-        </Link>
+        <Logotype href={platformUrl('/')} size={22} />
+        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {isSub && <Chip tone="accent" icon="check">Abonné</Chip>}
           <ThemeToggle /><LogoutButton />

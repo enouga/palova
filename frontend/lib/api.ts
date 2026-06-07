@@ -45,8 +45,15 @@ export const api = {
     request<ClubAvailability[]>(`/api/clubs/${slug}/availability?date=${date}&duration=${duration}`),
 
   // --- Compte ---
+  // L'inscription ne renvoie plus de token : elle déclenche l'envoi d'un code par email.
   register: (body: RegisterBody) =>
-    request<AuthResponse>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+    request<RegisterPending>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+
+  verifyEmail: (email: string, code: string) =>
+    request<AuthResponse>('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ email, code }) }),
+
+  resendCode: (email: string) =>
+    request<{ ok: boolean; devCode?: string }>('/api/auth/resend-code', { method: 'POST', body: JSON.stringify({ email }) }),
 
   getMyClubs: (token: string) => request<ManagedClub[]>('/api/me/clubs', {}, token),
 
@@ -323,11 +330,15 @@ export interface PlayerMembership {
 export type CreateMemberBody = { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string };
 export type UpdateMemberBody = Partial<{ isSubscriber: boolean; membershipNo: string | null; status: 'ACTIVE' | 'BLOCKED'; note: string | null; phone: string | null }>;
 
+// Plages d'heures pleines par jour (weekday Luxon 1=lundi..7=dimanche). Hors plage = creuses.
+export type PeakHours = Record<number, { start: number; end: number }>;
+
 export interface PublicResource {
   id: string;
   name: string;
   attributes: { surface?: string } & Record<string, unknown>;
   pricePerHour: string;
+  offPeakPricePerHour: string | null;
   openHour: number;
   closeHour: number;
   club: { slug: string; name: string; timezone: string; status: string; accentColor: string };
@@ -338,6 +349,8 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
+  pricePerHour: string; // tarif €/h effectif de ce créneau
+  offPeak: boolean;     // true en heures creuses
 }
 
 export interface ClubAvailability {
@@ -346,6 +359,7 @@ export interface ClubAvailability {
     name: string;
     attributes: { surface?: string; format?: string } & Record<string, unknown>;
     pricePerHour: string;
+    offPeakPricePerHour: string | null;
     sport: { key: string; name: string };
     clubSportId: string;
   };
@@ -390,6 +404,13 @@ export interface AuthResponse {
   user: { id: string; email: string; firstName: string; lastName: string; isSuperAdmin: boolean };
 }
 
+// Réponse d'inscription : aucun token, le compte attend la validation par code email.
+export interface RegisterPending {
+  pendingVerification: true;
+  email: string;
+  devCode?: string; // présent uniquement en dev (sans SMTP)
+}
+
 export interface ClubAdminDetail {
   id: string;
   slug: string;
@@ -406,6 +427,7 @@ export interface ClubAdminDetail {
   listedInDirectory: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
+  peakHours: PeakHours | null;
 }
 
 export type UpdateClubBody = Partial<{
@@ -420,6 +442,7 @@ export type UpdateClubBody = Partial<{
   listedInDirectory: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
+  peakHours: PeakHours | null;
 }>;
 
 // --- Types back-office ---
@@ -434,9 +457,10 @@ export interface AdminClubSport {
 export interface AdminResource {
   id: string;
   name: string;
-  attributes: { surface?: string } & Record<string, unknown>;
+  attributes: { surface?: string; format?: string } & Record<string, unknown>;
   isActive: boolean;
   pricePerHour: string;
+  offPeakPricePerHour: string | null;
   openHour: number;
   closeHour: number;
   slotStepMin: number | null;
@@ -448,6 +472,7 @@ export interface CreateResourceBody {
   name: string;
   attributes?: Record<string, unknown>;
   pricePerHour: number;
+  offPeakPricePerHour?: number | null;
   openHour?: number;
   closeHour?: number;
   slotStepMin?: number | null;

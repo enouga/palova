@@ -88,17 +88,17 @@ function CourtBooking() {
   const isSingle = courtFormat(typeof resource?.attributes?.format === 'string' ? resource.attributes.format : undefined);
 
   return (
-    <Screen style={{ maxWidth: 760 }}>
+    <Screen>
       <div style={{ paddingBottom: 30 }}>
         {club && <ClubNav club={club} />}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '16px 16px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '16px 20px 0' }}>
           <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.4 }}>{resource ? resource.name : 'Réservation'}</span>
           {resource && <Chip tone="accent" icon={ct.icon}>{ct.label}</Chip>}
           {resource && isSingle && <Chip tone="line">Single</Chip>}
         </div>
 
-        <div style={{ padding: '0 16px' }}>
+        <div style={{ padding: '0 20px' }}>
           <Placeholder label={`photo · ${resource?.name ?? 'terrain'}`} height={132} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -110,24 +110,24 @@ function CourtBooking() {
         </div>
 
         {confirmed && (
-          <div style={{ margin: '16px 16px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
+          <div style={{ margin: '16px 20px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
             <Icon name="check" size={18} color={th.onAccent} stroke={2.4} />
             <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
           </div>
         )}
 
-        <div style={{ padding: '18px 16px 4px' }}>
+        <div style={{ padding: '18px 20px 4px' }}>
           <DateSelector value={date} onChange={setDate} days={7} />
         </div>
 
         {durations.length > 1 && (
-          <div style={{ padding: '16px 16px 0' }}>
+          <div style={{ padding: '16px 20px 0' }}>
             <Segmented<number> value={duration} onChange={setDuration}
               options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 12px' }}>
           <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, color: th.text }}>
             Créneaux <span style={{ color: th.textMute, fontWeight: 500 }}>· {freeCount} libres</span>
           </span>
@@ -140,7 +140,7 @@ function CourtBooking() {
           </div>
         </div>
 
-        <div style={{ padding: '0 16px' }}>
+        <div style={{ padding: '0 20px' }}>
           {error && (
             <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 12 }}>{error}</div>
           )}
@@ -161,7 +161,7 @@ function CourtBooking() {
         <BookingModal
           slot={selectedSlot}
           resourceId={resourceId}
-          pricePerHour={resource?.pricePerHour ?? '0'}
+          pricePerHour={selectedSlot?.pricePerHour ?? resource?.pricePerHour ?? '0'}
           duration={duration}
           token={token ?? ''}
           timezone={tz}

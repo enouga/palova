@@ -89,7 +89,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   }
 
   return (
-    <Screen style={{ maxWidth: 820 }}>
+    <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
         {club.description && (
@@ -135,16 +135,20 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{resource.name}</span>
                               <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
                               {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
-                              <span style={{ marginLeft: 'auto', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.pricePerHour)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}>/h</span></span>
+                              <span style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                                <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.pricePerHour)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}>/h</span></span>
+                                {resource.offPeakPricePerHour && <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.accentWarm }}>{Number(resource.offPeakPricePerHour)}€/h en heures creuses</span>}
+                              </span>
                             </div>
                             {slots.length === 0 ? (
                               <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau ce jour.</div>
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                                 {slots.map((s) => s.available ? (
-                                  <button key={s.startTime} onClick={() => onSlot(resource.id, resource.pricePerHour, s)}
-                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500 }}>
+                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.pricePerHour, s)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
+                                    {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
                                   </button>
                                 ) : (
                                   <span key={s.startTime} title="Réservé"
@@ -169,7 +173,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           club.clubSports.map((cs) => (
             <div key={cs.id} style={{ padding: '18px 20px 0' }}>
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
                 {cs.resources.map((r) => {
                   const ct = courtType(typeof r.attributes?.surface === 'string' ? r.attributes.surface : undefined);
                   return (

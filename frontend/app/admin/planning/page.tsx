@@ -55,11 +55,11 @@ export default function AdminPlanningPage() {
   const { collapsed, setCollapsed } = useAdminChrome();
   const clubId = club?.id;
   // Étiquette d'une entrée : l'intitulé s'il existe, sinon le nom du joueur, sinon « Événement ».
-  const labelOf = (r: ClubReservation, short = false) =>
+  const labelOf = (r: ClubReservation) =>
     r.title?.trim()
       ? r.title
       : r.user
-        ? (short ? `${r.user.firstName} ${r.user.lastName.slice(0, 1)}.` : `${r.user.firstName} ${r.user.lastName}`)
+        ? `${r.user.firstName} ${r.user.lastName}`
         : 'Événement';
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -153,7 +153,7 @@ export default function AdminPlanningPage() {
   }
   const occupancy = openMin > 0 ? Math.round((bookedMin / openMin) * 100) : 0;
 
-  const colW = 78, rowH = 60, headerH = 34, labelW = 130;
+  const colW = 78, rowH = 70, headerH = 34, labelW = 130;
   const nm = nowMinutes(tz);
   const nowVisible = date === todayISO() && resources.length > 0 && nm >= minOpen * 60 && nm <= maxClose * 60;
   const nowLeft = ((nm - minOpen * 60) / 60) * colW;
@@ -368,7 +368,7 @@ export default function AdminPlanningPage() {
                           border: pend ? `1px dashed ${c}` : '1px solid transparent', opacity: pend ? 0.85 : 1,
                           display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2,
                         }}>
-                        <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelOf(rv, true)}</span>
+                        <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text, lineHeight: 1.15, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{labelOf(rv)}</span>
                         <span style={{ fontFamily: th.fontMono, fontSize: 10, color: th.textMute, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pend ? 'attente · ' : ''}{fmtHM(rv.startTime, tz)}–{fmtHM(rv.endTime, tz)}</span>
                       </button>
                     );

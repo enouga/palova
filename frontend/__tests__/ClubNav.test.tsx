@@ -27,11 +27,17 @@ describe('ClubNav', () => {
     expect(screen.getByText('Infos')).toBeInTheDocument();
   });
 
-  it('le lien « Palova » vise le domaine racine (pas le sous-domaine du club)', () => {
+  it('la marque Palova vise le domaine racine (pas le sous-domaine du club)', () => {
     wrap();
-    const link = screen.getByLabelText('Retour à Palova');
+    const link = screen.getByLabelText('Accueil Palova');
     expect(link).toHaveAttribute('href');
     expect(link.getAttribute('href')).not.toContain('demo.');
+  });
+
+  it('affiche le nom du club en titre non cliquable', () => {
+    wrap();
+    expect(screen.getByText('Club Démo')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Club Démo' })).not.toBeInTheDocument();
   });
 
   it("surligne l'onglet actif selon le chemin courant", () => {

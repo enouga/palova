@@ -107,10 +107,10 @@ router.get('/resources', async (req: ClubScopedRequest, res: Response, next: Nex
 
 router.post('/resources', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { clubSportId, name, attributes, pricePerHour, openHour, closeHour, slotStepMin } = req.body;
+    const { clubSportId, name, attributes, pricePerHour, offPeakPricePerHour, openHour, closeHour, slotStepMin } = req.body;
     if (!clubSportId) return void res.status(400).json({ error: 'clubSportId requis' });
     const resource = await resourceService.createResource({
-      clubId: req.membership!.clubId, clubSportId, name, attributes, pricePerHour, openHour, closeHour, slotStepMin,
+      clubId: req.membership!.clubId, clubSportId, name, attributes, pricePerHour, offPeakPricePerHour, openHour, closeHour, slotStepMin,
     });
     res.status(201).json(resource);
   } catch (err) { handleError(err, res, next); }
@@ -130,9 +130,9 @@ router.patch('/resources/reorder', async (req: ClubScopedRequest, res: Response,
 
 router.patch('/resources/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { name, attributes, pricePerHour, openHour, closeHour, slotStepMin } = req.body;
+    const { name, attributes, pricePerHour, offPeakPricePerHour, openHour, closeHour, slotStepMin } = req.body;
     const resource = await resourceService.updateResource(asString(req.params.id), req.membership!.clubId, {
-      name, attributes, pricePerHour, openHour, closeHour, slotStepMin,
+      name, attributes, pricePerHour, offPeakPricePerHour, openHour, closeHour, slotStepMin,
     });
     res.json(resource);
   } catch (err) { handleError(err, res, next); }

@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { SSEService } from './sse.service';
+import { effectiveRate, PeakHours } from './pricing';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -57,8 +58,9 @@ export class ReservationService {
         where: { id: resourceId },
         select: {
           pricePerHour: true,
+          offPeakPricePerHour: true,
           clubId: true,
-          club: { select: { timezone: true, publicBookingDays: true, memberBookingDays: true } },
+          club: { select: { timezone: true, peakHours: true, publicBookingDays: true, memberBookingDays: true } },
         },
       });
 
@@ -83,8 +85,15 @@ export class ReservationService {
         throw new Error('SLOT_NOT_AVAILABLE');
       }
 
+      const local = DateTime.fromJSDate(startTime, { zone: resource.club.timezone });
+      const { rate } = effectiveRate(
+        resource.club.peakHours as PeakHours | null,
+        local.weekday, local.hour,
+        Number(resource.pricePerHour),
+        resource.offPeakPricePerHour != null ? Number(resource.offPeakPricePerHour) : null,
+      );
       const durationHours = (endTime.getTime() - startTime.getTime()) / 3_600_000;
-      const totalPrice = new Prisma.Decimal(Number(resource.pricePerHour) * durationHours);
+      const totalPrice = new Prisma.Decimal(rate * durationHours);
 
       const reservation = await prisma.reservation.create({
         data: { resourceId, userId, startTime, endTime, status: 'PENDING', totalPrice },

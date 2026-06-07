@@ -3,8 +3,14 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import { generateCode } from '../utils/code';
+import { sendVerificationEmail, emailDevMode } from '../email/mailer';
 
 const router = Router();
+
+const CODE_TTL_MS = 15 * 60 * 1000;        // validité du code : 15 min
+const MAX_ATTEMPTS = 5;                     // essais max avant de devoir renvoyer un code
+const RESEND_COOLDOWN_MS = 60 * 1000;       // délai mini entre deux envois
 
 interface BasicUser { id: string; email: string; firstName: string; lastName: string; isSuperAdmin: boolean; }
 
@@ -14,6 +20,20 @@ function signToken(user: { id: string; email: string }): string {
 
 function publicUser(u: BasicUser) {
   return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, isSuperAdmin: u.isSuperAdmin };
+}
+
+// Génère + stocke (hashé) + envoie un nouveau code pour un utilisateur. Renvoie le code en clair (pour le mode dev).
+async function issueCode(userId: string, email: string): Promise<string> {
+  const code = generateCode();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+  await prisma.emailVerification.upsert({
+    where: { userId },
+    create: { userId, codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
+    update: { codeHash, expiresAt, attempts: 0, lastSentAt: new Date() },
+  });
+  await sendVerificationEmail(email, code);
+  return code;
 }
 
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
@@ -26,6 +46,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !(await bcrypt.compare(password, user.password))) {
     res.status(401).json({ error: 'Identifiants invalides' });
+    return;
+  }
+  if (!user.emailVerified) {
+    res.status(403).json({ error: 'EMAIL_NOT_VERIFIED', email: user.email });
     return;
   }
 
@@ -44,17 +68,91 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, password: hashed, firstName, lastName, phone: phone || null },
-    });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing?.emailVerified) {
+      res.status(409).json({ error: 'Cet email est déjà utilisé' });
+      return;
+    }
 
-    res.status(201).json({ token: signToken(user), user: publicUser(user) });
+    const hashed = await bcrypt.hash(password, 10);
+    // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
+    const user = existing
+      ? await prisma.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
+      : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null } });
+
+    const code = await issueCode(user.id, email);
+    res.status(201).json({ pendingVerification: true, email, ...(emailDevMode ? { devCode: code } : {}) });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       res.status(409).json({ error: 'Cet email est déjà utilisé' });
       return;
     }
+    next(err);
+  }
+});
+
+router.post('/verify-email', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      res.status(400).json({ error: 'email et code requis' });
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { email }, include: { emailVerification: true } });
+    if (!user) {
+      res.status(400).json({ error: 'CODE_INVALID' });
+      return;
+    }
+    if (user.emailVerified) {
+      res.json({ token: signToken(user), user: publicUser(user) });
+      return;
+    }
+    const v = user.emailVerification;
+    if (!v || v.expiresAt.getTime() < Date.now()) {
+      res.status(410).json({ error: 'CODE_EXPIRED' });
+      return;
+    }
+    if (v.attempts >= MAX_ATTEMPTS) {
+      res.status(429).json({ error: 'TOO_MANY_ATTEMPTS' });
+      return;
+    }
+    const ok = await bcrypt.compare(String(code), v.codeHash);
+    if (!ok) {
+      await prisma.emailVerification.update({ where: { userId: user.id }, data: { attempts: { increment: 1 } } });
+      res.status(400).json({ error: 'CODE_INVALID' });
+      return;
+    }
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } }),
+      prisma.emailVerification.delete({ where: { userId: user.id } }),
+    ]);
+    res.json({ token: signToken(user), user: publicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/resend-code', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'email requis' });
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { email }, include: { emailVerification: true } });
+    // Pas d'énumération : réponse neutre si l'email n'existe pas ou est déjà vérifié.
+    if (!user || user.emailVerified) {
+      res.json({ ok: true });
+      return;
+    }
+    const last = user.emailVerification?.lastSentAt;
+    if (last && Date.now() - last.getTime() < RESEND_COOLDOWN_MS) {
+      res.status(429).json({ error: 'RESEND_COOLDOWN' });
+      return;
+    }
+    const code = await issueCode(user.id, email);
+    res.json({ ok: true, ...(emailDevMode ? { devCode: code } : {}) });
+  } catch (err) {
     next(err);
   }
 });

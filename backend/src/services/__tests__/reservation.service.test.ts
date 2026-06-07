@@ -121,6 +121,23 @@ describe('ReservationService', () => {
         expect.objectContaining({ type: 'slot_held', reservationId: 'res-1' }),
       );
     });
+
+    it('applique le tarif heures creuses au total (créneau hors plage pleine)', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      // 2025-06-15 = dimanche, 10h Paris (08:00Z) ; pleines 18h–22h → ce créneau est creux.
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({
+        pricePerHour: 25, offPeakPricePerHour: 18, clubId: 'club-demo',
+        club: { timezone: 'Europe/Paris', peakHours: { 7: { start: 18, end: 22 } }, publicBookingDays: 7, memberBookingDays: 14 },
+      } as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isSubscriber: false } as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 18, createdAt: new Date() } as any);
+
+      await service.holdSlot(baseParams);
+
+      const arg = (prismaMock.reservation.create as jest.Mock).mock.calls[0][0];
+      expect(Number(arg.data.totalPrice)).toBe(18); // 18€/h × 1h
+    });
   });
 
   describe('cancelReservation', () => {

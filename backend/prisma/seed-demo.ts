@@ -119,7 +119,7 @@ async function main() {
     const owner = await prisma.user.upsert({
       where: { email: `owner@${cdef.slug}.fr` },
       update: {},
-      create: { email: `owner@${cdef.slug}.fr`, password: hashed, firstName: 'Gérant', lastName: cdef.city },
+      create: { email: `owner@${cdef.slug}.fr`, password: hashed, firstName: 'Gérant', lastName: cdef.city, emailVerified: true },
     });
     await prisma.clubMember.upsert({
       where: { userId_clubId: { userId: owner.id, clubId: club.id } },
@@ -138,7 +138,7 @@ async function main() {
         const u = await prisma.user.upsert({
           where: { email },
           update: {},
-          create: { email, password: hashed, firstName: first, lastName: last, sex, phone: phoneFor(c, sex === 'MALE' ? k : k + 100) },
+          create: { email, password: hashed, firstName: first, lastName: last, sex, phone: phoneFor(c, sex === 'MALE' ? k : k + 100), emailVerified: true },
         });
         await prisma.clubMembership.upsert({
           where: { userId_clubId: { userId: u.id, clubId: club.id } },
@@ -209,7 +209,7 @@ async function main() {
     const u = await prisma.user.upsert({
       where: { email },
       update: {},
-      create: { email, password: hashed, firstName: no.first, lastName: no.last, sex: no.sex, phone: phoneFor(99, i) },
+      create: { email, password: hashed, firstName: no.first, lastName: no.last, sex: no.sex, phone: phoneFor(99, i), emailVerified: true },
     });
     totalUsers++;
     for (const ci of no.clubs) {

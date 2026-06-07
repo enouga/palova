@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isPublicPath } from './lib/authGate';
 
 const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost';
 
@@ -42,10 +43,20 @@ export function proxy(request: NextRequest) {
   const url = request.nextUrl;
   const slug = clubSlugFromHost(host);
 
+  // Verrou de connexion : sans cookie `token` et hors page publique → /login (même hôte).
+  const token = request.cookies.get('token')?.value;
+  const redirectToLogin = () => {
+    const to = url.clone();
+    to.pathname = '/login';
+    to.search = '';
+    return NextResponse.redirect(to);
+  };
+
   if (!slug) {
     // HOST PLATEFORME — rétro-compat /c/<slug> → racine du sous-domaine club
     const m = url.pathname.match(/^\/c\/([^/]+)\/?$/);
     if (m) return NextResponse.redirect(`${url.protocol}//${m[1]}.${ROOT}${portSuffix(host)}/`);
+    if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
     return NextResponse.next();
   }
 
@@ -54,6 +65,7 @@ export function proxy(request: NextRequest) {
   if (url.pathname === '/clubs' || url.pathname.startsWith('/clubs/')) {
     return NextResponse.redirect(`${url.protocol}//${ROOT}${portSuffix(host)}${url.pathname}`);
   }
+  if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
   // Injecte le slug pour le layout serveur.
   const headers = new Headers(request.headers);
   headers.set('x-club-slug', slug);

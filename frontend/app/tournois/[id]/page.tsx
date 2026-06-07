@@ -117,7 +117,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const primaryBtn = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
 
   return (
-    <Screen style={{ maxWidth: 640 }}>
+    <Screen>
       <div style={{ paddingBottom: 48 }}>
         <ClubNav club={club} />
 

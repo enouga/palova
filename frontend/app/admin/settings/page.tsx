@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, CSSProperties } from 'react';
-import { api, ClubAdminDetail, UpdateClubBody } from '@/lib/api';
+import { api, ClubAdminDetail, UpdateClubBody, PeakHours } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -33,6 +33,29 @@ export default function AdminSettingsPage() {
     setClub((c) => (c ? { ...c, [k]: v } : c));
   };
 
+  // Heures pleines par jour (weekday Luxon 1=lundi..7=dimanche). Jour absent = tout en heures pleines.
+  const DAYS: [number, string][] = [[1, 'Lundi'], [2, 'Mardi'], [3, 'Mercredi'], [4, 'Jeudi'], [5, 'Vendredi'], [6, 'Samedi'], [7, 'Dimanche']];
+  const togglePeakDay = (day: number, enabled: boolean) => {
+    setSaved(false);
+    setClub((c) => {
+      if (!c) return c;
+      const ph: PeakHours = { ...(c.peakHours ?? {}) };
+      if (enabled) ph[day] = ph[day] ?? { start: 18, end: 22 };
+      else delete ph[day];
+      return { ...c, peakHours: ph };
+    });
+  };
+  const setPeakField = (day: number, field: 'start' | 'end', value: number) => {
+    setSaved(false);
+    setClub((c) => {
+      if (!c) return c;
+      const ph: PeakHours = { ...(c.peakHours ?? {}) };
+      const cur = ph[day] ?? { start: 18, end: 22 };
+      ph[day] = { ...cur, [field]: Math.max(0, Math.min(24, value || 0)) };
+      return { ...c, peakHours: ph };
+    });
+  };
+
   const save = async () => {
     if (!token || !clubId || !club) return;
     setSaving(true);
@@ -44,6 +67,7 @@ export default function AdminSettingsPage() {
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
         publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
+        peakHours: club.peakHours && Object.keys(club.peakHours).length > 0 ? club.peakHours : null,
       };
       await api.adminUpdateClub(clubId, body, token);
       setSaved(true);
@@ -117,6 +141,36 @@ export default function AdminSettingsPage() {
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}><span style={label}>Public (jours)</span><input type="number" min={0} max={365} value={club.publicBookingDays} onChange={(e) => set('publicBookingDays', Number(e.target.value))} style={field} /></div>
           <div style={{ flex: 1 }}><span style={label}>Abonnés (jours)</span><input type="number" min={0} max={365} value={club.memberBookingDays} onChange={(e) => set('memberBookingDays', Number(e.target.value))} style={field} /></div>
+        </div>
+      </div>
+
+      <div style={card}>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Heures pleines / creuses</h2>
+        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Cochez un jour pour y définir une plage d&apos;<strong>heures pleines</strong> ; le reste de la journée passe en <strong>heures creuses</strong> (tarif réduit). Un jour non coché = entièrement en heures pleines. Le tarif des heures creuses se règle par terrain dans <strong>Ressources</strong>.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {DAYS.map(([day, name]) => {
+            const win = club.peakHours?.[day];
+            const enabled = !!win;
+            return (
+              <div key={day} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', width: 150 }}>
+                  <input type="checkbox" checked={enabled} onChange={(e) => togglePeakDay(day, e.target.checked)} style={{ width: 17, height: 17, accentColor: th.accent, cursor: 'pointer' }} />
+                  <span style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.text }}>{name}</span>
+                </label>
+                {enabled ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+                    pleines de
+                    <input type="number" min={0} max={24} value={win!.start} onChange={(e) => setPeakField(day, 'start', Number(e.target.value))} style={{ ...field, width: 64, height: 40 }} />
+                    h à
+                    <input type="number" min={0} max={24} value={win!.end} onChange={(e) => setPeakField(day, 'end', Number(e.target.value))} style={{ ...field, width: 64, height: 40 }} />
+                    h
+                  </div>
+                ) : (
+                  <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint }}>tout en heures pleines</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

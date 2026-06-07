@@ -2,6 +2,22 @@ import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
+import { PeakHours } from './pricing';
+
+/** Valide/normalise les plages d'heures pleines. null → efface (tout en pleines). */
+function normalizePeakHours(input: PeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (input === null || input === undefined) return Prisma.DbNull;
+  if (typeof input !== 'object') throw new Error('VALIDATION_ERROR');
+  const out: PeakHours = {};
+  for (const [k, v] of Object.entries(input)) {
+    const day = Number(k);
+    if (!Number.isInteger(day) || day < 1 || day > 7) throw new Error('VALIDATION_ERROR');
+    const start = Number(v?.start), end = Number(v?.end);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 24 || start > end) throw new Error('VALIDATION_ERROR');
+    out[day] = { start, end };
+  }
+  return out as unknown as Prisma.InputJsonValue;
+}
 
 /** Transforme un nom en slug URL (minuscules, tirets, sans accents). */
 export function slugify(input: string): string {
@@ -111,7 +127,7 @@ export class ClubService {
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
         timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
-        listedInDirectory: true, publicBookingDays: true, memberBookingDays: true,
+        listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, peakHours: true,
       },
     });
   }
@@ -121,11 +137,13 @@ export class ClubService {
     name?: string; description?: string; address?: string; city?: string;
     timezone?: string; logoUrl?: string; accentColor?: string; defaultThemeMode?: string;
     listedInDirectory?: boolean; publicBookingDays?: number; memberBookingDays?: number;
+    peakHours?: PeakHours | null;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     return prisma.club.update({
       where: { id: clubId },
       data: {
+        ...(params.peakHours !== undefined ? { peakHours: normalizePeakHours(params.peakHours) } : {}),
         ...(params.name !== undefined ? { name: params.name.trim() } : {}),
         ...(params.description !== undefined ? { description: params.description } : {}),
         ...(params.address !== undefined ? { address: params.address } : {}),

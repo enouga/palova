@@ -15,6 +15,8 @@ const mockSlot: TimeSlot = {
   startTime: '2025-06-15T06:00:00.000Z',
   endTime:   '2025-06-15T07:00:00.000Z',
   available: true,
+  pricePerHour: '25',
+  offPeak: false,
 };
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {

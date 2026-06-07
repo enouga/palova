@@ -20,7 +20,7 @@ export default function InfosPage() {
   if (!club) return <div style={{ minHeight: '100vh', background: th.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, color: th.textMute }}>Club introuvable.</div>;
 
   return (
-    <Screen style={{ maxWidth: 760 }}>
+    <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
         <ClubInfo club={club} />

@@ -100,6 +100,9 @@ model Club {
   listedInDirectory Boolean   @default(true) @map("listed_in_directory") // visible dans l'annuaire public (le club reste joignable par son sous-domaine si false)
   publicBookingDays Int       @default(7)  @map("public_booking_days")  // fenêtre de résa grand public
   memberBookingDays Int       @default(14) @map("member_booking_days")  // fenêtre élargie pour les abonnés
+  // Plages d'heures PLEINES par jour de semaine (clé = weekday Luxon 1=lundi..7=dimanche),
+  // ex. { "1": { "start": 18, "end": 22 } }. Hors plage = heures creuses. null = tout en pleines.
+  peakHours        Json?      @map("peak_hours")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
@@ -143,6 +146,7 @@ model Resource {
   attributes   Json     @default("{}") // ex { "surface": "indoor" }
   isActive     Boolean  @default(true) @map("is_active")
   pricePerHour Decimal  @map("price_per_hour") @db.Decimal(10, 2)
+  offPeakPricePerHour Decimal? @map("off_peak_price_per_hour") @db.Decimal(10, 2) // tarif heures creuses ; null = pas de remise (= pricePerHour)
   openHour     Int      @default(8) @map("open_hour")
   closeHour    Int      @default(22) @map("close_hour")
   slotStepMin  Int?     @map("slot_step_min") // pas des créneaux (multiple de 15) ; null = repli sport/club
@@ -167,6 +171,7 @@ model User {
   lastName  String   @map("last_name")
   phone     String?
   sex          Sex?
+  emailVerified Boolean @default(false) @map("email_verified")
   isSuperAdmin Boolean @default(false) @map("is_super_admin")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -176,8 +181,23 @@ model User {
   clubMemberships ClubMembership[]
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
   partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
+  emailVerification EmailVerification?
 
   @@map("users")
+}
+
+/// Code de validation d'email à usage unique (inscription). Un par utilisateur non vérifié.
+model EmailVerification {
+  id         String   @id @default(cuid())
+  userId     String   @unique @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String   @map("code_hash")
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("email_verifications")
 }
 
 /// Adhésion d'un joueur à un club : la base du fichier-membres géré par le club.
