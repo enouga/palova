@@ -124,9 +124,9 @@ function ClubContent({ club }: { club: ClubDetail }) {
 
         {tab === 'book' ? (
           <>
-            {/* sélecteur de dates — proposition B (semaine navigable) */}
+            {/* sélecteur de dates — bande défilante (cellules confortables, swipe horizontal) */}
             <div style={{ padding: '18px 20px 4px' }}>
-              <DateSelector value={date} onChange={setDate} days={10} maxKey={days[days.length - 1]?.key} />
+              <DateSelector value={date} onChange={setDate} days={7} maxKey={days[days.length - 1]?.key} />
             </div>
             {allDurations.length > 1 && (
               <div style={{ padding: '14px 20px 0' }}>

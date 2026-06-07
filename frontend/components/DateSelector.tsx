@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 
 interface DateSelectorProps {
@@ -8,7 +8,7 @@ interface DateSelectorProps {
   onChange: (date: string) => void;
   /** jours encore ouverts (point apricot). Si omis : tous les jours futurs. */
   openDates?: Set<string>;
-  /** nombre de jours affichés. Défaut 7. */
+  /** nombre minimum de jours affichés. Défaut 7. La bande s'étend jusqu'à `maxKey`. */
   days?: number;
   /** dernier jour sélectionnable 'YYYY-MM-DD' (fenêtre de réservation). Optionnel. */
   maxKey?: string;
@@ -16,6 +16,13 @@ interface DateSelectorProps {
 
 const WEEKDAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+// Géométrie de la bande : cellules à largeur fixe confortable (lisibles sur mobile),
+// la rangée défile horizontalement au lieu de s'écraser.
+const CELL_W = 62;
+const GAP = 8;
+const STEP = CELL_W + GAP;
+const MS_PER_DAY = 86400000;
 
 function toKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -25,24 +32,53 @@ function addDays(d: Date, n: number): Date {
   r.setDate(r.getDate() + n);
   return r;
 }
+function keyToDate(key: string): Date {
+  const [y, m, dd] = key.split('-').map(Number);
+  return new Date(y, m - 1, dd);
+}
 
-/** Sélecteur de dates « proposition B » : semaine navigable, jour actif en pastille
- *  accent (bleu Palova), point apricot = jour ouvert. Stylé via le thème. */
+/** Sélecteur de dates « bande défilante » : cellules à largeur fixe confortable,
+ *  scroll-snap horizontal (swipe sur mobile, la semaine tient sur web), flèches pour
+ *  défiler d'une page. Jour actif en pastille accent, point apricot = jour ouvert. */
 export default function DateSelector({ value, onChange, openDates, days = 7, maxKey }: DateSelectorProps) {
   const { th } = useTheme();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayKey = toKey(today);
 
-  // Début de la fenêtre affichée (avance/recule par semaine).
-  const [start, setStart] = useState<Date>(today);
-  // Jour survolé (effet de survol sur les pastilles).
-  const [hover, setHover] = useState<string | null>(null);
+  // Nombre de cellules : au moins `days`, étendu pour couvrir toute la fenêtre réservable.
+  const windowDays = maxKey ? Math.round((keyToDate(maxKey).getTime() - today.getTime()) / MS_PER_DAY) + 1 : 0;
+  const count = Math.min(Math.max(days, windowDays), 90);
+  const list = Array.from({ length: count }, (_, i) => addDays(today, i));
 
-  const list = Array.from({ length: days }, (_, i) => addDays(start, i));
-  const monthLabel = MONTHS[list[Math.floor(days / 2)].getMonth()];
-  const canPrev = toKey(start) > todayKey;
-  const canNext = maxKey ? toKey(addDays(start, days)) <= maxKey : true;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const [visibleIdx, setVisibleIdx] = useState(0); // 1er jour visible → libellé du mois
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+
+  // Recalcule l'état des flèches + le mois affiché en fonction du défilement.
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtStart(el.scrollLeft <= 2);
+    setAtEnd(el.scrollWidth - el.clientWidth - el.scrollLeft <= 2);
+    setVisibleIdx(Math.round(el.scrollLeft / STEP));
+  }, []);
+
+  useEffect(() => { measure(); }, [measure, count]);
+
+  const scrollPage = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, STEP * 3);
+    el.scrollBy?.({ left: dir * amount, behavior: 'smooth' });
+  };
+
+  const headDate = list[Math.min(visibleIdx, list.length - 1)] ?? today;
+  const headLabel = headDate.getFullYear() === today.getFullYear()
+    ? MONTHS[headDate.getMonth()]
+    : `${MONTHS[headDate.getMonth()]} ${headDate.getFullYear()}`;
 
   const arrowStyle = (enabled: boolean): React.CSSProperties => ({
     width: 34, height: 34, borderRadius: 10, border: `1px solid ${th.line}`, background: 'transparent',
@@ -52,17 +88,27 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
 
   return (
     <div>
-      {/* En-tête mois + navigation */}
+      {/* Masque la scrollbar de la bande (Firefox / WebKit) sans gêner le swipe. */}
+      <style>{`.ds-strip{scrollbar-width:none;-ms-overflow-style:none}.ds-strip::-webkit-scrollbar{display:none}`}</style>
+
+      {/* En-tête mois + navigation par page */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, color: th.text, textTransform: 'capitalize' }}>{monthLabel}</div>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, color: th.text, textTransform: 'capitalize' }}>{headLabel}</div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" onClick={() => canPrev && setStart(addDays(start, -days))} disabled={!canPrev} aria-label="Semaine précédente" style={arrowStyle(canPrev)}>‹</button>
-          <button type="button" onClick={() => canNext && setStart(addDays(start, days))} disabled={!canNext} aria-label="Semaine suivante" style={arrowStyle(canNext)}>›</button>
+          <button type="button" onClick={() => scrollPage(-1)} disabled={atStart} aria-label="Jours précédents" style={arrowStyle(!atStart)}>‹</button>
+          <button type="button" onClick={() => scrollPage(1)} disabled={atEnd} aria-label="Jours suivants" style={arrowStyle(!atEnd)}>›</button>
         </div>
       </div>
 
-      {/* Bande de jours — pastilles rectangulaires compactes (jour abrégé + numéro empilés) */}
-      <div style={{ display: 'flex', gap: 5 }}>
+      {/* Bande de jours défilante — cellules à largeur fixe, scroll-snap horizontal */}
+      <div
+        ref={scrollRef}
+        className="ds-strip"
+        onScroll={measure}
+        role="group"
+        aria-label="Choisir une date"
+        style={{ display: 'flex', gap: GAP, overflowX: 'auto', scrollSnapType: 'x proximity', paddingBottom: 2, WebkitOverflowScrolling: 'touch' }}
+      >
         {list.map((d) => {
           const key = toKey(d);
           const isPast = key < todayKey;
@@ -71,6 +117,7 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
           const disabled = isPast || tooFar;
           const isOpen = !disabled && (openDates ? openDates.has(key) : true);
           const isHover = hover === key && !disabled && !isSel;
+          const isToday = key === todayKey;
 
           return (
             <button
@@ -83,9 +130,9 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
               aria-pressed={isSel}
               aria-label={`${WEEKDAYS[d.getDay()]} ${d.getDate()}`}
               style={{
-                flex: 1, minWidth: 0, cursor: disabled ? 'not-allowed' : 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                padding: '6px 2px 5px', borderRadius: 10,
+                flexShrink: 0, width: CELL_W, scrollSnapAlign: 'start', cursor: disabled ? 'not-allowed' : 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '10px 0 9px', borderRadius: 14,
                 border: `1px solid ${isSel ? th.accent : isHover ? th.lineStrong : th.line}`,
                 background: isSel ? th.accent : isHover ? th.surface2 : th.surface,
                 opacity: disabled ? 0.4 : 1,
@@ -94,15 +141,15 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
               }}
             >
               <span style={{
-                fontFamily: th.fontMono, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3,
-                color: isSel ? th.onAccent : th.textMute,
-              }}>{WEEKDAYS[d.getDay()]}</span>
+                fontFamily: th.fontMono, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4,
+                color: isSel ? th.onAccent : isToday ? th.accent : th.textMute,
+              }}>{isToday ? 'AUJ' : WEEKDAYS[d.getDay()]}</span>
               <span style={{
-                fontFamily: th.fontDisplay, fontSize: 16, fontWeight: 600, lineHeight: 1,
+                fontFamily: th.fontDisplay, fontSize: 19, fontWeight: 600, lineHeight: 1,
                 color: isSel ? th.onAccent : disabled ? th.textFaint : th.text,
               }}>{String(d.getDate()).padStart(2, '0')}</span>
               <span style={{
-                width: 4, height: 4, borderRadius: '50%',
+                width: 5, height: 5, borderRadius: '50%',
                 background: isSel ? th.onAccent : th.accentWarm,
                 opacity: isOpen ? (isSel ? 0.9 : 1) : 0, transition: 'opacity .15s',
               }} />
