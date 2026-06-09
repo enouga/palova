@@ -258,6 +258,64 @@ export class ClubService {
     await prisma.clubMembership.delete({ where: { id: membershipId } });
   }
 
+  /** Recherche de membres actifs par nom/prénom (pour choisir un coéquipier). Réservé aux membres actifs du club. */
+  async searchMembers(slug: string, callerUserId: string, q: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const caller = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: callerUserId, clubId: club.id } },
+      select: { status: true },
+    });
+    if (!caller || caller.status === 'BLOCKED') throw new Error('MEMBERSHIP_REQUIRED');
+
+    const query = (q ?? '').trim();
+    if (query.length < 2) return [];
+
+    const members = await prisma.clubMembership.findMany({
+      where: {
+        clubId: club.id,
+        status: 'ACTIVE',
+        userId: { not: callerUserId },
+        user: { OR: [{ firstName: { contains: query, mode: 'insensitive' } }, { lastName: { contains: query, mode: 'insensitive' } }] },
+      },
+      orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+      take: 20,
+      select: { user: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    return members.map((m) => m.user);
+  }
+
+  /** Adhésion du joueur connecté à ce club (licence / statut). */
+  async getMyMembership(slug: string, userId: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId: club.id } },
+      select: { membershipNo: true, status: true, isSubscriber: true },
+    });
+    if (!m) throw new Error('MEMBERSHIP_REQUIRED');
+    return m;
+  }
+
+  /** Le joueur renseigne / corrige sa propre licence (n° adhérent) pour ce club. */
+  async setMyMembership(slug: string, userId: string, membershipNo: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId: club.id } },
+      select: { id: true, status: true },
+    });
+    if (!m) throw new Error('MEMBERSHIP_REQUIRED');
+    if (m.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
+    const value = (membershipNo ?? '').trim();
+    if (!value) throw new Error('VALIDATION_ERROR');
+    return prisma.clubMembership.update({
+      where: { id: m.id },
+      data: { membershipNo: value },
+      select: { membershipNo: true, status: true, isSubscriber: true },
+    });
+  }
+
   /** Sports activés par un club (avec leurs ressources, y compris inactives). */
   async listClubSports(clubId: string) {
     return prisma.clubSport.findMany({

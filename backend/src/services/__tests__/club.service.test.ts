@@ -1,0 +1,83 @@
+import '../../__mocks__/prisma';
+import { prismaMock } from '../../__mocks__/prisma';
+import { ClubService } from '../club.service';
+
+describe('ClubService — recherche de membres', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('refuse un non-membre (MEMBERSHIP_REQUIRED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.searchMembers('demo', 'caller', 'dup')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+
+  it('renvoie [] si la requête fait moins de 2 caractères', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    expect(await service.searchMembers('demo', 'caller', 'a')).toEqual([]);
+  });
+
+  it('renvoie les membres correspondants (id + nom uniquement, sans e-mail)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont' } },
+      { user: { id: 'u2', firstName: 'Julie', lastName: 'Dupond' } },
+    ] as any);
+
+    const result = await service.searchMembers('demo', 'caller', 'dup');
+
+    expect(result).toEqual([
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont' },
+      { id: 'u2', firstName: 'Julie', lastName: 'Dupond' },
+    ]);
+    const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.userId).toEqual({ not: 'caller' });
+    expect(arg.where.status).toBe('ACTIVE');
+    expect(arg.take).toBe(20);
+  });
+});
+
+describe('ClubService — mon adhésion (licence)', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('getMyMembership renvoie la licence du joueur', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ membershipNo: 'LIC-9', status: 'ACTIVE', isSubscriber: false } as any);
+    expect(await service.getMyMembership('demo', 'caller')).toMatchObject({ membershipNo: 'LIC-9' });
+  });
+
+  it('getMyMembership lève MEMBERSHIP_REQUIRED si pas membre', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.getMyMembership('demo', 'caller')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+
+  it('setMyMembership écrit la licence (trim) sur sa propre adhésion', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.update.mockResolvedValue({ membershipNo: 'LIC-9', status: 'ACTIVE', isSubscriber: false } as any);
+
+    await service.setMyMembership('demo', 'caller', '  LIC-9  ');
+
+    expect(prismaMock.clubMembership.update).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: { membershipNo: 'LIC-9' },
+      select: { membershipNo: true, status: true, isSubscriber: true },
+    });
+  });
+
+  it('setMyMembership refuse une licence vide (VALIDATION_ERROR)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1', status: 'ACTIVE' } as any);
+    await expect(service.setMyMembership('demo', 'caller', '   ')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('setMyMembership refuse un membre bloqué (MEMBERSHIP_BLOCKED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1', status: 'BLOCKED' } as any);
+    await expect(service.setMyMembership('demo', 'caller', 'LIC-9')).rejects.toThrow('MEMBERSHIP_BLOCKED');
+  });
+});
