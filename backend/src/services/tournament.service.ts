@@ -25,8 +25,8 @@ function appError(code: string, subject?: 'self' | 'partner'): Error {
 export class TournamentService {
   // ---------------------------------------------------------------- Inscription
 
-  /** Inscrit un binôme (capitaine connecté + coéquipier par e-mail). */
-  async register(tournamentId: string, captainUserId: string, partnerEmail: string) {
+  /** Inscrit un binôme (capitaine connecté + coéquipier par identifiant). */
+  async register(tournamentId: string, captainUserId: string, partnerUserId: string) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { id: true, clubId: true, gender: true, status: true, registrationDeadline: true, maxTeams: true },
@@ -35,7 +35,7 @@ export class TournamentService {
     if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_CLOSED');
 
-    const { partnerUserId } = await this.resolveAndAssertEligible(tournament, captainUserId, partnerEmail);
+    await this.resolveAndAssertEligible(tournament, captainUserId, partnerUserId);
 
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
@@ -49,7 +49,7 @@ export class TournamentService {
   }
 
   /** Change de coéquipier : conserve statut + place en liste d'attente (createdAt inchangé). */
-  async changePartner(tournamentId: string, captainUserId: string, partnerEmail: string) {
+  async changePartner(tournamentId: string, captainUserId: string, partnerUserId: string) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { id: true, clubId: true, gender: true, status: true, registrationDeadline: true },
@@ -58,7 +58,7 @@ export class TournamentService {
     if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    const { partnerUserId } = await this.resolveAndAssertEligible(tournament, captainUserId, partnerEmail);
+    await this.resolveAndAssertEligible(tournament, captainUserId, partnerUserId);
 
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
@@ -287,22 +287,21 @@ export class TournamentService {
 
   // ----------------------------------------------------------------- Helpers
 
-  /** Vérifie l'éligibilité des 2 joueurs et renvoie l'id résolu du coéquipier. */
+  /** Vérifie l'éligibilité du capitaine et du coéquipier (résolus par id). */
   private async resolveAndAssertEligible(
     tournament: { clubId: string; gender: TournamentGender },
     captainUserId: string,
-    partnerEmail: string,
-  ): Promise<{ partnerUserId: string }> {
-    const email = (partnerEmail ?? '').trim().toLowerCase();
-    if (!email) throw appError('PARTNER_NOT_FOUND', 'partner');
+    partnerUserId: string,
+  ): Promise<void> {
+    if (!partnerUserId) throw appError('PARTNER_NOT_FOUND', 'partner');
+    if (partnerUserId === captainUserId) throw new Error('PARTNER_IS_SELF');
 
     const [captain, partner] = await Promise.all([
       prisma.user.findUnique({ where: { id: captainUserId }, select: { id: true, sex: true, phone: true } }),
-      prisma.user.findUnique({ where: { email }, select: { id: true, sex: true, phone: true } }),
+      prisma.user.findUnique({ where: { id: partnerUserId }, select: { id: true, sex: true, phone: true } }),
     ]);
     if (!captain) throw new Error('USER_NOT_FOUND');
     if (!partner) throw appError('PARTNER_NOT_FOUND', 'partner');
-    if (partner.id === captain.id) throw new Error('PARTNER_IS_SELF');
 
     const [capM, partM] = await Promise.all([
       prisma.clubMembership.findUnique({ where: { userId_clubId: { userId: captain.id, clubId: tournament.clubId } }, select: { status: true, membershipNo: true } }),
@@ -324,7 +323,6 @@ export class TournamentService {
     if (!partner.sex) throw appError('SEX_REQUIRED', 'partner');
 
     this.assertGender(tournament.gender, captain.sex as Sex, partner.sex as Sex);
-    return { partnerUserId: partner.id };
   }
 
   private assertGender(gender: TournamentGender, a: Sex, b: Sex): void {

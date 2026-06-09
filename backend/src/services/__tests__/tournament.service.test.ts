@@ -12,7 +12,7 @@ function tournament(overrides: Record<string, unknown> = {}) {
 function mockEligibleHappyPath() {
   prismaMock.user.findUnique.mockImplementation((args: any) => {
     if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: 'MALE', phone: '0600000001' }) as any;
-    if (args.where.email === 'partner@x.fr') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0600000002' }) as any;
+    if (args.where.id === 'partner') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0600000002' }) as any;
     return Promise.resolve(null) as any;
   });
   prismaMock.clubMembership.findUnique.mockImplementation((args: any) => {
@@ -34,7 +34,7 @@ describe('TournamentService.register', () => {
     prismaMock.tournamentRegistration.count.mockResolvedValue(3 as any);
     prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
 
-    const result = await service.register('t1', 'captain', 'partner@x.fr');
+    const result = await service.register('t1', 'captain', 'partner');
 
     expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ tournamentId: 't1', captainUserId: 'captain', partnerUserId: 'partner', status: 'CONFIRMED' }) }),
@@ -48,7 +48,7 @@ describe('TournamentService.register', () => {
     prismaMock.tournamentRegistration.count.mockResolvedValue(8 as any);
     prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'WAITLISTED' } as any);
 
-    await service.register('t1', 'captain', 'partner@x.fr');
+    await service.register('t1', 'captain', 'partner');
 
     expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'WAITLISTED' }) }),
@@ -61,7 +61,7 @@ describe('TournamentService.register', () => {
     prismaMock.tournamentRegistration.count.mockResolvedValue(999 as any);
     prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
 
-    await service.register('t1', 'captain', 'partner@x.fr');
+    await service.register('t1', 'captain', 'partner');
 
     expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIRMED' }) }),
@@ -70,31 +70,31 @@ describe('TournamentService.register', () => {
 
   it('lève TOURNAMENT_NOT_OPEN si le tournoi est DRAFT', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament({ status: 'DRAFT' }) as any);
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('TOURNAMENT_NOT_OPEN');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('TOURNAMENT_NOT_OPEN');
   });
 
   it('lève REGISTRATION_CLOSED après la deadline', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament({ registrationDeadline: new Date(Date.now() - 1000) }) as any);
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('REGISTRATION_CLOSED');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('REGISTRATION_CLOSED');
   });
 
   it('lève PARTNER_NOT_FOUND si le coéquipier n a pas de compte', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
     prismaMock.user.findUnique.mockImplementation((args: any) =>
       (args.where.id === 'captain' ? Promise.resolve({ id: 'captain', sex: 'MALE', phone: '0600' }) : Promise.resolve(null)) as any);
-    await expect(service.register('t1', 'captain', 'ghost@x.fr')).rejects.toThrow('PARTNER_NOT_FOUND');
+    await expect(service.register('t1', 'captain', 'ghost')).rejects.toThrow('PARTNER_NOT_FOUND');
   });
 
   it('lève MEMBERSHIP_REQUIRED si le coéquipier n est pas membre', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
     prismaMock.user.findUnique.mockImplementation((args: any) => {
       if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: 'MALE', phone: '0600' }) as any;
-      if (args.where.email === 'partner@x.fr') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0601' }) as any;
+      if (args.where.id === 'partner') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0601' }) as any;
       return Promise.resolve(null) as any;
     });
     prismaMock.clubMembership.findUnique.mockImplementation((args: any) =>
       (args.where.userId_clubId.userId === 'captain' ? Promise.resolve({ status: 'ACTIVE', membershipNo: 'L1' }) : Promise.resolve(null)) as any);
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('MEMBERSHIP_REQUIRED');
   });
 
   it('lève LICENSE_REQUIRED si une licence manque', async () => {
@@ -102,7 +102,7 @@ describe('TournamentService.register', () => {
     mockEligibleHappyPath();
     prismaMock.clubMembership.findUnique.mockImplementation((args: any) =>
       (args.where.userId_clubId.userId === 'captain' ? Promise.resolve({ status: 'ACTIVE', membershipNo: 'L1' }) : Promise.resolve({ status: 'ACTIVE', membershipNo: null })) as any);
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('LICENSE_REQUIRED');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('LICENSE_REQUIRED');
   });
 
   it('lève SEX_REQUIRED si le sexe d un joueur est absent', async () => {
@@ -110,23 +110,23 @@ describe('TournamentService.register', () => {
     mockEligibleHappyPath();
     prismaMock.user.findUnique.mockImplementation((args: any) => {
       if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: null, phone: '0600' }) as any;
-      if (args.where.email === 'partner@x.fr') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0601' }) as any;
+      if (args.where.id === 'partner') return Promise.resolve({ id: 'partner', sex: 'MALE', phone: '0601' }) as any;
       return Promise.resolve(null) as any;
     });
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('SEX_REQUIRED');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('SEX_REQUIRED');
   });
 
   it('lève GENDER_MISMATCH si un tournoi Mixte reçoit 2 hommes', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament({ gender: 'MIXED' }) as any);
     mockEligibleHappyPath(); // 2 MALE
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('GENDER_MISMATCH');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('GENDER_MISMATCH');
   });
 
   it('lève ALREADY_REGISTERED si un joueur est déjà engagé', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
     mockEligibleHappyPath();
     prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r-existing' } as any);
-    await expect(service.register('t1', 'captain', 'partner@x.fr')).rejects.toThrow('ALREADY_REGISTERED');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('ALREADY_REGISTERED');
   });
 });
 
@@ -142,7 +142,7 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
     // éligibilité du nouveau partenaire (2 hommes)
     prismaMock.user.findUnique.mockImplementation((args: any) => {
       if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: 'MALE', phone: '0600' }) as any;
-      if (args.where.email === 'new@x.fr') return Promise.resolve({ id: 'newp', sex: 'MALE', phone: '0602' }) as any;
+      if (args.where.id === 'newp') return Promise.resolve({ id: 'newp', sex: 'MALE', phone: '0602' }) as any;
       return Promise.resolve(null) as any;
     });
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', membershipNo: 'L' } as any);
@@ -150,7 +150,7 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
     prismaMock.$queryRaw.mockResolvedValue([] as any);
     prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-1', partnerUserId: 'newp' } as any);
 
-    await service.changePartner('t1', 'captain', 'new@x.fr');
+    await service.changePartner('t1', 'captain', 'newp');
 
     expect(prismaMock.tournamentRegistration.update).toHaveBeenCalledWith({
       where: { id: 'reg-1' },
@@ -160,7 +160,7 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
 
   it('lève REGISTRATION_LOCKED si on modifie après la deadline', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament({ registrationDeadline: new Date(Date.now() - 1000) }) as any);
-    await expect(service.changePartner('t1', 'captain', 'new@x.fr')).rejects.toThrow('REGISTRATION_LOCKED');
+    await expect(service.changePartner('t1', 'captain', 'newp')).rejects.toThrow('REGISTRATION_LOCKED');
   });
 
   it('annule et promeut le 1er WAITLISTED quand une place CONFIRMED se libère', async () => {
