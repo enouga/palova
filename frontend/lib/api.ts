@@ -178,6 +178,8 @@ export const api = {
 
   getTournament: (id: string) => request<TournamentDetail>(`/api/tournaments/${id}`),
 
+  getTournamentParticipants: (id: string) => request<TournamentParticipant[]>(`/api/tournaments/${id}/participants`),
+
   registerTournament: (id: string, partnerUserId: string, token: string) =>
     request<TournamentRegistrationRecord>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerUserId }) }, token),
 
@@ -624,6 +626,13 @@ export interface TournamentRegistrationRecord {
   cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TournamentParticipant {
+  id: string;
+  status: RegistrationStatus;
+  captain: { firstName: string; lastName: string };
+  partner: { firstName: string; lastName: string };
 }
 
 export interface MyTournamentRegistration {

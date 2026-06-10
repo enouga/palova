@@ -263,7 +263,7 @@ describe('TournamentService — admin & lectures', () => {
     expect(result[1]).toMatchObject({ id: 't2', confirmedCount: 0, waitlistCount: 0 });
   });
 
-  it('listUserRegistrations attache téléphone + licence des 2 joueurs', async () => {
+  it("listUserRegistrations n'expose que le téléphone du membre connecté", async () => {
     prismaMock.tournamentRegistration.findMany.mockResolvedValue([
       { id: 'r1', captainUserId: 'cap', partnerUserId: 'par',
         tournament: { clubId: 'club-demo', club: { slug: 'demo' } },
@@ -277,9 +277,24 @@ describe('TournamentService — admin & lectures', () => {
 
     const [reg] = await service.listUserRegistrations('cap');
 
-    expect(reg.captain.phone).toBe('0600');
-    expect(reg.partner.phone).toBe('0601');
+    expect(reg.captain.phone).toBe('0600');   // 'cap' est le membre connecté
+    expect(reg.partner.phone).toBeNull();      // tél du coéquipier masqué
     expect(reg.captainLicense).toBe('LIC-CAP');
     expect(reg.partnerLicense).toBe('LIC-PAR');
+  });
+
+  it('listParticipants masque un tournoi DRAFT', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'DRAFT' } as any);
+    await expect(service.listParticipants('t1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('listParticipants renvoie les binômes actifs (noms seuls)', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', captain: { firstName: 'A', lastName: 'A' }, partner: { firstName: 'B', lastName: 'B' } },
+    ] as any);
+    const res = await service.listParticipants('t1');
+    expect(res).toHaveLength(1);
+    expect(res[0]).toMatchObject({ status: 'CONFIRMED', captain: { firstName: 'A' } });
   });
 });

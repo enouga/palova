@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
-import { api, TournamentDetail, MyProfile, MyTournamentRegistration, MyClubMembership } from '@/lib/api';
+import { api, TournamentDetail, MyProfile, MyTournamentRegistration, MyClubMembership, TournamentParticipant } from '@/lib/api';
 import { Screen } from '@/components/ui/Screen';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -51,11 +51,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [myReg, setMyReg] = useState<MyTournamentRegistration | null>(null);
   const [partner, setPartner] = useState<{ id: string; firstName: string; lastName: string } | null>(null);
+  const [participants, setParticipants] = useState<TournamentParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = () => api.getTournament(id).then(setT).catch(() => setT(null));
-  useEffect(() => { load(); }, [id]);
+  const loadParticipants = () => api.getTournamentParticipants(id).then(setParticipants).catch(() => setParticipants([]));
+  useEffect(() => { load(); loadParticipants(); }, [id]);
   useEffect(() => {
     if (!ready || !token) return;
     api.getMyProfile(token).then(setProfile).catch(() => {});
@@ -98,6 +100,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
       await api.registerTournament(id, partner.id, token);
       setPartner(null);
       await load();
+      loadParticipants();
       const rs = await api.getMyTournaments(token);
       setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
     } catch (e) { setError(messageFor(e)); }
@@ -110,6 +113,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     try {
       await api.changeTournamentPartner(id, partner.id, token);
       setPartner(null);
+      loadParticipants();
       const rs = await api.getMyTournaments(token);
       setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
     } catch (e) { setError(messageFor(e)); }
@@ -123,6 +127,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
       await api.cancelTournamentRegistration(id, token);
       setMyReg(null);
       await load();
+      loadParticipants();
     } catch (e) { setError(messageFor(e)); }
     finally { setBusy(false); }
   };
@@ -180,7 +185,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                       <span style={{ color: th.textMute, fontWeight: 400, fontSize: 12 }}> · {role}</span>
                     </div>
                     <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>
-                      Licence {lic ?? '—'} · {p.phone ?? '—'}
+                      Licence {lic ?? '—'}{p.id === profile?.id ? ` · ${p.phone ?? '—'}` : ''}
                     </div>
                   </div>
                 ))}
@@ -218,6 +223,31 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           {token && !myReg && closed && (
             <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Les inscriptions pour ce tournoi sont closes.</div>
           )}
+        </div>
+
+        {/* Liste publique des inscrits (noms seuls) */}
+        <div style={{ padding: '28px 20px 0' }}>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, marginBottom: 12 }}>Inscrits</div>
+          {participants === null && <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>Chargement…</div>}
+          {participants?.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Aucun inscrit pour le moment.</div>}
+          {participants && participants.length > 0 && (['CONFIRMED', 'WAITLISTED'] as const).map((st) => {
+            const group = participants.filter((p) => p.status === st);
+            if (group.length === 0) return null;
+            return (
+              <div key={st} style={{ marginBottom: 16 }}>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute, marginBottom: 8 }}>
+                  {st === 'CONFIRMED' ? 'Confirmés' : "Liste d'attente"} ({group.length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {group.map((r, i) => (
+                    <div key={r.id} style={{ fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+                      {i + 1}. {r.captain.firstName} {r.captain.lastName} &amp; {r.partner.firstName} {r.partner.lastName}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </Screen>

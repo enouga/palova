@@ -135,6 +135,22 @@ export class TournamentService {
     return withCount;
   }
 
+  /** Liste publique des binômes inscrits (noms seuls), confirmés puis liste d'attente. DRAFT masqué. */
+  async listParticipants(tournamentId: string) {
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { status: true } });
+    if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
+    return prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }], // CONFIRMED avant WAITLISTED, puis ordre d'inscription
+      select: {
+        id: true,
+        status: true,
+        captain: { select: { firstName: true, lastName: true } },
+        partner: { select: { firstName: true, lastName: true } },
+      },
+    });
+  }
+
   /** Inscriptions actives du joueur connecté (capitaine OU partenaire), tous clubs, avec tél + licence du binôme. */
   async listUserRegistrations(userId: string) {
     const regs = await prisma.tournamentRegistration.findMany({
@@ -163,6 +179,8 @@ export class TournamentService {
 
     return regs.map((r) => ({
       ...r,
+      captain: { ...r.captain, phone: r.captainUserId === userId ? r.captain.phone : null },
+      partner: { ...r.partner, phone: r.partnerUserId === userId ? r.partner.phone : null },
       captainLicense: licByKey.get(`${r.captainUserId}:${r.tournament.clubId}`) ?? null,
       partnerLicense: licByKey.get(`${r.partnerUserId}:${r.tournament.clubId}`) ?? null,
     }));
