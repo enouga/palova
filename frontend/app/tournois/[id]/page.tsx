@@ -224,13 +224,16 @@ function ProfileCompletion({ busy, initialLicense, onSave }: {
   const { th } = useTheme();
   const [phone, setPhone] = useState('');
   const [sex, setSex] = useState<'MALE' | 'FEMALE' | ''>('');
+  // initialLicense vaut toujours '' ici : la carte ne s'affiche que si profileIncomplete,
+  // qui exige !membership.membershipNo. Si cet invariant change (édition d'une licence déjà
+  // saisie), remplacer par une synchro useEffect ou un remount via key.
   const [license, setLicense] = useState(initialLicense);
   const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const primaryBtn: React.CSSProperties = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 16 }}>
       <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text }}>Complétez votre profil</div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 4, marginBottom: 12 }}>Téléphone, sexe et licence sont requis pour s&apos;inscrire à un tournoi.</div>
+      <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 4, marginBottom: 12 }}>Téléphone, licence et sexe sont requis pour s&apos;inscrire à un tournoi.</div>
       <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Téléphone" style={{ ...inputStyle, marginBottom: 8 }} />
       <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="N° de licence / adhérent" style={{ ...inputStyle, marginBottom: 8 }} />
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
