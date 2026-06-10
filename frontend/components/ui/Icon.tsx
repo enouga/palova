@@ -4,7 +4,7 @@ export type IconName =
   | 'calendar' | 'clock' | 'pin' | 'check' | 'bolt' | 'user' | 'lock' | 'mail'
   | 'chevL' | 'chevR' | 'arrowR' | 'plus' | 'card' | 'x' | 'search' | 'bell'
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
-  | 'moon' | 'logout' | 'grip' | 'trophy' | 'eye' | 'eyeOff' | 'info';
+  | 'moon' | 'logout' | 'grip' | 'trophy' | 'eye' | 'eyeOff' | 'info' | 'home';
 
 interface IconProps {
   name: IconName;
@@ -50,6 +50,7 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" {...p} /><circle cx="12" cy="12" r="3" {...p} /></>,
     eyeOff: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" {...p} /><circle cx="12" cy="12" r="3" {...p} /><path d="M4 4l16 16" {...p} /></>,
     info: <><circle cx="12" cy="12" r="9" {...p} /><path d="M12 11v5" {...p} /><circle cx="12" cy="7.8" r="0.4" fill={color} stroke={color} strokeWidth="1.4" /></>,
+    home: <><path d="M3.5 10.5L12 3.5l8.5 7" {...p} /><path d="M5.5 9.5V20.5h13V9.5" {...p} /><path d="M9.5 20.5v-6h5v6" {...p} /></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0, ...style }}>

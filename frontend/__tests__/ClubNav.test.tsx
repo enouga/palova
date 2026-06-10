@@ -20,11 +20,12 @@ describe('ClubNav', () => {
   beforeEach(clearCookies);
   afterEach(clearCookies);
 
-  it('affiche les onglets Réserver, Tournois et Infos', () => {
+  it('affiche les onglets Réserver, Tournois et Club-house', () => {
     wrap();
     expect(screen.getByText('Réserver')).toBeInTheDocument();
     expect(screen.getByText('Tournois')).toBeInTheDocument();
-    expect(screen.getByText('Infos')).toBeInTheDocument();
+    expect(screen.getByText('Club-house')).toBeInTheDocument();
+    expect(screen.queryByText('Infos')).not.toBeInTheDocument();
   });
 
   it('la marque Palova vise le domaine racine (pas le sous-domaine du club)', () => {
