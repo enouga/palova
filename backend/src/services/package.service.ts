@@ -173,4 +173,71 @@ export class PackageService {
       include: { template: { select: { name: true } } },
     });
   }
+
+  // --- Caisse du jour & tickets CE ---
+
+  /** Détail joint pour libeller un paiement en caisse (résa ou vente de package). */
+  private paymentInclude() {
+    return {
+      reservation: {
+        select: {
+          id: true, startTime: true,
+          resource: { select: { name: true } },
+          user: { select: { firstName: true, lastName: true } },
+        },
+      },
+      memberPackage: {
+        select: {
+          id: true, kind: true,
+          user: { select: { firstName: true, lastName: true } },
+          template: { select: { name: true } },
+        },
+      },
+    } as const;
+  }
+
+  /**
+   * Récap de caisse d'une journée (fuseau du club) : liste des encaissements
+   * + totaux par méthode. NB : PACK_CREDIT/WALLET = consommation de prépayé
+   * (l'argent est entré au moment de la vente), affiché à part côté UI.
+   */
+  async dailySummary(clubId: string, date: string) {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { timezone: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+    const start = DateTime.fromISO(date, { zone: club.timezone }).startOf('day');
+    if (!start.isValid) throw new Error('VALIDATION_ERROR');
+    const end = start.plus({ days: 1 });
+
+    const payments = await prisma.payment.findMany({
+      where: { clubId, createdAt: { gte: start.toJSDate(), lt: end.toJSDate() } },
+      orderBy: { createdAt: 'asc' },
+      include: this.paymentInclude(),
+    });
+
+    const totals: Record<string, Prisma.Decimal> = {};
+    let collected = new Prisma.Decimal(0);
+    for (const p of payments) {
+      totals[p.method] = (totals[p.method] ?? new Prisma.Decimal(0)).plus(p.amount);
+      collected = collected.plus(p.amount);
+    }
+    const totalsByMethod: Record<string, string> = {};
+    for (const [m, v] of Object.entries(totals)) totalsByMethod[m] = v.toFixed(2);
+
+    return { date, totalsByMethod, collected: collected.toFixed(2), payments };
+  }
+
+  /** Tickets CE du club, filtrables par statut de remboursement. */
+  async listVouchers(clubId: string, status?: VoucherStatus) {
+    return prisma.payment.findMany({
+      where: { clubId, method: 'VOUCHER', ...(status ? { voucherStatus: status } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: this.paymentInclude(),
+    });
+  }
+
+  async setVoucherStatus(paymentId: string, clubId: string, status: VoucherStatus) {
+    const p = await prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!p || p.clubId !== clubId || p.method !== 'VOUCHER') throw new Error('PAYMENT_NOT_FOUND');
+    return prisma.payment.update({ where: { id: paymentId }, data: { voucherStatus: status } });
+  }
 }

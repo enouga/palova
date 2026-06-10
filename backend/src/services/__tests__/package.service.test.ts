@@ -165,3 +165,45 @@ describe('PackageService — consommation & soldes', () => {
     await expect(service.listMyPackagesBySlug('ghost', 'user-1')).rejects.toThrow('CLUB_NOT_FOUND');
   });
 });
+
+describe('PackageService — caisse du jour & vouchers', () => {
+  let service: PackageService;
+  beforeEach(() => { service = new PackageService(); });
+
+  it('dailySummary borne la journée dans le fuseau du club et totalise par méthode', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.payment.findMany.mockResolvedValue([
+      { method: 'CASH', amount: 20 }, { method: 'CASH', amount: 5.5 }, { method: 'CARD', amount: 30 },
+    ] as any);
+
+    const out = await service.dailySummary('club-1', '2026-06-10');
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0]!.where as any;
+    expect(where.clubId).toBe('club-1');
+    // 2026-06-10 00:00 Europe/Paris = 2026-06-09T22:00:00Z (UTC+2 en juin)
+    expect((where.createdAt.gte as Date).toISOString()).toBe('2026-06-09T22:00:00.000Z');
+    expect((where.createdAt.lt as Date).toISOString()).toBe('2026-06-10T22:00:00.000Z');
+    expect(out.totalsByMethod.CASH).toBe('25.50');
+    expect(out.totalsByMethod.CARD).toBe('30.00');
+    expect(out.collected).toBe('55.50');
+  });
+
+  it('dailySummary refuse une date invalide', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    await expect(service.dailySummary('club-1', 'pas-une-date')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('setVoucherStatus refuse un paiement non-voucher ou d’un autre club', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue({ id: 'pay-1', clubId: 'club-1', method: 'CASH' } as any);
+    await expect(service.setVoucherStatus('pay-1', 'club-1', 'REIMBURSED')).rejects.toThrow('PAYMENT_NOT_FOUND');
+  });
+
+  it('setVoucherStatus marque remboursé', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue({ id: 'pay-1', clubId: 'club-1', method: 'VOUCHER' } as any);
+    prismaMock.payment.update.mockResolvedValue({ id: 'pay-1', voucherStatus: 'REIMBURSED' } as any);
+    await service.setVoucherStatus('pay-1', 'club-1', 'REIMBURSED');
+    expect(prismaMock.payment.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { voucherStatus: 'REIMBURSED' },
+    }));
+  });
+});
