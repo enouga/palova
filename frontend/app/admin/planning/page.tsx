@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, Member } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, Member, MemberPackage } from '@/lib/api';
+import { packageLabel, isUsable, canCover } from '@/lib/packages';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -73,6 +74,9 @@ export default function AdminPlanningPage() {
   const [hidden, setHidden]       = useState<Set<ReservationType>>(new Set());
   const [selected, setSelected]   = useState<ClubReservation | null>(null);
   const [payForm, setPayForm]     = useState<{ amount: string; method: PaymentMethod }>({ amount: '', method: 'CASH' });
+  const [voucherRef, setVoucherRef]       = useState('');
+  const [voucherIssuer, setVoucherIssuer] = useState('');
+  const [selPackages, setSelPackages]     = useState<MemberPackage[]>([]);
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [isFs, setIsFs]           = useState(false);
@@ -184,6 +188,13 @@ export default function AdminPlanningPage() {
     setConfirmCancel(false);
     const remaining = Math.max(0, Number(rv.totalPrice) - Number(rv.paidAmount));
     setPayForm({ amount: remaining ? String(remaining) : '', method: 'CASH' });
+    setVoucherRef(''); setVoucherIssuer('');
+    setSelPackages([]);
+    if (rv.user && token && clubId) {
+      api.adminGetMemberPackages(clubId, rv.user.id, token)
+        .then((pkgs) => setSelPackages(pkgs.filter((p) => isUsable(p))))
+        .catch(() => setSelPackages([]));
+    }
   };
 
   const changeType = async (t: ReservationType) => {
@@ -206,9 +217,37 @@ export default function AdminPlanningPage() {
     if (!token || !clubId || !selected) return;
     const amount = Number(payForm.amount);
     if (!amount || amount <= 0) { setError('Montant invalide.'); return; }
+    if (payForm.method === 'VOUCHER' && !voucherRef.trim()) { setError('Référence du ticket CE requise.'); return; }
     setBusy(true);
-    try { setError(null); await api.adminAddPayment(clubId, selected.id, { amount, method: payForm.method }, token); setSelected(null); await load(); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      setError(null);
+      await api.adminAddPayment(clubId, selected.id, {
+        amount, method: payForm.method,
+        voucherRef: payForm.method === 'VOUCHER' ? voucherRef.trim() : undefined,
+        voucherIssuer: payForm.method === 'VOUCHER' ? voucherIssuer.trim() || undefined : undefined,
+      }, token);
+      setSelected(null); await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  // Solde la résa avec un package du joueur (1 entrée de carnet, ou débit du porte-monnaie).
+  const payWithPackage = async (pkg: MemberPackage) => {
+    if (!token || !clubId || !selected) return;
+    const remaining = Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount));
+    if (remaining <= 0) { setError('Rien à encaisser.'); return; }
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminAddPayment(clubId, selected.id, {
+        amount: remaining,
+        method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
+        sourcePackageId: pkg.id,
+      }, token);
+      setSelected(null); await load();
+    } catch (e) {
+      setError((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.' : (e as Error).message);
+    }
     finally { setBusy(false); }
   };
 
@@ -433,16 +472,43 @@ export default function AdminPlanningPage() {
 
             {/* encaissement rapide */}
             {selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
-                  <input type="number" min={0} step="0.5" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
-                </label>
-                <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
-                  <select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value as PaymentMethod })} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
-                    {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                  </select>
-                </label>
-                <Btn onClick={addPayment} icon="check" disabled={busy}>{busy ? '…' : 'Encaisser'}</Btn>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
+                    <input type="number" min={0} step="0.5" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
+                  </label>
+                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
+                    <select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value as PaymentMethod })} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
+                      {Object.keys(METHOD_LABEL).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
+                    </select>
+                  </label>
+                  {payForm.method === 'VOUCHER' && (
+                    <>
+                      <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
+                        <input type="text" value={voucherRef} onChange={(e) => setVoucherRef(e.target.value)} placeholder="N° ticket" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 100 }} />
+                      </label>
+                      <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
+                        <input type="text" value={voucherIssuer} onChange={(e) => setVoucherIssuer(e.target.value)} placeholder="ANCV…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
+                      </label>
+                    </>
+                  )}
+                  <Btn onClick={addPayment} icon="check" disabled={busy}>{busy ? '…' : 'Encaisser'}</Btn>
+                </div>
+                {selPackages.length > 0 && (
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {selPackages.map((p) => {
+                      const remaining = Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount));
+                      const ok = canCover(p, remaining);
+                      return (
+                        <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
+                          title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
+                          style={{ border: `1.5px solid ${th.line}`, background: th.surface2, borderRadius: 10, padding: '7px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+                          {packageLabel(p)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
