@@ -5,9 +5,11 @@
 export type ThemeMode = 'floodlit' | 'daylight';
 
 // Geist sur tout le site : titres + UI en Geist Sans, données en Geist Mono.
+// Righteous (--font-brand) en touche ponctuelle : libellé Club-house de la nav.
 const FONT_DISPLAY = 'var(--font-ui), -apple-system, system-ui, sans-serif';
 const FONT_UI = 'var(--font-ui), -apple-system, system-ui, sans-serif';
 const FONT_MONO = 'var(--font-mono), ui-monospace, monospace';
+const FONT_BRAND = 'var(--font-brand), var(--font-ui), sans-serif';
 
 // Curated accent options. `blue` = Palova brand primary, `apricot` = warm accent.
 export const ACCENTS = {
@@ -41,6 +43,7 @@ export interface Theme {
   fontDisplay: string;
   fontUI: string;
   fontMono: string;
+  fontBrand: string;
   canvas: string;
   bg: string;
   bgElev: string;
@@ -74,7 +77,7 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
   if (mode === 'daylight') {
     return {
       mode, accent, onAccent, accentWarm: ACCENTS.apricot, neon: false,
-      fontDisplay: FONT_DISPLAY, fontUI: FONT_UI, fontMono: FONT_MONO,
+      fontDisplay: FONT_DISPLAY, fontUI: FONT_UI, fontMono: FONT_MONO, fontBrand: FONT_BRAND,
       canvas: '#e7e3d8',
       bg: '#f1eee5',
       bgElev: '#f7f5ee',
@@ -99,7 +102,7 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
   // floodlit (dark)
   return {
     mode, accent, onAccent, accentWarm: ACCENTS.apricot, neon,
-    fontDisplay: FONT_DISPLAY, fontUI: FONT_UI, fontMono: FONT_MONO,
+    fontDisplay: FONT_DISPLAY, fontUI: FONT_UI, fontMono: FONT_MONO, fontBrand: FONT_BRAND,
     canvas: '#0a0a0a',
     bg: '#131312',
     bgElev: '#1a1a18',

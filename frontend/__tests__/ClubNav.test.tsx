@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { ClubNav } from '../components/ClubNav';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
+let pathname = '/tournois';
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/tournois',
+  usePathname: () => pathname,
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 jest.mock('../lib/api', () => ({ api: { getMyMemberships: jest.fn().mockResolvedValue([]) } }));
@@ -17,8 +18,29 @@ function clearCookies() {
 }
 
 describe('ClubNav', () => {
-  beforeEach(clearCookies);
+  beforeEach(() => { clearCookies(); pathname = '/tournois'; });
   afterEach(clearCookies);
+
+  it('Club-house est le premier onglet, pointe sur la racine, et Réserver sur /reserver', () => {
+    wrap();
+    const labels = Array.from(document.querySelectorAll('.cn-tab .cn-tab-label')).map((el) => el.textContent);
+    expect(labels[0]).toBe('Club-house');
+    expect(screen.getByText('Club-house').closest('a')).toHaveAttribute('href', '/');
+    expect(screen.getByText('Réserver').closest('a')).toHaveAttribute('href', '/reserver');
+  });
+
+  it("surligne Club-house (pas Réserver) sur la racine du club", () => {
+    pathname = '/';
+    wrap();
+    expect(screen.getByText('Club-house').closest('a')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Réserver').closest('a')).not.toHaveAttribute('aria-current');
+  });
+
+  it('le libellé Club-house utilise la police brand', () => {
+    wrap();
+    const label = screen.getByText('Club-house') as HTMLElement;
+    expect(label.style.fontFamily).toContain('--font-brand');
+  });
 
   it('affiche les onglets Réserver, Tournois et Club-house', () => {
     wrap();

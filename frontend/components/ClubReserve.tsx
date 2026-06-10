@@ -36,7 +36,7 @@ function formatHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
-// Expérience de réservation du club — rendue à la racine du sous-domaine (/) ET sur /reserver.
+// Expérience de réservation du club — rendue sur /reserver (la racine du sous-domaine affiche le Club-house).
 // Coiffée par la barre de nav club (ClubNav) ; onglet interne « réserver » / « terrains ».
 export function ClubReserve({ club }: { club: ClubDetail }) {
   const { th } = useTheme();

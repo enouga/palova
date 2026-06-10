@@ -9,11 +9,12 @@ import { platformUrl } from '@/lib/clubUrl';
 import { Logotype, Chip, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
 import { Icon, IconName } from '@/components/ui/Icon';
 
-type Tab = { label: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean };
+type Tab = { label: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
 
 // Barre de navigation club, présente sur toutes les pages d'un sous-domaine club.
-// Rangée 1 : retour plateforme (‹ Palova, cross-sous-domaine) · identité club (→ réservation) · thème/déconnexion.
-// Rangée 2 : onglets Réserver / Tournois / Mes réservations (ou Connexion) / Club-house, onglet actif surligné.
+// Rangée 1 : retour plateforme (‹ Palova, cross-sous-domaine) · identité club (titre) · thème/déconnexion.
+// Rangée 2 : onglets Club-house (accueil du club, libellé en police brand) / Réserver / Tournois /
+// Mes réservations (ou Connexion), onglet actif surligné.
 export function ClubNav({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
@@ -31,11 +32,11 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   }, [token, club.id]);
 
   const tabs: Tab[] = [
-    { label: 'Réserver', href: '/', icon: 'calendar', match: (p) => p === '/' || p.startsWith('/reserver') || p.startsWith('/courts'), show: true },
+    { label: 'Club-house', href: '/', icon: 'home', brand: true, match: (p) => p === '/' || p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
+    { label: 'Réserver', href: '/reserver', icon: 'calendar', match: (p) => p.startsWith('/reserver') || p.startsWith('/courts'), show: true },
     { label: 'Tournois', href: '/tournois', icon: 'trophy', match: (p) => p.startsWith('/tournois'), show: true },
     { label: 'Mes réservations', href: '/me/reservations', icon: 'ticket', match: (p) => p.startsWith('/me/'), show: ready && !!token },
     { label: 'Connexion', href: '/login', icon: 'user', match: (p) => p.startsWith('/login'), show: ready && !token },
-    { label: 'Club-house', href: '/club-house', icon: 'home', match: (p) => p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
   ];
 
   return (
@@ -74,7 +75,9 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                        color: active ? th.onAccent : hov ? th.text : th.textMute,
                        transition: 'background .15s, border-color .15s, transform .12s, color .15s',
                        transform: hov ? 'translateY(-1px)' : 'none' }}>
-              <Icon name={t.icon} size={16} color={iconColor} /><span className="cn-tab-label">{t.label}</span>
+              <Icon name={t.icon} size={16} color={iconColor} />
+              {/* Righteous n'existe qu'en 400 → graisse normale, taille/espacement ajustés pour s'aligner sur les labels 14/600. */}
+              <span className="cn-tab-label" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.label}</span>
             </Link>
           );
         })}

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, Righteous } from 'next/font/google';
 import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
 
@@ -17,6 +17,14 @@ const geistMono = Geist_Mono({
   display: 'swap',
 });
 
+// Righteous (graisse unique 400) : police « brand » réservée au libellé Club-house.
+const righteous = Righteous({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-brand',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Palova',
   description: 'Réservez votre terrain de padel en quelques secondes',
@@ -30,7 +38,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const slug = (await headers()).get('x-club-slug');
   return (
-    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} ${righteous.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ClubProvider slug={slug}>{children}</ClubProvider>
       </body>

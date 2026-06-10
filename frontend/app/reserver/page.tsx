@@ -3,8 +3,8 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ClubReserve } from '@/components/ClubReserve';
 
-// /reserver = même expérience que la racine du club (cf. components/ClubReserve).
-// Conservé comme route pour les liens existants (dont /reserver?tab=courts).
+// /reserver = expérience de réservation du club (cf. components/ClubReserve) ;
+// la racine du sous-domaine affiche désormais le Club-house.
 export default function ReserverPage() {
   const { club, loading } = useClub();
   const { th } = useTheme();
