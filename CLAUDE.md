@@ -119,6 +119,10 @@ Administrateur transverse à tous les clubs (distinct du back-office club `/admi
 
 L'inscription se valide par **code reçu par email**. `POST /api/auth/register` crée un compte **non vérifié** (`User.emailVerified`, migration `add_email_verification` + backfill des comptes existants à `true`) et envoie un code à 6 chiffres (modèle `EmailVerification` : code **hashé bcrypt**, expiry 15 min, 5 essais max, cooldown renvoi 60 s). `POST /api/auth/verify-email` valide le code → renvoie le JWT ; `POST /api/auth/resend-code` renvoie un code (réponse neutre, pas d'énumération). `login` renvoie **403 `EMAIL_NOT_VERIFIED`** pour un compte non vérifié. Envoi via **nodemailer** (`src/email/mailer.ts`) : transport SMTP si `SMTP_HOST` défini, sinon **fallback console** en dev (+ `devCode` renvoyé dans la réponse hors prod pour tester sans email). ⚠️ **Brancher le SMTP en prod** : variables `SMTP_HOST/PORT/USER/PASS/FROM` (`.env.prod.example` + transmises au conteneur via `docker-compose.prod.yml`) — ex. boîte OVH. Front : `/register` et `/clubs/new` en **2 étapes** (formulaire → `VerifyCodeForm`), `/login` bascule sur la saisie du code si compte non vérifié. Seed (`seed.ts` + `seed-demo.ts`) crée les comptes avec `emailVerified: true`.
 
+## Club-house (v1) ✅ implémenté
+
+La page « Infos » est devenue **« Club-house »** (`/club-house`, redirection depuis `/infos`) : hero « À la une » (annonce épinglée, `imageUrl` en fond), grille action — créneaux libres du jour (lien profond `/reserver?resource=&start=` qui pré-ouvre la confirmation) + prochains tournois (« Plus que X places ») —, vos réservations, annonces, **offres partenaires** (`Sponsor.offerText`/`offerCode`, migration `add_sponsor_offer`, code promo copiable, saisie dans `/admin/sponsors`). Composants : `ClubHouse.tsx` + `components/clubhouse/*`, helpers purs `lib/clubhouse.ts`. Spec & plan : `docs/superpowers/{specs,plans}/2026-06-10-club-house*`.
+
 ## À implémenter (pas encore fait)
 
 - Authentification réelle (JWT login/register) — actuellement `DEMO_TOKEN = 'demo-token'` hardcodé dans courts/[id]/page.tsx
@@ -126,3 +130,4 @@ L'inscription se valide par **code reçu par email**. `POST /api/auth/register` 
 - Gestion admin du club (créneaux, tarifs)
 - Timezone dynamique depuis `club.timezone` (actuellement UTC_OFFSET=2 hardcodé)
 - Tournois — évolutions : tableaux/poules/scores & résultats, notifications e-mail (promotion liste d'attente, rappels), blocage automatique de terrains par un tournoi
+- Club-house — évolutions : cherche-partenaire, pouls du club (SSE), identité visuelle par club (photo de couverture, couleur d'accent)
