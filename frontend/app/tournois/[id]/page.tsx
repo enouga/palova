@@ -50,7 +50,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   // undefined = en cours de chargement ; null = pas membre de ce club ; sinon l'adhésion.
   const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [myReg, setMyReg] = useState<MyTournamentRegistration | null>(null);
-  const [partnerEmail, setPartnerEmail] = useState('');
+  const [partner, setPartner] = useState<{ id: string; firstName: string; lastName: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -92,10 +92,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
   const register = async () => {
     if (!token) { router.push('/login'); return; }
+    if (!partner) return;
     setBusy(true); setError(null);
     try {
-      await api.registerTournament(id, partnerEmail.trim(), token);
-      setPartnerEmail('');
+      await api.registerTournament(id, partner.id, token);
+      setPartner(null);
       await load();
       const rs = await api.getMyTournaments(token);
       setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
@@ -104,11 +105,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   };
 
   const changePartner = async () => {
-    if (!token) return;
+    if (!token || !partner) return;
     setBusy(true); setError(null);
     try {
-      await api.changeTournamentPartner(id, partnerEmail.trim(), token);
-      setPartnerEmail('');
+      await api.changeTournamentPartner(id, partner.id, token);
+      setPartner(null);
       const rs = await api.getMyTournaments(token);
       setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
     } catch (e) { setError(messageFor(e)); }
@@ -174,11 +175,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               </div>
               {!closed ? (
                 <>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 16, marginBottom: 6 }}>Changer de coéquipier (e-mail)</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} placeholder="email@coequipier.fr" style={inputStyle} />
-                    <button onClick={changePartner} disabled={busy || !partnerEmail.trim()} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>Changer</button>
-                  </div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 16, marginBottom: 6 }}>Changer de coéquipier</div>
+                  <PartnerSearch slug={club.slug} token={token} selected={partner} onSelect={setPartner} onClear={() => setPartner(null)} disabled={busy} />
+                  <button onClick={changePartner} disabled={busy || !partner} style={{ ...primaryBtn, marginTop: 8 }}>Changer de coéquipier</button>
                   <button onClick={cancel} disabled={busy} style={{ marginTop: 12, border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, cursor: 'pointer', borderRadius: 11, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5 }}>Se désinscrire</button>
                 </>
               ) : (
@@ -196,13 +195,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
               <div style={{ opacity: profileIncomplete ? 0.4 : 1, pointerEvents: profileIncomplete ? 'none' : 'auto' }}>
                 {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 10 }}>Tournoi complet : votre binôme sera placé en liste d&apos;attente.</div>}
                 <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 8, lineHeight: 1.5 }}>
-                  Votre coéquipier doit avoir un compte, être membre du club, et avoir renseigné téléphone, licence et sexe.
+                  Votre coéquipier doit être membre du club et avoir renseigné téléphone, licence et sexe.
                 </div>
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>E-mail du coéquipier</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} placeholder="email@coequipier.fr" style={inputStyle} />
-                  <button onClick={register} disabled={busy || !partnerEmail.trim()} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>S&apos;inscrire</button>
-                </div>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>Coéquipier (recherche par nom)</div>
+                <PartnerSearch slug={club.slug} token={token!} selected={partner} onSelect={setPartner} onClear={() => setPartner(null)} disabled={busy} />
+                <button onClick={register} disabled={busy || !partner} style={{ ...primaryBtn, marginTop: 8 }}>S&apos;inscrire</button>
               </div>
             </div>
           )}
@@ -244,6 +241,59 @@ function ProfileCompletion({ busy, initialLicense, onSave }: {
         ))}
       </div>
       <button onClick={() => sex && onSave(phone.trim(), sex, license.trim())} disabled={busy || !phone.trim() || !sex || !license.trim()} style={{ ...primaryBtn, width: '100%' }}>Enregistrer mon profil</button>
+    </div>
+  );
+}
+
+function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled }: {
+  slug: string;
+  token: string;
+  selected: { id: string; firstName: string; lastName: string } | null;
+  onSelect: (m: { id: string; firstName: string; lastName: string }) => void;
+  onClear: () => void;
+  disabled?: boolean;
+}) {
+  const { th } = useTheme();
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (selected) return;
+    const query = q.trim();
+    const delay = query.length < 2 ? 0 : 250;
+    const handle = setTimeout(() => {
+      if (query.length < 2) { setResults([]); setOpen(false); return; }
+      api.searchClubMembers(slug, query, token)
+        .then((rs) => { setResults(rs); setOpen(true); })
+        .catch(() => { setResults([]); setOpen(false); });
+    }, delay);
+    return () => clearTimeout(handle);
+  }, [q, slug, token, selected]);
+
+  const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+
+  if (selected) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ ...inputStyle, flex: 1, display: 'flex', alignItems: 'center' }}>{selected.firstName} {selected.lastName}</div>
+        <button onClick={onClear} disabled={disabled} style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, cursor: 'pointer', borderRadius: 11, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, whiteSpace: 'nowrap' }}>Changer</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => results.length > 0 && setOpen(true)} placeholder="Rechercher par nom…" disabled={disabled} style={inputStyle} />
+      {open && results.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, background: th.surface, borderRadius: 11, boxShadow: `0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px ${th.line}`, overflow: 'hidden' }}>
+          {results.map((m) => (
+            <button key={m.id} onClick={() => { onSelect(m); setOpen(false); setQ(''); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+              {m.firstName} {m.lastName}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
