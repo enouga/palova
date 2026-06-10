@@ -51,12 +51,20 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [isSub, setIsSub]       = useState(false);
+  // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
+  const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
 
   const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
   const days = nextDays(Math.max(1, windowDays + 1));
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'courts') setTab('courts');
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('tab') === 'courts') setTab('courts');
+    const resource = p.get('resource'); const start = p.get('start');
+    if (resource && start && !isNaN(new Date(start).getTime())) {
+      setDeepSlot({ resourceId: resource, start });
+      setDate(start.slice(0, 10));
+    }
   }, []);
 
   // Statut d'abonné en lecture seule : l'abonnement est attribué par le club
@@ -74,6 +82,16 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   }, [club.slug, date, duration]);
 
   useEffect(() => { if (tab === 'book') loadAvail(); }, [tab, loadAvail]);
+
+  // Consomme le lien profond une fois les dispos chargées : créneau encore libre → pré-ouvre,
+  // sinon (pris entre-temps) la page normale s'affiche, sans erreur.
+  useEffect(() => {
+    if (!deepSlot || loadingA || !token) return;
+    const res = avail.find((a) => a.resource.id === deepSlot.resourceId);
+    const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
+    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.pricePerHour, slot });
+    setDeepSlot(null);
+  }, [deepSlot, loadingA, avail, token]);
 
   const onSlot = (resourceId: string, price: string, slot: TimeSlot) => {
     if (!token) { router.push('/login'); return; }
