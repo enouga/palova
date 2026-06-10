@@ -37,6 +37,16 @@ describe('ClubService — recherche de membres', () => {
     expect(arg.where.status).toBe('ACTIVE');
     expect(arg.take).toBe(20);
   });
+  it('refuse un membre bloqué (MEMBERSHIP_REQUIRED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);
+    await expect(service.searchMembers('demo', 'caller', 'dup')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+
+  it('refuse un club suspendu / introuvable (CLUB_NOT_FOUND)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+    await expect(service.searchMembers('demo', 'caller', 'dup')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
 });
 
 describe('ClubService — mon adhésion (licence)', () => {

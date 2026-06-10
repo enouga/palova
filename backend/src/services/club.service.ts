@@ -266,7 +266,7 @@ export class ClubService {
       where: { userId_clubId: { userId: callerUserId, clubId: club.id } },
       select: { status: true },
     });
-    if (!caller || caller.status === 'BLOCKED') throw new Error('MEMBERSHIP_REQUIRED');
+    if (!caller || caller.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
 
     const query = (q ?? '').trim();
     if (query.length < 2) return [];
