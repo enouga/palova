@@ -1,6 +1,6 @@
 import { prisma } from '../db/prisma';
 
-interface SponsorInput { name?: string; logoUrl?: string; linkUrl?: string | null; sortOrder?: number; isActive?: boolean; }
+interface SponsorInput { name?: string; logoUrl?: string; linkUrl?: string | null; sortOrder?: number; isActive?: boolean; offerText?: string | null; offerCode?: string | null; }
 
 export class SponsorService {
   async listPublic(slug: string) {
@@ -23,6 +23,8 @@ export class SponsorService {
         linkUrl: data.linkUrl?.trim() || null,
         sortOrder: Number.isInteger(data.sortOrder) ? data.sortOrder! : 0,
         isActive: data.isActive ?? true,
+        offerText: data.offerText?.trim() || null,
+        offerCode: data.offerCode?.trim() || null,
       },
     });
   }
@@ -38,6 +40,8 @@ export class SponsorService {
         ...(data.linkUrl !== undefined ? { linkUrl: data.linkUrl?.trim() || null } : {}),
         ...(data.sortOrder !== undefined ? { sortOrder: Number(data.sortOrder) } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.offerText !== undefined ? { offerText: data.offerText?.trim() || null } : {}),
+        ...(data.offerCode !== undefined ? { offerCode: data.offerCode?.trim() || null } : {}),
       },
     });
   }
