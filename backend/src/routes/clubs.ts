@@ -15,9 +15,11 @@ const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
 
 const ERROR_STATUS: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  SLUG_TAKEN:       409,
-  CLUB_NOT_FOUND:   404,
+  VALIDATION_ERROR:    400,
+  SLUG_TAKEN:          409,
+  CLUB_NOT_FOUND:      404,
+  MEMBERSHIP_REQUIRED: 403,
+  MEMBERSHIP_BLOCKED:  403,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -98,6 +100,26 @@ router.get('/:slug/sponsors', async (req, res, next) => {
 router.get('/:slug/tournaments', async (req, res, next) => {
   try { res.json(await tournamentService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Recherche de membres du club par nom (réservé aux membres ; pour choisir un coéquipier de tournoi).
+router.get('/:slug/members/search', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubService.searchMembers(asString(req.params.slug), req.user!.id, asString(req.query.q))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Adhésion du joueur connecté à ce club (licence / statut).
+router.get('/:slug/me/membership', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubService.getMyMembership(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Le joueur renseigne / corrige sa propre licence (n° adhérent) pour ce club.
+router.patch('/:slug/me/membership', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { membershipNo } = req.body;
+    res.json(await clubService.setMyMembership(asString(req.params.slug), req.user!.id, asString(membershipNo)));
+  } catch (err) { handleError(err, res, next); }
 });
 
 // Détail public d'un club par slug.
