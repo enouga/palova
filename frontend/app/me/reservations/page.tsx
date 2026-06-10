@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -10,6 +10,9 @@ import { BackButton, Chip, Segmented, ThemeToggle, LogoutButton } from '@/compon
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
+import { MonthCalendar } from '@/components/calendar/MonthCalendar';
+import { DayPanel } from '@/components/calendar/DayPanel';
+import { buildCalendarEntries, entriesByDay, todayKey, addMonths } from '@/lib/calendar';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -28,17 +31,31 @@ export default function MyReservationsPage() {
   // Sur un sous-domaine club, réserver dans CE club (même host) ; sur la plateforme, l'annuaire.
   const reserveHref = slug ? '/reserver' : '/clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
-  const [tab, setTab]         = useState<'upcoming' | 'past'>('upcoming');
+  const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
+  const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar'>('upcoming');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
+  const [ym, setYm] = useState(() => {
+    const [y, m] = todayKey().split('-').map(Number);
+    return { year: y, month: m };
+  });
+  const [selectedDay, setSelectedDay] = useState(() => todayKey());
 
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
-    try { setError(null); setItems(await api.getMyReservations(t)); }
+    try {
+      setError(null);
+      const [reservations, tournaments] = await Promise.all([
+        api.getMyReservations(t),
+        api.getMyTournaments(t).catch(() => []), // calendrier sans tournois si l'appel échoue
+      ]);
+      setItems(reservations);
+      setRegs(tournaments);
+    }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, []);
@@ -49,7 +66,15 @@ export default function MyReservationsPage() {
   const isUpcoming = (r: MyReservation) => r.status !== 'CANCELLED' && new Date(r.endTime).getTime() >= now;
   const upcoming = items.filter(isUpcoming);
   const past = items.filter((r) => !isUpcoming(r));
-  const list = tab === 'upcoming' ? upcoming : past;
+  const list = tab === 'past' ? past : upcoming;
+
+  const byDay = useMemo(
+    () => entriesByDay(buildCalendarEntries(items, regs, new Date())),
+    [items, regs],
+  );
+  // Déplacement possible : sur l'hôte du club de la résa uniquement (la page Réserver y vit).
+  const canMove = (r: MyReservation) =>
+    !!slug && r.resource.club.slug === slug && r.status !== 'CANCELLED' && new Date(r.startTime).getTime() > now;
 
   const cancel = async (r: MyReservation) => {
     if (!token) return;
@@ -84,12 +109,41 @@ export default function MyReservationsPage() {
         </div>
 
         <div style={{ padding: '16px 20px 0' }}>
-          <Segmented<'upcoming' | 'past'> value={tab} onChange={setTab}
-            options={[{ value: 'upcoming', label: `À venir · ${upcoming.length}` }, { value: 'past', label: `Passées · ${past.length}` }]} />
+          <Segmented<'upcoming' | 'past' | 'calendar'> value={tab} onChange={setTab}
+            options={[
+              { value: 'upcoming', label: `À venir · ${upcoming.length}` },
+              { value: 'past', label: `Passées · ${past.length}` },
+              { value: 'calendar', label: 'Calendrier' },
+            ]} />
         </div>
 
         {error && <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
+        {tab === 'calendar' ? (
+          <div style={{ padding: '18px 20px 0' }}>
+            {loading ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+            ) : (
+              <>
+                <MonthCalendar
+                  year={ym.year} month={ym.month} byDay={byDay}
+                  selected={selectedDay} todayKey={todayKey()}
+                  onSelect={setSelectedDay}
+                  onNavigate={(delta) => setYm((v) => addMonths(v.year, v.month, delta))}
+                />
+                <DayPanel
+                  dayKey={selectedDay}
+                  entries={byDay.get(selectedDay) ?? []}
+                  canMove={canMove}
+                  onMove={(r) => router.push(`/reserver?move=${r.id}`)}
+                  onCancel={setConfirmCancel}
+                  onReserve={() => router.push(reserveHref)}
+                  reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
+                />
+              </>
+            )}
+          </div>
+        ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13, padding: '18px 20px 0' }}>
           {loading ? (
             <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -131,6 +185,7 @@ export default function MyReservationsPage() {
             })
           )}
         </div>
+        )}
       </div>
 
       {confirmCancel && (

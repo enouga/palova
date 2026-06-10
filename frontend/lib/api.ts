@@ -81,6 +81,10 @@ export const api = {
   cancelReservation: (reservationId: string, token: string) =>
     request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
 
+  // Déplacement atomique : nouvelle résa CONFIRMED + ancienne CANCELLED côté backend.
+  rescheduleReservation: (reservationId: string, body: { resourceId: string; startTime: string; duration: number }, token: string) =>
+    request<Reservation>(`/api/reservations/${reservationId}/reschedule`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   // --- Back-office club (scopé par clubId) ---
   adminGetClub: (clubId: string, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, {}, token),
