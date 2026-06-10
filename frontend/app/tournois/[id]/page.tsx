@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
-import { api, TournamentDetail, MyProfile, MyTournamentRegistration } from '@/lib/api';
+import { api, TournamentDetail, MyProfile, MyTournamentRegistration, MyClubMembership } from '@/lib/api';
 import { Screen } from '@/components/ui/Screen';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -47,6 +47,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
 
   const [t, setT] = useState<TournamentDetail | null>(null);
   const [profile, setProfile] = useState<MyProfile | null>(null);
+  // undefined = en cours de chargement ; null = pas membre de ce club ; sinon l'adhésion.
+  const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [myReg, setMyReg] = useState<MyTournamentRegistration | null>(null);
   const [partnerEmail, setPartnerEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     if (!ready || !token) return;
     api.getMyProfile(token).then(setProfile).catch(() => {});
     api.getMyTournaments(token).then((rs) => setMyReg(rs.find((r) => r.tournament.id === id) ?? null)).catch(() => {});
-  }, [ready, token, id]);
+    if (club) api.getMyClubMembership(club.slug, token).then(setMembership).catch(() => setMembership(null));
+  }, [ready, token, id, club?.slug]);
 
   if (!t || !club) {
     return <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>Chargement…</div>;
@@ -67,13 +70,23 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const tz = t.club.timezone;
   const closed = new Date(t.registrationDeadline) <= new Date();
   const full = t.maxTeams != null && t.confirmedCount >= t.maxTeams;
-  const profileIncomplete = !!token && profile != null && (!profile.phone || !profile.sex);
+  // On attend que profil ET adhésion soient chargés. Si le joueur n'est pas membre (membership null),
+  // on ne bloque pas ici : l'inscription renverra MEMBERSHIP_REQUIRED.
+  const profileIncomplete =
+    !!token && profile != null && membership !== undefined && membership !== null &&
+    (!profile.phone || !profile.sex || !membership.membershipNo);
 
-  const saveProfile = async (phone: string, sex: 'MALE' | 'FEMALE') => {
-    if (!token) return;
+  const saveProfile = async (phone: string, sex: 'MALE' | 'FEMALE', license: string) => {
+    if (!token || !club) return;
     setBusy(true); setError(null);
-    try { setProfile(await api.updateMyProfile({ phone, sex }, token)); }
-    catch (e) { setError(messageFor(e)); }
+    try {
+      const [p, m] = await Promise.all([
+        api.updateMyProfile({ phone, sex }, token),
+        api.updateMyClubMembership(club.slug, license, token),
+      ]);
+      setProfile(p);
+      setMembership(m);
+    } catch (e) { setError(messageFor(e)); }
     finally { setBusy(false); }
   };
 
@@ -178,7 +191,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           {token && !myReg && !closed && (
             <div>
               {profileIncomplete && (
-                <ProfileCompletion busy={busy} onSave={saveProfile} />
+                <ProfileCompletion busy={busy} initialLicense={membership?.membershipNo ?? ''} onSave={saveProfile} />
               )}
               <div style={{ opacity: profileIncomplete ? 0.4 : 1, pointerEvents: profileIncomplete ? 'none' : 'auto' }}>
                 {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 10 }}>Tournoi complet : votre binôme sera placé en liste d&apos;attente.</div>}
@@ -203,20 +216,23 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   );
 }
 
-function ProfileCompletion({ busy, onSave }: {
+function ProfileCompletion({ busy, initialLicense, onSave }: {
   busy: boolean;
-  onSave: (phone: string, sex: 'MALE' | 'FEMALE') => void;
+  initialLicense: string;
+  onSave: (phone: string, sex: 'MALE' | 'FEMALE', license: string) => void;
 }) {
   const { th } = useTheme();
   const [phone, setPhone] = useState('');
   const [sex, setSex] = useState<'MALE' | 'FEMALE' | ''>('');
+  const [license, setLicense] = useState(initialLicense);
   const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const primaryBtn: React.CSSProperties = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 16 }}>
       <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text }}>Complétez votre profil</div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 4, marginBottom: 12 }}>Téléphone et sexe sont requis pour s&apos;inscrire à un tournoi.</div>
+      <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 4, marginBottom: 12 }}>Téléphone, sexe et licence sont requis pour s&apos;inscrire à un tournoi.</div>
       <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Téléphone" style={{ ...inputStyle, marginBottom: 8 }} />
+      <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="N° de licence / adhérent" style={{ ...inputStyle, marginBottom: 8 }} />
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         {(['MALE', 'FEMALE'] as const).map((s) => (
           <button key={s} onClick={() => setSex(s)} style={{ flex: 1, cursor: 'pointer', borderRadius: 11, padding: '10px', fontFamily: th.fontUI, fontSize: 14, border: `1px solid ${sex === s ? th.accent : th.line}`, background: sex === s ? th.surface2 : 'transparent', color: th.text }}>
@@ -224,7 +240,7 @@ function ProfileCompletion({ busy, onSave }: {
           </button>
         ))}
       </div>
-      <button onClick={() => sex && onSave(phone.trim(), sex)} disabled={busy || !phone.trim() || !sex} style={{ ...primaryBtn, width: '100%' }}>Enregistrer mon profil</button>
+      <button onClick={() => sex && onSave(phone.trim(), sex, license.trim())} disabled={busy || !phone.trim() || !sex || !license.trim()} style={{ ...primaryBtn, width: '100%' }}>Enregistrer mon profil</button>
     </div>
   );
 }
