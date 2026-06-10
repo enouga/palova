@@ -1,26 +1,39 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ClubDetail, Announcement, Sponsor, MyReservation } from '@/lib/api';
+import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubAvailability } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
+import { effectiveDurations, defaultDuration } from '@/lib/duration';
+import { pickUpcomingSlots, pickUpcomingTournaments, todayISO } from '@/lib/clubhouse';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { HeroAnnouncement } from '@/components/clubhouse/HeroAnnouncement';
+import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
+import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
+import { PartnerOffers } from '@/components/clubhouse/PartnerOffers';
 
 function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
-// Contenu « Infos club » : annonces, prochaines réservations (avec annulation), partenaires.
-// L'en-tête/identité et la navigation sont fournis par ClubNav (page /infos).
-export function ClubInfo({ club }: { club: ClubDetail }) {
+// Page « Club-house » : hero À la une, créneaux à saisir, prochains tournois,
+// vos réservations, annonces, offres partenaires. Chaque bloc charge en
+// indépendance et se masque en silence si vide ou en erreur.
+export function ClubHouse({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const [ann, setAnn] = useState<Announcement[]>([]);
   const [spons, setSpons] = useState<Sponsor[]>([]);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [avail, setAvail] = useState<ClubAvailability[]>([]);
   const [next, setNext] = useState<MyReservation[]>([]);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling] = useState(false);
+
+  const duration = defaultDuration(Array.from(new Set(
+    club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
+  )).sort((a, b) => a - b));
 
   const loadNext = useCallback(async () => {
     if (!token) return;
@@ -32,6 +45,8 @@ export function ClubInfo({ club }: { club: ClubDetail }) {
 
   useEffect(() => { api.getClubAnnouncements(club.slug).then(setAnn).catch(() => setAnn([])); }, [club.slug]);
   useEffect(() => { api.getClubSponsors(club.slug).then(setSpons).catch(() => setSpons([])); }, [club.slug]);
+  useEffect(() => { api.getClubTournaments(club.slug).then(setTournaments).catch(() => setTournaments([])); }, [club.slug]);
+  useEffect(() => { api.getClubAvailability(club.slug, todayISO(), duration).then(setAvail).catch(() => setAvail([])); }, [club.slug, duration]);
   useEffect(() => { if (ready && token) loadNext(); }, [ready, token, loadNext]);
 
   const cancel = async (r: MyReservation) => {
@@ -46,11 +61,31 @@ export function ClubInfo({ club }: { club: ClubDetail }) {
     <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{t}</div>
   );
 
-  const empty = ann.length === 0 && spons.length === 0 && next.length === 0;
+  // Hero : l'annonce épinglée la plus récente (l'API renvoie épinglées d'abord) ; pas répétée dans la liste.
+  const hero = ann.length > 0 && ann[0].pinned ? ann[0] : null;
+  const restAnn = hero ? ann.slice(1) : ann;
+  const now = new Date();
+  const slots = pickUpcomingSlots(avail, now);
+  const nextTournaments = pickUpcomingTournaments(tournaments, now);
+
+  const empty = !hero && slots.length === 0 && nextTournaments.length === 0 && restAnn.length === 0 && spons.length === 0 && next.length === 0;
 
   return (
     <>
-      {/* Prochaines réservations (joueur connecté) */}
+      {hero && <HeroAnnouncement announcement={hero} />}
+
+      {/* Grille action : créneaux + tournois, côte à côte ≥ 600px */}
+      {(slots.length > 0 || nextTournaments.length > 0) && (
+        <div style={{ padding: '16px 20px 0' }}>
+          <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:600px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
+          <div className="ch-grid">
+            <SlotsAlaUne slots={slots} timezone={club.timezone} />
+            <TournamentsAlaUne tournaments={nextTournaments} timezone={club.timezone} />
+          </div>
+        </div>
+      )}
+
+      {/* Vos prochaines réservations (repris de ClubInfo) */}
       {next.length > 0 && (
         <div style={{ padding: '22px 20px 0' }}>
           {sectionTitle('Vos prochaines réservations')}
@@ -67,12 +102,12 @@ export function ClubInfo({ club }: { club: ClubDetail }) {
         </div>
       )}
 
-      {/* Annonces */}
-      {ann.length > 0 && (
+      {/* Annonces (repris de ClubInfo, sans celle du hero) */}
+      {restAnn.length > 0 && (
         <div style={{ padding: '26px 20px 0' }}>
           {sectionTitle('Annonces')}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {ann.map((a) => (
+            {restAnn.map((a) => (
               <div key={a.id} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {a.pinned && <Chip tone="accent">Épinglé</Chip>}
@@ -86,20 +121,7 @@ export function ClubInfo({ club }: { club: ClubDetail }) {
         </div>
       )}
 
-      {/* Partenaires */}
-      {spons.length > 0 && (
-        <div style={{ padding: '26px 20px 0' }}>
-          {sectionTitle('Partenaires')}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {spons.map((s) => (
-              <a key={s.id} href={s.linkUrl ?? '#'} target={s.linkUrl ? '_blank' : undefined} rel="noreferrer" title={s.name} style={{ display: 'block' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.logoUrl} alt={s.name} style={{ height: 44, width: 'auto', borderRadius: 8, background: th.surface, padding: 6, objectFit: 'contain' }} />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+      <PartnerOffers sponsors={spons} />
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
