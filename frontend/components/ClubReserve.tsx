@@ -2,9 +2,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ClubDetail, ClubAvailability, TimeSlot } from '@/lib/api';
+import { api, ClubDetail, ClubAvailability, TimeSlot, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
+import { inkOn } from '@/lib/theme';
+import { dayKeyInTz } from '@/lib/calendar';
 import { courtType, courtFormat, SINGLE_COLOR } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
@@ -49,10 +51,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [avail, setAvail]       = useState<ClubAvailability[]>([]);
   const [loadingA, setLoadingA] = useState(true);
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot } | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState<false | 'booked' | 'moved'>(false);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
+  // Mode déplacement (?move=<id> depuis le calendrier de Mes réservations).
+  const [moveId, setMoveId]   = useState<string | null>(null);
+  const [moveRes, setMoveRes] = useState<MyReservation | null>(null);
 
   const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
   const days = nextDays(Math.max(1, windowDays + 1));
@@ -65,7 +70,32 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       setDeepSlot({ resourceId: resource, start });
       setDate(start.slice(0, 10));
     }
+    const move = p.get('move');
+    if (move) setMoveId(move);
   }, []);
+
+  // Charge la résa à déplacer : doit être à soi, de CE club, à venir et active —
+  // sinon le paramètre est ignoré silencieusement (page normale).
+  useEffect(() => {
+    if (!moveId || !token) return;
+    api.getMyReservations(token).then((list) => {
+      const r = list.find((x) => x.id === moveId);
+      if (!r || r.status === 'CANCELLED' || r.resource.club.slug !== club.slug
+          || new Date(r.startTime).getTime() <= Date.now()) return;
+      setMoveRes(r);
+      setDate(dayKeyInTz(r.startTime, club.timezone));
+      const dur = Math.round((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60_000);
+      if (allDurations.includes(dur)) setDuration(dur);
+    }).catch(() => {});
+    // allDurations est dérivé de `club` (stable pour un rendu donné)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveId, token, club.slug, club.timezone]);
+
+  const abandonMove = () => {
+    setMoveRes(null);
+    setMoveId(null);
+    router.replace('/reserver');
+  };
 
   // Statut d'abonné en lecture seule : l'abonnement est attribué par le club
   // (back-office). Sert à connaître la fenêtre de réservation du joueur.
@@ -117,7 +147,23 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         {confirmed && (
           <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
             <Icon name="check" size={18} color={th.onAccent} stroke={2.4} />
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>
+              {confirmed === 'moved' ? 'Réservation déplacée !' : 'Réservation confirmée !'}
+            </span>
+          </div>
+        )}
+
+        {moveRes && (
+          <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accentWarm, color: inkOn(th.accentWarm), borderRadius: 14, padding: '12px 14px' }}>
+            <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, lineHeight: 1.4 }}>
+              ↔ Déplacement de votre réservation — {moveRes.resource.name} ·{' '}
+              {new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: club.timezone }).format(new Date(moveRes.startTime))} ·{' '}
+              {formatHour(moveRes.startTime, club.timezone)}. Choisissez le nouveau créneau.
+            </span>
+            <button onClick={abandonMove}
+              style={{ border: 'none', cursor: 'pointer', borderRadius: 10, padding: '7px 12px', background: 'rgba(0,0,0,0.18)', color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              Abandonner
+            </button>
           </div>
         )}
 
@@ -226,8 +272,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           duration={duration}
           token={token ?? ''}
           timezone={club.timezone}
+          moveReservationId={moveRes?.id}
           onClose={() => setBooking(null)}
-          onConfirmed={() => { setBooking(null); setConfirmed(true); loadAvail(); }}
+          onConfirmed={() => {
+            setBooking(null);
+            setConfirmed(moveRes ? 'moved' : 'booked');
+            if (moveRes) { setMoveRes(null); setMoveId(null); router.replace('/reserver'); }
+            loadAvail();
+          }}
         />
       )}
     </Screen>

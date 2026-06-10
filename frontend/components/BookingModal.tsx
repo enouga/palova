@@ -13,6 +13,8 @@ interface BookingModalProps {
   duration: number;
   token: string;
   timezone?: string;
+  /** Mode déplacement : id de la résa à remplacer — un seul appel atomique, pas de hold. */
+  moveReservationId?: string;
   onClose: () => void;
   onConfirmed: (reservation: Reservation) => void;
 }
@@ -37,8 +39,16 @@ function ProgressRing({ frac, size = 132 }: { frac: number; size?: number }) {
   );
 }
 
+const MOVE_ERRORS: Record<string, string> = {
+  SLOT_NOT_AVAILABLE:     "Ce créneau vient d'être pris. Choisissez-en un autre.",
+  SLOT_ALREADY_HELD:      "Ce créneau vient d'être pris. Choisissez-en un autre.",
+  RESERVATION_NOT_ACTIVE: 'Cette réservation ne peut plus être déplacée.',
+  RESERVATION_IN_PAST:    'Cette réservation ne peut plus être déplacée.',
+  OUT_OF_HOURS:           "Ce créneau est en dehors des horaires d'ouverture.",
+};
+
 export default function BookingModal({
-  slot, resourceId, pricePerHour, duration, token, timezone, onClose, onConfirmed,
+  slot, resourceId, pricePerHour, duration, token, timezone, moveReservationId, onClose, onConfirmed,
 }: BookingModalProps) {
   const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
@@ -91,6 +101,23 @@ export default function BookingModal({
     }
   };
 
+  // Mode déplacement : un seul appel atomique côté backend (l'ancienne résa
+  // n'est annulée que si le nouveau créneau est obtenu) — pas de hold de 10 min.
+  const handleMove = async () => {
+    if (!moveReservationId) return;
+    try {
+      const moved = await api.rescheduleReservation(
+        moveReservationId,
+        { resourceId, startTime: slot.startTime, duration },
+        token,
+      );
+      onConfirmed(moved);
+    } catch (err) {
+      setPhase('error');
+      setErrorMsg(MOVE_ERRORS[(err as Error).message] ?? (err as Error).message);
+    }
+  };
+
   const handleClose = async () => {
     if (phase === 'pending' && reservation) {
       try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ }
@@ -119,11 +146,17 @@ export default function BookingModal({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
               <Icon name="clock" size={15} color={th.textMute} />
-              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>
+                {moveReservationId
+                  ? <>Votre réservation actuelle sera <b style={{ color: th.text }}>annulée et remplacée</b> par ce créneau.</>
+                  : <>Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.</>}
+              </span>
             </div>
             <div style={{ display: 'flex', gap: 11 }}>
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
-              <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>
+              {moveReservationId
+                ? <Btn icon="arrowR" onClick={handleMove} style={{ flex: 1 }}>Déplacer ici</Btn>
+                : <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>}
             </div>
           </>
         )}
