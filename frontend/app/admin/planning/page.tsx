@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, Member, MemberPackage } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, PeakHours, Member, MemberPackage } from '@/lib/api';
 import { packageLabel, isUsable, canCover } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, remainingCents, centsToInput, quickAmounts, fmtEuros, paymentDots } from '@/lib/caisse';
+import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots } from '@/lib/caisse';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -19,9 +19,9 @@ const TYPE_META: Record<ReservationType, { label: string; color: string }> = {
 };
 const TYPE_ORDER: ReservationType[] = ['COURT', 'COACHING', 'TOURNAMENT', 'EVENT'];
 // Libellés des méthodes de paiement affichées dans le panneau d'encaissement.
-const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', OTHER: 'Autre' };
+const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
 // Méthodes encaissables en caisse, en boutons 1-clic (les prépayés ont leurs boutons de package).
-const COUNTER_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'];
+const COUNTER_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'MEMBER', 'OTHER'];
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 // Dimensions de la grille verticale (terrains en colonnes, heures en lignes).
 const HOUR_H = 68, TIME_W = 56, COL_MIN_W = 120, HEADER_H = 52;
@@ -74,6 +74,7 @@ export default function AdminPlanningPage() {
   const gridRef = useRef<HTMLDivElement>(null);
 
   const [tz, setTz]               = useState('Europe/Paris');
+  const [peak, setPeak]           = useState<PeakHours | null>(null);
   const [resources, setResources] = useState<AdminResource[]>([]);
   const [reservations, setRes]    = useState<ClubReservation[]>([]);
   const [date, setDate]           = useState(todayISO());
@@ -114,6 +115,7 @@ export default function AdminPlanningPage() {
         api.adminGetMembers(clubId, token),
       ]);
       setTz(c.timezone);
+      setPeak(c.peakHours ?? null);
       setResources(res.filter((r) => r.isActive));
       setRes(resv.reservations);
       setMembers(mem);
@@ -153,8 +155,17 @@ export default function AdminPlanningPage() {
     byResource.set(rv.resource.id, arr);
   }
 
+  // Terrains par id (format single/double, tarifs) ; nb de joueurs et montant dû
+  // (= plafond d'encaissement, prix de la résa ou tarif heures pleines/creuses).
+  const resById = new Map(resources.map((r) => [r.id, r]));
+  const playersOf = (rv: ClubReservation) => {
+    const r = resById.get(rv.resource.id);
+    return playerCount(typeof r?.attributes?.format === 'string' ? r.attributes.format : undefined);
+  };
+  const dueOf = (rv: ClubReservation) => dueCents(rv, resById.get(rv.resource.id), peak, tz);
+
   // Stats (sur les réservations affichées).
-  let openMin = 0, bookedMin = 0, outstanding = 0;
+  let openMin = 0, bookedMin = 0, outstandingCents = 0;
   for (const r of resources) openMin += (r.closeHour - r.openHour) * 60;
   for (const rv of shown) {
     const r = resources.find((x) => x.id === rv.resource.id);
@@ -163,7 +174,7 @@ export default function AdminPlanningPage() {
       const e = Math.min(localMinutes(rv.endTime, tz), r.closeHour * 60);
       if (e > s) bookedMin += e - s;
     }
-    outstanding += Math.max(0, Number(rv.totalPrice) - Number(rv.paidAmount));
+    outstandingCents += Math.max(0, dueOf(rv) - toCents(rv.paidAmount));
   }
   const occupancy = openMin > 0 ? Math.round((bookedMin / openMin) * 100) : 0;
 
@@ -179,9 +190,6 @@ export default function AdminPlanningPage() {
 
   const tint = (hex: string) => (th.mode === 'floodlit' ? `${hex}2e` : `${hex}24`);
   const hatch = `repeating-linear-gradient(135deg, ${th.line} 0 5px, transparent 5px 11px)`;
-
-  // Format (double/single) de chaque terrain, pour le prix par joueur et les pastilles.
-  const fmtById = new Map(resources.map((r) => [r.id, typeof r.attributes?.format === 'string' ? r.attributes.format : undefined]));
 
   const arrow: CSSProperties = {
     width: 34, height: 34, borderRadius: 10, border: `1px solid ${th.line}`, background: 'transparent',
@@ -203,7 +211,7 @@ export default function AdminPlanningPage() {
   const openRes = (rv: ClubReservation) => {
     setSelected(rv);
     setConfirmCancel(false);
-    setPayAmount(centsToInput(remainingCents(rv.totalPrice, rv.paidAmount)));
+    setPayAmount(centsToInput(Math.max(0, dueOf(rv) - toCents(rv.paidAmount))));
     setVoucherOpen(false);
     setVoucherRef(''); setVoucherIssuer('');
     setSelPackages([]);
@@ -235,24 +243,25 @@ export default function AdminPlanningPage() {
     if (!token || !clubId || !selected) return;
     const amount = Number(payAmount);
     if (!amount || amount <= 0) { setError('Montant invalide.'); return; }
-    if (method === 'VOUCHER' && !voucherRef.trim()) { setError('Référence du ticket CE requise.'); return; }
     setBusy(true);
     try {
       setError(null);
       await api.adminAddPayment(clubId, selected.id, {
         amount, method,
-        voucherRef: method === 'VOUCHER' ? voucherRef.trim() : undefined,
+        voucherRef: method === 'VOUCHER' ? voucherRef.trim() || undefined : undefined,
         voucherIssuer: method === 'VOUCHER' ? voucherIssuer.trim() || undefined : undefined,
       }, token);
       setSelected(null); await load();
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) {
+      setError((e as Error).message === 'PAYMENT_EXCEEDS_DUE' ? 'Le montant dépasse le prix de la réservation.' : (e as Error).message);
+    }
     finally { setBusy(false); }
   };
 
   // Solde la résa avec un package du joueur (1 entrée de carnet, ou débit du porte-monnaie).
   const payWithPackage = async (pkg: MemberPackage) => {
     if (!token || !clubId || !selected) return;
-    const remaining = Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount));
+    const remaining = Math.max(0, dueOf(selected) - toCents(selected.paidAmount)) / 100;
     if (remaining <= 0) { setError('Rien à encaisser.'); return; }
     setBusy(true);
     try {
@@ -332,7 +341,7 @@ export default function AdminPlanningPage() {
         <div style={{ display: 'flex', gap: 24 }}>
           {stat('Occupation', `${occupancy}%`)}
           {stat('Réservations', String(shown.length))}
-          {stat('Reste dû', `${outstanding.toFixed(outstanding % 1 ? 2 : 0)} €`)}
+          {stat('Reste dû', fmtEuros(outstandingCents))}
         </div>
       </div>
 
@@ -419,10 +428,11 @@ export default function AdminPlanningPage() {
                   const small = height < 46;
                   const pend = rv.status === 'PENDING';
                   const c = TYPE_META[rv.type].color;
-                  const dots = paymentDots(rv, playerCount(fmtById.get(rv.resource.id)));
+                  const due = dueOf(rv);
+                  const dots = paymentDots(rv, playersOf(rv), due);
                   return (
                     <button key={rv.id} type="button" onClick={() => openRes(rv)}
-                      title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}${dots ? ` · payé ${fmtEuros(toCents(rv.paidAmount))} / ${fmtEuros(toCents(rv.totalPrice))}` : ''}`}
+                      title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}${dots ? ` · payé ${fmtEuros(toCents(rv.paidAmount))} / ${fmtEuros(due)}` : ''}`}
                       style={{
                         position: 'absolute', top: top + 2, left: 3, right: 3, height, boxSizing: 'border-box',
                         borderRadius: 9, padding: small ? '3px 8px' : '5px 8px', overflow: 'hidden', zIndex: 2, textAlign: 'left', cursor: 'pointer',
@@ -473,9 +483,9 @@ export default function AdminPlanningPage() {
               {selected.user && <div style={{ fontSize: 12.5, color: th.textFaint }}>{selected.user.email}</div>}
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 18, fontFamily: th.fontUI, fontSize: 13 }}>
-              <span style={{ color: th.textMute }}>Total : <b style={{ color: th.text }}>{selected.totalPrice} €</b></span>
-              <span style={{ color: th.textMute }}>Payé : <b style={{ color: th.text }}>{selected.paidAmount} €</b></span>
-              <span style={{ color: th.textMute }}>Reste : <b style={{ color: '#ff7a4d' }}>{Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount)).toFixed(2)} €</b></span>
+              <span style={{ color: th.textMute }}>Total : <b style={{ color: th.text }}>{fmtEuros(dueOf(selected))}</b>{toCents(selected.totalPrice) <= 0 && dueOf(selected) > 0 ? <span style={{ color: th.textFaint }}> (tarif)</span> : null}</span>
+              <span style={{ color: th.textMute }}>Payé : <b style={{ color: th.text }}>{fmtEuros(toCents(selected.paidAmount))}</b></span>
+              <span style={{ color: th.textMute }}>Reste : <b style={{ color: '#ff7a4d' }}>{fmtEuros(Math.max(0, dueOf(selected) - toCents(selected.paidAmount)))}</b></span>
             </div>
 
             {/* choix du type */}
@@ -497,16 +507,21 @@ export default function AdminPlanningPage() {
 
             {/* encaissement rapide */}
             {selected.status !== 'CANCELLED' && (() => {
-              const players = playerCount(fmtById.get(selected.resource.id));
-              const cannotPay = busy || toCents(payAmount) <= 0;
+              const players = playersOf(selected);
+              const due = dueOf(selected);
+              const maxPayable = Math.max(0, due - toCents(selected.paidAmount));
+              const amountC = toCents(payAmount);
+              const overCap = due > 0 && amountC > maxPayable;
+              const cannotPay = busy || amountC <= 0 || overCap;
+              const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
               return (
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                   <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
-                    <input type="number" min={0} step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
+                    <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ border: `1px solid ${overCap ? '#ff7a4d' : th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
                   </label>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 3 }}>
-                    {quickAmounts(selected, players).map((q) => (
+                    {quickAmounts(due, toCents(selected.paidAmount), players).map((q) => (
                       <button key={q.key} type="button" onClick={() => setPayAmount(centsToInput(q.cents))}
                         style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
                         {q.label}
@@ -517,7 +532,7 @@ export default function AdminPlanningPage() {
                 {/* moyens de paiement : 1 clic = encaissé (Ticket CE demande d'abord sa référence) */}
                 <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {COUNTER_METHODS.map((m) => (
-                    <button key={m} type="button" disabled={cannotPay}
+                    <button key={m} type="button" disabled={cannotPay} title={capTitle}
                       onClick={() => (m === 'VOUCHER' ? setVoucherOpen(true) : payNow(m))}
                       style={{ border: `1.5px solid ${m === 'VOUCHER' && voucherOpen ? th.text : th.line}`, background: th.surface2, borderRadius: 10, padding: '8px 13px', cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.5 : 1, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
                       {METHOD_LABEL[m]}

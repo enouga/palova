@@ -40,6 +40,7 @@ const ERROR_STATUS: Record<string, number> = {
   PACKAGE_NOT_FOUND:      404,
   PAYMENT_NOT_FOUND:      404,
   INSUFFICIENT_BALANCE:   409,
+  PAYMENT_EXCEEDS_DUE:    409,
   CLUB_NOT_FOUND:         404,
 };
 

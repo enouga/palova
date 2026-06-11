@@ -547,7 +547,7 @@ export interface CreateReservationBody {
   price?: number;
 }
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET';
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
 export type PackageKind = 'ENTRIES' | 'WALLET';
 export type VoucherStatus = 'PENDING_REIMBURSEMENT' | 'REIMBURSED';
 

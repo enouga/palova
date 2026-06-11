@@ -1,11 +1,16 @@
-import { toCents, remainingCents, centsToInput, fmtEuros, quickAmounts, paymentDots } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import type { ReservationType } from '@/lib/api';
 
-const resa = (over: { type?: ReservationType; totalPrice?: string; paidAmount?: string; payments?: number } = {}) => ({
+const TZ = 'Europe/Paris';
+
+const resa = (over: Partial<{ type: ReservationType; totalPrice: string; paidAmount: string; payments: number; startTime: string; endTime: string }> = {}) => ({
   type: over.type ?? ('COURT' as ReservationType),
   totalPrice: over.totalPrice ?? '52.00',
   paidAmount: over.paidAmount ?? '0.00',
+  // jeudi 11/06/2026, 16h-17h à Paris (UTC+2 en été)
+  startTime: over.startTime ?? '2026-06-11T14:00:00.000Z',
+  endTime: over.endTime ?? '2026-06-11T15:00:00.000Z',
   payments: Array.from({ length: over.payments ?? 0 }, (_, i) => ({ id: `pay-${i}` })),
 });
 
@@ -46,32 +51,71 @@ describe('fmtEuros', () => {
   });
 });
 
+describe('tariffCents', () => {
+  // 2026-06-11 est un jeudi (weekday 4) ; 14:00Z = 16h à Paris.
+  const peak = { 4: { start: 17, end: 23 } };
+
+  it('heures creuses : tarif réduit', () => {
+    expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T15:00:00Z', TZ, peak, '52', '30')).toBe(3000);
+  });
+  it('heures pleines : plein tarif × durée (18h-19h30 → 1,5 h)', () => {
+    expect(tariffCents('2026-06-11T16:00:00Z', '2026-06-11T17:30:00Z', TZ, peak, '52', '30')).toBe(7800);
+  });
+  it('pas de plages configurées → toujours plein tarif', () => {
+    expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T15:00:00Z', TZ, null, '52', '30')).toBe(5200);
+  });
+  it('pas de tarif heures creuses → plein tarif même en creuses', () => {
+    expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T15:00:00Z', TZ, peak, '52', null)).toBe(5200);
+  });
+  it('dimanche = weekday 7 (convention Luxon)', () => {
+    // 2026-06-14 est un dimanche ; 10:00Z = 12h Paris, pleines 9h-13h.
+    expect(tariffCents('2026-06-14T10:00:00Z', '2026-06-14T11:00:00Z', TZ, { 7: { start: 9, end: 13 } }, '52', '30')).toBe(5200);
+  });
+});
+
+describe('dueCents', () => {
+  const courtRes = { pricePerHour: '52', offPeakPricePerHour: '30' };
+  const peak = { 4: { start: 17, end: 23 } };
+
+  it('prix de la résa quand il existe', () => {
+    expect(dueCents(resa(), courtRes, peak, TZ)).toBe(5200);
+  });
+  it('résa COURT sans prix → tarif du terrain (heures creuses)', () => {
+    expect(dueCents(resa({ totalPrice: '0' }), courtRes, peak, TZ)).toBe(3000);
+  });
+  it('résa non-COURT sans prix → 0 ; terrain inconnu → 0', () => {
+    expect(dueCents(resa({ type: 'EVENT', totalPrice: '0' }), courtRes, peak, TZ)).toBe(0);
+    expect(dueCents(resa({ totalPrice: '0' }), undefined, peak, TZ)).toBe(0);
+  });
+});
+
 describe('quickAmounts', () => {
-  it('rien payé sur un double 52 € → Total 52 et / joueur 13 (pas de chip Reste en doublon)', () => {
-    const chips = quickAmounts(resa(), 4);
+  it('rien payé sur un double 52 € → Total 52 et / joueur 13', () => {
+    const chips = quickAmounts(5200, 0, 4);
     expect(chips.map((c) => c.key)).toEqual(['total', 'perPlayer']);
-    expect(chips.find((c) => c.key === 'total')!.cents).toBe(5200);
     expect(chips.find((c) => c.key === 'perPlayer')!.cents).toBe(1300);
   });
-  it('paiement partiel → chip Reste en premier', () => {
-    const chips = quickAmounts(resa({ paidAmount: '13.00' }), 4);
-    expect(chips.map((c) => c.key)).toEqual(['remaining', 'total', 'perPlayer']);
+  it('paiement partiel → Reste en premier, Total (qui dépasserait le plafond) disparaît', () => {
+    const chips = quickAmounts(5200, 1300, 4);
+    expect(chips.map((c) => c.key)).toEqual(['remaining', 'perPlayer']);
     expect(chips[0].cents).toBe(3900);
   });
-  it('terrain single → prix / 2', () => {
-    const chips = quickAmounts(resa({ totalPrice: '18.00' }), 2);
-    expect(chips.find((c) => c.key === 'perPlayer')!.cents).toBe(900);
+  it('la part / joueur qui dépasse le reste dû disparaît', () => {
+    expect(quickAmounts(5200, 4500, 4).map((c) => c.key)).toEqual(['remaining']);
   });
-  it('arrondi au centime (17 € / 4 = 4,25 €)', () => {
-    const chips = quickAmounts(resa({ totalPrice: '17.00' }), 4);
-    expect(chips.find((c) => c.key === 'perPlayer')!.cents).toBe(425);
+  it('la part / joueur égale au reste dû est dédupliquée', () => {
+    expect(quickAmounts(5200, 3900, 4).map((c) => c.key)).toEqual(['remaining']);
   });
-  it('soldé → aucune chip Reste ; prix 0 → aucune chip', () => {
-    expect(quickAmounts(resa({ paidAmount: '52.00' }), 4).map((c) => c.key)).toEqual(['total', 'perPlayer']);
-    expect(quickAmounts(resa({ totalPrice: '0.00' }), 4)).toEqual([]);
+  it('terrain single → prix / 2 ; arrondi au centime (17 € / 4)', () => {
+    expect(quickAmounts(1800, 0, 2).find((c) => c.key === 'perPlayer')!.cents).toBe(900);
+    expect(quickAmounts(1700, 0, 4).find((c) => c.key === 'perPlayer')!.cents).toBe(425);
+  });
+  it('soldé ou gratuit → aucune chip', () => {
+    expect(quickAmounts(5200, 5200, 4)).toEqual([]);
+    expect(quickAmounts(0, 0, 4)).toEqual([]);
   });
   it('libellés en euros lisibles', () => {
-    const chips = quickAmounts(resa({ totalPrice: '17.00' }), 4);
+    const chips = quickAmounts(1700, 0, 4);
     expect(chips.find((c) => c.key === 'total')!.label).toBe('Total 17 €');
     expect(chips.find((c) => c.key === 'perPlayer')!.label).toBe('/ joueur 4,25 €');
   });
@@ -79,25 +123,24 @@ describe('quickAmounts', () => {
 
 describe('paymentDots', () => {
   it('2 paiements sur 4 places → 2 pleines, pas soldé', () => {
-    expect(paymentDots(resa({ paidAmount: '26.00', payments: 2 }), 4))
+    expect(paymentDots(resa({ paidAmount: '26.00', payments: 2 }), 4, 5200))
       .toEqual({ filled: 2, slots: 4, overflow: 0, settled: false });
   });
   it('soldé → settled true même avec moins de paiements que de places', () => {
-    expect(paymentDots(resa({ paidAmount: '52.00', payments: 1 }), 4))
+    expect(paymentDots(resa({ paidAmount: '52.00', payments: 1 }), 4, 5200))
       .toEqual({ filled: 1, slots: 4, overflow: 0, settled: true });
   });
   it('plus de paiements que de places → cap + overflow', () => {
-    expect(paymentDots(resa({ paidAmount: '52.00', payments: 5 }), 4))
+    expect(paymentDots(resa({ paidAmount: '52.00', payments: 5 }), 4, 5200))
       .toEqual({ filled: 4, slots: 4, overflow: 1, settled: true });
   });
-  it('terrain single → 2 places', () => {
-    expect(paymentDots(resa({ payments: 1 }), 2))
-      .toEqual({ filled: 1, slots: 2, overflow: 0, settled: false });
+  it('résa sans prix mais avec tarif déduit → pastilles sur le dû', () => {
+    expect(paymentDots(resa({ totalPrice: '0', paidAmount: '30.00', payments: 1 }), 4, 3000))
+      .toEqual({ filled: 1, slots: 4, overflow: 0, settled: true });
   });
-  it('non applicable : type ≠ COURT ou prix ≤ 0 → null', () => {
-    expect(paymentDots(resa({ type: 'TOURNAMENT', payments: 1 }), 4)).toBeNull();
-    expect(paymentDots(resa({ type: 'EVENT' }), 4)).toBeNull();
-    expect(paymentDots(resa({ totalPrice: '0.00' }), 4)).toBeNull();
+  it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
+    expect(paymentDots(resa({ type: 'TOURNAMENT', payments: 1 }), 4, 5200)).toBeNull();
+    expect(paymentDots(resa({ totalPrice: '0.00' }), 4, 0)).toBeNull();
   });
 });
 
