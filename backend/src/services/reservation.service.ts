@@ -553,7 +553,9 @@ export class ReservationService {
 
   /**
    * Encaissement manuel sur une réservation (vérifie le club).
-   * VOUCHER : référence obligatoire, statut « à rembourser ».
+   * Plafond : le total encaissé ne peut pas dépasser le prix de la résa —
+   * ou, pour une résa COURT sans prix, le tarif du terrain (heures pleines/creuses).
+   * VOUCHER : référence optionnelle, statut « à rembourser ».
    * PACK_CREDIT / WALLET : consomme le package du joueur (décrément conditionnel)
    * et crée le paiement dans la même transaction.
    */
@@ -573,15 +575,44 @@ export class ReservationService {
     }
     const reservation = await prisma.reservation.findUnique({
       where: { id: params.reservationId },
-      include: { resource: { select: { clubId: true } } },
+      include: {
+        resource: {
+          select: {
+            clubId: true, pricePerHour: true, offPeakPricePerHour: true,
+            club: { select: { peakHours: true, timezone: true } },
+          },
+        },
+      },
     });
     if (!reservation)                                  throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.resource.clubId !== params.clubId) throw new Error('CLUB_MISMATCH');
 
-    const methods = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'PACK_CREDIT', 'WALLET'];
+    const methods = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'PACK_CREDIT', 'WALLET', 'MEMBER'];
     const method = (methods.includes(params.method ?? '') ? params.method : 'CASH') as
-      'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET';
-    if (method === 'VOUCHER' && !params.voucherRef?.trim()) throw new Error('VALIDATION_ERROR');
+      'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
+
+    // Montant dû en centimes : prix de la résa, sinon tarif du terrain pour un créneau COURT.
+    const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    let due = num(reservation.totalPrice);
+    if (due <= 0 && reservation.type === 'COURT') {
+      const local = DateTime.fromJSDate(reservation.startTime, { zone: reservation.resource.club.timezone });
+      const { rate } = effectiveRate(
+        reservation.resource.club.peakHours as PeakHours | null,
+        local.weekday, local.hour,
+        num(reservation.resource.pricePerHour),
+        reservation.resource.offPeakPricePerHour != null ? num(reservation.resource.offPeakPricePerHour) : null,
+      );
+      due = rate * ((reservation.endTime.getTime() - reservation.startTime.getTime()) / 3_600_000);
+    }
+    const dueCents = Math.round(due * 100);
+    const amountCents = Math.round(params.amount * 100);
+    // Re-lit le total payé dans la transaction (Serializable) pour bloquer deux encaissements concurrents.
+    const assertNotOverpaid = async (tx: Prisma.TransactionClient) => {
+      if (dueCents <= 0) return;
+      const agg = await tx.payment.aggregate({ _sum: { amount: true }, where: { reservationId: params.reservationId } });
+      const paidCents = Math.round(num(agg._sum.amount) * 100);
+      if (paidCents + amountCents > dueCents) throw new Error('PAYMENT_EXCEEDS_DUE');
+    };
 
     const base = {
       reservationId: params.reservationId,
@@ -590,13 +621,16 @@ export class ReservationService {
       method,
       payerName: params.payerName?.trim() || null,
       note: params.note?.trim() || null,
-      voucherRef:    method === 'VOUCHER' ? params.voucherRef!.trim() : null,
+      voucherRef:    method === 'VOUCHER' ? params.voucherRef?.trim() || null : null,
       voucherIssuer: method === 'VOUCHER' ? params.voucherIssuer?.trim() || null : null,
       voucherStatus: method === 'VOUCHER' ? ('PENDING_REIMBURSEMENT' as const) : null,
     };
 
     if (method !== 'PACK_CREDIT' && method !== 'WALLET') {
-      return prisma.payment.create({ data: base });
+      return prisma.$transaction(async (tx) => {
+        await assertNotOverpaid(tx);
+        return tx.payment.create({ data: base });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     }
 
     // Paiement par solde prépayé : le package doit appartenir au joueur de la résa.
@@ -607,8 +641,9 @@ export class ReservationService {
     if ((method === 'PACK_CREDIT') !== (pkg.kind === 'ENTRIES')) throw new Error('VALIDATION_ERROR');
 
     return prisma.$transaction(async (tx) => {
+      await assertNotOverpaid(tx);
       await PackageService.consume(tx, pkg, new Prisma.Decimal(params.amount));
       return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id } });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 }

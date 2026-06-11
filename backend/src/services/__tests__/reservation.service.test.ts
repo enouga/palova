@@ -622,22 +622,92 @@ describe('ReservationService', () => {
 
   describe('addPayment étendu (caisse)', () => {
     const resa = { id: 'res-1', userId: 'user-1', resource: { clubId: 'club-1' } };
+    // Résa avec prix et contexte tarifaire complet (jeudi 11/06/2026, 16h-17h à Paris).
+    const pricedResa = (over: Record<string, unknown> = {}) => ({
+      id: 'res-1', userId: 'user-1', type: 'COURT', totalPrice: '52',
+      startTime: new Date('2026-06-11T14:00:00Z'), endTime: new Date('2026-06-11T15:00:00Z'),
+      resource: {
+        clubId: 'club-1', pricePerHour: '52', offPeakPricePerHour: null,
+        club: { peakHours: null, timezone: 'Europe/Paris' },
+      },
+      ...over,
+    });
+    const paidSoFar = (amount: number) =>
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount } } as any);
 
     beforeEach(() => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+      paidSoFar(0);
     });
 
-    it('VOUCHER : exige une référence et pose voucherStatus PENDING_REIMBURSEMENT', async () => {
+    it('VOUCHER : référence optionnelle, pose voucherStatus PENDING_REIMBURSEMENT', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(resa as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-0' } as any);
 
-      await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 25, method: 'VOUCHER' }))
-        .rejects.toThrow('VALIDATION_ERROR');
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 25, method: 'VOUCHER' });
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'VOUCHER', voucherRef: null, voucherStatus: 'PENDING_REIMBURSEMENT' }),
+      }));
 
-      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+      prismaMock.payment.create.mockClear();
       await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 25, method: 'VOUCHER', voucherRef: 'ANCV-42', voucherIssuer: 'ANCV' });
       expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ method: 'VOUCHER', voucherRef: 'ANCV-42', voucherStatus: 'PENDING_REIMBURSEMENT', clubId: 'club-1' }),
       }));
+    });
+
+    it('MEMBER : enregistre un encaissement couvert par l’abonnement', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa() as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-m' } as any);
+
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 52, method: 'MEMBER' });
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'MEMBER' }),
+      }));
+    });
+
+    it('refuse un encaissement qui dépasse le prix de la résa', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa() as any);
+      paidSoFar(39);
+
+      await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 26, method: 'CASH' }))
+        .rejects.toThrow('PAYMENT_EXCEEDS_DUE');
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('accepte un encaissement qui complète exactement le prix', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa() as any);
+      paidSoFar(39);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-3' } as any);
+
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 13, method: 'CASH' });
+      expect(prismaMock.payment.create).toHaveBeenCalled();
+    });
+
+    it('résa COURT sans prix : plafond = tarif du terrain, heures creuses comprises', async () => {
+      // Jeudi (weekday 4), 16h locale : heures pleines à partir de 17h → créneau en heures creuses à 30 €/h.
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa({
+        totalPrice: '0',
+        resource: {
+          clubId: 'club-1', pricePerHour: '52', offPeakPricePerHour: '30',
+          club: { peakHours: { 4: { start: 17, end: 23 } }, timezone: 'Europe/Paris' },
+        },
+      }) as any);
+
+      await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 40, method: 'CASH' }))
+        .rejects.toThrow('PAYMENT_EXCEEDS_DUE');
+
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-4' } as any);
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 30, method: 'CASH' });
+      expect(prismaMock.payment.create).toHaveBeenCalled();
+    });
+
+    it('EVENT sans prix : pas de plafond', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa({ type: 'EVENT', totalPrice: '0' }) as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-5' } as any);
+
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 999, method: 'CASH' });
+      expect(prismaMock.payment.create).toHaveBeenCalled();
     });
 
     it('PACK_CREDIT : consomme 1 entrée et crée le paiement dans une transaction', async () => {

@@ -40,6 +40,7 @@ enum PaymentMethod {
   VOUCHER      // ticket CE / chèque sport
   PACK_CREDIT  // consommation d'1 entrée d'un carnet
   WALLET       // débit du porte-monnaie €
+  MEMBER       // couvert par l'abonnement du membre (pas de flux d'argent)
 }
 
 /// Type d'offre prépayée : carnet d'entrées ou porte-monnaie €.
