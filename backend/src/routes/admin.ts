@@ -7,6 +7,7 @@ import { ClubService } from '../services/club.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
+import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
@@ -17,6 +18,7 @@ const clubService = new ClubService();
 const announcementService = new AnnouncementService();
 const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
+const eventService = new EventService();
 const packageService = new PackageService();
 
 const ERROR_STATUS: Record<string, number> = {
@@ -33,6 +35,7 @@ const ERROR_STATUS: Record<string, number> = {
   ANNOUNCEMENT_NOT_FOUND: 404,
   SPONSOR_NOT_FOUND:      404,
   TOURNAMENT_NOT_FOUND:   404,
+  EVENT_NOT_FOUND:        404,
   HAS_REGISTRATIONS:      409,
   REGISTRATION_NOT_FOUND: 404,
   SLOT_NOT_AVAILABLE:    409,
@@ -341,6 +344,30 @@ router.patch('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequ
 });
 router.delete('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await tournamentService.adminRemoveRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Events (animations : mêlées, stages, soirées…) ---
+
+router.get('/events', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.listForAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/events', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await eventService.createEvent(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.get('/events/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.getForAdmin(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/events/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.updateEvent(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/events/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await eventService.deleteEvent(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/events/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.adminPromoteRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/events/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.adminRemoveRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Offres prépayées (carnets / porte-monnaie) ---

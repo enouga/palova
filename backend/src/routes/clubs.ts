@@ -5,6 +5,7 @@ import { AvailabilityService } from '../services/availability.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
+import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { prisma } from '../db/prisma';
 
@@ -14,6 +15,7 @@ const availabilityService = new AvailabilityService();
 const announcementService = new AnnouncementService();
 const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
+const eventService = new EventService();
 const packageService = new PackageService();
 
 const ERROR_STATUS: Record<string, number> = {
@@ -101,6 +103,12 @@ router.get('/:slug/sponsors', async (req, res, next) => {
 // Tournois publiés d'un club (à venir).
 router.get('/:slug/tournaments', async (req, res, next) => {
   try { res.json(await tournamentService.listPublicByClubSlug(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Animations publiées d'un club (à venir).
+router.get('/:slug/events', async (req, res, next) => {
+  try { res.json(await eventService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
 });
 

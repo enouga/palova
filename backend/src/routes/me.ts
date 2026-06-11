@@ -3,10 +3,12 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
+import { EventService } from '../services/event.service';
 
 const router = Router();
 const reservationService = new ReservationService();
 const tournamentService = new TournamentService();
+const eventService = new EventService();
 
 // Clubs gérés par l'utilisateur connecté (pour le gating UX du back-office).
 router.get('/clubs', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -103,6 +105,12 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
 // Inscriptions tournois du joueur connecté.
 router.get('/tournaments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await tournamentService.listUserRegistrations(req.user!.id)); }
+  catch (err) { next(err); }
+});
+
+// Inscriptions actives du joueur aux animations (tous clubs).
+router.get('/events', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.listUserRegistrations(req.user!.id)); }
   catch (err) { next(err); }
 });
 

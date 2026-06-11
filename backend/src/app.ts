@@ -9,6 +9,7 @@ import adminRouter from './routes/admin';
 import resourcesRouter from './routes/resources';
 import reservationsRouter from './routes/reservations';
 import tournamentsRouter from './routes/tournaments';
+import eventsRouter from './routes/events';
 import platformRouter from './routes/platform';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
@@ -37,6 +38,7 @@ app.use('/api/sports',        sportsRouter);
 app.use('/api/resources',     resourcesRouter);
 app.use('/api/reservations',  reservationsRouter);
 app.use('/api/tournaments',   tournamentsRouter);
+app.use('/api/events',        eventsRouter);
 app.use('/api/platform', authMiddleware, requireSuperAdmin, platformRouter);
 // Admin scopé par club — monté AVANT /api/clubs (plus spécifique).
 app.use('/api/clubs/:clubId/admin', adminRouter);
