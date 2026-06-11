@@ -124,7 +124,7 @@ export class ClubService {
             resources: {
               where: { isActive: true },
               orderBy: { name: 'asc' },
-              select: { id: true, name: true, attributes: true, pricePerHour: true, openHour: true, closeHour: true },
+              select: { id: true, name: true, attributes: true, price: true, openHour: true, closeHour: true },
             },
           },
         },

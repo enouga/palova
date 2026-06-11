@@ -17,8 +17,7 @@ const slot = {
   startTime: '2026-06-16T10:00:00.000Z',
   endTime: '2026-06-16T11:30:00.000Z',
   available: true,
-  pricePerHour: '25',
-  totalPrice: '37.50',
+  price: '25',
   offPeak: false,
 };
 
@@ -26,7 +25,7 @@ function renderModal(props: Partial<React.ComponentProps<typeof BookingModal>> =
   return render(
     <ThemeProvider>
       <BookingModal
-        slot={slot} resourceId="court-2" pricePerHour="25" duration={90}
+        slot={slot} resourceId="court-2" price="25" duration={90}
         token="abc" timezone="Europe/Paris"
         onClose={jest.fn()} onConfirmed={jest.fn()} {...props}
       />

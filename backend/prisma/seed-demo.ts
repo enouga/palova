@@ -110,7 +110,7 @@ async function main() {
         update: { name: `Terrain ${n}` },
         create: {
           id: `${cdef.slug}-court-${n}`, clubId: club.id, clubSportId: clubSport.id,
-          name: `Terrain ${n}`, attributes: { surface, format }, pricePerHour: n <= 3 ? 25 : 18,
+          name: `Terrain ${n}`, attributes: { surface, format }, price: n <= 3 ? 25 : 18,
         },
       });
     }

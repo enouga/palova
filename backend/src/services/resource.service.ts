@@ -6,8 +6,8 @@ interface CreateResourceParams {
   clubSportId: string;
   name: string;
   attributes?: Prisma.InputJsonValue;
-  pricePerHour: number;
-  offPeakPricePerHour?: number | null;
+  price: number;
+  offPeakPrice?: number | null;
   openHour?: number;
   closeHour?: number;
   slotStepMin?: number | null;
@@ -16,8 +16,8 @@ interface CreateResourceParams {
 interface UpdateResourceParams {
   name?: string;
   attributes?: Prisma.InputJsonValue;
-  pricePerHour?: number;
-  offPeakPricePerHour?: number | null;
+  price?: number;
+  offPeakPrice?: number | null;
   openHour?: number;
   closeHour?: number;
   slotStepMin?: number | null;
@@ -65,7 +65,7 @@ export class ResourceService {
       where: { clubId },
       select: {
         id: true, name: true, attributes: true, isActive: true,
-        pricePerHour: true, offPeakPricePerHour: true, openHour: true, closeHour: true, slotStepMin: true,
+        price: true, offPeakPrice: true, openHour: true, closeHour: true, slotStepMin: true,
         clubSport: { select: { id: true, slotStepMin: true, durationsMin: true, sport: { select: { key: true, name: true, resourceNoun: true, defaultSlotStepMin: true, defaultDurationsMin: true } } } },
       },
     });
@@ -107,8 +107,8 @@ export class ResourceService {
 
     const openHour = params.openHour ?? 8;
     const closeHour = params.closeHour ?? 22;
-    validateHoursAndPrice(openHour, closeHour, params.pricePerHour);
-    validateOffPeak(params.offPeakPricePerHour);
+    validateHoursAndPrice(openHour, closeHour, params.price);
+    validateOffPeak(params.offPeakPrice);
     validateSlotStep(params.slotStepMin);
 
     // Nouveau terrain ajouté en fin de liste (sortOrder = nombre actuel).
@@ -120,8 +120,8 @@ export class ResourceService {
         clubSportId: params.clubSportId,
         name,
         attributes: { ...((params.attributes as Record<string, unknown>) ?? {}), sortOrder } as Prisma.InputJsonValue,
-        pricePerHour: params.pricePerHour,
-        offPeakPricePerHour: params.offPeakPricePerHour ?? null,
+        price: params.price,
+        offPeakPrice: params.offPeakPrice ?? null,
         openHour,
         closeHour,
         slotStepMin: params.slotStepMin ?? null,
@@ -137,9 +137,9 @@ export class ResourceService {
 
     const openHour = params.openHour ?? resource.openHour;
     const closeHour = params.closeHour ?? resource.closeHour;
-    const price = params.pricePerHour ?? Number(resource.pricePerHour);
+    const price = params.price ?? Number(resource.price);
     validateHoursAndPrice(openHour, closeHour, price);
-    validateOffPeak(params.offPeakPricePerHour);
+    validateOffPeak(params.offPeakPrice);
     validateSlotStep(params.slotStepMin);
 
     if (params.name !== undefined && !params.name.trim()) throw new Error('VALIDATION_ERROR');
@@ -149,8 +149,8 @@ export class ResourceService {
       data: {
         ...(params.name !== undefined ? { name: params.name.trim() } : {}),
         ...(params.attributes !== undefined ? { attributes: params.attributes } : {}),
-        ...(params.pricePerHour !== undefined ? { pricePerHour: params.pricePerHour } : {}),
-        ...(params.offPeakPricePerHour !== undefined ? { offPeakPricePerHour: params.offPeakPricePerHour } : {}),
+        ...(params.price !== undefined ? { price: params.price } : {}),
+        ...(params.offPeakPrice !== undefined ? { offPeakPrice: params.offPeakPrice } : {}),
         ...(params.openHour !== undefined ? { openHour: params.openHour } : {}),
         ...(params.closeHour !== undefined ? { closeHour: params.closeHour } : {}),
         ...(params.slotStepMin !== undefined ? { slotStepMin: params.slotStepMin } : {}),
@@ -170,7 +170,7 @@ export class ResourceService {
     const resource = await prisma.resource.findUnique({
       where: { id: resourceId },
       select: {
-        id: true, name: true, attributes: true, pricePerHour: true, offPeakPricePerHour: true, openHour: true, closeHour: true, isActive: true,
+        id: true, name: true, attributes: true, price: true, offPeakPrice: true, openHour: true, closeHour: true, isActive: true,
         club: { select: { slug: true, name: true, timezone: true, status: true, accentColor: true } },
         clubSport: { select: { durationsMin: true, sport: { select: { name: true, resourceNoun: true, defaultDurationsMin: true } } } },
       },

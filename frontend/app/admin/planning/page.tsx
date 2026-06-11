@@ -397,7 +397,7 @@ export default function AdminPlanningPage() {
                     <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: SINGLE_COLOR }}>Single</span>
                   )}
                 </span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}>{Number(r.pricePerHour)}€/h</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}>{Number(r.price)}€ / créneau</span>
               </div>
             ))}
 

@@ -15,8 +15,7 @@ const mockSlot: TimeSlot = {
   startTime: '2026-06-15T06:00:00.000Z',
   endTime:   '2026-06-15T07:00:00.000Z',
   available: true,
-  pricePerHour: '25',
-  totalPrice: '25.00',
+  price: '25',
   offPeak: false,
 };
 
@@ -33,7 +32,7 @@ async function openPending(packages: MemberPackage[]) {
       <BookingModal
         slot={mockSlot}
         resourceId="court-1"
-        pricePerHour="25"
+        price="25"
         duration={60}
         token="jwt-token"
         packages={packages}

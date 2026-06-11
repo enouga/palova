@@ -54,7 +54,7 @@ describe('ClubHouse', () => {
     const future = new Date(Date.now() + 2 * 3600e3).toISOString();
     mocked.getClubAvailability.mockResolvedValue([{
       resource: { id: 'court-1', name: 'Terrain 1' },
-      slots: [{ startTime: future, endTime: future, available: true, pricePerHour: '25', offPeak: false }],
+      slots: [{ startTime: future, endTime: future, available: true, price: '25', offPeak: false }],
     }] as never);
     wrap();
     expect(await screen.findByText(/À saisir aujourd/)).toBeInTheDocument();

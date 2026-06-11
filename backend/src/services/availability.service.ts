@@ -1,15 +1,14 @@
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
-import { effectiveRate, proratedTariffCents, classifySlot, OffPeakHours } from './pricing';
+import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 
 export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
-  pricePerHour: string; // tarif €/h à l'heure de début (affichage ; le vrai prix est totalPrice)
-  totalPrice: string;   // prix du créneau au prorata des minutes pleines/creuses
-  offPeak: boolean;     // true si le créneau est ENTIÈREMENT en heures creuses
+  price: string;    // prix du créneau (tarif creux si entièrement en heures creuses)
+  offPeak: boolean; // true si le créneau est ENTIÈREMENT en heures creuses
 }
 
 const HOLD_EXPIRY_MINUTES = 10;
@@ -25,16 +24,16 @@ export class AvailabilityService {
       select: {
         openHour: true,
         closeHour: true,
-        pricePerHour: true,
-        offPeakPricePerHour: true,
+        price: true,
+        offPeakPrice: true,
         club: { select: { timezone: true, offPeakHours: true } },
       },
     });
 
     const tz = resource.club.timezone;
     const peak = resource.club.offPeakHours as OffPeakHours | null;
-    const basePrice = Number(resource.pricePerHour);
-    const offPrice = resource.offPeakPricePerHour != null ? Number(resource.offPeakPricePerHour) : null;
+    const basePrice = Number(resource.price);
+    const offPrice = resource.offPeakPrice != null ? Number(resource.offPeakPrice) : null;
 
     // Ouverture/fermeture exprimées en heure LOCALE du club, converties en instants UTC.
     const dayStartLocal = DateTime.fromISO(date, { zone: tz }).startOf('day');
@@ -68,9 +67,7 @@ export class AvailabilityService {
         (r) => r.startTime < slotEnd && r.endTime > slotStart,
       );
 
-      const local = cursor.setZone(tz);
-      const { rate } = effectiveRate(peak, local.weekday, local.hour, basePrice, offPrice, local.minute);
-      const totalCents = proratedTariffCents(
+      const priceCents = slotPriceCents(
         peak, slotStart, slotEnd, tz,
         Math.round(basePrice * 100),
         offPrice != null ? Math.round(offPrice * 100) : null,
@@ -80,8 +77,7 @@ export class AvailabilityService {
         startTime: cursor.toISO()!,
         endTime: cursor.plus({ minutes: durationMinutes }).toISO()!,
         available: !hasConflict,
-        pricePerHour: String(rate),
-        totalPrice: (totalCents / 100).toFixed(2),
+        price: (priceCents / 100).toFixed(2),
         offPeak: classifySlot(peak, slotStart, slotEnd, tz) === 'OFF_PEAK',
       });
 
@@ -98,7 +94,7 @@ export class AvailabilityService {
     const resources = (await prisma.resource.findMany({
       where: { clubId, isActive: true },
       select: {
-        id: true, name: true, attributes: true, pricePerHour: true, offPeakPricePerHour: true,
+        id: true, name: true, attributes: true, price: true, offPeakPrice: true,
         clubSport: { select: { id: true, sport: { select: { key: true, name: true } } } },
       },
     })).sort(bySortOrder);
@@ -107,7 +103,7 @@ export class AvailabilityService {
     for (const r of resources) {
       result.push({
         resource: {
-          id: r.id, name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour, offPeakPricePerHour: r.offPeakPricePerHour,
+          id: r.id, name: r.name, attributes: r.attributes, price: r.price, offPeakPrice: r.offPeakPrice,
           sport: r.clubSport.sport, clubSportId: r.clubSport.id,
         },
         slots: await this.getAvailableSlots(r.id, date, durationMinutes),

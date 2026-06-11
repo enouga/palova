@@ -347,7 +347,7 @@ export interface Resource {
   id: string;
   name: string;
   attributes: { surface?: string } & Record<string, unknown>;
-  pricePerHour: string;
+  price: string;
   openHour: number;
   closeHour: number;
 }
@@ -424,8 +424,8 @@ export interface PublicResource {
   id: string;
   name: string;
   attributes: { surface?: string } & Record<string, unknown>;
-  pricePerHour: string;
-  offPeakPricePerHour: string | null;
+  price: string;
+  offPeakPrice: string | null;
   openHour: number;
   closeHour: number;
   club: { slug: string; name: string; timezone: string; status: string; accentColor: string };
@@ -436,9 +436,8 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
-  pricePerHour: string; // tarif €/h à l'heure de début (affichage ; le vrai prix est totalPrice)
-  totalPrice: string;   // prix du créneau au prorata des minutes pleines/creuses
-  offPeak: boolean;     // true si le créneau est ENTIÈREMENT en heures creuses
+  price: string;    // prix du créneau (tarif creux si entièrement en heures creuses)
+  offPeak: boolean; // true si le créneau est ENTIÈREMENT en heures creuses
 }
 
 export interface ClubAvailability {
@@ -446,8 +445,8 @@ export interface ClubAvailability {
     id: string;
     name: string;
     attributes: { surface?: string; format?: string } & Record<string, unknown>;
-    pricePerHour: string;
-    offPeakPricePerHour: string | null;
+    price: string;
+    offPeakPrice: string | null;
     sport: { key: string; name: string };
     clubSportId: string;
   };
@@ -559,8 +558,8 @@ export interface AdminResource {
   name: string;
   attributes: { surface?: string; format?: string } & Record<string, unknown>;
   isActive: boolean;
-  pricePerHour: string;
-  offPeakPricePerHour: string | null;
+  price: string;
+  offPeakPrice: string | null;
   openHour: number;
   closeHour: number;
   slotStepMin: number | null;
@@ -571,8 +570,8 @@ export interface CreateResourceBody {
   clubSportId: string;
   name: string;
   attributes?: Record<string, unknown>;
-  pricePerHour: number;
-  offPeakPricePerHour?: number | null;
+  price: number;
+  offPeakPrice?: number | null;
   openHour?: number;
   closeHour?: number;
   slotStepMin?: number | null;

@@ -3,7 +3,7 @@ import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { SSEService } from './sse.service';
-import { proratedTariffCents, classifySlot, OffPeakHours } from './pricing';
+import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
 
@@ -117,8 +117,8 @@ export class ReservationService {
       const resource = await prisma.resource.findUniqueOrThrow({
         where: { id: resourceId },
         select: {
-          pricePerHour: true,
-          offPeakPricePerHour: true,
+          price: true,
+          offPeakPrice: true,
           clubId: true,
           club: { select: { timezone: true, offPeakHours: true, publicBookingDays: true, memberBookingDays: true, bookingQuotas: true } },
         },
@@ -146,12 +146,12 @@ export class ReservationService {
         throw new Error('SLOT_NOT_AVAILABLE');
       }
 
-      // Prix au prorata des minutes pleines/creuses (un créneau peut être à cheval).
-      const priceCents = proratedTariffCents(
+      // Prix du créneau (tarif creux ssi entièrement en heures creuses).
+      const priceCents = slotPriceCents(
         resource.club.offPeakHours as OffPeakHours | null,
         startTime, endTime, resource.club.timezone,
-        Math.round(Number(resource.pricePerHour) * 100),
-        resource.offPeakPricePerHour != null ? Math.round(Number(resource.offPeakPricePerHour) * 100) : null,
+        Math.round(Number(resource.price) * 100),
+        resource.offPeakPrice != null ? Math.round(Number(resource.offPeakPrice) * 100) : null,
       );
       const totalPrice = new Prisma.Decimal(priceCents).div(100);
 
@@ -294,7 +294,7 @@ export class ReservationService {
       where: { id: resourceId },
       select: {
         clubId: true, openHour: true, closeHour: true,
-        pricePerHour: true, offPeakPricePerHour: true,
+        price: true, offPeakPrice: true,
         club: { select: { timezone: true, offPeakHours: true, publicBookingDays: true, memberBookingDays: true, bookingQuotas: true } },
       },
     });
@@ -323,12 +323,12 @@ export class ReservationService {
     }
 
     try {
-      // Prix au prorata des minutes pleines/creuses du nouveau créneau.
-      const priceCents = proratedTariffCents(
+      // Prix du nouveau créneau (tarif creux ssi entièrement en heures creuses).
+      const priceCents = slotPriceCents(
         resource.club.offPeakHours as OffPeakHours | null,
         startTime, endTime, resource.club.timezone,
-        Math.round(Number(resource.pricePerHour) * 100),
-        resource.offPeakPricePerHour != null ? Math.round(Number(resource.offPeakPricePerHour) * 100) : null,
+        Math.round(Number(resource.price) * 100),
+        resource.offPeakPrice != null ? Math.round(Number(resource.offPeakPrice) * 100) : null,
       );
       const totalPrice = new Prisma.Decimal(priceCents).div(100);
 
@@ -586,7 +586,7 @@ export class ReservationService {
       where,
       orderBy: { startTime: 'asc' },
       include: {
-        resource: { select: { id: true, name: true, pricePerHour: true, offPeakPricePerHour: true } },
+        resource: { select: { id: true, name: true, price: true, offPeakPrice: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
           select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true },
@@ -595,7 +595,7 @@ export class ReservationService {
       },
     });
 
-    // Dû par résa = prix, sinon tarif du terrain au prorata (COURT), sinon 0 —
+    // Dû par résa = prix, sinon prix du créneau au tarif du terrain (COURT), sinon 0 —
     // exposé en `dueAmount` : le frontend (planning, caisse) ne recalcule plus.
     const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
     let totalC = 0, paidC = 0, outstandingC = 0;
@@ -605,11 +605,11 @@ export class ReservationService {
       let dueC = cents(r.totalPrice);
       if (dueC <= 0) {
         dueC = r.type === 'COURT'
-          ? proratedTariffCents(
+          ? slotPriceCents(
               club.offPeakHours as OffPeakHours | null,
               r.startTime, r.endTime, club.timezone,
-              cents(r.resource.pricePerHour),
-              r.resource.offPeakPricePerHour != null ? cents(r.resource.offPeakPricePerHour) : null,
+              cents(r.resource.price),
+              r.resource.offPeakPrice != null ? cents(r.resource.offPeakPrice) : null,
             )
           : 0;
       }
@@ -660,7 +660,7 @@ export class ReservationService {
       include: {
         resource: {
           select: {
-            clubId: true, pricePerHour: true, offPeakPricePerHour: true,
+            clubId: true, price: true, offPeakPrice: true,
             club: { select: { offPeakHours: true, timezone: true } },
           },
         },
@@ -673,16 +673,16 @@ export class ReservationService {
     const method = (methods.includes(params.method ?? '') ? params.method : 'CASH') as
       'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
 
-    // Montant dû en centimes : prix de la résa, sinon tarif du terrain au
-    // prorata pleines/creuses pour un créneau COURT.
+    // Montant dû en centimes : prix de la résa, sinon prix du créneau au tarif
+    // du terrain (creux ssi entièrement en heures creuses) pour un créneau COURT.
     const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
     let dueCents = Math.round(num(reservation.totalPrice) * 100);
     if (dueCents <= 0 && reservation.type === 'COURT') {
-      dueCents = proratedTariffCents(
+      dueCents = slotPriceCents(
         reservation.resource.club.offPeakHours as OffPeakHours | null,
         reservation.startTime, reservation.endTime, reservation.resource.club.timezone,
-        Math.round(num(reservation.resource.pricePerHour) * 100),
-        reservation.resource.offPeakPricePerHour != null ? Math.round(num(reservation.resource.offPeakPricePerHour) * 100) : null,
+        Math.round(num(reservation.resource.price) * 100),
+        reservation.resource.offPeakPrice != null ? Math.round(num(reservation.resource.offPeakPrice) * 100) : null,
       );
     }
     const amountCents = Math.round(params.amount * 100);

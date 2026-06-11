@@ -52,14 +52,19 @@ describe('fmtEuros', () => {
 });
 
 describe('tariffCents', () => {
+  // Prix AU CRÉNEAU : tarif creux ssi le créneau est entièrement en heures creuses,
+  // la durée n'entre pas dans le prix (miroir de slotPriceCents backend).
   // 2026-06-11 est un jeudi (weekday 4) ; 14:00Z = 16h à Paris. Creuses 8h-17h le jeudi.
   const off = { 4: [{ start: 8, end: 17 }] };
 
-  it('heures creuses : tarif réduit', () => {
+  it('créneau entièrement creux : tarif réduit', () => {
     expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T15:00:00Z', TZ, off, '52', '30')).toBe(3000);
   });
-  it('heures pleines : plein tarif × durée (18h-19h30 → 1,5 h)', () => {
-    expect(tariffCents('2026-06-11T16:00:00Z', '2026-06-11T17:30:00Z', TZ, off, '52', '30')).toBe(7800);
+  it('heures pleines : plein tarif, durée sans effet (18h-19h30)', () => {
+    expect(tariffCents('2026-06-11T16:00:00Z', '2026-06-11T17:30:00Z', TZ, off, '52', '30')).toBe(5200);
+  });
+  it('à cheval creuses/pleines (16h-18h) → plein tarif', () => {
+    expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T16:00:00Z', TZ, off, '52', '30')).toBe(5200);
   });
   it('pas de plages configurées → toujours plein tarif', () => {
     expect(tariffCents('2026-06-11T14:00:00Z', '2026-06-11T15:00:00Z', TZ, null, '52', '30')).toBe(5200);
@@ -73,13 +78,13 @@ describe('tariffCents', () => {
     expect(tariffCents('2026-06-11T11:00:00Z', '2026-06-11T12:00:00Z', TZ, split, '52', '30')).toBe(5200);  // 13h locale
     expect(tariffCents('2026-06-11T13:00:00Z', '2026-06-11T14:00:00Z', TZ, split, '52', '30')).toBe(3000);  // 15h locale
   });
-  it('précision à la minute : 9h30 creux, 9h15 plein', () => {
+  it('précision à la minute : 9h30 creux, 9h15 à cheval → plein', () => {
     // Jeudi (weekday 4), creuses 9h30–12h00.
     const offMin = { 4: [{ start: 9, startMin: 30, end: 12, endMin: 0 }] };
-    // 2026-06-11T07:30Z = 9h30 Paris → borne basse incluse → creux
+    // 2026-06-11T07:30Z = 9h30 Paris → borne basse incluse → créneau creux
     expect(tariffCents('2026-06-11T07:30:00Z', '2026-06-11T08:30:00Z', TZ, offMin, '52', '30')).toBe(3000);
-    // 2026-06-11T07:15Z = 9h15 Paris → 15 min pleines puis 45 min creuses (prorata)
-    expect(tariffCents('2026-06-11T07:15:00Z', '2026-06-11T08:15:00Z', TZ, offMin, '52', '30')).toBe(3550);
+    // 2026-06-11T07:15Z = 9h15 Paris → 15 min pleines avant 9h30 → plein tarif
+    expect(tariffCents('2026-06-11T07:15:00Z', '2026-06-11T08:15:00Z', TZ, offMin, '52', '30')).toBe(5200);
     // 2026-06-11T10:00Z = 12h00 Paris → borne haute exclue → plein
     expect(tariffCents('2026-06-11T10:00:00Z', '2026-06-11T11:00:00Z', TZ, offMin, '52', '30')).toBe(5200);
   });
@@ -88,27 +93,25 @@ describe('tariffCents', () => {
     expect(tariffCents('2026-06-14T10:00:00Z', '2026-06-14T11:00:00Z', TZ, { 7: [{ start: 13, end: 24 }] }, '52', '30')).toBe(5200);
   });
 
-  // Prorata — vecteurs PARTAGÉS avec backend/src/services/__tests__/pricing.test.ts (anti-drift).
-  // Lundi 8 juin 2026 à Paris (UTC+2) ; creuses lundi 9h-12h et 14h-17h ; 25/18 €/h.
-  describe('prorata creuses/pleines (miroir backend)', () => {
+  // Vecteurs PARTAGÉS avec backend/src/services/__tests__/pricing.test.ts (anti-drift).
+  // Lundi 8 juin 2026 à Paris (UTC+2) ; creuses lundi 9h-12h et 14h-17h ; créneau 25 € / creux 18 €.
+  describe('classe du créneau (miroir backend slotPriceCents)', () => {
     const OFF = { 1: [{ start: 9, end: 12 }, { start: 14, end: 17 }] };
-    it('à cheval 16h-18h : 1h creuse + 1h pleine = 43 €', () => {
-      expect(tariffCents('2026-06-08T14:00:00Z', '2026-06-08T16:00:00Z', TZ, OFF, '25', '18')).toBe(4300);
+    it('entièrement creux 9h-11h → 18 €, peu importe la durée', () => {
+      expect(tariffCents('2026-06-08T07:00:00Z', '2026-06-08T09:00:00Z', TZ, OFF, '25', '18')).toBe(1800);
+      expect(tariffCents('2026-06-08T07:00:00Z', '2026-06-08T08:00:00Z', TZ, OFF, '25', '18')).toBe(1800);
     });
-    it('multi-plages 11h30-14h30 : 1h creuse + 2h pleines = 68 €', () => {
-      expect(tariffCents('2026-06-08T09:30:00Z', '2026-06-08T12:30:00Z', TZ, OFF, '25', '18')).toBe(6800);
+    it('à cheval 16h-18h → plein tarif 25 €', () => {
+      expect(tariffCents('2026-06-08T14:00:00Z', '2026-06-08T16:00:00Z', TZ, OFF, '25', '18')).toBe(2500);
     });
-    it('arrondi final unique sur taux impairs : 16h-17h30 à 25,50/17,33 €/h = 30,08 €', () => {
-      expect(tariffCents('2026-06-08T14:00:00Z', '2026-06-08T15:30:00Z', TZ, OFF, '25.50', '17.33')).toBe(3008);
-    });
-    it('franchissement de minuit : lundi 23h → mardi 1h (creuses lundi 22h-24h)', () => {
-      expect(tariffCents('2026-06-08T21:00:00Z', '2026-06-08T23:00:00Z', TZ, { 1: [{ start: 22, end: 24 }] }, '25', '18')).toBe(4300);
+    it('franchissement de minuit : lundi 23h → mardi 1h (creuses lundi 22h-24h) → à cheval → plein', () => {
+      expect(tariffCents('2026-06-08T21:00:00Z', '2026-06-08T23:00:00Z', TZ, { 1: [{ start: 22, end: 24 }] }, '25', '18')).toBe(2500);
     });
   });
 });
 
 describe('dueCents', () => {
-  const courtRes = { pricePerHour: '52', offPeakPricePerHour: '30' };
+  const courtRes = { price: '52', offPeakPrice: '30' };
   const off = { 4: [{ start: 8, end: 17 }] };
 
   it('prix de la résa quand il existe', () => {

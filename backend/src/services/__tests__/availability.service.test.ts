@@ -5,13 +5,13 @@ import { AvailabilityService } from '../availability.service';
 // Ressource padel 8h–22h, fuseau du club par défaut Europe/Paris, pas de 30 min.
 function mockResource(
   timezone = 'Europe/Paris',
-  opts: { pricePerHour?: number; offPeakPricePerHour?: number | null; offPeakHours?: unknown } = {},
+  opts: { price?: number; offPeakPrice?: number | null; offPeakHours?: unknown } = {},
 ) {
   prismaMock.resource.findUniqueOrThrow.mockResolvedValue({
     openHour: 8,
     closeHour: 22,
-    pricePerHour: opts.pricePerHour ?? 25,
-    offPeakPricePerHour: opts.offPeakPricePerHour ?? null,
+    price: opts.price ?? 25,
+    offPeakPrice: opts.offPeakPrice ?? null,
     club: { timezone, offPeakHours: opts.offPeakHours ?? null },
     clubSport: { slotStepMin: null, sport: { defaultSlotStepMin: 30 } },
   } as any);
@@ -85,34 +85,34 @@ describe('AvailabilityService.getAvailableSlots', () => {
 
   it('applique le tarif heures creuses dans les plages configurées', async () => {
     // 2025-06-15 = dimanche (weekday Luxon 7). Heures creuses ce jour : 8h–18h.
-    mockResource('Europe/Paris', { pricePerHour: 25, offPeakPricePerHour: 18, offPeakHours: { 7: [{ start: 8, end: 18 }] } });
+    mockResource('Europe/Paris', { price: 25, offPeakPrice: 18, offPeakHours: { 7: [{ start: 8, end: 18 }] } });
     prismaMock.reservation.findMany.mockResolvedValue([]);
 
     const slots = await service.getAvailableSlots('court-1', '2025-06-15', 60);
 
     const morning = slots.find((s) => s.startTime === '2025-06-15T08:00:00.000Z'); // 10h Paris → creux
     expect(morning?.offPeak).toBe(true);
-    expect(morning?.pricePerHour).toBe('18');
+    expect(morning?.price).toBe('18.00');
 
     const evening = slots.find((s) => s.startTime === '2025-06-15T17:00:00.000Z'); // 19h Paris → plein
     expect(evening?.offPeak).toBe(false);
-    expect(evening?.pricePerHour).toBe('25');
+    expect(evening?.price).toBe('25.00');
   });
 
-  it('totalPrice au prorata pour un créneau à cheval creuses/pleines', async () => {
-    // Dimanche, creuses 8h–18h, 25/18 €/h, créneaux de 90 min.
-    mockResource('Europe/Paris', { pricePerHour: 25, offPeakPricePerHour: 18, offPeakHours: { 7: [{ start: 8, end: 18 }] } });
+  it('prix du créneau indépendant de la durée ; à cheval creuses/pleines → tarif plein', async () => {
+    // Dimanche, creuses 8h–18h, 25 € le créneau plein / 18 € le créneau creux, créneaux de 90 min.
+    mockResource('Europe/Paris', { price: 25, offPeakPrice: 18, offPeakHours: { 7: [{ start: 8, end: 18 }] } });
     prismaMock.reservation.findMany.mockResolvedValue([]);
 
     const slots = await service.getAvailableSlots('court-1', '2025-06-15', 90);
 
     const full = slots.find((s) => s.startTime === '2025-06-15T06:00:00.000Z'); // 8h-9h30 Paris → tout creux
-    expect(full?.totalPrice).toBe('27.00'); // 18 × 1,5
+    expect(full?.price).toBe('18.00'); // tarif creux, même à 1h30
     expect(full?.offPeak).toBe(true);
 
     const straddle = slots.find((s) => s.startTime === '2025-06-15T15:00:00.000Z'); // 17h-18h30 Paris
-    expect(straddle?.totalPrice).toBe('30.50'); // 1h creuse + 30 min pleines
-    expect(straddle?.offPeak).toBe(false); // à cheval → pas « creux »
+    expect(straddle?.price).toBe('25.00'); // à cheval → tarif plein
+    expect(straddle?.offPeak).toBe(false);
   });
 
   it('respecte le fuseau horaire du club (America/New_York)', async () => {

@@ -54,17 +54,17 @@ async function main() {
 
   // 4. Ressources (anciens "terrains")
   const resources = [
-    { id: 'court-1', name: 'Terrain 1', attributes: { surface: 'indoor',  format: 'double' }, pricePerHour: 25 },
-    { id: 'court-2', name: 'Terrain 2', attributes: { surface: 'indoor',  format: 'double' }, pricePerHour: 25 },
-    { id: 'court-3', name: 'Terrain 3', attributes: { surface: 'outdoor', format: 'double' }, pricePerHour: 20 },
-    { id: 'court-4', name: 'Terrain 4', attributes: { surface: 'indoor',  format: 'single' }, pricePerHour: 18 },
-    { id: 'court-5', name: 'Terrain 5', attributes: { surface: 'outdoor', format: 'single' }, pricePerHour: 16 },
+    { id: 'court-1', name: 'Terrain 1', attributes: { surface: 'indoor',  format: 'double' }, price: 25 },
+    { id: 'court-2', name: 'Terrain 2', attributes: { surface: 'indoor',  format: 'double' }, price: 25 },
+    { id: 'court-3', name: 'Terrain 3', attributes: { surface: 'outdoor', format: 'double' }, price: 20 },
+    { id: 'court-4', name: 'Terrain 4', attributes: { surface: 'indoor',  format: 'single' }, price: 18 },
+    { id: 'court-5', name: 'Terrain 5', attributes: { surface: 'outdoor', format: 'single' }, price: 16 },
   ];
   for (const r of resources) {
     await prisma.resource.upsert({
       where: { id: r.id },
-      update: { name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour },
-      create: { id: r.id, clubId: club.id, clubSportId: clubSport.id, name: r.name, attributes: r.attributes, pricePerHour: r.pricePerHour },
+      update: { name: r.name, attributes: r.attributes, price: r.price },
+      create: { id: r.id, clubId: club.id, clubSportId: clubSport.id, name: r.name, attributes: r.attributes, price: r.price },
     });
   }
 

@@ -12,12 +12,12 @@ describe('ResourceService', () => {
       prismaMock.resource.create.mockResolvedValue({ id: 'r1' } as any);
 
       const res = await service.createResource({
-        clubId: 'club-demo', clubSportId: 'cs-1', name: 'Terrain 4', pricePerHour: 30,
+        clubId: 'club-demo', clubSportId: 'cs-1', name: 'Terrain 4', price: 30,
       });
 
       expect(prismaMock.resource.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({
-          clubId: 'club-demo', clubSportId: 'cs-1', name: 'Terrain 4', pricePerHour: 30, openHour: 8, closeHour: 22,
+          clubId: 'club-demo', clubSportId: 'cs-1', name: 'Terrain 4', price: 30, openHour: 8, closeHour: 22,
         }),
       }));
       expect(res.id).toBe('r1');
@@ -26,19 +26,19 @@ describe('ResourceService', () => {
     it('rejette CLUB_SPORT_NOT_FOUND si le clubSport appartient à un autre club (isolation)', async () => {
       prismaMock.clubSport.findUnique.mockResolvedValue({ clubId: 'autre-club' } as any);
 
-      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-x', name: 'T', pricePerHour: 30 }))
+      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-x', name: 'T', price: 30 }))
         .rejects.toThrow('CLUB_SPORT_NOT_FOUND');
       expect(prismaMock.resource.create).not.toHaveBeenCalled();
     });
 
-    it('rejette VALIDATION_ERROR si pricePerHour <= 0', async () => {
+    it('rejette VALIDATION_ERROR si price <= 0', async () => {
       prismaMock.clubSport.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
-      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-1', name: 'T4', pricePerHour: 0 }))
+      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-1', name: 'T4', price: 0 }))
         .rejects.toThrow('VALIDATION_ERROR');
     });
 
     it('rejette VALIDATION_ERROR si name vide', async () => {
-      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-1', name: '   ', pricePerHour: 30 }))
+      await expect(service.createResource({ clubId: 'club-demo', clubSportId: 'cs-1', name: '   ', price: 30 }))
         .rejects.toThrow('VALIDATION_ERROR');
     });
   });
@@ -46,24 +46,24 @@ describe('ResourceService', () => {
   describe('updateResource (isolation multi-tenant)', () => {
     it('rejette RESOURCE_NOT_FOUND si la ressource appartient à un autre club', async () => {
       prismaMock.resource.findUnique.mockResolvedValue({
-        id: 'r1', clubId: 'autre-club', openHour: 8, closeHour: 22, pricePerHour: 25,
+        id: 'r1', clubId: 'autre-club', openHour: 8, closeHour: 22, price: 25,
       } as any);
 
-      await expect(service.updateResource('r1', 'club-demo', { pricePerHour: 30 }))
+      await expect(service.updateResource('r1', 'club-demo', { price: 30 }))
         .rejects.toThrow('RESOURCE_NOT_FOUND');
       expect(prismaMock.resource.update).not.toHaveBeenCalled();
     });
 
     it('met à jour le tarif (validation sur horaires existants mergés)', async () => {
       prismaMock.resource.findUnique.mockResolvedValue({
-        id: 'r1', clubId: 'club-demo', openHour: 8, closeHour: 22, pricePerHour: 25,
+        id: 'r1', clubId: 'club-demo', openHour: 8, closeHour: 22, price: 25,
       } as any);
-      prismaMock.resource.update.mockResolvedValue({ id: 'r1', pricePerHour: 28 } as any);
+      prismaMock.resource.update.mockResolvedValue({ id: 'r1', price: 28 } as any);
 
-      await service.updateResource('r1', 'club-demo', { pricePerHour: 28 });
+      await service.updateResource('r1', 'club-demo', { price: 28 });
 
       expect(prismaMock.resource.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'r1' }, data: { pricePerHour: 28 },
+        where: { id: 'r1' }, data: { price: 28 },
       }));
     });
   });

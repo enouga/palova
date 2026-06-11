@@ -30,8 +30,8 @@ const club = {
 } as never;
 
 const availability = [{
-  resource: { id: 'court-1', name: 'Terrain 1', attributes: {}, pricePerHour: '25', offPeakPricePerHour: null, sport: { key: 'padel', name: 'Padel' }, clubSportId: 'cs1' },
-  slots: [{ startTime: start, endTime: start, available: true, pricePerHour: '25', offPeak: false }],
+  resource: { id: 'court-1', name: 'Terrain 1', attributes: {}, price: '25', offPeakPrice: null, sport: { key: 'padel', name: 'Padel' }, clubSportId: 'cs1' },
+  slots: [{ startTime: start, endTime: start, available: true, price: '25', offPeak: false }],
 }];
 
 describe('ClubReserve — lien profond', () => {
@@ -50,7 +50,7 @@ describe('ClubReserve — lien profond', () => {
   it('créneau pris entre-temps → page normale, sans modale ni erreur', async () => {
     mocked.getClubAvailability.mockResolvedValue([{
       ...availability[0],
-      slots: [{ startTime: start, endTime: start, available: false, pricePerHour: '25', offPeak: false }],
+      slots: [{ startTime: start, endTime: start, available: false, price: '25', offPeak: false }],
     }] as never);
     window.history.pushState({}, '', `/reserver?resource=court-1&start=${encodeURIComponent(start)}`);
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);

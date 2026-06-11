@@ -1,6 +1,9 @@
 import { DateTime } from 'luxon';
 
-// Tarification heures pleines / creuses.
+// Tarification au CRÉNEAU, heures pleines / creuses.
+// Le prix d'une ressource (Resource.price) est le prix d'une réservation, quelle
+// que soit sa durée. Le tarif creux (Resource.offPeakPrice) s'applique ssi le
+// créneau est ENTIÈREMENT en heures creuses (classifySlot).
 // offPeakHours = plages d'heures CREUSES par jour de semaine (clé = weekday Luxon
 // 1=lundi..7=dimanche), plusieurs plages possibles par jour, précision à la minute.
 // Jour non configuré (ou rien de configuré) → tout en heures pleines.
@@ -12,28 +15,7 @@ function rangeMinutes(r: OffPeakRange): { s: number; e: number } {
   return { s: r.start * 60 + (r.startMin ?? 0), e: r.end * 60 + (r.endMin ?? 0) };
 }
 
-/** true si (weekday, hour, minute) tombe dans une plage d'heures CREUSES. minute=0 par défaut. */
-export function isOffPeakHour(off: OffPeakHours | null | undefined, weekday: number, hour: number, minute = 0): boolean {
-  const ranges = off?.[weekday];
-  if (!ranges) return false;
-  const t = hour * 60 + minute;
-  return ranges.some((r) => { const { s, e } = rangeMinutes(r); return t >= s && t < e; });
-}
-
-/** €/h effectif pour un créneau commençant à (weekday, hour[, minute]) en heure locale du club. */
-export function effectiveRate(
-  off: OffPeakHours | null | undefined,
-  weekday: number,
-  hour: number,
-  pricePerHour: number,
-  offPeakPricePerHour: number | null,
-  minute = 0,
-): { rate: number; offPeak: boolean } {
-  if (isOffPeakHour(off, weekday, hour, minute)) return { rate: offPeakPricePerHour ?? pricePerHour, offPeak: true };
-  return { rate: pricePerHour, offPeak: false };
-}
-
-// ----------------------------------------------------------------- Prorata
+// ------------------------------------------------------- Classe d'un créneau
 // Un créneau peut chevaucher des plages creuses et pleines : on le découpe en
 // segments par un walker qui avance en minutes RÉELLES et relit l'heure locale
 // à chaque borne — minuit et le changement de jour sont gérés gratuitement.
@@ -70,27 +52,7 @@ export function splitOffPeakMinutes(
   return { offPeakMin, peakMin };
 }
 
-/**
- * Tarif au prorata en CENTIMES : minutes pleines × tarif plein + minutes
- * creuses × tarif creux (repli plein si absent), un seul arrondi final —
- * déterministe et identique au miroir frontend.
- */
-export function proratedTariffCents(
-  off: OffPeakHours | null | undefined,
-  start: Date,
-  end: Date,
-  tz: string,
-  priceCentsPerHour: number,
-  offPeakCentsPerHour: number | null,
-): number {
-  if (offPeakCentsPerHour == null) {
-    return Math.round((priceCentsPerHour * (end.getTime() - start.getTime())) / 3_600_000);
-  }
-  const { offPeakMin, peakMin } = splitOffPeakMinutes(off, start, end, tz);
-  return Math.round((peakMin * priceCentsPerHour + offPeakMin * offPeakCentsPerHour) / 60);
-}
-
-/** Classe d'un créneau pour les quotas : CREUX ssi 100 % des minutes en creuses. */
+/** Classe d'un créneau (tarif et quotas) : CREUX ssi 100 % des minutes en creuses. */
 export function classifySlot(
   off: OffPeakHours | null | undefined,
   start: Date,
@@ -99,4 +61,21 @@ export function classifySlot(
 ): 'PEAK' | 'OFF_PEAK' {
   const { peakMin } = splitOffPeakMinutes(off, start, end, tz);
   return peakMin === 0 ? 'OFF_PEAK' : 'PEAK';
+}
+
+/**
+ * Prix d'un créneau en CENTIMES : tarif creux si le créneau est entièrement en
+ * heures creuses (et qu'un tarif creux existe), sinon tarif plein. La durée du
+ * créneau n'entre pas dans le prix.
+ */
+export function slotPriceCents(
+  off: OffPeakHours | null | undefined,
+  start: Date,
+  end: Date,
+  tz: string,
+  priceCents: number,
+  offPeakCents: number | null,
+): number {
+  if (offPeakCents == null) return priceCents;
+  return classifySlot(off, start, end, tz) === 'OFF_PEAK' ? offPeakCents : priceCents;
 }

@@ -79,23 +79,22 @@ function splitOffPeakMinutes(
 }
 
 /**
- * Tarif du terrain pour un créneau, en centimes, au PRORATA des minutes pleines
- * et creuses (un seul arrondi final — miroir de `proratedTariffCents` backend).
+ * Prix du terrain pour un créneau, en centimes : tarif creux si le créneau est
+ * ENTIÈREMENT en heures creuses (et qu'un tarif creux existe), sinon tarif
+ * plein. La durée n'entre pas dans le prix — miroir de `slotPriceCents` backend.
  */
 export function tariffCents(
   startISO: string,
   endISO: string,
   tz: string,
   off: OffPeakHours | null | undefined,
-  pricePerHour: string,
-  offPeakPricePerHour: string | null,
+  price: string,
+  offPeakPrice: string | null,
 ): number {
-  const startMs = new Date(startISO).getTime();
-  const endMs = new Date(endISO).getTime();
-  const priceCents = toCents(pricePerHour);
-  if (offPeakPricePerHour == null) return Math.round((priceCents * (endMs - startMs)) / 3_600_000);
-  const { offPeakMin, peakMin } = splitOffPeakMinutes(off, startMs, endMs, tz);
-  return Math.round((peakMin * priceCents + offPeakMin * toCents(offPeakPricePerHour)) / 60);
+  const priceCents = toCents(price);
+  if (offPeakPrice == null) return priceCents;
+  const { peakMin } = splitOffPeakMinutes(off, new Date(startISO).getTime(), new Date(endISO).getTime(), tz);
+  return peakMin === 0 ? toCents(offPeakPrice) : priceCents;
 }
 
 /**
@@ -107,7 +106,7 @@ export function tariffCents(
  */
 export function dueCents(
   rv: { type: ReservationType; totalPrice: string; startTime: string; endTime: string; dueAmount?: string },
-  resource: { pricePerHour: string; offPeakPricePerHour: string | null } | undefined,
+  resource: { price: string; offPeakPrice: string | null } | undefined,
   off: OffPeakHours | null | undefined,
   tz: string,
 ): number {
@@ -115,7 +114,7 @@ export function dueCents(
   const total = toCents(rv.totalPrice);
   if (total > 0) return total;
   if (rv.type !== 'COURT' || !resource) return 0;
-  return tariffCents(rv.startTime, rv.endTime, tz, off, resource.pricePerHour, resource.offPeakPricePerHour);
+  return tariffCents(rv.startTime, rv.endTime, tz, off, resource.price, resource.offPeakPrice);
 }
 
 export interface QuickAmount {

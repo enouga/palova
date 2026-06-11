@@ -10,7 +10,7 @@ import { Icon } from '@/components/ui/Icon';
 interface BookingModalProps {
   slot: TimeSlot;
   resourceId: string;
-  pricePerHour: string;
+  price: string;
   duration: number;
   token: string;
   timezone?: string;
@@ -57,7 +57,7 @@ const MOVE_ERRORS: Record<string, string> = {
 };
 
 export default function BookingModal({
-  slot, resourceId, pricePerHour, duration, token, timezone, moveReservationId, packages = [], onClose, onConfirmed,
+  slot, resourceId, price, duration, token, timezone, moveReservationId, packages = [], onClose, onConfirmed,
 }: BookingModalProps) {
   const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
@@ -66,11 +66,9 @@ export default function BookingModal({
   const [errorMsg, setErrorMsg]       = useState('');
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = régler au club
 
-  // Prix réel du créneau : prorata pleines/creuses calculé par le backend
-  // (slot.totalPrice) ; repli tarif horaire × durée pour les anciens slots.
-  const totalCents = slot.totalPrice != null
-    ? Math.round(Number(slot.totalPrice) * 100)
-    : Math.round(Number(pricePerHour) * (duration / 60) * 100);
+  // Prix du créneau calculé par le backend (slot.price : tarif creux ssi
+  // entièrement en heures creuses) ; repli sur le prix du terrain.
+  const totalCents = Math.round(Number(slot.price ?? price) * 100);
   const totalEuros = totalCents / 100;
   const totalPrice = totalCents % 100 === 0 ? String(totalCents / 100) : (totalCents / 100).toFixed(2).replace('.', ',');
   const durLabel = durationLabel(duration);
@@ -154,7 +152,7 @@ export default function BookingModal({
           <>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 52, lineHeight: 1, color: th.text, letterSpacing: -1 }}>{totalPrice}€</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durLabel} · {Number(pricePerHour)}€/h</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durLabel}{slot.offPeak ? ' · heures creuses' : ''}</span>
             </div>
             <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0' }}>

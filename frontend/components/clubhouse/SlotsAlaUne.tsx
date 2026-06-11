@@ -22,7 +22,7 @@ export function SlotsAlaUne({ slots, timezone }: { slots: UpcomingSlot[]; timezo
           <div key={`${s.resourceId}-${s.slot.startTime}`} style={{ background: th.surface2, borderRadius: 10, padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
               <strong>{s.resourceName}</strong> · {formatHour(s.slot.startTime, timezone)}
-              <span style={{ color: th.textMute, fontSize: 12.5 }}> · {Number(s.slot.pricePerHour)} €/h</span>
+              <span style={{ color: th.textMute, fontSize: 12.5 }}> · {Number(s.slot.price)} €</span>
             </span>
             <Link href={`/reserver?resource=${s.resourceId}&start=${encodeURIComponent(s.slot.startTime)}`}
               style={{ background: th.accent, color: th.onAccent, borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>

@@ -2,7 +2,7 @@ import { pickUpcomingSlots, tournamentPlacesLabel, todayISO } from '../lib/clubh
 import { ClubAvailability, Tournament } from '../lib/api';
 
 const slot = (startTime: string, available = true) =>
-  ({ startTime, endTime: startTime, available, pricePerHour: '25', offPeak: false });
+  ({ startTime, endTime: startTime, available, price: '25', offPeak: false });
 const court = (id: string, name: string, slots: ReturnType<typeof slot>[]) =>
   ({ resource: { id, name }, slots }) as unknown as ClubAvailability;
 const NOW = new Date('2026-06-10T12:00:00Z');

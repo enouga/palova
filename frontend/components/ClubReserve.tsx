@@ -127,7 +127,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     if (!deepSlot || loadingA || !token) return;
     const res = avail.find((a) => a.resource.id === deepSlot.resourceId);
     const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
-    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.pricePerHour, slot });
+    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.price, slot });
     setDeepSlot(null);
   }, [deepSlot, loadingA, avail, token]);
 
@@ -216,8 +216,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
                               {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
                               <span style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                                <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.pricePerHour)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}>/h</span></span>
-                                {resource.offPeakPricePerHour && <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.accentWarm }}>{Number(resource.offPeakPricePerHour)}€/h en heures creuses</span>}
+                                <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.price)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}> / créneau</span></span>
+                                {resource.offPeakPrice && <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.accentWarm }}>{Number(resource.offPeakPrice)}€ en heures creuses</span>}
                               </span>
                             </div>
                             {slots.length === 0 ? (
@@ -225,7 +225,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                                 {slots.map((s) => s.available ? (
-                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.pricePerHour, s)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
@@ -268,7 +268,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                         </div>
                         <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, color: th.text }}>{r.name}</span>
-                          <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, color: th.text }}>{Number(r.pricePerHour)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}> /h</span></span>
+                          <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, color: th.text }}>{Number(r.price)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}> / créneau</span></span>
                         </div>
                       </div>
                     </Link>
@@ -284,7 +284,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         <BookingModal
           slot={booking.slot}
           resourceId={booking.resourceId}
-          pricePerHour={booking.price}
+          price={booking.price}
           duration={duration}
           token={token ?? ''}
           timezone={club.timezone}

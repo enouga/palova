@@ -185,8 +185,8 @@ model Resource {
   name         String
   attributes   Json     @default("{}") // ex { "surface": "indoor" }
   isActive     Boolean  @default(true) @map("is_active")
-  pricePerHour Decimal  @map("price_per_hour") @db.Decimal(10, 2)
-  offPeakPricePerHour Decimal? @map("off_peak_price_per_hour") @db.Decimal(10, 2) // tarif heures creuses ; null = pas de remise (= pricePerHour)
+  price        Decimal  @db.Decimal(10, 2) // prix du CRÉNEAU (la réservation), quelle que soit sa durée — pas un tarif horaire
+  offPeakPrice Decimal? @map("off_peak_price") @db.Decimal(10, 2) // prix d'un créneau ENTIÈREMENT en heures creuses ; null = pas de remise (= price)
   openHour     Int      @default(8) @map("open_hour")
   closeHour    Int      @default(22) @map("close_hour")
   slotStepMin  Int?     @map("slot_step_min") // pas des créneaux (multiple de 15) ; null = repli sport/club

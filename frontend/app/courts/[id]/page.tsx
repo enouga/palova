@@ -161,7 +161,7 @@ function CourtBooking() {
         <BookingModal
           slot={selectedSlot}
           resourceId={resourceId}
-          pricePerHour={selectedSlot?.pricePerHour ?? resource?.pricePerHour ?? '0'}
+          price={selectedSlot?.price ?? resource?.price ?? '0'}
           duration={duration}
           token={token ?? ''}
           timezone={tz}

@@ -37,8 +37,8 @@ const club = {
 } as never;
 
 const availability = [{
-  resource: { id: 'court-1', name: 'Terrain 1', attributes: {}, pricePerHour: '25', offPeakPricePerHour: null, sport: { key: 'padel', name: 'Padel' }, clubSportId: 'cs1' },
-  slots: [{ startTime: startISO, endTime: endISO, available: true, pricePerHour: '25', offPeak: false }],
+  resource: { id: 'court-1', name: 'Terrain 1', attributes: {}, price: '25', offPeakPrice: null, sport: { key: 'padel', name: 'Padel' }, clubSportId: 'cs1' },
+  slots: [{ startTime: startISO, endTime: endISO, available: true, price: '25', offPeak: false }],
 }];
 
 const myReservation = {
