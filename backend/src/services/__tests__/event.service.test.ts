@@ -205,3 +205,56 @@ describe('EventService lectures', () => {
     expect(out).toHaveLength(1);
   });
 });
+
+describe('EventService admin', () => {
+  let service: EventService;
+  beforeEach(() => { service = new EventService(); });
+
+  const validInput = {
+    name: 'Mêlée du vendredi', kind: 'MELEE' as const,
+    startTime: FUTURE.toISOString(), registrationDeadline: FUTURE.toISOString(),
+    capacity: 12, price: 10, memberOnly: true,
+  };
+
+  it('createEvent : crée avec les champs normalisés', async () => {
+    prismaMock.clubEvent.create.mockResolvedValue({ id: 'e1' } as any);
+    await service.createEvent('club-demo', validInput);
+    expect(prismaMock.clubEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubId: 'club-demo', name: 'Mêlée du vendredi', kind: 'MELEE', capacity: 12, memberOnly: true }),
+    }));
+  });
+
+  it('createEvent : refuse un kind inconnu', async () => {
+    await expect(service.createEvent('club-demo', { ...validInput, kind: 'KARAOKE' as never }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('createEvent : refuse capacity < 1 et price < 0', async () => {
+    await expect(service.createEvent('club-demo', { ...validInput, capacity: 0 })).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.createEvent('club-demo', { ...validInput, price: -1 })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('updateEvent : refuse un event d un autre club', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue(null as any);
+    await expect(service.updateEvent('e1', 'autre-club', { name: 'X' })).rejects.toThrow('EVENT_NOT_FOUND');
+  });
+
+  it('deleteEvent : refuse s il reste des inscriptions actives', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.eventRegistration.count.mockResolvedValue(3 as any);
+    await expect(service.deleteEvent('e1', 'club-demo')).rejects.toThrow('HAS_REGISTRATIONS');
+  });
+
+  it('adminRemoveRegistration : annule et promeut sous verrou', async () => {
+    prismaMock.eventRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED' } as any)  // appartenance au club
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED' } as any)  // relecture sous verrou
+      .mockResolvedValueOnce(null as any);                              // pas de WAITLISTED
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+
+    const out = await service.adminRemoveRegistration('e1', 'r1', 'club-demo');
+    expect(out.status).toBe('CANCELLED');
+  });
+});
