@@ -3,7 +3,16 @@
 > Objectif : mettre toute l'app en ligne (frontend Next + backend Express + Postgres + Redis) sur **une seule machine**, avec le domaine `palova.fr` et **les sous-domaines clubs `*.palova.fr`**, HTTPS automatique.
 > Coût : **~3,79 €/mois** (Hetzner CX22). Effort 1ʳᵉ fois : **~30-45 min** (dont attente DNS/build).
 
----
+
+## pour déployer
+
+# git clone https://github.com/enouga/palova.git
+# ssh -i "C:\Users\e.nougayrede\OneDrive - BAYARD PRESSE\Projet\CleSSH\id_ed25519" -o UserKnownHostsFile=NUL -o StrictHostKeyChecking=accept-new root@167.233.41.155
+# on se connecter a la vm Hetzner
+ssh -i "C:\Users\e.nougayrede\OneDrive - BAYARD PRESSE\Projet\CleSSH\id_ed25519" root@167.233.41.155
+cd palova
+bash deploy/setup-vm.sh
+
 
 ## Vue d'ensemble
 
