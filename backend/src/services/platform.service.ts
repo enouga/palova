@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
-import { slugify } from './club.service';
+import { slugify, RESERVED_SLUGS } from './club.service';
 
 export interface CreateClubByPlatformParams {
   club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
@@ -40,6 +40,7 @@ export class PlatformService {
           include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
         },
         _count: { select: { clubMemberships: true, resources: true } },
+        slugAliases: { select: { slug: true }, orderBy: { createdAt: 'asc' } },
       },
     });
     return clubs.map((c) => ({
@@ -51,6 +52,7 @@ export class PlatformService {
       createdAt: c.createdAt,
       owners: c.members.map((m) => m.user),
       counts: { adherents: c._count.clubMemberships, resources: c._count.resources },
+      aliases: c.slugAliases.map((a) => a.slug),
     }));
   }
 
@@ -68,6 +70,37 @@ export class PlatformService {
     }
   }
 
+  /**
+   * Change le slug (sous-domaine) d'un club — réservé au super-admin plateforme.
+   * L'ancien slug devient un alias permanent (redirection 308 côté front) réservé à vie.
+   * Le club peut reprendre un de SES anciens alias (swap-back : la ligne d'alias est supprimée).
+   */
+  async changeClubSlug(clubId: string, rawSlug: unknown) {
+    const slug = slugify(typeof rawSlug === 'string' ? rawSlug : '');
+    if (!slug) throw new Error('SLUG_INVALID');
+    if (RESERVED_SLUGS.has(slug)) throw new Error('SLUG_RESERVED');
+
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { id: true, slug: true, name: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+    if (club.slug === slug) return { id: club.id, slug: club.slug, name: club.name }; // no-op
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const current = await tx.club.findUnique({ where: { slug }, select: { id: true } });
+        if (current) throw new Error('SLUG_TAKEN'); // slug actuel d'un autre club
+        const alias = await tx.clubSlugAlias.findUnique({ where: { slug }, select: { clubId: true } });
+        if (alias && alias.clubId !== clubId) throw new Error('SLUG_TAKEN'); // alias réservé par un autre club
+        if (alias) await tx.clubSlugAlias.delete({ where: { slug } }); // swap-back : le club reprend son ancien alias
+        await tx.clubSlugAlias.create({ data: { slug: club.slug, clubId } }); // l'ancien slug devient alias permanent
+        return tx.club.update({ where: { id: clubId }, data: { slug }, select: { id: true, slug: true, name: true } });
+      });
+    } catch (err) {
+      // Course concurrente : violation d'unicité (slug ou alias créé entre-temps).
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw new Error('SLUG_TAKEN');
+      throw err;
+    }
+  }
+
   /** Crée un club ET son gérant OWNER (le super-admin n'est pas le gérant). */
   async createClubWithOwner(params: CreateClubByPlatformParams) {
     const name = (params.club?.name ?? '').trim();
@@ -80,6 +113,9 @@ export class PlatformService {
 
     const slug = slugify(name);
     if (!slug) throw new Error('VALIDATION_ERROR');
+    if (RESERVED_SLUGS.has(slug)) throw new Error('SLUG_RESERVED');
+    const reservedAlias = await prisma.clubSlugAlias.findUnique({ where: { slug }, select: { slug: true } });
+    if (reservedAlias) throw new Error('SLUG_TAKEN');
 
     const existing = await prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
