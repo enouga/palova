@@ -55,9 +55,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(`${url.protocol}//${ROOT}${portSuffix(host)}${url.pathname}`);
   }
   if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
-  // Injecte le slug pour le layout serveur.
+  // Injecte le slug + le chemin complet pour le layout serveur (résolution d'alias → redirection 308).
   const headers = new Headers(request.headers);
   headers.set('x-club-slug', slug);
+  headers.set('x-club-path', url.pathname + url.search);
   return NextResponse.next({ request: { headers } });
 }
 

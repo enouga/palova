@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { permanentRedirect } from 'next/navigation';
 import { Geist, Geist_Mono, Righteous } from 'next/font/google';
 import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
+import { api } from '@/lib/api';
 
 // Geist sur tout le site : Geist Sans (titres + UI) et Geist Mono (données).
 const geistSans = Geist({
@@ -43,7 +45,26 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const slug = (await headers()).get('x-club-slug');
+  const h = await headers();
+  const slug = h.get('x-club-slug');
+
+  // Hôte club : si le slug est un ANCIEN alias, redirection permanente (308) vers le
+  // sous-domaine actuel en conservant chemin + query. En cas d'échec de l'API (club
+  // inconnu, backend indisponible), on laisse la page se rendre comme aujourd'hui.
+  let movedTo: string | null = null;
+  if (slug) {
+    try {
+      const r = await api.resolveClubSlug(slug);
+      if (r.moved && r.slug !== slug) movedTo = r.slug;
+    } catch { /* comportement actuel inchangé */ }
+  }
+  if (movedTo) {
+    const host = h.get('host') || '';
+    const proto = h.get('x-forwarded-proto') || 'http';
+    const path = h.get('x-club-path') || '/';
+    permanentRedirect(`${proto}://${host.replace(/^[^.]+/, movedTo)}${path}`);
+  }
+
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} ${righteous.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
