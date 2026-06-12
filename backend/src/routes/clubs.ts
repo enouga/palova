@@ -20,6 +20,7 @@ const packageService = new PackageService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:    400,
+  SLUG_RESERVED:       400,
   SLUG_TAKEN:          409,
   CLUB_NOT_FOUND:      404,
   MEMBERSHIP_REQUIRED: 403,
@@ -38,6 +39,14 @@ function asString(v: unknown): string {
   if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
   return '';
 }
+
+// Résolution d'un libellé de sous-domaine : slug actuel ({moved:false}) ou alias historique ({moved:true}).
+// Préfixe `_` : slugify() ne produit jamais d'underscore → aucune collision avec un vrai slug.
+// Déclarée en PREMIER pour ne pas être interceptée par les routes /:slug/*.
+router.get('/_resolve/:slug', async (req: Request, res: Response, next: NextFunction) => {
+  try { res.json(await clubService.resolveSlug(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
 
 // Auto-inscription : crée un club, l'auteur devient OWNER.
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
