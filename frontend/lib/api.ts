@@ -43,6 +43,10 @@ export const api = {
 
   getClub: (slug: string) => request<ClubDetail>(`/api/clubs/${slug}`),
 
+  /** Résout un libellé de sous-domaine (slug actuel ou alias historique). 404 si inconnu. */
+  resolveClubSlug: (slug: string) =>
+    request<{ slug: string; moved: boolean }>(`/api/clubs/_resolve/${slug}`),
+
   getResource: (resourceId: string) => request<PublicResource>(`/api/resources/${resourceId}`),
 
   getAvailability: (resourceId: string, date: string, duration: number) =>
@@ -329,6 +333,11 @@ export const api = {
   platformSetClubStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED', token: string) =>
     request<{ id: string; status: 'ACTIVE' | 'SUSPENDED' }>(`/api/platform/clubs/${id}`, {
       method: 'PATCH', body: JSON.stringify({ status }),
+    }, token),
+
+  platformChangeClubSlug: (id: string, slug: string, token: string) =>
+    request<{ id: string; slug: string; name: string }>(`/api/platform/clubs/${id}/slug`, {
+      method: 'POST', body: JSON.stringify({ slug }),
     }, token),
 
   platformCreateClub: (body: CreateClubByPlatformBody, token: string) =>
@@ -949,6 +958,7 @@ export interface PlatformStats {
 export interface PlatformClub {
   id: string;
   slug: string;
+  aliases: string[];
   name: string;
   city: string | null;
   status: 'ACTIVE' | 'SUSPENDED';
