@@ -211,6 +211,10 @@ model User {
   lastName  String   @map("last_name")
   phone     String?
   sex          Sex?
+  birthDate DateTime? @map("birth_date") @db.Date
+  avatarUrl String?   @map("avatar_url")
+  /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
+  locale    String?   @default("fr")
   emailVerified Boolean @default(false) @map("email_verified")
   isSuperAdmin Boolean @default(false) @map("is_super_admin")
   createdAt    DateTime @default(now()) @map("created_at")

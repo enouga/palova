@@ -1,5 +1,10 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// URL complète d'un fichier servi par le backend (ex. avatarUrl `/uploads/avatars/...`).
+export function assetUrl(path: string | null): string | null {
+  return path ? `${BASE_URL}${path}` : null;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -235,8 +240,24 @@ export const api = {
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
 
-  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null }, token: string) =>
+  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
+
+  // Upload d'avatar en FormData — fetch dédié : request() force Content-Type JSON.
+  uploadMyAvatar: async (file: File, token: string): Promise<MyProfile> => {
+    const form = new FormData();
+    form.append('avatar', file);
+    const res = await fetch(`${BASE_URL}/api/me/avatar`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
 
   // --- Annuaire & adhésion (club courant) ---
   searchClubMembers: (slug: string, q: string, token: string) =>
@@ -807,6 +828,10 @@ export interface MyProfile {
   lastName: string;
   phone: string | null;
   sex: Sex | null;
+  birthDate: string | null;
+  avatarUrl: string | null;
+  locale: string | null;
+  isSuperAdmin: boolean;
 }
 
 export interface ClubMemberSearchResult {

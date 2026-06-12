@@ -6,7 +6,8 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { BackButton, Chip, Segmented, ThemeToggle, LogoutButton } from '@/components/ui/atoms';
+import { BackButton, Chip, Segmented, ThemeToggle } from '@/components/ui/atoms';
+import { ProfileMenu } from '@/components/ProfileMenu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
@@ -99,7 +100,7 @@ export default function MyReservationsPage() {
                   <Icon name="plus" size={16} color={th.onAccent} />Réserver
                 </button>
                 <ThemeToggle />
-                <LogoutButton />
+                <ProfileMenu />
               </div>
             </div>
           </div>

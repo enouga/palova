@@ -18,6 +18,7 @@ jest.mock('../lib/ClubProvider', () => ({
   useClub: () => ({ slug: 'padel-arena', club: { name: 'Padel Arena' } }),
 }));
 jest.mock('../lib/api', () => ({
+  assetUrl: (p: string | null) => p,
   api: {
     getMyReservations: jest.fn(),
     getMyTournaments: jest.fn(),
