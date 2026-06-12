@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isPublicPath } from './lib/authGate';
+import { clubSlugFromHost } from './lib/host';
 
 const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost';
-
-/** Renvoie le slug du club si le host est un sous-domaine club, sinon null (plateforme). */
-function clubSlugFromHost(host: string): string | null {
-  const h = host.split(':')[0];
-  if (h === ROOT || h === `www.${ROOT}` || h === `app.${ROOT}`) return null;
-  if (h.endsWith(`.${ROOT}`)) {
-    const label = h.slice(0, -(ROOT.length + 1)).split('.')[0];
-    if (!label || label === 'www' || label === 'app') return null;
-    return label;
-  }
-  return null; // host inconnu → traité comme plateforme
-}
 
 function portSuffix(host: string): string {
   const i = host.indexOf(':');
@@ -41,7 +30,7 @@ export function proxy(request: NextRequest) {
 
   const host = request.headers.get('host') || '';
   const url = request.nextUrl;
-  const slug = clubSlugFromHost(host);
+  const slug = clubSlugFromHost(host, ROOT);
 
   // Verrou de connexion : sans cookie `token` et hors page publique → /login (même hôte).
   const token = request.cookies.get('token')?.value;
