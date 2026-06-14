@@ -113,6 +113,7 @@ model Sport {
   resourceNoun        String   @default("terrain") @map("resource_noun") // "terrain"|"court"|"table"|"piste"|"baie"
   defaultSlotStepMin  Int      @default(30) @map("default_slot_step_min")
   defaultDurationsMin Int[]    @default([60, 90, 120]) @map("default_durations_min")
+  surfaces            String[] @default([])
   icon                String?
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
