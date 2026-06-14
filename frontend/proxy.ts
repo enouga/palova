@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isPublicPath } from './lib/authGate';
 import { clubSlugFromHost } from './lib/host';
-
-const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost';
+import { ROOT_DOMAINS, rootForHost, CANONICAL_ROOT } from './lib/roots';
 
 function portSuffix(host: string): string {
   const i = host.indexOf(':');
@@ -30,7 +29,10 @@ export function proxy(request: NextRequest) {
 
   const host = request.headers.get('host') || '';
   const url = request.nextUrl;
-  const slug = clubSlugFromHost(host, ROOT);
+  // Racine du domaine effectivement visité (.fr ou .app) : les redirections same-host
+  // doivent rester sur ce domaine, jamais sauter d'un domaine racine à l'autre.
+  const currentRoot = rootForHost(host) || CANONICAL_ROOT;
+  const slug = clubSlugFromHost(host, ROOT_DOMAINS);
 
   // Verrou de connexion : sans cookie `token` et hors page publique → /login (même hôte).
   const token = request.cookies.get('token')?.value;
@@ -44,7 +46,7 @@ export function proxy(request: NextRequest) {
   if (!slug) {
     // HOST PLATEFORME — rétro-compat /c/<slug> → racine du sous-domaine club
     const m = url.pathname.match(/^\/c\/([^/]+)\/?$/);
-    if (m) return NextResponse.redirect(`${url.protocol}//${m[1]}.${ROOT}${portSuffix(host)}/`);
+    if (m) return NextResponse.redirect(`${url.protocol}//${m[1]}.${currentRoot}${portSuffix(host)}/`);
     if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
     // Hôte plateforme : on retire les en-têtes internes (sinon un client peut les forger
     // et déclencher la redirection d'alias du layout — vecteur d'open redirect / cache poisoning).
@@ -57,7 +59,7 @@ export function proxy(request: NextRequest) {
   // HOST CLUB
   // L'annuaire et la création de club n'existent que sur la plateforme.
   if (url.pathname === '/clubs' || url.pathname.startsWith('/clubs/')) {
-    return NextResponse.redirect(`${url.protocol}//${ROOT}${portSuffix(host)}${url.pathname}`);
+    return NextResponse.redirect(`${url.protocol}//${currentRoot}${portSuffix(host)}${url.pathname}`);
   }
   if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
   // Injecte le slug + le chemin complet pour le layout serveur (résolution d'alias → redirection 308).

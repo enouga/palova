@@ -1,9 +1,18 @@
-const COOKIE_DOMAIN = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || 'localhost';
+import { rootForHost } from './roots';
+
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 jours, aligné sur l'expiry JWT
 
+// Domaine du cookie calculé à l'écriture selon l'hôte courant : la session est posée
+// sur la racine du domaine visité (`.palova.fr` OU `.palova.app`) → login indépendant
+// par domaine. localhost / hôte inconnu → pas d'attribut `domain` (cookie hôte-only).
+function cookieDomainAttr(): string {
+  if (typeof window === 'undefined') return '';
+  const root = rootForHost(window.location.host);
+  return root && root !== 'localhost' ? `; domain=.${root}` : '';
+}
+
 function writeCookie(name: string, value: string, maxAge: number) {
-  const domainAttr = COOKIE_DOMAIN === 'localhost' ? '' : `; domain=${COOKIE_DOMAIN}`;
-  document.cookie = `${name}=${encodeURIComponent(value)}${domainAttr}; path=/; SameSite=Lax; max-age=${maxAge}`;
+  document.cookie = `${name}=${encodeURIComponent(value)}${cookieDomainAttr()}; path=/; SameSite=Lax; max-age=${maxAge}`;
 }
 
 export function getCookie(name: string): string | null {

@@ -5,6 +5,7 @@ import { Geist, Geist_Mono, Righteous } from 'next/font/google';
 import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
 import { api } from '@/lib/api';
+import { CANONICAL_ROOT } from '@/lib/roots';
 
 // Geist sur tout le site : Geist Sans (titres + UI) et Geist Mono (données).
 const geistSans = Geist({
@@ -33,10 +34,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // l'icône d'accueil et ne supporte pas le SVG) ; le backend gère le repli Palova.
 // Le <link rel="manifest"> est injecté automatiquement par Next (app/manifest.ts).
 export async function generateMetadata(): Promise<Metadata> {
-  const slug = (await headers()).get('x-club-slug');
+  const h = await headers();
+  const slug = h.get('x-club-slug');
+  // Multi-domaines : canonical SEO des pages club vers la racine canonique (palova.fr),
+  // même chemin. Auto-référencé sur .fr, pointe vers .fr depuis .app (évite le contenu
+  // dupliqué). Renseigné pour les hôtes club (slug + chemin connus via en-têtes du proxy).
+  const path = (h.get('x-club-path') || '/').split('?')[0];
   return {
     title: 'Palova',
     description: 'Réservez votre terrain de padel en quelques secondes',
+    ...(slug ? { alternates: { canonical: `https://${slug}.${CANONICAL_ROOT}${path}` } } : {}),
     icons: {
       icon: '/favicon.svg',
       apple: slug ? `${API_URL}/api/clubs/${slug}/icon/apple-180.png` : '/apple-touch-icon.png',

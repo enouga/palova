@@ -18,12 +18,17 @@ bash deploy/setup-vm.sh
 
 ```
 Internet ──► Caddy (:443, HTTPS auto + wildcard)
-              ├─ palova.fr, www.palova.fr  ──► frontend (Next, :3000)
-              ├─ *.palova.fr (clubs)       ──► frontend (cert à la demande)
-              └─ api.palova.fr             ──► backend (Express, :3001)
-                                                  │
+              ├─ palova.fr,  palova.app  (+ www)  ──► frontend (Next, :3000)
+              ├─ *.palova.fr, *.palova.app (clubs) ──► frontend (cert à la demande)
+              └─ api.palova.fr                     ──► backend (Express, :3001)
+                                                  │      (API partagée par les 2 domaines)
                             postgres (volume)  +  redis (volume)
 ```
+
+> **Multi-domaines** : `palova.fr` **et** `palova.app` servent l'app en parallèle
+> (sessions séparées par domaine — c'est normal, un cookie ne couvre pas deux racines).
+> L'API est **partagée** sur `api.palova.fr` (auth par token Bearer → cross-origin OK),
+> donc **pas** de `api.palova.app`. Domaine canonique (emails, fallback SSR) = `palova.fr`.
 
 Tout tourne via `docker-compose.prod.yml` sur la VM. **Mises à jour** = `bash deploy/deploy.sh` (git pull + rebuild). **Aucun changement de code applicatif** : seulement du packaging (Dockerfiles, compose, Caddyfile) + une mini-route backend `/internal/tls-check` pour valider les certificats à la demande.
 
@@ -57,6 +62,19 @@ Dans la **Zone DNS** OVH de `palova.fr`, on remplace les valeurs Render par l'**
 | **Ajouter** | A | `*` (wildcard) | **IP de la VM** |
 
 > Le `*` couvre tous les sous-domaines clubs (`padel-arena-paris.palova.fr`, etc.). **Ne touche pas** aux entrées mail (MX, SPF, SRV, DKIM…).
+
+### Zone DNS de `palova.app` (second domaine)
+Dans la zone DNS de `palova.app`, créer les mêmes **A records** vers l'**IP de la VM** :
+
+| Action | Type | Sous-domaine | Cible |
+|---|---|---|---|
+| **Ajouter** | A | *(vide = racine)* | **IP de la VM** |
+| **Ajouter** | A | `*` (wildcard) | **IP de la VM** |
+
+> Le `*` couvre `www.palova.app` et tous les clubs `<slug>.palova.app`. **Pas** de record
+> `api` ici (API partagée sur `api.palova.fr`). `.app` est en HSTS-preload → HTTPS
+> obligatoire, mais Caddy sert déjà tout en HTTPS : rien de spécial à faire, juste laisser
+> Caddy émettre le certificat au 1ᵉʳ accès (DNS propagé + ports 80/443 ouverts).
 > ⚠️ Si `api` était un **CNAME** (vers onrender), supprime-le et crée une entrée **A** à la place (on ne peut pas avoir A et CNAME sur le même nom).
 
 ## Étape 3 — Installer Docker sur la VM

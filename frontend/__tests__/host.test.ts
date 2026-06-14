@@ -19,4 +19,23 @@ describe('clubSlugFromHost', () => {
   it('demo.localhost:3000 → demo (dev local)', () => {
     expect(clubSlugFromHost('demo.localhost:3000', 'localhost')).toBe('demo');
   });
+
+  // Multi-domaines : une liste de racines (palova.fr + palova.app) — chaque racine
+  // garde la même sémantique (apex/www/app → plateforme, sous-domaine → slug).
+  describe('liste de racines (palova.fr + palova.app)', () => {
+    const ROOTS = ['palova.fr', 'palova.app'];
+    it.each([
+      ['demo.palova.fr', 'demo'],
+      ['demo.palova.app', 'demo'],
+      ['demo.palova.app:443', 'demo'],
+      ['palova.fr', null],
+      ['palova.app', null],
+      ['www.palova.app', null],
+      ['app.palova.app', null],
+      ['www.demo.palova.app', null],
+      ['autresite.com', null],
+    ] as Array<[string, string | null]>)('host %s → %s', (host, expected) => {
+      expect(clubSlugFromHost(host, ROOTS)).toBe(expected);
+    });
+  });
 });

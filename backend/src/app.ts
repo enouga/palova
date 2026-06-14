@@ -20,13 +20,23 @@ import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
 
 const app = express();
 
-const FRONTEND_ROOT = process.env.FRONTEND_ROOT_DOMAIN || 'localhost';
+// Domaines racines acceptés (multi-domaines, ex. "palova.fr,palova.app"). Repli
+// rétro-compat sur l'ancienne variable singulière, puis localhost (dev).
+function rootDomains(): string[] {
+  const list = (process.env.FRONTEND_ROOT_DOMAINS || '')
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length ? list : [(process.env.FRONTEND_ROOT_DOMAIN || 'localhost').toLowerCase()];
+}
+
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true); // outils non-navigateur / same-origin
     try {
       const host = new URL(origin).hostname;
-      if (host === FRONTEND_ROOT || host.endsWith(`.${FRONTEND_ROOT}`)) return cb(null, true);
+      const roots = rootDomains();
+      if (roots.some((r) => host === r || host.endsWith(`.${r}`))) return cb(null, true);
     } catch { /* origine illisible */ }
     cb(null, false);
   },
@@ -52,15 +62,18 @@ app.use('/api/clubs',         clubsRouter);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // Validation des certificats TLS « à la demande » de Caddy (sous-domaines clubs en prod).
-// Caddy appelle GET /internal/tls-check?domain=<host> ; on n'autorise que palova.fr et ses sous-domaines.
+// Caddy appelle GET /internal/tls-check?domain=<host> ; on n'autorise que nos domaines
+// racines (palova.fr, palova.app, …) et leurs sous-domaines.
 app.get('/internal/tls-check', (req: Request, res: Response) => {
   const domain = String(req.query.domain || '').toLowerCase();
-  const root = (process.env.FRONTEND_ROOT_DOMAIN || 'localhost').toLowerCase();
-  if (domain === root || domain === `www.${root}` || domain === `api.${root}` || domain.endsWith(`.${root}`)) {
-    res.sendStatus(200);
-    return;
-  }
-  res.sendStatus(403);
+  const ok = rootDomains().some(
+    (root) =>
+      domain === root ||
+      domain === `www.${root}` ||
+      domain === `api.${root}` ||
+      domain.endsWith(`.${root}`),
+  );
+  res.sendStatus(ok ? 200 : 403);
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

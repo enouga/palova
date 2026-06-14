@@ -6,8 +6,10 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Btn } from '@/components/ui/atoms';
 import { slugify } from '@/lib/slug';
+import { CANONICAL_ROOT } from '@/lib/roots';
 
-const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost';
+// Aperçu d'URL : on affiche le domaine canonique (multi-domaines → palova.fr).
+const ROOT = CANONICAL_ROOT;
 
 /** Dialog top-sheet de changement d'alias (même langage visuel que ConfirmDialog). */
 function ChangeSlugDialog({ club, onDone, onCancel }: {

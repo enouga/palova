@@ -37,7 +37,8 @@ services:
       DATABASE_URL: postgresql://palovauser:${POSTGRES_PASSWORD}@postgres:5432/palova
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
-      FRONTEND_ROOT_DOMAIN: palova.fr
+      # Multi-domaines : la 1re entrée est la racine CANONIQUE (emails, fallback).
+      FRONTEND_ROOT_DOMAINS: palova.fr,palova.app
       FRONTEND_URL: https://palova.fr
       NODE_ENV: production
       PORT: "3001"
@@ -59,9 +60,11 @@ services:
     build:
       context: ./frontend
       args:
+        # API partagée sur .fr (auth Bearer → cross-origin OK depuis .app).
         NEXT_PUBLIC_API_URL: https://api.palova.fr
-        NEXT_PUBLIC_ROOT_DOMAIN: palova.fr
-        NEXT_PUBLIC_COOKIE_DOMAIN: .palova.fr
+        # Multi-domaines : 1re entrée = racine canonique. Le domaine de cookie est
+        # désormais calculé au runtime selon l'hôte visité (plus de COOKIE_DOMAIN).
+        NEXT_PUBLIC_ROOT_DOMAINS: palova.fr,palova.app
     restart: unless-stopped
     environment:
       NODE_ENV: production
