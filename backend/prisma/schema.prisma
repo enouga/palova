@@ -147,6 +147,10 @@ model Club {
   // UPCOMING = résas à venir simultanées ; WEEKLY = semaine calendaire lun-dim (fuseau club).
   // Limite null = illimité, 0 = bloqué. Une résa compte en creuses ssi 100 % de ses minutes le sont.
   bookingQuotas    Json?      @map("booking_quotas")
+  // Délais (heures avant le début d'une réservation) au-delà desquels le joueur ne
+  // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
+  playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")
+  cancellationCutoffHours Int @default(0) @map("cancellation_cutoff_hours")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
