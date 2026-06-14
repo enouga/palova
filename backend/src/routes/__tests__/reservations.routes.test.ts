@@ -61,3 +61,43 @@ describe('POST /api/reservations/hold (multi-joueurs)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+const token2 = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, SECRET);
+
+describe('GET /api/reservations/:id/players', () => {
+  it('404 si la réservation est introuvable', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/api/reservations/res-1/players').set('Authorization', `Bearer ${token2()}`);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('RESERVATION_NOT_FOUND');
+  });
+
+  it('403 si ce n est pas le propriétaire', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'autre', resource: { attributes: {} }, participants: [],
+    } as any);
+    const res = await request(app).get('/api/reservations/res-1/players').set('Authorization', `Bearer ${token2()}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('UNAUTHORIZED');
+  });
+});
+
+describe('POST /api/reservations/:id/players', () => {
+  it('400 sans memberUserId', async () => {
+    const res = await request(app).post('/api/reservations/res-1/players').set('Authorization', `Bearer ${token2()}`).send({});
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /api/reservations/:id (annulation)', () => {
+  it('409 CANCELLATION_TOO_LATE après le délai', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', resourceId: 'court-1', userId: 'u1', status: 'CONFIRMED',
+      startTime: new Date(Date.now() + 3_600_000), endTime: new Date(Date.now() + 7_200_000),
+      resource: { club: { cancellationCutoffHours: 2 } },
+    } as any);
+    const res = await request(app).delete('/api/reservations/res-1').set('Authorization', `Bearer ${token2()}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('CANCELLATION_TOO_LATE');
+  });
+});

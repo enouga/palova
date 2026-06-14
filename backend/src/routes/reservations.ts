@@ -28,6 +28,12 @@ const ERROR_STATUS: Record<string, number> = {
   TOO_MANY_PLAYERS:         409,
   PARTNER_NOT_MEMBER:       403,
   PARTNER_DUPLICATE:        400,
+  PLAYER_CHANGE_TOO_LATE:   409,
+  CANCELLATION_TOO_LATE:    409,
+  MEMBER_NOT_FOUND:         404,
+  PARTICIPANT_NOT_FOUND:    404,
+  CANNOT_REMOVE_ORGANIZER:  409,
+  RESERVATION_HAS_NO_MEMBER: 409,
 };
 
 function asString(v: unknown): string {
@@ -80,6 +86,29 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, ne
   try {
     const cancelled = await reservationService.cancelReservation(asString(req.params.id), req.user!.id);
     res.json(cancelled);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Joueurs d'une réservation (organisateur uniquement) : lecture.
+router.get('/:id/players', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await reservationService.getOwnReservationPlayers(asString(req.params.id), req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Ajoute un membre du club à sa partie (répartit les parts).
+router.post('/:id/players', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const memberUserId = asString(req.body?.memberUserId);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
+    res.json(await reservationService.addOwnReservationParticipant(asString(req.params.id), req.user!.id, memberUserId));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retire un joueur de sa partie (recalcule les parts).
+router.delete('/:id/players/:participantId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await reservationService.removeOwnReservationParticipant(asString(req.params.id), req.user!.id, asString(req.params.participantId)));
   } catch (err) { handleError(err, res, next); }
 });
 
