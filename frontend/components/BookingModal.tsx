@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { api, TimeSlot, Reservation, MemberPackage } from '@/lib/api';
+import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { durationLabel } from '@/lib/duration';
-import { Btn } from '@/components/ui/atoms';
+import { Btn, Segmented } from '@/components/ui/atoms';
+import { Avatar } from '@/components/ui/Avatar';
+import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { Icon } from '@/components/ui/Icon';
 
 interface BookingModalProps {
@@ -16,6 +18,10 @@ interface BookingModalProps {
   timezone?: string;
   /** Mode déplacement : id de la résa à remplacer — un seul appel atomique, pas de hold. */
   moveReservationId?: string;
+  /** Slug du club — active l'ajout de partenaires (annuaire des membres) hors mode déplacement. */
+  slug?: string;
+  /** Nombre max de joueurs du terrain (single = 2, double = 4) — plafonne les partenaires. */
+  maxPlayers?: number;
   /** Soldes prépayés utilisables du joueur sur ce club (option « payer avec mon carnet »). */
   packages?: MemberPackage[];
   onClose: () => void;
@@ -47,6 +53,9 @@ const BOOKING_ERRORS: Record<string, string> = {
   SLOT_ALREADY_HELD:      "Ce créneau vient d'être pris. Choisissez-en un autre.",
   QUOTA_PEAK_REACHED:     'Vous avez atteint votre nombre maximum de réservations en heures pleines.',
   QUOTA_OFFPEAK_REACHED:  'Vous avez atteint votre nombre maximum de réservations en heures creuses.',
+  TOO_MANY_PLAYERS:       'Trop de joueurs pour ce terrain.',
+  PARTNER_NOT_MEMBER:     "Un partenaire n'est pas membre du club.",
+  PARTNER_DUPLICATE:      'Un partenaire figure en double.',
 };
 
 const MOVE_ERRORS: Record<string, string> = {
@@ -57,7 +66,7 @@ const MOVE_ERRORS: Record<string, string> = {
 };
 
 export default function BookingModal({
-  slot, resourceId, price, duration, token, timezone, moveReservationId, packages = [], onClose, onConfirmed,
+  slot, resourceId, price, duration, token, timezone, moveReservationId, slug, maxPlayers, packages = [], onClose, onConfirmed,
 }: BookingModalProps) {
   const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
@@ -65,12 +74,23 @@ export default function BookingModal({
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = régler au club
+  const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
+  const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
+
+  // Multi-joueurs : ajout de partenaires + partie publique/privée (hors déplacement).
+  const cap = maxPlayers ?? 1;
+  const showPartners = !moveReservationId && !!slug && cap > 1;
+  const nbPlayers = 1 + partners.length;
+  const atCap = nbPlayers >= cap;
+  const spotsLeft = Math.max(0, cap - nbPlayers);
+  const euros = (cents: number) => (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2).replace('.', ','));
 
   // Prix du créneau calculé par le backend (slot.price : tarif creux ssi
   // entièrement en heures creuses) ; repli sur le prix du terrain.
   const totalCents = Math.round(Number(slot.price ?? price) * 100);
   const totalEuros = totalCents / 100;
   const totalPrice = totalCents % 100 === 0 ? String(totalCents / 100) : (totalCents / 100).toFixed(2).replace('.', ',');
+  const perPlayer = euros(Math.floor(totalCents / nbPlayers));
   const durLabel = durationLabel(duration);
 
   useEffect(() => {
@@ -86,7 +106,10 @@ export default function BookingModal({
 
   const handleHold = async () => {
     try {
-      const res = await api.holdSlot({ resourceId, startTime: slot.startTime, endTime: slot.endTime }, token);
+      const res = await api.holdSlot({
+        resourceId, startTime: slot.startTime, endTime: slot.endTime,
+        ...(showPartners ? { partnerUserIds: partners.map((p) => p.id), visibility } : {}),
+      }, token);
       setReservation(res);
       setSecondsLeft(HOLD_SECONDS);
       setPhase('pending');
@@ -160,6 +183,51 @@ export default function BookingModal({
                 <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)}</span>
               </div>
             </div>
+
+            {showPartners && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>
+                  Partenaires <span style={{ color: th.textFaint, fontWeight: 500 }}>· membres du club</span>
+                </div>
+                {partners.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                    {partners.map((p) => (
+                      <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: th.surface2, borderRadius: 999, padding: '4px 10px 4px 4px' }}>
+                        <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={24} />
+                        <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>{p.firstName} {p.lastName}</span>
+                        <button type="button" onClick={() => setPartners((xs) => xs.filter((x) => x.id !== p.id))} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {atCap ? (
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({cap} joueurs).</div>
+                ) : (
+                  <PartnerSearch slug={slug!} token={token} selected={null}
+                    excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
+                    onSelect={(m) => setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]))}
+                    onClear={() => {}} />
+                )}
+
+                <div style={{ marginTop: 14 }}>
+                  <Segmented<'PRIVATE' | 'PUBLIC'> value={visibility} onChange={setVisibility}
+                    options={[{ value: 'PRIVATE', label: 'Partie privée' }, { value: 'PUBLIC', label: 'Partie ouverte' }]} />
+                  <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                    {visibility === 'PUBLIC'
+                      ? `Visible par les membres du club, qui peuvent rejoindre (${spotsLeft} place${spotsLeft > 1 ? 's' : ''} restante${spotsLeft > 1 ? 's' : ''}).`
+                      : 'Visible uniquement par vous et vos partenaires.'}
+                  </div>
+                </div>
+
+                {nbPlayers > 1 && (
+                  <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+                    ≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
               <Icon name="clock" size={15} color={th.textMute} />
               <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>

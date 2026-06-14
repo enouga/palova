@@ -9,7 +9,9 @@ import {
   PlayerAction,
   buildOrganizerEmail,
   buildPlayerEmail,
+  buildMatchJoinEmail,
 } from './templates/emails';
+import { playerCount } from '../utils/courtType';
 
 // Couche d'orchestration : charge les données (hors transaction), construit les emails
 // et les envoie aux bons destinataires. Ces fonctions PEUVENT lever (DB/SMTP) ; les
@@ -233,4 +235,41 @@ export async function notifyEventPromotion(registrationId: string): Promise<void
   const reg = await loadEventRegistration(registrationId);
   if (!reg) return;
   await sendEventPlayerEmail(reg, 'promoted');
+}
+
+// ------------------------------------------------------ Parties ouvertes
+
+/** Prévient l'organisateur (propriétaire de la résa) qu'un joueur a rejoint sa partie ouverte. */
+export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: {
+          name: true, attributes: true,
+          club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        },
+      },
+      participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+    },
+  });
+  if (!resa) return;
+
+  const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
+  const joiner = resa.participants.find((p) => p.userId === joinerUserId)?.user;
+  if (!organizer?.email || !joiner) return;
+
+  const club = resa.resource.club;
+  const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
+  const mail = buildMatchJoinEmail({
+    organizerFirstName: organizer.firstName,
+    joinerName: fullName(joiner),
+    resourceName: resa.resource.name,
+    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
+    clubName: club.name,
+    spotsLeft: Math.max(0, maxPlayers - resa.participants.length),
+    url: clubAppUrl(club.slug, '/parties'),
+    brand: brandOf(club),
+  });
+  await sendMail({ to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text });
 }

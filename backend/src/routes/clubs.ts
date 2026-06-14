@@ -7,6 +7,7 @@ import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
+import { OpenMatchService } from '../services/openMatch.service';
 import { iconService } from '../services/icon.service';
 import { prisma } from '../db/prisma';
 
@@ -18,14 +19,23 @@ const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
+const openMatchService = new OpenMatchService();
 
 const ERROR_STATUS: Record<string, number> = {
-  VALIDATION_ERROR:    400,
-  SLUG_RESERVED:       400,
-  SLUG_TAKEN:          409,
-  CLUB_NOT_FOUND:      404,
-  MEMBERSHIP_REQUIRED: 403,
-  MEMBERSHIP_BLOCKED:  403,
+  VALIDATION_ERROR:      400,
+  SLUG_RESERVED:         400,
+  SLUG_TAKEN:            409,
+  CLUB_NOT_FOUND:        404,
+  MEMBERSHIP_REQUIRED:   403,
+  MEMBERSHIP_BLOCKED:    403,
+  RESERVATION_NOT_FOUND: 404,
+  CLUB_MISMATCH:         403,
+  MATCH_NOT_JOINABLE:    409,
+  MATCH_FULL:            409,
+  MATCH_IN_PAST:         409,
+  ALREADY_JOINED:        409,
+  ORGANIZER_CANNOT_LEAVE: 403,
+  PARTICIPANT_NOT_FOUND: 404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -125,6 +135,22 @@ router.get('/:slug/events', async (req, res, next) => {
 // Recherche de membres du club par nom (réservé aux membres ; pour choisir un coéquipier de tournoi).
 router.get('/:slug/members/search', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubService.searchMembers(asString(req.params.slug), req.user!.id, asString(req.query.q))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Parties ouvertes du club (réservé aux membres) : découverte + rejoindre / quitter.
+router.get('/:slug/open-matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+router.post('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.joinOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.leaveOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 

@@ -162,6 +162,46 @@ export function buildOrganizerEmail(i: OrganizerEmailInput): BuiltEmail {
   return { subject, html, text };
 }
 
+export interface MatchJoinEmailInput {
+  organizerFirstName: string;
+  joinerName: string;
+  resourceName: string;
+  dateLabel: string;
+  clubName: string;
+  spotsLeft: number;
+  url: string;
+  brand: Brand;
+}
+
+/** Email à l'organisateur d'une partie ouverte quand un joueur la rejoint. */
+export function buildMatchJoinEmail(i: MatchJoinEmailInput): BuiltEmail {
+  const subject = `${i.joinerName} a rejoint votre partie`;
+  const heading = 'Un joueur a rejoint votre partie 🎾';
+  const spots = i.spotsLeft <= 0
+    ? 'La partie est désormais complète.'
+    : `Il reste ${i.spotsLeft} place${i.spotsLeft > 1 ? 's' : ''}.`;
+  const intro = `<strong>${escapeHtml(i.joinerName)}</strong> a rejoint votre partie ouverte. ${spots}`;
+  const infoRows: InfoRow[] = [
+    { label: 'Terrain', value: i.resourceName },
+    { label: 'Date', value: i.dateLabel },
+    { label: 'Club', value: i.clubName },
+  ];
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.organizerFirstName)},</p><p style="margin:0;">${intro}</p>`;
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading, introHtml, infoRows,
+    ctaLabel: 'Voir la partie', ctaUrl: i.url,
+  });
+  const text = [
+    `Bonjour ${i.organizerFirstName},`, '',
+    stripTags(intro), '',
+    `Terrain : ${i.resourceName}`,
+    `Date : ${i.dateLabel}`,
+    `Club : ${i.clubName}`, '',
+    `Voir la partie : ${i.url}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 /** Retire les balises HTML pour produire la version texte. */
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '');

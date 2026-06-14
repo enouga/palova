@@ -8,7 +8,9 @@ jest.mock('../lib/api', () => ({
     holdSlot:           jest.fn(),
     confirmReservation: jest.fn(),
     cancelReservation:  jest.fn(),
+    searchClubMembers:  jest.fn(),
   },
+  assetUrl: (u: string | null) => u,
 }));
 
 const mockSlot: TimeSlot = {
@@ -90,5 +92,40 @@ describe('BookingModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
 
     await waitFor(() => expect(screen.getByText(/vient d'être pris/)).toBeInTheDocument());
+  });
+
+  it('partie ouverte : ajoute un partenaire, affiche le prix par joueur et transmet partnerUserIds + visibility', async () => {
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
+
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+
+    // ouvrir l'annuaire des membres et sélectionner un partenaire
+    fireEvent.focus(screen.getByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+
+    // basculer en partie ouverte
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+
+    // récap prix par joueur : 25 € / 2 joueurs = 12,50 €
+    expect(screen.getByText(/12,50\s*€\s*par joueur/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
+    await waitFor(() => expect(api.holdSlot).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'court-1', partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
+      'jwt-token',
+    ));
+  });
+
+  it('sans slug (mode simple), n envoie ni partnerUserIds ni visibility', async () => {
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
+
+    renderModal();
+    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
+
+    await waitFor(() => expect(api.holdSlot).toHaveBeenCalledWith(
+      { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
+      'jwt-token',
+    ));
   });
 });

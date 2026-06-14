@@ -25,6 +25,9 @@ const ERROR_STATUS: Record<string, number> = {
   PACKAGE_NOT_FOUND:        404,
   QUOTA_PEAK_REACHED:       409,
   QUOTA_OFFPEAK_REACHED:    409,
+  TOO_MANY_PLAYERS:         409,
+  PARTNER_NOT_MEMBER:       403,
+  PARTNER_DUPLICATE:        400,
 };
 
 function asString(v: unknown): string {
@@ -42,14 +45,21 @@ const handleError = (err: unknown, res: Response, next: NextFunction) => {
 
 router.post('/hold', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { resourceId, startTime, endTime } = req.body;
+    const { resourceId, startTime, endTime, partnerUserIds, visibility } = req.body;
     if (!resourceId || !startTime || !endTime) {
       return void res.status(400).json({ error: 'resourceId, startTime, endTime requis' });
+    }
+    if (visibility !== undefined && visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (partnerUserIds !== undefined && (!Array.isArray(partnerUserIds) || partnerUserIds.some((id: unknown) => typeof id !== 'string'))) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     }
     const reservation = await reservationService.holdSlot({
       resourceId, userId: req.user!.id,
       startTime: new Date(startTime),
       endTime:   new Date(endTime),
+      partnerUserIds, visibility,
     });
     res.status(201).json(reservation);
   } catch (err) { handleError(err, res, next); }

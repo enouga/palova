@@ -8,7 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { inkOn } from '@/lib/theme';
 import { dayKeyInTz } from '@/lib/calendar';
-import { courtType, courtFormat, SINGLE_COLOR } from '@/lib/courtType';
+import { courtType, courtFormat, SINGLE_COLOR, playerCount } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
 import { Chip, Placeholder, Segmented } from '@/components/ui/atoms';
@@ -51,7 +51,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [duration, setDuration] = useState<number>(defaultDuration(allDurations));
   const [avail, setAvail]       = useState<ClubAvailability[]>([]);
   const [loadingA, setLoadingA] = useState(true);
-  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot } | null>(null);
+  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; format?: string } | null>(null);
   const [confirmed, setConfirmed] = useState<false | 'booked' | 'moved'>(false);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
@@ -127,13 +127,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     if (!deepSlot || loadingA || !token) return;
     const res = avail.find((a) => a.resource.id === deepSlot.resourceId);
     const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
-    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.price, slot });
+    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.price, slot, format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined });
     setDeepSlot(null);
   }, [deepSlot, loadingA, avail, token]);
 
-  const onSlot = (resourceId: string, price: string, slot: TimeSlot) => {
+  const onSlot = (resourceId: string, price: string, slot: TimeSlot, format?: string) => {
     if (!token) { router.push('/login'); return; }
-    setBooking({ resourceId, price, slot });
+    setBooking({ resourceId, price, slot, format });
   };
 
   // Regroupe les terrains (avec dispos) par sport.
@@ -225,7 +225,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                                 {slots.map((s) => s.available ? (
-                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
@@ -289,6 +289,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           token={token ?? ''}
           timezone={club.timezone}
           moveReservationId={moveRes?.id}
+          slug={club.slug}
+          maxPlayers={playerCount(booking.format)}
           packages={moveRes ? [] : myPackages}
           onClose={() => setBooking(null)}
           onConfirmed={() => {

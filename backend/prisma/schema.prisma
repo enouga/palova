@@ -31,6 +31,13 @@ enum ReservationType {
   EVENT
 }
 
+/// Visibilité d'une réservation : privée (organisateur + partenaires invités) ou
+/// publique (« partie ouverte » : visible et rejoignable par les autres membres du club).
+enum ReservationVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -235,6 +242,7 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   reservations    Reservation[]
+  reservationParticipations ReservationParticipant[]
   staffRoles      ClubMember[]
   clubMemberships ClubMembership[]
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
@@ -307,6 +315,7 @@ model Reservation {
   endTime     DateTime          @map("end_time") @db.Timestamptz
   status      ReservationStatus @default(PENDING)
   type        ReservationType   @default(COURT)
+  visibility  ReservationVisibility @default(PRIVATE) // PUBLIC = partie ouverte (rejoignable par les membres du club)
   title       String?
   totalPrice  Decimal           @map("total_price") @db.Decimal(10, 2)
   notes       String?
@@ -314,14 +323,37 @@ model Reservation {
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
-  resource Resource  @relation(fields: [resourceId], references: [id], onDelete: Restrict)
-  user     User?     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  payments Payment[]
+  resource     Resource                 @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  user         User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  participants ReservationParticipant[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
   @@index([userId, startTime]) // comptage des quotas par joueur
+  @@index([visibility, status, startTime]) // liste des parties ouvertes à venir
   @@map("reservations")
+}
+
+/// Joueur associé à une réservation : l'organisateur (isOrganizer) + ses partenaires.
+/// Base du multi-joueurs : partage du montant (share) et parties ouvertes (les membres
+/// rejoignent une résa PUBLIC). Une seule ligne par joueur et par résa (@@unique).
+model ReservationParticipant {
+  id            String   @id @default(cuid())
+  reservationId String   @map("reservation_id")
+  userId        String   @map("user_id")
+  isOrganizer   Boolean  @default(false) @map("is_organizer")
+  share         Decimal  @db.Decimal(10, 2) // part du montant total à régler par ce joueur
+  joinedAt      DateTime @default(now()) @map("joined_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payments    Payment[]
+
+  @@unique([reservationId, userId])
+  @@index([userId])
+  @@index([reservationId])
+  @@map("reservation_participants")
 }
 
 /// Encaissement manuel : sur une réservation (reservationId) OU vente d'un
@@ -330,6 +362,7 @@ model Reservation {
 model Payment {
   id              String         @id @default(cuid())
   reservationId   String?        @map("reservation_id")
+  participantId   String?        @map("participant_id") // paiement attribué à un joueur précis ; null = paiement « résa » global
   clubId          String?        @map("club_id")
   amount          Decimal        @db.Decimal(10, 2)
   method          PaymentMethod  @default(CASH)
@@ -342,11 +375,13 @@ model Payment {
   voucherStatus   VoucherStatus? @map("voucher_status")
   createdAt       DateTime       @default(now()) @map("created_at")
 
-  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  memberPackage MemberPackage? @relation("PackageSale", fields: [memberPackageId], references: [id], onDelete: SetNull)
-  sourcePackage MemberPackage? @relation("PackageConsumption", fields: [sourcePackageId], references: [id], onDelete: SetNull)
+  reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  memberPackage MemberPackage?          @relation("PackageSale", fields: [memberPackageId], references: [id], onDelete: SetNull)
+  sourcePackage MemberPackage?          @relation("PackageConsumption", fields: [sourcePackageId], references: [id], onDelete: SetNull)
 
   @@index([reservationId])
+  @@index([participantId])
   @@index([clubId, createdAt])
   @@map("payments")
 }

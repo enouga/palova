@@ -1,4 +1,4 @@
-import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail } from '../templates/emails';
+import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -67,6 +67,34 @@ describe('buildPlayerEmail', () => {
 
   it('échappe le HTML des intitulés dynamiques', () => {
     const mail = buildPlayerEmail({ ...baseTournament, activityName: 'Open <script>', action: 'confirmed' });
+    expect(mail.html).not.toContain('<script>');
+    expect(mail.html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('buildMatchJoinEmail', () => {
+  const base = {
+    organizerFirstName: 'Léa', joinerName: 'Marc Dupont', resourceName: 'Court 1',
+    dateLabel: 'samedi 12 juillet 2026 à 18h00', clubName: 'Padel Arena', url: 'https://arena.palova.fr/parties', brand,
+  };
+
+  it('annonce le joueur, les places restantes et le lien vers les parties', () => {
+    const mail = buildMatchJoinEmail({ ...base, spotsLeft: 2 });
+    expect(mail.subject).toContain('Marc Dupont');
+    expect(mail.html).toContain('Léa');
+    expect(mail.html).toContain('Court 1');
+    expect(mail.html).toContain('Il reste 2 places');
+    expect(mail.html).toContain('https://arena.palova.fr/parties');
+    expect(mail.text).toContain('https://arena.palova.fr/parties');
+  });
+
+  it('signale une partie complète quand il ne reste plus de place', () => {
+    const mail = buildMatchJoinEmail({ ...base, spotsLeft: 0 });
+    expect(mail.html).toContain('complète');
+  });
+
+  it('échappe le HTML du nom du joueur', () => {
+    const mail = buildMatchJoinEmail({ ...base, joinerName: '<script>x', spotsLeft: 1 });
     expect(mail.html).not.toContain('<script>');
     expect(mail.html).toContain('&lt;script&gt;');
   });
