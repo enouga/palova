@@ -1,16 +1,19 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody } from '@/lib/api';
 import { packageLabel, isUsable, canCover } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
+import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
+import { TimePicker } from '@/components/ui/TimePicker';
+import { DateField } from '@/components/ui/DateField';
 
 const TYPE_META: Record<ReservationType, { label: string; color: string }> = {
   COURT:      { label: 'Terrain',   color: '#5e93da' },
@@ -83,6 +86,7 @@ export default function AdminPlanningPage() {
   const [error, setError]         = useState<string | null>(null);
   const [hidden, setHidden]       = useState<Set<ReservationType>>(new Set());
   const [selected, setSelected]   = useState<ClubReservation | null>(null);
+  const [payParticipantId, setPayParticipantId] = useState<string | null>(null); // encaissement attribué à un joueur (null = résa entière)
   const [payAmount, setPayAmount] = useState('');
   const [voucherOpen, setVoucherOpen]     = useState(false);
   const [voucherRef, setVoucherRef]       = useState('');
@@ -100,8 +104,7 @@ export default function AdminPlanningPage() {
   const [cStart, setCStart]     = useState('18:00');
   const [cEnd, setCEnd]         = useState('19:00');
   const [cTitle, setCTitle]     = useState('');
-  const [cMemberId, setCMemberId] = useState<string | null>(null);
-  const [cMemberQuery, setCMemberQuery] = useState('');
+  const [cMember, setCMember] = useState<Member | null>(null);
   const [cPrice, setCPrice]     = useState('');
 
   const load = useCallback(async () => {
@@ -251,12 +254,15 @@ export default function AdminPlanningPage() {
       setError(null);
       await api.adminAddPayment(clubId, selected.id, {
         amount, method,
+        participantId: payParticipantId ?? undefined,
         voucherRef: method === 'VOUCHER' ? voucherRef.trim() || undefined : undefined,
         voucherIssuer: method === 'VOUCHER' ? voucherIssuer.trim() || undefined : undefined,
       }, token);
-      setSelected(null); await load();
+      setPayParticipantId(null); setSelected(null); await load();
     } catch (e) {
-      setError((e as Error).message === 'PAYMENT_EXCEEDS_DUE' ? 'Le montant dépasse le prix de la réservation.' : (e as Error).message);
+      setError((e as Error).message === 'PAYMENT_EXCEEDS_DUE'
+        ? (payParticipantId ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le prix de la réservation.')
+        : (e as Error).message);
     }
     finally { setBusy(false); }
   };
@@ -264,7 +270,10 @@ export default function AdminPlanningPage() {
   // Solde la résa avec un package du joueur (1 entrée de carnet, ou débit du porte-monnaie).
   const payWithPackage = async (pkg: MemberPackage) => {
     if (!token || !clubId || !selected) return;
-    const remaining = Math.max(0, dueOf(selected) - toCents(selected.paidAmount)) / 100;
+    const activePart = payParticipantId ? selected.participants?.find((p) => p.id === payParticipantId) : null;
+    const remaining = activePart
+      ? toCents(activePart.outstanding) / 100
+      : Math.max(0, dueOf(selected) - toCents(selected.paidAmount)) / 100;
     if (remaining <= 0) { setError('Rien à encaisser.'); return; }
     setBusy(true);
     try {
@@ -273,12 +282,51 @@ export default function AdminPlanningPage() {
         amount: remaining,
         method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
         sourcePackageId: pkg.id,
+        participantId: payParticipantId ?? undefined,
       }, token);
-      setSelected(null); await load();
+      setPayParticipantId(null); setSelected(null); await load();
     } catch (e) {
       setError((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.' : (e as Error).message);
     }
     finally { setBusy(false); }
+  };
+
+  // Associer / changer le joueur de la résa sélectionnée (au comptoir).
+  const assignPlayer = async (m: Member) => {
+    if (!token || !clubId || !selected) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminAssignReservationMember(clubId, selected.id, m.userId, token);
+      setSelected({ ...selected, user: { id: m.userId, firstName: m.firstName, lastName: m.lastName, email: m.email } });
+      const pkgs = await api.adminGetMemberPackages(clubId, m.userId, token).catch(() => []);
+      setSelPackages(pkgs.filter((p) => isUsable(p)));
+      await load();
+    } catch (e) {
+      setError((e as Error).message === 'MEMBER_NOT_FOUND' ? "Ce joueur n'est pas membre actif du club." : (e as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  // Création à la volée + affectation (panneau Encaisser).
+  const createAndAssign = async (body: CreateMemberBody) => {
+    if (!token || !clubId) return { tempPassword: null, existed: false };
+    const r = await api.adminCreateMember(clubId, body, token);
+    const mem = await api.adminGetMembers(clubId, token);
+    setMembers(mem);
+    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
+    if (created) await assignPlayer(created);
+    return r;
+  };
+
+  // Création à la volée + sélection (formulaire de création de résa).
+  const createForResa = async (body: CreateMemberBody) => {
+    if (!token || !clubId) return { tempPassword: null, existed: false };
+    const r = await api.adminCreateMember(clubId, body, token);
+    const mem = await api.adminGetMembers(clubId, token);
+    setMembers(mem);
+    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
+    if (created) setCMember(created);
+    return r;
   };
 
   const openCreate = (prefill?: { resourceId?: string; startHour?: number }) => {
@@ -290,7 +338,7 @@ export default function AdminPlanningPage() {
     setCDate(date);
     setCStart(start);
     setCEnd(endTimeFrom(start, defaultDurOf(rid), resById.get(rid)?.closeHour ?? maxClose));
-    setCTitle(''); setCMemberId(null); setCMemberQuery(''); setCPrice('');
+    setCTitle(''); setCMember(null); setCPrice('');
     setError(null);
     setCreateOpen(true);
   };
@@ -306,7 +354,7 @@ export default function AdminPlanningPage() {
         resourceId: cResourceId, date: cDate, startTime: cStart, endTime: cEnd,
         type: cType,
         title: cTitle.trim() || undefined,
-        memberUserId: cMemberId ?? undefined,
+        memberUserId: cMember?.userId ?? undefined,
         price: cPrice ? Number(cPrice) : undefined,
       }, token);
       setCreateOpen(false);
@@ -314,10 +362,6 @@ export default function AdminPlanningPage() {
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
-
-  const memberMatches = cMemberQuery.trim().length > 0 && !cMemberId
-    ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(cMemberQuery.toLowerCase())).slice(0, 6)
-    : [];
 
   return (
     <div ref={rootRef} style={isFs ? { background: th.bg, padding: '22px 26px', minHeight: '100vh', overflow: 'auto' } : undefined}>
@@ -336,7 +380,7 @@ export default function AdminPlanningPage() {
           <button type="button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Jour précédent" style={arrow}>‹</button>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 17, color: th.text, textTransform: 'capitalize', lineHeight: 1.1 }}>{fmtDay(date)}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ marginTop: 4, border: `1px solid ${th.line}`, background: th.bg, color: th.textMute, borderRadius: 8, padding: '3px 6px', fontFamily: th.fontUI, fontSize: 12 }} />
+            <div style={{ marginTop: 4 }}><DateField value={date} onChange={setDate} size="sm" /></div>
           </div>
           <button type="button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Jour suivant" style={arrow}>›</button>
           {date !== todayISO() && (
@@ -510,17 +554,71 @@ export default function AdminPlanningPage() {
               </div>
             </div>
 
+            {/* joueur rattaché à la résa (associer à l'encaissement) */}
+            {selected.status !== 'CANCELLED' && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 4 }}>Joueur</div>
+                <PlayerPicker
+                  members={members}
+                  value={selected.user ? { firstName: selected.user.firstName, lastName: selected.user.lastName } : null}
+                  onSelect={assignPlayer}
+                  onClear={() => {}}
+                  onCreate={createAndAssign}
+                  placeholder="Rechercher un membre…"
+                />
+              </div>
+            )}
+
             {/* encaissement rapide */}
             {selected.status !== 'CANCELLED' && (() => {
               const players = playersOf(selected);
               const due = dueOf(selected);
-              const maxPayable = Math.max(0, due - toCents(selected.paidAmount));
+              const bills = selected.participants ?? [];
+              const activePart = payParticipantId ? bills.find((p) => p.id === payParticipantId) ?? null : null;
+              const maxPayable = activePart ? toCents(activePart.outstanding) : Math.max(0, due - toCents(selected.paidAmount));
               const amountC = toCents(payAmount);
               const overCap = due > 0 && amountC > maxPayable;
               const cannotPay = busy || amountC <= 0 || overCap;
               const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
               return (
               <div style={{ marginTop: 16 }}>
+                {bills.length > 1 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Par joueur</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {bills.map((p) => {
+                        const rest = toCents(p.outstanding);
+                        const settled = rest <= 0;
+                        const on = payParticipantId === p.id;
+                        return (
+                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: on ? tint(th.text) : th.surface2, border: `1px solid ${on ? th.text : 'transparent'}` }}>
+                            <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
+                              {p.firstName} {p.lastName}{p.isOrganizer ? <span style={{ color: th.textFaint }}> · orga</span> : null}
+                            </span>
+                            <span style={{ fontFamily: th.fontMono, fontSize: 12.5, color: settled ? SETTLED_COLOR : th.textMute }}>
+                              {fmtEuros(toCents(p.paid))} / {fmtEuros(toCents(p.share))}
+                            </span>
+                            {settled ? (
+                              <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: SETTLED_COLOR }}>réglé</span>
+                            ) : (
+                              <button type="button" disabled={busy}
+                                onClick={() => { setPayParticipantId(p.id); setPayAmount(centsToInput(rest)); }}
+                                style={{ border: `1px solid ${th.line}`, background: th.surface, color: th.text, borderRadius: 8, padding: '5px 10px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                                Régler
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {activePart && (
+                      <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.text }}>
+                        Encaissement pour <b>{activePart.firstName} {activePart.lastName}</b> ·{' '}
+                        <button type="button" onClick={() => setPayParticipantId(null)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, textDecoration: 'underline' }}>résa entière</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                   <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
                     <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ border: `1px solid ${overCap ? '#ff7a4d' : th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
@@ -636,45 +734,34 @@ export default function AdminPlanningPage() {
                   {resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </label>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Date
-                <input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
-              </label>
             </div>
 
-            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Début
-                <input type="time" value={cStart} onChange={(e) => setCStart(e.target.value)} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
-              </label>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Fin
-                <input type="time" value={cEnd} onChange={(e) => setCEnd(e.target.value)} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
-              </label>
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 8 }}>Jour &amp; début</div>
+                <TimePicker value={cStart} onChange={setCStart} presets={['08:00', '12:00', '18:00', '20:00']}
+                  leading={<DateField value={cDate} onChange={setCDate} size="sm" />} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 8 }}>Fin</div>
+                <TimePicker value={cEnd} onChange={setCEnd} leading={<div style={{ width: 150 }} aria-hidden="true" />} />
+              </div>
             </div>
 
             <label style={{ marginTop: 12, fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Intitulé (optionnel)
               <input type="text" value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex. Maintenance, Tournoi P100…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
             </label>
 
-            <div style={{ marginTop: 12, position: 'relative' }}>
+            <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: th.textMute, marginBottom: 4 }}>Membre (optionnel)</div>
-              {cMemberId ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px' }}>
-                  <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{cMemberQuery}</span>
-                  <button type="button" onClick={() => { setCMemberId(null); setCMemberQuery(''); }} style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '3px 8px', color: th.textMute, fontSize: 12 }}>Retirer</button>
-                </div>
-              ) : (
-                <input type="text" value={cMemberQuery} onChange={(e) => setCMemberQuery(e.target.value)} placeholder="Rechercher un membre…" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
-              )}
-              {memberMatches.length > 0 && (
-                <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, overflow: 'hidden', boxShadow: th.shadowSoft }}>
-                  {memberMatches.map((m) => (
-                    <button key={m.userId} type="button"
-                      onClick={() => { setCMemberId(m.userId); setCMemberQuery(`${m.firstName} ${m.lastName}`); }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-                      {m.firstName} {m.lastName} <span style={{ color: th.textFaint }}>· {m.email}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <PlayerPicker
+                members={members}
+                value={cMember}
+                onSelect={setCMember}
+                onClear={() => setCMember(null)}
+                onCreate={createForResa}
+                placeholder="Rechercher un membre…"
+              />
             </div>
 
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
