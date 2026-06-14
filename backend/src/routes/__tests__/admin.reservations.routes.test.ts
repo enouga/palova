@@ -53,3 +53,32 @@ describe('POST /api/clubs/:clubId/admin/reservations', () => {
     expect(res.body.error).toBe('SLOT_NOT_AVAILABLE');
   });
 });
+
+describe('PATCH /api/clubs/:clubId/admin/reservations/:id/member', () => {
+  const murl = `${url}/res-1/member`;
+
+  it('200 affecte un membre actif', async () => {
+    asMember();
+    prismaMock.reservation.findUnique.mockResolvedValue({ id: 'res-1', resource: { clubId: 'club-demo' } } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb-1', status: 'ACTIVE' } as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', userId: 'user-1' } as any);
+    const res = await request(app).patch(murl).set('Authorization', `Bearer ${token}`).send({ memberUserId: 'user-1' });
+    expect(res.status).toBe(200);
+    expect(res.body.userId).toBe('user-1');
+  });
+
+  it('400 si memberUserId manquant', async () => {
+    asMember();
+    const res = await request(app).patch(murl).set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('404 MEMBER_NOT_FOUND si le joueur n\'est pas membre', async () => {
+    asMember();
+    prismaMock.reservation.findUnique.mockResolvedValue({ id: 'res-1', resource: { clubId: 'club-demo' } } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    const res = await request(app).patch(murl).set('Authorization', `Bearer ${token}`).send({ memberUserId: 'user-1' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('MEMBER_NOT_FOUND');
+  });
+});

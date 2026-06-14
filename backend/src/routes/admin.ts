@@ -1,6 +1,10 @@
 import { Router, Response, NextFunction } from 'express';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
+import { SPONSORS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -20,6 +24,9 @@ const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
+
+// Upload du logo partenaire en mémoire (2 Mo max) ; mêmes formats que l'avatar.
+const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 const ERROR_STATUS: Record<string, number> = {
   FORBIDDEN:             403,
@@ -44,6 +51,7 @@ const ERROR_STATUS: Record<string, number> = {
   PAYMENT_NOT_FOUND:      404,
   INSUFFICIENT_BALANCE:   409,
   PAYMENT_EXCEEDS_DUE:    409,
+  PARTICIPANT_NOT_FOUND:  404,
   CLUB_NOT_FOUND:         404,
 };
 
@@ -278,10 +286,22 @@ router.patch('/reservations/:id', async (req: ClubScopedRequest, res: Response, 
   } catch (err) { handleError(err, res, next); }
 });
 
+// (Ré)affecte le joueur d'une réservation (associer un joueur à l'encaissement).
+router.patch('/reservations/:id/member', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const memberUserId = asString(req.body.memberUserId);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
+    const updated = await reservationService.assignReservationMember(
+      asString(req.params.id), req.membership!.clubId, memberUserId,
+    );
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Encaissement manuel sur une réservation (espèces/carte/ticket CE/carnet/porte-monnaie).
 router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { amount, method, payerName, note, sourcePackageId, voucherRef, voucherIssuer } = req.body;
+    const { amount, method, payerName, note, sourcePackageId, voucherRef, voucherIssuer, participantId } = req.body;
     const payment = await reservationService.addPayment({
       reservationId: asString(req.params.id),
       clubId: req.membership!.clubId,
@@ -290,6 +310,7 @@ router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Re
       sourcePackageId: typeof sourcePackageId === 'string' && sourcePackageId ? sourcePackageId : undefined,
       voucherRef:      typeof voucherRef === 'string' ? voucherRef : undefined,
       voucherIssuer:   typeof voucherIssuer === 'string' ? voucherIssuer : undefined,
+      participantId:   typeof participantId === 'string' && participantId ? participantId : undefined,
     });
     res.status(201).json(payment);
   } catch (err) { handleError(err, res, next); }
@@ -310,6 +331,28 @@ router.delete('/announcements/:id', async (req: ClubScopedRequest, res: Response
 });
 
 // --- Sponsors ---
+// Upload d'un logo (JPEG/PNG/WebP, 2 Mo max) → renvoie le chemin /uploads à stocker dans logoUrl.
+router.post('/sponsors/logo', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  logoUpload.single('logo')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (2 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) {
+        return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      }
+      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
+      ensureUploadDirs();
+      await fs.promises.writeFile(path.join(SPONSORS_DIR, filename), file.buffer);
+      res.json({ logoUrl: `/uploads/sponsors/${filename}` });
+    } catch (e) { handleError(e, res, next); }
+  });
+});
 router.get('/sponsors', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await sponsorService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
