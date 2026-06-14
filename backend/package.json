@@ -11,7 +11,8 @@
     "test:coverage": "jest --coverage",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
-    "db:seed:demo": "ts-node prisma/seed-demo.ts"
+    "db:seed:demo": "ts-node prisma/seed-demo.ts",
+    "db:seed:events": "ts-node prisma/seed-events.ts"
   },
   "keywords": [],
   "author": "",
