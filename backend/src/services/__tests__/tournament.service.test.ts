@@ -1,6 +1,14 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { TournamentService } from '../tournament.service';
+import {
+  notifyTournamentRegistration,
+  notifyTournamentCancellation,
+  notifyTournamentPromotion,
+} from '../../email/notifications';
+
+// Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
+jest.mock('../../email/notifications');
 
 const FUTURE = new Date(Date.now() + 86_400_000); // +24h
 
@@ -299,5 +307,61 @@ describe('TournamentService — admin & lectures', () => {
     const select = (prismaMock.tournamentRegistration.findMany.mock.calls[0][0] as any).select;
     expect(select.captain.select.avatarUrl).toBe(true);
     expect(select.partner.select.avatarUrl).toBe(true);
+  });
+});
+
+describe('TournamentService — notifications email', () => {
+  let service: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); service = new TournamentService(); });
+
+  it('register déclenche la notification d inscription avec l id créé', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
+    mockEligibleHappyPath();
+    prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' } as any);
+
+    await service.register('t1', 'captain', 'partner');
+
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r-new');
+  });
+
+  it('cancelRegistration notifie la désinscription ET la promotion du 1er en attente', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE } as any);
+    prismaMock.tournamentRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'reg-confirmed', status: 'CONFIRMED' } as any)
+      .mockResolvedValueOnce({ id: 'reg-waiting' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-confirmed', status: 'CANCELLED' } as any);
+
+    await service.cancelRegistration('t1', 'captain');
+
+    expect(notifyTournamentCancellation).toHaveBeenCalledWith('reg-confirmed');
+    expect(notifyTournamentPromotion).toHaveBeenCalledWith('reg-waiting');
+  });
+
+  it('cancelRegistration d une WAITLISTED ne notifie pas de promotion', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValueOnce({ id: 'reg-w', status: 'WAITLISTED' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-w', status: 'CANCELLED' } as any);
+
+    await service.cancelRegistration('t1', 'captain');
+
+    expect(notifyTournamentCancellation).toHaveBeenCalledWith('reg-w');
+    expect(notifyTournamentPromotion).not.toHaveBeenCalled();
+  });
+
+  it('une erreur d envoi d email ne fait pas échouer l inscription', async () => {
+    (notifyTournamentRegistration as jest.Mock).mockRejectedValueOnce(new Error('SMTP down'));
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
+    mockEligibleHappyPath();
+    prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' } as any);
+
+    // notifyTournamentRegistration est best-effort en prod ; ici le mock rejette, mais
+    // comme l'inscription est déjà committée, on ne veut pas que l'appelant casse.
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ id: 'r-new' });
   });
 });

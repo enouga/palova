@@ -76,20 +76,6 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/:id/reschedule', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { resourceId, startTime, duration } = req.body;
-    if (!resourceId || !startTime || !duration) {
-      return void res.status(400).json({ error: 'resourceId, startTime, duration requis' });
-    }
-    const moved = await reservationService.rescheduleReservation(
-      asString(req.params.id), req.user!.id,
-      { resourceId, startTime: new Date(startTime), duration: Number(duration) },
-    );
-    res.json(moved);
-  } catch (err) { handleError(err, res, next); }
-});
-
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const cancelled = await reservationService.cancelReservation(asString(req.params.id), req.user!.id);

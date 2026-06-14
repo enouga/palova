@@ -10,6 +10,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { platformUrl } from '@/lib/clubUrl';
 import { packageLabel, isUsable } from '@/lib/packages';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 
 // Icône profil (header) + menu déroulant : identité, soldes prépayés du club courant,
@@ -34,11 +35,19 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const { state: installState, promptInstall } = useInstallPrompt();
   const [iosHelp, setIosHelp] = useState(false);
 
+  // Identité chargée dès le montage : l'info-bulle de survol (« qui est connecté ? ») doit être
+  // prête sans ouvrir le menu. Les données par club (clubs/membership/soldes) restent paresseuses.
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    api.getMyProfile(token).then((p) => { if (alive) setProfile(p); }).catch(() => {});
+    return () => { alive = false; };
+  }, [token]);
+
   // Chargement paresseux à la première ouverture (échecs silencieux : section masquée).
   const toggle = () => {
     if (!open && !loaded && token) {
       setLoaded(true);
-      api.getMyProfile(token).then(setProfile).catch(() => {});
       api.getMyClubs(token).then(setManaged).catch(() => {});
       if (slug) {
         api.getMyClubMembership(slug, token).then(setMembership).catch(() => setMembership(null));
@@ -67,6 +76,9 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const soldes = packages.filter((p) => isUsable(p));
   const managesClub = !!club && managed.some((m) => m.clubId === club.id);
   const avatarSrc = assetUrl(profile?.avatarUrl ?? null);
+  // Info-bulle de survol : « Prénom Nom · e-mail » (l'icône reste inchangée, aucune empreinte au repos).
+  const who = profile ? `${profile.firstName} ${profile.lastName}`.trim() : '';
+  const tooltip = profile ? [who, profile.email].filter(Boolean).join(' · ') || undefined : undefined;
 
   const go = (href: string) => { setOpen(false); router.push(href); };
 
@@ -74,12 +86,17 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={toggle} aria-label="Mon profil" aria-haspopup="menu" aria-expanded={open}
+      <button onClick={toggle} aria-label="Mon profil" title={tooltip} aria-haspopup="menu" aria-expanded={open}
         style={{
-          width: 38, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', flexShrink: 0,
-          background: open ? th.surfaceHi : th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 38, height: 38, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
+          background: profile ? 'transparent' : (open ? th.surfaceHi : th.surface2),
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: open ? `0 0 0 2px ${th.accent}` : 'none',
         }}>
-        <Icon name="user" size={19} color={th.text} />
+        {/* Avatar (photo ou initiales) = on voit qui est connecté d'un coup d'œil ; repli icône le temps du chargement. */}
+        {profile
+          ? <Avatar firstName={profile.firstName} lastName={profile.lastName} avatarUrl={profile.avatarUrl} size={38} />
+          : <Icon name="user" size={19} color={th.text} />}
       </button>
 
       {open && (

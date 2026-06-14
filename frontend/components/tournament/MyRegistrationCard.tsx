@@ -7,11 +7,12 @@ import { PartnerSearch } from './PartnerSearch';
 
 // Carte « mon inscription » : binôme, statut (+ position en liste d'attente),
 // changement de coéquipier et désinscription tant que les inscriptions sont ouvertes.
-export function MyRegistrationCard({ myReg, profileId, closed, busy, waitlistPos, slug, token, partner, onSelectPartner, onClearPartner, onChangePartner, onCancel }: {
+export function MyRegistrationCard({ myReg, profileId, closed, busy, contactInfo, waitlistPos, slug, token, partner, onSelectPartner, onClearPartner, onChangePartner, onCancel }: {
   myReg: MyTournamentRegistration;
   profileId: string | undefined;
   closed: boolean;
   busy: boolean;
+  contactInfo?: string | null;
   waitlistPos: number | null;
   slug: string;
   token: string;
@@ -55,7 +56,10 @@ export function MyRegistrationCard({ myReg, profileId, closed, busy, waitlistPos
           <button onClick={onCancel} disabled={busy} style={{ marginTop: 12, marginLeft: 10, border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, cursor: 'pointer', borderRadius: 11, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5 }}>Se désinscrire</button>
         </>
       ) : (
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 12 }}>Inscriptions closes : modification et annulation ne sont plus possibles.</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 12 }}>
+          Inscriptions closes : modification et annulation ne sont plus possibles.
+          {contactInfo && <div style={{ marginTop: 6, color: th.textMute, whiteSpace: 'pre-wrap' }}>{contactInfo}</div>}
+        </div>
       )}
     </div>
   );

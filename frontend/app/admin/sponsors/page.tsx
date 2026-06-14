@@ -1,12 +1,15 @@
 'use client';
-import { useState, useEffect, useCallback, CSSProperties } from 'react';
-import { api, Sponsor, SponsorBody } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
+import { api, assetUrl, Sponsor, SponsorBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn, Chip } from '@/components/ui/atoms';
+import { DateField } from '@/components/ui/DateField';
 
 const EMPTY = { name: '', logoUrl: '', linkUrl: '', sortOrder: '0', isActive: true, offerText: '', offerCode: '', offerUntil: '', pinned: false };
+const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 export default function AdminSponsorsPage() {
   const { th } = useTheme();
@@ -18,7 +21,9 @@ export default function AdminSponsorsPage() {
   const [editId, setEditId]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const logoFileRef = useRef<HTMLInputElement>(null);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const labelStyle: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 6 };
@@ -36,6 +41,20 @@ export default function AdminSponsorsPage() {
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
   const resetForm = () => { setForm(EMPTY); setEditId(null); };
+
+  // Upload du logo depuis l'ordinateur (comme la photo de profil) : on stocke le chemin renvoyé dans form.logoUrl.
+  const pickLogo = async (file: File | undefined) => {
+    if (!file || !token || !clubId) return;
+    if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
+    if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
+    setError(null);
+    setUploading(true);
+    try {
+      const { logoUrl } = await api.uploadSponsorLogo(clubId, file, token);
+      setForm((f) => ({ ...f, logoUrl }));
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(false); }
+  };
 
   const submit = async () => {
     if (!token || !clubId || !form.name.trim() || !form.logoUrl.trim()) return;
@@ -95,10 +114,20 @@ export default function AdminSponsorsPage() {
               Nom *
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nom du partenaire" style={inputStyle} />
             </label>
-            <label style={{ ...labelStyle, flex: 1, minWidth: 220 }}>
-              URL du logo *
-              <input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://…/logo.png" type="url" style={inputStyle} />
-            </label>
+            <div style={{ ...labelStyle, flex: 1, minWidth: 220 }}>
+              Logo *
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {form.logoUrl
+                  ? <img src={assetUrl(form.logoUrl) ?? undefined} alt="Logo du partenaire" style={{ height: 46, width: 46, objectFit: 'contain', borderRadius: 10, background: '#fff', border: `1px solid ${th.line}`, padding: 4, boxSizing: 'border-box', flexShrink: 0 }} />
+                  : <span style={{ height: 46, width: 46, borderRadius: 10, border: `1px dashed ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.textFaint, flexShrink: 0 }}>—</span>}
+                <input ref={logoFileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                  aria-label="Choisir un logo" onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
+                <Btn variant="ghost" onClick={() => logoFileRef.current?.click()} disabled={uploading}>
+                  {uploading ? 'Envoi…' : form.logoUrl ? 'Changer le logo' : 'Choisir un fichier'}
+                </Btn>
+              </div>
+              <span style={{ fontWeight: 400, color: th.textFaint, fontSize: 12 }}>JPEG, PNG ou WebP · 2 Mo max</span>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <label style={{ ...labelStyle, flex: 1, minWidth: 220 }}>
@@ -121,7 +150,7 @@ export default function AdminSponsorsPage() {
             </label>
             <label style={{ ...labelStyle, width: 200 }}>
               Offre valable jusqu&apos;au
-              <input value={form.offerUntil} onChange={(e) => setForm({ ...form, offerUntil: e.target.value })} type="date" style={inputStyle} />
+              <DateField value={form.offerUntil} onChange={(d) => setForm({ ...form, offerUntil: d })} width="100%" />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 2 }}>
@@ -159,7 +188,7 @@ export default function AdminSponsorsPage() {
                 <tr key={s.id} style={{ borderBottom: `1px solid ${th.line}` }}>
                   <td style={cell}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={s.logoUrl} alt={s.name} style={{ height: 32, width: 'auto', maxWidth: 80, objectFit: 'contain', borderRadius: 6, display: 'block' }} />
+                    <img src={assetUrl(s.logoUrl) ?? undefined} alt={s.name} style={{ height: 32, width: 'auto', maxWidth: 80, objectFit: 'contain', borderRadius: 6, display: 'block' }} />
                   </td>
                   <td style={{ ...cell, fontWeight: 600 }}>
                     {s.name}{s.pinned && <span style={{ marginLeft: 8, verticalAlign: 'middle', display: 'inline-flex' }}><Chip tone="accent">À la une</Chip></span>}

@@ -1,5 +1,6 @@
 import { ClubEventKind, ClubEventStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import * as notify from '../email/notifications';
 
 export interface CreateEventInput {
   name: string;
@@ -37,7 +38,7 @@ export class EventService {
     if (membership?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
     if (event.memberOnly && membership?.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
 
-    return prisma.$transaction(async (tx) => {
+    const registration = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const existing = await tx.eventRegistration.findUnique({
         where: { eventId_userId: { eventId, userId } },
@@ -58,6 +59,19 @@ export class EventService {
       }
       return tx.eventRegistration.create({ data: { eventId, userId, status } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    // Emails hors transaction, best-effort (ne fait jamais échouer l'inscription).
+    await this.safeNotify(() => notify.notifyEventRegistration(registration.id));
+    return registration;
+  }
+
+  /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
+  private async safeNotify(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      console.error('[notifications] envoi email échoué (événement) :', err);
+    }
   }
 
   /** Le joueur se désinscrit avant la deadline ; promotion auto du 1er en attente. */
@@ -69,7 +83,7 @@ export class EventService {
     if (!event) throw new Error('EVENT_NOT_FOUND');
     if (new Date() >= event.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    return prisma.$transaction(async (tx) => {
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const reg = await tx.eventRegistration.findFirst({
         where: { eventId, userId, status: { not: 'CANCELLED' } },
@@ -78,23 +92,36 @@ export class EventService {
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
       return this.cancelAndPromoteTx(tx, eventId, reg.id, reg.status === 'CONFIRMED');
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    return cancelled;
   }
 
-  /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. À appeler sous verrou de l'événement. */
+  /** Notifie désinscription + éventuelle promotion auto. Best-effort, hors transaction. */
+  private async notifyCancellation(cancelledRegId: string, promotedRegistrationId: string | null): Promise<void> {
+    await this.safeNotify(() => notify.notifyEventCancellation(cancelledRegId));
+    if (promotedRegistrationId) await this.safeNotify(() => notify.notifyEventPromotion(promotedRegistrationId));
+  }
+
+  /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. Renvoie l'inscription annulée + l'id éventuellement promu. À appeler sous verrou de l'événement. */
   private async cancelAndPromoteTx(tx: Prisma.TransactionClient, eventId: string, regId: string, wasConfirmed: boolean) {
     const cancelled = await tx.eventRegistration.update({
       where: { id: regId },
       data: { status: 'CANCELLED', cancelledAt: new Date() },
     });
+    let promotedRegistrationId: string | null = null;
     if (wasConfirmed) {
       const next = await tx.eventRegistration.findFirst({
         where: { eventId, status: 'WAITLISTED' },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       });
-      if (next) await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'CONFIRMED' } });
+      if (next) {
+        await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'CONFIRMED' } });
+        promotedRegistrationId = next.id;
+      }
     }
-    return cancelled;
+    return { cancelled, promotedRegistrationId };
   }
 
   // --------------------------------------------------------- Lectures publiques
@@ -207,13 +234,15 @@ export class EventService {
   async adminPromoteRegistration(eventId: string, regId: string, clubId: string) {
     const reg = await this.findClubRegistration(eventId, regId, clubId);
     if (reg.status !== 'WAITLISTED') throw new Error('VALIDATION_ERROR');
-    return prisma.eventRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
+    const promoted = await prisma.eventRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
+    await this.safeNotify(() => notify.notifyEventPromotion(promoted.id));
+    return promoted;
   }
 
   /** Désinscription manuelle par le club (promeut le 1er en attente si CONFIRMED). */
   async adminRemoveRegistration(eventId: string, regId: string, clubId: string) {
     await this.findClubRegistration(eventId, regId, clubId); // vérifie l'appartenance au club
-    return prisma.$transaction(async (tx) => {
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const reg = await tx.eventRegistration.findFirst({
         where: { id: regId, status: { not: 'CANCELLED' } },
@@ -222,6 +251,9 @@ export class EventService {
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
       return this.cancelAndPromoteTx(tx, eventId, regId, reg.status === 'CONFIRMED');
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    return cancelled;
   }
 
   private async findClubRegistration(eventId: string, regId: string, clubId: string) {

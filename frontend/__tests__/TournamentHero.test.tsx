@@ -7,7 +7,7 @@ const NOW = new Date('2026-06-10T12:00:00Z');
 
 const tournament = (over: Partial<TournamentDetail> = {}): TournamentDetail => ({
   id: 't1', clubId: 'c1', clubSportId: 'cs1', name: 'Grand Prix Messieurs', category: 'P500', gender: 'MEN',
-  description: null, startTime: '2026-07-09T12:01:00Z', endTime: null,
+  description: null, contactInfo: null, startTime: '2026-07-09T12:01:00Z', endTime: null,
   registrationDeadline: '2026-07-04T12:01:00Z', maxTeams: 12, entryFee: '40', status: 'PUBLISHED',
   confirmedCount: 7, waitlistCount: 0,
   club: { slug: 'demo', name: 'Toulouse Padel Indoor', timezone: 'Europe/Paris' },

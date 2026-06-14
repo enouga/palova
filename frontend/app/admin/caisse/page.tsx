@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
+import { DateField } from '@/components/ui/DateField';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -135,7 +136,7 @@ export default function AdminCaissePage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 18px', flexWrap: 'wrap' }}>
         <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Caisse</h1>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={input} />
+        <DateField value={date} onChange={setDate} size="sm" />
       </div>
 
       {error && <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
@@ -171,7 +172,7 @@ export default function AdminCaissePage() {
               onSelect={pickBuyer}
               onClear={() => { setBuyer(null); setBuyerPackages([]); }}
               onCreate={createBuyer}
-              placeholder="Rechercher un membre…"
+              placeholder="Cliquez pour voir les membres, ou tapez un nom…"
             />
           </div>
 

@@ -4,13 +4,17 @@ import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 
 // Annuaire du club : recherche d'un coéquipier par nom (membres actifs uniquement).
-export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled }: {
+export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect }: {
   slug: string;
   token: string;
   selected: { id: string; firstName: string; lastName: string } | null;
   onSelect: (m: { id: string; firstName: string; lastName: string }) => void;
   onClear: () => void;
   disabled?: boolean;
+  /** Ids à masquer des résultats (ex. partenaires déjà ajoutés). */
+  excludeIds?: string[];
+  /** Garde le menu ouvert après une sélection — pour enchaîner les ajouts (multi). */
+  keepOpenOnSelect?: boolean;
 }) {
   const { th } = useTheme();
   const [q, setQ] = useState('');
@@ -27,6 +31,8 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
     }, query ? 250 : 0);
     return () => clearTimeout(handle);
   }, [q, slug, token, selected, open]);
+
+  const visible = excludeIds?.length ? results.filter((m) => !excludeIds.includes(m.id)) : results;
 
   const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
 
@@ -47,10 +53,10 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
         placeholder="Cliquez pour voir les membres, ou tapez un nom…" disabled={disabled} style={inputStyle} />
       {open && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 260, overflowY: 'auto', background: th.surface, borderRadius: 11, boxShadow: `0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px ${th.line}` }}>
-          {results.length === 0
+          {visible.length === 0
             ? <div style={{ padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
-            : results.map((m) => (
-                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setOpen(false); setQ(''); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+            : visible.map((m) => (
+                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
                   {m.firstName} {m.lastName}
                 </button>
               ))}

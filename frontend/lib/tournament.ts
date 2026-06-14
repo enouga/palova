@@ -17,6 +17,41 @@ export function formatDateShort(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
 }
 
+/** Date sans heure dans le fuseau du club, ex. « jeudi 9 juillet ». */
+function formatDateLong(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }).format(new Date(iso));
+}
+
+/** Heure seule dans le fuseau du club, ex. « 14h01 ». */
+function formatHour(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
+}
+
+/** Clé année-mois-jour dans le fuseau du club (pour détecter le même jour). */
+function dayKey(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: tz }).format(new Date(iso));
+}
+
+/**
+ * Plage date + heure dans le fuseau du club, compacte si début et fin tombent le même jour.
+ *  - sans fin         → « jeudi 9 juillet à 14h00 »
+ *  - même jour        → « jeudi 9 juillet · 14h00 → 18h00 » (date non répétée)
+ *  - jours différents → « jeudi 9 juillet à 14h00 → vendredi 10 juillet à 18h00 »
+ * Le « même jour » est calculé dans le fuseau du club, jamais en heure locale du navigateur.
+ */
+export function formatDateTimeRange(startIso: string, endIso: string | null | undefined, tz: string): string {
+  if (!endIso) return formatDateTime(startIso, tz);
+  if (dayKey(startIso, tz) === dayKey(endIso, tz)) {
+    return `${formatDateLong(startIso, tz)} · ${formatHour(startIso, tz)} → ${formatHour(endIso, tz)}`;
+  }
+  return `${formatDateTime(startIso, tz)} → ${formatDateTime(endIso, tz)}`;
+}
+
+/** Plage d'heures seules dans le fuseau du club, ex. « 14h00 → 18h00 » (ou « 14h00 » sans fin). */
+export function formatHourRange(startIso: string, endIso: string | null | undefined, tz: string): string {
+  return endIso ? `${formatHour(startIso, tz)} → ${formatHour(endIso, tz)}` : formatHour(startIso, tz);
+}
+
 /**
  * Compte à rebours avant la clôture des inscriptions. null si la deadline est passée.
  * ≥ 48 h → « J-x » ; < 48 h → « Plus que x h » (urgent) ; < 1 h → « Plus que x min » (urgent).

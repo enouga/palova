@@ -20,8 +20,8 @@ const e = (over: Partial<ClubEvent>): ClubEvent => ({
 const items = (list: (Tournament | ClubEvent)[]): AgendaItem[] =>
   list.map((x) =>
     'kind' in x
-      ? { source: 'event' as const, startTime: x.startTime, event: x }
-      : { source: 'tournament' as const, startTime: x.startTime, tournament: x });
+      ? { source: 'event' as const, startTime: x.startTime, endTime: x.endTime, event: x }
+      : { source: 'tournament' as const, startTime: x.startTime, endTime: x.endTime, tournament: x });
 
 const wrap = (list: AgendaItem[], now: Date | null = null) =>
   render(<ThemeProvider><TournamentsAlaUne items={list} timezone="Europe/Paris" now={now} /></ThemeProvider>);
@@ -53,5 +53,16 @@ describe('TournamentsAlaUne', () => {
     expect(screen.getByText(/Mêlée ·/)).toBeInTheDocument();
     expect(screen.getByText('8 places restantes')).toBeInTheDocument();
     expect(screen.getByText('Mêlée du vendredi').closest('a')).toHaveAttribute('href', '/events/e1');
+  });
+
+  it('affiche la plage horaire (début → fin) à côté de la date', () => {
+    // 18:00Z → 20:00Z = 20h00 → 22h00 à Paris (UTC+2 en juin)
+    wrap(items([e({ endTime: '2026-06-19T20:00:00.000Z' })]));
+    expect(screen.getByText(/20h00 → 22h00/)).toBeInTheDocument();
+  });
+
+  it('affiche l’heure de début seule quand il n’y a pas de fin', () => {
+    wrap(items([e({ endTime: null })])); // 18:00Z = 20h00 à Paris
+    expect(screen.getByText(/· 20h00$/)).toBeInTheDocument();
   });
 });

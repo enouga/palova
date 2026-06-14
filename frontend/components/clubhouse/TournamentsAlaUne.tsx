@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { AgendaItem, eventPlacesLabel, KIND_LABEL } from '@/lib/events';
-import { deadlineCountdown, fillRatio } from '@/lib/tournament';
+import { deadlineCountdown, fillRatio, formatHourRange } from '@/lib/tournament';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
@@ -55,6 +55,8 @@ export function TournamentsAlaUne({ items, timezone, now = null }: { items: Agen
                 {badge}
                 {' · '}
                 {formatDay(item.startTime, timezone)}
+                {' · '}
+                {formatHourRange(item.startTime, item.endTime, timezone)}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
                 {ratio != null && (

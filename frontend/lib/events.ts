@@ -5,8 +5,8 @@ import type { Tournament, ClubEvent, ClubEventKind } from '@/lib/api';
 export type AgendaFilter = 'tout' | 'competitions' | 'animations';
 
 export type AgendaItem =
-  | { source: 'tournament'; startTime: string; tournament: Tournament }
-  | { source: 'event'; startTime: string; event: ClubEvent };
+  | { source: 'tournament'; startTime: string; endTime: string | null; tournament: Tournament }
+  | { source: 'event'; startTime: string; endTime: string | null; event: ClubEvent };
 
 export const KIND_LABEL: Record<ClubEventKind, string> = {
   MELEE: 'Mêlée', STAGE: 'Stage', SOIREE: 'Soirée', INITIATION: 'Initiation', AUTRE: 'Événement',
@@ -17,10 +17,10 @@ export function mergeAgenda(tournaments: Tournament[], events: ClubEvent[], now:
   const items: AgendaItem[] = [
     ...tournaments
       .filter((t) => t.status === 'PUBLISHED' && new Date(t.startTime) > now)
-      .map((t) => ({ source: 'tournament' as const, startTime: t.startTime, tournament: t })),
+      .map((t) => ({ source: 'tournament' as const, startTime: t.startTime, endTime: t.endTime, tournament: t })),
     ...events
       .filter((e) => e.status === 'PUBLISHED' && new Date(e.startTime) > now)
-      .map((e) => ({ source: 'event' as const, startTime: e.startTime, event: e })),
+      .map((e) => ({ source: 'event' as const, startTime: e.startTime, endTime: e.endTime, event: e })),
   ];
   // ISO UTC : ordre lexicographique = ordre chronologique
   return items.sort((a, b) => a.startTime.localeCompare(b.startTime));

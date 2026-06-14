@@ -16,9 +16,7 @@ interface BookingModalProps {
   duration: number;
   token: string;
   timezone?: string;
-  /** Mode déplacement : id de la résa à remplacer — un seul appel atomique, pas de hold. */
-  moveReservationId?: string;
-  /** Slug du club — active l'ajout de partenaires (annuaire des membres) hors mode déplacement. */
+  /** Slug du club — active l'ajout de partenaires (annuaire des membres). */
   slug?: string;
   /** Nombre max de joueurs du terrain (single = 2, double = 4) — plafonne les partenaires. */
   maxPlayers?: number;
@@ -58,15 +56,8 @@ const BOOKING_ERRORS: Record<string, string> = {
   PARTNER_DUPLICATE:      'Un partenaire figure en double.',
 };
 
-const MOVE_ERRORS: Record<string, string> = {
-  ...BOOKING_ERRORS,
-  RESERVATION_NOT_ACTIVE: 'Cette réservation ne peut plus être déplacée.',
-  RESERVATION_IN_PAST:    'Cette réservation ne peut plus être déplacée.',
-  OUT_OF_HOURS:           "Ce créneau est en dehors des horaires d'ouverture.",
-};
-
 export default function BookingModal({
-  slot, resourceId, price, duration, token, timezone, moveReservationId, slug, maxPlayers, packages = [], onClose, onConfirmed,
+  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, packages = [], onClose, onConfirmed,
 }: BookingModalProps) {
   const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
@@ -77,9 +68,9 @@ export default function BookingModal({
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
 
-  // Multi-joueurs : ajout de partenaires + partie publique/privée (hors déplacement).
+  // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
-  const showPartners = !moveReservationId && !!slug && cap > 1;
+  const showPartners = !!slug && cap > 1;
   const nbPlayers = 1 + partners.length;
   const atCap = nbPlayers >= cap;
   const spotsLeft = Math.max(0, cap - nbPlayers);
@@ -137,23 +128,6 @@ export default function BookingModal({
       }
       setPhase('error');
       setErrorMsg(msg === 'SLOT_NO_LONGER_AVAILABLE' ? 'Ce créneau a été pris entre-temps. Veuillez recommencer.' : msg);
-    }
-  };
-
-  // Mode déplacement : un seul appel atomique côté backend (l'ancienne résa
-  // n'est annulée que si le nouveau créneau est obtenu) — pas de hold de 10 min.
-  const handleMove = async () => {
-    if (!moveReservationId) return;
-    try {
-      const moved = await api.rescheduleReservation(
-        moveReservationId,
-        { resourceId, startTime: slot.startTime, duration },
-        token,
-      );
-      onConfirmed(moved);
-    } catch (err) {
-      setPhase('error');
-      setErrorMsg(MOVE_ERRORS[(err as Error).message] ?? (err as Error).message);
     }
   };
 
@@ -231,16 +205,12 @@ export default function BookingModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
               <Icon name="clock" size={15} color={th.textMute} />
               <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>
-                {moveReservationId
-                  ? <>Votre réservation actuelle sera <b style={{ color: th.text }}>annulée et remplacée</b> par ce créneau.</>
-                  : <>Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.</>}
+                Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.
               </span>
             </div>
             <div style={{ display: 'flex', gap: 11 }}>
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
-              {moveReservationId
-                ? <Btn icon="arrowR" onClick={handleMove} style={{ flex: 1 }}>Déplacer ici</Btn>
-                : <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>}
+              <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>
             </div>
           </>
         )}

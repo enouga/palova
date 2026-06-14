@@ -1,6 +1,16 @@
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../db/prisma';
+import { SPONSORS_DIR } from '../utils/uploads';
 
 interface SponsorInput { name?: string; logoUrl?: string; linkUrl?: string | null; sortOrder?: number; isActive?: boolean; offerText?: string | null; offerCode?: string | null; offerUntil?: string | null; pinned?: boolean; }
+
+/** Supprime best-effort un logo uploadé (jamais une URL externe). Jamais bloquant. */
+function deleteUploadedLogo(logoUrl: string | null | undefined): void {
+  if (logoUrl?.startsWith('/uploads/sponsors/')) {
+    fs.promises.unlink(path.join(SPONSORS_DIR, path.basename(logoUrl))).catch(() => {});
+  }
+}
 
 /** `YYYY-MM-DD` → fin de journée UTC (tolérance fuseau assumée pour une date de promo). Vide/null → null. */
 function parseOfferUntil(v: string | null | undefined): Date | null {
@@ -41,9 +51,9 @@ export class SponsorService {
   }
 
   async update(id: string, clubId: string, data: SponsorInput) {
-    const found = await prisma.sponsor.findUnique({ where: { id }, select: { clubId: true } });
+    const found = await prisma.sponsor.findUnique({ where: { id }, select: { clubId: true, logoUrl: true } });
     if (!found || found.clubId !== clubId) throw new Error('SPONSOR_NOT_FOUND');
-    return prisma.sponsor.update({
+    const updated = await prisma.sponsor.update({
       where: { id },
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
@@ -57,9 +67,14 @@ export class SponsorService {
         ...(data.pinned !== undefined ? { pinned: !!data.pinned } : {}),
       },
     });
+    // L'ancien logo uploadé n'est plus référencé → nettoyage best-effort.
+    if (data.logoUrl !== undefined && data.logoUrl.trim() !== found.logoUrl) deleteUploadedLogo(found.logoUrl);
+    return updated;
   }
 
   async remove(id: string, clubId: string) {
+    const found = await prisma.sponsor.findUnique({ where: { id }, select: { clubId: true, logoUrl: true } });
     await prisma.sponsor.deleteMany({ where: { id, clubId } });
+    if (found?.clubId === clubId) deleteUploadedLogo(found.logoUrl);
   }
 }

@@ -1,5 +1,6 @@
 import {
-  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, icsFilename, timelineSteps, waitlistPosition,
+  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatHourRange,
+  icsFilename, timelineSteps, waitlistPosition,
 } from '../lib/tournament';
 import { TournamentParticipant } from '../lib/api';
 
@@ -107,5 +108,36 @@ describe('icsFilename', () => {
 describe('formatDateTime', () => {
   it('formate dans le fuseau du club', () => {
     expect(formatDateTime('2026-07-09T12:01:00.000Z', 'Europe/Paris')).toBe('jeudi 9 juillet à 14h01');
+  });
+});
+
+describe('formatDateTimeRange', () => {
+  const tz = 'Europe/Paris';
+  it('sans fin → identique à formatDateTime', () => {
+    expect(formatDateTimeRange('2026-07-09T12:01:00.000Z', null, tz)).toBe('jeudi 9 juillet à 14h01');
+    expect(formatDateTimeRange('2026-07-09T12:01:00.000Z', undefined, tz)).toBe('jeudi 9 juillet à 14h01');
+  });
+  it('même jour → date non répétée, séparateur ·', () => {
+    expect(formatDateTimeRange('2026-07-09T12:01:00.000Z', '2026-07-09T16:00:00.000Z', tz))
+      .toBe('jeudi 9 juillet · 14h01 → 18h00');
+  });
+  it('jours différents → date affichée des deux côtés', () => {
+    expect(formatDateTimeRange('2026-07-09T12:01:00.000Z', '2026-07-10T16:00:00.000Z', tz))
+      .toBe('jeudi 9 juillet à 14h01 → vendredi 10 juillet à 18h00');
+  });
+  it('bascule de jour calculée dans le fuseau du club (pas en UTC)', () => {
+    // Même jour UTC (9 juillet) mais 23h30 → 00h30 à Paris : doit basculer en multi-jours.
+    expect(formatDateTimeRange('2026-07-09T21:30:00.000Z', '2026-07-09T22:30:00.000Z', tz))
+      .toBe('jeudi 9 juillet à 23h30 → vendredi 10 juillet à 00h30');
+  });
+});
+
+describe('formatHourRange', () => {
+  const tz = 'Europe/Paris';
+  it('sans fin → heure seule', () => {
+    expect(formatHourRange('2026-07-09T12:01:00.000Z', null, tz)).toBe('14h01');
+  });
+  it('avec fin → plage d’heures', () => {
+    expect(formatHourRange('2026-07-09T12:01:00.000Z', '2026-07-09T16:00:00.000Z', tz)).toBe('14h01 → 18h00');
   });
 });

@@ -28,8 +28,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { club } = useClub();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   // Pas de mismatch d'hydration : le premier rendu est « Chargement… », indépendant de cette valeur.
-  const [collapsed, setCollapsedState] = useState(() =>
-    typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_KEY) === 'collapsed');
+  const [collapsed, setCollapsedState] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = window.localStorage.getItem(SIDEBAR_KEY);
+    if (saved === 'collapsed') return true;
+    if (saved === 'open') return false;
+    // Aucune préférence enregistrée : replié par défaut sur téléphone (petit écran),
+    // où la sidebar de 244 px mangerait l'essentiel de la largeur.
+    return window.matchMedia('(max-width: 768px)').matches;
+  });
   const setCollapsed = useCallback((v: boolean) => {
     setCollapsedState(v);
     try { window.localStorage.setItem(SIDEBAR_KEY, v ? 'collapsed' : 'open'); } catch { /* stockage indisponible : préférence non persistée */ }
@@ -117,7 +124,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
       )}
 
-      <main style={{ flex: 1, minWidth: 0, maxWidth: collapsed ? '100%' : 1280, padding: collapsed ? '22px 30px 48px' : '28px 32px 48px' }}>
+      <main style={{ flex: 1, minWidth: 0, maxWidth: '100%', padding: collapsed ? '22px 30px 48px' : '28px 32px 48px' }}>
         {collapsed && (
           // height: 0 — le bouton flotte sans décaler le contenu ; sticky pour rester accessible en scrollant.
           <div style={{ position: 'sticky', top: 12, zIndex: 40, height: 0, marginLeft: -14 }}>

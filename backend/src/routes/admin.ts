@@ -53,6 +53,10 @@ const ERROR_STATUS: Record<string, number> = {
   PAYMENT_EXCEEDS_DUE:    409,
   PARTICIPANT_NOT_FOUND:  404,
   CLUB_NOT_FOUND:         404,
+  TOO_MANY_PLAYERS:        409,
+  RESERVATION_HAS_NO_MEMBER: 409,
+  CANNOT_REMOVE_ORGANIZER: 409,
+  PARTNER_DUPLICATE:       409,
 };
 
 function asString(v: unknown): string {
@@ -293,6 +297,28 @@ router.patch('/reservations/:id/member', async (req: ClubScopedRequest, res: Res
     if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
     const updated = await reservationService.assignReservationMember(
       asString(req.params.id), req.membership!.clubId, memberUserId,
+    );
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Ajoute un membre comme participant (répartition du paiement par joueur).
+router.post('/reservations/:id/participants', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const memberUserId = asString(req.body.memberUserId);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
+    const updated = await reservationService.addReservationParticipant(
+      asString(req.params.id), req.membership!.clubId, memberUserId,
+    );
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retire un participant d'une réservation (recalcule les parts).
+router.delete('/reservations/:id/participants/:participantId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const updated = await reservationService.removeReservationParticipant(
+      asString(req.params.id), req.membership!.clubId, asString(req.params.participantId),
     );
     res.json(updated);
   } catch (err) { handleError(err, res, next); }

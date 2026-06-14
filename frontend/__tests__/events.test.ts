@@ -26,6 +26,15 @@ describe('mergeAgenda', () => {
     const draft = tournoi({ status: 'DRAFT' });
     expect(mergeAgenda([draft], [past], NOW)).toHaveLength(0);
   });
+  it('expose endTime de chaque source (pour l’affichage des horaires)', () => {
+    const items = mergeAgenda(
+      [tournoi({ endTime: '2026-06-20T12:00:00.000Z' })],
+      [anim({ endTime: null })],
+      NOW,
+    );
+    expect(items[0].endTime).toBeNull(); // event (15/06)
+    expect(items[1].endTime).toBe('2026-06-20T12:00:00.000Z'); // tournoi (20/06)
+  });
 });
 
 describe('filterAgenda', () => {

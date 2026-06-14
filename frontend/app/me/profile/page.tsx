@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
 import { BackButton, Segmented, ThemeToggle } from '@/components/ui/atoms';
+import { DateField } from '@/components/ui/DateField';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
 
@@ -135,9 +136,9 @@ export default function MyProfilePage() {
     padding: '10px 18px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, opacity: busy ? 0.6 : 1, alignSelf: 'flex-start',
   });
   const readonlyRow = (l: string, v: string) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontFamily: th.fontUI, fontSize: 14 }}>
-      <span style={{ color: th.textMute }}>{l}</span>
-      <span style={{ color: th.text, fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
+    <div style={{ display: 'flex', gap: 12, fontFamily: th.fontUI, fontSize: 14 }}>
+      <span style={{ color: th.textMute, width: 92, flexShrink: 0 }}>{l}</span>
+      <span style={{ color: th.text, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
     </div>
   );
 
@@ -215,7 +216,7 @@ export default function MyProfilePage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={label}>Date de naissance</span>
-                <input type="date" value={birthDate} onChange={(e) => { setBirthDate(e.target.value); setSavedInfo(false); }} aria-label="Date de naissance" style={input} />
+                <DateField value={birthDate} onChange={(d) => { setBirthDate(d); setSavedInfo(false); }} width="100%" ariaLabel="Date de naissance" />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={label}>Sexe</span>

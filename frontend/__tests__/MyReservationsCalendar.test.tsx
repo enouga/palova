@@ -75,11 +75,11 @@ describe('Mes réservations — onglet Calendrier', () => {
     expect(await screen.findByText('Annuler la réservation ?')).toBeInTheDocument();
   });
 
-  it('« Déplacer » navigue vers la page Réserver en mode déplacement', async () => {
+  it('ne propose plus « Déplacer » sur la carte du jour', async () => {
     const { container } = render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
     fireEvent.click(await screen.findByText('Calendrier'));
     fireEvent.click(container.querySelector(`[data-day-key="${dayKey}"]`)!);
-    fireEvent.click(await screen.findByRole('button', { name: 'Déplacer' }));
-    expect(pushMock).toHaveBeenCalledWith('/reserver?move=res-1');
+    expect(await screen.findByText('Court 1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Déplacer' })).toBeNull();
   });
 });

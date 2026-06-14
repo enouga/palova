@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
-import { notifyOpenMatchJoin } from '../email/notifications';
+import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved } from '../email/notifications';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
@@ -76,7 +76,7 @@ export class OpenMatchService {
         viewerIsParticipant: m.participants.some((p) => p.userId === viewerUserId),
         viewerIsOrganizer: m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
         players: m.participants.map((p) => ({
-          firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
+          userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
         })),
       };
     });

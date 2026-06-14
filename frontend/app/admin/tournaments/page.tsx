@@ -4,6 +4,8 @@ import { useClub } from '@/lib/ClubProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClubSport } from '@/lib/api';
+import { localInputToISO } from '@/lib/datetimeLocal';
+import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
 
 const CATEGORIES = ['P25', 'P50', 'P100', 'P250', 'P500', 'P1000', 'P1500', 'P2000'];
@@ -13,7 +15,7 @@ const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
 
 const emptyForm = (clubSportId: string): CreateTournamentBody => ({
   clubSportId, name: '', category: 'P100', gender: 'MEN',
-  description: '', startTime: '', registrationDeadline: '', maxTeams: null, entryFee: null,
+  description: '', contactInfo: '', startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
 });
 
 export default function AdminTournamentsPage() {
@@ -47,6 +49,9 @@ export default function AdminTournamentsPage() {
     try {
       await api.adminCreateTournament(club.id, {
         ...form,
+        startTime: localInputToISO(form.startTime),
+        registrationDeadline: localInputToISO(form.registrationDeadline),
+        endTime: form.endTime ? localInputToISO(form.endTime) : null,
         maxTeams: form.maxTeams ? Number(form.maxTeams) : null,
         entryFee: form.entryFee ? Number(form.entryFee) : null,
       }, token);
@@ -106,16 +111,6 @@ export default function AdminTournamentsPage() {
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={label}>Début</div>
-              <input type="datetime-local" style={input} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={label}>Limite d&apos;inscription</div>
-              <input type="datetime-local" style={input} value={form.registrationDeadline} onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
               <div style={label}>Nb max de binômes (vide = illimité)</div>
               <input type="number" min={1} style={input} value={form.maxTeams ?? ''} onChange={(e) => setForm({ ...form, maxTeams: e.target.value ? Number(e.target.value) : null })} />
             </div>
@@ -124,8 +119,16 @@ export default function AdminTournamentsPage() {
               <input type="number" min={0} step="0.01" style={input} value={form.entryFee ?? ''} onChange={(e) => setForm({ ...form, entryFee: e.target.value ? Number(e.target.value) : null })} />
             </div>
           </div>
+          <div style={label}>Début</div>
+          <DateTimeField value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
+          <div style={label}>Fin (optionnel)</div>
+          <DateTimeField value={form.endTime ?? ''} onChange={(v) => setForm({ ...form, endTime: v || null })} clearable />
+          <div style={label}>Limite d&apos;inscription</div>
+          <DateTimeField value={form.registrationDeadline} onChange={(v) => setForm({ ...form, registrationDeadline: v })} />
           <div style={label}>Description</div>
           <textarea style={{ ...input, minHeight: 70, resize: 'vertical' }} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <div style={label}>Contact (affiché une fois les inscriptions closes)</div>
+          <textarea style={{ ...input, minHeight: 50, resize: 'vertical' }} value={form.contactInfo ?? ''} onChange={(e) => setForm({ ...form, contactInfo: e.target.value })} placeholder="Ex. Vous devez contacter le Juge Arbitre au 06 02 32 33 65" />
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button onClick={submit} style={btn}>Créer (brouillon)</button>
             <button onClick={() => setForm(null)} style={ghost}>Annuler</button>

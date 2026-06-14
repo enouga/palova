@@ -5,6 +5,8 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEvent, AdminEventDetail, CreateEventBody, ClubEventKind } from '@/lib/api';
 import { KIND_LABEL } from '@/lib/events';
+import { localInputToISO, isoToLocalInput } from '@/lib/datetimeLocal';
+import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
 
 const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE'];
@@ -13,15 +15,6 @@ const emptyForm = (): CreateEventBody => ({
   name: '', kind: 'MELEE', description: '', startTime: '', endTime: null,
   registrationDeadline: '', capacity: null, price: null, memberOnly: true,
 });
-
-/** ISO → valeur d'un input datetime-local (heure locale du navigateur). */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function AdminEventsPage() {
   const { club } = useClub();
@@ -42,13 +35,11 @@ export default function AdminEventsPage() {
 
   if (!club || !token) return null;
 
-  const toISO = (v: string) => (v ? new Date(v).toISOString() : '');
-
   const save = async () => {
     if (!form) return;
     setError(null);
     try {
-      const body = { ...form, startTime: toISO(form.startTime), registrationDeadline: toISO(form.registrationDeadline), endTime: form.endTime ? toISO(form.endTime) : null };
+      const body = { ...form, startTime: localInputToISO(form.startTime), registrationDeadline: localInputToISO(form.registrationDeadline), endTime: form.endTime ? localInputToISO(form.endTime) : null };
       if (editingId) await api.adminUpdateEvent(club.id, editingId, body, token);
       else await api.adminCreateEvent(club.id, body, token);
       setForm(null); setEditingId(null); reload();
@@ -71,8 +62,8 @@ export default function AdminEventsPage() {
     setEditingId(e.id);
     setForm({
       name: e.name, kind: e.kind, description: e.description ?? '',
-      startTime: toLocalInput(e.startTime), endTime: e.endTime ? toLocalInput(e.endTime) : null,
-      registrationDeadline: toLocalInput(e.registrationDeadline),
+      startTime: isoToLocalInput(e.startTime), endTime: e.endTime ? isoToLocalInput(e.endTime) : null,
+      registrationDeadline: isoToLocalInput(e.registrationDeadline),
       capacity: e.capacity, price: e.price != null ? Number(e.price) : null, memberOnly: e.memberOnly,
     });
   };
@@ -119,30 +110,23 @@ export default function AdminEventsPage() {
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={label}>Limite d&apos;inscription</div>
-              <input type="datetime-local" style={input} value={form.registrationDeadline} onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={label}>Début</div>
-              <input type="datetime-local" style={input} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={label}>Fin (optionnel)</div>
-              <input type="datetime-local" style={input} value={form.endTime ?? ''} onChange={(e) => setForm({ ...form, endTime: e.target.value || null })} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
               <div style={label}>Nb de places (vide = illimité)</div>
               <input type="number" min={1} style={input} value={form.capacity ?? ''} onChange={(e) => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : null })} />
             </div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={label}>Prix (€, vide = gratuit)</div>
               <input type="number" min={0} step="0.01" style={input} value={form.price ?? ''} onChange={(e) => setForm({ ...form, price: e.target.value ? Number(e.target.value) : null })} />
             </div>
+            <div style={{ flex: 1 }} />
           </div>
+          <div style={label}>Début</div>
+          <DateTimeField value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
+          <div style={label}>Fin (optionnel)</div>
+          <DateTimeField value={form.endTime ?? ''} onChange={(v) => setForm({ ...form, endTime: v || null })} clearable />
+          <div style={label}>Limite d&apos;inscription</div>
+          <DateTimeField value={form.registrationDeadline} onChange={(v) => setForm({ ...form, registrationDeadline: v })} />
           <div style={label}>Description</div>
           <textarea style={{ ...input, minHeight: 70, resize: 'vertical' }} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 12, cursor: 'pointer' }}>

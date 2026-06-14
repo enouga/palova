@@ -96,10 +96,6 @@ export const api = {
   cancelReservation: (reservationId: string, token: string) =>
     request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
 
-  // Déplacement atomique : nouvelle résa CONFIRMED + ancienne CANCELLED côté backend.
-  rescheduleReservation: (reservationId: string, body: { resourceId: string; startTime: string; duration: number }, token: string) =>
-    request<Reservation>(`/api/reservations/${reservationId}/reschedule`, { method: 'POST', body: JSON.stringify(body) }, token),
-
   // --- Parties ouvertes (membres du club) ---
   getOpenMatches: (slug: string, token: string) =>
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
@@ -180,6 +176,12 @@ export const api = {
 
   adminAssignReservationMember: (clubId: string, reservationId: string, memberUserId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/member`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
+
+  adminAddReservationParticipant: (clubId: string, reservationId: string, memberUserId: string, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants`, { method: 'POST', body: JSON.stringify({ memberUserId }) }, token),
+
+  adminRemoveReservationParticipant: (clubId: string, reservationId: string, participantId: string, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'DELETE' }, token),
 
   // --- Offres prépayées & caisse ---
   adminGetPackageTemplates: (clubId: string, token: string) =>
@@ -863,6 +865,7 @@ export interface Tournament {
   category: string;
   gender: TournamentGender;
   description: string | null;
+  contactInfo: string | null;
   startTime: string;
   endTime: string | null;
   registrationDeadline: string;
@@ -953,6 +956,7 @@ export type CreateTournamentBody = {
   category: string;
   gender: TournamentGender;
   description?: string | null;
+  contactInfo?: string | null;
   startTime: string;
   endTime?: string | null;
   registrationDeadline: string;

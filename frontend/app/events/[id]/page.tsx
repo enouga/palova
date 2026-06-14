@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEventDetail, EventParticipant, MyEventRegistration } from '@/lib/api';
 import { eventPlacesLabel, KIND_LABEL } from '@/lib/events';
-import { fillRatio, formatDateTime, timelineSteps, waitlistPosition } from '@/lib/tournament';
+import { fillRatio, formatDateTime, formatDateTimeRange, timelineSteps, waitlistPosition } from '@/lib/tournament';
 import { Screen } from '@/components/ui/Screen';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -83,7 +83,7 @@ export default function EventDetailPage() {
   const myWaitlistPos = myReg && participants ? waitlistPosition(participants, myReg.id) : null;
 
   const metaCards: MetaCard[] = [
-    { icon: 'calendar', label: 'Début', value: formatDateTime(event.startTime, tz) + (event.endTime ? ` → ${formatDateTime(event.endTime, tz)}` : '') },
+    { icon: 'calendar', label: event.endTime ? 'Horaire' : 'Début', value: formatDateTimeRange(event.startTime, event.endTime, tz) },
     { icon: 'clock', label: 'Clôture des inscriptions', value: formatDateTime(event.registrationDeadline, tz) },
     ...(event.price != null && Number(event.price) > 0 ? [{ icon: 'euro', label: 'Prix', value: `${Number(event.price)} € — règlement au club` } as MetaCard] : []),
   ];

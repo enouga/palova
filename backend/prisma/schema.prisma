@@ -480,6 +480,7 @@ model Tournament {
   category             String                                   // "P25","P50","P100",…
   gender               TournamentGender
   description          String?
+  contactInfo          String?          @map("contact_info")     // contact affiché quand les inscriptions sont closes (ex. Juge Arbitre)
   startTime            DateTime         @map("start_time") @db.Timestamptz
   endTime              DateTime?        @map("end_time") @db.Timestamptz
   registrationDeadline DateTime         @map("registration_deadline") @db.Timestamptz

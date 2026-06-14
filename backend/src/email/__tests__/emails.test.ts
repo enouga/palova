@@ -1,4 +1,4 @@
-import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail } from '../templates/emails';
+import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail, buildMatchInviteEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -228,5 +228,36 @@ describe('links', () => {
       const end = new Date('2026-07-12T06:00:00.000Z'); // avant le début
       expect(formatDateRangeFr(start, end, tz)).toBe(formatDateFr(start, tz));
     });
+  });
+});
+
+describe('buildMatchInviteEmail', () => {
+  const base = {
+    recipientFirstName: 'Sophie', resourceName: 'Terrain 2',
+    dateLabel: 'samedi 12 juillet 2026 à 18h00', clubName: 'Padel Arena',
+    url: 'https://arena.palova.fr/me/reservations', brand,
+  };
+
+  it('mentionne qui a ajouté le joueur, le terrain et le lien', () => {
+    const mail = buildMatchInviteEmail({ ...base, byName: 'Adam Laurent' });
+    expect(mail.subject).toContain('Padel Arena');
+    expect(mail.html).toContain('Sophie');
+    expect(mail.html).toContain('Adam Laurent');
+    expect(mail.html).toContain('Terrain 2');
+    expect(mail.html).toContain('samedi 12 juillet 2026 à 18h00');
+    expect(mail.html).toContain('https://arena.palova.fr/me/reservations');
+    expect(mail.text).toContain('https://arena.palova.fr/me/reservations');
+  });
+
+  it('sans byName (rattachement club) : formulation neutre', () => {
+    const mail = buildMatchInviteEmail({ ...base, byName: null });
+    expect(mail.html).toContain('ajouté');
+    expect(mail.html).not.toContain('vous a ajouté'); // pas de « X vous a ajouté » sans nom
+  });
+
+  it('échappe le HTML du nom de celui qui ajoute', () => {
+    const mail = buildMatchInviteEmail({ ...base, byName: '<script>x' });
+    expect(mail.html).not.toContain('<script>');
+    expect(mail.html).toContain('&lt;script&gt;');
   });
 });

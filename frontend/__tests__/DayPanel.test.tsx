@@ -39,7 +39,7 @@ function renderPanel(props: Partial<React.ComponentProps<typeof DayPanel>> = {})
     <ThemeProvider>
       <DayPanel
         dayKey="2026-06-12" entries={entries}
-        canMove={() => true} onMove={jest.fn()} onCancel={jest.fn()}
+        onCancel={jest.fn()}
         onReserve={jest.fn()} reserveLabel="Réserver un créneau" {...props}
       />
     </ThemeProvider>,
@@ -54,18 +54,15 @@ describe('DayPanel', () => {
     expect(screen.getByText(/37.5/)).toBeInTheDocument();
   });
 
-  it('déclenche onMove et onCancel depuis la carte réservation', () => {
-    const onMove = jest.fn();
+  it('déclenche onCancel depuis la carte réservation', () => {
     const onCancel = jest.fn();
-    renderPanel({ onMove, onCancel });
-    fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }));
-    expect(onMove).toHaveBeenCalledWith(reservation);
+    renderPanel({ onCancel });
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(onCancel).toHaveBeenCalledWith(reservation);
   });
 
-  it('masque « Déplacer » quand canMove est faux mais garde « Annuler »', () => {
-    renderPanel({ canMove: () => false });
+  it('ne propose jamais « Déplacer » (fonctionnalité retirée), garde « Annuler »', () => {
+    renderPanel();
     expect(screen.queryByRole('button', { name: 'Déplacer' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
   });

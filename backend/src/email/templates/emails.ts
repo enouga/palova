@@ -202,6 +202,45 @@ export function buildMatchJoinEmail(i: MatchJoinEmailInput): BuiltEmail {
   return { subject, html, text };
 }
 
+export interface MatchInviteEmailInput {
+  recipientFirstName: string;
+  /** Nom de l'organisateur qui a ajouté le joueur ; null = ajout par le club (caisse). */
+  byName?: string | null;
+  resourceName: string;
+  dateLabel: string;
+  clubName: string;
+  url: string;
+  brand: Brand;
+}
+
+/** Email à un membre qu'on vient d'ajouter à une partie (partenaire ou rattachement club). */
+export function buildMatchInviteEmail(i: MatchInviteEmailInput): BuiltEmail {
+  const subject = `Vous avez été ajouté·e à une partie — ${i.clubName}`;
+  const heading = 'Vous jouez ! 🎾';
+  const intro = i.byName
+    ? `<strong>${escapeHtml(i.byName)}</strong> vous a ajouté·e à une partie de padel.`
+    : 'Vous avez été ajouté·e à une partie de padel.';
+  const infoRows: InfoRow[] = [
+    { label: 'Terrain', value: i.resourceName },
+    { label: 'Date', value: i.dateLabel },
+    { label: 'Club', value: i.clubName },
+  ];
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p><p style="margin:0;">${intro}</p>`;
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading, introHtml, infoRows,
+    ctaLabel: 'Voir mes parties', ctaUrl: i.url,
+  });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`, '',
+    stripTags(intro), '',
+    `Terrain : ${i.resourceName}`,
+    `Date : ${i.dateLabel}`,
+    `Club : ${i.clubName}`, '',
+    `Voir mes parties : ${i.url}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 /** Retire les balises HTML pour produire la version texte. */
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '');

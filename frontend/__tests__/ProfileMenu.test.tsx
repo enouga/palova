@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ProfileMenu } from '../components/ProfileMenu';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -69,7 +69,32 @@ describe('ProfileMenu', () => {
     const btn = await screen.findByLabelText('Mon profil');
     expect(btn).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('Se déconnecter')).not.toBeInTheDocument();
-    expect(api.getMyProfile).not.toHaveBeenCalled(); // chargement paresseux
+    // L'identité est chargée dès le montage (pour l'info-bulle de survol), mais le menu reste fermé.
+    expect(api.getMyProfile).toHaveBeenCalled();
+    expect(api.getMyClubs).not.toHaveBeenCalled(); // données par club encore paresseuses
+  });
+
+  it("bouton fermé : avatar en initiales + info-bulle « Nom · e-mail », sans ouvrir le menu", async () => {
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const btn = await screen.findByLabelText('Mon profil');
+    // Initiales visibles dans le bouton dès le montage : on sait qui est connecté sans cliquer.
+    await waitFor(() => expect(screen.getByText('MB')).toBeInTheDocument());
+    expect(btn).toHaveAttribute('title', 'Marc Bidaut · marc@palova.fr'); // survol → identité complète
+    expect(screen.queryByText('Se déconnecter')).not.toBeInTheDocument();  // menu toujours fermé
+  });
+
+  it("bouton fermé : photo d'avatar si disponible (pas d'initiales)", async () => {
+    document.cookie = 'token=abc; path=/';
+    api.getMyProfile.mockResolvedValue({ ...profile, avatarUrl: '/uploads/avatars/u1-1.png' });
+    const { container } = wrap();
+    await screen.findByLabelText('Mon profil');
+    await waitFor(() => {
+      const img = container.querySelector('img');
+      expect(img).not.toBeNull();
+      expect(img!.getAttribute('src')).toContain('/uploads/avatars/u1-1.png');
+    });
+    expect(screen.queryByText('MB')).not.toBeInTheDocument(); // photo → pas d'initiales
   });
 
   it("au clic : identité (nom, e-mail, initiales) + déconnexion + liens", async () => {
@@ -78,7 +103,8 @@ describe('ProfileMenu', () => {
     openMenu();
     expect(await screen.findByText('Marc Bidaut')).toBeInTheDocument();
     expect(screen.getByText('marc@palova.fr')).toBeInTheDocument();
-    expect(screen.getByText('MB')).toBeInTheDocument();
+    // Initiales à deux endroits : l'avatar du bouton + l'identité du menu ouvert.
+    expect(screen.getAllByText('MB')).toHaveLength(2);
     expect(screen.getByText('Se déconnecter')).toBeInTheDocument();
     expect(screen.getByText('Mes réservations')).toBeInTheDocument();
     expect(screen.getByText('Mes clubs')).toBeInTheDocument();

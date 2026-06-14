@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
+import { DateField } from '@/components/ui/DateField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 function fmt(iso: string): string {
@@ -87,7 +88,7 @@ export default function AdminReservationsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
         <label style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, display: 'flex', alignItems: 'center', gap: 8 }}>
           Jour
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={input} />
+          <DateField value={date} onChange={setDate} size="sm" />
         </label>
         {date && <button onClick={() => setDate('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.accent }}>Tout afficher</button>}
       </div>

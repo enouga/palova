@@ -10,6 +10,7 @@ import {
   buildOrganizerEmail,
   buildPlayerEmail,
   buildMatchJoinEmail,
+  buildMatchInviteEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
 
@@ -272,4 +273,52 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
     brand: brandOf(club),
   });
   await sendMail({ to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+/** Prévient chaque partenaire (non-organisateur) qu'il a été ajouté à une partie. */
+export async function notifyMatchPartnersInvited(reservationId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+    },
+  });
+  if (!resa) return;
+
+  const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
+  const byName = organizer ? fullName(organizer) : null;
+  const club = resa.resource.club;
+  const brand = brandOf(club);
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+
+  for (const p of resa.participants) {
+    if (p.isOrganizer || !p.user.email) continue;
+    const mail = buildMatchInviteEmail({
+      recipientFirstName: p.user.firstName, byName,
+      resourceName: resa.resource.name, dateLabel, clubName: club.name, url, brand,
+    });
+    await sendMail({ to: p.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  }
+}
+
+/** Prévient un membre qu'un gestionnaire vient de le rattacher à une réservation. */
+export async function notifyReservationMemberAssigned(reservationId: string, memberUserId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: { resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+  });
+  if (!resa) return;
+  const member = await prisma.user.findUnique({ where: { id: memberUserId }, select: { firstName: true, email: true } });
+  if (!member?.email) return;
+
+  const club = resa.resource.club;
+  const mail = buildMatchInviteEmail({
+    recipientFirstName: member.firstName, byName: null,
+    resourceName: resa.resource.name,
+    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
+    clubName: club.name, url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+  });
+  await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
 }

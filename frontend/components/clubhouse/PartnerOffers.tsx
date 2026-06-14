@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Sponsor } from '@/lib/api';
+import { Sponsor, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
@@ -44,7 +44,7 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
 
   const logoTile = (s: Sponsor, size: number) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={s.logoUrl} alt={s.name} style={{ height: size, width: size + 18, objectFit: 'contain', borderRadius: 12, background: '#fff', padding: 6, flexShrink: 0, boxSizing: 'border-box' }} />
+    <img src={assetUrl(s.logoUrl) ?? undefined} alt={s.name} style={{ height: size, width: size + 18, objectFit: 'contain', borderRadius: 12, background: '#fff', padding: 6, flexShrink: 0, boxSizing: 'border-box' }} />
   );
 
   const codeButton = (s: Sponsor, onGradient = false) => s.offerCode && (

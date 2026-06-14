@@ -10,6 +10,7 @@ import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
 import { TimePicker } from '@/components/ui/TimePicker';
@@ -63,6 +64,7 @@ function fmtHM(iso: string, tz: string): string {
 
 export default function AdminPlanningPage() {
   const { th } = useTheme();
+  const isDesktop = useIsDesktop();
   const { token, ready } = useAuth();
   const { club } = useClub();
   const { collapsed, setCollapsed } = useAdminChrome();
@@ -318,6 +320,55 @@ export default function AdminPlanningPage() {
     return r;
   };
 
+  // Messages FR pour les erreurs de gestion des participants.
+  const participantErr = (code: string): string => ({
+    TOO_MANY_PLAYERS:          'Terrain complet.',
+    CANNOT_REMOVE_ORGANIZER:   "Impossible de retirer l'organisateur.",
+    RESERVATION_HAS_NO_MEMBER: "Associez d'abord un joueur à la réservation.",
+    PARTNER_DUPLICATE:         'Ce joueur est déjà ajouté.',
+    MEMBER_NOT_FOUND:          "Ce joueur n'est pas membre actif du club.",
+  }[code] ?? code);
+
+  // Ajouter un joueur à la répartition par joueur (panneau Encaisser).
+  const addParticipant = async (m: Member) => {
+    if (!token || !clubId || !selected) return;
+    setBusy(true);
+    try {
+      setError(null);
+      const updated = await api.adminAddReservationParticipant(clubId, selected.id, m.userId, token);
+      setSelected(updated);
+      await load();
+    } catch (e) {
+      setError(participantErr((e as Error).message));
+    } finally { setBusy(false); }
+  };
+
+  // Création à la volée + ajout comme participant.
+  const createAndAddParticipant = async (body: CreateMemberBody) => {
+    if (!token || !clubId) return { tempPassword: null, existed: false };
+    const r = await api.adminCreateMember(clubId, body, token);
+    const mem = await api.adminGetMembers(clubId, token);
+    setMembers(mem);
+    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
+    if (created) await addParticipant(created);
+    return r;
+  };
+
+  // Retirer un joueur de la répartition (recalcule les parts côté serveur).
+  const removeParticipant = async (participantId: string) => {
+    if (!token || !clubId || !selected) return;
+    setBusy(true);
+    try {
+      setError(null);
+      const updated = await api.adminRemoveReservationParticipant(clubId, selected.id, participantId, token);
+      if (payParticipantId === participantId) setPayParticipantId(null);
+      setSelected(updated);
+      await load();
+    } catch (e) {
+      setError(participantErr((e as Error).message));
+    } finally { setBusy(false); }
+  };
+
   // Création à la volée + sélection (formulaire de création de résa).
   const createForResa = async (body: CreateMemberBody) => {
     if (!token || !clubId) return { tempPassword: null, existed: false };
@@ -518,14 +569,18 @@ export default function AdminPlanningPage() {
         <div onClick={() => setSelected(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 22, fontFamily: th.fontUI }}>
+            style={{ width: '100%', maxWidth: isDesktop ? 640 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 30 : 22, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div>
-                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 21, color: th.text }}>{selected.resource.name}</div>
-                <div style={{ fontFamily: th.fontMono, fontSize: 13, color: th.textMute, marginTop: 2 }}>{fmtHM(selected.startTime, tz)} – {fmtHM(selected.endTime, tz)} · {STATUS_LABEL[selected.status]}</div>
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: isDesktop ? 26 : 21, color: th.text }}>{selected.resource.name}</div>
+                <div style={{ fontFamily: th.fontMono, fontSize: isDesktop ? 14 : 13, color: th.textMute, marginTop: 2 }}>{fmtHM(selected.startTime, tz)} – {fmtHM(selected.endTime, tz)} · {STATUS_LABEL[selected.status]}</div>
               </div>
-              <button onClick={() => setSelected(null)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 30, height: 30, color: th.textMute, fontSize: 16 }}>✕</button>
+              <button onClick={() => setSelected(null)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 32, height: 32, color: th.textMute, fontSize: 16 }}>✕</button>
             </div>
+
+            {error && (
+              <div style={{ marginTop: 14, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+            )}
 
             <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
               {labelOf(selected)}
@@ -564,7 +619,7 @@ export default function AdminPlanningPage() {
                   onSelect={assignPlayer}
                   onClear={() => {}}
                   onCreate={createAndAssign}
-                  placeholder="Rechercher un membre…"
+                  placeholder="Cliquez pour voir les membres, ou tapez un nom…"
                 />
               </div>
             )}
@@ -582,14 +637,15 @@ export default function AdminPlanningPage() {
               const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
               return (
               <div style={{ marginTop: 16 }}>
-                {bills.length > 1 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Par joueur</div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Par joueur</div>
+                  {bills.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {bills.map((p) => {
                         const rest = toCents(p.outstanding);
                         const settled = rest <= 0;
                         const on = payParticipantId === p.id;
+                        const canRemove = !(p.isOrganizer && bills.length > 1); // l'orga ne part pas tant qu'il reste des joueurs
                         return (
                           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: on ? tint(th.text) : th.surface2, border: `1px solid ${on ? th.text : 'transparent'}` }}>
                             <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
@@ -607,18 +663,37 @@ export default function AdminPlanningPage() {
                                 Régler
                               </button>
                             )}
+                            {canRemove && (
+                              <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur"
+                                onClick={() => removeParticipant(p.id)}
+                                style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                    {activePart && (
-                      <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.text }}>
-                        Encaissement pour <b>{activePart.firstName} {activePart.lastName}</b> ·{' '}
-                        <button type="button" onClick={() => setPayParticipantId(null)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, textDecoration: 'underline' }}>résa entière</button>
-                      </div>
+                  )}
+                  {activePart && (
+                    <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.text }}>
+                      Encaissement pour <b>{activePart.firstName} {activePart.lastName}</b> ·{' '}
+                      <button type="button" onClick={() => setPayParticipantId(null)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, textDecoration: 'underline' }}>résa entière</button>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 10 }}>
+                    {bills.length >= players ? (
+                      <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({players} joueurs).</div>
+                    ) : (
+                      <PlayerPicker
+                        members={members}
+                        value={null}
+                        onSelect={addParticipant}
+                        onClear={() => {}}
+                        onCreate={createAndAddParticipant}
+                        placeholder="+ Ajouter un joueur…"
+                      />
                     )}
                   </div>
-                )}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                   <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
                     <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ border: `1px solid ${overCap ? '#ff7a4d' : th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
@@ -744,7 +819,7 @@ export default function AdminPlanningPage() {
               </div>
               <div>
                 <div style={{ fontSize: 12, color: th.textMute, marginBottom: 8 }}>Fin</div>
-                <TimePicker value={cEnd} onChange={setCEnd} leading={<div style={{ width: 150 }} aria-hidden="true" />} />
+                <TimePicker value={cEnd} onChange={setCEnd} presets={['09:00', '13:00', '19:00', '21:00']} />
               </div>
             </div>
 
@@ -760,7 +835,7 @@ export default function AdminPlanningPage() {
                 onSelect={setCMember}
                 onClear={() => setCMember(null)}
                 onCreate={createForResa}
-                placeholder="Rechercher un membre…"
+                placeholder="Cliquez pour voir les membres, ou tapez un nom…"
               />
             </div>
 

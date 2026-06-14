@@ -73,10 +73,6 @@ export default function MyReservationsPage() {
     () => entriesByDay(buildCalendarEntries(items, regs, new Date())),
     [items, regs],
   );
-  // Déplacement possible : sur l'hôte du club de la résa uniquement (la page Réserver y vit).
-  const canMove = (r: MyReservation) =>
-    !!slug && r.resource.club.slug === slug && r.status !== 'CANCELLED' && new Date(r.startTime).getTime() > now;
-
   const cancel = async (r: MyReservation) => {
     if (!token) return;
     setCancelling(true);
@@ -135,8 +131,6 @@ export default function MyReservationsPage() {
                 <DayPanel
                   dayKey={selectedDay}
                   entries={byDay.get(selectedDay) ?? []}
-                  canMove={canMove}
-                  onMove={(r) => router.push(`/reserver?move=${r.id}`)}
                   onCancel={setConfirmCancel}
                   onReserve={() => router.push(reserveHref)}
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}

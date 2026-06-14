@@ -1,6 +1,14 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { EventService } from '../event.service';
+import {
+  notifyEventRegistration,
+  notifyEventCancellation,
+  notifyEventPromotion,
+} from '../../email/notifications';
+
+// Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
+jest.mock('../../email/notifications');
 
 const FUTURE = new Date(Date.now() + 86_400_000); // +24h
 
@@ -274,5 +282,46 @@ describe('EventService admin', () => {
 
     const out = await service.adminRemoveRegistration('e1', 'r1', 'club-demo');
     expect(out.status).toBe('CANCELLED');
+  });
+});
+
+describe('EventService — notifications email', () => {
+  let service: EventService;
+  beforeEach(() => { jest.clearAllMocks(); service = new EventService(); });
+
+  it('register déclenche la notification d inscription avec l id créé', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event() as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' } as any);
+
+    await service.register('e1', 'user-1');
+
+    expect(notifyEventRegistration).toHaveBeenCalledWith('r-new');
+  });
+
+  it('cancelRegistration notifie la désinscription ET la promotion du 1er en attente', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event() as any);
+    prismaMock.eventRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED' } as any)
+      .mockResolvedValueOnce({ id: 'r-wait' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+
+    await service.cancelRegistration('e1', 'user-1');
+
+    expect(notifyEventCancellation).toHaveBeenCalledWith('r1');
+    expect(notifyEventPromotion).toHaveBeenCalledWith('r-wait');
+  });
+
+  it('une erreur d envoi d email ne fait pas échouer l inscription', async () => {
+    (notifyEventRegistration as jest.Mock).mockRejectedValueOnce(new Error('SMTP down'));
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event() as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' } as any);
+
+    await expect(service.register('e1', 'user-1')).resolves.toMatchObject({ id: 'r-new' });
   });
 });

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Member, CreateMemberBody } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 
@@ -22,24 +22,32 @@ function splitName(q: string): { firstName: string; lastName: string } {
 export function PlayerPicker({ members, value, onSelect, onClear, onCreate, placeholder }: PlayerPickerProps) {
   const { th } = useTheme();
   const [query, setQuery]           = useState('');
+  const [open, setOpen]             = useState(false);
   const [editing, setEditing]       = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm]             = useState({ firstName: '', lastName: '', email: '', phone: '' });
   const [creating, setCreating]     = useState(false);
   const [createErr, setCreateErr]   = useState<string | null>(null);
   const [createMsg, setCreateMsg]   = useState<string | null>(null);
+  const inputRef                    = useRef<HTMLInputElement>(null);
 
   const valueKey = value ? `${value.firstName} ${value.lastName}` : '';
   // Changement de cible (autre résa / réinit) : on repart en mode « chip ».
   useEffect(() => { setEditing(false); setShowCreate(false); }, [valueKey]);
+  // Passage en édition (clic « Changer ») : focus le champ pour ouvrir la liste tout de suite.
+  useEffect(() => { if (editing && !showCreate) inputRef.current?.focus(); }, [editing, showCreate]);
 
   const showChip = !!value && !editing;
 
-  const matches = !showChip && !showCreate && query.trim().length > 0
-    ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
+  // Liste visible dès le focus (parcourir les membres) OU dès qu'on tape ; vide → tous
+  // les membres, sinon filtrés par nom/email.
+  const q = query.trim().toLowerCase();
+  const showList = !showChip && !showCreate && (open || q.length > 0);
+  const matches = showList
+    ? (q ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)) : members).slice(0, 8)
     : [];
 
-  const pick = (m: Member) => { setQuery(''); setEditing(false); setCreateMsg(null); onSelect(m); };
+  const pick = (m: Member) => { setQuery(''); setOpen(false); setEditing(false); setCreateMsg(null); onSelect(m); };
 
   const openCreate = () => {
     const { firstName, lastName } = splitName(query);
@@ -82,7 +90,7 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
       {showChip ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px' }}>
           <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{value!.firstName} {value!.lastName}</span>
-          <button type="button" onClick={() => { setEditing(true); setQuery(''); onClear(); }}
+          <button type="button" onClick={() => { setEditing(true); setQuery(''); setOpen(true); onClear(); }}
             style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '3px 8px', color: th.textMute, fontSize: 12 }}>Changer</button>
         </div>
       ) : showCreate ? (
@@ -102,18 +110,21 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
           </div>
         </div>
       ) : (
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder ?? 'Rechercher un joueur…'}
+        <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder ?? 'Rechercher un joueur…'}
+          onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
           style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
       )}
 
-      {matches.length > 0 && (
-        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, overflow: 'hidden', boxShadow: th.shadowSoft }}>
-          {matches.map((m) => (
-            <button key={m.userId} type="button" onClick={() => pick(m)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-              {m.firstName} {m.lastName} <span style={{ color: th.textFaint }}>· {m.email}</span>
-            </button>
-          ))}
+      {showList && (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, maxHeight: 240, overflowY: 'auto', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, boxShadow: th.shadowSoft }}>
+          {matches.length === 0
+            ? <div style={{ padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>{members.length === 0 ? 'Aucun membre dans ce club.' : 'Aucun membre trouvé.'}</div>
+            : matches.map((m) => (
+                <button key={m.userId} type="button" onClick={() => pick(m)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
+                  {m.firstName} {m.lastName} <span style={{ color: th.textFaint }}>· {m.email}</span>
+                </button>
+              ))}
         </div>
       )}
 

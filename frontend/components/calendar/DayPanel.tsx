@@ -25,12 +25,10 @@ const REG_LABEL: Record<string, string> = { CONFIRMED: 'Inscrit', WAITLISTED: "L
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
 export function DayPanel({
-  dayKey, entries, canMove, onMove, onCancel, onReserve, reserveLabel,
+  dayKey, entries, onCancel, onReserve, reserveLabel,
 }: {
   dayKey: string;
   entries: CalendarEntry[];
-  canMove: (r: MyReservation) => boolean;
-  onMove: (r: MyReservation) => void;
   onCancel: (r: MyReservation) => void;
   onReserve: () => void;
   reserveLabel: string;
@@ -82,12 +80,6 @@ export function DayPanel({
                     <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
                     {!e.past && (
                       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                        {canMove(r) && (
-                          <button onClick={() => onMove(r)}
-                            style={{ border: `1px solid ${th.lineStrong}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            Déplacer
-                          </button>
-                        )}
                         <button onClick={() => onCancel(r)}
                           style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>
                           Annuler

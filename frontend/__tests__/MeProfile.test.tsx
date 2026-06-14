@@ -57,18 +57,20 @@ describe('Page Mon profil', () => {
     expect(screen.getByText('eric@palova.fr')).toBeInTheDocument();
     expect(screen.getByText('L’email ne peut pas être modifié.')).toBeInTheDocument();
     expect(screen.getByLabelText('Téléphone')).toHaveValue('0609032635');
-    expect(screen.getByLabelText('Date de naissance')).toHaveValue('1973-07-08');
+    expect(screen.getByLabelText('Date de naissance')).toHaveTextContent('08/07/1973');
   });
 
   it('Enregistrer envoie téléphone, sexe et date de naissance', async () => {
     wrap();
     await screen.findByLabelText('Téléphone');
     fireEvent.change(screen.getByLabelText('Téléphone'), { target: { value: '0699999999' } });
-    fireEvent.change(screen.getByLabelText('Date de naissance'), { target: { value: '1980-01-15' } });
+    // Calendrier maison : ouvrir le popup (mois de la valeur = juillet 1973) puis cliquer un jour.
+    fireEvent.click(screen.getByLabelText('Date de naissance'));
+    fireEvent.click(screen.getByLabelText('15/07/1973'));
     fireEvent.click(screen.getByText('Femme'));
     fireEvent.click(screen.getByText('Enregistrer'));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
-      { phone: '0699999999', sex: 'FEMALE', birthDate: '1980-01-15' }, 'abc',
+      { phone: '0699999999', sex: 'FEMALE', birthDate: '1973-07-15' }, 'abc',
     ));
     expect(await screen.findByText('Enregistré ✓')).toBeInTheDocument();
   });

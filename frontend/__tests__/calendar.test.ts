@@ -47,6 +47,7 @@ function makeRegistration(over: {
       category: 'P100',
       gender: 'MEN',
       description: null,
+      contactInfo: null,
       startTime: over.startTime ?? '2026-06-13T07:00:00.000Z',
       endTime: over.endTime === undefined ? '2026-06-14T16:00:00.000Z' : over.endTime,
       registrationDeadline: '2026-06-11T22:00:00.000Z',

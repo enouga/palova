@@ -6,7 +6,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, ClubEvent } from '@/lib/api';
 import { mergeAgenda, filterAgenda, eventPlacesLabel, AgendaFilter, KIND_LABEL } from '@/lib/events';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
-import { fillRatio } from '@/lib/tournament';
+import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
@@ -16,10 +16,6 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 const FILTERS: { key: AgendaFilter; label: string }[] = [
   { key: 'tout', label: 'Tout' }, { key: 'competitions', label: 'Compétitions' }, { key: 'animations', label: 'Animations' },
 ];
-
-function formatDate(iso: string, tz: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
-}
 
 export default function EventsPage() {
   const { club, loading } = useClub();
@@ -95,7 +91,7 @@ export default function EventsPage() {
                 accent={isT ? ACCENTS.apricot : ACCENTS.cyan}
                 tag={isT ? `${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}` : KIND_LABEL[item.event.kind]}
                 title={isT ? item.tournament.name : item.event.name}
-                dateLabel={formatDate(item.startTime, club.timezone)}
+                dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
                 deadline={isT ? item.tournament.registrationDeadline : item.event.registrationDeadline}
                 now={now}
                 ratio={isT

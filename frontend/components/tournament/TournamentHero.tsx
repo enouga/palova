@@ -1,7 +1,7 @@
 'use client';
 import { TournamentDetail } from '@/lib/api';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
-import { fillRatio, formatDateTime } from '@/lib/tournament';
+import { fillRatio, formatDateTime, formatDateTimeRange } from '@/lib/tournament';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
@@ -29,7 +29,7 @@ export function TournamentHero({ t, now }: { t: TournamentDetail; now: Date | nu
 export function MetaCards({ t }: { t: TournamentDetail }) {
   const tz = t.club.timezone;
   const cards: MetaCard[] = [
-    { icon: 'calendar', label: 'Début', value: formatDateTime(t.startTime, tz) },
+    { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateTimeRange(t.startTime, t.endTime, tz) },
     { icon: 'clock', label: 'Clôture des inscriptions', value: formatDateTime(t.registrationDeadline, tz) },
     ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € par binôme` } as MetaCard] : []),
   ];

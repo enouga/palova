@@ -20,7 +20,8 @@ jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubCtx }));
 jest.mock('../lib/api', () => ({
   api: {
     getMyClubs: jest.fn(),
-    getMyProfile: jest.fn(),
+    // Chargé au montage par ProfileMenu (info-bulle d'identité) ; le menu ne s'ouvre pas ici.
+    getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Admin', lastName: 'User', email: 'admin@palova.fr', avatarUrl: null }),
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
   },
@@ -82,5 +83,28 @@ describe('AdminLayout — toggle de la sidebar', () => {
 
     fireEvent.click(screen.getByLabelText('Afficher le menu'));
     expect(localStorage.getItem(KEY)).toBe('open');
+  });
+
+  describe('repli par défaut sur téléphone', () => {
+    const realMatchMedia = window.matchMedia;
+    // matche uniquement la requête « petit écran » (téléphone).
+    const phoneMM = (q: string) => ({
+      matches: /max-width/.test(q), media: q, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
+    });
+    beforeEach(() => { window.matchMedia = phoneMM as unknown as typeof window.matchMedia; });
+    afterEach(() => { window.matchMedia = realMatchMedia; });
+
+    it('téléphone sans préférence : sidebar repliée par défaut', async () => {
+      await wrap();
+      expect(screen.getByLabelText('Afficher le menu')).toBeInTheDocument();
+      expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+    });
+
+    it('une préférence « open » explicite prime sur le repli auto', async () => {
+      localStorage.setItem(KEY, 'open');
+      await wrap();
+      expect(screen.getByText('Espace club')).toBeInTheDocument();
+    });
   });
 });

@@ -7,6 +7,7 @@ import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
 import { playerCount } from '../utils/courtType';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned } from '../email/notifications';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -25,19 +26,29 @@ export class ReservationService {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
   }
 
+  /** Envoi d'email best-effort : un échec est loggé, jamais propagé (ne casse pas l'action). */
+  private async safeNotify(fn: () => Promise<void>): Promise<void> {
+    try { await fn(); }
+    catch (err) { console.error('[reservation] notification échouée', err); }
+  }
+
   /**
    * Lignes participant d'une réservation : l'organisateur (isOrganizer, part = reste
    * au centime) + ses partenaires (part égale). La somme des parts == prix total.
    */
-  private participantRows(reservationId: string, organizerId: string, partnerIds: string[], priceCents: number) {
+  private splitShares(organizerId: string, partnerIds: string[], priceCents: number) {
     const nb = 1 + partnerIds.length;
     const baseCents = Math.floor(priceCents / nb);
     const organizerCents = priceCents - baseCents * partnerIds.length;
     const dec = (c: number) => new Prisma.Decimal(c).div(100);
     return [
-      { reservationId, userId: organizerId, isOrganizer: true, share: dec(organizerCents) },
-      ...partnerIds.map((userId) => ({ reservationId, userId, isOrganizer: false, share: dec(baseCents) })),
+      { userId: organizerId, isOrganizer: true, share: dec(organizerCents) },
+      ...partnerIds.map((userId) => ({ userId, isOrganizer: false, share: dec(baseCents) })),
     ];
+  }
+
+  private participantRows(reservationId: string, organizerId: string, partnerIds: string[], priceCents: number) {
+    return this.splitShares(organizerId, partnerIds, priceCents).map((row) => ({ reservationId, ...row }));
   }
 
   /**
@@ -318,154 +329,10 @@ export class ReservationService {
       endTime:       confirmed.endTime.toISOString(),
     });
 
+    // Best-effort : prévenir les partenaires qu'ils ont été ajoutés à la partie.
+    await this.safeNotify(() => notifyMatchPartnersInvited(reservationId));
+
     return confirmed;
-  }
-
-  /**
-   * Déplacement atomique d'une réservation par son propriétaire : la nouvelle
-   * résa est créée CONFIRMED et l'ancienne passée en CANCELLED dans la même
-   * transaction Serializable — tout échec laisse l'ancienne intacte.
-   * Intra-club uniquement ; le créneau cible est revalidé intégralement
-   * (heures ouvrées, fenêtre, membership, conflits) car il vient du client.
-   */
-  async rescheduleReservation(
-    reservationId: string,
-    userId: string,
-    params: { resourceId: string; startTime: Date; duration: number },
-  ) {
-    const old = await prisma.reservation.findUnique({
-      where: { id: reservationId },
-      include: {
-        resource:     { select: { clubId: true } },
-        participants: { select: { userId: true, isOrganizer: true } },
-      },
-    });
-    if (!old)                          throw new Error('RESERVATION_NOT_FOUND');
-    if (old.userId !== userId)         throw new Error('UNAUTHORIZED');
-    if (old.status !== 'PENDING' && old.status !== 'CONFIRMED')
-                                       throw new Error('RESERVATION_NOT_ACTIVE');
-    if (old.startTime.getTime() <= Date.now()) throw new Error('RESERVATION_IN_PAST');
-
-    const { resourceId, startTime, duration } = params;
-    if (!Number.isFinite(duration) || duration <= 0 || duration % 30 !== 0
-        || isNaN(startTime.getTime()) || startTime.getTime() <= Date.now()) {
-      throw new Error('VALIDATION_ERROR');
-    }
-    const endTime = new Date(startTime.getTime() + duration * 60_000);
-
-    const resource = await prisma.resource.findUnique({
-      where: { id: resourceId },
-      select: {
-        clubId: true, openHour: true, closeHour: true,
-        price: true, offPeakPrice: true,
-        club: { select: { timezone: true, offPeakHours: true, publicBookingDays: true, memberBookingDays: true, bookingQuotas: true } },
-      },
-    });
-    if (!resource)                              throw new Error('RESOURCE_NOT_FOUND');
-    if (resource.clubId !== old.resource.clubId) throw new Error('CLUB_MISMATCH');
-
-    // Heures ouvrées en heure locale du club — holdSlot s'en dispense car ses
-    // créneaux viennent d'AvailabilityService ; ici le créneau vient du client.
-    const startLocal = DateTime.fromJSDate(startTime).setZone(resource.club.timezone);
-    const endLocal   = DateTime.fromJSDate(endTime).setZone(resource.club.timezone);
-    const open  = startLocal.startOf('day').set({ hour: resource.openHour });
-    const close = startLocal.startOf('day').set({ hour: resource.closeHour });
-    if (startLocal < open || endLocal > close) throw new Error('OUT_OF_HOURS');
-
-    const { isSubscriber } = await this.assertMembershipAndWindow(resource, userId, startTime);
-    // La résa déplacée est exclue du comptage : à quota plein, le déplacement doit marcher.
-    await this.assertQuota(resource.club, resource.clubId, userId, isSubscriber, startTime, endTime, reservationId);
-
-    // Lock du nouveau créneau — sauf clé identique à l'ancienne (changement de
-    // durée seule) : le SET NX échouerait contre notre propre résa.
-    const newLock = this.lockKey(resourceId, startTime);
-    const sameKey = newLock === this.lockKey(old.resourceId, old.startTime);
-    if (!sameKey) {
-      const acquired = await redis.set(newLock, userId, 'EX', HOLD_TTL_SECONDS, 'NX');
-      if (!acquired) throw new Error('SLOT_ALREADY_HELD');
-    }
-
-    try {
-      // Prix du nouveau créneau (tarif creux ssi entièrement en heures creuses).
-      const priceCents = slotPriceCents(
-        resource.club.offPeakHours as OffPeakHours | null,
-        startTime, endTime, resource.club.timezone,
-        Math.round(Number(resource.price) * 100),
-        resource.offPeakPrice != null ? Math.round(Number(resource.offPeakPrice) * 100) : null,
-      );
-      const totalPrice = new Prisma.Decimal(priceCents).div(100);
-
-      // Joueurs recopiés depuis l'ancienne résa (organisateur + partenaires) ; parts
-      // re-réparties sur le nouveau prix. Résa legacy sans participants → organisateur seul.
-      const oldParts = old.participants ?? [];
-      const organizerId = oldParts.find((p) => p.isOrganizer)?.userId ?? old.userId ?? userId;
-      const partnerIds = oldParts.map((p) => p.userId).filter((id) => id !== organizerId);
-
-      const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
-      const created = await prisma.$transaction(async (tx) => {
-        const locked = await tx.$queryRaw<any[]>`
-          SELECT id, status FROM reservations WHERE id = ${reservationId} FOR UPDATE
-        `;
-        if (!locked[0] || (locked[0].status !== 'PENDING' && locked[0].status !== 'CONFIRMED')) {
-          throw new Error('RESERVATION_NOT_ACTIVE');
-        }
-
-        // id != reservationId : déplacer vers un créneau qui chevauche
-        // l'ancienne résa doit fonctionner (ex. décalage de 30 min).
-        const conflicts = await tx.reservation.count({
-          where: {
-            resourceId,
-            id: { not: reservationId },
-            OR: [
-              { status: 'CONFIRMED' },
-              { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
-            ],
-            startTime: { lt: endTime },
-            endTime:   { gt: startTime },
-          },
-        });
-        if (conflicts > 0) throw new Error('SLOT_NOT_AVAILABLE');
-
-        const next = await tx.reservation.create({
-          data: { resourceId, userId, startTime, endTime, status: 'CONFIRMED', totalPrice, visibility: old.visibility },
-        });
-        await tx.reservationParticipant.createMany({
-          data: this.participantRows(next.id, organizerId, partnerIds, priceCents),
-        });
-        await tx.reservation.update({
-          where: { id: reservationId },
-          data:  { status: 'CANCELLED', cancelledAt: new Date() },
-        });
-        return next;
-      }, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        timeout: 10_000,
-      });
-
-      await redis.del(this.lockKey(old.resourceId, old.startTime));
-      if (!sameKey) await redis.del(newLock); // la ligne CONFIRMED protège désormais le créneau
-
-      SSEService.getInstance().broadcast(old.resourceId, {
-        type: 'slot_released',
-        resourceId:    old.resourceId,
-        reservationId: old.id,
-        startTime:     old.startTime.toISOString(),
-        endTime:       old.endTime.toISOString(),
-      });
-      SSEService.getInstance().broadcast(resourceId, {
-        type: 'slot_confirmed',
-        resourceId,
-        reservationId: created.id,
-        startTime:     created.startTime.toISOString(),
-        endTime:       created.endTime.toISOString(),
-      });
-
-      return created;
-
-    } catch (err) {
-      if (!sameKey) await redis.del(newLock);
-      throw err;
-    }
   }
 
   /**
@@ -619,11 +486,84 @@ export class ReservationService {
     return prisma.reservation.update({ where: { id: reservationId }, data: { type } });
   }
 
+  /** Dû d'une résa en centimes : prix, sinon tarif du terrain (COURT, creux ssi
+   * entièrement en heures creuses), sinon 0. Source unique du « montant à régler ». */
+  private effectiveDueCents(
+    r: { totalPrice: Prisma.Decimal | null; type: ReservationType; startTime: Date; endTime: Date; resource: { price: Prisma.Decimal; offPeakPrice: Prisma.Decimal | null } },
+    club: { offPeakHours: Prisma.JsonValue | null; timezone: string },
+  ): number {
+    const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
+    let dueC = cents(r.totalPrice);
+    if (dueC <= 0) {
+      dueC = r.type === 'COURT'
+        ? slotPriceCents(
+            club.offPeakHours as OffPeakHours | null,
+            r.startTime, r.endTime, club.timezone,
+            cents(r.resource.price),
+            r.resource.offPeakPrice != null ? cents(r.resource.offPeakPrice) : null,
+          )
+        : 0;
+    }
+    return dueC;
+  }
+
+  /** Sérialise une réservation au format planning/caisse : dueAmount, paidAmount,
+   * et le détail par joueur (part / payé / reste). Utilisé par listClubReservations
+   * et loadClubReservation pour une forme de sortie identique. */
+  private mapReservation<
+    R extends {
+      totalPrice: Prisma.Decimal | null; type: ReservationType; startTime: Date; endTime: Date;
+      resource: { price: Prisma.Decimal; offPeakPrice: Prisma.Decimal | null };
+      payments?: Array<{ amount: Prisma.Decimal; participantId: string | null }>;
+      participants?: Array<{ id: string; userId: string; share: Prisma.Decimal; isOrganizer: boolean; user: { firstName: string; lastName: string } }>;
+    }
+  >(r: R, club: { offPeakHours: Prisma.JsonValue | null; timezone: string }) {
+    const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
+    const p = (r.payments ?? []).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+    const dueC = this.effectiveDueCents(r, club);
+    const participants = (r.participants ?? []).map((pp) => {
+      const ppPaid = (r.payments ?? []).filter((x) => x.participantId === pp.id).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+      const shareC = cents(pp.share);
+      return {
+        id: pp.id, userId: pp.userId, isOrganizer: pp.isOrganizer,
+        firstName: pp.user.firstName, lastName: pp.user.lastName,
+        share: (shareC / 100).toFixed(2),
+        paid: cents(ppPaid) === 0 ? '0.00' : ppPaid.toFixed(2),
+        outstanding: (Math.max(0, shareC - cents(ppPaid)) / 100).toFixed(2),
+      };
+    });
+    return { ...r, paidAmount: p.toFixed(2), dueAmount: (dueC / 100).toFixed(2), participants };
+  }
+
+  /** Recharge une réservation seule au format planning/caisse (gardes club/existence).
+   * Renvoyé par les endpoints d'encaissement pour que le front fasse setSelected sans recharger. */
+  private async loadClubReservation(reservationId: string, clubId: string) {
+    const r = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: { select: { id: true, name: true, price: true, offPeakPrice: true, clubId: true } },
+        user:     { select: { id: true, firstName: true, lastName: true, email: true } },
+        payments: {
+          select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        participants: {
+          orderBy: { joinedAt: 'asc' },
+          select: { id: true, userId: true, share: true, isOrganizer: true, user: { select: { firstName: true, lastName: true } } },
+        },
+      },
+    });
+    if (!r)                           throw new Error('RESERVATION_NOT_FOUND');
+    if (r.resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+    const club = await prisma.club.findUniqueOrThrow({ where: { id: clubId }, select: { timezone: true, offPeakHours: true } });
+    return this.mapReservation(r, club);
+  }
+
   /**
-   * (Ré)affecte le joueur d'une réservation — action admin au comptoir, pour
-   * associer un joueur à l'encaissement. Le joueur doit être membre ACTIF du
-   * club. Pas de re-check quota (cohérent avec le bypass admin de
-   * adminCreateReservation).
+   * (Ré)affecte le joueur principal d'une réservation — action admin au comptoir,
+   * pour associer un joueur à l'encaissement. Le joueur doit être membre ACTIF du
+   * club. La répartition par joueur se gère via add/removeReservationParticipant.
+   * Pas de re-check quota (cohérent avec le bypass admin de adminCreateReservation).
    */
   async assignReservationMember(reservationId: string, clubId: string, memberUserId: string) {
     const reservation = await prisma.reservation.findUnique({
@@ -638,7 +578,119 @@ export class ReservationService {
     });
     if (!membership || membership.status === 'BLOCKED') throw new Error('MEMBER_NOT_FOUND');
 
-    return prisma.reservation.update({ where: { id: reservationId }, data: { userId: memberUserId } });
+    const updated = await prisma.reservation.update({ where: { id: reservationId }, data: { userId: memberUserId } });
+    // Best-effort : prévenir le membre qu'il a été rattaché à la réservation.
+    await this.safeNotify(() => notifyReservationMemberAssigned(reservationId, memberUserId));
+    return updated;
+  }
+
+  /**
+   * Ajoute un membre comme participant d'une réservation (répartition du paiement
+   * par joueur, au comptoir). Membre ACTIF requis. Part recalculée (égale,
+   * l'organisateur garde le reste). Si la résa n'a aucune ligne participant, la
+   * première matérialise l'organisateur (membre principal) puis ajoute le membre.
+   */
+  async addReservationParticipant(reservationId: string, clubId: string, memberUserId: string) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: {
+          select: { clubId: true, attributes: true, price: true, offPeakPrice: true, club: { select: { offPeakHours: true, timezone: true } } },
+        },
+      },
+    });
+    if (!reservation)                           throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: memberUserId, clubId } },
+    });
+    if (!membership || membership.status === 'BLOCKED') throw new Error('MEMBER_NOT_FOUND');
+
+    const format   = (reservation.resource.attributes as { format?: string } | null)?.format;
+    const max      = playerCount(format);
+    const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.reservationParticipant.findMany({
+        where: { reservationId }, orderBy: { joinedAt: 'asc' },
+        select: { id: true, userId: true, isOrganizer: true },
+      });
+      // Déjà participant → no-op gracieux (évite la violation @@unique).
+      if (existing.some((p) => p.userId === memberUserId)) return;
+
+      if (existing.length === 0) {
+        if (!reservation.userId)                  throw new Error('RESERVATION_HAS_NO_MEMBER');
+        if (reservation.userId === memberUserId)  throw new Error('PARTNER_DUPLICATE');
+        if (2 > max)                              throw new Error('TOO_MANY_PLAYERS');
+        await tx.reservationParticipant.createMany({
+          data: this.participantRows(reservationId, reservation.userId, [memberUserId], dueCents),
+        });
+        return;
+      }
+
+      if (existing.length + 1 > max) throw new Error('TOO_MANY_PLAYERS');
+      const organizer  = existing.find((p) => p.isOrganizer) ?? existing[0];
+      const partnerIds = [...existing.filter((p) => p.id !== organizer.id).map((p) => p.userId), memberUserId];
+      const shares     = this.splitShares(organizer.userId, partnerIds, dueCents);
+      const byUser     = new Map(shares.map((s) => [s.userId, s]));
+      for (const p of existing) {
+        const s = byUser.get(p.userId)!;
+        await tx.reservationParticipant.update({ where: { id: p.id }, data: { share: s.share, isOrganizer: s.isOrganizer } });
+      }
+      const ns = byUser.get(memberUserId)!;
+      await tx.reservationParticipant.create({ data: { reservationId, userId: memberUserId, isOrganizer: ns.isOrganizer, share: ns.share } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    // Best-effort : prévenir le membre qu'il a été ajouté à la partie.
+    await this.safeNotify(() => notifyReservationMemberAssigned(reservationId, memberUserId));
+    return this.loadClubReservation(reservationId, clubId);
+  }
+
+  /**
+   * Retire un participant d'une réservation et recalcule les parts des survivants.
+   * On ne peut pas retirer l'organisateur tant qu'il reste d'autres joueurs
+   * (CANNOT_REMOVE_ORGANIZER). Les paiements déjà attribués au joueur retiré sont
+   * conservés (participantId → null via onDelete: SetNull) : l'argent reste compté.
+   */
+  async removeReservationParticipant(reservationId: string, clubId: string, participantId: string) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: {
+          select: { clubId: true, price: true, offPeakPrice: true, club: { select: { offPeakHours: true, timezone: true } } },
+        },
+      },
+    });
+    if (!reservation)                           throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.reservationParticipant.findMany({
+        where: { reservationId }, orderBy: { joinedAt: 'asc' },
+        select: { id: true, userId: true, isOrganizer: true },
+      });
+      const target = existing.find((p) => p.id === participantId);
+      if (!target)                                       throw new Error('PARTICIPANT_NOT_FOUND');
+      if (target.isOrganizer && existing.length > 1)     throw new Error('CANNOT_REMOVE_ORGANIZER');
+
+      await tx.reservationParticipant.delete({ where: { id: participantId } });
+
+      const remaining = existing.filter((p) => p.id !== participantId);
+      if (remaining.length === 0) return; // plus aucune ligne : retour à l'organisateur implicite
+      const organizer  = remaining.find((p) => p.isOrganizer) ?? remaining[0];
+      const partnerIds = remaining.filter((p) => p.id !== organizer.id).map((p) => p.userId);
+      const shares     = this.splitShares(organizer.userId, partnerIds, dueCents);
+      const byUser     = new Map(shares.map((s) => [s.userId, s]));
+      for (const p of remaining) {
+        const s = byUser.get(p.userId)!;
+        await tx.reservationParticipant.update({ where: { id: p.id }, data: { share: s.share, isOrganizer: s.isOrganizer } });
+      }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    return this.loadClubReservation(reservationId, clubId);
   }
 
   /** Réservations d'un joueur (les siennes), pour l'espace « Mes réservations ». */
@@ -694,41 +746,18 @@ export class ReservationService {
     });
 
     // Dû par résa = prix, sinon prix du créneau au tarif du terrain (COURT), sinon 0 —
-    // exposé en `dueAmount` : le frontend (planning, caisse) ne recalcule plus.
-    const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
+    // exposé en `dueAmount` (cf. mapReservation) : le frontend ne recalcule plus.
     let totalC = 0, paidC = 0, outstandingC = 0;
     const withPaid = reservations.map((r) => {
-      const p = (r.payments ?? []).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
-      const pC = cents(p);
-      let dueC = cents(r.totalPrice);
-      if (dueC <= 0) {
-        dueC = r.type === 'COURT'
-          ? slotPriceCents(
-              club.offPeakHours as OffPeakHours | null,
-              r.startTime, r.endTime, club.timezone,
-              cents(r.resource.price),
-              r.resource.offPeakPrice != null ? cents(r.resource.offPeakPrice) : null,
-            )
-          : 0;
-      }
+      const enriched = this.mapReservation(r, club);
       if (r.status !== 'CANCELLED') {
+        const dueC = Math.round(Number(enriched.dueAmount) * 100);
+        const pC   = Math.round(Number(enriched.paidAmount) * 100);
         totalC += dueC;
         paidC  += pC;
         outstandingC += Math.max(0, dueC - pC); // clamp PAR résa : une surpayée ne masque pas le dû d'une autre
       }
-      // Détail par joueur : part due, payé (paiements attribués à ce participant), reste.
-      const participants = ((r as { participants?: Array<{ id: string; userId: string; share: unknown; isOrganizer: boolean; user: { firstName: string; lastName: string } }> }).participants ?? []).map((pp) => {
-        const ppPaid = (r.payments ?? []).filter((x) => x.participantId === pp.id).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
-        const shareC = cents(pp.share);
-        return {
-          id: pp.id, userId: pp.userId, isOrganizer: pp.isOrganizer,
-          firstName: pp.user.firstName, lastName: pp.user.lastName,
-          share: (shareC / 100).toFixed(2),
-          paid: cents(ppPaid) === 0 ? '0.00' : ppPaid.toFixed(2),
-          outstanding: (Math.max(0, shareC - cents(ppPaid)) / 100).toFixed(2),
-        };
-      });
-      return { ...r, paidAmount: p.toFixed(2), dueAmount: (dueC / 100).toFixed(2), participants };
+      return enriched;
     });
 
     const euros = (c: number) => (c / 100).toFixed(2);

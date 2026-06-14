@@ -164,6 +164,13 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: 0, padding: '18px 20px 0', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{t.description}</p>
         )}
 
+        {t.contactInfo && (
+          <div style={{ display: 'flex', gap: 8, padding: '14px 20px 0', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, lineHeight: 1.55 }}>
+            <Icon name="info" size={15} color={th.textMute} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span><b style={{ color: th.text }}>Contact</b> · <span style={{ whiteSpace: 'pre-wrap' }}>{t.contactInfo}</span></span>
+          </div>
+        )}
+
         <div style={{ padding: '24px 20px 0' }}>
           {error && <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>{error}</div>}
 
@@ -176,6 +183,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           {token && myReg && (
             <MyRegistrationCard
               myReg={myReg} profileId={profile?.id} closed={closed} busy={busy}
+              contactInfo={t.contactInfo}
               waitlistPos={participants ? waitlistPosition(participants, myReg.id) : null}
               slug={club.slug} token={token}
               partner={partner} onSelectPartner={setPartner} onClearPartner={() => setPartner(null)}
@@ -201,7 +209,10 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           )}
 
           {token && !myReg && closed && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Les inscriptions pour ce tournoi sont closes.</div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+              Les inscriptions pour ce tournoi sont closes.
+              {t.contactInfo && <div style={{ marginTop: 6, color: th.text, whiteSpace: 'pre-wrap' }}>{t.contactInfo}</div>}
+            </div>
           )}
         </div>
 

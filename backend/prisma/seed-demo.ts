@@ -21,11 +21,11 @@ type TStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
 type RStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED';
 
 const PASSWORD = 'password123';
-const MEMBERS_PER_CLUB = 48; // 24 hommes + 24 femmes
+const MEMBERS_PER_CLUB = 100; // 50 hommes + 50 femmes
 
-const MALE_FIRST = ['Lucas','Hugo','Louis','Gabriel','Jules','Adam','Arthur','Nathan','Leo','Thomas','Maxime','Antoine','Paul','Nicolas','Pierre','Alexandre','Victor','Theo','Romain','Julien','Mathis','Enzo','Quentin','Florian'];
-const FEMALE_FIRST = ['Emma','Jade','Louise','Alice','Chloe','Lina','Lea','Manon','Camille','Sarah','Ines','Juliette','Charlotte','Clara','Anais','Marie','Julie','Laura','Pauline','Sophie','Eva','Zoe','Lola','Nina'];
-const LAST = ['Martin','Bernard','Dubois','Thomas','Robert','Petit','Durand','Leroy','Moreau','Simon','Laurent','Lefebvre','Michel','Garcia','David','Bertrand','Roux','Vincent','Fournier','Morel','Girard','Andre','Mercier','Blanc','Guerin','Boyer','Garnier','Chevalier','Francois','Legrand'];
+const MALE_FIRST = ['Lucas','Hugo','Louis','Gabriel','Jules','Adam','Arthur','Nathan','Leo','Thomas','Maxime','Antoine','Paul','Nicolas','Pierre','Alexandre','Victor','Theo','Romain','Julien','Mathis','Enzo','Quentin','Florian','Raphael','Ethan','Noah','Sacha','Tom','Clement','Baptiste','Valentin','Mathieu','Damien','Sebastien','Guillaume','Benjamin','Axel','Dorian','Kevin','Anthony','Loic','Cedric','Fabien','Gaetan','Hadrien','Marius','Aurelien','Yann','Bastien'];
+const FEMALE_FIRST = ['Emma','Jade','Louise','Alice','Chloe','Lina','Lea','Manon','Camille','Sarah','Ines','Juliette','Charlotte','Clara','Anais','Marie','Julie','Laura','Pauline','Sophie','Eva','Zoe','Lola','Nina','Lucie','Margaux','Oceane','Elise','Celine','Aurelie','Melanie','Justine','Amandine','Mathilde','Elodie','Caroline','Audrey','Maeva','Clemence','Romane','Lilou','Agathe','Capucine','Noemie','Salome','Maya','Lou','Anna','Eline','Faustine'];
+const LAST = ['Martin','Bernard','Dubois','Thomas','Robert','Petit','Durand','Leroy','Moreau','Simon','Laurent','Lefebvre','Michel','Garcia','David','Bertrand','Roux','Vincent','Fournier','Morel','Girard','Andre','Mercier','Blanc','Guerin','Boyer','Garnier','Chevalier','Francois','Legrand','Gauthier','Perrin','Robin','Clement','Morin','Nicolas','Henry','Rousseau','Masson','Marchand','Duval','Denis','Dumont','Marie','Lemaire','Noel','Meyer','Dufour','Meunier','Brun','Blanchard','Giraud','Joly','Riviere','Lucas','Brunet','Gaillard','Barbier','Arnaud','Renard'];
 
 const CLUBS = [
   { slug: 'padel-arena-paris',     name: 'Padel Arena Paris',     city: 'Paris',     short: 'paris',     accent: '#5e93da', theme: 'daylight' },
@@ -56,6 +56,25 @@ const NOMADS: Array<{ first: string; last: string; sex: 'MALE' | 'FEMALE'; clubs
   { first: 'Yanis',   last: 'Lopez',    sex: 'MALE',   clubs: [1, 2, 4] },
   { first: 'Camille', last: 'Faure',    sex: 'FEMALE', clubs: [0, 2, 4] },
   { first: 'Hugo',    last: 'Marchand', sex: 'MALE',   clubs: [3, 4] },
+];
+
+// Comptes de test « nommés » avec un rôle d'équipe (staff) — créés sur le 1er club
+// (Paris). Emails parlants, mot de passe commun PASSWORD, pour tester le back-office.
+const NAMED_STAFF: Array<{ email: string; first: string; last: string; role: 'OWNER' | 'ADMIN' | 'STAFF' }> = [
+  { email: 'admin@padel-arena-paris.fr', first: 'Alice', last: 'Admin', role: 'ADMIN' },
+  { email: 'staff@padel-arena-paris.fr', first: 'Sam',   last: 'Staff', role: 'STAFF' },
+];
+
+// Comptes de test « nommés » côté joueur (adhésion) — couvrent abonné / non-abonné /
+// bloqué, sur le 1er club (Paris). N° de licence en PAR20xx pour ne pas croiser les
+// membres générés (PAR10xx).
+const NAMED_MEMBERS: Array<{
+  email: string; first: string; last: string; sex: 'MALE' | 'FEMALE';
+  isSubscriber: boolean; status: 'ACTIVE' | 'BLOCKED'; membershipNo: string; note?: string;
+}> = [
+  { email: 'abonne@padel-arena-paris.fr', first: 'Adrien', last: 'Abonne', sex: 'MALE',   isSubscriber: true,  status: 'ACTIVE',  membershipNo: 'PAR2001' },
+  { email: 'membre@padel-arena-paris.fr', first: 'Manon',  last: 'Membre', sex: 'FEMALE', isSubscriber: false, status: 'ACTIVE',  membershipNo: 'PAR2002' },
+  { email: 'bloque@padel-arena-paris.fr', first: 'Bruno',  last: 'Bloque', sex: 'MALE',   isSubscriber: false, status: 'BLOCKED', membershipNo: 'PAR2003', note: 'Compte de test : membre bloqué' },
 ];
 
 function fold(s: string): string {
@@ -127,7 +146,7 @@ async function main() {
       create: { userId: owner.id, clubId: club.id, role: 'OWNER' },
     });
 
-    // Membres (24 H + 24 F) avec adhésion ACTIVE + téléphone + licence
+    // Membres (50 H + 50 F) avec adhésion ACTIVE + téléphone + licence
     const males: string[] = [];
     const females: string[] = [];
     for (let k = 0; k < MEMBERS_PER_CLUB / 2; k++) {
@@ -224,7 +243,57 @@ async function main() {
     console.log(`✔ multi-clubs : ${no.first} ${no.last} → ${no.clubs.map((ci) => createdClubs[ci].slug).join(', ')}`);
   }
 
+  // === Comptes de test « nommés » (tous les profils) sur le 1er club (Paris) ===
+  const mainClub = createdClubs[0];
+
+  // Super-admin plateforme (en dev : password123 ; ne réécrit pas un mot de passe existant).
+  await prisma.user.upsert({
+    where: { email: 'super@palova.fr' },
+    update: { isSuperAdmin: true, emailVerified: true },
+    create: { email: 'super@palova.fr', password: hashed, firstName: 'Super', lastName: 'Admin', isSuperAdmin: true, emailVerified: true },
+  });
+
+  // Staff (rôles d'équipe : ADMIN / STAFF — l'OWNER « Gérant Paris » est déjà créé plus haut).
+  for (const s of NAMED_STAFF) {
+    const u = await prisma.user.upsert({
+      where: { email: s.email },
+      update: {},
+      create: { email: s.email, password: hashed, firstName: s.first, lastName: s.last, emailVerified: true },
+    });
+    await prisma.clubMember.upsert({
+      where: { userId_clubId: { userId: u.id, clubId: mainClub.id } },
+      update: { role: s.role },
+      create: { userId: u.id, clubId: mainClub.id, role: s.role },
+    });
+  }
+
+  // Joueurs (adhésions : abonné / standard / bloqué).
+  for (const m of NAMED_MEMBERS) {
+    const u = await prisma.user.upsert({
+      where: { email: m.email },
+      update: {},
+      create: { email: m.email, password: hashed, firstName: m.first, lastName: m.last, sex: m.sex, emailVerified: true },
+    });
+    await prisma.clubMembership.upsert({
+      where: { userId_clubId: { userId: u.id, clubId: mainClub.id } },
+      update: { status: m.status, isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, note: m.note ?? null },
+      create: { userId: u.id, clubId: mainClub.id, status: m.status, isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, note: m.note ?? null },
+    });
+  }
+
   console.log(`\nSeed démo terminé : ${CLUBS.length} clubs, ${totalUsers} membres (dont ${NOMADS.length} multi-clubs = ${nomadMemberships} adhésions), ${totalTournaments} tournois, ${totalRegs} inscriptions.`);
+
+  console.log(`\n=== COMPTES DE TEST — mot de passe commun : ${PASSWORD} ===`);
+  console.log(`(tous sur le club « ${mainClub.name} » → ${mainClub.slug}.localhost:3000, sauf le super-admin)`);
+  console.log(`  Super-admin plateforme   : super@palova.fr               → hôte plateforme, /superadmin`);
+  console.log(`  Gérant (OWNER)           : owner@${mainClub.slug}.fr   → back-office /admin (tous droits)`);
+  console.log(`  Admin club (ADMIN)       : admin@${mainClub.slug}.fr   → back-office /admin`);
+  console.log(`  Staff club (STAFF)       : staff@${mainClub.slug}.fr   → back-office /admin (droits réduits)`);
+  console.log(`  Membre ABONNÉ (ACTIVE)   : abonne@${mainClub.slug}.fr  → fenêtre de résa élargie`);
+  console.log(`  Membre standard (ACTIVE) : membre@${mainClub.slug}.fr  → joueur non abonné`);
+  console.log(`  Membre BLOQUÉ (BLOCKED)  : bloque@${mainClub.slug}.fr  → résa/inscriptions refusées`);
+  console.log(`  Joueur multi-clubs       : karim.benali@multi.demo.fr     → membre de 3 clubs`);
+  console.log(`  Membre généré (exemple)  : lucas.martin.0@paris.demo.fr   → +99 autres / club`);
   console.log(`Connexion gérant : owner@<slug>.fr / ${PASSWORD}  (ex. owner@lyon-padel-club.fr)`);
   console.log(`Joueurs multi-clubs : <prenom>.<nom>@multi.demo.fr / ${PASSWORD}  (ex. karim.benali@multi.demo.fr)`);
   console.log(`Clubs : ${CLUBS.map((c) => `${c.slug}.localhost:3000`).join(' , ')}`);

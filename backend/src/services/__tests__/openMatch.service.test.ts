@@ -3,8 +3,12 @@ import { prismaMock } from '../../__mocks__/prisma';
 import { OpenMatchService } from '../openMatch.service';
 
 const mockNotifyJoin = jest.fn();
+const mockNotifyLeft = jest.fn();
+const mockNotifyRemoved = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyOpenMatchJoin: (...args: unknown[]) => mockNotifyJoin(...args),
+  notifyOpenMatchLeft: (...args: unknown[]) => mockNotifyLeft(...args),
+  notifyOpenMatchRemoved: (...args: unknown[]) => mockNotifyRemoved(...args),
 }));
 
 const future = (h = 48) => new Date(Date.now() + h * 3_600_000);
@@ -14,6 +18,8 @@ describe('OpenMatchService', () => {
   beforeEach(() => {
     service = new OpenMatchService();
     mockNotifyJoin.mockReset().mockResolvedValue(undefined);
+    mockNotifyLeft.mockReset().mockResolvedValue(undefined);
+    mockNotifyRemoved.mockReset().mockResolvedValue(undefined);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
   });
@@ -176,6 +182,67 @@ describe('OpenMatchService', () => {
       ] as any);
 
       await expect(service.leaveOpenMatch('club-demo', 'm1', 'inconnu')).rejects.toThrow('PARTICIPANT_NOT_FOUND');
+    });
+  });
+
+  describe('removeOpenMatchPlayer', () => {
+    const lockRow = () => (prismaMock.$queryRaw as jest.Mock).mockResolvedValue([{ id: 'm1', start_time: future(48), resource_id: 'court-1', total_price: '24' }]);
+    const happyTx = () => prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    const parts = () => prismaMock.reservationParticipant.findMany.mockResolvedValue([
+      { id: 'p1', userId: 'org', isOrganizer: true },
+      { id: 'p2', userId: 'user-3', isOrganizer: false },
+      { id: 'p3', userId: 'user-4', isOrganizer: false },
+    ] as any);
+
+    it('l organisateur retire un joueur, re-répartit et notifie le joueur retiré', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      prismaMock.reservationParticipant.delete.mockResolvedValue({} as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3');
+
+      expect(prismaMock.reservationParticipant.delete).toHaveBeenCalledWith({ where: { id: 'p2' } });
+      const updates = (prismaMock.reservationParticipant.update as jest.Mock).mock.calls;
+      expect(updates).toHaveLength(2); // org + user-4 → 12 € chacun
+      expect(updates.every((c) => Number(c[0].data.share) === 12)).toBe(true);
+      expect(mockNotifyRemoved).toHaveBeenCalledWith('m1', 'user-3');
+      expect(mockNotifyLeft).not.toHaveBeenCalled();
+    });
+
+    it('un non-organisateur ne peut pas retirer un autre joueur (NOT_ORGANIZER)', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      await expect(service.removeOpenMatchPlayer('club-demo', 'm1', 'user-3', 'user-4')).rejects.toThrow('NOT_ORGANIZER');
+      expect(prismaMock.reservationParticipant.delete).not.toHaveBeenCalled();
+    });
+
+    it('on ne peut pas retirer l organisateur (CANNOT_REMOVE_ORGANIZER)', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      await expect(service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'org')).rejects.toThrow('ORGANIZER_CANNOT_LEAVE');
+    });
+
+    it('départ volontaire : notifie l organisateur', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      prismaMock.reservationParticipant.delete.mockResolvedValue({} as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.removeOpenMatchPlayer('club-demo', 'm1', 'user-3', 'user-3');
+
+      expect(mockNotifyLeft).toHaveBeenCalledWith('m1', 'user-3');
+      expect(mockNotifyRemoved).not.toHaveBeenCalled();
+    });
+
+    it('un échec d email ne fait pas échouer le retrait', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      prismaMock.reservationParticipant.delete.mockResolvedValue({} as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      mockNotifyRemoved.mockRejectedValue(new Error('SMTP down'));
+
+      await expect(service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3')).resolves.toBeDefined();
     });
   });
 });
