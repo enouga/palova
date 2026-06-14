@@ -144,7 +144,7 @@ export class ClubService {
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
-            sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultSlotStepMin: true, defaultDurationsMin: true, icon: true } },
+            sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true } },
             resources: {
               where: { isActive: true },
               orderBy: { name: 'asc' },
