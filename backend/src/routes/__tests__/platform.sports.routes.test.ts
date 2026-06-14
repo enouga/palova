@@ -45,6 +45,11 @@ describe('POST /api/platform/sports', () => {
       .send({ name: 'X', defaultDurationsMin: [90] });
     expect(res.status).toBe(403);
   });
+
+  it('401 sans token', async () => {
+    const res = await request(app).post('/api/platform/sports').send({ name: 'X', defaultDurationsMin: [90] });
+    expect(res.status).toBe(401);
+  });
 });
 
 describe('PATCH /api/platform/sports/:id', () => {
@@ -57,6 +62,15 @@ describe('PATCH /api/platform/sports/:id', () => {
     const arg = (prismaMock.sport.update as jest.Mock).mock.calls[0][0];
     expect(arg.data).not.toHaveProperty('key');
     expect(arg.data.surfaces).toEqual(['Résine', 'Béton poreux']);
+  });
+
+  it('404 SPORT_NOT_FOUND si le sport n existe pas', async () => {
+    asSuper();
+    prismaMock.sport.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('nf', { code: 'P2025', clientVersion: 'x' }));
+    const res = await request(app).patch('/api/platform/sports/absent').set('Authorization', `Bearer ${superToken}`)
+      .send({ name: 'Tennis' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('SPORT_NOT_FOUND');
   });
 });
 

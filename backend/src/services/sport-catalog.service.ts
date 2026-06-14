@@ -12,7 +12,7 @@ export interface SportInput {
 function parseDurations(v: unknown): number[] {
   if (!Array.isArray(v)) throw new Error('VALIDATION_ERROR');
   const out = v.map(Number);
-  if (out.length === 0 || out.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error('VALIDATION_ERROR');
+  if (out.length === 0 || out.some((n) => !Number.isInteger(n) || n < 15 || n > 240 || n % 15 !== 0)) throw new Error('VALIDATION_ERROR');
   return Array.from(new Set(out)).sort((a, b) => a - b);
 }
 function parseSurfaces(v: unknown): string[] {
@@ -21,13 +21,12 @@ function parseSurfaces(v: unknown): string[] {
   return Array.from(new Set(v.map((s) => String(s).trim()).filter(Boolean)));
 }
 function parseNoun(v: unknown): string {
-  const n = typeof v === 'string' ? v : 'terrain';
-  if (!RESOURCE_NOUNS.includes(n)) throw new Error('VALIDATION_ERROR');
-  return n;
+  if (typeof v !== 'string' || !RESOURCE_NOUNS.includes(v)) throw new Error('VALIDATION_ERROR');
+  return v;
 }
 function parseStep(v: unknown): number {
   const n = v === undefined ? 30 : Number(v);
-  if (!Number.isInteger(n) || n <= 0) throw new Error('VALIDATION_ERROR');
+  if (!Number.isInteger(n) || n < 15 || n > 240 || n % 15 !== 0) throw new Error('VALIDATION_ERROR');
   return n;
 }
 
@@ -42,7 +41,7 @@ export class SportCatalogService {
         data: {
           key, name,
           icon: typeof input.icon === 'string' && input.icon.trim() ? input.icon.trim() : null,
-          resourceNoun: parseNoun(input.resourceNoun),
+          resourceNoun: parseNoun(input.resourceNoun ?? 'terrain'),
           defaultSlotStepMin: parseStep(input.defaultSlotStepMin),
           defaultDurationsMin: parseDurations(input.defaultDurationsMin),
           surfaces: parseSurfaces(input.surfaces),
@@ -67,6 +66,7 @@ export class SportCatalogService {
     if (input.defaultDurationsMin !== undefined) data.defaultDurationsMin = parseDurations(input.defaultDurationsMin);
     if (input.surfaces !== undefined) data.surfaces = parseSurfaces(input.surfaces);
     // `key` volontairement jamais repris : identifiant immuable.
+    if (Object.keys(data).length === 0) throw new Error('VALIDATION_ERROR');
     try {
       return await prisma.sport.update({ where: { id }, data });
     } catch (err) {
@@ -81,6 +81,7 @@ export class SportCatalogService {
       await prisma.sport.delete({ where: { id } });
       return { id };
     } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') throw new Error('SPORT_IN_USE');
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') throw new Error('SPORT_NOT_FOUND');
       throw err;
     }
