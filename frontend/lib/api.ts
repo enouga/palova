@@ -96,6 +96,13 @@ export const api = {
   cancelReservation: (reservationId: string, token: string) =>
     request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
 
+  getReservationPlayers: (reservationId: string, token: string) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/players`, {}, token),
+  addReservationPlayer: (reservationId: string, memberUserId: string, token: string) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/players`, { method: 'POST', body: JSON.stringify({ memberUserId }) }, token),
+  removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
+
   // --- Parties ouvertes (membres du club) ---
   getOpenMatches: (slug: string, token: string) =>
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
@@ -405,7 +412,21 @@ export interface MyReservation {
   endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
-  resource: { id: string; name: string; club: { name: string; slug: string; timezone: string } };
+  resource: { id: string; name: string; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
+}
+
+export interface ReservationPlayer {
+  id: string;
+  userId: string;
+  isOrganizer: boolean;
+  firstName: string;
+  lastName: string;
+  share: string;
+}
+export interface ReservationPlayers {
+  id: string;
+  capacity: number;
+  participants: ReservationPlayer[];
 }
 
 export interface Resource {
@@ -613,6 +634,8 @@ export interface ClubAdminDetail {
   memberBookingDays: number;
   offPeakHours: OffPeakHours | null;
   bookingQuotas: BookingQuotas | null;
+  playerChangeCutoffHours: number;
+  cancellationCutoffHours: number;
 }
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
@@ -639,6 +662,8 @@ export type UpdateClubBody = Partial<{
   memberBookingDays: number;
   offPeakHours: OffPeakHours | null;
   bookingQuotas: BookingQuotas | null;
+  playerChangeCutoffHours: number;
+  cancellationCutoffHours: number;
 }>;
 
 // --- Types back-office ---
