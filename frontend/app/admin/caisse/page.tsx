@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod } from '@/lib/api';
+import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
+import { PlayerPicker } from '@/components/admin/PlayerPicker';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
@@ -43,7 +44,6 @@ export default function AdminCaissePage() {
   // vente de carnet
   const [members, setMembers]     = useState<Member[]>([]);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
-  const [query, setQuery]         = useState('');
   const [buyer, setBuyer]         = useState<Member | null>(null);
   const [buyerPackages, setBuyerPackages] = useState<MemberPackage[]>([]);
   const [sellTplId, setSellTplId] = useState('');
@@ -74,9 +74,21 @@ export default function AdminCaissePage() {
 
   const pickBuyer = async (m: Member) => {
     if (!token || !clubId) return;
-    setBuyer(m); setQuery('');
+    setBuyer(m);
     try { setBuyerPackages(await api.adminGetMemberPackages(clubId, m.userId, token)); }
     catch (e) { setError((e as Error).message); }
+  };
+
+  // Création d'un joueur à la volée : crée le compte+adhésion, recharge le
+  // fichier-membres, puis sélectionne le nouvel acheteur.
+  const createBuyer = async (body: CreateMemberBody) => {
+    if (!token || !clubId) return { tempPassword: null, existed: false };
+    const r = await api.adminCreateMember(clubId, body, token);
+    const mem = await api.adminGetMembers(clubId, token);
+    setMembers(mem);
+    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
+    if (created) await pickBuyer(created);
+    return r;
   };
 
   const sell = async () => {
@@ -104,10 +116,6 @@ export default function AdminCaissePage() {
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
-
-  const matches = query.trim().length > 0 && !buyer
-    ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
-    : [];
 
   const moneyTotal = caisse
     ? MONEY_METHODS.reduce((s, m) => s + Number(caisse.totalsByMethod[m] ?? 0), 0)
@@ -156,25 +164,15 @@ export default function AdminCaissePage() {
         {/* vente de carnet / porte-monnaie */}
         <div style={card}>
           <div style={sectionTitle}>Vendre une offre</div>
-          <div style={{ position: 'relative', marginBottom: 12 }}>
-            {buyer ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px' }}>
-                <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{buyer.firstName} {buyer.lastName}</span>
-                <button type="button" onClick={() => { setBuyer(null); setBuyerPackages([]); }} style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '3px 8px', color: th.textMute, fontSize: 12 }}>Changer</button>
-              </div>
-            ) : (
-              <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un membre…" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
-            )}
-            {matches.length > 0 && (
-              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, overflow: 'hidden', boxShadow: th.shadowSoft }}>
-                {matches.map((m) => (
-                  <button key={m.userId} type="button" onClick={() => pickBuyer(m)}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-                    {m.firstName} {m.lastName} <span style={{ color: th.textFaint }}>· {m.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+          <div style={{ marginBottom: 12 }}>
+            <PlayerPicker
+              members={members}
+              value={buyer ? { firstName: buyer.firstName, lastName: buyer.lastName } : null}
+              onSelect={pickBuyer}
+              onClear={() => { setBuyer(null); setBuyerPackages([]); }}
+              onCreate={createBuyer}
+              placeholder="Rechercher un membre…"
+            />
           </div>
 
           {buyer && (
