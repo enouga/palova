@@ -369,7 +369,7 @@ export class ClubService {
       where: { clubId },
       select: {
         id: true, slotStepMin: true, durationsMin: true,
-        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true } },
+        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true, surfaces: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
