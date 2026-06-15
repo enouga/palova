@@ -191,3 +191,32 @@ describe('ClubService.addClubSport — gate published', () => {
     expect(prismaMock.clubSport.upsert).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ClubService — updateClub heures d\'ouverture', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('clampe les heures de release (0-23) et accepte un mode valide', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { bookingReleaseMode: 'WINDOW_SHIFT', publicReleaseHour: 30, memberReleaseHour: -2 });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.bookingReleaseMode).toBe('WINDOW_SHIFT');
+    expect(arg.data.publicReleaseHour).toBe(23);
+    expect(arg.data.memberReleaseHour).toBe(0);
+  });
+
+  it('ignore un mode invalide', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { bookingReleaseMode: 'NOPE' as any });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.bookingReleaseMode).toBeUndefined();
+  });
+
+  it('ignore les heures absentes', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { name: 'X' });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.publicReleaseHour).toBeUndefined();
+    expect(arg.data.memberReleaseHour).toBeUndefined();
+  });
+});

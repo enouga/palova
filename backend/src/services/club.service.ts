@@ -141,6 +141,7 @@ export class ClubService {
         id: true, slug: true, name: true, address: true, city: true, country: true,
         description: true, timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         publicBookingDays: true, memberBookingDays: true,
+        bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -167,6 +168,7 @@ export class ClubService {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
         timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
+        bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
       },
@@ -178,12 +180,17 @@ export class ClubService {
     name?: string; description?: string; address?: string; city?: string;
     timezone?: string; logoUrl?: string; accentColor?: string; defaultThemeMode?: string;
     listedInDirectory?: boolean; publicBookingDays?: number; memberBookingDays?: number;
+    bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
+    publicReleaseHour?: number;
+    memberReleaseHour?: number;
     offPeakHours?: OffPeakHours | null;
     bookingQuotas?: unknown;
     playerChangeCutoffHours?: number;
     cancellationCutoffHours?: number;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
+    const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
+    const VALID_RELEASE_MODES = new Set(['DAY_AT_HOUR', 'ROLLING_SLOT', 'WINDOW_SHIFT']);
     return prisma.club.update({
       where: { id: clubId },
       data: {
@@ -200,6 +207,9 @@ export class ClubService {
         ...(typeof params.listedInDirectory === 'boolean' ? { listedInDirectory: params.listedInDirectory } : {}),
         ...(typeof params.publicBookingDays === 'number' ? { publicBookingDays: clamp(params.publicBookingDays) } : {}),
         ...(typeof params.memberBookingDays === 'number' ? { memberBookingDays: clamp(params.memberBookingDays) } : {}),
+        ...(params.bookingReleaseMode !== undefined && VALID_RELEASE_MODES.has(params.bookingReleaseMode) ? { bookingReleaseMode: params.bookingReleaseMode } : {}),
+        ...(typeof params.publicReleaseHour === 'number' ? { publicReleaseHour: clampHour(params.publicReleaseHour) } : {}),
+        ...(typeof params.memberReleaseHour === 'number' ? { memberReleaseHour: clampHour(params.memberReleaseHour) } : {}),
         ...(typeof params.playerChangeCutoffHours === 'number' ? { playerChangeCutoffHours: clamp(params.playerChangeCutoffHours) } : {}),
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
       },
