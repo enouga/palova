@@ -74,6 +74,28 @@ describe('PATCH /api/platform/sports/:id', () => {
   });
 });
 
+describe('GET /api/platform/sports', () => {
+  it('200 renvoie TOUS les sports (publiés + brouillons) pour un super-admin', async () => {
+    asSuper();
+    prismaMock.sport.findMany.mockResolvedValue([
+      { id: 's1', key: 'padel', name: 'Padel', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾', surfaces: [], published: true },
+      { id: 's2', key: 'beach', name: 'Beach', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60], icon: null, surfaces: [], published: false },
+    ] as any);
+    const res = await request(app).get('/api/platform/sports').set('Authorization', `Bearer ${superToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    const arg = (prismaMock.sport.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toBeUndefined();           // pas de filtre published
+    expect(arg.select.published).toBe(true);
+  });
+
+  it('403 pour un non super-admin', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ isSuperAdmin: false } as any);
+    const res = await request(app).get('/api/platform/sports').set('Authorization', `Bearer ${superToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('DELETE /api/platform/sports/:id', () => {
   it('409 SPORT_IN_USE si un club utilise le sport', async () => {
     asSuper();

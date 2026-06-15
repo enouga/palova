@@ -31,6 +31,16 @@ function parseStep(v: unknown): number {
 }
 
 export class SportCatalogService {
+  async listSports() {
+    return prisma.sport.findMany({
+      orderBy: { name: 'asc' },
+      select: {
+        id: true, key: true, name: true, resourceNoun: true,
+        defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, published: true,
+      },
+    });
+  }
+
   async createSport(input: SportInput) {
     const name = (typeof input.name === 'string' ? input.name : '').trim();
     if (!name) throw new Error('VALIDATION_ERROR');

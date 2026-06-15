@@ -50,6 +50,11 @@ router.post('/clubs', async (req, res, next) => {
   catch (err) { handleError(err, res, next); }
 });
 
+router.get('/sports', async (_req, res, next) => {
+  try { res.json(await sportCatalog.listSports()); }
+  catch (err) { handleError(err, res, next); }
+});
+
 router.post('/sports', async (req, res, next) => {
   try { res.status(201).json(await sportCatalog.createSport(req.body)); }
   catch (err) { handleError(err, res, next); }
