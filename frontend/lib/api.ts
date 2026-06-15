@@ -407,6 +407,10 @@ export const api = {
     request<Sport>(`/api/platform/sports/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
   platformDeleteSport: (id: string, token: string) =>
     request<{ id: string }>(`/api/platform/sports/${id}`, { method: 'DELETE' }, token),
+  platformListSports: (token: string) =>
+    request<Sport[]>('/api/platform/sports', {}, token),
+  platformSetSportPublished: (id: string, published: boolean, token: string) =>
+    request<Sport>(`/api/platform/sports/${id}`, { method: 'PATCH', body: JSON.stringify({ published }) }, token),
 };
 
 // --- Types ---
@@ -420,6 +424,7 @@ export interface Sport {
   defaultDurationsMin: number[];
   icon: string | null;
   surfaces: string[];
+  published: boolean;
 }
 
 export interface SportCatalogBody {
