@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody } from '@/lib/api';
-import { packageLabel, isUsable, canCover } from '@/lib/packages';
+import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
@@ -94,6 +94,7 @@ export default function AdminPlanningPage() {
   const [voucherRef, setVoucherRef]       = useState('');
   const [voucherIssuer, setVoucherIssuer] = useState('');
   const [selPackages, setSelPackages]     = useState<MemberPackage[]>([]);
+  const [pkgLoading, setPkgLoading]       = useState(false);
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [isFs, setIsFs]           = useState(false);
@@ -224,9 +225,11 @@ export default function AdminPlanningPage() {
     setVoucherRef(''); setVoucherIssuer('');
     setSelPackages([]);
     if (rv.user && token && clubId) {
+      setPkgLoading(true);
       api.adminGetMemberPackages(clubId, rv.user.id, token)
         .then((pkgs) => setSelPackages(pkgs.filter((p) => isUsable(p))))
-        .catch(() => setSelPackages([]));
+        .catch(() => setSelPackages([]))
+        .finally(() => setPkgLoading(false));
     }
   };
 
@@ -301,8 +304,10 @@ export default function AdminPlanningPage() {
       setError(null);
       await api.adminAssignReservationMember(clubId, selected.id, m.userId, token);
       setSelected({ ...selected, user: { id: m.userId, firstName: m.firstName, lastName: m.lastName, email: m.email } });
+      setPkgLoading(true);
       const pkgs = await api.adminGetMemberPackages(clubId, m.userId, token).catch(() => []);
       setSelPackages(pkgs.filter((p) => isUsable(p)));
+      setPkgLoading(false);
       await load();
     } catch (e) {
       setError((e as Error).message === 'MEMBER_NOT_FOUND' ? "Ce joueur n'est pas membre actif du club." : (e as Error).message);
@@ -729,7 +734,7 @@ export default function AdminPlanningPage() {
                     <button type="button" onClick={() => setVoucherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
                   </div>
                 )}
-                {selPackages.length > 0 && (
+                {selPackages.length > 0 ? (
                   <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {selPackages.map((p) => {
                       const remaining = Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount));
@@ -743,7 +748,12 @@ export default function AdminPlanningPage() {
                       );
                     })}
                   </div>
-                )}
+                ) : (!pkgLoading && (() => {
+                  const msg = prepaidHint(!!selected.user, selPackages.length, maxPayable);
+                  return msg ? (
+                    <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div>
+                  ) : null;
+                })())}
               </div>
               );
             })()}

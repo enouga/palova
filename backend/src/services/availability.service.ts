@@ -89,10 +89,14 @@ export class AvailabilityService {
     return slots;
   }
 
-  /** Disponibilités de TOUS les terrains actifs d'un club (vue planning joueur). */
-  async getClubAvailability(clubId: string, date: string, durationMinutes: number) {
+  /**
+   * Disponibilités des terrains actifs d'un club (vue planning joueur).
+   * `clubSportId` (optionnel) restreint à un sport — la page Réserver charge chaque
+   * sport avec sa propre durée. Absent = tous les terrains (comportement historique).
+   */
+  async getClubAvailability(clubId: string, date: string, durationMinutes: number, clubSportId?: string) {
     const resources = (await prisma.resource.findMany({
-      where: { clubId, isActive: true },
+      where: { clubId, isActive: true, ...(clubSportId ? { clubSportId } : {}) },
       select: {
         id: true, name: true, attributes: true, price: true, offPeakPrice: true,
         clubSport: { select: { id: true, sport: { select: { key: true, name: true } } } },

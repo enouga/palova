@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage } from '@/lib/api';
@@ -41,21 +41,25 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const router = useRouter();
   const { token } = useAuth();
-  const allDurations = Array.from(new Set(
-    club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
-  )).sort((a, b) => a - b);
   const [tab, setTab]           = useState<'book' | 'courts'>('book');
   const [date, setDate]         = useState(todayISO());
-  const [duration, setDuration] = useState<number>(defaultDuration(allDurations));
-  const [avail, setAvail]       = useState<ClubAvailability[]>([]);
-  const [loadingA, setLoadingA] = useState(true);
-  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; format?: string } | null>(null);
+  // Durée choisie PAR sport (clé = clubSport.id) : chaque sport propose ses propres durées.
+  const [durationBySport, setDurationBySport] = useState<Record<string, number>>(
+    () => Object.fromEntries(club.clubSports.map((cs) => [cs.id, defaultDuration(effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin))])),
+  );
+  const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
+  const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
+  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
   // Soldes prépayés du joueur sur ce club (chips + option de paiement à la confirmation).
   const [myPackages, setMyPackages] = useState<MemberPackage[]>([]);
+  // Ref des durées courantes : l'effet [date] recharge chaque sport à SA durée sans relancer
+  // tous les sports quand une seule durée change.
+  const durationsRef = useRef(durationBySport);
+  durationsRef.current = durationBySport;
 
   const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
   const days = nextDays(Math.max(1, windowDays + 1));
@@ -82,37 +86,43 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => setMyPackages([]));
   }, [token, club.slug]);
 
-  const loadAvail = useCallback(async () => {
-    setLoadingA(true);
-    try { setAvail(await api.getClubAvailability(club.slug, date, duration)); }
-    catch { setAvail([]); }
-    finally { setLoadingA(false); }
-  }, [club.slug, date, duration]);
+  const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
+    setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
+    try { const a = await api.getClubAvailability(club.slug, dateArg, dur, clubSportId); setAvailBySport((s) => ({ ...s, [clubSportId]: a })); }
+    catch { setAvailBySport((s) => ({ ...s, [clubSportId]: [] })); }
+    finally { setLoadingBySport((s) => ({ ...s, [clubSportId]: false })); }
+  }, [club.slug]);
 
-  useEffect(() => { if (tab === 'book') loadAvail(); }, [tab, loadAvail]);
+  const reloadAll = useCallback(() => {
+    for (const cs of club.clubSports) loadSport(cs.id, durationsRef.current[cs.id], date);
+  }, [club.clubSports, loadSport, date]);
 
-  // Consomme le lien profond une fois les dispos chargées : créneau encore libre → pré-ouvre,
-  // sinon (pris entre-temps) la page normale s'affiche, sans erreur.
-  useEffect(() => {
-    if (!deepSlot || loadingA || !token) return;
-    const res = avail.find((a) => a.resource.id === deepSlot.resourceId);
-    const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
-    if (res && slot) setBooking({ resourceId: res.resource.id, price: slot.price, slot, format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined });
-    setDeepSlot(null);
-  }, [deepSlot, loadingA, avail, token]);
+  useEffect(() => { if (tab === 'book') reloadAll(); }, [tab, reloadAll]);
 
-  const onSlot = (resourceId: string, price: string, slot: TimeSlot, format?: string) => {
-    if (!token) { router.push('/login'); return; }
-    setBooking({ resourceId, price, slot, format });
+  const changeDuration = (clubSportId: string, dur: number) => {
+    setDurationBySport((s) => ({ ...s, [clubSportId]: dur }));
+    loadSport(clubSportId, dur, date);
   };
 
-  // Regroupe les terrains (avec dispos) par sport.
-  const bySport = new Map<string, ClubAvailability[]>();
-  for (const a of avail) {
-    const k = a.resource.sport.name;
-    if (!bySport.has(k)) bySport.set(k, []);
-    bySport.get(k)!.push(a);
-  }
+  // Consomme le lien profond dès que la section du sport du terrain est chargée : créneau
+  // encore libre → pré-ouvre la confirmation (à la durée du sport) ; sinon page normale.
+  useEffect(() => {
+    if (!deepSlot || !token) return;
+    for (const cs of club.clubSports) {
+      const res = (availBySport[cs.id] ?? []).find((a) => a.resource.id === deepSlot.resourceId);
+      const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
+      if (res && slot) {
+        setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined });
+        setDeepSlot(null);
+        return;
+      }
+    }
+  }, [deepSlot, availBySport, token, club.clubSports, durationBySport]);
+
+  const onSlot = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string) => {
+    if (!token) { router.push('/login'); return; }
+    setBooking({ resourceId, price, slot, duration, format });
+  };
 
   return (
     <Screen>
@@ -143,24 +153,28 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             <div style={{ padding: '18px 20px 4px' }}>
               <DateSelector value={date} onChange={setDate} days={7} maxKey={days[days.length - 1]?.key} />
             </div>
-            {allDurations.length > 1 && (
-              <div style={{ padding: '14px 20px 0' }}>
-                <Segmented<number> value={duration} onChange={setDuration} options={allDurations.map((d) => ({ value: d, label: durationLabel(d) }))} />
-              </div>
-            )}
 
-            {/* grille : par sport, chaque terrain + ses créneaux libres */}
+            {/* grille : une section par sport — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
-              {loadingA && avail.length === 0 ? (
-                <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-              ) : avail.length === 0 ? (
-                <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun terrain.</div>
-              ) : (
-                <div style={{ opacity: loadingA ? 0.55 : 1, transition: 'opacity .15s' }}>
-                {[...bySport.entries()].map(([sportName, items]) => (
-                  <div key={sportName} style={{ marginTop: 14 }}>
-                    <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{sportName}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {club.clubSports.map((cs) => {
+                const durations = effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin);
+                const selDur = durationBySport[cs.id];
+                const items = availBySport[cs.id];
+                const loading = loadingBySport[cs.id];
+                return (
+                  <div key={cs.id} style={{ marginTop: 14 }}>
+                    <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
+                    {durations.length > 1 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <Segmented<number> value={selDur} onChange={(d) => changeDuration(cs.id, d)} options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
+                      </div>
+                    )}
+                    {items === undefined ? (
+                      <div style={{ padding: '20px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+                    ) : items.length === 0 ? (
+                      <div style={{ padding: '12px 0 4px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun terrain.</div>
+                    ) : (
+                    <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(({ resource, slots }) => {
                         const ct = coveredType(resource.attributes?.covered === true);
                         return (
@@ -182,7 +196,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                                 {slots.map((s) => s.available ? (
-                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
@@ -199,10 +213,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                         );
                       })}
                     </div>
+                    )}
                   </div>
-                ))}
-                </div>
-              )}
+                  );
+                })}
             </div>
           </>
         ) : (
@@ -245,7 +259,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           slot={booking.slot}
           resourceId={booking.resourceId}
           price={booking.price}
-          duration={duration}
+          duration={booking.duration}
           token={token ?? ''}
           timezone={club.timezone}
           slug={club.slug}
@@ -256,7 +270,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             setBooking(null);
             setConfirmed(true);
             if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
-            loadAvail();
+            reloadAll();
           }}
         />
       )}

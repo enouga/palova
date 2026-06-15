@@ -93,7 +93,8 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
     const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
 
-    res.json(await availabilityService.getClubAvailability(club.id, date, duration));
+    const clubSportId = req.query.clubSportId ? asString(req.query.clubSportId) : undefined;
+    res.json(await availabilityService.getClubAvailability(club.id, date, duration, clubSportId));
   } catch (err) { handleError(err, res, next); }
 });
 

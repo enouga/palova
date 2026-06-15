@@ -55,8 +55,8 @@ export const api = {
   getAvailability: (resourceId: string, date: string, duration: number) =>
     request<TimeSlot[]>(`/api/resources/${resourceId}/availability?date=${date}&duration=${duration}`),
 
-  getClubAvailability: (slug: string, date: string, duration: number) =>
-    request<ClubAvailability[]>(`/api/clubs/${slug}/availability?date=${date}&duration=${duration}`),
+  getClubAvailability: (slug: string, date: string, duration: number, clubSportId?: string) =>
+    request<ClubAvailability[]>(`/api/clubs/${slug}/availability?date=${date}&duration=${duration}${clubSportId ? `&clubSportId=${clubSportId}` : ''}`),
 
   // --- Compte ---
   // L'inscription ne renvoie plus de token : elle déclenche l'envoi d'un code par email.

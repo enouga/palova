@@ -125,3 +125,29 @@ describe('AvailabilityService.getAvailableSlots', () => {
     expect(slots[0].startTime).toBe('2025-06-15T12:00:00.000Z');
   });
 });
+
+describe('AvailabilityService.getClubAvailability', () => {
+  let service: AvailabilityService;
+  beforeEach(() => { service = new AvailabilityService(); });
+
+  it('filtre les terrains par clubSportId quand fourni', async () => {
+    prismaMock.resource.findMany.mockResolvedValue([] as any);
+
+    await service.getClubAvailability('club-1', '2025-06-15', 60, 'cs-padel');
+
+    expect(prismaMock.resource.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ clubId: 'club-1', isActive: true, clubSportId: 'cs-padel' }),
+      }),
+    );
+  });
+
+  it('sans clubSportId : aucun filtre de sport', async () => {
+    prismaMock.resource.findMany.mockResolvedValue([] as any);
+
+    await service.getClubAvailability('club-1', '2025-06-15', 60);
+
+    const arg = (prismaMock.resource.findMany as jest.Mock).mock.calls.pop()![0];
+    expect(arg.where).not.toHaveProperty('clubSportId');
+  });
+});

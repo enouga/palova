@@ -1,4 +1,4 @@
-import { packageLabel, isUsable, canCover } from '@/lib/packages';
+import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import type { MemberPackage } from '@/lib/api';
 
 const entries = (remaining: number, expiresAt: string | null = null): MemberPackage => ({
@@ -45,5 +45,29 @@ describe('canCover', () => {
   it('un porte-monnaie couvre si son solde >= montant', () => {
     expect(canCover(wallet('25.00'), 25, now)).toBe(true);
     expect(canCover(wallet('24.99'), 25, now)).toBe(false);
+  });
+});
+
+describe('prepaidHint', () => {
+  it('rien à encaisser (reste dû ≤ 0) → null', () => {
+    expect(prepaidHint(true, 0, 0)).toBeNull();
+    expect(prepaidHint(false, 0, -100)).toBeNull();
+  });
+
+  it('au moins un solde utilisable → null (les boutons sont affichés)', () => {
+    expect(prepaidHint(true, 1, 5200)).toBeNull();
+    expect(prepaidHint(false, 2, 5200)).toBeNull();
+  });
+
+  it('joueur rattaché mais aucun solde utilisable → invite à vendre une offre', () => {
+    expect(prepaidHint(true, 0, 5200)).toBe(
+      'Aucun solde prépayé actif pour ce joueur — vendez-lui une offre depuis la Caisse.',
+    );
+  });
+
+  it('aucun joueur rattaché → invite à associer un joueur', () => {
+    expect(prepaidHint(false, 0, 5200)).toBe(
+      'Associez un joueur pour régler avec un carnet ou un porte-monnaie.',
+    );
   });
 });

@@ -20,3 +20,12 @@ export function canCover(p: MemberPackage, amount: number, now: Date = new Date(
   if (!isUsable(p, now)) return false;
   return p.kind === 'ENTRIES' ? true : Number(p.amountRemaining) >= amount;
 }
+
+/** Message d'aide quand aucun bouton de solde prépayé n'est proposé (null = ne rien afficher). */
+export function prepaidHint(hasPlayer: boolean, usableCount: number, remainingCents: number): string | null {
+  if (remainingCents <= 0) return null;   // rien à encaisser
+  if (usableCount > 0) return null;        // des boutons solde sont déjà affichés
+  return hasPlayer
+    ? 'Aucun solde prépayé actif pour ce joueur — vendez-lui une offre depuis la Caisse.'
+    : 'Associez un joueur pour régler avec un carnet ou un porte-monnaie.';
+}
