@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import { Prisma } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
@@ -589,6 +590,55 @@ router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, n
   try {
     const url = await stripeService.createLoginLink(req.membership!.clubId);
     res.json({ url });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const reservationId = asString(req.params.id);
+    const amount = Number(req.body?.amount);
+    if (!amount || amount <= 0) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: { select: { clubId: true } },
+        participants: { where: { isOrganizer: true }, select: { id: true, userId: true }, take: 1 },
+      },
+    });
+    if (!reservation || reservation.resource.clubId !== req.membership!.clubId) {
+      return void res.status(404).json({ error: 'RESERVATION_NOT_FOUND' });
+    }
+
+    const organizer = reservation.participants[0];
+    if (!organizer) return void res.status(422).json({ error: 'NO_CARD_ON_FILE' });
+
+    const amountCents = Math.round(amount * 100);
+    const piId = await stripeService.chargeNoShow({
+      clubId: req.membership!.clubId,
+      userId: organizer.userId,
+      reservationId,
+      amountCents,
+      note: typeof req.body?.note === 'string' ? req.body.note : undefined,
+      createdByUserId: req.user?.id,
+    });
+
+    const payment = await prisma.payment.create({
+      data: {
+        reservationId,
+        participantId: organizer.id,
+        clubId: req.membership!.clubId,
+        amount: new Prisma.Decimal(amount),
+        method: 'ONLINE',
+        status: 'CAPTURED',
+        stripePaymentIntentId: piId,
+        stripePaymentMethodId: undefined,
+        note: typeof req.body?.note === 'string' ? req.body.note : null,
+        createdByUserId: req.user?.id ?? null,
+      },
+    });
+
+    res.status(201).json({ paymentId: payment.id, stripePaymentIntentId: piId });
   } catch (err) { handleError(err, res, next); }
 });
 

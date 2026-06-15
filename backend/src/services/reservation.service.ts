@@ -1010,11 +1010,31 @@ export class ReservationService {
       },
     });
 
+    // Empreintes Stripe : quels organisateurs ont une carte enregistrée ?
+    const organizerUserIds = reservations
+      .flatMap((r) => (r.participants ?? []).filter((p) => p.isOrganizer).map((p) => p.userId))
+      .filter((id): id is string => id != null);
+
+    const withFingerprint = organizerUserIds.length > 0
+      ? await prisma.clubStripeCustomer.findMany({
+          where: {
+            clubId: params.clubId,
+            userId: { in: organizerUserIds },
+            defaultPaymentMethodId: { not: null },
+          },
+          select: { userId: true },
+        })
+      : [];
+
+    const fingerprintSet = new Set(withFingerprint.map((f) => f.userId));
+
     // Dû par résa = prix, sinon prix du créneau au tarif du terrain (COURT), sinon 0 —
     // exposé en `dueAmount` (cf. mapReservation) : le frontend ne recalcule plus.
     let totalC = 0, paidC = 0, outstandingC = 0;
     const withPaid = reservations.map((r) => {
       const enriched = this.mapReservation(r, club);
+      const organizerUserId = (r.participants ?? []).find((p) => p.isOrganizer)?.userId ?? null;
+      (enriched as any).hasCardFingerprint = organizerUserId != null && fingerprintSet.has(organizerUserId);
       if (r.status !== 'CANCELLED') {
         const dueC = Math.round(Number(enriched.dueAmount) * 100);
         const pC   = Math.round(Number(enriched.paidAmount) * 100);
