@@ -168,3 +168,14 @@ export function paymentDots(
     settled: toCents(rv.paidAmount) >= due,
   };
 }
+
+/**
+ * Le montant (centimes) à encaisser est-il valide ? > 0 et, si un plafond
+ * `remainingCents` est fourni (> 0), n'excède pas le reste dû. `remainingCents`
+ * = 0 → pas de plafond (événement libre).
+ */
+export function validatePaymentAmount(cents: number, remainingCents: number): boolean {
+  if (!Number.isFinite(cents) || cents <= 0) return false;
+  if (remainingCents > 0 && cents > remainingCents) return false;
+  return true;
+}
