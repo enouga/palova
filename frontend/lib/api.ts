@@ -495,6 +495,8 @@ export interface ClubSummary {
   resourceCount: number;
 }
 
+export type BookingReleaseMode = 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
+
 export interface ClubDetail {
   id: string;
   slug: string;
@@ -510,6 +512,9 @@ export interface ClubDetail {
   status: string;
   publicBookingDays: number;
   memberBookingDays: number;
+  bookingReleaseMode: BookingReleaseMode;
+  publicReleaseHour: number;
+  memberReleaseHour: number;
   clubSports: ClubSportPublic[];
 }
 
@@ -669,6 +674,9 @@ export interface ClubAdminDetail {
   listedInDirectory: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
+  bookingReleaseMode: BookingReleaseMode;
+  publicReleaseHour: number;
+  memberReleaseHour: number;
   offPeakHours: OffPeakHours | null;
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
@@ -697,6 +705,9 @@ export type UpdateClubBody = Partial<{
   listedInDirectory: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
+  bookingReleaseMode: BookingReleaseMode;
+  publicReleaseHour: number;
+  memberReleaseHour: number;
   offPeakHours: OffPeakHours | null;
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
