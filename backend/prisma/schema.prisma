@@ -164,6 +164,8 @@ model Club {
   // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
   playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")
   cancellationCutoffHours Int @default(0) @map("cancellation_cutoff_hours")
+  // Rembourse automatiquement les paiements d'une réservation annulée dans la fenêtre d'annulation. Opt-in.
+  refundOnCancelWithinCutoff Boolean @default(false) @map("refund_on_cancel_within_cutoff")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
