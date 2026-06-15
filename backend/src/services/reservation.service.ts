@@ -6,7 +6,7 @@ import { SSEService } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
-import { maxBookableInstant } from './booking-window';
+import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned } from '../email/notifications';
 
@@ -84,7 +84,7 @@ export class ReservationService {
    * - Adhésion automatique (ACTIVE) au 1er accès/réservation si absente.
    */
   private async assertMembershipAndWindow(
-    resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number; bookingReleaseMode: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT'; publicReleaseHour: number; memberReleaseHour: number } },
+    resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number; bookingReleaseMode: BookingReleaseMode; publicReleaseHour: number; memberReleaseHour: number } },
     userId: string,
     startTime: Date,
   ): Promise<{ isSubscriber: boolean }> {
