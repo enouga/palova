@@ -257,6 +257,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           slug={club.slug}
           maxPlayers={playerCount(booking.format)}
           packages={myPackages}
+          clubId={club.id}
+          requireOnlinePayment={club.requireOnlinePayment}
+          requireCardFingerprint={club.requireCardFingerprint}
           onClose={() => setBooking(null)}
           onConfirmed={() => {
             setBooking(null);

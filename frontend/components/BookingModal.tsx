@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -9,6 +10,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { Icon } from '@/components/ui/Icon';
+
+const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
 interface BookingModalProps {
   slot: TimeSlot;
@@ -25,6 +28,12 @@ interface BookingModalProps {
   packages?: MemberPackage[];
   onClose: () => void;
   onConfirmed: (reservation: Reservation) => void;
+  /** ID du club (pour les appels Stripe). */
+  clubId?: string;
+  /** Exige un paiement CB en ligne. */
+  requireOnlinePayment?: boolean;
+  /** Exige une empreinte bancaire (anti-no-show). */
+  requireCardFingerprint?: boolean;
 }
 
 const HOLD_SECONDS = 600;
@@ -59,6 +68,7 @@ const BOOKING_ERRORS: Record<string, string> = {
 
 export default function BookingModal({
   slot, resourceId, price, duration, token, timezone, slug, maxPlayers, packages = [], onClose, onConfirmed,
+  clubId, requireOnlinePayment, requireCardFingerprint,
 }: BookingModalProps) {
   const { th } = useTheme();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
@@ -66,6 +76,7 @@ export default function BookingModal({
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = régler au club
+  const [stripeStep, setStripeStep]   = useState(false);
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
 
@@ -113,6 +124,11 @@ export default function BookingModal({
 
   const handleConfirm = async () => {
     if (!reservation) return;
+    // Si paiement/empreinte Stripe requis et pas de package sélectionné → afficher l'étape Stripe
+    if ((requireOnlinePayment || requireCardFingerprint) && !paySource) {
+      setStripeStep(true);
+      return;
+    }
     try {
       const confirmed = await api.confirmReservation(
         reservation.id, token,
@@ -258,6 +274,23 @@ export default function BookingModal({
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
               <Btn icon="arrowR" onClick={handleConfirm} style={{ flex: 1 }}>{paySource ? 'Confirmer avec mon solde' : 'Confirmer et payer'}</Btn>
             </div>
+            {stripeStep && reservation && (
+              <div style={{ marginTop: 20, padding: '16px 0 0', borderTop: `1px solid ${th.lineStrong}` }}>
+                <StripePaymentStep
+                  reservationId={reservation.id}
+                  slug={slug ?? ''}
+                  clubId={clubId ?? ''}
+                  type={requireOnlinePayment ? 'payment' : 'setup'}
+                  amountLabel={`${totalPrice}€`}
+                  token={token}
+                  onSuccess={() => {
+                    setStripeStep(false);
+                    onClose();
+                  }}
+                  onCancel={() => setStripeStep(false)}
+                />
+              </div>
+            )}
           </>
         )}
 
