@@ -390,8 +390,8 @@ export class ClubService {
 
   /** Active un sport pour un club (idempotent). */
   async addClubSport(clubId: string, sportId: string) {
-    const sport = await prisma.sport.findUnique({ where: { id: sportId } });
-    if (!sport) throw new Error('SPORT_NOT_FOUND');
+    const sport = await prisma.sport.findUnique({ where: { id: sportId }, select: { id: true, published: true } });
+    if (!sport || !sport.published) throw new Error('SPORT_NOT_FOUND');
     return prisma.clubSport.upsert({
       where: { clubId_sportId: { clubId, sportId } },
       update: {},

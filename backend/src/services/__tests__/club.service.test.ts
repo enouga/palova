@@ -172,3 +172,22 @@ describe('ClubService — updateClub délais', () => {
     expect(arg.data.cancellationCutoffHours).toBeUndefined();
   });
 });
+
+describe('ClubService.addClubSport — gate published', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('refuse d\'activer un sport non publié (SPORT_NOT_FOUND) et n\'appelle pas upsert', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-1', published: false } as any);
+    await expect(svc.addClubSport('club-1', 'sport-1')).rejects.toThrow('SPORT_NOT_FOUND');
+    expect(prismaMock.clubSport.upsert).not.toHaveBeenCalled();
+  });
+
+  it('active un sport publié (published: true) et appelle upsert', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-1', published: true } as any);
+    prismaMock.clubSport.upsert.mockResolvedValue({ id: 'cs-1', clubId: 'club-1', sportId: 'sport-1' } as any);
+    const result = await svc.addClubSport('club-1', 'sport-1');
+    expect(result).toMatchObject({ id: 'cs-1' });
+    expect(prismaMock.clubSport.upsert).toHaveBeenCalledTimes(1);
+  });
+});
