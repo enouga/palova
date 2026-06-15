@@ -7,7 +7,8 @@ import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded } from '../email/notifications';
+import { RefundService } from './refund.service';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -22,6 +23,8 @@ const HOLD_TTL_SECONDS = 600; // 10 minutes
 const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
 
 export class ReservationService {
+  private refundService = new RefundService();
+
   private lockKey(resourceId: string, startTime: Date): string {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
   }
@@ -366,10 +369,43 @@ export class ReservationService {
     return cancelled;
   }
 
+  /**
+   * Si le club l'active ET qu'on annule dans la fenêtre d'annulation, rembourse tous les
+   * paiements encaissés restants de la résa (recrédit prépayé géré par RefundService).
+   * Renvoie le détail des remboursements (vide si politique off / hors fenêtre).
+   */
+  private async autoRefundOnCancel(
+    reservationId: string,
+    clubId: string,
+    startTime: Date,
+    club: { cancellationCutoffHours: number; refundOnCancelWithinCutoff: boolean },
+  ): Promise<Array<{ paymentId: string; amount: string; method: string }>> {
+    if (!club.refundOnCancelWithinCutoff) return [];
+    const deadline = startTime.getTime() - Math.max(0, club.cancellationCutoffHours) * 3_600_000;
+    if (Date.now() > deadline) return []; // hors fenêtre (annulation tardive) → pas de remboursement auto
+
+    const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
+    const payments = await prisma.payment.findMany({
+      where: { reservationId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] }, method: { not: 'MEMBER' } },
+      select: { id: true, amount: true, refundedAmount: true, method: true },
+    });
+    const refunded: Array<{ paymentId: string; amount: string; method: string }> = [];
+    for (const p of payments) {
+      const refundableCents = cents(p.amount) - cents(p.refundedAmount);
+      if (refundableCents <= 0) continue;
+      await this.refundService.refund({
+        paymentId: p.id, clubId, amount: refundableCents / 100,
+        reason: 'Annulation de la réservation', method: p.method,
+      });
+      refunded.push({ paymentId: p.id, amount: (refundableCents / 100).toFixed(2), method: p.method });
+    }
+    return refunded;
+  }
+
   async cancelReservation(reservationId: string, userId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { club: { select: { cancellationCutoffHours: true } } } } },
+      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
     });
 
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
@@ -377,21 +413,31 @@ export class ReservationService {
     if (reservation.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
     this.assertWithinCutoff(reservation.startTime, reservation.resource.club.cancellationCutoffHours, 'CANCELLATION_TOO_LATE');
 
-    return this.performCancel(reservation);
+    const cancelled = await this.performCancel(reservation);
+    const refunded = await this.autoRefundOnCancel(
+      reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
+    );
+    if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    return { ...cancelled, refunded };
   }
 
   /** Annulation par un gestionnaire : n'importe quelle résa d'une ressource de SON club. */
   async adminCancelReservation(reservationId: string, adminClubId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true } } },
+      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
     });
 
-    if (!reservation)                              throw new Error('RESERVATION_NOT_FOUND');
+    if (!reservation)                                throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.resource.clubId !== adminClubId) throw new Error('CLUB_MISMATCH');
-    if (reservation.status === 'CANCELLED')        throw new Error('ALREADY_CANCELLED');
+    if (reservation.status === 'CANCELLED')          throw new Error('ALREADY_CANCELLED');
 
-    return this.performCancel(reservation);
+    const cancelled = await this.performCancel(reservation);
+    const refunded = await this.autoRefundOnCancel(
+      reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
+    );
+    if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    return { ...cancelled, refunded };
   }
 
   /**

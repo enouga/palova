@@ -14,9 +14,11 @@ jest.mock('../sse.service', () => ({
 
 const mockNotifyPartners = jest.fn();
 const mockNotifyAssigned = jest.fn();
+const mockNotifyRefunded = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyMatchPartnersInvited: (...a: unknown[]) => mockNotifyPartners(...a),
   notifyReservationMemberAssigned: (...a: unknown[]) => mockNotifyAssigned(...a),
+  notifyReservationRefunded: (...a: unknown[]) => mockNotifyRefunded(...a),
 }));
 
 const sseBroadcast = () => mockBroadcast;
@@ -29,6 +31,7 @@ describe('ReservationService', () => {
     mockBroadcast.mockReset();
     mockNotifyPartners.mockReset().mockResolvedValue(undefined);
     mockNotifyAssigned.mockReset().mockResolvedValue(undefined);
+    mockNotifyRefunded.mockReset().mockResolvedValue(undefined);
   });
 
   const baseParams = {
@@ -280,7 +283,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
         startTime: future, endTime: new Date(future.getTime() + 3_600_000),
-        resource: { club: { cancellationCutoffHours: 0 } },
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
       } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
@@ -305,7 +308,7 @@ describe('ReservationService', () => {
         id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
         startTime: new Date(Date.now() + 3_600_000),       // début dans 1h
         endTime:   new Date(Date.now() + 7_200_000),
-        resource: { club: { cancellationCutoffHours: 2 } }, // clôture 2h avant → déjà fermé
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 2, refundOnCancelWithinCutoff: false } }, // clôture 2h avant → déjà fermé
       } as any);
 
       await expect(service.cancelReservation('res-1', 'user-1')).rejects.toThrow('CANCELLATION_TOO_LATE');
@@ -339,7 +342,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', userId: 'autre-user', status: 'CONFIRMED',
         startTime: baseParams.startTime, endTime: baseParams.endTime,
-        resource: { clubId: 'club-demo' },
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
       } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
@@ -1265,6 +1268,108 @@ describe('ReservationService', () => {
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(resa({ userId: 'autre' }) as any);
       await expect(service.removeOwnReservationParticipant('res-1', 'user-1', 'p2')).rejects.toThrow('UNAUTHORIZED');
+    });
+  });
+
+  describe('remboursement à l\'annulation (Phase 2)', () => {
+    // RefundService est importé par le module testé ; on espionne son prototype.
+
+    beforeEach(() => {
+      // s'assurer que payment.findMany retourne [] par défaut (pas de paiements)
+      prismaMock.payment.findMany.mockResolvedValue([] as any);
+      redisMock.del.mockResolvedValue(1);
+    });
+
+    it('politique off : refund non appelé, refunded vide', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-x' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r1', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+
+      const out = await service.cancelReservation('r1', 'u1');
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(out.refunded).toHaveLength(0);
+      spy.mockRestore();
+    });
+
+    it('politique on + dans la fenêtre + paiement CASH : rembourse', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-1' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r1', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-1', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      const out = await service.cancelReservation('r1', 'u1');
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay-1', amount: 20, method: 'CASH' }));
+      expect(out.refunded).toHaveLength(1);
+      expect(out.refunded[0]).toMatchObject({ paymentId: 'pay-1', amount: '20.00', method: 'CASH' });
+      spy.mockRestore();
+    });
+
+    it('politique on + paiement PACK_CREDIT : rembourse (recrédit géré par RefundService)', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-2' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r2', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r2', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-2', amount: new Prisma.Decimal(15), refundedAmount: new Prisma.Decimal(0), method: 'PACK_CREDIT' },
+      ] as any);
+
+      const out = await service.cancelReservation('r2', 'u1');
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay-2', amount: 15, method: 'PACK_CREDIT' }));
+      expect(out.refunded).toHaveLength(1);
+      spy.mockRestore();
+    });
+
+    it('politique on mais hors fenêtre (adminCancel après délai) : refund non appelé', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-x' } as any);
+      // startTime dans 1h, cutoffHours=2 → deadline déjà passée
+      const soon = new Date(Date.now() + 1 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r3', userId: 'u1', status: 'CONFIRMED',
+        startTime: soon, endTime: new Date(soon.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 2, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r3', status: 'CANCELLED', resourceId: 'res-1', startTime: soon, endTime: soon,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-3', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      // L'admin peut annuler même hors fenêtre, mais autoRefundOnCancel ne rembourse pas
+      const out = await service.adminCancelReservation('r3', 'club-1');
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(out.refunded).toHaveLength(0);
+      spy.mockRestore();
     });
   });
 });
