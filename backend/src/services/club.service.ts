@@ -142,6 +142,7 @@ export class ClubService {
         description: true, timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         publicBookingDays: true, memberBookingDays: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
+        showOtherClubsReservations: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -171,6 +172,7 @@ export class ClubService {
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
+        showOtherClubsReservations: true,
       },
     });
   }
@@ -187,6 +189,7 @@ export class ClubService {
     bookingQuotas?: unknown;
     playerChangeCutoffHours?: number;
     cancellationCutoffHours?: number;
+    showOtherClubsReservations?: boolean;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
@@ -212,6 +215,7 @@ export class ClubService {
         ...(typeof params.memberReleaseHour === 'number' ? { memberReleaseHour: clampHour(params.memberReleaseHour) } : {}),
         ...(typeof params.playerChangeCutoffHours === 'number' ? { playerChangeCutoffHours: clamp(params.playerChangeCutoffHours) } : {}),
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
+        ...(typeof params.showOtherClubsReservations === 'boolean' ? { showOtherClubsReservations: params.showOtherClubsReservations } : {}),
       },
     });
   }

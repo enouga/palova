@@ -1,9 +1,8 @@
 'use client';
 
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
-import { CalendarEntry, monthGrid, monthLabel } from '@/lib/calendar';
+import { CalendarEntry, monthGrid, monthLabel, agendaKindMeta } from '@/lib/calendar';
 
 const DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
 const GAP = 4;
@@ -21,8 +20,10 @@ export function MonthCalendar({
 }) {
   const { th } = useTheme();
   const weeks = monthGrid(year, month);
-  // Pastilles réservation en bleu marque (et non th.accent, surchargé par la couleur du club).
-  const resaColor = ACCENTS.blue;
+  // Couleurs par type, source de vérité unique (et non th.accent, surchargé par la couleur du club).
+  const resaColor = agendaKindMeta('reservation').color;
+  const tournamentColor = agendaKindMeta('tournament').color;
+  const eventColor = agendaKindMeta('event').color;
 
   const navBtn = (label: string, icon: 'chevL' | 'chevR', delta: 1 | -1) => (
     <button onClick={() => onNavigate(delta)} aria-label={label}
@@ -49,7 +50,10 @@ export function MonthCalendar({
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: resaColor }} />Réservation
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 14, height: 5, borderRadius: 3, background: th.accentWarm }} />Tournoi
+          <span style={{ width: 14, height: 5, borderRadius: 3, background: tournamentColor }} />Tournoi
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 14, height: 5, borderRadius: 3, background: eventColor }} />Event
         </span>
       </div>
 
@@ -63,6 +67,22 @@ export function MonthCalendar({
           const entries = byDay.get(cell.key) ?? [];
           const reservations = entries.filter((e) => e.kind === 'reservation');
           const tournament = entries.find((e) => e.kind === 'tournament');
+          const event = entries.find((e) => e.kind === 'event');
+          const barCount = (tournament ? 1 : 0) + (event ? 1 : 0);
+          const dotsBottom = barCount >= 2 ? 19 : barCount === 1 ? 13 : 6;
+          // Barre continue multi-jours (tournoi/event) : déborde sur le gap, arrondie aux extrémités.
+          const multiDayBar = (e: Extract<CalendarEntry, { dayKeys: string[] }>, bottom: number, color: string, marker: string) => (
+            <span key={marker} data-marker={marker}
+              style={{
+                position: 'absolute', bottom, height: 5, background: color, opacity: e.past ? 0.4 : 1,
+                left: cell.key === e.startKey ? 6 : -(GAP / 2),
+                right: cell.key === e.endKey ? 6 : -(GAP / 2),
+                borderTopLeftRadius: cell.key === e.startKey ? 3 : 0,
+                borderBottomLeftRadius: cell.key === e.startKey ? 3 : 0,
+                borderTopRightRadius: cell.key === e.endKey ? 3 : 0,
+                borderBottomRightRadius: cell.key === e.endKey ? 3 : 0,
+              }} />
+          );
           const isToday = cell.key === todayKey;
           const isSelected = cell.key === selected;
           const dim = !cell.inMonth;
@@ -84,7 +104,7 @@ export function MonthCalendar({
                 {cell.day}
               </span>
               {reservations.length > 0 && (
-                <span style={{ position: 'absolute', left: 6, bottom: tournament ? 13 : 6, display: 'flex', gap: 3, alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 6, bottom: dotsBottom, display: 'flex', gap: 3, alignItems: 'center' }}>
                   {reservations.slice(0, 3).map((e) => (
                     <span key={e.id} data-marker="reservation"
                       style={{ width: 5, height: 5, borderRadius: '50%', background: resaColor, opacity: e.past ? 0.4 : 1 }} />
@@ -94,21 +114,8 @@ export function MonthCalendar({
                   )}
                 </span>
               )}
-              {tournament && tournament.kind === 'tournament' && (
-                <span data-marker="tournament"
-                  style={{
-                    position: 'absolute', bottom: 5, height: 5, background: th.accentWarm,
-                    opacity: tournament.past ? 0.4 : 1,
-                    // Barre continue d'un jour à l'autre : on déborde sur le gap de la
-                    // grille, sauf aux extrémités du tournoi (arrondies).
-                    left: cell.key === tournament.startKey ? 6 : -(GAP / 2),
-                    right: cell.key === tournament.endKey ? 6 : -(GAP / 2),
-                    borderTopLeftRadius: cell.key === tournament.startKey ? 3 : 0,
-                    borderBottomLeftRadius: cell.key === tournament.startKey ? 3 : 0,
-                    borderTopRightRadius: cell.key === tournament.endKey ? 3 : 0,
-                    borderBottomRightRadius: cell.key === tournament.endKey ? 3 : 0,
-                  }} />
-              )}
+              {tournament && multiDayBar(tournament, 5, tournamentColor, 'tournament')}
+              {event && multiDayBar(event, tournament ? 11 : 5, eventColor, 'event')}
             </button>
           );
         })}

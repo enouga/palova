@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MonthCalendar } from '../components/calendar/MonthCalendar';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { buildCalendarEntries, entriesByDay } from '../lib/calendar';
-import { MyReservation, MyTournamentRegistration } from '../lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '../lib/api';
 
 const reservation: MyReservation = {
   id: 'res-1',
@@ -31,7 +31,19 @@ const registration = {
   },
 } as MyTournamentRegistration;
 
-const byDay = entriesByDay(buildCalendarEntries([reservation], [registration], new Date('2026-06-10T12:00:00.000Z')));
+const eventReg = {
+  id: 'evt-1',
+  status: 'CONFIRMED',
+  event: {
+    id: 'ev-1', clubId: 'club-demo', name: 'Stage week-end', kind: 'STAGE', description: null,
+    startTime: '2026-06-20T08:00:00.000Z', endTime: '2026-06-21T16:00:00.000Z',
+    registrationDeadline: '2026-06-19T22:00:00.000Z', capacity: 12, price: null, memberOnly: false,
+    status: 'PUBLISHED', confirmedCount: 3, waitlistCount: 0,
+    club: { slug: 'padel-arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+  },
+} as MyEventRegistration;
+
+const byDay = entriesByDay(buildCalendarEntries([reservation], [registration], [eventReg], new Date('2026-06-10T12:00:00.000Z')));
 
 function renderCal(props: Partial<React.ComponentProps<typeof MonthCalendar>> = {}) {
   return render(
@@ -65,6 +77,15 @@ describe('MonthCalendar', () => {
       expect(cell.querySelector('[data-marker="tournament"]')).toBeInTheDocument();
     }
     expect(container.querySelector('[data-day-key="2026-06-15"]')!.querySelector('[data-marker="tournament"]')).toBeNull();
+  });
+
+  it('étire la barre event sur tous les jours de l event', () => {
+    const { container } = renderCal();
+    for (const key of ['2026-06-20', '2026-06-21']) {
+      const cell = container.querySelector(`[data-day-key="${key}"]`)!;
+      expect(cell.querySelector('[data-marker="event"]')).toBeInTheDocument();
+    }
+    expect(container.querySelector('[data-day-key="2026-06-22"]')!.querySelector('[data-marker="event"]')).toBeNull();
   });
 
   it('marque aujourd hui et le jour sélectionné', () => {

@@ -1,13 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import { CalendarEntry } from '@/lib/calendar';
+import { CalendarEntry, agendaKindMeta, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
 import { MyReservation } from '@/lib/api';
 import { isCancellationOpen } from '@/lib/reservations';
+import { clubUrl } from '@/lib/clubUrl';
+import { KIND_LABEL } from '@/lib/events';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -21,21 +21,19 @@ function dayTitle(dayKey: string): string {
     .format(new Date(`${dayKey}T00:00:00Z`));
 }
 
-const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
-const REG_LABEL: Record<string, string> = { CONFIRMED: 'Inscrit', WAITLISTED: "Liste d'attente" };
-const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
-
 export function DayPanel({
-  dayKey, entries, onCancel, onManagePlayers, onReserve, reserveLabel,
+  dayKey, entries, localSlug, onCancel, onManagePlayers, onReserve, reserveLabel,
 }: {
   dayKey: string;
   entries: CalendarEntry[];
+  localSlug: string | null;
   onCancel: (r: MyReservation) => void;
   onManagePlayers?: (r: MyReservation) => void;
   onReserve: () => void;
   reserveLabel: string;
 }) {
   const { th } = useTheme();
+  const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
 
   const card = (children: React.ReactNode, key: string, stripe: string, past: boolean) => (
     <div key={key} style={{
@@ -68,6 +66,7 @@ export function DayPanel({
             if (e.kind === 'reservation') {
               const r = e.r;
               const tz = r.resource.club.timezone;
+              const isForeign = localSlug != null && r.resource.club.slug !== localSlug;
               return card(
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -80,7 +79,9 @@ export function DayPanel({
                       <Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}
                     </span>
                     <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
-                    {!e.past && (
+                    {isForeign ? (
+                      <a href={clubUrl(r.resource.club.slug, '/me/reservations')} style={linkStyle}>Voir</a>
+                    ) : (!e.past && (
                       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                         {onManagePlayers && (
                           <button onClick={() => onManagePlayers(r)}
@@ -93,40 +94,61 @@ export function DayPanel({
                           Annuler
                         </button>
                       </span>
-                    )}
+                    ))}
                   </div>
                 </>,
-                `res-${r.id}`, ACCENTS.blue, e.past,
+                `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
               );
             }
 
-            const t = e.reg.tournament;
-            const tz = t.club.timezone;
-            const team = `${e.reg.captain.firstName} ${e.reg.captain.lastName} & ${e.reg.partner.firstName} ${e.reg.partner.lastName}`;
+            if (e.kind === 'tournament') {
+              const t = e.reg.tournament;
+              const tz = t.club.timezone;
+              const team = `${e.reg.captain.firstName} ${e.reg.captain.lastName} & ${e.reg.partner.firstName} ${e.reg.partner.lastName}`;
+              return card(
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{t.name}</span>
+                    <Chip color={agendaKindMeta('tournament').color}>{REG_LABEL[e.reg.status] ?? e.reg.status}</Chip>
+                  </div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
+                    {t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="calendar" size={14} color={th.textMute} />
+                      {fmtDate(t.startTime, tz)}{t.endTime && ` – ${fmtDate(t.endTime, tz)}`} · {fmtHour(t.startTime, tz)}
+                    </span>
+                    <a href={clubUrl(t.club.slug, `/tournois/${t.id}`)} style={linkStyle}>Gérer</a>
+                  </div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 6 }}>
+                    Équipe : {team}
+                  </div>
+                </>,
+                `reg-${e.reg.id}`, agendaKindMeta('tournament').color, e.past,
+              );
+            }
+
+            const ev = e.ev.event;
+            const tz = ev.club.timezone;
             return card(
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{t.name}</span>
-                  <Chip color={th.accentWarm}>{REG_LABEL[e.reg.status] ?? e.reg.status}</Chip>
+                  <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{ev.name}</span>
+                  <Chip color={agendaKindMeta('event').color}>{REG_LABEL[e.ev.status] ?? e.ev.status}</Chip>
                 </div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
-                  {t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}
+                  {KIND_LABEL[ev.kind]} · {ev.club.name}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Icon name="calendar" size={14} color={th.textMute} />
-                    {fmtDate(t.startTime, tz)}{t.endTime && ` – ${fmtDate(t.endTime, tz)}`} · {fmtHour(t.startTime, tz)}
+                    {fmtDate(ev.startTime, tz)}{ev.endTime && ` – ${fmtDate(ev.endTime, tz)}`} · {fmtHour(ev.startTime, tz)}
                   </span>
-                  <Link href={`/tournois/${t.id}`}
-                    style={{ marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    Gérer
-                  </Link>
-                </div>
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 6 }}>
-                  Équipe : {team}
+                  <a href={clubUrl(ev.club.slug, `/events/${ev.id}`)} style={linkStyle}>Voir</a>
                 </div>
               </>,
-              `reg-${e.reg.id}`, th.accentWarm, e.past,
+              `evt-${e.ev.id}`, agendaKindMeta('event').color, e.past,
             );
           })
         )}

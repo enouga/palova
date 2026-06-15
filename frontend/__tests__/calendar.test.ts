@@ -7,9 +7,13 @@ import {
   enumerateDayKeys,
   buildCalendarEntries,
   entriesByDay,
+  buildAgendaList,
+  agendaKindMeta,
+  agendaItemClubSlug,
   CalendarEntry,
 } from '@/lib/calendar';
-import { MyReservation, MyTournamentRegistration } from '@/lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '@/lib/api';
+import { ACCENTS } from '@/lib/theme';
 
 function makeReservation(over: Partial<MyReservation> = {}): MyReservation {
   return {
@@ -55,6 +59,37 @@ function makeRegistration(over: {
       entryFee: null,
       status: over.tournamentStatus ?? 'PUBLISHED',
       confirmedCount: 4,
+      waitlistCount: 0,
+      club: { slug: 'padel-arena', name: 'Padel Arena', timezone: over.timezone ?? 'Europe/Paris' },
+    },
+  };
+}
+
+function makeEventReg(over: {
+  id?: string;
+  status?: MyEventRegistration['status'];
+  startTime?: string;
+  endTime?: string | null;
+  eventStatus?: 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
+  timezone?: string;
+} = {}): MyEventRegistration {
+  return {
+    id: over.id ?? 'evt-1',
+    status: over.status ?? 'CONFIRMED',
+    event: {
+      id: 'ev-1',
+      clubId: 'club-demo',
+      name: 'Mêlée du vendredi',
+      kind: 'MELEE',
+      description: null,
+      startTime: over.startTime ?? '2026-06-13T17:00:00.000Z',
+      endTime: over.endTime === undefined ? '2026-06-13T20:00:00.000Z' : over.endTime,
+      registrationDeadline: '2026-06-13T12:00:00.000Z',
+      capacity: 16,
+      price: null,
+      memberOnly: false,
+      status: over.eventStatus ?? 'PUBLISHED',
+      confirmedCount: 6,
       waitlistCount: 0,
       club: { slug: 'padel-arena', name: 'Padel Arena', timezone: over.timezone ?? 'Europe/Paris' },
     },
@@ -126,6 +161,7 @@ describe('buildCalendarEntries', () => {
         makeRegistration({ id: 'reg-2', status: 'CANCELLED' }),
         makeRegistration({ id: 'reg-3', tournamentStatus: 'CANCELLED' }),
       ],
+      [],
       NOW,
     );
     expect(entries.map((e) => e.id).sort()).toEqual(['reg-1', 'res-1']);
@@ -135,7 +171,7 @@ describe('buildCalendarEntries', () => {
     // 22h30 UTC la veille = 00h30 à Paris le 13
     const entries = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-12T22:30:00.000Z', endTime: '2026-06-12T23:30:00.000Z' })],
-      [], NOW,
+      [], [], NOW,
     );
     expect(entries[0]).toMatchObject({ kind: 'reservation', dayKey: '2026-06-13', past: false });
   });
@@ -143,7 +179,7 @@ describe('buildCalendarEntries', () => {
   it('étale un tournoi multi-jours sur toutes ses journées', () => {
     const entries = buildCalendarEntries([], [makeRegistration({
       startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z',
-    })], NOW);
+    })], [], NOW);
     expect(entries[0]).toMatchObject({
       kind: 'tournament',
       startKey: '2026-06-13',
@@ -153,7 +189,7 @@ describe('buildCalendarEntries', () => {
   });
 
   it('un tournoi sans endTime tient sur un seul jour', () => {
-    const entries = buildCalendarEntries([], [makeRegistration({ endTime: null })], NOW);
+    const entries = buildCalendarEntries([], [makeRegistration({ endTime: null })], [], NOW);
     expect(entries[0]).toMatchObject({ startKey: '2026-06-13', endKey: '2026-06-13', dayKeys: ['2026-06-13'] });
   });
 
@@ -161,9 +197,36 @@ describe('buildCalendarEntries', () => {
     const entries = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' })],
       [makeRegistration({ startTime: '2026-06-02T07:00:00.000Z', endTime: '2026-06-03T16:00:00.000Z' })],
+      [],
       NOW,
     );
     expect(entries.every((e) => e.past)).toBe(true);
+  });
+
+  it('masque les events annulés (inscription OU event sous-jacent)', () => {
+    const entries = buildCalendarEntries([], [], [
+      makeEventReg(),
+      makeEventReg({ id: 'evt-2', status: 'CANCELLED' }),
+      makeEventReg({ id: 'evt-3', eventStatus: 'CANCELLED' }),
+    ], NOW);
+    expect(entries.map((e) => e.id)).toEqual(['evt-1']);
+  });
+
+  it('place l event sur son jour au fuseau du club (mono-jour si pas d endTime)', () => {
+    // 22h30 UTC la veille = 00h30 à Paris le 13
+    const entries = buildCalendarEntries([], [], [
+      makeEventReg({ startTime: '2026-06-12T22:30:00.000Z', endTime: null }),
+    ], NOW);
+    expect(entries[0]).toMatchObject({ kind: 'event', startKey: '2026-06-13', endKey: '2026-06-13', dayKeys: ['2026-06-13'], past: false });
+  });
+
+  it('étale un event multi-jours sur toutes ses journées et marque past si terminé', () => {
+    const entries = buildCalendarEntries([], [], [
+      makeEventReg({ startTime: '2026-06-01T17:00:00.000Z', endTime: '2026-06-03T20:00:00.000Z' }),
+    ], NOW);
+    expect(entries[0]).toMatchObject({
+      kind: 'event', dayKeys: ['2026-06-01', '2026-06-02', '2026-06-03'], past: true,
+    });
   });
 });
 
@@ -172,6 +235,7 @@ describe('entriesByDay', () => {
     const entries: CalendarEntry[] = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
       [makeRegistration({ startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
+      [],
       NOW,
     );
     const byDay = entriesByDay(entries);
@@ -181,15 +245,88 @@ describe('entriesByDay', () => {
     expect(byDay.get('2026-06-12')).toBeUndefined();
   });
 
+  it('ordonne un jour cumulant les 3 types : tournoi, event, réservation', () => {
+    const byDay = entriesByDay(buildCalendarEntries(
+      [makeReservation({ startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
+      [makeRegistration({ startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
+      [makeEventReg({ startTime: '2026-06-14T15:00:00.000Z', endTime: '2026-06-14T18:00:00.000Z' })],
+      NOW,
+    ));
+    expect(byDay.get('2026-06-14')!.map((e) => e.kind)).toEqual(['tournament', 'event', 'reservation']);
+  });
+
   it('trie les réservations d un même jour par heure de début', () => {
     const byDay = entriesByDay(buildCalendarEntries(
       [
         makeReservation({ id: 'r-soir', startTime: '2026-06-12T18:00:00.000Z', endTime: '2026-06-12T19:00:00.000Z' }),
         makeReservation({ id: 'r-matin', startTime: '2026-06-12T08:00:00.000Z', endTime: '2026-06-12T09:00:00.000Z' }),
       ],
-      [], NOW,
+      [], [], NOW,
     ));
     expect(byDay.get('2026-06-12')!.map((e) => e.id)).toEqual(['r-matin', 'r-soir']);
+  });
+});
+
+describe('buildAgendaList', () => {
+  it('fusionne les 3 types triés chronologiquement par instant de début', () => {
+    const list = buildAgendaList(
+      [makeReservation({ id: 'res-1', startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
+      [makeRegistration({ id: 'reg-1', startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
+      [makeEventReg({ id: 'evt-1', startTime: '2026-06-13T17:00:00.000Z', endTime: '2026-06-13T20:00:00.000Z' })],
+      NOW,
+    );
+    expect(list.map((i) => i.id)).toEqual(['reg-1', 'evt-1', 'res-1']);
+  });
+
+  it('exclut tout ce qui est annulé (5 chemins)', () => {
+    const list = buildAgendaList(
+      [makeReservation(), makeReservation({ id: 'res-x', status: 'CANCELLED' })],
+      [makeRegistration(), makeRegistration({ id: 'reg-x', status: 'CANCELLED' }), makeRegistration({ id: 'reg-y', tournamentStatus: 'CANCELLED' })],
+      [makeEventReg(), makeEventReg({ id: 'evt-x', status: 'CANCELLED' }), makeEventReg({ id: 'evt-y', eventStatus: 'CANCELLED' })],
+      NOW,
+    );
+    expect(list.map((i) => i.id).sort()).toEqual(['evt-1', 'reg-1', 'res-1']);
+  });
+
+  it('calcule past sur la fin (repli sur le début si pas d endTime)', () => {
+    const list = buildAgendaList(
+      [makeReservation({ id: 'r-past', startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' })],
+      [],
+      [makeEventReg({ id: 'e-future', startTime: '2026-06-20T17:00:00.000Z', endTime: null })],
+      NOW,
+    );
+    expect(list.find((i) => i.id === 'r-past')!.past).toBe(true);
+    expect(list.find((i) => i.id === 'e-future')!.past).toBe(false);
+  });
+
+  it('trie par instant réel même quand les fuseaux diffèrent, tie-break stable par id', () => {
+    // Même instant de début : l'ordre est déterministe (par id).
+    const list = buildAgendaList(
+      [],
+      [makeRegistration({ id: 'b', startTime: '2026-06-20T10:00:00.000Z', endTime: '2026-06-20T16:00:00.000Z' })],
+      [makeEventReg({ id: 'a', startTime: '2026-06-20T10:00:00.000Z', endTime: '2026-06-20T12:00:00.000Z' })],
+      NOW,
+    );
+    expect(list.map((i) => i.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('agendaKindMeta', () => {
+  it('associe une couleur ACCENTS et un libellé à chaque type', () => {
+    expect(agendaKindMeta('reservation')).toEqual({ color: ACCENTS.blue, label: 'Réservation' });
+    expect(agendaKindMeta('tournament')).toEqual({ color: ACCENTS.apricot, label: 'Tournoi' });
+    expect(agendaKindMeta('event')).toEqual({ color: ACCENTS.cyan, label: 'Event' });
+  });
+});
+
+describe('agendaItemClubSlug', () => {
+  it('renvoie le slug du club selon le type d item (les 3 types)', () => {
+    const list = buildAgendaList([makeReservation()], [makeRegistration()], [makeEventReg()], NOW);
+    // Les fixtures utilisent toutes le slug 'padel-arena' ; on vérifie chaque branche du switch.
+    for (const kind of ['reservation', 'tournament', 'event'] as const) {
+      const item = list.find((i) => i.kind === kind)!;
+      expect(agendaItemClubSlug(item)).toBe('padel-arena');
+    }
   });
 });
 

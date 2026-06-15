@@ -1,4 +1,23 @@
-import { MyReservation, MyTournamentRegistration } from '@/lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '@/lib/api';
+import { ACCENTS } from '@/lib/theme';
+
+export type AgendaKind = 'reservation' | 'tournament' | 'event';
+
+/** Couleur + libellé par type d'item d'agenda — source de vérité unique (listes + calendrier).
+ *  Couleurs prises dans ACCENTS (constantes), pas th.accent/th.accentWarm qui peuvent être
+ *  surchargés par la couleur du club. */
+export function agendaKindMeta(kind: AgendaKind): { color: string; label: string } {
+  switch (kind) {
+    case 'reservation': return { color: ACCENTS.blue,    label: 'Réservation' };
+    case 'tournament':  return { color: ACCENTS.apricot, label: 'Tournoi' };
+    case 'event':       return { color: ACCENTS.cyan,    label: 'Event' };
+  }
+}
+
+/** Libellés partagés (réservation vs inscription tournoi/event), réutilisés par les composants. */
+export const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
+export const REG_LABEL: Record<string, string> = { CONFIRMED: 'Inscrit', WAITLISTED: "Liste d'attente" };
+export const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
 export interface MonthCell {
   key: string; // YYYY-MM-DD
@@ -11,6 +30,10 @@ export type CalendarEntry =
   | {
       kind: 'tournament'; id: string; dayKeys: string[]; startKey: string; endKey: string;
       past: boolean; reg: MyTournamentRegistration;
+    }
+  | {
+      kind: 'event'; id: string; dayKeys: string[]; startKey: string; endKey: string;
+      past: boolean; ev: MyEventRegistration;
     };
 
 /**
@@ -79,10 +102,11 @@ export function enumerateDayKeys(startKey: string, endKey: string): string[] {
   return out;
 }
 
-/** Fusionne réservations terrain et inscriptions tournois en entrées calendrier. */
+/** Fusionne réservations terrain, inscriptions tournois et inscriptions events en entrées calendrier. */
 export function buildCalendarEntries(
   reservations: MyReservation[],
   regs: MyTournamentRegistration[],
+  events: MyEventRegistration[],
   now: Date,
 ): CalendarEntry[] {
   const entries: CalendarEntry[] = [];
@@ -114,10 +138,36 @@ export function buildCalendarEntries(
     });
   }
 
+  for (const ev of events) {
+    if (ev.status === 'CANCELLED' || ev.event.status === 'CANCELLED') continue;
+    const tz = ev.event.club.timezone;
+    const startKey = dayKeyInTz(ev.event.startTime, tz);
+    const endKey = ev.event.endTime ? dayKeyInTz(ev.event.endTime, tz) : startKey;
+    entries.push({
+      kind: 'event',
+      id: ev.id,
+      startKey,
+      endKey,
+      dayKeys: enumerateDayKeys(startKey, endKey),
+      past: new Date(ev.event.endTime ?? ev.event.startTime) < now,
+      ev,
+    });
+  }
+
   return entries;
 }
 
-/** Index par jour ; un tournoi multi-jours apparaît sur chacun de ses jours, avant les réservations. */
+/** Instant ISO de début d'une entrée, tous types confondus. */
+function entryStart(e: CalendarEntry): string {
+  if (e.kind === 'reservation') return e.r.startTime;
+  if (e.kind === 'tournament') return e.reg.tournament.startTime;
+  return e.ev.event.startTime;
+}
+
+// Ordre d'affichage intra-jour : tournois, puis events, puis réservations.
+const KIND_RANK: Record<CalendarEntry['kind'], number> = { tournament: 0, event: 1, reservation: 2 };
+
+/** Index par jour ; tournois/events multi-jours apparaissent sur chacun de leurs jours, avant les réservations. */
 export function entriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
   const byDay = new Map<string, CalendarEntry[]>();
   const push = (key: string, e: CalendarEntry) => {
@@ -132,12 +182,57 @@ export function entriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntr
   }
 
   for (const list of byDay.values()) {
-    list.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === 'tournament' ? -1 : 1;
-      const sa = a.kind === 'reservation' ? a.r.startTime : a.reg.tournament.startTime;
-      const sb = b.kind === 'reservation' ? b.r.startTime : b.reg.tournament.startTime;
-      return sa.localeCompare(sb); // ISO UTC : ordre lexicographique = chronologique
-    });
+    // rang de kind, puis instant ISO UTC (ordre lexicographique = chronologique).
+    list.sort((a, b) => (KIND_RANK[a.kind] - KIND_RANK[b.kind]) || entryStart(a).localeCompare(entryStart(b)));
   }
   return byDay;
+}
+
+// --- Listes « Mes réservations » (À venir / Passées) : fusion à plat, triée par date ---
+
+export type AgendaListItem =
+  | { kind: 'reservation'; id: string; start: string; past: boolean; r: MyReservation }
+  | { kind: 'tournament'; id: string; start: string; past: boolean; reg: MyTournamentRegistration }
+  | { kind: 'event'; id: string; start: string; past: boolean; ev: MyEventRegistration };
+
+/**
+ * Fusionne réservations + inscriptions tournois + inscriptions events en une liste à plat,
+ * triée chronologiquement par instant de début (ISO UTC), tie-break stable par id.
+ * Exclut les éléments annulés (réservation, inscription ou tournoi/event sous-jacent).
+ * `past` = terminé avant `now` (repli sur le début si pas d'heure de fin).
+ */
+export function buildAgendaList(
+  reservations: MyReservation[],
+  regs: MyTournamentRegistration[],
+  events: MyEventRegistration[],
+  now: Date,
+): AgendaListItem[] {
+  const items: AgendaListItem[] = [];
+
+  for (const r of reservations) {
+    if (r.status === 'CANCELLED') continue;
+    items.push({ kind: 'reservation', id: r.id, start: r.startTime, past: new Date(r.endTime) < now, r });
+  }
+
+  for (const reg of regs) {
+    if (reg.status === 'CANCELLED' || reg.tournament.status === 'CANCELLED') continue;
+    const t = reg.tournament;
+    items.push({ kind: 'tournament', id: reg.id, start: t.startTime, past: new Date(t.endTime ?? t.startTime) < now, reg });
+  }
+
+  for (const ev of events) {
+    if (ev.status === 'CANCELLED' || ev.event.status === 'CANCELLED') continue;
+    const e = ev.event;
+    items.push({ kind: 'event', id: ev.id, start: e.startTime, past: new Date(e.endTime ?? e.startTime) < now, ev });
+  }
+
+  // ISO UTC : localeCompare = chronologique ; tie-break id → tri stable et déterministe.
+  return items.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+}
+
+/** Slug du club auquel appartient un item d'agenda (pour cloisonner/relier par club). */
+export function agendaItemClubSlug(item: AgendaListItem): string {
+  if (item.kind === 'reservation') return item.r.resource.club.slug;
+  if (item.kind === 'tournament') return item.reg.tournament.club.slug;
+  return item.ev.event.club.slug;
 }

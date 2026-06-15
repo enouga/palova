@@ -175,6 +175,9 @@ model Club {
   // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
   playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")
   cancellationCutoffHours Int @default(0) @map("cancellation_cutoff_hours")
+  // « Mes réservations » sur l'app de ce club : false (défaut) = n'affiche que ce club ;
+  // true = affiche aussi les réservations/tournois/events des autres clubs du joueur.
+  showOtherClubsReservations Boolean @default(false) @map("show_other_clubs_reservations")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 

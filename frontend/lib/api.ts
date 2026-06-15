@@ -515,6 +515,7 @@ export interface ClubDetail {
   bookingReleaseMode: BookingReleaseMode;
   publicReleaseHour: number;
   memberReleaseHour: number;
+  showOtherClubsReservations: boolean;
   clubSports: ClubSportPublic[];
 }
 
@@ -681,6 +682,7 @@ export interface ClubAdminDetail {
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
+  showOtherClubsReservations: boolean;
 }
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
@@ -712,6 +714,7 @@ export type UpdateClubBody = Partial<{
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
+  showOtherClubsReservations: boolean;
 }>;
 
 // --- Types back-office ---

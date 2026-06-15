@@ -250,6 +250,15 @@ export default function AdminSettingsPage() {
       </div>
 
       <div style={card}>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Page « Mes réservations »</h2>
+        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Par défaut, vos joueurs ne voient ici que les réservations, tournois et events de <strong>votre club</strong>. Cochez pour leur afficher aussi ceux des autres clubs dont ils sont membres (un clic sur une entrée d&apos;un autre club ouvre l&apos;app de ce club).</p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={club.showOtherClubsReservations} onChange={(e) => set('showOtherClubsReservations', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher aussi les réservations des autres clubs</span>
+        </label>
+      </div>
+
+      <div style={card}>
         <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Heures pleines / creuses</h2>
         <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Ajoutez des plages d&apos;<strong>heures creuses</strong> (tarif réduit) jour par jour — plusieurs plages possibles. Le reste de la journée est en <strong>heures pleines</strong> ; un jour sans plage est entièrement en heures pleines. Le tarif des heures creuses se règle par terrain dans <strong>Ressources</strong>.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

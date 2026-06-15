@@ -127,7 +127,6 @@ export default function EventsPage() {
 
         <div style={{ padding: '18px 20px 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Events</div>
-          <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 4 }}>{club.name}</div>
         </div>
 
         <div style={{ padding: '16px 20px 0', display: 'flex', gap: 8 }}>

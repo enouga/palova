@@ -1,21 +1,22 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation, MyTournamentRegistration } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration, MyEventRegistration } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { BackButton, Chip, Segmented, ThemeToggle } from '@/components/ui/atoms';
+import { BackButton, Segmented, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { MonthCalendar } from '@/components/calendar/MonthCalendar';
 import { DayPanel } from '@/components/calendar/DayPanel';
-import { buildCalendarEntries, entriesByDay, todayKey, addMonths } from '@/lib/calendar';
+import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
+import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonths } from '@/lib/calendar';
 import { ManagePlayersModal } from '@/components/reservations/ManagePlayersModal';
-import { isCancellationOpen, isPlayerChangeOpen } from '@/lib/reservations';
+import { isPlayerChangeOpen } from '@/lib/reservations';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -23,8 +24,6 @@ function fmtDate(iso: string, tz: string): string {
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
-
-const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 
 export default function MyReservationsPage() {
   const router = useRouter();
@@ -35,6 +34,7 @@ export default function MyReservationsPage() {
   const reserveHref = slug ? '/reserver' : '/clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
+  const [evts, setEvts]       = useState<MyEventRegistration[]>([]);
   const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar'>('calendar');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -53,12 +53,14 @@ export default function MyReservationsPage() {
     setLoading(true);
     try {
       setError(null);
-      const [reservations, tournaments] = await Promise.all([
+      const [reservations, tournaments, events] = await Promise.all([
         api.getMyReservations(t),
-        api.getMyTournaments(t).catch(() => []), // calendrier sans tournois si l'appel échoue
+        api.getMyTournaments(t).catch(() => []), // agenda sans tournois si l'appel échoue
+        api.getMyEvents(t).catch(() => []),      // agenda sans events si l'appel échoue
       ]);
       setItems(reservations);
       setRegs(tournaments);
+      setEvts(events);
     }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
@@ -66,15 +68,31 @@ export default function MyReservationsPage() {
 
   useEffect(() => { if (token) load(token); }, [token, load]);
 
-  const now = Date.now();
-  const isUpcoming = (r: MyReservation) => r.status !== 'CANCELLED' && new Date(r.endTime).getTime() >= now;
-  const upcoming = items.filter(isUpcoming);
-  const past = items.filter((r) => !isUpcoming(r));
+  // Horloge posée en effet (jamais new Date() au rendu → pas de mismatch d'hydration).
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    tick();
+    const h = setInterval(tick, 60_000);
+    return () => clearInterval(h);
+  }, []);
+  const nowDate = useMemo(() => new Date(now ?? 0), [now]);
+
+  // Cloisonnement par club : sur l'app d'un club (slug défini), on ne montre que CE club
+  // sauf si le club a ouvert la vision des autres. Sur la plateforme (pas de slug), vue globale.
+  const showAll = !slug || !!club?.showOtherClubsReservations;
+  const fItems = useMemo(() => (showAll ? items : items.filter((r) => r.resource.club.slug === slug)), [showAll, items, slug]);
+  const fRegs  = useMemo(() => (showAll ? regs  : regs.filter((r) => r.tournament.club.slug === slug)), [showAll, regs, slug]);
+  const fEvts  = useMemo(() => (showAll ? evts  : evts.filter((e) => e.event.club.slug === slug)), [showAll, evts, slug]);
+
+  const agenda   = useMemo(() => buildAgendaList(fItems, fRegs, fEvts, nowDate), [fItems, fRegs, fEvts, nowDate]);
+  const upcoming = useMemo(() => agenda.filter((i) => !i.past), [agenda]);
+  const past     = useMemo(() => agenda.filter((i) =>  i.past), [agenda]);
   const list = tab === 'past' ? past : upcoming;
 
   const byDay = useMemo(
-    () => entriesByDay(buildCalendarEntries(items, regs, new Date())),
-    [items, regs],
+    () => entriesByDay(buildCalendarEntries(fItems, fRegs, fEvts, nowDate)),
+    [fItems, fRegs, fEvts, nowDate],
   );
   const cancel = async (r: MyReservation) => {
     if (!token) return;
@@ -134,6 +152,7 @@ export default function MyReservationsPage() {
                 <DayPanel
                   dayKey={selectedDay}
                   entries={byDay.get(selectedDay) ?? []}
+                  localSlug={slug ?? null}
                   onCancel={setConfirmCancel}
                   onManagePlayers={setManagePlayers}
                   onReserve={() => router.push(reserveHref)}
@@ -148,7 +167,7 @@ export default function MyReservationsPage() {
             <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
           ) : list.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
-              {tab === 'upcoming' ? 'Aucune réservation à venir.' : 'Aucune réservation passée.'}
+              {tab === 'upcoming' ? 'Rien à venir.' : 'Rien de passé.'}
               {tab === 'upcoming' && (
                 <div style={{ marginTop: 12 }}>
                   <button onClick={() => router.push(reserveHref)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text, textDecoration: 'underline', textUnderlineOffset: 3 }}>{slug ? 'Réserver un créneau' : 'Trouver un club'}</button>
@@ -156,35 +175,16 @@ export default function MyReservationsPage() {
               )}
             </div>
           ) : (
-            list.map((r) => {
-              const tz = r.resource.club.timezone;
-              const upcoming = tab === 'upcoming';
-              return (
-                <div key={r.id} style={{ background: th.surface, borderRadius: 20, padding: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', gap: 14, opacity: upcoming ? 1 : 0.7 }}>
-                  <div style={{ width: 56, flexShrink: 0, textAlign: 'center', borderRight: `1px solid ${th.line}`, paddingRight: 14, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, lineHeight: 1, color: th.text }}>{new Intl.DateTimeFormat('fr-FR', { day: 'numeric', timeZone: tz }).format(new Date(r.startTime))}</span>
-                    <span style={{ fontFamily: th.fontUI, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginTop: 3 }}>{new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: tz }).format(new Date(r.startTime)).replace('.', '')}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text }}>{r.resource.name}</span>
-                      <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
-                    </div>
-                    <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>{r.resource.club.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 9, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
-                      <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
-                      {upcoming && (
-                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                          <button onClick={() => setManagePlayers(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Joueurs</button>
-                          <button onClick={() => setConfirmCancel(r)} disabled={!isCancellationOpen(r, now)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: isCancellationOpen(r, now) ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: isCancellationOpen(r, now) ? '#ff7a4d' : th.textFaint }}>Annuler</button>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+            list.map((it) => (
+              <MyAgendaListItem
+                key={`${it.kind}-${it.id}`}
+                item={it}
+                now={now ?? Date.now()}
+                localSlug={slug ?? null}
+                onCancel={setConfirmCancel}
+                onManagePlayers={setManagePlayers}
+              />
+            ))
           )}
         </div>
         )}
@@ -212,7 +212,7 @@ export default function MyReservationsPage() {
         <ManagePlayersModal
           reservation={managePlayers}
           token={token}
-          canEdit={isPlayerChangeOpen(managePlayers, now)}
+          canEdit={isPlayerChangeOpen(managePlayers, now ?? Date.now())}
           onClose={() => setManagePlayers(null)}
           onChanged={() => { if (token) load(token); }}
         />

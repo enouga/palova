@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { DayPanel } from '../components/calendar/DayPanel';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { buildCalendarEntries } from '../lib/calendar';
-import { MyReservation, MyTournamentRegistration } from '../lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '../lib/api';
 
 // startTime in the future so isCancellationOpen returns true (no cutoff configured).
 const futureStart = (() => { const d = new Date(Date.now() + 48 * 3600e3); d.setUTCHours(16, 0, 0, 0); return d.toISOString(); })();
@@ -35,14 +35,26 @@ const registration = {
   },
 } as MyTournamentRegistration;
 
+const eventReg = {
+  id: 'evt-1',
+  status: 'CONFIRMED',
+  event: {
+    id: 'ev-1', clubId: 'club-demo', name: 'Mêlée du vendredi', kind: 'MELEE', description: null,
+    startTime: '2026-06-12T17:00:00.000Z', endTime: '2026-06-12T20:00:00.000Z',
+    registrationDeadline: '2026-06-12T12:00:00.000Z', capacity: 16, price: null, memberOnly: false,
+    status: 'PUBLISHED', confirmedCount: 6, waitlistCount: 0,
+    club: { slug: 'padel-arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+  },
+} as MyEventRegistration;
+
 const NOW = new Date('2026-06-10T12:00:00.000Z');
-const entries = buildCalendarEntries([reservation], [registration], NOW);
+const entries = buildCalendarEntries([reservation], [registration], [], NOW);
 
 function renderPanel(props: Partial<React.ComponentProps<typeof DayPanel>> = {}) {
   return render(
     <ThemeProvider>
       <DayPanel
-        dayKey="2026-06-12" entries={entries}
+        dayKey="2026-06-12" entries={entries} localSlug={null}
         onCancel={jest.fn()}
         onReserve={jest.fn()} reserveLabel="Réserver un créneau" {...props}
       />
@@ -71,11 +83,18 @@ describe('DayPanel', () => {
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
   });
 
-  it('affiche la carte tournoi avec un lien Gérer vers la page du tournoi', () => {
+  it('affiche la carte tournoi avec un lien Gérer vers la page du tournoi (sous-domaine club)', () => {
     renderPanel();
     expect(screen.getByText('P100 Messieurs')).toBeInTheDocument();
     expect(screen.getByText(/Marc Dupont/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Gérer/ })).toHaveAttribute('href', '/tournois/t-1');
+    expect(screen.getByRole('link', { name: /Gérer/ })).toHaveAttribute('href', expect.stringContaining('/tournois/t-1'));
+  });
+
+  it('affiche la carte event avec un lien Voir vers la fiche event (sous-domaine club)', () => {
+    renderPanel({ entries: buildCalendarEntries([], [], [eventReg], NOW), dayKey: '2026-06-12' });
+    expect(screen.getByText('Mêlée du vendredi')).toBeInTheDocument();
+    expect(screen.getByText(/Mêlée · Padel Arena/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/events/ev-1'));
   });
 
   it('jour vide : message + bouton réserver', () => {
@@ -86,9 +105,16 @@ describe('DayPanel', () => {
     expect(onReserve).toHaveBeenCalled();
   });
 
+  it('résa d un AUTRE club (localSlug différent) : pas d actions, mais un lien vers l app du club', () => {
+    renderPanel({ entries: buildCalendarEntries([reservation], [], [], NOW), localSlug: 'un-autre-club' });
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Joueurs' })).toBeNull();
+    expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/me/reservations'));
+  });
+
   it('ne propose pas d actions sur une réservation passée', () => {
     const pastRes = { ...reservation, startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' };
-    renderPanel({ entries: buildCalendarEntries([pastRes], [], NOW) });
+    renderPanel({ entries: buildCalendarEntries([pastRes], [], [], NOW) });
     expect(screen.queryByRole('button', { name: 'Déplacer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
   });

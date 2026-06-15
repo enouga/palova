@@ -22,6 +22,7 @@ jest.mock('../lib/api', () => ({
   api: {
     getMyReservations: jest.fn(),
     getMyTournaments: jest.fn(),
+    getMyEvents: jest.fn(),
     cancelReservation: jest.fn(),
   },
 }));
@@ -46,6 +47,7 @@ describe('Mes réservations — onglet Calendrier', () => {
     pushMock.mockReset();
     mocked.getMyReservations.mockResolvedValue([reservation] as never);
     mocked.getMyTournaments.mockResolvedValue([] as never);
+    mocked.getMyEvents.mockResolvedValue([] as never);
   });
 
   it('Calendrier est l’onglet par défaut et apparaît en premier', async () => {

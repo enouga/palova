@@ -165,8 +165,8 @@ export default function AdminResourcesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['', 'Ressource', 'Sport', 'Surface', 'Format', '€ créneau plein', '€ créneau creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
-                  <th key={i} style={{ padding: '14px 18px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap' }}>{h}</th>
+                {['', 'Ressource', 'Sport', 'Surface', 'Couvert', 'Format', '€ créneau plein', '€ créneau creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
+                  <th key={i} style={{ padding: '14px 18px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap', textAlign: h === 'Couvert' ? 'center' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -188,15 +188,17 @@ export default function AdminResourcesPage() {
                   </td>
                   <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
                   <td style={cell}>
-                    {(r.clubSport.sport.surfaces ?? []).length > 0 && (
-                      <select value={typeof r.attributes?.surface === 'string' ? r.attributes.surface : ''} onChange={(e) => editAttr(r.id, 'surface', e.target.value)} style={{ ...input, width: 110 }}>
+                    {(r.clubSport.sport.surfaces ?? []).length > 0 ? (
+                      <select value={typeof r.attributes?.surface === 'string' ? r.attributes.surface : ''} onChange={(e) => editAttr(r.id, 'surface', e.target.value)} style={{ ...input, width: 130 }}>
                         <option value="">—</option>
                         {(r.clubSport.sport.surfaces ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
+                    ) : (
+                      <span style={{ color: th.textFaint }}>—</span>
                     )}
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 8, fontSize: 13 }}>
-                      <input type="checkbox" checked={r.attributes?.covered === true} onChange={(e) => editCovered(r.id, e.target.checked)} /> Couvert
-                    </label>
+                  </td>
+                  <td style={{ ...cell, textAlign: 'center' }}>
+                    <input type="checkbox" aria-label="Couvert" checked={r.attributes?.covered === true} onChange={(e) => editCovered(r.id, e.target.checked)} />
                   </td>
                   <td style={cell}>
                     <select value={typeof r.attributes?.format === 'string' ? r.attributes.format : 'double'} onChange={(e) => editAttr(r.id, 'format', e.target.value)} style={{ ...input, width: 100 }}>
