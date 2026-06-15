@@ -393,11 +393,18 @@ export class ReservationService {
     for (const p of payments) {
       const refundableCents = cents(p.amount) - cents(p.refundedAmount);
       if (refundableCents <= 0) continue;
-      await this.refundService.refund({
-        paymentId: p.id, clubId, amount: refundableCents / 100,
-        reason: 'Annulation de la réservation', method: p.method,
-      });
-      refunded.push({ paymentId: p.id, amount: (refundableCents / 100).toFixed(2), method: p.method });
+      // Best-effort : l'annulation est DÉJÀ committée. Un remboursement qui échoue
+      // (course avec le bouton « Rembourser » manuel, erreur transitoire…) ne doit
+      // pas faire échouer l'annulation — le club a le remboursement manuel en repli.
+      try {
+        await this.refundService.refund({
+          paymentId: p.id, clubId, amount: refundableCents / 100,
+          reason: 'Annulation de la réservation', method: p.method,
+        });
+        refunded.push({ paymentId: p.id, amount: (refundableCents / 100).toFixed(2), method: p.method });
+      } catch (err) {
+        console.error('[reservation] remboursement auto échoué', { paymentId: p.id, err });
+      }
     }
     return refunded;
   }

@@ -1371,5 +1371,29 @@ describe('ReservationService', () => {
       expect(out.refunded).toHaveLength(0);
       spy.mockRestore();
     });
+
+    it('best-effort : un remboursement qui échoue ne fait pas échouer l\'annulation', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockRejectedValue(new Error('ALREADY_REFUNDED'));
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r4', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r4', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-4', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      // L'annulation est déjà committée : un refund qui rejette ne doit pas la faire échouer.
+      const out = await service.cancelReservation('r4', 'u1');
+
+      expect(out.status).toBe('CANCELLED');
+      expect(out.refunded).toHaveLength(0); // le remboursement échoué n'est pas listé
+      spy.mockRestore();
+    });
   });
 });
