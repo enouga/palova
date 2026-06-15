@@ -442,6 +442,7 @@ model Payment {
   @@index([participantId])
   @@index([clubId, createdAt])
   @@index([clubId, status])
+  @@index([stripePaymentIntentId])
   @@unique([clubId, receiptNo])
   @@map("payments")
 }
@@ -476,6 +477,7 @@ model ClubStripeCustomer {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([clubId, userId])
+  @@unique([clubId, stripeCustomerId])
   @@index([clubId])
   @@map("club_stripe_customers")
 }

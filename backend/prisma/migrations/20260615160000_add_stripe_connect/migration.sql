@@ -12,6 +12,9 @@ ALTER TABLE "payments"
   ADD COLUMN "stripe_payment_intent_id" TEXT,
   ADD COLUMN "stripe_payment_method_id" TEXT;
 
+CREATE INDEX "payments_stripe_payment_intent_id_idx"
+  ON "payments"("stripe_payment_intent_id");
+
 CREATE TABLE "club_stripe_customers" (
   "id"                        TEXT         NOT NULL,
   "club_id"                   TEXT         NOT NULL,
@@ -25,6 +28,8 @@ CREATE TABLE "club_stripe_customers" (
 
 CREATE UNIQUE INDEX "club_stripe_customers_club_id_user_id_key"
   ON "club_stripe_customers"("club_id", "user_id");
+CREATE UNIQUE INDEX "club_stripe_customers_club_id_stripe_customer_id_key"
+  ON "club_stripe_customers"("club_id", "stripe_customer_id");
 CREATE INDEX "club_stripe_customers_club_id_idx"
   ON "club_stripe_customers"("club_id");
 
