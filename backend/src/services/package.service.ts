@@ -74,7 +74,7 @@ export class PackageService {
    */
   async sellPackage(clubId: string, userId: string, body: {
     templateId?: string; method?: string; payerName?: string;
-    voucherRef?: string; voucherIssuer?: string;
+    voucherRef?: string; voucherIssuer?: string; createdByUserId?: string;
   }) {
     const tpl = await prisma.packageTemplate.findUnique({ where: { id: body.templateId ?? '' } });
     if (!tpl || tpl.clubId !== clubId || !tpl.isActive) throw new Error('TEMPLATE_NOT_FOUND');
@@ -114,6 +114,7 @@ export class PackageService {
           voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
           voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
           voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
+          createdByUserId: body.createdByUserId ?? null,
         },
       });
       return { package: pkg, payment };

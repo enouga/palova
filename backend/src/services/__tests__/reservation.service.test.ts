@@ -1,6 +1,7 @@
 import '../../__mocks__/prisma';
 import '../../__mocks__/redis';
 import { DateTime } from 'luxon';
+import { Prisma } from '@prisma/client';
 import { prismaMock } from '../../__mocks__/prisma';
 import { redisMock } from '../../__mocks__/redis';
 import { ReservationService } from '../reservation.service';
@@ -754,6 +755,7 @@ describe('ReservationService', () => {
     beforeEach(() => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
       paidSoFar(0);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
     });
 
     it('VOUCHER : référence optionnelle, pose voucherStatus PENDING_REIMBURSEMENT', async () => {
@@ -863,6 +865,36 @@ describe('ReservationService', () => {
       await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 25, method: 'PACK_CREDIT', sourcePackageId: 'pkg-2' }))
         .rejects.toThrow('VALIDATION_ERROR');
     });
+
+    it('persiste createdByUserId quand fourni', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', totalPrice: new Prisma.Decimal(20), type: 'COURT',
+        startTime: new Date(), endTime: new Date(),
+        resource: { clubId: 'club-1', price: new Prisma.Decimal(20), offPeakPrice: null, club: { offPeakHours: null, timezone: 'Europe/Paris' } },
+      } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      await service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 10, method: 'CASH', createdByUserId: 'staff-9' });
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ createdByUserId: 'staff-9' }),
+      }));
+    });
+
+    it('plafond NET : un remboursement rouvre du dû encaissable', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', totalPrice: new Prisma.Decimal(20), type: 'COURT',
+        startTime: new Date(), endTime: new Date(),
+        resource: { clubId: 'club-1', price: new Prisma.Decimal(20), offPeakPrice: null, club: { offPeakHours: null, timezone: 'Europe/Paris' } },
+      } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(20) } } as any);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(8) } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-2' } as any);
+
+      await expect(service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 8, method: 'CASH' })).resolves.toBeDefined();
+      await expect(service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 9, method: 'CASH' })).rejects.toThrow('PAYMENT_EXCEEDS_DUE');
+    });
   });
 
   describe('addPayment par participant (Phase 3)', () => {
@@ -876,6 +908,7 @@ describe('ReservationService', () => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
       prismaMock.reservation.findUnique.mockResolvedValue(resa as any);
       paidByParticipant(0);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
     });
 
     it('attribue le paiement au participant et plafonne à SA part', async () => {

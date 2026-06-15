@@ -902,6 +902,7 @@ export class ReservationService {
     voucherRef?: string;
     voucherIssuer?: string;
     participantId?: string;
+    createdByUserId?: string;
   }) {
     if (!(typeof params.amount === 'number') || isNaN(params.amount) || params.amount <= 0) {
       throw new Error('VALIDATION_ERROR');
@@ -957,8 +958,11 @@ export class ReservationService {
     const overpaidWhere = participant ? { participantId: participant.id } : { reservationId: params.reservationId };
     const assertNotOverpaid = async (tx: Prisma.TransactionClient) => {
       if (dueCents <= 0) return;
-      const agg = await tx.payment.aggregate({ _sum: { amount: true }, where: overpaidWhere });
-      const paidCents = Math.round(num(agg._sum.amount) * 100);
+      const [paidAgg, refundAgg] = await Promise.all([
+        tx.payment.aggregate({ _sum: { amount: true }, where: overpaidWhere }),
+        tx.refund.aggregate({ _sum: { amount: true }, where: { payment: overpaidWhere } }),
+      ]);
+      const paidCents = Math.round(num(paidAgg._sum.amount) * 100) - Math.round(num(refundAgg._sum.amount) * 100);
       if (paidCents + amountCents > dueCents) throw new Error('PAYMENT_EXCEEDS_DUE');
     };
 
@@ -973,6 +977,7 @@ export class ReservationService {
       voucherRef:    method === 'VOUCHER' ? params.voucherRef?.trim() || null : null,
       voucherIssuer: method === 'VOUCHER' ? params.voucherIssuer?.trim() || null : null,
       voucherStatus: method === 'VOUCHER' ? ('PENDING_REIMBURSEMENT' as const) : null,
+      createdByUserId: params.createdByUserId ?? null,
     };
 
     if (method !== 'PACK_CREDIT' && method !== 'WALLET') {
