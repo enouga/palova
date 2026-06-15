@@ -50,6 +50,17 @@ enum PaymentMethod {
   MEMBER       // couvert par l'abonnement du membre (pas de flux d'argent)
 }
 
+/// Cycle de vie d'un paiement. Les encaissements caisse naissent CAPTURED ;
+/// PENDING/AUTHORIZED/FAILED serviront au paiement en ligne (phase ultérieure).
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
 /// Type d'offre prépayée : carnet d'entrées ou porte-monnaie €.
 enum PackageKind {
   ENTRIES
@@ -256,6 +267,7 @@ model User {
   eventRegistrations   EventRegistration[]
   emailVerification EmailVerification?
   memberPackages MemberPackage[]
+  paymentsCreated Payment[] @relation("PaymentsCreated")
 
   @@map("users")
 }
@@ -380,16 +392,41 @@ model Payment {
   voucherIssuer   String?        @map("voucher_issuer")
   voucherStatus   VoucherStatus? @map("voucher_status")
   createdAt       DateTime       @default(now()) @map("created_at")
+  status          PaymentStatus  @default(CAPTURED) @map("status")
+  refundedAmount  Decimal        @default(0) @db.Decimal(10, 2) @map("refunded_amount")
+  createdByUserId String?        @map("created_by_user_id")
 
   reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
   memberPackage MemberPackage?          @relation("PackageSale", fields: [memberPackageId], references: [id], onDelete: SetNull)
   sourcePackage MemberPackage?          @relation("PackageConsumption", fields: [sourcePackageId], references: [id], onDelete: SetNull)
+  createdBy     User?                   @relation("PaymentsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  refunds       Refund[]
 
   @@index([reservationId])
   @@index([participantId])
   @@index([clubId, createdAt])
+  @@index([clubId, status])
   @@map("payments")
+}
+
+/// Remboursement (total ou partiel) d'un Payment. Montant POSITIF + lien parent —
+/// jamais un Payment négatif, pour que le récap caisse (sum(amount)) reste juste.
+model Refund {
+  id              String        @id @default(cuid())
+  paymentId       String        @map("payment_id")
+  clubId          String        @map("club_id")
+  amount          Decimal       @db.Decimal(10, 2)
+  reason          String?
+  method          PaymentMethod @default(CASH)
+  createdByUserId String?       @map("created_by_user_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([clubId, createdAt])
+  @@map("refunds")
 }
 
 /// Offre prépayée vendue par un club (carnet d'entrées ou porte-monnaie €).
