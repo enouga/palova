@@ -56,4 +56,87 @@ export class StripeService {
     const link = await stripe.accounts.createLoginLink(club.stripeAccountId);
     return link.url;
   }
+
+  async createOrGetCustomer(clubId: string, userId: string) {
+    const existing = await prisma.clubStripeCustomer.findUnique({
+      where: { clubId_userId: { clubId, userId } },
+    });
+    if (existing) return existing;
+
+    const [club, user] = await Promise.all([
+      prisma.club.findUnique({ where: { id: clubId }, select: { stripeAccountId: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+    ]);
+    if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const customer = await stripe.customers.create(
+      { email: user.email ?? undefined },
+      { stripeAccount: club.stripeAccountId },
+    );
+
+    return prisma.clubStripeCustomer.create({
+      data: { clubId, userId, stripeCustomerId: customer.id },
+    });
+  }
+
+  async createPaymentIntent(params: {
+    clubId: string;
+    userId: string;
+    reservationId: string;
+    amountCents: number;
+  }): Promise<{ clientSecret: string }> {
+    const club = await prisma.club.findUnique({
+      where: { id: params.clubId },
+      select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') {
+      throw new Error('STRIPE_NOT_CONFIGURED');
+    }
+
+    const customer = await this.createOrGetCustomer(params.clubId, params.userId);
+
+    const pi = await stripe.paymentIntents.create(
+      {
+        amount: params.amountCents,
+        currency: 'eur',
+        customer: customer.stripeCustomerId,
+        setup_future_usage: 'off_session',
+        metadata: { reservationId: params.reservationId, clubId: params.clubId },
+      },
+      { stripeAccount: club.stripeAccountId },
+    );
+
+    if (!pi.client_secret) throw new Error('STRIPE_ERROR');
+    return { clientSecret: pi.client_secret };
+  }
+
+  async createSetupIntent(params: {
+    clubId: string;
+    userId: string;
+    reservationId: string;
+  }): Promise<{ clientSecret: string }> {
+    const club = await prisma.club.findUnique({
+      where: { id: params.clubId },
+      select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') {
+      throw new Error('STRIPE_NOT_CONFIGURED');
+    }
+
+    const customer = await this.createOrGetCustomer(params.clubId, params.userId);
+
+    const si = await stripe.setupIntents.create(
+      {
+        customer: customer.stripeCustomerId,
+        usage: 'off_session',
+        payment_method_types: ['card'],
+        metadata: { reservationId: params.reservationId, clubId: params.clubId },
+      },
+      { stripeAccount: club.stripeAccountId },
+    );
+
+    if (!si.client_secret) throw new Error('STRIPE_ERROR');
+    return { clientSecret: si.client_secret };
+  }
 }

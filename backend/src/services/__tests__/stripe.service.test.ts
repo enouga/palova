@@ -10,6 +10,8 @@ jest.mock('../../db/prisma', () => ({
     clubStripeCustomer: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
   },
 }));
@@ -114,5 +116,94 @@ describe('createLoginLink', () => {
 
     const url = await svc.createLoginLink('club-1');
     expect(url).toBe('https://dashboard.stripe.com/xxx');
+  });
+});
+
+describe('createOrGetCustomer', () => {
+  it('crée un nouveau Customer Stripe si absent en base', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ email: 'j@test.fr' });
+    (stripe.customers.create as jest.Mock).mockResolvedValue({ id: 'cus_new' });
+    (prisma.clubStripeCustomer.create as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_new', defaultPaymentMethodId: null,
+    });
+
+    const result = await svc.createOrGetCustomer('club-1', 'user-1');
+
+    expect(stripe.customers.create).toHaveBeenCalledWith(
+      { email: 'j@test.fr' },
+      { stripeAccount: 'acct_1' },
+    );
+    expect(result.stripeCustomerId).toBe('cus_new');
+  });
+
+  it('retourne le Customer existant sans appel Stripe', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_existing', defaultPaymentMethodId: 'pm_xxx',
+    });
+
+    const result = await svc.createOrGetCustomer('club-1', 'user-1');
+
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    expect(result.stripeCustomerId).toBe('cus_existing');
+  });
+});
+
+describe('createPaymentIntent', () => {
+  it('crée un PaymentIntent sur le compte connecté', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_secret_xxx' });
+
+    const result = await svc.createPaymentIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1', amountCents: 2500,
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 2500,
+        currency: 'eur',
+        customer: 'cus_1',
+        setup_future_usage: 'off_session',
+      }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(result.clientSecret).toBe('pi_secret_xxx');
+  });
+
+  it('lève STRIPE_NOT_CONFIGURED si status !== ACTIVE', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'PENDING',
+    });
+    await expect(svc.createPaymentIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'r-1', amountCents: 1000,
+    })).rejects.toThrow('STRIPE_NOT_CONFIGURED');
+  });
+});
+
+describe('createSetupIntent', () => {
+  it('crée un SetupIntent off_session sur le compte connecté', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.setupIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'seti_secret_yyy' });
+
+    const result = await svc.createSetupIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1',
+    });
+
+    expect(stripe.setupIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: 'cus_1', usage: 'off_session' }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(result.clientSecret).toBe('seti_secret_yyy');
   });
 });
