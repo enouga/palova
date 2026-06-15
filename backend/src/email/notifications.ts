@@ -13,6 +13,7 @@ import {
   buildMatchInviteEmail,
   buildMatchRemovedEmail,
   buildMatchLeftEmail,
+  buildRefundEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
 
@@ -371,4 +372,32 @@ export async function notifyReservationMemberAssigned(reservationId: string, mem
     clubName: club.name, url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
   });
   await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+/** Prévient le joueur (propriétaire de la résa) du remboursement automatique à l'annulation. */
+export async function notifyReservationRefunded(
+  reservationId: string,
+  refunds: Array<{ amount: string; method: string }>,
+): Promise<void> {
+  if (refunds.length === 0) return;
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      user: { select: { firstName: true, email: true } },
+      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+    },
+  });
+  if (!resa?.user?.email) return;
+  const totalCents = refunds.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0);
+  const amountLabel = (totalCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
+  const prepaid = refunds.some((r) => r.method === 'PACK_CREDIT' || r.method === 'WALLET');
+  const club = resa.resource.club;
+  const mail = buildRefundEmail({
+    recipientFirstName: resa.user.firstName,
+    resourceName: resa.resource.name,
+    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
+    clubName: club.name, amountLabel, prepaid,
+    url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+  });
+  await sendMail({ to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text });
 }

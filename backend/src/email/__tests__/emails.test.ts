@@ -1,4 +1,4 @@
-import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail } from '../templates/emails';
+import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail, buildRefundEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -276,5 +276,29 @@ describe('buildMatchLeftEmail', () => {
     const m = buildMatchLeftEmail({ organizerFirstName: 'Tom', leaverName: 'Léa Martin', resourceName: 'Court 1', dateLabel: 'lun. 16 juin', clubName: 'Padel Arena Paris', spotsLeft: 1, url: 'https://x/parties', brand: { name: 'Padel Arena Paris', accentColor: '#5e93da', logoUrl: null } });
     expect(m.subject).toContain('Léa Martin');
     expect(m.text).toContain('1 place');
+  });
+});
+
+describe('buildRefundEmail', () => {
+  const brand: Brand = { name: 'Club Test', logoUrl: null, accentColor: '#d6ff3f' };
+  it('produit le sujet, le montant, et le wording recrédité si prépayé', () => {
+    const mail = buildRefundEmail({
+      recipientFirstName: 'Jean', resourceName: 'Court 1', dateLabel: 'samedi 20 juin, 18:00–19:30',
+      clubName: 'Club Test', amountLabel: '20,00 €', prepaid: true,
+      url: 'https://club.palova.fr/me/reservations', brand,
+    });
+    expect(mail.subject).toContain('Remboursement');
+    expect(mail.html).toContain('20,00 €');
+    expect(mail.html.toLowerCase()).toContain('recrédité');
+    expect(mail.text).toContain('20,00 €');
+  });
+  it('sans prépayé : pas de mention de recrédit de solde', () => {
+    const mail = buildRefundEmail({
+      recipientFirstName: 'Jean', resourceName: 'Court 1', dateLabel: 'x',
+      clubName: 'Club Test', amountLabel: '15,00 €', prepaid: false,
+      url: 'u', brand,
+    });
+    expect(mail.html).toContain('15,00 €');
+    expect(mail.html.toLowerCase()).not.toContain('carnet');
   });
 });
