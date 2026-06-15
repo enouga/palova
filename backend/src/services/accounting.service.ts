@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 
+const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const isMoney = (m: string) => MONEY_METHODS.includes(m);
+
 export class AccountingService {
   /** Récap mensuel net des remboursements, fuseau du club. */
   async monthlySummary(clubId: string, year: number, month: number) {
@@ -31,14 +34,18 @@ export class AccountingService {
 
     for (const p of payments) {
       totals[p.method] = (totals[p.method] ?? new Prisma.Decimal(0)).plus(p.amount);
-      collected = collected.plus(p.amount);
-      byDay[dayKey(p.createdAt)] = (byDay[dayKey(p.createdAt)] ?? new Prisma.Decimal(0)).plus(p.amount);
+      if (isMoney(p.method)) {
+        collected = collected.plus(p.amount);
+        byDay[dayKey(p.createdAt)] = (byDay[dayKey(p.createdAt)] ?? new Prisma.Decimal(0)).plus(p.amount);
+      }
     }
     for (const r of refunds) {
       totals[r.method] = (totals[r.method] ?? new Prisma.Decimal(0)).minus(r.amount);
-      collected = collected.minus(r.amount);
-      refunded = refunded.plus(r.amount);
-      byDay[dayKey(r.createdAt)] = (byDay[dayKey(r.createdAt)] ?? new Prisma.Decimal(0)).minus(r.amount);
+      if (isMoney(r.method)) {
+        collected = collected.minus(r.amount);
+        refunded = refunded.plus(r.amount);
+        byDay[dayKey(r.createdAt)] = (byDay[dayKey(r.createdAt)] ?? new Prisma.Decimal(0)).minus(r.amount);
+      }
     }
 
     const totalsByMethod: Record<string, string> = {};
@@ -65,7 +72,8 @@ export class AccountingService {
     });
 
     const esc = (v: unknown) => {
-      const s = String(v ?? '');
+      let s = String(v ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
       return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const fmtDate = (d: Date) => DateTime.fromJSDate(d).setZone(club.timezone).toFormat('yyyy-MM-dd HH:mm');

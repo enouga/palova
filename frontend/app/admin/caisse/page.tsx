@@ -295,8 +295,8 @@ export default function AdminCaissePage() {
       {/* modale reçu imprimable */}
       {receiptTarget && clubDetail && (
         <>
-          {/* Style print : masque tout sauf la modale reçu */}
-          <style>{`@media print { body > * { display: none !important; } .receipt-print-overlay { display: block !important; position: static !important; background: none !important; } .receipt-print-overlay > div { box-shadow: none !important; } }`}</style>
+          {/* Style print : masque tout sauf la modale reçu (pattern visibility) */}
+          <style>{`@media print { body * { visibility: hidden !important; } .receipt-print-overlay, .receipt-print-overlay * { visibility: visible !important; } .receipt-print-overlay { position: absolute; inset: 0; background: #fff !important; } .receipt-print-overlay .no-print { display: none !important; } }`}</style>
           <div
             className="receipt-print-overlay"
             onClick={() => setReceiptTarget(null)}
@@ -305,7 +305,7 @@ export default function AdminCaissePage() {
             <div onClick={(e) => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
               <Receipt payment={receiptTarget} clubName={clubDetail.name} clubAddress={clubDetail.address} />
-              <div style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
+              <div className="no-print" style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
                 <button type="button" onClick={() => window.print()}
                   style={{ flex: 1, border: 'none', background: '#111', color: '#fff', borderRadius: 10, padding: '10px 0', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 700 }}>
                   Imprimer

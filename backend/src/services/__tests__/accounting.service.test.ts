@@ -30,6 +30,19 @@ describe('AccountingService.monthlySummary', () => {
     prismaMock.club.findUnique.mockResolvedValue(null as any);
     await expect(service.monthlySummary('x', 2026, 6)).rejects.toThrow('CLUB_NOT_FOUND');
   });
+
+  it('PACK_CREDIT apparaît dans totalsByMethod mais n\'affecte pas collected', async () => {
+    prismaMock.payment.findMany.mockResolvedValue([
+      { amount: 20, method: 'CASH',        createdAt: new Date('2026-06-10T10:00:00Z') },
+      { amount: 25, method: 'PACK_CREDIT', createdAt: new Date('2026-06-10T11:00:00Z') },
+    ] as any);
+    prismaMock.refund.findMany.mockResolvedValue([] as any);
+    const out = await service.monthlySummary('club-1', 2026, 6);
+    expect(out.totalsByMethod.PACK_CREDIT).toBe('25.00'); // breakdown montre les prépayés
+    expect(out.totalsByMethod.CASH).toBe('20.00');
+    expect(out.collected).toBe('20.00');                  // seuls les vrais encaissements
+    expect(out.refunded).toBe('0.00');
+  });
 });
 
 describe('AccountingService.exportCsv', () => {
@@ -46,5 +59,15 @@ describe('AccountingService.exportCsv', () => {
     expect(lines[1]).toContain('"Dupont, Jean"'); // virgule → quoté
     expect(lines[1]).toContain('CASH');
     expect(lines[1]).toContain('20.00');
+  });
+
+  it('anti-injection : payerName commençant par = est préfixé d\'une apostrophe', async () => {
+    prismaMock.payment.findMany.mockResolvedValue([
+      { createdAt: new Date('2026-06-10T08:00:00Z'), receiptNo: 2, method: 'CASH', amount: 10, refundedAmount: 0, payerName: '=HYPERLINK("x")' },
+    ] as any);
+    const csv = await service.exportCsv('club-1', '2026-06-01', '2026-06-30');
+    const lines = csv.split('\n');
+    // La valeur doit commencer par ' pour neutraliser la formule
+    expect(lines[1]).toContain("'=HYPERLINK");
   });
 });
