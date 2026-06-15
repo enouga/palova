@@ -16,6 +16,7 @@ import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { RefundService } from '../services/refund.service';
 import { AccountingService } from '../services/accounting.service';
+import { StripeService } from '../services/stripe.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -64,6 +65,10 @@ const ERROR_STATUS: Record<string, number> = {
   PARTNER_DUPLICATE:       409,
   REFUND_EXCEEDS_PAID:    409,
   ALREADY_REFUNDED:       409,
+  STRIPE_NOT_CONFIGURED:  422,
+  CARD_DECLINED:          402,
+  NO_CARD_ON_FILE:        422,
+  STRIPE_ERROR:           500,
 };
 
 function asString(v: unknown): string {
@@ -555,6 +560,36 @@ router.get('/accounting/export', async (req: ClubScopedRequest, res: Response, n
     res.setHeader('Content-Disposition', `attachment; filename="caisse_${from}_${to}.csv"`);
     res.send(csv);
   } catch (e) { handleError(e, res, next); }
+});
+
+// --- Stripe Connect ---
+const stripeService = new StripeService();
+
+router.post('/stripe/connect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { refreshUrl, returnUrl } = req.body;
+    if (!refreshUrl || !returnUrl) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    const url = await stripeService.createConnectedAccount(
+      req.membership!.clubId,
+      String(refreshUrl),
+      String(returnUrl),
+    );
+    res.status(201).json({ url });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/stripe/status', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const stripeAccountStatus = await stripeService.syncAccountStatus(req.membership!.clubId);
+    res.json({ stripeAccountStatus });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const url = await stripeService.createLoginLink(req.membership!.clubId);
+    res.json({ url });
+  } catch (err) { handleError(err, res, next); }
 });
 
 export default router;
