@@ -233,6 +233,9 @@ export const api = {
   adminSetVoucherStatus: (clubId: string, paymentId: string, status: VoucherStatus, token: string) =>
     request<Payment>(`/api/clubs/${clubId}/admin/payments/${paymentId}/voucher`, { method: 'PATCH', body: JSON.stringify({ status }) }, token),
 
+  refundPayment: (clubId: string, paymentId: string, body: { amount: number; reason?: string; method?: string }, token: string) =>
+    request<Refund>(`/api/clubs/${clubId}/admin/payments/${paymentId}/refunds`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   // --- Annonces & sponsors (page d'accueil club) ---
   getClubAnnouncements: (slug: string) => request<Announcement[]>(`/api/clubs/${slug}/announcements`),
   getClubSponsors: (slug: string) => request<Sponsor[]>(`/api/clubs/${slug}/sponsors`),
@@ -759,6 +762,8 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 
 export type PackageKind = 'ENTRIES' | 'WALLET';
 export type VoucherStatus = 'PENDING_REIMBURSEMENT' | 'REIMBURSED';
 
+export type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
+
 export interface Payment {
   id: string;
   amount: string;
@@ -768,6 +773,20 @@ export interface Payment {
   voucherRef: string | null;
   voucherIssuer: string | null;
   voucherStatus: VoucherStatus | null;
+  createdAt: string;
+  /** Statut du paiement (présent depuis la feature payments-foundations). */
+  status?: PaymentStatus;
+  /** Montant déjà remboursé, string décimale (ex. "13.00"). */
+  refundedAmount?: string;
+}
+
+export interface Refund {
+  id: string;
+  paymentId: string;
+  clubId: string;
+  amount: number;
+  reason?: string;
+  method: string;
   createdAt: string;
 }
 
