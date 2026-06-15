@@ -108,6 +108,8 @@ export default function AdminSettingsPage() {
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
         publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
+        bookingReleaseMode: club.bookingReleaseMode,
+        publicReleaseHour: Number(club.publicReleaseHour), memberReleaseHour: Number(club.memberReleaseHour),
         offPeakHours: club.offPeakHours && Object.keys(club.offPeakHours).length > 0 ? club.offPeakHours : null,
         bookingQuotas: club.bookingQuotas ?? null,
         playerChangeCutoffHours: Number(club.playerChangeCutoffHours),
@@ -206,6 +208,33 @@ export default function AdminSettingsPage() {
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}><span style={label}>Public (jours)</span><input type="number" min={0} max={365} value={club.publicBookingDays} onChange={(e) => set('publicBookingDays', Number(e.target.value))} style={field} /></div>
           <div style={{ flex: 1 }}><span style={label}>Abonnés (jours)</span><input type="number" min={0} max={365} value={club.memberBookingDays} onChange={(e) => set('memberBookingDays', Number(e.target.value))} style={field} /></div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <span style={label}>Ouverture des nouvelles réservations</span>
+          <select
+            value={club.bookingReleaseMode}
+            onChange={(e) => set('bookingReleaseMode', e.target.value as ClubAdminDetail['bookingReleaseMode'])}
+            style={field}
+          >
+            <option value="DAY_AT_HOUR">Journée entière à heure fixe (à H, toute la nouvelle journée s'ouvre)</option>
+            <option value="ROLLING_SLOT">Au fil de l'eau (chaque créneau s'ouvre X jours avant son horaire)</option>
+            <option value="WINDOW_SHIFT">Fenêtre jusqu'à l'heure (réservable jusqu'à J+X à H:00)</option>
+          </select>
+          <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '8px 0 0' }}>
+            « Au fil de l'eau » n'utilise pas l'heure de release ci-dessous. Heure 0 = ouverture à minuit (comportement par défaut).
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 12, opacity: club.bookingReleaseMode === 'ROLLING_SLOT' ? 0.4 : 1 }}>
+          <div style={{ flex: 1 }}>
+            <span style={label}>Heure publique (0-23)</span>
+            <input type="number" min={0} max={23} disabled={club.bookingReleaseMode === 'ROLLING_SLOT'}
+              value={club.publicReleaseHour} onChange={(e) => set('publicReleaseHour', Number(e.target.value))} style={field} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <span style={label}>Heure abonnés (0-23)</span>
+            <input type="number" min={0} max={23} disabled={club.bookingReleaseMode === 'ROLLING_SLOT'}
+              value={club.memberReleaseHour} onChange={(e) => set('memberReleaseHour', Number(e.target.value))} style={field} />
+          </div>
         </div>
       </div>
 
