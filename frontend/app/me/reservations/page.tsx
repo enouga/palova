@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation, MyTournamentRegistration } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration, CancelledWithRefund } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -16,6 +16,7 @@ import { DayPanel } from '@/components/calendar/DayPanel';
 import { buildCalendarEntries, entriesByDay, todayKey, addMonths } from '@/lib/calendar';
 import { ManagePlayersModal } from '@/components/reservations/ManagePlayersModal';
 import { isCancellationOpen, isPlayerChangeOpen } from '@/lib/reservations';
+import { toCents, fmtEuros } from '@/lib/caisse';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -41,6 +42,7 @@ export default function MyReservationsPage() {
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
   const [managePlayers, setManagePlayers] = useState<MyReservation | null>(null);
+  const [refundMsg, setRefundMsg] = useState<string | null>(null);
   const [ym, setYm] = useState(() => {
     const [y, m] = todayKey().split('-').map(Number);
     return { year: y, month: m };
@@ -79,7 +81,17 @@ export default function MyReservationsPage() {
   const cancel = async (r: MyReservation) => {
     if (!token) return;
     setCancelling(true);
-    try { setError(null); await api.cancelReservation(r.id, token); setConfirmCancel(null); await load(token); }
+    try {
+      setError(null);
+      setRefundMsg(null);
+      const result = await api.cancelReservation(r.id, token) as CancelledWithRefund;
+      setConfirmCancel(null);
+      if (result.refunded && result.refunded.length > 0) {
+        const totalCents = result.refunded.reduce((sum, x) => sum + toCents(x.amount), 0);
+        setRefundMsg(`Remboursé : ${fmtEuros(totalCents)}`);
+      }
+      await load(token);
+    }
     catch (e) { setError((e as Error).message); }
     finally { setCancelling(false); }
   };
@@ -118,6 +130,7 @@ export default function MyReservationsPage() {
         </div>
 
         {error && <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+        {refundMsg && <div style={{ margin: '14px 20px 0', background: th.surface, color: th.text, border: `1px solid ${th.line}`, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{refundMsg}</div>}
 
         {tab === 'calendar' ? (
           <div style={{ padding: '18px 20px 0' }}>

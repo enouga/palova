@@ -169,6 +169,7 @@ export class ClubService {
         listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
+        refundOnCancelWithinCutoff: true,
       },
     });
   }
@@ -182,6 +183,7 @@ export class ClubService {
     bookingQuotas?: unknown;
     playerChangeCutoffHours?: number;
     cancellationCutoffHours?: number;
+    refundOnCancelWithinCutoff?: boolean;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     return prisma.club.update({
@@ -202,6 +204,7 @@ export class ClubService {
         ...(typeof params.memberBookingDays === 'number' ? { memberBookingDays: clamp(params.memberBookingDays) } : {}),
         ...(typeof params.playerChangeCutoffHours === 'number' ? { playerChangeCutoffHours: clamp(params.playerChangeCutoffHours) } : {}),
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
+        ...(typeof params.refundOnCancelWithinCutoff === 'boolean' ? { refundOnCancelWithinCutoff: params.refundOnCancelWithinCutoff } : {}),
       },
     });
   }

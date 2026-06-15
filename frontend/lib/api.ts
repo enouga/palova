@@ -599,6 +599,11 @@ export interface Reservation {
   participants?: ReservationParticipant[];
 }
 
+/** Réponse de DELETE /reservations/:id — Reservation + remboursements auto effectués. */
+export interface CancelledWithRefund extends Reservation {
+  refunded?: Array<{ paymentId: string; amount: string; method: PaymentMethod }>;
+}
+
 export interface HoldParams {
   resourceId: string;
   startTime: string;
@@ -676,6 +681,7 @@ export interface ClubAdminDetail {
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
+  refundOnCancelWithinCutoff: boolean;
 }
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
@@ -704,6 +710,7 @@ export type UpdateClubBody = Partial<{
   bookingQuotas: BookingQuotas | null;
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
+  refundOnCancelWithinCutoff: boolean;
 }>;
 
 // --- Types back-office ---

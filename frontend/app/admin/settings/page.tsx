@@ -112,6 +112,7 @@ export default function AdminSettingsPage() {
         bookingQuotas: club.bookingQuotas ?? null,
         playerChangeCutoffHours: Number(club.playerChangeCutoffHours),
         cancellationCutoffHours: Number(club.cancellationCutoffHours),
+        refundOnCancelWithinCutoff: club.refundOnCancelWithinCutoff,
       };
       await api.adminUpdateClub(clubId, body, token);
       setSaved(true);
@@ -217,6 +218,16 @@ export default function AdminSettingsPage() {
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}><span style={label}>Changement de joueurs (h)</span><input type="number" min={0} max={365} value={club.playerChangeCutoffHours} onChange={(e) => set('playerChangeCutoffHours', Number(e.target.value))} style={field} /></div>
           <div style={{ flex: 1 }}><span style={label}>Annulation (h)</span><input type="number" min={0} max={365} value={club.cancellationCutoffHours} onChange={(e) => set('cancellationCutoffHours', Number(e.target.value))} style={field} /></div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={club.refundOnCancelWithinCutoff} onChange={(e) => set('refundOnCancelWithinCutoff', e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer', marginTop: 2, flexShrink: 0 }} />
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Rembourser automatiquement en cas d&apos;annulation dans les délais</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Le joueur est remboursé (recrédit du carnet / porte-monnaie si prépayé) lorsqu&apos;il annule avant le délai.</span>
+            </span>
+          </label>
         </div>
       </div>
 
