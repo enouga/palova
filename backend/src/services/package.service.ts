@@ -74,7 +74,7 @@ export class PackageService {
    */
   async sellPackage(clubId: string, userId: string, body: {
     templateId?: string; method?: string; payerName?: string;
-    voucherRef?: string; voucherIssuer?: string;
+    voucherRef?: string; voucherIssuer?: string; createdByUserId?: string;
   }) {
     const tpl = await prisma.packageTemplate.findUnique({ where: { id: body.templateId ?? '' } });
     if (!tpl || tpl.clubId !== clubId || !tpl.isActive) throw new Error('TEMPLATE_NOT_FOUND');
@@ -103,6 +103,7 @@ export class PackageService {
           expiresAt,
         },
       });
+      const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
       const payment = await tx.payment.create({
         data: {
           clubId,
@@ -114,6 +115,8 @@ export class PackageService {
           voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
           voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
           voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
+          createdByUserId: body.createdByUserId ?? null,
+          receiptNo,
         },
       });
       return { package: pkg, payment };
@@ -121,6 +124,16 @@ export class PackageService {
   }
 
   // --- Consommation & soldes ---
+
+  /** Alloue le prochain numéro de reçu du club (séquentiel, dans la transaction appelante). */
+  static async nextReceiptNo(tx: Prisma.TransactionClient, clubId: string): Promise<number> {
+    const c = await tx.clubCounter.upsert({
+      where: { clubId_kind: { clubId, kind: 'RECEIPT' } },
+      create: { clubId, kind: 'RECEIPT', value: 1 },
+      update: { value: { increment: 1 } },
+    });
+    return c.value;
+  }
 
   /**
    * Débite un package DANS une transaction appelante : décrément conditionnel
@@ -214,16 +227,28 @@ export class PackageService {
       include: this.paymentInclude(),
     });
 
+    const refunds = await prisma.refund.findMany({
+      where: { clubId, createdAt: { gte: start.toJSDate(), lt: end.toJSDate() } },
+    });
+
     const totals: Record<string, Prisma.Decimal> = {};
     let collected = new Prisma.Decimal(0);
     for (const p of payments) {
       totals[p.method] = (totals[p.method] ?? new Prisma.Decimal(0)).plus(p.amount);
       collected = collected.plus(p.amount);
     }
+
+    let refundedTotal = new Prisma.Decimal(0);
+    for (const r of refunds) {
+      totals[r.method] = (totals[r.method] ?? new Prisma.Decimal(0)).minus(r.amount);
+      collected = collected.minus(r.amount);
+      refundedTotal = refundedTotal.plus(r.amount);
+    }
+
     const totalsByMethod: Record<string, string> = {};
     for (const [m, v] of Object.entries(totals)) totalsByMethod[m] = v.toFixed(2);
 
-    return { date, totalsByMethod, collected: collected.toFixed(2), payments };
+    return { date, totalsByMethod, collected: collected.toFixed(2), refunded: refundedTotal.toFixed(2), refunds, payments };
   }
 
   /** Tickets CE du club, filtrables par statut de remboursement. */

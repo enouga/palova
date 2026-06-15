@@ -178,6 +178,8 @@ model Club {
   // « Mes réservations » sur l'app de ce club : false (défaut) = n'affiche que ce club ;
   // true = affiche aussi les réservations/tournois/events des autres clubs du joueur.
   showOtherClubsReservations Boolean @default(false) @map("show_other_clubs_reservations")
+  // Rembourse automatiquement les paiements d'une réservation annulée dans la fenêtre d'annulation. Opt-in.
+  refundOnCancelWithinCutoff Boolean @default(false) @map("refund_on_cancel_within_cutoff")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
@@ -192,6 +194,7 @@ model Club {
   packageTemplates PackageTemplate[]
   memberPackages   MemberPackage[]
   slugAliases      ClubSlugAlias[]
+  counters         ClubCounter[]
 
   @@map("clubs")
 }
@@ -409,6 +412,7 @@ model Payment {
   status          PaymentStatus  @default(CAPTURED) @map("status")
   refundedAmount  Decimal        @default(0) @db.Decimal(10, 2) @map("refunded_amount")
   createdByUserId String?        @map("created_by_user_id")
+  receiptNo       Int?           @map("receipt_no") // numéro de reçu séquentiel par club
 
   reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
@@ -421,8 +425,25 @@ model Payment {
   @@index([participantId])
   @@index([clubId, createdAt])
   @@index([clubId, status])
+  @@unique([clubId, receiptNo])
   @@map("payments")
 }
+
+/// Compteurs séquentiels par club (ex. numéro de reçu). Incrément atomique (upsert) dans
+/// la transaction d'encaissement → numérotation sans trou (les rollbacks n'incrémentent pas).
+model ClubCounter {
+  id        String   @id @default(cuid())
+  clubId    String   @map("club_id")
+  kind      String   // ex. "RECEIPT"
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, kind])
+  @@map("club_counters")
+}
+
 
 /// Remboursement (total ou partiel) d'un Payment. Montant POSITIF + lien parent —
 /// jamais un Payment négatif, pour que le récap caisse (sum(amount)) reste juste.

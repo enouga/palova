@@ -1,4 +1,4 @@
-import { toCents, remainingCents, centsToInput, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import type { ReservationType } from '@/lib/api';
 
@@ -190,5 +190,23 @@ describe('playerCount', () => {
     expect(playerCount('single')).toBe(2);
     expect(playerCount('double')).toBe(4);
     expect(playerCount(undefined)).toBe(4);
+  });
+});
+
+describe('validatePaymentAmount', () => {
+  it('refuse 0, négatif, NaN', () => {
+    expect(validatePaymentAmount(0, 1000)).toBe(false);
+    expect(validatePaymentAmount(-5, 1000)).toBe(false);
+    expect(validatePaymentAmount(NaN, 1000)).toBe(false);
+  });
+  it('accepte un montant dans le reste dû', () => {
+    expect(validatePaymentAmount(1000, 1000)).toBe(true);
+    expect(validatePaymentAmount(500, 1000)).toBe(true);
+  });
+  it('refuse un dépassement du reste dû', () => {
+    expect(validatePaymentAmount(1001, 1000)).toBe(false);
+  });
+  it('autorise tout montant > 0 si le reste dû est inconnu (0 = pas de plafond)', () => {
+    expect(validatePaymentAmount(5000, 0)).toBe(true);
   });
 });

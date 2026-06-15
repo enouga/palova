@@ -8,7 +8,8 @@ import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded } from '../email/notifications';
+import { RefundService } from './refund.service';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -23,6 +24,8 @@ const HOLD_TTL_SECONDS = 600; // 10 minutes
 const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
 
 export class ReservationService {
+  private refundService = new RefundService();
+
   private lockKey(resourceId: string, startTime: Date): string {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
   }
@@ -301,6 +304,7 @@ export class ReservationService {
         const organizer = await tx.reservationParticipant.findFirst({
           where: { reservationId, isOrganizer: true }, select: { id: true },
         });
+        const receiptNo = await PackageService.nextReceiptNo(tx, reservation.resource.clubId);
         await tx.payment.create({
           data: {
             reservationId,
@@ -309,6 +313,7 @@ export class ReservationService {
             amount,
             method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
             sourcePackageId: pkg.id,
+            receiptNo,
           },
         });
       }
@@ -369,10 +374,50 @@ export class ReservationService {
     return cancelled;
   }
 
+  /**
+   * Si le club l'active ET qu'on annule dans la fenêtre d'annulation, rembourse tous les
+   * paiements encaissés restants de la résa (recrédit prépayé géré par RefundService).
+   * Renvoie le détail des remboursements (vide si politique off / hors fenêtre).
+   */
+  private async autoRefundOnCancel(
+    reservationId: string,
+    clubId: string,
+    startTime: Date,
+    club: { cancellationCutoffHours: number; refundOnCancelWithinCutoff: boolean },
+  ): Promise<Array<{ paymentId: string; amount: string; method: string }>> {
+    if (!club.refundOnCancelWithinCutoff) return [];
+    const deadline = startTime.getTime() - Math.max(0, club.cancellationCutoffHours) * 3_600_000;
+    if (Date.now() > deadline) return []; // hors fenêtre (annulation tardive) → pas de remboursement auto
+
+    const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
+    const payments = await prisma.payment.findMany({
+      where: { reservationId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] }, method: { not: 'MEMBER' } },
+      select: { id: true, amount: true, refundedAmount: true, method: true },
+    });
+    const refunded: Array<{ paymentId: string; amount: string; method: string }> = [];
+    for (const p of payments) {
+      const refundableCents = cents(p.amount) - cents(p.refundedAmount);
+      if (refundableCents <= 0) continue;
+      // Best-effort : l'annulation est DÉJÀ committée. Un remboursement qui échoue
+      // (course avec le bouton « Rembourser » manuel, erreur transitoire…) ne doit
+      // pas faire échouer l'annulation — le club a le remboursement manuel en repli.
+      try {
+        await this.refundService.refund({
+          paymentId: p.id, clubId, amount: refundableCents / 100,
+          reason: 'Annulation de la réservation', method: p.method,
+        });
+        refunded.push({ paymentId: p.id, amount: (refundableCents / 100).toFixed(2), method: p.method });
+      } catch (err) {
+        console.error('[reservation] remboursement auto échoué', { paymentId: p.id, err });
+      }
+    }
+    return refunded;
+  }
+
   async cancelReservation(reservationId: string, userId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { club: { select: { cancellationCutoffHours: true } } } } },
+      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
     });
 
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
@@ -380,21 +425,31 @@ export class ReservationService {
     if (reservation.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
     this.assertWithinCutoff(reservation.startTime, reservation.resource.club.cancellationCutoffHours, 'CANCELLATION_TOO_LATE');
 
-    return this.performCancel(reservation);
+    const cancelled = await this.performCancel(reservation);
+    const refunded = await this.autoRefundOnCancel(
+      reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
+    );
+    if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    return { ...cancelled, refunded };
   }
 
   /** Annulation par un gestionnaire : n'importe quelle résa d'une ressource de SON club. */
   async adminCancelReservation(reservationId: string, adminClubId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true } } },
+      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
     });
 
-    if (!reservation)                              throw new Error('RESERVATION_NOT_FOUND');
+    if (!reservation)                                throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.resource.clubId !== adminClubId) throw new Error('CLUB_MISMATCH');
-    if (reservation.status === 'CANCELLED')        throw new Error('ALREADY_CANCELLED');
+    if (reservation.status === 'CANCELLED')          throw new Error('ALREADY_CANCELLED');
 
-    return this.performCancel(reservation);
+    const cancelled = await this.performCancel(reservation);
+    const refunded = await this.autoRefundOnCancel(
+      reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
+    );
+    if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    return { ...cancelled, refunded };
   }
 
   /**
@@ -525,15 +580,23 @@ export class ReservationService {
     R extends {
       totalPrice: Prisma.Decimal | null; type: ReservationType; startTime: Date; endTime: Date;
       resource: { price: Prisma.Decimal; offPeakPrice: Prisma.Decimal | null };
-      payments?: Array<{ amount: Prisma.Decimal; participantId: string | null }>;
+      payments?: Array<{ amount: Prisma.Decimal; refundedAmount?: Prisma.Decimal; participantId: string | null }>;
       participants?: Array<{ id: string; userId: string; share: Prisma.Decimal; isOrganizer: boolean; user: { firstName: string; lastName: string } }>;
     }
   >(r: R, club: { offPeakHours: Prisma.JsonValue | null; timezone: string }) {
     const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
-    const p = (r.payments ?? []).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+    const p = (r.payments ?? []).reduce(
+      (s, x) => s.plus(x.amount).minus(new Prisma.Decimal((x as any).refundedAmount ?? 0)),
+      new Prisma.Decimal(0),
+    );
     const dueC = this.effectiveDueCents(r, club);
     const participants = (r.participants ?? []).map((pp) => {
-      const ppPaid = (r.payments ?? []).filter((x) => x.participantId === pp.id).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+      const ppPaid = (r.payments ?? [])
+        .filter((x) => x.participantId === pp.id)
+        .reduce(
+          (s, x) => s.plus(x.amount).minus(new Prisma.Decimal((x as any).refundedAmount ?? 0)),
+          new Prisma.Decimal(0),
+        );
       const shareC = cents(pp.share);
       return {
         id: pp.id, userId: pp.userId, isOrganizer: pp.isOrganizer,
@@ -555,7 +618,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true, clubId: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true, receiptNo: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {
@@ -849,7 +912,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true, receiptNo: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {
@@ -905,6 +968,7 @@ export class ReservationService {
     voucherRef?: string;
     voucherIssuer?: string;
     participantId?: string;
+    createdByUserId?: string;
   }) {
     if (!(typeof params.amount === 'number') || isNaN(params.amount) || params.amount <= 0) {
       throw new Error('VALIDATION_ERROR');
@@ -960,8 +1024,11 @@ export class ReservationService {
     const overpaidWhere = participant ? { participantId: participant.id } : { reservationId: params.reservationId };
     const assertNotOverpaid = async (tx: Prisma.TransactionClient) => {
       if (dueCents <= 0) return;
-      const agg = await tx.payment.aggregate({ _sum: { amount: true }, where: overpaidWhere });
-      const paidCents = Math.round(num(agg._sum.amount) * 100);
+      const [paidAgg, refundAgg] = await Promise.all([
+        tx.payment.aggregate({ _sum: { amount: true }, where: overpaidWhere }),
+        tx.refund.aggregate({ _sum: { amount: true }, where: { payment: overpaidWhere } }),
+      ]);
+      const paidCents = Math.round(num(paidAgg._sum.amount) * 100) - Math.round(num(refundAgg._sum.amount) * 100);
       if (paidCents + amountCents > dueCents) throw new Error('PAYMENT_EXCEEDS_DUE');
     };
 
@@ -976,12 +1043,14 @@ export class ReservationService {
       voucherRef:    method === 'VOUCHER' ? params.voucherRef?.trim() || null : null,
       voucherIssuer: method === 'VOUCHER' ? params.voucherIssuer?.trim() || null : null,
       voucherStatus: method === 'VOUCHER' ? ('PENDING_REIMBURSEMENT' as const) : null,
+      createdByUserId: params.createdByUserId ?? null,
     };
 
     if (method !== 'PACK_CREDIT' && method !== 'WALLET') {
       return prisma.$transaction(async (tx) => {
         await assertNotOverpaid(tx);
-        return tx.payment.create({ data: base });
+        const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
+        return tx.payment.create({ data: { ...base, receiptNo } });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     }
 
@@ -996,7 +1065,8 @@ export class ReservationService {
     return prisma.$transaction(async (tx) => {
       await assertNotOverpaid(tx);
       await PackageService.consume(tx, pkg, new Prisma.Decimal(params.amount));
-      return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id } });
+      const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
+      return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id, receiptNo } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 }

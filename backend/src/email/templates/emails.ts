@@ -281,6 +281,41 @@ export function buildMatchLeftEmail(i: MatchLeftEmailInput): BuiltEmail {
   return { subject, html, text };
 }
 
+export interface RefundEmailInput {
+  recipientFirstName: string;
+  resourceName: string;
+  dateLabel: string;
+  clubName: string;
+  amountLabel: string;   // ex. "20,00 €"
+  prepaid: boolean;      // au moins un remboursement a recrédité un carnet/porte-monnaie
+  url: string;
+  brand: Brand;
+}
+
+/** Email au joueur quand sa réservation annulée est remboursée automatiquement. */
+export function buildRefundEmail(i: RefundEmailInput): BuiltEmail {
+  const subject = `Remboursement de votre réservation — ${i.clubName}`;
+  const heading = 'Réservation remboursée 💶';
+  const intro = i.prepaid
+    ? `Votre réservation annulée a été remboursée : <strong>${escapeHtml(i.amountLabel)}</strong> recrédité sur votre solde (carnet / porte-monnaie).`
+    : `Votre réservation annulée a été remboursée : <strong>${escapeHtml(i.amountLabel)}</strong>.`;
+  const infoRows: InfoRow[] = [
+    { label: 'Terrain', value: i.resourceName },
+    { label: 'Date', value: i.dateLabel },
+    { label: 'Club', value: i.clubName },
+    { label: 'Remboursé', value: i.amountLabel },
+  ];
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p><p style="margin:0;">${intro}</p>`;
+  const html = renderLayout({ brand: i.brand, preheader: subject, heading, introHtml, infoRows, ctaLabel: 'Voir mes réservations', ctaUrl: i.url });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`, '',
+    stripTags(intro), '',
+    `Terrain : ${i.resourceName}`, `Date : ${i.dateLabel}`, `Club : ${i.clubName}`, `Remboursé : ${i.amountLabel}`, '',
+    `Voir mes réservations : ${i.url}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 /** Retire les balises HTML pour produire la version texte. */
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '');

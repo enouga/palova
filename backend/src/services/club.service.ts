@@ -173,6 +173,7 @@ export class ClubService {
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
         showOtherClubsReservations: true,
+        refundOnCancelWithinCutoff: true,
       },
     });
   }
@@ -190,6 +191,7 @@ export class ClubService {
     playerChangeCutoffHours?: number;
     cancellationCutoffHours?: number;
     showOtherClubsReservations?: boolean;
+    refundOnCancelWithinCutoff?: boolean;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
@@ -216,6 +218,7 @@ export class ClubService {
         ...(typeof params.playerChangeCutoffHours === 'number' ? { playerChangeCutoffHours: clamp(params.playerChangeCutoffHours) } : {}),
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
         ...(typeof params.showOtherClubsReservations === 'boolean' ? { showOtherClubsReservations: params.showOtherClubsReservations } : {}),
+        ...(typeof params.refundOnCancelWithinCutoff === 'boolean' ? { refundOnCancelWithinCutoff: params.refundOnCancelWithinCutoff } : {}),
       },
     });
   }

@@ -54,11 +54,23 @@ describe('PackageService — offres (templates)', () => {
   });
 });
 
+describe('PackageService — nextReceiptNo', () => {
+  it('upsert le compteur RECEIPT et retourne la valeur', async () => {
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 7 } as any);
+    const result = await PackageService.nextReceiptNo(prismaMock as any, 'club-1');
+    expect(prismaMock.clubCounter.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { clubId_kind: { clubId: 'club-1', kind: 'RECEIPT' } },
+    }));
+    expect(result).toBe(7);
+  });
+});
+
 describe('PackageService — vente en caisse', () => {
   let service: PackageService;
   beforeEach(() => {
     service = new PackageService();
     prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
   });
 
   const tplEntries = { id: 'tpl-1', clubId: 'club-1', kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10, walletAmount: null, validityDays: null, isActive: true };
@@ -75,7 +87,7 @@ describe('PackageService — vente en caisse', () => {
       data: expect.objectContaining({ clubId: 'club-1', userId: 'user-1', creditsTotal: 10, creditsRemaining: 10, amountTotal: null }),
     }));
     expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ clubId: 'club-1', memberPackageId: 'pkg-1', method: 'CARD' }),
+      data: expect.objectContaining({ clubId: 'club-1', memberPackageId: 'pkg-1', method: 'CARD', receiptNo: 1 }),
     }));
     expect(out.package.id).toBe('pkg-1');
   });
@@ -168,7 +180,10 @@ describe('PackageService — consommation & soldes', () => {
 
 describe('PackageService — caisse du jour & vouchers', () => {
   let service: PackageService;
-  beforeEach(() => { service = new PackageService(); });
+  beforeEach(() => {
+    service = new PackageService();
+    prismaMock.refund.findMany.mockResolvedValue([] as any);
+  });
 
   it('dailySummary borne la journée dans le fuseau du club et totalise par méthode', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
@@ -186,6 +201,24 @@ describe('PackageService — caisse du jour & vouchers', () => {
     expect(out.totalsByMethod.CASH).toBe('25.50');
     expect(out.totalsByMethod.CARD).toBe('30.00');
     expect(out.collected).toBe('55.50');
+  });
+
+  it('dailySummary soustrait les remboursements du jour par méthode et du total encaissé', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.payment.findMany.mockResolvedValue([
+      { method: 'CASH', amount: new Prisma.Decimal(20) },
+      { method: 'CARD', amount: new Prisma.Decimal(30) },
+    ] as any);
+    prismaMock.refund.findMany.mockResolvedValue([
+      { method: 'CASH', amount: new Prisma.Decimal(5) },
+    ] as any);
+
+    const out = await service.dailySummary('club-1', '2026-06-10');
+
+    expect(out.totalsByMethod.CASH).toBe('15.00');
+    expect(out.totalsByMethod.CARD).toBe('30.00');
+    expect(out.collected).toBe('45.00');
+    expect(out.refunded).toBe('5.00');
   });
 
   it('dailySummary refuse une date invalide', async () => {

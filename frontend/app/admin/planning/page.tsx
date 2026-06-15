@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots } from '@/lib/caisse';
+import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots, validatePaymentAmount } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
@@ -638,7 +638,7 @@ export default function AdminPlanningPage() {
               const maxPayable = activePart ? toCents(activePart.outstanding) : Math.max(0, due - toCents(selected.paidAmount));
               const amountC = toCents(payAmount);
               const overCap = due > 0 && amountC > maxPayable;
-              const cannotPay = busy || amountC <= 0 || overCap;
+              const cannotPay = busy || !validatePaymentAmount(amountC, maxPayable);
               const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
               return (
               <div style={{ marginTop: 16 }}>

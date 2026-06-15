@@ -1,6 +1,7 @@
 import '../../__mocks__/prisma';
 import '../../__mocks__/redis';
 import { DateTime, Settings } from 'luxon';
+import { Prisma } from '@prisma/client';
 import { prismaMock } from '../../__mocks__/prisma';
 import { redisMock } from '../../__mocks__/redis';
 import { ReservationService } from '../reservation.service';
@@ -13,9 +14,11 @@ jest.mock('../sse.service', () => ({
 
 const mockNotifyPartners = jest.fn();
 const mockNotifyAssigned = jest.fn();
+const mockNotifyRefunded = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyMatchPartnersInvited: (...a: unknown[]) => mockNotifyPartners(...a),
   notifyReservationMemberAssigned: (...a: unknown[]) => mockNotifyAssigned(...a),
+  notifyReservationRefunded: (...a: unknown[]) => mockNotifyRefunded(...a),
 }));
 
 const sseBroadcast = () => mockBroadcast;
@@ -28,6 +31,7 @@ describe('ReservationService', () => {
     mockBroadcast.mockReset();
     mockNotifyPartners.mockReset().mockResolvedValue(undefined);
     mockNotifyAssigned.mockReset().mockResolvedValue(undefined);
+    mockNotifyRefunded.mockReset().mockResolvedValue(undefined);
   });
 
   const baseParams = {
@@ -279,7 +283,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
         startTime: future, endTime: new Date(future.getTime() + 3_600_000),
-        resource: { club: { cancellationCutoffHours: 0 } },
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
       } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
@@ -304,7 +308,7 @@ describe('ReservationService', () => {
         id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
         startTime: new Date(Date.now() + 3_600_000),       // début dans 1h
         endTime:   new Date(Date.now() + 7_200_000),
-        resource: { club: { cancellationCutoffHours: 2 } }, // clôture 2h avant → déjà fermé
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 2, refundOnCancelWithinCutoff: false } }, // clôture 2h avant → déjà fermé
       } as any);
 
       await expect(service.cancelReservation('res-1', 'user-1')).rejects.toThrow('CANCELLATION_TOO_LATE');
@@ -338,7 +342,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', userId: 'autre-user', status: 'CONFIRMED',
         startTime: baseParams.startTime, endTime: baseParams.endTime,
-        resource: { clubId: 'club-demo' },
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
       } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
@@ -617,6 +621,22 @@ describe('ReservationService', () => {
       expect(parts.find((p: any) => p.id === 'pp2')).toEqual(expect.objectContaining({ paid: '5.00', outstanding: '7.00' }));
     });
 
+    it('paidAmount net du remboursement (refundedAmount sur le paiement)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'r1', status: 'CONFIRMED', type: 'COURT', totalPrice: 20,
+          startTime: new Date('2026-06-11T14:00:00Z'), endTime: new Date('2026-06-11T15:00:00Z'),
+          resource: { id: 'c1', name: 'T1', price: 20, offPeakPrice: null },
+          participants: [],
+          payments: [{ id: 'x1', amount: 20, refundedAmount: 8, participantId: null }],
+        },
+      ] as any);
+
+      const result = await service.listClubReservations({ clubId: 'club-demo' });
+
+      expect(result.reservations[0].paidAmount).toBe('12.00');
+    });
+
     it('dueAmount : repli tarif terrain pour une COURT sans prix, outstanding clampé par résa', async () => {
       // Jeudi 11/06/2026, creuses 8h-17h → 16h-17h locale est creuse (créneau à 30 €).
       prismaMock.club.findUniqueOrThrow.mockResolvedValue({
@@ -665,6 +685,7 @@ describe('ReservationService', () => {
       mockHappyTx();
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
       prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED',
@@ -705,6 +726,7 @@ describe('ReservationService', () => {
       prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
       prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
       prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED', startTime: new Date(), endTime: new Date() } as any);
 
@@ -754,6 +776,8 @@ describe('ReservationService', () => {
     beforeEach(() => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
       paidSoFar(0);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
     });
 
     it('VOUCHER : référence optionnelle, pose voucherStatus PENDING_REIMBURSEMENT', async () => {
@@ -863,6 +887,51 @@ describe('ReservationService', () => {
       await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 25, method: 'PACK_CREDIT', sourcePackageId: 'pkg-2' }))
         .rejects.toThrow('VALIDATION_ERROR');
     });
+
+    it('persiste createdByUserId quand fourni', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', totalPrice: new Prisma.Decimal(20), type: 'COURT',
+        startTime: new Date(), endTime: new Date(),
+        resource: { clubId: 'club-1', price: new Prisma.Decimal(20), offPeakPrice: null, club: { offPeakHours: null, timezone: 'Europe/Paris' } },
+      } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      await service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 10, method: 'CASH', createdByUserId: 'staff-9' });
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ createdByUserId: 'staff-9' }),
+      }));
+    });
+
+    it('pose receiptNo sur le paiement (non-prépayé)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa() as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 3 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-rno' } as any);
+
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 10, method: 'CASH' });
+
+      expect(prismaMock.clubCounter.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { clubId_kind: { clubId: 'club-1', kind: 'RECEIPT' } },
+      }));
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ receiptNo: 3 }),
+      }));
+    });
+
+    it('plafond NET : un remboursement rouvre du dû encaissable', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', totalPrice: new Prisma.Decimal(20), type: 'COURT',
+        startTime: new Date(), endTime: new Date(),
+        resource: { clubId: 'club-1', price: new Prisma.Decimal(20), offPeakPrice: null, club: { offPeakHours: null, timezone: 'Europe/Paris' } },
+      } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(20) } } as any);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(8) } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-2' } as any);
+
+      await expect(service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 8, method: 'CASH' })).resolves.toBeDefined();
+      await expect(service.addPayment({ reservationId: 'r1', clubId: 'club-1', amount: 9, method: 'CASH' })).rejects.toThrow('PAYMENT_EXCEEDS_DUE');
+    });
   });
 
   describe('addPayment par participant (Phase 3)', () => {
@@ -876,6 +945,8 @@ describe('ReservationService', () => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
       prismaMock.reservation.findUnique.mockResolvedValue(resa as any);
       paidByParticipant(0);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
     });
 
     it('attribue le paiement au participant et plafonne à SA part', async () => {
@@ -1260,6 +1331,126 @@ describe('ReservationService', () => {
         resourceId: 'court-1', userId: 'user-1', startTime: start, endTime: new Date(start.getTime() + 3_600_000),
       });
       expect(r.status).toBe('PENDING');
+    });
+  });
+
+  describe('remboursement à l\'annulation (Phase 2)', () => {
+    beforeEach(() => {
+      prismaMock.payment.findMany.mockResolvedValue([] as any);
+      redisMock.del.mockResolvedValue(1);
+    });
+
+    it('politique off : refund non appelé, refunded vide', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-x' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r1', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+
+      const out = await service.cancelReservation('r1', 'u1');
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(out.refunded).toHaveLength(0);
+      spy.mockRestore();
+    });
+
+    it('politique on + dans la fenêtre + paiement CASH : rembourse', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-1' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r1', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r1', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-1', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      const out = await service.cancelReservation('r1', 'u1');
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay-1', amount: 20, method: 'CASH' }));
+      expect(out.refunded).toHaveLength(1);
+      expect(out.refunded[0]).toMatchObject({ paymentId: 'pay-1', amount: '20.00', method: 'CASH' });
+      spy.mockRestore();
+    });
+
+    it('politique on + paiement PACK_CREDIT : rembourse (recrédit géré par RefundService)', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-2' } as any);
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r2', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r2', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-2', amount: new Prisma.Decimal(15), refundedAmount: new Prisma.Decimal(0), method: 'PACK_CREDIT' },
+      ] as any);
+
+      const out = await service.cancelReservation('r2', 'u1');
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay-2', amount: 15, method: 'PACK_CREDIT' }));
+      expect(out.refunded).toHaveLength(1);
+      spy.mockRestore();
+    });
+
+    it('politique on mais hors fenêtre (adminCancel après délai) : refund non appelé', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'ref-x' } as any);
+      const soon = new Date(Date.now() + 1 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r3', userId: 'u1', status: 'CONFIRMED',
+        startTime: soon, endTime: new Date(soon.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 2, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r3', status: 'CANCELLED', resourceId: 'res-1', startTime: soon, endTime: soon,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-3', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      const out = await service.adminCancelReservation('r3', 'club-1');
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(out.refunded).toHaveLength(0);
+      spy.mockRestore();
+    });
+
+    it('best-effort : un remboursement qui échoue ne fait pas échouer l\'annulation', async () => {
+      const { RefundService } = require('../refund.service');
+      const spy = jest.spyOn(RefundService.prototype, 'refund').mockRejectedValue(new Error('ALREADY_REFUNDED'));
+      const future = new Date(Date.now() + 48 * 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'r4', userId: 'u1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000), resourceId: 'res-1',
+        resource: { clubId: 'club-1', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'r4', status: 'CANCELLED', resourceId: 'res-1', startTime: future, endTime: future,
+      } as any);
+      prismaMock.payment.findMany.mockResolvedValue([
+        { id: 'pay-4', amount: new Prisma.Decimal(20), refundedAmount: new Prisma.Decimal(0), method: 'CASH' },
+      ] as any);
+
+      const out = await service.cancelReservation('r4', 'u1');
+
+      expect(out.status).toBe('CANCELLED');
+      expect(out.refunded).toHaveLength(0);
+      spy.mockRestore();
     });
   });
 });

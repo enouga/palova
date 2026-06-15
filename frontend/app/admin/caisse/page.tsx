@@ -1,13 +1,15 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody } from '@/lib/api';
+import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
+import { toCents, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { Receipt } from '@/components/admin/Receipt';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
@@ -41,6 +43,8 @@ export default function AdminCaissePage() {
   const [vouchers, setVouchers] = useState<CaissePayment[]>([]);
   const [error, setError]       = useState<string | null>(null);
   const [busy, setBusy]         = useState(false);
+  const [clubDetail, setClubDetail] = useState<ClubAdminDetail | null>(null);
+  const [receiptTarget, setReceiptTarget] = useState<CaissePayment | null>(null);
 
   // vente de carnet
   const [members, setMembers]     = useState<Member[]>([]);
@@ -52,22 +56,29 @@ export default function AdminCaissePage() {
   const [sellRef, setSellRef]     = useState('');
   const [sellIssuer, setSellIssuer] = useState('');
 
+  // remboursement d'un encaissement
+  const [refundTarget, setRefundTarget] = useState<CaissePayment | null>(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+
   const load = useCallback(async () => {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const [c, resv, v, mem, tpl] = await Promise.all([
+      const [c, resv, v, mem, tpl, detail] = await Promise.all([
         api.adminGetCaisse(clubId, date, token),
         api.adminGetReservations(clubId, { date }, token),
         api.adminGetVouchers(clubId, 'PENDING_REIMBURSEMENT', token),
         api.adminGetMembers(clubId, token),
         api.adminGetPackageTemplates(clubId, token),
+        api.adminGetClub(clubId, token),
       ]);
       setCaisse(c);
       setOut(resv.summary.outstanding);
       setVouchers(v);
       setMembers(mem);
       setTemplates(tpl.filter((t) => t.isActive));
+      setClubDetail(detail);
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId, date]);
 
@@ -118,6 +129,37 @@ export default function AdminCaissePage() {
     finally { setBusy(false); }
   };
 
+  const openRefund = (p: CaissePayment) => {
+    const remainingCents = Math.max(0, toCents(p.amount) - toCents(p.refundedAmount ?? '0'));
+    setRefundTarget(p);
+    setRefundAmount(remainingCents > 0 ? String(remainingCents / 100) : '');
+    setRefundReason('');
+    setError(null);
+  };
+
+  const doRefund = async () => {
+    if (!token || !clubId || !refundTarget) return;
+    const cents = toCents(refundAmount);
+    const remainingCents = Math.max(0, toCents(refundTarget.amount) - toCents(refundTarget.refundedAmount ?? '0'));
+    if (!validatePaymentAmount(cents, remainingCents)) { setError('Montant invalide ou supérieur au remboursable.'); return; }
+    setBusy(true);
+    try {
+      setError(null);
+      await api.refundPayment(clubId, refundTarget.id, { amount: cents / 100, reason: refundReason.trim() || undefined }, token);
+      setRefundTarget(null);
+      await load();
+    } catch (e) {
+      const msg = (e as Error).message;
+      setError(
+        msg === 'REFUND_EXCEEDS_PAID' ? 'Le remboursement dépasse le montant encaissé.' :
+        msg === 'ALREADY_REFUNDED'    ? 'Ce paiement est déjà intégralement remboursé.' :
+        msg === 'PAYMENT_NOT_FOUND'   ? 'Paiement introuvable.' :
+        msg
+      );
+    }
+    finally { setBusy(false); }
+  };
+
   const moneyTotal = caisse
     ? MONEY_METHODS.reduce((s, m) => s + Number(caisse.totalsByMethod[m] ?? 0), 0)
     : 0;
@@ -150,13 +192,32 @@ export default function AdminCaissePage() {
           {(Object.entries(caisse?.totalsByMethod ?? {}) as [PaymentMethod, string][]).map(([m, v]) => stat(METHOD_LABEL[m], euro(v)))}
         </div>
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {(caisse?.payments ?? []).map((p) => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '7px 0', borderTop: `1px solid ${th.line}` }}>
-              <span style={{ flex: 1 }}>{paymentLabel(p)}</span>
-              <span style={{ color: th.textMute }}>{METHOD_LABEL[p.method]}{p.voucherRef ? ` · ${p.voucherRef}` : ''}</span>
-              <b>{euro(p.amount)}</b>
-            </div>
-          ))}
+          {(caisse?.payments ?? []).map((p) => {
+            const refunded = toCents(p.refundedAmount ?? '0');
+            const isFullyRefunded = p.status === 'REFUNDED';
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '7px 0', borderTop: `1px solid ${th.line}` }}>
+                <span style={{ flex: 1 }}>{paymentLabel(p)}</span>
+                <span style={{ color: th.textMute }}>{METHOD_LABEL[p.method]}{p.voucherRef ? ` · ${p.voucherRef}` : ''}</span>
+                {refunded > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#ff7a4d', background: '#ff7a4d22', borderRadius: 6, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                    remboursé {fmtEuros(refunded)}
+                  </span>
+                )}
+                <b style={{ color: isFullyRefunded ? th.textMute : th.text }}>{euro(p.amount)}</b>
+                {!isFullyRefunded && (
+                  <button type="button" onClick={() => openRefund(p)} disabled={busy}
+                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '4px 9px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    Rembourser
+                  </button>
+                )}
+                <button type="button" onClick={() => setReceiptTarget(p)}
+                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '4px 9px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  Reçu
+                </button>
+              </div>
+            );
+          })}
           {caisse && caisse.payments.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun encaissement ce jour.</div>}
         </div>
       </div>
@@ -230,6 +291,83 @@ export default function AdminCaissePage() {
           </div>
         </div>
       </div>
+
+      {/* modale reçu imprimable */}
+      {receiptTarget && clubDetail && (
+        <>
+          {/* Style print : masque tout sauf la modale reçu (pattern visibility) */}
+          <style>{`@media print { body * { visibility: hidden !important; } .receipt-print-overlay, .receipt-print-overlay * { visibility: visible !important; } .receipt-print-overlay { position: absolute; inset: 0; background: #fff !important; } .receipt-print-overlay .no-print { display: none !important; } }`}</style>
+          <div
+            className="receipt-print-overlay"
+            onClick={() => setReceiptTarget(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          >
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+              <Receipt payment={receiptTarget} clubName={clubDetail.name} clubAddress={clubDetail.address} />
+              <div className="no-print" style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
+                <button type="button" onClick={() => window.print()}
+                  style={{ flex: 1, border: 'none', background: '#111', color: '#fff', borderRadius: 10, padding: '10px 0', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 700 }}>
+                  Imprimer
+                </button>
+                <button type="button" onClick={() => setReceiptTarget(null)}
+                  style={{ border: '1px solid #ccc', background: 'transparent', color: '#555', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14 }}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* modale remboursement */}
+      {refundTarget && (
+        <div onClick={() => { setRefundTarget(null); setError(null); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 420, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 26, fontFamily: th.fontUI }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, color: th.text }}>Rembourser / corriger</div>
+              <button onClick={() => { setRefundTarget(null); setError(null); }} aria-label="Fermer"
+                style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 32, height: 32, color: th.textMute, fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, color: th.textMute, marginBottom: 16 }}>
+              {paymentLabel(refundTarget)} · <b style={{ color: th.text }}>{euro(refundTarget.amount)}</b>
+              {toCents(refundTarget.refundedAmount ?? '0') > 0 && (
+                <span style={{ marginLeft: 8, color: '#ff7a4d' }}>déjà remboursé {fmtEuros(toCents(refundTarget.refundedAmount ?? '0'))}</span>
+              )}
+            </div>
+            {error && <div style={{ marginBottom: 14, background: '#ff7a4d', color: '#fff', borderRadius: 10, padding: '9px 13px', fontSize: 13, fontWeight: 600 }}>{error}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Montant à rembourser (€)
+                <input
+                  type="number" min={0.01} step="0.01" value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  style={{ ...input, width: '100%', boxSizing: 'border-box',
+                    border: `1px solid ${!validatePaymentAmount(toCents(refundAmount), Math.max(0, toCents(refundTarget.amount) - toCents(refundTarget.refundedAmount ?? '0'))) && refundAmount !== '' ? '#ff7a4d' : th.line}` }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Motif (optionnel)
+                <input
+                  type="text" value={refundReason} onChange={(e) => setRefundReason(e.target.value)}
+                  placeholder="Annulation, erreur de montant…"
+                  style={{ ...input, width: '100%', boxSizing: 'border-box' }}
+                />
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button type="button" onClick={() => { setRefundTarget(null); setError(null); }}
+                style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+                Annuler
+              </button>
+              <Btn type="button" onClick={doRefund}
+                disabled={busy || !validatePaymentAmount(toCents(refundAmount), Math.max(0, toCents(refundTarget.amount) - toCents(refundTarget.refundedAmount ?? '0')))}>
+                {busy ? '…' : 'Confirmer le remboursement'}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

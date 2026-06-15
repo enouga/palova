@@ -233,6 +233,20 @@ export const api = {
   adminSetVoucherStatus: (clubId: string, paymentId: string, status: VoucherStatus, token: string) =>
     request<Payment>(`/api/clubs/${clubId}/admin/payments/${paymentId}/voucher`, { method: 'PATCH', body: JSON.stringify({ status }) }, token),
 
+  refundPayment: (clubId: string, paymentId: string, body: { amount: number; reason?: string; method?: string }, token: string) =>
+    request<Refund>(`/api/clubs/${clubId}/admin/payments/${paymentId}/refunds`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminAccountingSummary: (clubId: string, year: number, month: number, token: string) =>
+    request<MonthlySummary>(`/api/clubs/${clubId}/admin/accounting/summary?year=${year}&month=${month}`, {}, token),
+
+  adminAccountingExport: async (clubId: string, from: string, to: string, token: string): Promise<Blob> => {
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/accounting/export?from=${from}&to=${to}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  },
+
   // --- Annonces & sponsors (page d'accueil club) ---
   getClubAnnouncements: (slug: string) => request<Announcement[]>(`/api/clubs/${slug}/announcements`),
   getClubSponsors: (slug: string) => request<Sponsor[]>(`/api/clubs/${slug}/sponsors`),
@@ -602,6 +616,11 @@ export interface Reservation {
   participants?: ReservationParticipant[];
 }
 
+/** Réponse de DELETE /reservations/:id — Reservation + remboursements auto effectués. */
+export interface CancelledWithRefund extends Reservation {
+  refunded?: Array<{ paymentId: string; amount: string; method: PaymentMethod }>;
+}
+
 export interface HoldParams {
   resourceId: string;
   startTime: string;
@@ -683,6 +702,7 @@ export interface ClubAdminDetail {
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
   showOtherClubsReservations: boolean;
+  refundOnCancelWithinCutoff: boolean;
 }
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
@@ -715,6 +735,7 @@ export type UpdateClubBody = Partial<{
   playerChangeCutoffHours: number;
   cancellationCutoffHours: number;
   showOtherClubsReservations: boolean;
+  refundOnCancelWithinCutoff: boolean;
 }>;
 
 // --- Types back-office ---
@@ -773,6 +794,8 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 
 export type PackageKind = 'ENTRIES' | 'WALLET';
 export type VoucherStatus = 'PENDING_REIMBURSEMENT' | 'REIMBURSED';
 
+export type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
+
 export interface Payment {
   id: string;
   amount: string;
@@ -782,6 +805,23 @@ export interface Payment {
   voucherRef: string | null;
   voucherIssuer: string | null;
   voucherStatus: VoucherStatus | null;
+  createdAt: string;
+  /** Statut du paiement (présent depuis la feature payments-foundations). */
+  status?: PaymentStatus;
+  /** Montant déjà remboursé, string décimale (ex. "13.00"). */
+  refundedAmount?: string;
+  /** Numéro de reçu séquentiel, null si non encore attribué. */
+  receiptNo?: number | null;
+}
+
+export interface Refund {
+  id: string;
+  paymentId: string;
+  clubId: string;
+  /** Montant remboursé, string décimale (ex. "13.00") — l'API sérialise le Decimal Prisma. */
+  amount: string;
+  reason: string | null;
+  method: PaymentMethod;
   createdAt: string;
 }
 
@@ -838,6 +878,15 @@ export interface CaisseSummary {
   totalsByMethod: Partial<Record<PaymentMethod, string>>;
   collected: string;
   payments: CaissePayment[];
+}
+
+export interface MonthlySummary {
+  year: number;
+  month: number;
+  totalsByMethod: Record<string, string>;
+  collected: string;
+  refunded: string;
+  byDay: { date: string; net: string }[];
 }
 
 export interface SellPackageBody {
