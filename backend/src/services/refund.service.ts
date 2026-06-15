@@ -47,17 +47,16 @@ export class RefundService {
       ? await prisma.memberPackage.findUnique({ where: { id: payment.sourcePackageId } })
       : null;
 
-    if (payment.method === 'ONLINE' && (payment as any).stripePaymentIntentId) {
+    if (payment.method === 'ONLINE' && payment.stripePaymentIntentId) {
       const club = await prisma.club.findUnique({
         where: { id: params.clubId },
         select: { stripeAccountId: true },
       });
-      if (club?.stripeAccountId) {
-        await stripe.refunds.create(
-          { payment_intent: (payment as any).stripePaymentIntentId, amount: amountCents },
-          { stripeAccount: club.stripeAccountId },
-        );
-      }
+      if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+      await stripe.refunds.create(
+        { payment_intent: payment.stripePaymentIntentId, amount: amountCents },
+        { stripeAccount: club.stripeAccountId },
+      );
     }
 
     return prisma.$transaction(async (tx) => {

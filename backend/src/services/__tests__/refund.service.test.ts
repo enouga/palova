@@ -142,4 +142,15 @@ describe('RefundService.refund — paiements ONLINE', () => {
 
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
+
+  it('lève STRIPE_NOT_CONFIGURED si le club n\'a pas de compte Stripe', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue(onlinePayment as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountId: null } as any);
+
+    await expect(
+      service.refund({ paymentId: 'pay-online-1', clubId: 'club-1', amount: 25 })
+    ).rejects.toThrow('STRIPE_NOT_CONFIGURED');
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
 });
