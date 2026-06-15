@@ -9,7 +9,7 @@ export class StripeService {
     let accountId = club.stripeAccountId;
 
     if (!accountId) {
-      const account = await (stripe.accounts.create as any)({
+      const account = await stripe.accounts.create({
         type: 'express',
         country: 'FR',
         capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
@@ -39,7 +39,7 @@ export class StripeService {
 
     const account = await stripe.accounts.retrieve(club.stripeAccountId);
     const status = account.charges_enabled ? 'ACTIVE'
-      : (account as any).details_submitted ? 'RESTRICTED'
+      : account.details_submitted ? 'RESTRICTED'
       : 'PENDING';
 
     await prisma.club.update({ where: { id: clubId }, data: { stripeAccountStatus: status as any } });
@@ -53,7 +53,7 @@ export class StripeService {
     });
     if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') throw new Error('STRIPE_NOT_CONFIGURED');
 
-    const link = await (stripe.accounts as any).createLoginLink(club.stripeAccountId);
+    const link = await stripe.accounts.createLoginLink(club.stripeAccountId);
     return link.url;
   }
 }
