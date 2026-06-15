@@ -207,3 +207,76 @@ describe('createSetupIntent', () => {
     expect(result.clientSecret).toBe('seti_secret_yyy');
   });
 });
+
+describe('chargeNoShow', () => {
+  it('crée un PaymentIntent off_session confirmé et retourne son id', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      stripeCustomerId: 'cus_1',
+      defaultPaymentMethodId: 'pm_saved',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ id: 'pi_noshow_123' });
+
+    const piId = await svc.chargeNoShow({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1',
+      amountCents: 2500, createdByUserId: 'admin-1',
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 2500, currency: 'eur', off_session: true, confirm: true,
+        payment_method: 'pm_saved',
+      }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(piId).toBe('pi_noshow_123');
+  });
+
+  it('lève NO_CARD_ON_FILE si pas de defaultPaymentMethodId', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+
+    await expect(svc.chargeNoShow({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'r-1', amountCents: 1000,
+    })).rejects.toThrow('NO_CARD_ON_FILE');
+  });
+
+  it('lève NO_CARD_ON_FILE si pas de ClubStripeCustomer', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(svc.chargeNoShow({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'r-1', amountCents: 1000,
+    })).rejects.toThrow('NO_CARD_ON_FILE');
+  });
+
+  it('lève CARD_DECLINED si Stripe renvoie card_declined', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    const stripeErr = Object.assign(new Error('card declined'), { code: 'card_declined' });
+    (stripe.paymentIntents.create as jest.Mock).mockRejectedValue(stripeErr);
+
+    await expect(svc.chargeNoShow({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'r-1', amountCents: 1000,
+    })).rejects.toThrow('CARD_DECLINED');
+  });
+});
+
+describe('refundPaymentIntent', () => {
+  it('appelle stripe.refunds.create sur le compte connecté', async () => {
+    (stripe.refunds.create as jest.Mock).mockResolvedValue({ id: 'ref_1' });
+
+    await svc.refundPaymentIntent({
+      stripeAccountId: 'acct_1', paymentIntentId: 'pi_1', amountCents: 500,
+    });
+
+    expect(stripe.refunds.create).toHaveBeenCalledWith(
+      { payment_intent: 'pi_1', amount: 500 },
+      { stripeAccount: 'acct_1' },
+    );
+  });
+});

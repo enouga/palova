@@ -139,4 +139,59 @@ export class StripeService {
     if (!si.client_secret) throw new Error('STRIPE_ERROR');
     return { clientSecret: si.client_secret };
   }
+
+  async chargeNoShow(params: {
+    clubId: string;
+    userId: string;
+    reservationId: string;
+    amountCents: number;
+    note?: string;
+    createdByUserId?: string;
+  }): Promise<string> {
+    const [club, stripeCustomer] = await Promise.all([
+      prisma.club.findUnique({ where: { id: params.clubId }, select: { stripeAccountId: true } }),
+      prisma.clubStripeCustomer.findUnique({
+        where: { clubId_userId: { clubId: params.clubId, userId: params.userId } },
+      }),
+    ]);
+
+    if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+    if (!stripeCustomer?.defaultPaymentMethodId) throw new Error('NO_CARD_ON_FILE');
+
+    try {
+      const pi = await stripe.paymentIntents.create(
+        {
+          amount: params.amountCents,
+          currency: 'eur',
+          customer: stripeCustomer.stripeCustomerId,
+          payment_method: stripeCustomer.defaultPaymentMethodId,
+          off_session: true,
+          confirm: true,
+          metadata: {
+            reservationId: params.reservationId,
+            clubId: params.clubId,
+            noShow: 'true',
+          },
+        },
+        { stripeAccount: club.stripeAccountId },
+      );
+      return pi.id;
+    } catch (err: any) {
+      if (err?.code === 'card_declined' || err?.code === 'authentication_required') {
+        throw new Error('CARD_DECLINED');
+      }
+      throw err;
+    }
+  }
+
+  async refundPaymentIntent(params: {
+    stripeAccountId: string;
+    paymentIntentId: string;
+    amountCents: number;
+  }): Promise<void> {
+    await stripe.refunds.create(
+      { payment_intent: params.paymentIntentId, amount: params.amountCents },
+      { stripeAccount: params.stripeAccountId },
+    );
+  }
 }
