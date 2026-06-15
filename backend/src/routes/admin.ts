@@ -15,6 +15,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { RefundService } from '../services/refund.service';
+import { AccountingService } from '../services/accounting.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -27,6 +28,7 @@ const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
 const refundService = new RefundService();
+const accountingService = new AccountingService();
 
 // Upload du logo partenaire en mémoire (2 Mo max) ; mêmes formats que l'avatar.
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -534,6 +536,24 @@ router.patch('/payments/:id/voucher', async (req: ClubScopedRequest, res: Respon
       return void res.status(400).json({ error: 'status invalide' });
     }
     res.json(await packageService.setVoucherStatus(asString(req.params.id), req.membership!.clubId, status));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// --- Comptabilité mensuelle ---
+router.get('/accounting/summary', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const year = Number(asString(req.query.year)); const month = Number(asString(req.query.month));
+    res.json(await accountingService.monthlySummary(req.membership!.clubId, year, month));
+  } catch (e) { handleError(e, res, next); }
+});
+router.get('/accounting/export', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const from = asString(req.query.from); const to = asString(req.query.to);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return void res.status(400).json({ error: 'from/to YYYY-MM-DD requis' });
+    const csv = await accountingService.exportCsv(req.membership!.clubId, from, to);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="caisse_${from}_${to}.csv"`);
+    res.send(csv);
   } catch (e) { handleError(e, res, next); }
 });
 
