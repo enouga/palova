@@ -3,7 +3,6 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import app from '../../app';
 
-// Mock stripe module
 jest.mock('../../db/stripe', () => ({
   stripe: {
     webhooks: {
@@ -12,8 +11,17 @@ jest.mock('../../db/stripe', () => ({
   },
 }));
 
+jest.mock('../../services/reservation.service', () => ({
+  ReservationService: jest.fn().mockImplementation(() => ({
+    confirmReservation: jest.fn().mockResolvedValue({ id: 'r-1', status: 'CONFIRMED' }),
+  })),
+}));
+
 import { stripe } from '../../db/stripe';
+import { ReservationService } from '../../services/reservation.service';
 const mockConstructEvent = stripe.webhooks.constructEvent as jest.Mock;
+
+let mockConfirmReservation: jest.Mock;
 
 const RAW_BODY = Buffer.from(JSON.stringify({ type: 'test' }));
 const SIG = 't=1,v1=abc';
@@ -21,11 +29,15 @@ const SIG = 't=1,v1=abc';
 describe('POST /api/stripe/webhooks', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockConfirmReservation = jest.fn().mockResolvedValue({ id: 'r-1', status: 'CONFIRMED' });
+    (ReservationService as jest.Mock).mockImplementation(() => ({
+      confirmReservation: mockConfirmReservation,
+    }));
   });
 
   it('400 si la signature Stripe est invalide', async () => {
     mockConstructEvent.mockImplementation(() => {
-      throw new Error('No signatures found');
+      throw new Error('signature invalide');
     });
 
     const res = await request(app)
@@ -38,9 +50,8 @@ describe('POST /api/stripe/webhooks', () => {
   });
 
   it('200 + met à jour le statut club sur account.updated', async () => {
-    const accountEvent = {
+    mockConstructEvent.mockReturnValue({
       type: 'account.updated',
-      account: 'acct_123',
       data: {
         object: {
           id: 'acct_123',
@@ -48,9 +59,9 @@ describe('POST /api/stripe/webhooks', () => {
           details_submitted: true,
         },
       },
-    };
-    mockConstructEvent.mockReturnValue(accountEvent);
-    prismaMock.club.updateMany.mockResolvedValue({ count: 1 });
+    });
+    prismaMock.club.findFirst.mockResolvedValue({ id: 'club-1' } as any);
+    prismaMock.club.update.mockResolvedValue({ id: 'club-1' } as any);
 
     const res = await request(app)
       .post('/api/stripe/webhooks')
@@ -59,26 +70,31 @@ describe('POST /api/stripe/webhooks', () => {
       .send(RAW_BODY);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.club.updateMany).toHaveBeenCalledWith({
+    expect(prismaMock.club.findFirst).toHaveBeenCalledWith({
       where: { stripeAccountId: 'acct_123' },
+    });
+    expect(prismaMock.club.update).toHaveBeenCalledWith({
+      where: { id: 'club-1' },
       data: { stripeAccountStatus: 'ACTIVE' },
     });
   });
 
-  it('200 + sauvegarde defaultPaymentMethodId sur payment_intent.succeeded', async () => {
-    const piEvent = {
+  it('200 + confirme la résa si payment_intent.succeeded et résa PENDING', async () => {
+    mockConstructEvent.mockReturnValue({
       type: 'payment_intent.succeeded',
       data: {
         object: {
           id: 'pi_123',
-          customer: 'cus_club_xyz',
+          metadata: { reservationId: 'res-1' },
           payment_method: 'pm_card_456',
-          metadata: { clubId: 'club-demo', reservationId: 'res-1' },
         },
       },
-    };
-    mockConstructEvent.mockReturnValue(piEvent);
-    prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 });
+    });
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1',
+      status: 'PENDING',
+      userId: 'user-1',
+    } as any);
 
     const res = await request(app)
       .post('/api/stripe/webhooks')
@@ -87,25 +103,53 @@ describe('POST /api/stripe/webhooks', () => {
       .send(RAW_BODY);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.clubStripeCustomer.updateMany).toHaveBeenCalledWith({
-      where: { clubId: 'club-demo', stripeCustomerId: 'cus_club_xyz' },
-      data: { defaultPaymentMethodId: 'pm_card_456' },
+    expect(mockConfirmReservation).toHaveBeenCalledWith('res-1', 'user-1', {
+      stripePaymentIntentId: 'pi_123',
     });
   });
 
+  it('200 (no-op) si payment_intent.succeeded et résa déjà CONFIRMED (idempotent)', async () => {
+    mockConstructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_123',
+          metadata: { reservationId: 'res-1' },
+          payment_method: 'pm_card_456',
+        },
+      },
+    });
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1',
+      status: 'CONFIRMED',
+      userId: 'user-1',
+    } as any);
+
+    const res = await request(app)
+      .post('/api/stripe/webhooks')
+      .set('stripe-signature', SIG)
+      .set('Content-Type', 'application/json')
+      .send(RAW_BODY);
+
+    expect(res.status).toBe(200);
+    expect(mockConfirmReservation).not.toHaveBeenCalled();
+  });
+
   it('200 + sauvegarde defaultPaymentMethodId sur setup_intent.succeeded', async () => {
-    const siEvent = {
+    mockConstructEvent.mockReturnValue({
       type: 'setup_intent.succeeded',
       data: {
         object: {
           id: 'si_123',
-          customer: 'cus_club_xyz',
+          metadata: { reservationId: 'res-2' },
           payment_method: 'pm_card_789',
-          metadata: { clubId: 'club-demo', reservationId: 'res-2' },
         },
       },
-    };
-    mockConstructEvent.mockReturnValue(siEvent);
+    });
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      resource: { clubId: 'club-demo' },
+    } as any);
     prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app)
@@ -116,7 +160,7 @@ describe('POST /api/stripe/webhooks', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.clubStripeCustomer.updateMany).toHaveBeenCalledWith({
-      where: { clubId: 'club-demo', stripeCustomerId: 'cus_club_xyz' },
+      where: { clubId: 'club-demo', userId: 'user-1', defaultPaymentMethodId: null },
       data: { defaultPaymentMethodId: 'pm_card_789' },
     });
   });
@@ -131,5 +175,6 @@ describe('POST /api/stripe/webhooks', () => {
       .send(RAW_BODY);
 
     expect(res.status).toBe(200);
+    expect(mockConfirmReservation).not.toHaveBeenCalled();
   });
 });
