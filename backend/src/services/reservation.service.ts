@@ -522,15 +522,23 @@ export class ReservationService {
     R extends {
       totalPrice: Prisma.Decimal | null; type: ReservationType; startTime: Date; endTime: Date;
       resource: { price: Prisma.Decimal; offPeakPrice: Prisma.Decimal | null };
-      payments?: Array<{ amount: Prisma.Decimal; participantId: string | null }>;
+      payments?: Array<{ amount: Prisma.Decimal; refundedAmount?: Prisma.Decimal; participantId: string | null }>;
       participants?: Array<{ id: string; userId: string; share: Prisma.Decimal; isOrganizer: boolean; user: { firstName: string; lastName: string } }>;
     }
   >(r: R, club: { offPeakHours: Prisma.JsonValue | null; timezone: string }) {
     const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
-    const p = (r.payments ?? []).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+    const p = (r.payments ?? []).reduce(
+      (s, x) => s.plus(x.amount).minus(new Prisma.Decimal((x as any).refundedAmount ?? 0)),
+      new Prisma.Decimal(0),
+    );
     const dueC = this.effectiveDueCents(r, club);
     const participants = (r.participants ?? []).map((pp) => {
-      const ppPaid = (r.payments ?? []).filter((x) => x.participantId === pp.id).reduce((s, x) => s.plus(x.amount), new Prisma.Decimal(0));
+      const ppPaid = (r.payments ?? [])
+        .filter((x) => x.participantId === pp.id)
+        .reduce(
+          (s, x) => s.plus(x.amount).minus(new Prisma.Decimal((x as any).refundedAmount ?? 0)),
+          new Prisma.Decimal(0),
+        );
       const shareC = cents(pp.share);
       return {
         id: pp.id, userId: pp.userId, isOrganizer: pp.isOrganizer,
@@ -552,7 +560,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true, clubId: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {
@@ -846,7 +854,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {

@@ -618,6 +618,22 @@ describe('ReservationService', () => {
       expect(parts.find((p: any) => p.id === 'pp2')).toEqual(expect.objectContaining({ paid: '5.00', outstanding: '7.00' }));
     });
 
+    it('paidAmount net du remboursement (refundedAmount sur le paiement)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'r1', status: 'CONFIRMED', type: 'COURT', totalPrice: 20,
+          startTime: new Date('2026-06-11T14:00:00Z'), endTime: new Date('2026-06-11T15:00:00Z'),
+          resource: { id: 'c1', name: 'T1', price: 20, offPeakPrice: null },
+          participants: [],
+          payments: [{ id: 'x1', amount: 20, refundedAmount: 8, participantId: null }],
+        },
+      ] as any);
+
+      const result = await service.listClubReservations({ clubId: 'club-demo' });
+
+      expect(result.reservations[0].paidAmount).toBe('12.00');
+    });
+
     it('dueAmount : repli tarif terrain pour une COURT sans prix, outstanding clampé par résa', async () => {
       // Jeudi 11/06/2026, creuses 8h-17h → 16h-17h locale est creuse (créneau à 30 €).
       prismaMock.club.findUniqueOrThrow.mockResolvedValue({

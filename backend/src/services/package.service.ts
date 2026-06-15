@@ -215,16 +215,28 @@ export class PackageService {
       include: this.paymentInclude(),
     });
 
+    const refunds = await prisma.refund.findMany({
+      where: { clubId, createdAt: { gte: start.toJSDate(), lt: end.toJSDate() } },
+    });
+
     const totals: Record<string, Prisma.Decimal> = {};
     let collected = new Prisma.Decimal(0);
     for (const p of payments) {
       totals[p.method] = (totals[p.method] ?? new Prisma.Decimal(0)).plus(p.amount);
       collected = collected.plus(p.amount);
     }
+
+    let refundedTotal = new Prisma.Decimal(0);
+    for (const r of refunds) {
+      totals[r.method] = (totals[r.method] ?? new Prisma.Decimal(0)).minus(r.amount);
+      collected = collected.minus(r.amount);
+      refundedTotal = refundedTotal.plus(r.amount);
+    }
+
     const totalsByMethod: Record<string, string> = {};
     for (const [m, v] of Object.entries(totals)) totalsByMethod[m] = v.toFixed(2);
 
-    return { date, totalsByMethod, collected: collected.toFixed(2), payments };
+    return { date, totalsByMethod, collected: collected.toFixed(2), refunded: refundedTotal.toFixed(2), refunds, payments };
   }
 
   /** Tickets CE du club, filtrables par statut de remboursement. */
