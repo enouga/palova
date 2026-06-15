@@ -784,9 +784,10 @@ export interface Refund {
   id: string;
   paymentId: string;
   clubId: string;
-  amount: number;
-  reason?: string;
-  method: string;
+  /** Montant remboursé, string décimale (ex. "13.00") — l'API sérialise le Decimal Prisma. */
+  amount: string;
+  reason: string | null;
+  method: PaymentMethod;
   createdAt: string;
 }
 
