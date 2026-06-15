@@ -52,9 +52,9 @@ router.post('/', async (req: Request, res: Response) => {
         const reservationId = pi.metadata?.reservationId;
         if (!reservationId) break;
         const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
-        if (!reservation || reservation.status !== 'PENDING') break;
+        if (!reservation || reservation.status !== 'PENDING' || !reservation.userId) break;
         try {
-          await reservationService.confirmReservation(reservation.id, reservation.userId!, {
+          await reservationService.confirmReservation(reservation.id, reservation.userId, {
             stripePaymentIntentId: pi.id,
           });
         } catch {
