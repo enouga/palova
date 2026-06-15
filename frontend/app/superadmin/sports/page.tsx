@@ -24,11 +24,12 @@ export default function SuperAdminSportsPage() {
   const [busy, setBusy]       = useState(false);
 
   const load = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
-    try { setError(null); setSports(await api.getSports()); }
+    try { setError(null); setSports(await api.platformListSports(token)); }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
-  }, []);
+  }, [token]);
   useEffect(() => { if (ready) load(); }, [ready, load]);
 
   const startCreate = () => { setForm(emptyForm()); setEditId(''); setSurfaceInput(''); setOtherDuration(''); };
@@ -55,6 +56,14 @@ export default function SuperAdminSportsPage() {
       const m = (e as Error).message;
       setError(m === 'SPORT_KEY_TAKEN' ? 'Un sport avec ce nom existe déjà.' : m === 'VALIDATION_ERROR' ? 'Champs invalides.' : 'Enregistrement impossible.');
     } finally { setBusy(false); }
+  };
+
+  const togglePublished = async (s: Sport) => {
+    if (!token) return;
+    setBusy(true);
+    try { setError(null); await api.platformSetSportPublished(s.id, !s.published, token); await load(); }
+    catch { setError('Changement de statut impossible.'); }
+    finally { setBusy(false); }
   };
 
   const remove = async (s: Sport) => {
@@ -139,12 +148,16 @@ export default function SuperAdminSportsPage() {
             <div key={s.id} style={{ ...card, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontSize: 22 }}>{s.icon ?? '•'}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text }}>{s.name} <span style={{ color: th.textFaint, fontWeight: 400 }}>· {s.resourceNoun}</span></div>
+                <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {s.name} <span style={{ color: th.textFaint, fontWeight: 400 }}>· {s.resourceNoun}</span>
+                  {!s.published && <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, color: th.textMute, background: th.bg, border: `1px solid ${th.line}`, borderRadius: 6, padding: '2px 7px' }}>Brouillon</span>}
+                </div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>
                   Durées : {s.defaultDurationsMin.map(durationLabel).join(', ')}
                   {s.surfaces.length > 0 && <> · Surfaces : {s.surfaces.join(', ')}</>}
                 </div>
               </div>
+              <Btn variant="surface" onClick={() => togglePublished(s)} disabled={busy}>{s.published ? 'Dépublier' : 'Publier'}</Btn>
               <Btn variant="surface" onClick={() => startEdit(s)}>Modifier</Btn>
               <Btn variant="danger" onClick={() => remove(s)} disabled={busy}>Suppr.</Btn>
             </div>
