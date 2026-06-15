@@ -788,6 +788,8 @@ export type UpdateClubBody = Partial<{
   cancellationCutoffHours: number;
   showOtherClubsReservations: boolean;
   refundOnCancelWithinCutoff: boolean;
+  requireOnlinePayment: boolean;
+  requireCardFingerprint: boolean;
 }>;
 
 // --- Types back-office ---
@@ -1012,6 +1014,7 @@ export interface ClubReservation {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
   payments: Payment[];
   participants: ParticipantBill[];
+  hasCardFingerprint?: boolean;
 }
 
 export interface ClubReservationsResponse {

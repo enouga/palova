@@ -143,6 +143,8 @@ export class ClubService {
         publicBookingDays: true, memberBookingDays: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         showOtherClubsReservations: true,
+        requireOnlinePayment: true,
+        requireCardFingerprint: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -174,6 +176,10 @@ export class ClubService {
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
         showOtherClubsReservations: true,
         refundOnCancelWithinCutoff: true,
+        stripeAccountId: true,
+        stripeAccountStatus: true,
+        requireOnlinePayment: true,
+        requireCardFingerprint: true,
       },
     });
   }
@@ -192,6 +198,8 @@ export class ClubService {
     cancellationCutoffHours?: number;
     showOtherClubsReservations?: boolean;
     refundOnCancelWithinCutoff?: boolean;
+    requireOnlinePayment?: boolean;
+    requireCardFingerprint?: boolean;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
@@ -219,6 +227,8 @@ export class ClubService {
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
         ...(typeof params.showOtherClubsReservations === 'boolean' ? { showOtherClubsReservations: params.showOtherClubsReservations } : {}),
         ...(typeof params.refundOnCancelWithinCutoff === 'boolean' ? { refundOnCancelWithinCutoff: params.refundOnCancelWithinCutoff } : {}),
+        ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
+        ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
       },
     });
   }

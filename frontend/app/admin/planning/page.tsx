@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
+import NoShowChargeModal from '@/components/admin/NoShowChargeModal';
 import { TimePicker } from '@/components/ui/TimePicker';
 import { DateField } from '@/components/ui/DateField';
 
@@ -97,6 +98,7 @@ export default function AdminPlanningPage() {
   const [pkgLoading, setPkgLoading]       = useState(false);
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [noShowTarget, setNoShowTarget] = useState<string | null>(null);
   const [isFs, setIsFs]           = useState(false);
 
   const [members, setMembers]   = useState<Member[]>([]);
@@ -551,6 +553,9 @@ export default function AdminPlanningPage() {
                       {dots && small && (dots.settled
                         ? <span style={{ position: 'absolute', right: 5, bottom: 3, fontSize: 9, fontWeight: 700, color: SETTLED_COLOR, lineHeight: 1 }}>✓</span>
                         : dots.filled > 0 && <span style={{ position: 'absolute', right: 6, bottom: 5, width: 6, height: 6, borderRadius: '50%', background: c }} />)}
+                      {rv.hasCardFingerprint && (
+                        <span title="Empreinte bancaire enregistrée" style={{ fontSize: 11, position: 'absolute', right: small ? 5 : 8, top: small ? 2 : 4 }}>💳</span>
+                      )}
                     </button>
                   );
                 })}
@@ -772,8 +777,29 @@ export default function AdminPlanningPage() {
                 )}
               </div>
             )}
+
+            {/* no-show charge */}
+            {selected.hasCardFingerprint && selected.status !== 'CANCELLED' && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+                <button onClick={() => setNoShowTarget(selected.id)}
+                  style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                  💳 Facturer no-show
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {noShowTarget && selected && (
+        <NoShowChargeModal
+          clubId={clubId ?? ''}
+          reservationId={noShowTarget}
+          defaultAmount={Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount))}
+          token={token ?? ''}
+          onSuccess={() => { setNoShowTarget(null); load(); }}
+          onClose={() => setNoShowTarget(null)}
+        />
       )}
 
       {createOpen && (
