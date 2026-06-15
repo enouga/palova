@@ -685,6 +685,7 @@ describe('ReservationService', () => {
       mockHappyTx();
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
       prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
       prismaMock.reservation.update.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED',
@@ -725,6 +726,7 @@ describe('ReservationService', () => {
       prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
       prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
       prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED', startTime: new Date(), endTime: new Date() } as any);
 
@@ -775,6 +777,7 @@ describe('ReservationService', () => {
       prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
       paidSoFar(0);
       prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
     });
 
     it('VOUCHER : référence optionnelle, pose voucherStatus PENDING_REIMBURSEMENT', async () => {
@@ -901,6 +904,21 @@ describe('ReservationService', () => {
       }));
     });
 
+    it('pose receiptNo sur le paiement (non-prépayé)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pricedResa() as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 3 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-rno' } as any);
+
+      await service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 10, method: 'CASH' });
+
+      expect(prismaMock.clubCounter.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { clubId_kind: { clubId: 'club-1', kind: 'RECEIPT' } },
+      }));
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ receiptNo: 3 }),
+      }));
+    });
+
     it('plafond NET : un remboursement rouvre du dû encaissable', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'r1', totalPrice: new Prisma.Decimal(20), type: 'COURT',
@@ -928,6 +946,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue(resa as any);
       paidByParticipant(0);
       prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
     });
 
     it('attribue le paiement au participant et plafonne à SA part', async () => {

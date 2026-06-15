@@ -301,6 +301,7 @@ export class ReservationService {
         const organizer = await tx.reservationParticipant.findFirst({
           where: { reservationId, isOrganizer: true }, select: { id: true },
         });
+        const receiptNo = await PackageService.nextReceiptNo(tx, reservation.resource.clubId);
         await tx.payment.create({
           data: {
             reservationId,
@@ -309,6 +310,7 @@ export class ReservationService {
             amount,
             method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
             sourcePackageId: pkg.id,
+            receiptNo,
           },
         });
       }
@@ -613,7 +615,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true, clubId: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true, receiptNo: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {
@@ -907,7 +909,7 @@ export class ReservationService {
         resource: { select: { id: true, name: true, price: true, offPeakPrice: true } },
         user:     { select: { id: true, firstName: true, lastName: true, email: true } },
         payments: {
-          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true },
+          select: { id: true, amount: true, refundedAmount: true, method: true, payerName: true, note: true, createdAt: true, participantId: true, receiptNo: true },
           orderBy: { createdAt: 'asc' },
         },
         participants: {
@@ -1044,7 +1046,8 @@ export class ReservationService {
     if (method !== 'PACK_CREDIT' && method !== 'WALLET') {
       return prisma.$transaction(async (tx) => {
         await assertNotOverpaid(tx);
-        return tx.payment.create({ data: base });
+        const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
+        return tx.payment.create({ data: { ...base, receiptNo } });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     }
 
@@ -1059,7 +1062,8 @@ export class ReservationService {
     return prisma.$transaction(async (tx) => {
       await assertNotOverpaid(tx);
       await PackageService.consume(tx, pkg, new Prisma.Decimal(params.amount));
-      return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id } });
+      const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
+      return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id, receiptNo } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 }

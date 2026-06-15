@@ -54,11 +54,23 @@ describe('PackageService — offres (templates)', () => {
   });
 });
 
+describe('PackageService — nextReceiptNo', () => {
+  it('upsert le compteur RECEIPT et retourne la valeur', async () => {
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 7 } as any);
+    const result = await PackageService.nextReceiptNo(prismaMock as any, 'club-1');
+    expect(prismaMock.clubCounter.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { clubId_kind: { clubId: 'club-1', kind: 'RECEIPT' } },
+    }));
+    expect(result).toBe(7);
+  });
+});
+
 describe('PackageService — vente en caisse', () => {
   let service: PackageService;
   beforeEach(() => {
     service = new PackageService();
     prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
   });
 
   const tplEntries = { id: 'tpl-1', clubId: 'club-1', kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10, walletAmount: null, validityDays: null, isActive: true };
@@ -75,7 +87,7 @@ describe('PackageService — vente en caisse', () => {
       data: expect.objectContaining({ clubId: 'club-1', userId: 'user-1', creditsTotal: 10, creditsRemaining: 10, amountTotal: null }),
     }));
     expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ clubId: 'club-1', memberPackageId: 'pkg-1', method: 'CARD' }),
+      data: expect.objectContaining({ clubId: 'club-1', memberPackageId: 'pkg-1', method: 'CARD', receiptNo: 1 }),
     }));
     expect(out.package.id).toBe('pkg-1');
   });

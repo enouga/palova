@@ -103,6 +103,7 @@ export class PackageService {
           expiresAt,
         },
       });
+      const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
       const payment = await tx.payment.create({
         data: {
           clubId,
@@ -115,6 +116,7 @@ export class PackageService {
           voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
           voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
           createdByUserId: body.createdByUserId ?? null,
+          receiptNo,
         },
       });
       return { package: pkg, payment };
@@ -122,6 +124,16 @@ export class PackageService {
   }
 
   // --- Consommation & soldes ---
+
+  /** Alloue le prochain numéro de reçu du club (séquentiel, dans la transaction appelante). */
+  static async nextReceiptNo(tx: Prisma.TransactionClient, clubId: string): Promise<number> {
+    const c = await tx.clubCounter.upsert({
+      where: { clubId_kind: { clubId, kind: 'RECEIPT' } },
+      create: { clubId, kind: 'RECEIPT', value: 1 },
+      update: { value: { increment: 1 } },
+    });
+    return c.value;
+  }
 
   /**
    * Débite un package DANS une transaction appelante : décrément conditionnel
