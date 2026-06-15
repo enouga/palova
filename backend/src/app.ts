@@ -17,6 +17,7 @@ import { startCleanupJob } from './jobs/cleanup.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
+import stripeWebhooksRouter from './routes/stripe-webhooks';
 
 const app = express();
 
@@ -41,6 +42,9 @@ app.use(cors({
     cb(null, false);
   },
 }));
+// Stripe webhooks — raw body requis pour la vérification de signature
+app.use('/api/stripe/webhooks', express.raw({ type: 'application/json' }), stripeWebhooksRouter);
+
 app.use(express.json());
 
 // Fichiers uploadés (avatars). Cache long : les noms de fichiers sont horodatés.
