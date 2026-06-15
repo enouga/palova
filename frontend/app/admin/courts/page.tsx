@@ -38,7 +38,7 @@ export default function AdminResourcesPage() {
       const [res, sp] = await Promise.all([api.adminGetResources(clubId, token), api.adminGetSports(clubId, token)]);
       setResources(res);
       setSports(sp);
-      setNr((n) => (n.clubSportId || sp.length === 0 ? n : { ...n, clubSportId: sp[0].id }));
+      setNr((n) => (n.clubSportId || sp.length === 0 ? n : { ...n, clubSportId: sp[0].id, surface: sp[0].sport.surfaces?.[0] ?? '' }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -137,7 +137,7 @@ export default function AdminResourcesPage() {
         openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
         slotStepMin: nr.slotStepMin ? Number(nr.slotStepMin) : undefined,
       }, token);
-      setNr((n) => ({ ...n, name: '', surface: '', covered: false, price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
+      setNr((n) => ({ ...n, name: '', surface: surfacesFor(n.clubSportId)[0] ?? '', covered: false, price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
       await load();
     } catch (e) {
       const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture, créneau multiple de 15)' : (e as Error).message;
@@ -233,7 +233,7 @@ export default function AdminResourcesPage() {
         <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 16px', color: th.text }}>Ajouter une ressource</h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 14 }}>
           <label style={label}>Sport
-            <select value={nr.clubSportId} onChange={(e) => setNr({ ...nr, clubSportId: e.target.value, surface: '' })} style={input}>
+            <select value={nr.clubSportId} onChange={(e) => { const s = sports.find((sp) => sp.id === e.target.value); setNr({ ...nr, clubSportId: e.target.value, surface: s?.sport.surfaces?.[0] ?? '' }); }} style={input}>
               {sports.map((s) => <option key={s.id} value={s.id}>{s.sport.name}</option>)}
             </select>
           </label>
