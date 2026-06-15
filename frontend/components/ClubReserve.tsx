@@ -13,23 +13,11 @@ import { Chip, Placeholder, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
+import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
-function nextDays(count: number) {
-  const out: { key: string; dow: string; day: string }[] = [];
-  const base = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = new Date(base); d.setDate(base.getDate() + i);
-    out.push({
-      key: d.toISOString().slice(0, 10),
-      dow: new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(d).replace('.', ''),
-      day: new Intl.DateTimeFormat('fr-FR', { day: 'numeric' }).format(d),
-    });
-  }
-  return out;
-}
 
 function formatHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -61,8 +49,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const durationsRef = useRef(durationBySport);
   durationsRef.current = durationBySport;
 
-  const windowDays = (isSub ? club.memberBookingDays : club.publicBookingDays);
-  const days = nextDays(Math.max(1, windowDays + 1));
+  const windowDays  = isSub ? club.memberBookingDays : club.publicBookingDays;
+  const releaseHour = isSub ? club.memberReleaseHour : club.publicReleaseHour;
+  const win = bookingWindow(new Date(), club.timezone, windowDays, club.bookingReleaseMode, releaseHour);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -151,7 +140,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <>
             {/* sélecteur de dates — bande défilante (cellules confortables, swipe horizontal) */}
             <div style={{ padding: '18px 20px 4px' }}>
-              <DateSelector value={date} onChange={setDate} days={7} maxKey={days[days.length - 1]?.key} />
+              <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
             {/* grille : une section par sport — durée propre + terrains + créneaux libres */}
@@ -195,7 +184,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau ce jour.</div>
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                                {slots.map((s) => s.available ? (
+                                {slots.map((s) => (s.available && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
