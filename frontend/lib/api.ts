@@ -236,6 +236,17 @@ export const api = {
   refundPayment: (clubId: string, paymentId: string, body: { amount: number; reason?: string; method?: string }, token: string) =>
     request<Refund>(`/api/clubs/${clubId}/admin/payments/${paymentId}/refunds`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  adminAccountingSummary: (clubId: string, year: number, month: number, token: string) =>
+    request<MonthlySummary>(`/api/clubs/${clubId}/admin/accounting/summary?year=${year}&month=${month}`, {}, token),
+
+  adminAccountingExport: async (clubId: string, from: string, to: string, token: string): Promise<Blob> => {
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/accounting/export?from=${from}&to=${to}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  },
+
   // --- Annonces & sponsors (page d'accueil club) ---
   getClubAnnouncements: (slug: string) => request<Announcement[]>(`/api/clubs/${slug}/announcements`),
   getClubSponsors: (slug: string) => request<Sponsor[]>(`/api/clubs/${slug}/sponsors`),
@@ -785,6 +796,8 @@ export interface Payment {
   status?: PaymentStatus;
   /** Montant déjà remboursé, string décimale (ex. "13.00"). */
   refundedAmount?: string;
+  /** Numéro de reçu séquentiel, null si non encore attribué. */
+  receiptNo?: number | null;
 }
 
 export interface Refund {
@@ -851,6 +864,15 @@ export interface CaisseSummary {
   totalsByMethod: Partial<Record<PaymentMethod, string>>;
   collected: string;
   payments: CaissePayment[];
+}
+
+export interface MonthlySummary {
+  year: number;
+  month: number;
+  totalsByMethod: Record<string, string>;
+  collected: string;
+  refunded: string;
+  byDay: { date: string; net: string }[];
 }
 
 export interface SellPackageBody {

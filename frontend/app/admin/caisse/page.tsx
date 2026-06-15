@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody } from '@/lib/api';
+import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
 import { toCents, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
 import { useAuth } from '@/lib/useAuth';
@@ -9,6 +9,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { Receipt } from '@/components/admin/Receipt';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
@@ -42,6 +43,8 @@ export default function AdminCaissePage() {
   const [vouchers, setVouchers] = useState<CaissePayment[]>([]);
   const [error, setError]       = useState<string | null>(null);
   const [busy, setBusy]         = useState(false);
+  const [clubDetail, setClubDetail] = useState<ClubAdminDetail | null>(null);
+  const [receiptTarget, setReceiptTarget] = useState<CaissePayment | null>(null);
 
   // vente de carnet
   const [members, setMembers]     = useState<Member[]>([]);
@@ -62,18 +65,20 @@ export default function AdminCaissePage() {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const [c, resv, v, mem, tpl] = await Promise.all([
+      const [c, resv, v, mem, tpl, detail] = await Promise.all([
         api.adminGetCaisse(clubId, date, token),
         api.adminGetReservations(clubId, { date }, token),
         api.adminGetVouchers(clubId, 'PENDING_REIMBURSEMENT', token),
         api.adminGetMembers(clubId, token),
         api.adminGetPackageTemplates(clubId, token),
+        api.adminGetClub(clubId, token),
       ]);
       setCaisse(c);
       setOut(resv.summary.outstanding);
       setVouchers(v);
       setMembers(mem);
       setTemplates(tpl.filter((t) => t.isActive));
+      setClubDetail(detail);
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId, date]);
 
@@ -206,6 +211,10 @@ export default function AdminCaissePage() {
                     Rembourser
                   </button>
                 )}
+                <button type="button" onClick={() => setReceiptTarget(p)}
+                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '4px 9px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  Reçu
+                </button>
               </div>
             );
           })}
@@ -282,6 +291,34 @@ export default function AdminCaissePage() {
           </div>
         </div>
       </div>
+
+      {/* modale reçu imprimable */}
+      {receiptTarget && clubDetail && (
+        <>
+          {/* Style print : masque tout sauf la modale reçu */}
+          <style>{`@media print { body > * { display: none !important; } .receipt-print-overlay { display: block !important; position: static !important; background: none !important; } .receipt-print-overlay > div { box-shadow: none !important; } }`}</style>
+          <div
+            className="receipt-print-overlay"
+            onClick={() => setReceiptTarget(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          >
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+              <Receipt payment={receiptTarget} clubName={clubDetail.name} clubAddress={clubDetail.address} />
+              <div style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
+                <button type="button" onClick={() => window.print()}
+                  style={{ flex: 1, border: 'none', background: '#111', color: '#fff', borderRadius: 10, padding: '10px 0', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 700 }}>
+                  Imprimer
+                </button>
+                <button type="button" onClick={() => setReceiptTarget(null)}
+                  style={{ border: '1px solid #ccc', background: 'transparent', color: '#555', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14 }}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* modale remboursement */}
       {refundTarget && (

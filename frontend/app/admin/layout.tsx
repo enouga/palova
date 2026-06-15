@@ -68,6 +68,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/sports',       label: 'Sports',          icon: 'bolt' as const },
     { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },
     { href: '/admin/caisse',       label: 'Caisse',          icon: 'ticket' as const },
+    { href: '/admin/comptabilite', label: 'Comptabilité',    icon: 'chart' as const },
     { href: '/admin/packages',     label: 'Offres prépayées', icon: 'bolt' as const },
     { href: '/admin/tournaments', label: 'Tournois',         icon: 'trophy' as const },
     { href: '/admin/events',       label: 'Events',          icon: 'bolt' as const },
