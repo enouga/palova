@@ -1,5 +1,6 @@
 import { Prisma, PaymentMethod } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import { stripe } from '../db/stripe';
 
 const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
 
@@ -45,6 +46,19 @@ export class RefundService {
     const pkg = PREPAID_METHODS.includes(payment.method) && payment.sourcePackageId
       ? await prisma.memberPackage.findUnique({ where: { id: payment.sourcePackageId } })
       : null;
+
+    if (payment.method === 'ONLINE' && (payment as any).stripePaymentIntentId) {
+      const club = await prisma.club.findUnique({
+        where: { id: params.clubId },
+        select: { stripeAccountId: true },
+      });
+      if (club?.stripeAccountId) {
+        await stripe.refunds.create(
+          { payment_intent: (payment as any).stripePaymentIntentId, amount: amountCents },
+          { stripeAccount: club.stripeAccountId },
+        );
+      }
+    }
 
     return prisma.$transaction(async (tx) => {
       const res = await tx.payment.updateMany({

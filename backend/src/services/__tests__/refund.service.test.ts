@@ -3,6 +3,14 @@ import { Prisma } from '@prisma/client';
 import { prismaMock } from '../../__mocks__/prisma';
 import { RefundService } from '../refund.service';
 
+jest.mock('../../db/stripe', () => ({
+  stripe: {
+    refunds: { create: jest.fn() },
+  },
+}));
+
+import { stripe } from '../../db/stripe';
+
 describe('RefundService.refund', () => {
   let service: RefundService;
   beforeEach(() => {
@@ -72,5 +80,66 @@ describe('RefundService.refund', () => {
     expect(prismaMock.memberPackage.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'pkg-1' }, data: { creditsRemaining: { increment: 1 } },
     }));
+  });
+});
+
+describe('RefundService.refund — paiements ONLINE', () => {
+  let service: RefundService;
+  beforeEach(() => {
+    service = new RefundService();
+    jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+  });
+
+  const onlinePayment = {
+    id: 'pay-online-1',
+    clubId: 'club-1',
+    amount: new Prisma.Decimal(25),
+    refundedAmount: new Prisma.Decimal(0),
+    method: 'ONLINE',
+    status: 'CAPTURED',
+    sourcePackageId: null,
+    stripePaymentIntentId: 'pi_1',
+  };
+
+  it('appelle stripe.refunds.create pour un paiement ONLINE', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue(onlinePayment as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountId: 'acct_1' } as any);
+    (stripe.refunds.create as jest.Mock).mockResolvedValue({ id: 'ref_1' });
+    prismaMock.payment.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.refund.create.mockResolvedValue({ id: 'rf-1' } as any);
+    prismaMock.payment.update.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+    await service.refund({ paymentId: 'pay-online-1', clubId: 'club-1', amount: 25 });
+
+    expect(stripe.refunds.create).toHaveBeenCalledWith(
+      { payment_intent: 'pi_1', amount: 2500 },
+      { stripeAccount: 'acct_1' },
+    );
+  });
+
+  it('ne pas appeler stripe.refunds.create pour un paiement CASH', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue({
+      ...onlinePayment, method: 'CASH', stripePaymentIntentId: null,
+    } as any);
+    prismaMock.payment.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.refund.create.mockResolvedValue({ id: 'rf-1' } as any);
+    prismaMock.payment.update.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+    await service.refund({ paymentId: 'pay-online-1', clubId: 'club-1', amount: 25 });
+
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+  });
+
+  it('ne crée pas le Refund DB si stripe.refunds.create échoue', async () => {
+    prismaMock.payment.findUnique.mockResolvedValue(onlinePayment as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountId: 'acct_1' } as any);
+    (stripe.refunds.create as jest.Mock).mockRejectedValue(new Error('stripe error'));
+
+    await expect(
+      service.refund({ paymentId: 'pay-online-1', clubId: 'club-1', amount: 25 })
+    ).rejects.toThrow('stripe error');
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
