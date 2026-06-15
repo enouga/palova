@@ -14,6 +14,7 @@ import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
+import { RefundService } from '../services/refund.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -25,6 +26,7 @@ const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
+const refundService = new RefundService();
 
 // Upload du logo partenaire en mémoire (2 Mo max) ; mêmes formats que l'avatar.
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -58,6 +60,8 @@ const ERROR_STATUS: Record<string, number> = {
   RESERVATION_HAS_NO_MEMBER: 409,
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTNER_DUPLICATE:       409,
+  REFUND_EXCEEDS_PAID:    409,
+  ALREADY_REFUNDED:       409,
 };
 
 function asString(v: unknown): string {
@@ -338,8 +342,25 @@ router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Re
       voucherRef:      typeof voucherRef === 'string' ? voucherRef : undefined,
       voucherIssuer:   typeof voucherIssuer === 'string' ? voucherIssuer : undefined,
       participantId:   typeof participantId === 'string' && participantId ? participantId : undefined,
+      createdByUserId: req.user!.id,
     });
     res.status(201).json(payment);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Remboursement / correction d'un encaissement (total ou partiel).
+router.post('/payments/:paymentId/refunds', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { amount, reason, method } = req.body;
+    const refund = await refundService.refund({
+      paymentId: asString(req.params.paymentId),
+      clubId: req.membership!.clubId,
+      amount: Number(amount),
+      reason: typeof reason === 'string' ? reason : undefined,
+      method: typeof method === 'string' ? method : undefined,
+      createdByUserId: req.user!.id,
+    });
+    res.status(201).json(refund);
   } catch (err) { handleError(err, res, next); }
 });
 
@@ -486,7 +507,7 @@ router.get('/members/:userId/packages', async (req: ClubScopedRequest, res: Resp
   try { res.json(await packageService.listMemberPackages(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
 });
 router.post('/members/:userId/packages', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
-  try { res.status(201).json(await packageService.sellPackage(req.membership!.clubId, asString(req.params.userId), req.body)); } catch (e) { handleError(e, res, next); }
+  try { res.status(201).json(await packageService.sellPackage(req.membership!.clubId, asString(req.params.userId), { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Caisse du jour & tickets CE ---
