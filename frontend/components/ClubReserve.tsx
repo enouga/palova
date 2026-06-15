@@ -52,6 +52,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const windowDays  = isSub ? club.memberBookingDays : club.publicBookingDays;
   const releaseHour = isSub ? club.memberReleaseHour : club.publicReleaseHour;
   const win = bookingWindow(new Date(), club.timezone, windowDays, club.bookingReleaseMode, releaseHour);
+  const nowMs = Date.now(); // masque les créneaux du jour déjà commencés
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -166,6 +167,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(({ resource, slots }) => {
                         const ct = coveredType(resource.attributes?.covered === true);
+                        // Créneaux dont le début est déjà passé (aujourd'hui) → retirés de la liste.
+                        const visibleSlots = slots.filter((s) => new Date(s.startTime).getTime() > nowMs);
                         return (
                           <div key={resource.id} style={{ background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -180,11 +183,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 {resource.offPeakPrice && <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.accentWarm }}>{Number(resource.offPeakPrice)}€ en heures creuses</span>}
                               </span>
                             </div>
-                            {slots.length === 0 ? (
+                            {visibleSlots.length === 0 ? (
                               <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau ce jour.</div>
                             ) : (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                                {slots.map((s) => (s.available && win.slotAllowed(s.startTime)) ? (
+                                {visibleSlots.map((s) => (s.available && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {formatHour(s.startTime, club.timezone)}
