@@ -56,7 +56,7 @@ describe('BookingModal — paiement par carnet', () => {
     fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
 
     await waitFor(() => {
-      expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', { packageId: 'pkg-1' });
+      expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', { paymentSource: { packageId: 'pkg-1' } });
     });
   });
 

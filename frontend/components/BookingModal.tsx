@@ -116,7 +116,7 @@ export default function BookingModal({
     try {
       const confirmed = await api.confirmReservation(
         reservation.id, token,
-        paySource ? { packageId: paySource } : undefined,
+        paySource ? { paymentSource: { packageId: paySource } } : undefined,
       );
       onConfirmed(confirmed);
     } catch (err) {

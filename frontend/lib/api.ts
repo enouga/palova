@@ -87,11 +87,57 @@ export const api = {
   holdSlot: (params: HoldParams, token: string) =>
     request<Reservation>('/api/reservations/hold', { method: 'POST', body: JSON.stringify(params) }, token),
 
-  confirmReservation: (reservationId: string, token: string, paymentSource?: { packageId: string }) =>
+  confirmReservation: (
+    reservationId: string,
+    token: string,
+    options?: {
+      paymentSource?: { packageId: string };
+      stripePaymentIntentId?: string;
+      stripeSetupIntentId?: string;
+    },
+  ) =>
     request<Reservation>(`/api/reservations/${reservationId}/confirm`, {
       method: 'POST',
-      body: JSON.stringify(paymentSource ? { paymentSource } : {}),
+      body: JSON.stringify(options ?? {}),
     }, token),
+
+  // --- Stripe Connect (admin) ---
+  initiateStripeConnect: (clubId: string, body: { refreshUrl: string; returnUrl: string }, token: string) =>
+    request<{ url: string }>(`/api/clubs/${clubId}/admin/stripe/connect`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }, token),
+
+  getStripeStatus: (clubId: string, token: string) =>
+    request<{ stripeAccountStatus: string }>(`/api/clubs/${clubId}/admin/stripe/status`, {}, token),
+
+  getStripeLoginLink: (clubId: string, token: string) =>
+    request<{ url: string }>(`/api/clubs/${clubId}/admin/stripe/login-link`, {}, token),
+
+  // --- Stripe Intent (joueur) ---
+  createStripeIntent: (
+    slug: string,
+    body: { reservationId: string; type: 'payment' | 'setup' },
+    token: string,
+  ) =>
+    request<{ clientSecret: string; type: 'payment' | 'setup' }>(
+      `/api/clubs/${slug}/stripe/intent`,
+      { method: 'POST', body: JSON.stringify(body) },
+      token,
+    ),
+
+  // --- No-show (admin) ---
+  chargeNoShow: (
+    clubId: string,
+    reservationId: string,
+    body: { amount: number; note?: string },
+    token: string,
+  ) =>
+    request<{ paymentId: string; stripePaymentIntentId: string }>(
+      `/api/clubs/${clubId}/admin/reservations/${reservationId}/no-show-charge`,
+      { method: 'POST', body: JSON.stringify(body) },
+      token,
+    ),
 
   cancelReservation: (reservationId: string, token: string) =>
     request<Reservation>(`/api/reservations/${reservationId}`, { method: 'DELETE' }, token),
@@ -530,6 +576,8 @@ export interface ClubDetail {
   publicReleaseHour: number;
   memberReleaseHour: number;
   showOtherClubsReservations: boolean;
+  requireOnlinePayment: boolean;
+  requireCardFingerprint: boolean;
   clubSports: ClubSportPublic[];
 }
 
@@ -703,6 +751,10 @@ export interface ClubAdminDetail {
   cancellationCutoffHours: number;
   showOtherClubsReservations: boolean;
   refundOnCancelWithinCutoff: boolean;
+  stripeAccountId: string | null;
+  stripeAccountStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
+  requireOnlinePayment: boolean;
+  requireCardFingerprint: boolean;
 }
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
