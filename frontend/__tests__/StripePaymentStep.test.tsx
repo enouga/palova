@@ -5,6 +5,26 @@ import StripePaymentStep from '@/components/StripePaymentStep';
 const mockConfirmPayment = jest.fn();
 const mockConfirmSetup = jest.fn();
 
+jest.mock('@/components/ui/atoms', () => ({
+  Btn: ({ onClick, children, disabled, variant }: any) => (
+    <button onClick={onClick} disabled={disabled}>{children}</button>
+  ),
+}));
+
+jest.mock('next/dynamic', () => {
+  // Track call count: first call = Elements, second call = PaymentElement
+  let callCount = 0;
+  return (importFn: () => Promise<any>, options?: any) => {
+    callCount += 1;
+    const mod = require('@stripe/react-stripe-js');
+    if (options && options.ssr === false) {
+      const exportName = callCount === 1 ? 'Elements' : 'PaymentElement';
+      return mod[exportName];
+    }
+    return mod;
+  };
+});
+
 jest.mock('@stripe/react-stripe-js', () => ({
   Elements: ({ children }: any) => <div>{children}</div>,
   PaymentElement: () => <div data-testid="payment-element" />,
@@ -42,7 +62,7 @@ describe('StripePaymentStep', () => {
   it('affiche le Payment Element et le montant', async () => {
     render(<StripePaymentStep {...defaultProps} />);
     await waitFor(() => expect(screen.getByTestId('payment-element')).toBeInTheDocument());
-    expect(screen.getByText(/25,00/)).toBeInTheDocument();
+    expect(screen.getAllByText(/25,00/).length).toBeGreaterThan(0);
   });
 
   it('appelle onSuccess après un paiement réussi', async () => {

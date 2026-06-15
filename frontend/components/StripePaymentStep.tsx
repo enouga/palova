@@ -1,8 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import dynamic from 'next/dynamic';
+import { useStripe, useElements } from '@stripe/react-stripe-js';
 import { api } from '@/lib/api';
 import { getStripe } from '@/lib/stripe';
+import { Btn } from '@/components/ui/atoms';
+
+const Elements = dynamic(
+  () => import('@stripe/react-stripe-js').then((m) => m.Elements),
+  { ssr: false },
+);
+const PaymentElement = dynamic(
+  () => import('@stripe/react-stripe-js').then((m) => m.PaymentElement),
+  { ssr: false },
+);
 
 interface Props {
   reservationId: string;
@@ -59,10 +70,10 @@ function StripeForm({ reservationId, type, amountLabel, token, onSuccess, onCanc
       <PaymentElement />
       {error && <p style={{ color: 'red', fontSize: 14 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={onCancel} style={{ cursor: 'pointer' }}>Annuler</button>
-        <button type="button" onClick={handleSubmit} disabled={loading || !stripe} style={{ cursor: 'pointer' }}>
-          {loading ? 'Traitement…' : type === 'payment' ? 'Payer' : 'Enregistrer ma carte'}
-        </button>
+        <Btn variant="ghost" onClick={onCancel}>Annuler</Btn>
+        <Btn onClick={handleSubmit} disabled={loading || !stripe}>
+          {loading ? 'Traitement…' : type === 'payment' ? `Payer ${amountLabel}` : 'Enregistrer ma carte'}
+        </Btn>
       </div>
     </div>
   );
@@ -86,7 +97,7 @@ export default function StripePaymentStep(props: Props) {
     return (
       <div>
         <p style={{ color: 'red' }}>{fetchError}</p>
-        <button type="button" onClick={props.onCancel} style={{ cursor: 'pointer' }}>Annuler</button>
+        <Btn variant="ghost" onClick={props.onCancel}>Annuler</Btn>
       </div>
     );
   }
@@ -95,7 +106,7 @@ export default function StripePaymentStep(props: Props) {
     return (
       <div>
         <p>Chargement…</p>
-        <button type="button" onClick={props.onCancel} style={{ cursor: 'pointer' }}>Annuler</button>
+        <Btn variant="ghost" onClick={props.onCancel}>Annuler</Btn>
       </div>
     );
   }
