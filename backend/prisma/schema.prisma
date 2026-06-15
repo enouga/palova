@@ -105,6 +105,13 @@ enum ClubEventStatus {
   CANCELLED
 }
 
+/// Mode d'ouverture des nouvelles réservations dans la fenêtre d'un club.
+enum BookingReleaseMode {
+  DAY_AT_HOUR    // toute la nouvelle journée s'ouvre à l'heure de release
+  ROLLING_SLOT   // chaque créneau s'ouvre exactement W jours avant son horaire (heure ignorée)
+  WINDOW_SHIFT   // réservable jusqu'à J+W à l'heure de release pile
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -140,6 +147,10 @@ model Club {
   listedInDirectory Boolean   @default(true) @map("listed_in_directory") // visible dans l'annuaire public (le club reste joignable par son sous-domaine si false)
   publicBookingDays Int       @default(7)  @map("public_booking_days")  // fenêtre de résa grand public
   memberBookingDays Int       @default(14) @map("member_booking_days")  // fenêtre élargie pour les abonnés
+  // Ouverture des réservations dans la fenêtre. Défaut DAY_AT_HOUR + 0h = ouverture à minuit (comportement historique).
+  bookingReleaseMode BookingReleaseMode @default(DAY_AT_HOUR) @map("booking_release_mode")
+  publicReleaseHour  Int                @default(0)          @map("public_release_hour") // heure (0-23) d'ouverture grand public
+  memberReleaseHour  Int                @default(0)          @map("member_release_hour") // heure (0-23) d'ouverture abonnés
   // Plages d'heures CREUSES par jour de semaine (clé = weekday Luxon 1=lundi..7=dimanche),
   // plusieurs plages possibles par jour, ex. { "1": [{ "start": 9, "end": 12 }, { "start": 14, "end": 17 }] }.
   // Hors plage = heures pleines. null ou jour absent = tout en pleines.
