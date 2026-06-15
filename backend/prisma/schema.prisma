@@ -123,6 +123,14 @@ enum BookingReleaseMode {
   WINDOW_SHIFT   // réservable jusqu'à J+W à l'heure de release pile
 }
 
+/// Statut du compte Stripe Connect d'un club.
+enum StripeAccountStatus {
+  NONE        // pas encore connecté
+  PENDING     // compte créé, onboarding incomplet
+  ACTIVE      // charges_enabled=true
+  RESTRICTED  // Stripe a restreint le compte
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -180,6 +188,11 @@ model Club {
   showOtherClubsReservations Boolean @default(false) @map("show_other_clubs_reservations")
   // Rembourse automatiquement les paiements d'une réservation annulée dans la fenêtre d'annulation. Opt-in.
   refundOnCancelWithinCutoff Boolean @default(false) @map("refund_on_cancel_within_cutoff")
+  // Stripe Connect : compte propre au club (Express, direct charges).
+  stripeAccountId        String?             @map("stripe_account_id")
+  stripeAccountStatus    StripeAccountStatus @default(NONE) @map("stripe_account_status")
+  requireOnlinePayment   Boolean             @default(false) @map("require_online_payment")
+  requireCardFingerprint Boolean             @default(false) @map("require_card_fingerprint")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
@@ -195,6 +208,7 @@ model Club {
   memberPackages   MemberPackage[]
   slugAliases      ClubSlugAlias[]
   counters         ClubCounter[]
+  stripeCustomers  ClubStripeCustomer[]
 
   @@map("clubs")
 }
@@ -285,6 +299,7 @@ model User {
   emailVerification EmailVerification?
   memberPackages MemberPackage[]
   paymentsCreated Payment[] @relation("PaymentsCreated")
+  stripeCustomers  ClubStripeCustomer[]
 
   @@map("users")
 }
@@ -413,6 +428,8 @@ model Payment {
   refundedAmount  Decimal        @default(0) @db.Decimal(10, 2) @map("refunded_amount")
   createdByUserId String?        @map("created_by_user_id")
   receiptNo       Int?           @map("receipt_no") // numéro de reçu séquentiel par club
+  stripePaymentIntentId String? @map("stripe_payment_intent_id")
+  stripePaymentMethodId String? @map("stripe_payment_method_id")
 
   reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
@@ -444,6 +461,24 @@ model ClubCounter {
   @@map("club_counters")
 }
 
+/// Identité Stripe d'un joueur sur le compte connecté d'un club.
+/// Le Customer est créé sur le compte connecté (stripeAccount), pas sur le compte plateforme.
+model ClubStripeCustomer {
+  id                     String   @id @default(cuid())
+  clubId                 String   @map("club_id")
+  userId                 String   @map("user_id")
+  stripeCustomerId       String   @map("stripe_customer_id")
+  defaultPaymentMethodId String?  @map("default_payment_method_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@map("club_stripe_customers")
+}
 
 /// Remboursement (total ou partiel) d'un Payment. Montant POSITIF + lien parent —
 /// jamais un Payment négatif, pour que le récap caisse (sum(amount)) reste juste.
