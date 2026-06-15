@@ -1,6 +1,6 @@
 import '../../__mocks__/prisma';
 import '../../__mocks__/redis';
-import { DateTime } from 'luxon';
+import { DateTime, Settings } from 'luxon';
 import { prismaMock } from '../../__mocks__/prisma';
 import { redisMock } from '../../__mocks__/redis';
 import { ReservationService } from '../reservation.service';
@@ -1216,6 +1216,50 @@ describe('ReservationService', () => {
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(resa({ userId: 'autre' }) as any);
       await expect(service.removeOwnReservationParticipant('res-1', 'user-1', 'p2')).rejects.toThrow('UNAUTHORIZED');
+    });
+  });
+
+  describe('assertMembershipAndWindow — heure d\'ouverture', () => {
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservationParticipant.createMany.mockResolvedValue({ count: 1 } as any);
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+      prismaMock.reservation.create.mockResolvedValue({
+        id: 'res-x', status: 'PENDING', totalPrice: 25, createdAt: new Date(),
+        startTime: new Date(), endTime: new Date(),
+      } as any);
+    });
+    afterEach(() => { Settings.now = () => Date.now(); });
+
+    const clubWith = (over: Record<string, unknown>) => ({
+      price: 25, clubId: 'club-demo',
+      club: {
+        timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14,
+        bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 0, memberReleaseHour: 0, ...over,
+      },
+    });
+
+    it('DAY_AT_HOUR : refuse la journée lointaine AVANT l\'heure de release', async () => {
+      Settings.now = () => new Date('2026-06-15T04:00:00.000Z').getTime(); // 06:00 Paris < 8h
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue(
+        clubWith({ bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 8 }) as any);
+      const start = new Date('2026-06-22T09:00:00.000Z'); // J+7
+      await expect(service.holdSlot({
+        resourceId: 'court-1', userId: 'user-1', startTime: start, endTime: new Date(start.getTime() + 3_600_000),
+      })).rejects.toThrow('BOOKING_TOO_FAR');
+    });
+
+    it('DAY_AT_HOUR : ouvre la journée lointaine APRÈS l\'heure de release', async () => {
+      Settings.now = () => new Date('2026-06-15T07:00:00.000Z').getTime(); // 09:00 Paris ≥ 8h
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue(
+        clubWith({ bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 8 }) as any);
+      const start = new Date('2026-06-22T09:00:00.000Z'); // J+7
+      const r = await service.holdSlot({
+        resourceId: 'court-1', userId: 'user-1', startTime: start, endTime: new Date(start.getTime() + 3_600_000),
+      });
+      expect(r.status).toBe('PENDING');
     });
   });
 });

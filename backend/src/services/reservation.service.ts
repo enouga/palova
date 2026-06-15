@@ -6,6 +6,7 @@ import { SSEService } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
 import { PackageService } from './package.service';
+import { maxBookableInstant } from './booking-window';
 import { playerCount } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned } from '../email/notifications';
 
@@ -83,7 +84,7 @@ export class ReservationService {
    * - Adhésion automatique (ACTIVE) au 1er accès/réservation si absente.
    */
   private async assertMembershipAndWindow(
-    resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number } },
+    resource: { clubId: string; club: { timezone: string; publicBookingDays: number; memberBookingDays: number; bookingReleaseMode: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT'; publicReleaseHour: number; memberReleaseHour: number } },
     userId: string,
     startTime: Date,
   ): Promise<{ isSubscriber: boolean }> {
@@ -92,11 +93,13 @@ export class ReservationService {
     if (membership?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
 
     const isSubscriber = membership?.isSubscriber ?? false;
-    const windowDays = isSubscriber ? resource.club.memberBookingDays : resource.club.publicBookingDays;
+    const windowDays  = isSubscriber ? resource.club.memberBookingDays : resource.club.publicBookingDays;
+    const releaseHour = isSubscriber ? resource.club.memberReleaseHour  : resource.club.publicReleaseHour;
     const tz = resource.club.timezone;
-    const maxDate = DateTime.now().setZone(tz).startOf('day').plus({ days: windowDays }).endOf('day');
+    const now = DateTime.now().setZone(tz);
+    const maxInstant = maxBookableInstant(now, windowDays, resource.club.bookingReleaseMode, releaseHour);
     const startLocal = DateTime.fromJSDate(startTime).setZone(tz);
-    if (startLocal > maxDate) throw new Error('BOOKING_TOO_FAR');
+    if (startLocal > maxInstant) throw new Error('BOOKING_TOO_FAR');
 
     if (!membership) {
       await prisma.clubMembership.create({ data: { userId, clubId: resource.clubId } });
@@ -175,7 +178,7 @@ export class ReservationService {
           offPeakPrice: true,
           clubId: true,
           attributes: true,
-          club: { select: { timezone: true, offPeakHours: true, publicBookingDays: true, memberBookingDays: true, bookingQuotas: true } },
+          club: { select: { timezone: true, offPeakHours: true, publicBookingDays: true, memberBookingDays: true, bookingQuotas: true, bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true } },
         },
       });
 
