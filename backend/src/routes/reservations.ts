@@ -23,6 +23,10 @@ const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:         400,
   INSUFFICIENT_BALANCE:     409,
   PACKAGE_NOT_FOUND:        404,
+  ONLINE_PAYMENT_REQUIRED:   402,
+  CARD_FINGERPRINT_REQUIRED: 402,
+  PAYMENT_NOT_SUCCEEDED:     402,
+  SETUP_NOT_SUCCEEDED:       402,
   QUOTA_PEAK_REACHED:       409,
   QUOTA_OFFPEAK_REACHED:    409,
   TOO_MANY_PLAYERS:         409,
@@ -76,7 +80,11 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
     const packageId = req.body?.paymentSource?.packageId;
     const confirmed = await reservationService.confirmReservation(
       asString(req.params.id), req.user!.id,
-      typeof packageId === 'string' && packageId ? { packageId } : undefined,
+      {
+        paymentSource: typeof packageId === 'string' && packageId ? { packageId } : undefined,
+        stripePaymentIntentId: typeof req.body?.stripePaymentIntentId === 'string' ? req.body.stripePaymentIntentId : undefined,
+        stripeSetupIntentId:   typeof req.body?.stripeSetupIntentId   === 'string' ? req.body.stripeSetupIntentId   : undefined,
+      },
     );
     res.json(confirmed);
   } catch (err) { handleError(err, res, next); }

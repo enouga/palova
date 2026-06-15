@@ -2,6 +2,7 @@ import { Prisma, ReservationType } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
+import { stripe } from '../db/stripe';
 import { SSEService } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas } from './quotas';
@@ -253,11 +254,28 @@ export class ReservationService {
   async confirmReservation(
     reservationId: string,
     userId: string,
-    paymentSource?: { packageId: string },
+    options?: {
+      paymentSource?: { packageId: string };
+      stripePaymentIntentId?: string;
+      stripeSetupIntentId?: string;
+    },
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true } } },
+      include: {
+        resource: {
+          select: {
+            clubId: true,
+            club: {
+              select: {
+                requireOnlinePayment: true,
+                requireCardFingerprint: true,
+                stripeAccountId: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!reservation)                     throw new Error('RESERVATION_NOT_FOUND');
@@ -266,6 +284,55 @@ export class ReservationService {
 
     const age = Date.now() - reservation.createdAt.getTime();
     if (age > HOLD_EXPIRY_MS)             throw new Error('RESERVATION_NOT_PENDING');
+
+    const club = (reservation as any).resource?.club as {
+      requireOnlinePayment: boolean;
+      requireCardFingerprint: boolean;
+      stripeAccountId: string | null;
+    } | undefined;
+
+    // Vérifications Stripe (hors transaction — appels HTTP interdits dans $transaction)
+    if (club?.requireOnlinePayment && !options?.stripePaymentIntentId) {
+      throw new Error('ONLINE_PAYMENT_REQUIRED');
+    }
+    // fingerprint seulement si paiement en ligne non requis (sinon le PI couvre les deux)
+    if (club?.requireCardFingerprint && !club.requireOnlinePayment && !options?.stripeSetupIntentId) {
+      throw new Error('CARD_FINGERPRINT_REQUIRED');
+    }
+
+    let stripePaymentMethodId: string | null = null;
+
+    if (options?.stripePaymentIntentId && club?.stripeAccountId) {
+      const pi = await stripe.paymentIntents.retrieve(
+        options.stripePaymentIntentId,
+        {},
+        { stripeAccount: club.stripeAccountId },
+      );
+      if (pi.status !== 'succeeded') throw new Error('PAYMENT_NOT_SUCCEEDED');
+      stripePaymentMethodId = typeof pi.payment_method === 'string' ? pi.payment_method : null;
+      if (stripePaymentMethodId) {
+        await prisma.clubStripeCustomer.updateMany({
+          where: { clubId: reservation.resource.clubId, userId },
+          data: { defaultPaymentMethodId: stripePaymentMethodId },
+        });
+      }
+    }
+
+    if (options?.stripeSetupIntentId && club?.stripeAccountId) {
+      const si = await stripe.setupIntents.retrieve(
+        options.stripeSetupIntentId,
+        {},
+        { stripeAccount: club.stripeAccountId },
+      );
+      if (si.status !== 'succeeded') throw new Error('SETUP_NOT_SUCCEEDED');
+      const pmId = typeof si.payment_method === 'string' ? si.payment_method : null;
+      if (pmId) {
+        await prisma.clubStripeCustomer.updateMany({
+          where: { clubId: reservation.resource.clubId, userId },
+          data: { defaultPaymentMethodId: pmId },
+        });
+      }
+    }
 
     const confirmed = await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<any[]>`
@@ -293,8 +360,8 @@ export class ReservationService {
       // Paiement par carnet / porte-monnaie : consommation dans la MÊME
       // transaction Serializable — solde insuffisant → tout rollback, la
       // résa reste PENDING et payable autrement.
-      if (paymentSource) {
-        const pkg = await tx.memberPackage.findUnique({ where: { id: paymentSource.packageId } });
+      if (options?.paymentSource) {
+        const pkg = await tx.memberPackage.findUnique({ where: { id: options.paymentSource.packageId } });
         if (!pkg || pkg.userId !== userId || pkg.clubId !== reservation.resource.clubId) {
           throw new Error('PACKAGE_NOT_FOUND');
         }
@@ -313,6 +380,27 @@ export class ReservationService {
             amount,
             method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
             sourcePackageId: pkg.id,
+            receiptNo,
+          },
+        });
+      }
+
+      // Paiement Stripe en ligne — le PI a déjà été vérifié hors transaction.
+      if (options?.stripePaymentIntentId) {
+        const organizer = await tx.reservationParticipant.findFirst({
+          where: { reservationId, isOrganizer: true }, select: { id: true },
+        });
+        const receiptNo = await PackageService.nextReceiptNo(tx, reservation.resource.clubId);
+        await tx.payment.create({
+          data: {
+            reservationId,
+            participantId: organizer?.id ?? null,
+            clubId: reservation.resource.clubId,
+            amount: new Prisma.Decimal(reservation.totalPrice),
+            method: 'ONLINE',
+            status: 'CAPTURED',
+            stripePaymentIntentId: options.stripePaymentIntentId,
+            stripePaymentMethodId: stripePaymentMethodId ?? undefined,
             receiptNo,
           },
         });

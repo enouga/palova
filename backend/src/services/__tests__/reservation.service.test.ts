@@ -1,10 +1,18 @@
-import '../../__mocks__/prisma';
+﻿import '../../__mocks__/prisma';
 import '../../__mocks__/redis';
 import { DateTime, Settings } from 'luxon';
 import { Prisma } from '@prisma/client';
 import { prismaMock } from '../../__mocks__/prisma';
 import { redisMock } from '../../__mocks__/redis';
 import { ReservationService } from '../reservation.service';
+import { stripe } from '../../db/stripe';
+
+jest.mock('../../db/stripe', () => ({
+  stripe: {
+    paymentIntents: { retrieve: jest.fn() },
+    setupIntents:   { retrieve: jest.fn() },
+  },
+}));
 
 const mockBroadcast = jest.fn();
 
@@ -692,7 +700,7 @@ describe('ReservationService', () => {
         startTime: new Date(), endTime: new Date(),
       } as any);
 
-      await service.confirmReservation('res-1', 'user-1', { packageId: 'pkg-1' });
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
 
       expect(prismaMock.memberPackage.updateMany).toHaveBeenCalled();
       expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -706,7 +714,7 @@ describe('ReservationService', () => {
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
       prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 0 } as any);
 
-      await expect(service.confirmReservation('res-1', 'user-1', { packageId: 'pkg-1' }))
+      await expect(service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } }))
         .rejects.toThrow('INSUFFICIENT_BALANCE');
       expect(prismaMock.reservation.update).not.toHaveBeenCalled();
     });
@@ -716,7 +724,7 @@ describe('ReservationService', () => {
       mockHappyTx();
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'autre-club', userId: 'user-1', kind: 'ENTRIES' } as any);
 
-      await expect(service.confirmReservation('res-1', 'user-1', { packageId: 'pkg-1' }))
+      await expect(service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } }))
         .rejects.toThrow('PACKAGE_NOT_FOUND');
     });
 
@@ -730,7 +738,7 @@ describe('ReservationService', () => {
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
       prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED', startTime: new Date(), endTime: new Date() } as any);
 
-      await service.confirmReservation('res-1', 'user-1', { packageId: 'pkg-1' });
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
 
       expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ participantId: 'org-p', sourcePackageId: 'pkg-1' }),
@@ -755,6 +763,69 @@ describe('ReservationService', () => {
 
       const r = await service.confirmReservation('res-1', 'user-1');
       expect(r.status).toBe('CONFIRMED');
+    });
+  });
+
+  describe('confirmReservation -- verification Stripe', () => {
+    const pendingResaWithStripe = (clubOverrides: Record<string, unknown> = {}) => ({
+      id: 'res-1', userId: 'user-1', status: 'PENDING', createdAt: new Date(),
+      resourceId: 'court-1', startTime: new Date(), endTime: new Date(),
+      totalPrice: 25,
+      resource: {
+        clubId: 'club-demo',
+        club: {
+          requireOnlinePayment: false,
+          requireCardFingerprint: false,
+          stripeAccountId: null,
+          ...clubOverrides,
+        },
+      },
+    });
+
+    const mockHappyTx = () => {
+      prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+      (prismaMock.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'res-1', status: 'PENDING', resource_id: 'court-1', start_time: new Date(), end_time: new Date() }])
+        .mockResolvedValueOnce([{ count: 0n }]);
+      prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED', startTime: new Date(), endTime: new Date() } as any);
+    };
+
+    it('leve ONLINE_PAYMENT_REQUIRED si requireOnlinePayment=true sans stripePaymentIntentId', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', {}))
+        .rejects.toThrow('ONLINE_PAYMENT_REQUIRED');
+    });
+
+    it('leve PAYMENT_NOT_SUCCEEDED si le PI Stripe n est pas succeeded', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+      (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'requires_payment_method', payment_method: null });
+
+      await expect(service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' }))
+        .rejects.toThrow('PAYMENT_NOT_SUCCEEDED');
+    });
+
+    it('confirme avec PI succeeded et cree un Payment ONLINE', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+      (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'succeeded', payment_method: 'pm_xxx' });
+      prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 } as any);
+      mockHappyTx();
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'ONLINE', stripePaymentIntentId: 'pi_xxx' }),
+      }));
+    });
+
+    it('leve CARD_FINGERPRINT_REQUIRED si requireCardFingerprint=true sans stripeSetupIntentId', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', {}))
+        .rejects.toThrow('CARD_FINGERPRINT_REQUIRED');
     });
   });
 

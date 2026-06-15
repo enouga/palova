@@ -8,6 +8,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { OpenMatchService } from '../services/openMatch.service';
+import { StripeService } from '../services/stripe.service';
 import { iconService } from '../services/icon.service';
 import { prisma } from '../db/prisma';
 
@@ -189,6 +190,39 @@ router.get('/:slug/icon/:file', async (req: Request, res: Response, next: NextFu
     const filePath = m ? await iconService.getClubIconPath(asString(req.params.slug), m[1]) : null;
     if (!filePath) { res.status(404).json({ error: 'Icône introuvable' }); return; }
     res.sendFile(filePath, { headers: { 'Cache-Control': 'public, max-age=86400' } });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Créer un PaymentIntent ou SetupIntent pour un joueur (paiement/empreinte à la réservation).
+router.post('/:slug/stripe/intent', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { reservationId, type } = req.body;
+    if (!reservationId || !['payment', 'setup'].includes(type as string)) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) } });
+    if (!club) return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: asString(reservationId) },
+      select: { totalPrice: true, userId: true },
+    });
+    if (!reservation) return void res.status(404).json({ error: 'RESERVATION_NOT_FOUND' });
+    if (reservation.userId !== req.user!.id) return void res.status(403).json({ error: 'UNAUTHORIZED' });
+
+    const svc = new StripeService();
+    if (type === 'payment') {
+      const amountCents = Math.round(Number(reservation.totalPrice) * 100);
+      const result = await svc.createPaymentIntent({
+        clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId), amountCents,
+      });
+      return void res.json({ ...result, type: 'payment' });
+    } else {
+      const result = await svc.createSetupIntent({
+        clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId),
+      });
+      return void res.json({ ...result, type: 'setup' });
+    }
   } catch (err) { handleError(err, res, next); }
 });
 
