@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ClubNav } from '../components/ClubNav';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -20,6 +20,7 @@ jest.mock('../lib/api', () => ({
 }));
 
 const club = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null } as never;
+const clubWithLogo = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: '/uploads/logos/demo.png' } as never;
 const wrap = () => render(<ThemeProvider><ClubNav club={club} /></ThemeProvider>);
 
 function clearCookies() {
@@ -101,6 +102,27 @@ describe('ClubNav', () => {
     expect(reserver).not.toHaveClass('is-active');
     // onglet nommé même quand l'icône est seule (mobile)
     expect(reserver).toHaveAttribute('aria-label', 'Réserver');
+  });
+
+  it("affiche le logo du club quand logoUrl est renseigné, lien vers l'accueil club, à la place de la marque Palova", () => {
+    render(<ThemeProvider><ClubNav club={clubWithLogo} /></ThemeProvider>);
+    const img = screen.getByRole('img', { name: 'Logo Club Démo' });
+    expect(img).toHaveAttribute('src', '/uploads/logos/demo.png');
+    expect(img.closest('a')).toHaveAttribute('href', '/');
+    expect(screen.queryByLabelText('Accueil Palova')).not.toBeInTheDocument();
+  });
+
+  it("retombe sur la marque Palova quand le club n'a pas de logo", () => {
+    wrap();
+    expect(screen.getByLabelText('Accueil Palova')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /Logo/ })).not.toBeInTheDocument();
+  });
+
+  it("bascule sur la marque Palova si le logo du club échoue à charger (onError)", () => {
+    render(<ThemeProvider><ClubNav club={clubWithLogo} /></ThemeProvider>);
+    fireEvent.error(screen.getByRole('img', { name: 'Logo Club Démo' }));
+    expect(screen.getByLabelText('Accueil Palova')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Logo Club Démo' })).not.toBeInTheDocument();
   });
 
   it('montre « Connexion » et masque « Mes réservations » sans session', () => {

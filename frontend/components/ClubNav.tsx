@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClubDetail } from '@/lib/api';
+import { ClubDetail, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
@@ -21,6 +21,8 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const { token, ready } = useAuth();
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const showClubLogo = !!club.logoUrl && !logoFailed;
 
   const tabs: Tab[] = [
     { label: 'Club-house', short: 'Club', href: '/', icon: 'home', brand: true, match: (p) => p === '/' || p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
@@ -40,7 +42,15 @@ export function ClubNav({ club }: { club: ClubDetail }) {
 
       {/* Rangée 1 : marque Palova (→ accueil plateforme) · nom du club (titre) · actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Logotype href={platformUrl('/')} size={22} />
+        {showClubLogo ? (
+          <Link href="/" style={{ display: 'inline-flex', flexShrink: 0 }}>
+            <img src={assetUrl(club.logoUrl) ?? undefined} alt={`Logo ${club.name}`}
+              onError={() => setLogoFailed(true)}
+              style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block' }} />
+          </Link>
+        ) : (
+          <Logotype href={platformUrl('/')} size={22} />
+        )}
         <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <ThemeToggle /><ProfileMenu />
