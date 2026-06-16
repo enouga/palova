@@ -159,7 +159,8 @@ model Sport {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  clubSports ClubSport[]
+  clubSports    ClubSport[]
+  playerRatings PlayerRating[]
 
   @@map("sports")
 }
@@ -353,6 +354,7 @@ model User {
 
   reservations    Reservation[]
   reservationParticipations ReservationParticipant[]
+  playerRatings   PlayerRating[]
   staffRoles      ClubMember[]
   clubMemberships ClubMembership[]
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
@@ -364,6 +366,31 @@ model User {
   stripeCustomers  ClubStripeCustomer[]
 
   @@map("users")
+}
+
+/// Niveau d'un joueur pour un sport, GLOBAL (partagé entre tous ses clubs).
+/// Calculé par Glicko-2 ; `displayLevel` (0–8) est dénormalisé pour tri/filtre rapides.
+model PlayerRating {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  sportId          String    @map("sport_id")
+  rating           Float     @default(1500)
+  rd               Float     @default(350)
+  volatility       Float     @default(0.06)
+  displayLevel     Float     @default(3) @map("display_level")
+  matchesPlayed    Int       @default(0) @map("matches_played")
+  lastMatchAt      DateTime? @map("last_match_at")
+  isProvisional    Boolean   @default(true) @map("is_provisional")
+  initialSelfLevel Float?    @map("initial_self_level")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport Sport @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sportId])
+  @@index([sportId, displayLevel])
+  @@map("player_ratings")
 }
 
 /// Code de validation d'email à usage unique (inscription). Un par utilisateur non vérifié.
