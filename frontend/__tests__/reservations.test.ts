@@ -9,6 +9,8 @@ const r = (startInHours: number, cutoff: number, status: MyReservation['status']
   status,
   totalPrice: '25',
   resource: { id: 'c1', name: 'Court 1', club: { name: 'Club', slug: 'club', timezone: 'Europe/Paris', playerChangeCutoffHours: cutoff, cancellationCutoffHours: cutoff } },
+  capacity: 4,
+  participants: [],
 });
 
 describe('isPlayerChangeOpen / isCancellationOpen', () => {

@@ -512,6 +512,8 @@ export interface MyReservation {
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
   resource: { id: string; name: string; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
+  capacity: number;
+  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null }[];
 }
 
 export interface ReservationPlayer {
@@ -520,6 +522,7 @@ export interface ReservationPlayer {
   isOrganizer: boolean;
   firstName: string;
   lastName: string;
+  avatarUrl: string | null;
   share: string;
 }
 export interface ReservationPlayers {

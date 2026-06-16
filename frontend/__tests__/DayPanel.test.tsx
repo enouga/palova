@@ -15,6 +15,8 @@ const reservation: MyReservation = {
   status: 'CONFIRMED',
   totalPrice: '37.50',
   resource: { id: 'court-1', name: 'Court 1', club: { name: 'Padel Arena', slug: 'padel-arena', timezone: 'Europe/Paris' } },
+  capacity: 4,
+  participants: [],
 };
 
 const registration = {

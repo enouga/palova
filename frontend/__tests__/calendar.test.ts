@@ -23,6 +23,8 @@ function makeReservation(over: Partial<MyReservation> = {}): MyReservation {
     status: 'CONFIRMED',
     totalPrice: '25.00',
     resource: { id: 'court-1', name: 'Court 1', club: { name: 'Padel Arena', slug: 'padel-arena', timezone: 'Europe/Paris' } },
+    capacity: 4,
+    participants: [],
     ...over,
   };
 }
