@@ -88,4 +88,11 @@ describe('POST /api/clubs/:clubId/admin/matches/:matchId/resolve', () => {
       .send({ action: 'NOPE' });
     expect(res.status).toBe(400);
   });
+
+  it('404 si le match appartient à un autre club', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ clubId: 'AUTRE', status: 'DISPUTED' } as any);
+    const res = await request(app).post('/api/clubs/c1/admin/matches/m1/resolve')
+      .set('Authorization', `Bearer ${token()}`).send({ action: 'CANCEL' });
+    expect(res.status).toBe(404);
+  });
 });

@@ -129,8 +129,12 @@ export class MatchService {
     return done;
   }
 
-  /** Résolution staff d'un litige. VALIDATE (avec sets corrigés optionnels) ou CANCEL. */
-  async resolveDispute(matchId: string, action: 'VALIDATE' | 'CANCEL', sets?: SetScore[]): Promise<void> {
+  /** Résolution staff d'un litige (scopée au club). VALIDATE (avec sets corrigés optionnels) ou CANCEL. */
+  async resolveDispute(matchId: string, clubId: string, action: 'VALIDATE' | 'CANCEL', sets?: SetScore[]): Promise<void> {
+    const match = await prisma.match.findUnique({ where: { id: matchId }, select: { clubId: true, status: true } });
+    if (!match || match.clubId !== clubId) throw new Error('MATCH_NOT_FOUND');
+    if (match.status !== 'DISPUTED') throw new Error('MATCH_NOT_DISPUTED');
+
     if (action === 'CANCEL') {
       await prisma.match.update({ where: { id: matchId }, data: { status: 'CANCELLED' } });
       return;
@@ -150,6 +154,7 @@ export class MatchService {
       });
       if (!match) throw new Error('MATCH_NOT_FOUND');
       if (match.ratingsAppliedAt) return; // déjà appliqué → idempotent
+      if (match.status === 'CANCELLED') return; // ne jamais appliquer un match annulé
 
       const playedAt = match.playedAt;
       const states: (TeamPlayer & { userId: string; before: number })[] = [];

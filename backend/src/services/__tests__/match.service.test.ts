@@ -141,10 +141,14 @@ describe('autoValidateDue', () => {
 });
 
 describe('resolveDispute', () => {
-  it('VALIDATE re-PENDING puis finalise', async () => {
+  beforeEach(() => {
+    prismaMock.match.findUnique.mockResolvedValue({ clubId: 'c1', status: 'DISPUTED' } as any);
     prismaMock.match.update.mockResolvedValue({} as any);
+  });
+
+  it('VALIDATE re-PENDING puis finalise', async () => {
     const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
-    await service.resolveDispute('m1', 'VALIDATE');
+    await service.resolveDispute('m1', 'c1', 'VALIDATE');
     expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'PENDING' }),
     }));
@@ -153,12 +157,27 @@ describe('resolveDispute', () => {
   });
 
   it('CANCEL passe le match CANCELLED sans finaliser', async () => {
-    prismaMock.match.update.mockResolvedValue({} as any);
     const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
-    await service.resolveDispute('m1', 'CANCEL');
+    await service.resolveDispute('m1', 'c1', 'CANCEL');
     expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'CANCELLED' } }));
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it('refuse un match d un autre club (IDOR)', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ clubId: 'AUTRE', status: 'DISPUTED' } as any);
+    await expect(service.resolveDispute('m1', 'c1', 'CANCEL')).rejects.toThrow('MATCH_NOT_FOUND');
+    expect(prismaMock.match.update).not.toHaveBeenCalled();
+  });
+
+  it('refuse un match introuvable', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(null as any);
+    await expect(service.resolveDispute('m1', 'c1', 'CANCEL')).rejects.toThrow('MATCH_NOT_FOUND');
+  });
+
+  it('refuse un match non DISPUTED', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ clubId: 'c1', status: 'CONFIRMED' } as any);
+    await expect(service.resolveDispute('m1', 'c1', 'CANCEL')).rejects.toThrow('MATCH_NOT_DISPUTED');
   });
 });
 

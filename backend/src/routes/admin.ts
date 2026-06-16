@@ -735,13 +735,14 @@ router.get('/matches', async (req: ClubScopedRequest, res: Response, next: NextF
 router.post('/matches/:matchId/resolve', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { action, sets } = req.body;
-    if (action !== 'VALIDATE' && action !== 'CANCEL') {
-      res.status(400).json({ error: 'VALIDATION_ERROR' });
-      return;
-    }
-    await matchService.resolveDispute(asString(req.params.matchId), action, sets);
+    if (action !== 'VALIDATE' && action !== 'CANCEL') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
+    await matchService.resolveDispute(asString(req.params.matchId), asString(req.params.clubId), action, sets);
     res.json({ ok: true });
-  } catch (err) { handleError(err, res, next); }
+  } catch (err) {
+    if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
+    if (err instanceof Error && err.message === 'MATCH_NOT_DISPUTED') { res.status(409).json({ error: 'MATCH_NOT_DISPUTED' }); return; }
+    next(err as Error);
+  }
 });
 
 export default router;
