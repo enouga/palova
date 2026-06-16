@@ -961,12 +961,28 @@ export class ReservationService {
 
   /** Réservations d'un joueur (les siennes), pour l'espace « Mes réservations ». */
   async listUserReservations(userId: string) {
-    return prisma.reservation.findMany({
+    const rows = await prisma.reservation.findMany({
       where: { userId },
       orderBy: { startTime: 'desc' },
       include: {
-        resource: { select: { id: true, name: true, club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } } } },
+        resource: { select: { id: true, name: true, attributes: true, club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } } } },
+        participants: {
+          orderBy: { joinedAt: 'asc' },
+          select: { id: true, userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+        },
       },
+    });
+    return rows.map(({ participants, resource, ...rest }) => {
+      const { attributes, ...resourcePublic } = resource;
+      return {
+        ...rest,
+        resource: resourcePublic,
+        capacity: playerCount((attributes as { format?: string } | null)?.format),
+        participants: participants.map((p) => ({
+          id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
+          firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
+        })),
+      };
     });
   }
 
