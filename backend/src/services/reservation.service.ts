@@ -11,6 +11,7 @@ import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded } from '../email/notifications';
 import { RefundService } from './refund.service';
+import { RatingService } from './rating.service';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -26,6 +27,7 @@ const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
 
 export class ReservationService {
   private refundService = new RefundService();
+  private ratingService = new RatingService();
 
   private lockKey(resourceId: string, startTime: Date): string {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
@@ -972,6 +974,13 @@ export class ReservationService {
         },
       },
     });
+
+    // Collecte les userIds uniques des participants pour enrichir d'un seul appel.
+    const allParticipantUserIds = [...new Set(rows.flatMap((r) => r.participants.map((p) => p.userId)))];
+    const levels = allParticipantUserIds.length > 0
+      ? await this.ratingService.getLevelsForUsers(allParticipantUserIds, 'padel')
+      : {};
+
     return rows.map(({ participants, resource, ...rest }) => {
       const { attributes, ...resourcePublic } = resource;
       return {
@@ -981,6 +990,7 @@ export class ReservationService {
         participants: participants.map((p) => ({
           id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
           firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
+          level: levels[p.userId] ?? null,
         })),
       };
     });

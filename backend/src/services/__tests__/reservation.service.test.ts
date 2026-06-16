@@ -1289,32 +1289,57 @@ describe('ReservationService', () => {
   });
 
   describe('listUserReservations', () => {
+    const baseReservation = () => ({
+      id: 'res-1', startTime: new Date('2026-06-16T15:00:00Z'), endTime: new Date('2026-06-16T16:30:00Z'),
+      status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-1', type: 'COURT',
+      resource: {
+        id: 'court-1', name: 'Terrain 2', attributes: { format: 'double' },
+        club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+      },
+      participants: [
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
+      ],
+    });
+
     it('mappe participants (avec avatarUrl) + capacity et n expose pas attributes', async () => {
-      prismaMock.reservation.findMany.mockResolvedValue([
-        {
-          id: 'res-1', startTime: new Date('2026-06-16T15:00:00Z'), endTime: new Date('2026-06-16T16:30:00Z'),
-          status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-1', type: 'COURT',
-          resource: {
-            id: 'court-1', name: 'Terrain 2', attributes: { format: 'double' },
-            club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
-          },
-          participants: [
-            { id: 'p1', userId: 'user-1', isOrganizer: true,  user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
-            { id: 'p2', userId: 'user-2', isOrganizer: false, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
-          ],
-        },
-      ] as any);
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
 
       const out = await service.listUserReservations('user-1');
 
       expect(out).toHaveLength(1);
       expect(out[0].capacity).toBe(4);
       expect(out[0].participants).toEqual([
-        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' },
-        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null },
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png', level: null },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null, level: null },
       ]);
       expect(out[0].resource.name).toBe('Terrain 2');
       expect((out[0].resource as any).attributes).toBeUndefined();
+    });
+
+    it('ajoute level sur les participants qui ont un rating', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([
+        { userId: 'user-1', displayLevel: 4, isProvisional: false },
+      ] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect(out[0].participants[0].level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+      expect(out[0].participants[1].level).toBeNull();
+    });
+
+    it('retourne level null pour tous les participants quand aucun rating', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect(out[0].participants.every((p: any) => p.level === null)).toBe(true);
     });
   });
 
