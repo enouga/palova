@@ -29,6 +29,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
     if (!token) return;
     setOptingIn(true);
     try { await api.updateMyProfile({ showInLeaderboard: true }, token); await load(); }
+    catch { /* best-effort : la CTA reste affichée */ }
     finally { setOptingIn(false); }
   };
 
