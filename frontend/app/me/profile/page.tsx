@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MyClubMembership, MyProfile, Sex } from '@/lib/api';
+import { api, assetUrl, MyClubMembership, MyProfile, MyRating, Sex } from '@/lib/api';
+import { LevelBadge } from '@/components/player/LevelBadge';
+import { LevelCalibration } from '@/components/player/LevelCalibration';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
@@ -46,6 +48,11 @@ export default function MyProfilePage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Niveau padel
+  const [rating, setRating] = useState<MyRating | null>(null);
+  const [calibrating, setCalibrating] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
+
   // Préférences & licence
   const [savingLocale, setSavingLocale] = useState(false);
   const [license, setLicense] = useState('');
@@ -64,6 +71,7 @@ export default function MyProfilePage() {
         setPhone(p.phone ?? '');
         setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
         setSex(p.sex);
+        api.getMyRating(token).then(setRating).catch(() => {});
         if (slug) {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
@@ -102,6 +110,18 @@ export default function MyProfilePage() {
       setSavedLicense(true);
     } catch (e) { setError((e as Error).message); }
     finally { setSavingLicense(false); }
+  };
+
+  const handleCalibrate = async (selfLevel: number | null) => {
+    if (!token) return;
+    setRatingBusy(true);
+    try {
+      const r = await api.calibrateRating(selfLevel, token);
+      setRating(r);
+      setCalibrating(false);
+    } finally {
+      setRatingBusy(false);
+    }
   };
 
   const pickAvatar = async (file: File | undefined) => {
@@ -205,6 +225,22 @@ export default function MyProfilePage() {
                 {readonlyRow('Email', profile.email)}
                 <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’email ne peut pas être modifié.</span>
               </div>
+            </section>
+
+            {/* Niveau padel */}
+            <section style={card} aria-label="Mon niveau padel">
+              <div style={cardTitle}>Mon niveau padel</div>
+              {rating && !calibrating ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <LevelBadge rating={rating} />
+                  <button type="button" onClick={() => setCalibrating(true)}
+                    style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                    Réévaluer
+                  </button>
+                </div>
+              ) : (
+                <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
+              )}
             </section>
 
             {/* Informations modifiables */}
