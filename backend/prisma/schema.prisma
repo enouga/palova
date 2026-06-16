@@ -131,6 +131,20 @@ enum StripeAccountStatus {
   RESTRICTED  // Stripe a restreint le compte
 }
 
+/// Pages de contenu éditable d'un club (une seule par type, cf. @@unique([clubId, kind])).
+enum ClubPageKind {
+  CGV              // conditions générales de vente
+  MENTIONS_LEGALES // mentions légales (auto-générables depuis l'identité légale)
+  CONFIDENTIALITE  // politique de confidentialité / RGPD
+  OFFRES           // « Nos offres » (page commerciale publique)
+}
+
+/// Provenance du contenu d'une page : encore le modèle Palova, ou édité par le club.
+enum ClubPageSource {
+  TEMPLATE // contenu issu du modèle Palova, non encore personnalisé
+  CUSTOM   // contenu édité par le club
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -193,6 +207,15 @@ model Club {
   stripeAccountStatus    StripeAccountStatus @default(NONE) @map("stripe_account_status")
   requireOnlinePayment   Boolean             @default(false) @map("require_online_payment")
   requireCardFingerprint Boolean             @default(false) @map("require_card_fingerprint")
+  // Identité légale du club (marchand Stripe Connect distinct) : alimente les mentions
+  // légales auto-générées et les modèles de CGV/confidentialité. Tous optionnels.
+  legalEntityName     String? @map("legal_entity_name")     // raison sociale
+  legalForm           String? @map("legal_form")            // SARL, SAS, association loi 1901…
+  siret               String? @map("siret")
+  vatNumber           String? @map("vat_number")            // TVA intracommunautaire
+  legalRepresentative String? @map("legal_representative")  // directeur de la publication
+  legalEmail          String? @map("legal_email")
+  legalPhone          String? @map("legal_phone")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
@@ -209,8 +232,47 @@ model Club {
   slugAliases      ClubSlugAlias[]
   counters         ClubCounter[]
   stripeCustomers  ClubStripeCustomer[]
+  pages            ClubPage[]
+  faqItems         ClubFaqItem[]
 
   @@map("clubs")
+}
+
+/// Page de contenu éditable par le club (CGV, mentions légales, confidentialité, offres).
+/// Une seule par type ; pré-remplissable depuis un modèle Palova, puis personnalisable.
+model ClubPage {
+  id           String         @id @default(cuid())
+  clubId       String         @map("club_id")
+  kind         ClubPageKind
+  bodyMarkdown String         @map("body_markdown")
+  published    Boolean        @default(false)
+  source       ClubPageSource @default(CUSTOM)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, kind])
+  @@index([clubId])
+  @@map("club_pages")
+}
+
+/// Question/réponse propre à un club, fusionnée au socle commun Palova côté lecture publique.
+model ClubFaqItem {
+  id             String   @id @default(cuid())
+  clubId         String   @map("club_id")
+  question       String
+  answerMarkdown String   @map("answer_markdown")
+  category       String?  // libellé de rubrique (regroupement d'affichage)
+  sortOrder      Int      @default(0) @map("sort_order")
+  published      Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@map("club_faq_items")
 }
 
 /// Ancien slug d'un club, conservé à vie : <alias>.palova.fr redirige (308) vers le slug actuel.

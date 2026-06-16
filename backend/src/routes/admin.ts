@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-import { Prisma } from '@prisma/client';
+import { Prisma, ClubPageKind } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
@@ -18,6 +18,7 @@ import { PackageService } from '../services/package.service';
 import { RefundService } from '../services/refund.service';
 import { AccountingService } from '../services/accounting.service';
 import { StripeService } from '../services/stripe.service';
+import { ClubPageService } from '../services/clubPage.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -31,6 +32,9 @@ const eventService = new EventService();
 const packageService = new PackageService();
 const refundService = new RefundService();
 const accountingService = new AccountingService();
+const clubPageService = new ClubPageService();
+
+const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
 // Upload du logo partenaire en mémoire (2 Mo max) ; mêmes formats que l'avatar.
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -70,6 +74,8 @@ const ERROR_STATUS: Record<string, number> = {
   CARD_DECLINED:          402,
   NO_CARD_ON_FILE:        422,
   STRIPE_ERROR:           500,
+  PAGE_NOT_FOUND:         404,
+  FAQ_ITEM_NOT_FOUND:     404,
 };
 
 function asString(v: unknown): string {
@@ -106,6 +112,70 @@ router.patch('/', async (req: ClubScopedRequest, res: Response, next: NextFuncti
     const club = await clubService.updateClub(req.membership!.clubId, req.body);
     res.json(club);
   } catch (err) { handleError(err, res, next); }
+});
+
+// --- Pages de contenu (CGV, mentions légales, confidentialité, offres) ---
+
+router.get('/pages', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubPageService.listAdminPages(req.membership!.clubId)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Modèle Palova pré-rempli pour un type (pré-remplir / réinitialiser l'éditeur).
+router.get('/pages/:kind/template', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const kind = asString(req.params.kind).toUpperCase() as ClubPageKind;
+    if (!PAGE_KINDS.has(kind)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    const bodyMarkdown = await clubPageService.renderTemplate(req.membership!.clubId, kind);
+    res.json({ bodyMarkdown });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.put('/pages/:kind', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const kind = asString(req.params.kind).toUpperCase() as ClubPageKind;
+    if (!PAGE_KINDS.has(kind)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    const { bodyMarkdown, published } = req.body;
+    res.json(await clubPageService.upsertPage(req.membership!.clubId, kind, { bodyMarkdown, published }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- FAQ propre au club ---
+
+router.get('/faq', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubPageService.listAdminFaq(req.membership!.clubId)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+router.post('/faq', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { question, answerMarkdown, category } = req.body;
+    res.status(201).json(await clubPageService.createFaqItem(req.membership!.clubId, { question, answerMarkdown, category }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Réordonne — placé AVANT /faq/:id pour ne pas être capturé.
+router.patch('/faq/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || !orderedIds.every((x) => typeof x === 'string')) {
+      return void res.status(400).json({ error: 'orderedIds (string[]) requis' });
+    }
+    await clubPageService.reorderFaq(req.membership!.clubId, orderedIds);
+    res.json(await clubPageService.listAdminFaq(req.membership!.clubId));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.patch('/faq/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { question, answerMarkdown, category, published } = req.body;
+    res.json(await clubPageService.updateFaqItem(asString(req.params.id), req.membership!.clubId, { question, answerMarkdown, category, published }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/faq/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await clubPageService.deleteFaqItem(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); }
+  catch (err) { handleError(err, res, next); }
 });
 
 // --- Sports activés ---

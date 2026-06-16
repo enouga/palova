@@ -220,3 +220,45 @@ describe('ClubService — updateClub heures d\'ouverture', () => {
     expect(arg.data.memberReleaseHour).toBeUndefined();
   });
 });
+
+describe('ClubService — updateClub identité légale', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('écrit les champs d\'identité légale (trim) et ignore les absents', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', {
+      legalEntityName: '  Padel Arena SAS  ',
+      siret: ' 12345678900012 ',
+      legalEmail: '  contact@arena.fr ',
+    });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.legalEntityName).toBe('Padel Arena SAS');
+    expect(arg.data.siret).toBe('12345678900012');
+    expect(arg.data.legalEmail).toBe('contact@arena.fr');
+    expect(arg.data.legalForm).toBeUndefined();
+    expect(arg.data.vatNumber).toBeUndefined();
+    expect(arg.data.legalRepresentative).toBeUndefined();
+    expect(arg.data.legalPhone).toBeUndefined();
+  });
+
+  it('vide un champ d\'identité légale passé en chaîne vide (→ null)', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { legalPhone: '   ' });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.legalPhone).toBeNull();
+  });
+
+  it('getClubForAdmin sélectionne les champs d\'identité légale', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
+    expect(arg.select.legalEntityName).toBe(true);
+    expect(arg.select.legalForm).toBe(true);
+    expect(arg.select.siret).toBe(true);
+    expect(arg.select.vatNumber).toBe(true);
+    expect(arg.select.legalRepresentative).toBe(true);
+    expect(arg.select.legalEmail).toBe(true);
+    expect(arg.select.legalPhone).toBe(true);
+  });
+});

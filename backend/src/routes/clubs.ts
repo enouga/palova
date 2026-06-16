@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { ClubPageKind } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { ClubService } from '../services/club.service';
+import { ClubPageService } from '../services/clubPage.service';
 import { AvailabilityService } from '../services/availability.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
@@ -14,7 +16,10 @@ import { prisma } from '../db/prisma';
 
 const router = Router();
 const clubService = new ClubService();
+const clubPageService = new ClubPageService();
 const availabilityService = new AvailabilityService();
+
+const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 const announcementService = new AnnouncementService();
 const sponsorService = new SponsorService();
 const tournamentService = new TournamentService();
@@ -27,6 +32,7 @@ const ERROR_STATUS: Record<string, number> = {
   SLUG_RESERVED:         400,
   SLUG_TAKEN:            409,
   CLUB_NOT_FOUND:        404,
+  PAGE_NOT_FOUND:        404,
   MEMBERSHIP_REQUIRED:   403,
   MEMBERSHIP_BLOCKED:    403,
   RESERVATION_NOT_FOUND: 404,
@@ -134,6 +140,21 @@ router.get('/:slug/tournaments', async (req, res, next) => {
 router.get('/:slug/events', async (req, res, next) => {
   try { res.json(await eventService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// FAQ publique : socle Palova interpolé + items publiés du club.
+router.get('/:slug/faq', async (req, res, next) => {
+  try { res.json(await clubPageService.getPublicFaq(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Page de contenu publiée (CGV, mentions légales, confidentialité, offres).
+router.get('/:slug/pages/:kind', async (req, res, next) => {
+  try {
+    const kind = asString(req.params.kind).toUpperCase() as ClubPageKind;
+    if (!PAGE_KINDS.has(kind)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await clubPageService.getPublicPage(asString(req.params.slug), kind));
+  } catch (err) { handleError(err, res, next); }
 });
 
 // Recherche de membres du club par nom (réservé aux membres ; pour choisir un coéquipier de tournoi).

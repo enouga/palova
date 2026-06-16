@@ -180,6 +180,8 @@ export class ClubService {
         stripeAccountStatus: true,
         requireOnlinePayment: true,
         requireCardFingerprint: true,
+        legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
+        legalRepresentative: true, legalEmail: true, legalPhone: true,
       },
     });
   }
@@ -200,10 +202,19 @@ export class ClubService {
     refundOnCancelWithinCutoff?: boolean;
     requireOnlinePayment?: boolean;
     requireCardFingerprint?: boolean;
+    legalEntityName?: string;
+    legalForm?: string;
+    siret?: string;
+    vatNumber?: string;
+    legalRepresentative?: string;
+    legalEmail?: string;
+    legalPhone?: string;
   }) {
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
     const VALID_RELEASE_MODES = new Set(['DAY_AT_HOUR', 'ROLLING_SLOT', 'WINDOW_SHIFT']);
+    // Champ d'identité légale : on trim, et une chaîne vide efface le champ (null).
+    const legal = (v: string | undefined) => (v === undefined ? undefined : (v.trim() || null));
     return prisma.club.update({
       where: { id: clubId },
       data: {
@@ -229,6 +240,13 @@ export class ClubService {
         ...(typeof params.refundOnCancelWithinCutoff === 'boolean' ? { refundOnCancelWithinCutoff: params.refundOnCancelWithinCutoff } : {}),
         ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
+        ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),
+        ...(params.legalForm !== undefined ? { legalForm: legal(params.legalForm) } : {}),
+        ...(params.siret !== undefined ? { siret: legal(params.siret) } : {}),
+        ...(params.vatNumber !== undefined ? { vatNumber: legal(params.vatNumber) } : {}),
+        ...(params.legalRepresentative !== undefined ? { legalRepresentative: legal(params.legalRepresentative) } : {}),
+        ...(params.legalEmail !== undefined ? { legalEmail: legal(params.legalEmail) } : {}),
+        ...(params.legalPhone !== undefined ? { legalPhone: legal(params.legalPhone) } : {}),
       },
     });
   }
