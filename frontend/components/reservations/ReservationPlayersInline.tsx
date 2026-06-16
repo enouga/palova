@@ -53,6 +53,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
         players={participants.map((p) => ({
           userId: p.userId, firstName: p.firstName, lastName: p.lastName,
           avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id,
+          level: p.level,
         }))}
         spotsLeft={spotsLeft}
         size="sm"

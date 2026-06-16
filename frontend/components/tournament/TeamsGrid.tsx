@@ -5,6 +5,7 @@ import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 import { colorForSeed } from '@/lib/playerColors';
+import { LevelChip } from '@/components/player/LevelChip';
 
 // Grille publique des binômes inscrits : cartes avec avatars, section Confirmés
 // puis Liste d'attente (position = ordre d'inscription garanti par le backend).
@@ -60,8 +61,10 @@ function TeamCard({ team, index, mine }: { team: TournamentParticipant; index: n
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, lineHeight: 1.3 }}>
           {team.captain.firstName} {team.captain.lastName}
+          <LevelChip level={team.captainLevel} size="xs" />
           <span style={{ color: th.textFaint, fontWeight: 400 }}> &amp; </span>
           {team.partner.firstName} {team.partner.lastName}
+          <LevelChip level={team.partnerLevel} size="xs" />
         </div>
         {badges > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>

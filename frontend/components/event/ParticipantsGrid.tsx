@@ -5,6 +5,7 @@ import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 import { colorForSeed } from '@/lib/playerColors';
+import { LevelChip } from '@/components/player/LevelChip';
 
 // Grille publique des inscrits d'un event (inscription individuelle) :
 // section Confirmés puis Liste d'attente (position = ordre d'inscription backend).
@@ -56,8 +57,9 @@ function ParticipantCard({ reg, index, mine }: { reg: EventParticipant; index: n
         <Avatar firstName={reg.user.firstName} lastName={reg.user.lastName} avatarUrl={reg.user.avatarUrl} size={34} color={c} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
           {reg.user.firstName} {reg.user.lastName}
+          <LevelChip level={reg.level} size="xs" />
         </div>
         {badges > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>

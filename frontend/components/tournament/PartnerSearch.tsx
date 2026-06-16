@@ -1,14 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, ClubMemberSearchResult } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { LevelChip } from '@/components/player/LevelChip';
 
 // Annuaire du club : recherche d'un coéquipier par nom (membres actifs uniquement).
 export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect }: {
   slug: string;
   token: string;
-  selected: { id: string; firstName: string; lastName: string } | null;
-  onSelect: (m: { id: string; firstName: string; lastName: string }) => void;
+  selected: ClubMemberSearchResult | null;
+  onSelect: (m: ClubMemberSearchResult) => void;
   onClear: () => void;
   disabled?: boolean;
   /** Ids à masquer des résultats (ex. partenaires déjà ajoutés). */
@@ -18,7 +19,7 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
 }) {
   const { th } = useTheme();
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [results, setResults] = useState<ClubMemberSearchResult[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -56,8 +57,9 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
           {visible.length === 0
             ? <div style={{ padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
             : visible.map((m) => (
-                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
                   {m.firstName} {m.lastName}
+                  <LevelChip level={m.level} size="xs" />
                 </button>
               ))}
         </div>
