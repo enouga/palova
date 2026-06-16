@@ -1,11 +1,12 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubEvent, ClubAvailability } from '@/lib/api';
+import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubEvent, ClubAvailability, OpenMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { effectiveDurations, defaultDuration } from '@/lib/duration';
 import { pickUpcomingSlots, todayISO, addDaysISO } from '@/lib/clubhouse';
 import { mergeAgenda } from '@/lib/events';
+import { recommendMatches } from '@/lib/recommend';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -13,6 +14,7 @@ import { HeroAnnouncement } from '@/components/clubhouse/HeroAnnouncement';
 import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
 import { PartnerOffers } from '@/components/clubhouse/PartnerOffers';
+import { MatchesForYou } from '@/components/clubhouse/MatchesForYou';
 
 function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -30,6 +32,8 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [avail, setAvail] = useState<ClubAvailability[]>([]);
   const [next, setNext] = useState<MyReservation[]>([]);
+  const [openMatches, setOpenMatches] = useState<OpenMatch[]>([]);
+  const [myLevel, setMyLevel] = useState<number | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling] = useState(false);
   // Horloge des countdowns : null au premier rendu (hydration-safe), puis tick chaque minute.
@@ -75,6 +79,8 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     return () => { cancelled = true; };
   }, [club.slug, duration]);
   useEffect(() => { if (ready && token) loadNext(); }, [ready, token, loadNext]);
+  useEffect(() => { if (!token) return; api.getOpenMatches(club.slug, token).then(setOpenMatches).catch(() => setOpenMatches([])); }, [club.slug, token]);
+  useEffect(() => { if (!token) return; api.getMyRating(token).then((r) => setMyLevel(r?.level ?? null)).catch(() => {}); }, [token]);
 
   const cancel = async (r: MyReservation) => {
     if (!token) return;
@@ -94,8 +100,9 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const now = new Date();
   const slots = pickUpcomingSlots(avail, now);
   const nextEvents = mergeAgenda(tournaments, events, now).slice(0, 3);
+  const matchRecos = recommendMatches(openMatches, myLevel, now).slice(0, 3);
 
-  const empty = !hero && slots.length === 0 && nextEvents.length === 0 && restAnn.length === 0 && spons.length === 0 && next.length === 0;
+  const empty = !hero && slots.length === 0 && nextEvents.length === 0 && restAnn.length === 0 && spons.length === 0 && next.length === 0 && matchRecos.length === 0;
 
   return (
     <>
@@ -109,6 +116,13 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
             <SlotsAlaUne slots={slots} timezone={club.timezone} />
             <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} />
           </div>
+        </div>
+      )}
+
+      {/* Parties pour toi : recos à ton niveau, top 3 (le bloc re-filtre en interne) */}
+      {matchRecos.length > 0 && (
+        <div style={{ padding: '22px 20px 0' }}>
+          <MatchesForYou matches={openMatches} myLevel={myLevel} timezone={club.timezone} />
         </div>
       )}
 
