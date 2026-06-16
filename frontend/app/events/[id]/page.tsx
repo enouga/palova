@@ -12,6 +12,7 @@ import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
+import { AboutCard, RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
 import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
@@ -116,35 +117,32 @@ export default function EventDetailPage() {
         <ShareActions item={event} uidPrefix="event" />
         {now && <TournamentTimeline steps={timelineSteps(event, now)} tz={tz} />}
 
-        {event.description && (
-          <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, margin: 0, padding: '18px 20px 0', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{event.description}</p>
-        )}
+        {event.description && <AboutCard text={event.description} />}
 
         <div style={{ padding: '24px 20px 0' }}>
           {error && <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>{error}</div>}
 
           {!token && ready && (
-            <Btn onClick={() => router.push('/login')} icon="user">Se connecter pour s’inscrire</Btn>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Btn onClick={() => router.push('/login')} icon="user">Se connecter pour s’inscrire</Btn>
+            </div>
           )}
           {token && !myReg && !deadlinePassed && (
-            <div>
-              {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 10 }}>Event complet : vous serez placé en liste d’attente.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, textAlign: 'center' }}>Event complet : vous serez placé en liste d’attente.</div>}
               <Btn onClick={() => act(() => api.registerEvent(event.id, token))} disabled={busy} icon="check">
                 {busy ? '…' : full ? 'Rejoindre la liste d’attente' : 'S’inscrire'}
               </Btn>
             </div>
           )}
           {token && myReg && (
-            <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text }}>
-                {myReg.status === 'CONFIRMED'
-                  ? '✅ Vous êtes inscrit.'
-                  : `⏳ Vous êtes en liste d’attente${myWaitlistPos != null ? ` · position n°${myWaitlistPos}` : ''}.`}
-              </span>
+            <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <RegistrationStatus confirmed={myReg.status === 'CONFIRMED'} waitlistPos={myWaitlistPos} />
               {!deadlinePassed ? (
-                <Btn onClick={() => act(() => api.cancelEventRegistration(event.id, token))} disabled={busy} icon="x" variant="ghost">
-                  {busy ? '…' : 'Se désinscrire'}
-                </Btn>
+                <>
+                  <div style={{ height: 1, background: th.line }} />
+                  <LeaveButton onClick={() => act(() => api.cancelEventRegistration(event.id, token))} disabled={busy} label={busy ? '…' : 'Se désinscrire'} />
+                </>
               ) : (
                 <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Inscriptions closes : la désinscription se fait à l’accueil.</span>
               )}

@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { TournamentHero, MetaCards } from '@/components/tournament/TournamentHero';
+import { AboutCard } from '@/components/agenda/RegistrationUI';
 import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { TeamsGrid } from '@/components/tournament/TeamsGrid';
 import { ShareActions } from '@/components/tournament/ShareActions';
@@ -160,9 +161,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         <ShareActions item={t} uidPrefix="tournament" />
         {now && <TournamentTimeline steps={timelineSteps(t, now)} tz={t.club.timezone} />}
 
-        {t.description && (
-          <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: 0, padding: '18px 20px 0', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{t.description}</p>
-        )}
+        {t.description && <AboutCard text={t.description} />}
 
         {t.contactInfo && (
           <div style={{ display: 'flex', gap: 8, padding: '14px 20px 0', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, lineHeight: 1.55 }}>

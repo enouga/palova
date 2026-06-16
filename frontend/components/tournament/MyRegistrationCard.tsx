@@ -1,8 +1,7 @@
 'use client';
 import { MyTournamentRegistration } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
-import { Chip } from '@/components/ui/atoms';
+import { RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
 import { PartnerSearch } from './PartnerSearch';
 
 // Carte « mon inscription » : binôme, statut (+ position en liste d'attente),
@@ -27,11 +26,7 @@ export function MyRegistrationCard({ myReg, profileId, closed, busy, contactInfo
 
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {myReg.status === 'CONFIRMED'
-          ? <Chip tone="accent" icon="check">Inscrit</Chip>
-          : <Chip color={ACCENTS.apricot} icon="clock">{waitlistPos != null ? `Liste d'attente · position n°${waitlistPos}` : "Liste d'attente"}</Chip>}
-      </div>
+      <RegistrationStatus confirmed={myReg.status === 'CONFIRMED'} waitlistPos={waitlistPos} />
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[
           { p: myReg.captain, lic: myReg.captainLicense, role: 'Capitaine' },
@@ -53,7 +48,8 @@ export function MyRegistrationCard({ myReg, profileId, closed, busy, contactInfo
           <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 16, marginBottom: 6 }}>Changer de coéquipier</div>
           <PartnerSearch key="change-partner-search" slug={slug} token={token} selected={partner} onSelect={onSelectPartner} onClear={onClearPartner} disabled={busy} />
           <button onClick={onChangePartner} disabled={busy || !partner} style={{ ...primaryBtn, marginTop: 8 }}>Changer de coéquipier</button>
-          <button onClick={onCancel} disabled={busy} style={{ marginTop: 12, marginLeft: 10, border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, cursor: 'pointer', borderRadius: 11, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5 }}>Se désinscrire</button>
+          <div style={{ height: 1, background: th.line, margin: '16px 0 14px' }} />
+          <LeaveButton onClick={onCancel} disabled={busy} />
         </>
       ) : (
         <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 12 }}>
