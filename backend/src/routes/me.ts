@@ -182,6 +182,25 @@ router.get('/rating', authMiddleware, async (req: AuthRequest, res: Response, ne
   }
 });
 
+// Historique des matchs du joueur connecté.
+router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const rows = await prisma.matchPlayer.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { match: { playedAt: 'desc' } },
+      select: {
+        confirmation: true, team: true, ratingAfter: true,
+        match: { select: { id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true } },
+      },
+    });
+    res.json(rows.map((r) => ({
+      matchId: r.match.id, status: r.match.status, sets: r.match.sets, playedAt: r.match.playedAt,
+      winningTeam: r.match.winningTeam, myTeam: r.team, myConfirmation: r.confirmation,
+      needsMyConfirmation: r.match.status === 'PENDING' && r.confirmation === 'PENDING',
+    })));
+  } catch (err) { next(err); }
+});
+
 // Auto-évaluation du niveau. selfLevel 1–8, ou null pour « passer » (départ neutre).
 router.post('/rating/calibrate', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

@@ -1,9 +1,12 @@
 import { Router, Response, NextFunction } from 'express';
 import { ReservationService } from '../services/reservation.service';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { MatchService } from '../services/match.service';
+import { matchError } from './matches';
 
 const router = Router();
 const reservationService = new ReservationService();
+const matchService = new MatchService();
 
 const ERROR_STATUS: Record<string, number> = {
   SLOT_ALREADY_HELD:        409,
@@ -118,6 +121,15 @@ router.delete('/:id/players/:participantId', authMiddleware, async (req: AuthReq
   try {
     res.json(await reservationService.removeOwnReservationParticipant(asString(req.params.id), req.user!.id, asString(req.params.participantId)));
   } catch (err) { handleError(err, res, next); }
+});
+
+// Saisie du résultat d'un match depuis une réservation de terrain.
+router.post('/:id/match', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { teams, sets } = req.body;
+    const match = await matchService.createFromReservation(asString(req.params.id), req.user!.id, { teams, sets, now: new Date() });
+    res.status(201).json({ id: match.id, status: match.status });
+  } catch (err) { matchError(err, res, next); }
 });
 
 export default router;
