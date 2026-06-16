@@ -47,6 +47,9 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM}
+      # Stripe Connect (charges directes sur les comptes connectés des clubs).
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
     volumes:
       # Fichiers uploadés (avatars) — sans volume, perdus à chaque rebuild.
       - backend_uploads:/app/uploads
@@ -65,6 +68,8 @@ services:
         # Multi-domaines : 1re entrée = racine canonique. Le domaine de cookie est
         # désormais calculé au runtime selon l'hôte visité (plus de COOKIE_DOMAIN).
         NEXT_PUBLIC_ROOT_DOMAINS: palova.fr,palova.app
+        # Clé publique Stripe — GELÉE au build (NEXT_PUBLIC_*) → rebuild front obligatoire si elle change.
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
     restart: unless-stopped
     environment:
       NODE_ENV: production
