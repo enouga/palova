@@ -3,6 +3,8 @@ import { Fragment } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
+import { UserLevel } from '@/lib/api';
+import { LevelChip } from './LevelChip';
 
 export interface PlayerPillData {
   userId: string;
@@ -11,6 +13,7 @@ export interface PlayerPillData {
   avatarUrl?: string | null;
   isOrganizer?: boolean;
   participantId?: string;
+  level?: UserLevel | null;
 }
 
 // Rangée de pastilles de joueurs façon Parties ouvertes : avatar coloré (couleur par userId),
@@ -44,6 +47,7 @@ export function PlayerPills({
           }}>
             <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl ?? null} size={av} color={c} />
             {p.firstName} {p.lastName}
+            <LevelChip level={p.level} size="xs" />
             {showOrgaBadge && p.isOrganizer && (
               <span style={{ fontSize: 10, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3 }}>orga</span>
             )}

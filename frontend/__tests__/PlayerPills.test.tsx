@@ -42,4 +42,18 @@ describe('PlayerPills', () => {
     expect(screen.getByText('Ajouter')).toBeInTheDocument();
     expect(screen.getAllByText('Place libre')).toHaveLength(1);
   });
+
+  it('affiche la pastille de niveau quand level est présent', () => {
+    render(<ThemeProvider><PlayerPills players={[
+      { userId: 'u1', firstName: 'A', lastName: 'A', level: { level: 4.2, tier: 'Intermédiaire', isProvisional: false } },
+    ]} /></ThemeProvider>);
+    expect(screen.getByText('4.2')).toBeInTheDocument();
+  });
+
+  it('pas de pastille sans level', () => {
+    render(<ThemeProvider><PlayerPills players={[
+      { userId: 'u2', firstName: 'B', lastName: 'B' },
+    ]} /></ThemeProvider>);
+    expect(screen.queryByText(/^\d\.\d$/)).toBeNull();
+  });
 });
