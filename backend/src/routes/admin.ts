@@ -19,6 +19,7 @@ import { RefundService } from '../services/refund.service';
 import { AccountingService } from '../services/accounting.service';
 import { StripeService } from '../services/stripe.service';
 import { ClubPageService } from '../services/clubPage.service';
+import { MatchService } from '../services/match.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -33,6 +34,7 @@ const packageService = new PackageService();
 const refundService = new RefundService();
 const accountingService = new AccountingService();
 const clubPageService = new ClubPageService();
+const matchService = new MatchService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -709,6 +711,36 @@ router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, r
     });
 
     res.status(201).json({ paymentId: payment.id, stripePaymentIntentId: piId });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- File des litiges de matchs ---
+
+router.get('/matches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const where: { clubId: string; status?: any } = { clubId: asString(req.params.clubId) };
+    if (status) where.status = status;
+    const matches = await prisma.match.findMany({
+      where, orderBy: { playedAt: 'desc' },
+      select: {
+        id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true,
+        players: { select: { userId: true, team: true, confirmation: true, user: { select: { firstName: true, lastName: true } } } },
+      },
+    });
+    res.json(matches);
+  } catch (err) { next(err); }
+});
+
+router.post('/matches/:matchId/resolve', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { action, sets } = req.body;
+    if (action !== 'VALIDATE' && action !== 'CANCEL') {
+      res.status(400).json({ error: 'VALIDATION_ERROR' });
+      return;
+    }
+    await matchService.resolveDispute(asString(req.params.matchId), action, sets);
+    res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
 });
 
