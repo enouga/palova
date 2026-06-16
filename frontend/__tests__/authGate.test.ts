@@ -20,4 +20,10 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/clubs')).toBe(false);
     expect(isPublicPath('/clubs/new')).toBe(true);
   });
+
+  it('autorise les pages de contenu public (légales, FAQ, offres, tarifs)', () => {
+    for (const p of ['/faq', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs']) {
+      expect(isPublicPath(p)).toBe(true);
+    }
+  });
 });

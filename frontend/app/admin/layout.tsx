@@ -75,6 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/members',      label: 'Membres',         icon: 'users' as const },
     { href: '/admin/announcements', label: 'Annonces',       icon: 'bolt' as const },
     { href: '/admin/sponsors',     label: 'Partenaires',     icon: 'users' as const },
+    { href: '/admin/pages',        label: 'Contenu & mentions', icon: 'info' as const },
     { href: '/admin/settings',     label: 'Réglages',        icon: 'settings' as const },
   ];
 

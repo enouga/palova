@@ -4,6 +4,7 @@ import { permanentRedirect } from 'next/navigation';
 import { Geist, Geist_Mono, Righteous } from 'next/font/google';
 import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
+import { Footer } from '@/components/Footer';
 import { api } from '@/lib/api';
 import { CANONICAL_ROOT } from '@/lib/roots';
 
@@ -75,7 +76,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} ${righteous.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ClubProvider slug={slug}>{children}</ClubProvider>
+        <ClubProvider slug={slug}>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <div style={{ flex: '1 0 auto' }}>{children}</div>
+            <Footer />
+          </div>
+        </ClubProvider>
       </body>
     </html>
   );

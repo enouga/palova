@@ -473,6 +473,31 @@ export const api = {
     request<Sport[]>('/api/platform/sports', {}, token),
   platformSetSportPublished: (id: string, published: boolean, token: string) =>
     request<Sport>(`/api/platform/sports/${id}`, { method: 'PATCH', body: JSON.stringify({ published }) }, token),
+
+  // --- Contenu club : pages (CGV, mentions, confidentialité, offres) & FAQ ---
+  // Public
+  getClubFaq: (slug: string) => request<PublicClubFaq>(`/api/clubs/${slug}/faq`),
+  getClubPage: (slug: string, kind: ClubPageKind) => request<PublicClubPage>(`/api/clubs/${slug}/pages/${kind}`),
+
+  // Back-office : pages
+  adminGetPages: (clubId: string, token: string) =>
+    request<AdminClubPage[]>(`/api/clubs/${clubId}/admin/pages`, {}, token),
+  adminGetPageTemplate: (clubId: string, kind: ClubPageKind, token: string) =>
+    request<{ bodyMarkdown: string }>(`/api/clubs/${clubId}/admin/pages/${kind}/template`, {}, token),
+  adminPutPage: (clubId: string, kind: ClubPageKind, body: PutPageBody, token: string) =>
+    request<AdminClubPage>(`/api/clubs/${clubId}/admin/pages/${kind}`, { method: 'PUT', body: JSON.stringify(body) }, token),
+
+  // Back-office : FAQ
+  adminGetFaq: (clubId: string, token: string) =>
+    request<AdminFaqItem[]>(`/api/clubs/${clubId}/admin/faq`, {}, token),
+  adminCreateFaq: (clubId: string, body: FaqItemBody, token: string) =>
+    request<AdminFaqItem>(`/api/clubs/${clubId}/admin/faq`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminUpdateFaq: (clubId: string, id: string, body: FaqItemBody, token: string) =>
+    request<AdminFaqItem>(`/api/clubs/${clubId}/admin/faq/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  adminDeleteFaq: (clubId: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/faq/${id}`, { method: 'DELETE' }, token),
+  adminReorderFaq: (clubId: string, orderedIds: string[], token: string) =>
+    request<AdminFaqItem[]>(`/api/clubs/${clubId}/admin/faq/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
 };
 
 // --- Types ---
@@ -760,7 +785,50 @@ export interface ClubAdminDetail {
   stripeAccountStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  legalEntityName: string | null;
+  legalForm: string | null;
+  siret: string | null;
+  vatNumber: string | null;
+  legalRepresentative: string | null;
+  legalEmail: string | null;
+  legalPhone: string | null;
 }
+
+// --- Contenu club (pages légales/offres + FAQ) ---
+
+export type ClubPageKind = 'CGV' | 'MENTIONS_LEGALES' | 'CONFIDENTIALITE' | 'OFFRES';
+
+export interface PublicClubPage {
+  kind: ClubPageKind;
+  bodyMarkdown: string;
+  updatedAt: string;
+}
+
+export interface FaqEntry { id: string; category: string; question: string; answer: string }
+export interface PublicClubFaq {
+  socle: FaqEntry[];
+  custom: { id: string; category: string | null; question: string; answer: string }[];
+}
+
+export interface AdminClubPage {
+  kind: ClubPageKind;
+  bodyMarkdown: string;
+  published: boolean;
+  source: 'TEMPLATE' | 'CUSTOM';
+  updatedAt: string;
+}
+
+export interface AdminFaqItem {
+  id: string;
+  question: string;
+  answerMarkdown: string;
+  category: string | null;
+  sortOrder: number;
+  published: boolean;
+}
+
+export type PutPageBody = { bodyMarkdown: string; published?: boolean };
+export type FaqItemBody = Partial<{ question: string; answerMarkdown: string; category: string | null; published: boolean }>;
 
 // Quotas de réservations COURT par joueur (réglage club, null = désactivé).
 // UPCOMING = résas à venir simultanées ; WEEKLY = semaine calendaire lun-dim.
@@ -795,6 +863,13 @@ export type UpdateClubBody = Partial<{
   refundOnCancelWithinCutoff: boolean;
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  legalEntityName: string;
+  legalForm: string;
+  siret: string;
+  vatNumber: string;
+  legalRepresentative: string;
+  legalEmail: string;
+  legalPhone: string;
 }>;
 
 // --- Types back-office ---

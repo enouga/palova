@@ -1,5 +1,9 @@
-// Chemins accessibles sans être connecté (portes d'entrée de l'app).
-export const PUBLIC_PATHS = ['/login', '/register', '/clubs/new'];
+// Chemins accessibles sans être connecté (portes d'entrée de l'app + pages de
+// contenu public : légales, FAQ, offres/tarifs — lisibles par tout visiteur).
+export const PUBLIC_PATHS = [
+  '/login', '/register', '/clubs/new',
+  '/faq', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs',
+];
 
 /** true si le chemin est public (exact ou sous-chemin d'un PUBLIC_PATHS). */
 export function isPublicPath(pathname: string): boolean {
