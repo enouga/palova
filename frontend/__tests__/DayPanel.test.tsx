@@ -120,4 +120,31 @@ describe('DayPanel', () => {
     expect(screen.queryByRole('button', { name: 'Déplacer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
   });
+
+  it('affiche les pastilles joueurs et les places libres pour une réservation', () => {
+    const future = new Date(Date.now() + 48 * 3600e3).toISOString();
+    const resWithPlayers: MyReservation = {
+      id: 'res-pills',
+      startTime: future,
+      endTime: future,
+      status: 'CONFIRMED',
+      totalPrice: '25',
+      capacity: 4,
+      participants: [
+        { id: 'p1', userId: 'u-org',  firstName: 'Org',  lastName: 'A',       avatarUrl: null, isOrganizer: true },
+        { id: 'p2', userId: 'u-emma', firstName: 'Emma', lastName: 'Bernard', avatarUrl: null, isOrganizer: false },
+      ],
+      resource: { id: 'court-1', name: 'Terrain 2', club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris' } },
+    };
+    renderPanel({
+      entries: buildCalendarEntries([resWithPlayers], [], [], NOW),
+      dayKey: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(future)),
+      localSlug: 'bordeaux-pala',
+      onManagePlayers: jest.fn(),
+    });
+    expect(screen.getByText('Terrain 2')).toBeInTheDocument();
+    expect(screen.getByText('Org A')).toBeInTheDocument();
+    expect(screen.getByText('Emma Bernard')).toBeInTheDocument();
+    expect(screen.getAllByText('Place libre')).toHaveLength(2);
+  });
 });

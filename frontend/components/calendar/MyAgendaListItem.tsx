@@ -8,6 +8,7 @@ import { MyReservation } from '@/lib/api';
 import { isCancellationOpen } from '@/lib/reservations';
 import { clubUrl } from '@/lib/clubUrl';
 import { KIND_LABEL } from '@/lib/events';
+import { PlayerPills } from '@/components/player/PlayerPills';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -72,6 +73,15 @@ export function MyAgendaListItem({ item, now, localSlug, onCancel, onManagePlaye
             </span>
           ))}
         </div>
+        {(r.participants?.length ?? 0) > 0 && (
+          <div style={{ marginTop: 9 }}>
+            <PlayerPills
+              players={r.participants ?? []}
+              spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))}
+              size="sm"
+            />
+          </div>
+        )}
       </>
     );
   } else if (item.kind === 'tournament') {
