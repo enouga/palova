@@ -280,6 +280,11 @@ describe('OpenMatchService', () => {
       mockNotifyAdded.mockRejectedValue(new Error('SMTP down'));
       await expect(service.addOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3')).resolves.toBeDefined();
     });
+
+    it('lève VALIDATION_ERROR si targetUserId est vide ou absent', async () => {
+      await expect(service.addOpenMatchPlayer('club-demo', 'm1', 'org', '')).rejects.toThrow('VALIDATION_ERROR');
+      expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('removeOpenMatchPlayer', () => {

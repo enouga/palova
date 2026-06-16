@@ -169,9 +169,11 @@ export class OpenMatchService {
    * Miroir du join : transaction Serializable + FOR UPDATE, recalcul des parts, notif best-effort.
    */
   async addOpenMatchPlayer(slug: string, reservationId: string, organizerUserId: string, targetUserId: string) {
+    if (!targetUserId || typeof targetUserId !== 'string') throw new Error('VALIDATION_ERROR');
+
     const club = await this.resolveActiveMember(slug, organizerUserId);
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
         SELECT status, visibility, start_time, resource_id, total_price FROM reservations WHERE id = ${reservationId} FOR UPDATE
       `;
@@ -198,6 +200,7 @@ export class OpenMatchService {
       if (!targetMembership) throw new Error('MEMBERSHIP_REQUIRED');
       if (targetMembership.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
 
+      // ALREADY_JOINED avant MATCH_FULL (diagnostic plus clair quand la cible est déjà présente).
       if (parts.some((p) => p.userId === targetUserId)) throw new Error('ALREADY_JOINED');
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
 
@@ -206,10 +209,11 @@ export class OpenMatchService {
       });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
+      return { id: reservationId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
     await this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
-    return { id: reservationId };
+    return result;
   }
 
   /** Quitter une partie ouverte (départ volontaire) — délègue au retrait unifié. */
