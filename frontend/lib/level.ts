@@ -17,3 +17,9 @@ export const LEVEL_TIERS: LevelTier[] = [
   { level: 7, name: 'Expert',            blurb: "Je maîtrise tactique et coups appuyés (bandeja, vibora), bonne contre-attaque." },
   { level: 8, name: 'Élite',             blurb: "Niveau compétition national (P1000/P1500/P2000)." },
 ];
+
+/** Palier correspondant à un niveau 0–8 décimal (arrondi au plus proche, borné 1–8). */
+export function tierForLevel(level: number): LevelTier {
+  const idx = Math.max(1, Math.min(8, Math.round(level)));
+  return LEVEL_TIERS[idx - 1];
+}
