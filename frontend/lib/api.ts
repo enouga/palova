@@ -158,6 +158,8 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'DELETE' }, token),
   removeOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
+  addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
 
   // --- Back-office club (scopé par clubId) ---
   adminGetClub: (clubId: string, token: string) =>
