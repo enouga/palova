@@ -117,4 +117,24 @@ describe('OpenMatches', () => {
     expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ajouter un joueur/ })).not.toBeInTheDocument();
   });
+
+  it('met les parties à mon niveau dans « Pour toi » et les retire des « Autres »', async () => {
+    const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+    // myLevel = 5 ; une partie ciblée niveau 5 (recommandée) + une hors fourchette (niveau 1-2)
+    mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'reco', resourceName: 'Court A', startTime: at(2), endTime: at(3), players: [], targetLevelMin: 5, targetLevelMax: 5 }),
+      match({ id: 'other', resourceName: 'Court B', startTime: at(4), endTime: at(5), players: [], targetLevelMin: 1, targetLevelMax: 2 }),
+    ] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    // « Pour toi » présent et contient Court A ; la section « Autres parties » ne re-liste pas 'reco'.
+    await screen.findByText('Pour toi');
+    expect(screen.getByText('Court A')).toBeInTheDocument();
+    // Court A n'apparaît qu'une fois (dé-dup) :
+    expect(screen.getAllByText('Court A')).toHaveLength(1);
+    // Court B (hors fourchette) reste dans « Autres parties ».
+    expect(screen.getByText('Autres parties')).toBeInTheDocument();
+    expect(screen.getByText('Court B')).toBeInTheDocument();
+  });
 });

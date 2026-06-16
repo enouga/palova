@@ -11,6 +11,7 @@ import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { inRange } from '@/lib/levelMatch';
+import { recommendMatches } from '@/lib/recommend';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -77,6 +78,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     ? matches.filter((m) => inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null))
     : matches;
 
+  // Section « Pour toi » : parties recommandées à mon niveau, retirées de la liste « Autres ».
+  const recommended = recommendMatches(matches, myLevel, new Date());
+  const recoIds = new Set(recommended.map((m) => m.id));
+  const otherMatches = visibleMatches.filter((m) => !recoIds.has(m.id));
+
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
@@ -106,16 +112,44 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
         )}
 
+        {token && recommended.length > 0 && (
+          <div style={{ padding: '14px 20px 0' }}>
+            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Pour toi</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {recommended.map((m) => (
+                <OpenMatchCard
+                  key={m.id} match={m} timezone={club.timezone} slug={club.slug} token={token}
+                  busy={busyId === m.id} addingOpen={addingId === m.id}
+                  onJoin={handleJoin}
+                  onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token))}
+                  onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token))}
+                  onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token)); }}
+                  onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
+                  onCancelAdd={() => setAddingId(null)}
+                  onRecordResult={(mm) => setRecordingFor(mm)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {token && recommended.length > 0 && otherMatches.length > 0 && (
+            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 0 }}>Autres parties</div>
+          )}
           {!ready || loading ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
           ) : !token ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Connectez-vous pour voir les parties ouvertes.</div>
-          ) : visibleMatches.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
-              {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
-            </div>
-          ) : visibleMatches.map((m) => (
+          ) : otherMatches.length === 0 ? (
+            recommended.length > 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Pas d&apos;autre partie ouverte.</div>
+            ) : (
+              <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+                {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
+              </div>
+            )
+          ) : otherMatches.map((m) => (
             <OpenMatchCard
               key={m.id}
               match={m}
