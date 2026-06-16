@@ -15,8 +15,6 @@ import { MonthCalendar } from '@/components/calendar/MonthCalendar';
 import { DayPanel } from '@/components/calendar/DayPanel';
 import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
 import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonths } from '@/lib/calendar';
-import { ManagePlayersModal } from '@/components/reservations/ManagePlayersModal';
-import { isCancellationOpen, isPlayerChangeOpen } from '@/lib/reservations';
 import { toCents, fmtEuros } from '@/lib/caisse';
 
 function fmtDate(iso: string, tz: string): string {
@@ -41,7 +39,6 @@ export default function MyReservationsPage() {
   const [error, setError]     = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
-  const [managePlayers, setManagePlayers] = useState<MyReservation | null>(null);
   const [refundMsg, setRefundMsg] = useState<string | null>(null);
   const [ym, setYm] = useState(() => {
     const [y, m] = todayKey().split('-').map(Number);
@@ -166,8 +163,10 @@ export default function MyReservationsPage() {
                   dayKey={selectedDay}
                   entries={byDay.get(selectedDay) ?? []}
                   localSlug={slug ?? null}
+                  token={token}
+                  now={now ?? Date.now()}
                   onCancel={setConfirmCancel}
-                  onManagePlayers={setManagePlayers}
+                  onPlayersChanged={() => { if (token) load(token); }}
                   onReserve={() => router.push(reserveHref)}
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
                 />
@@ -194,8 +193,9 @@ export default function MyReservationsPage() {
                 item={it}
                 now={now ?? Date.now()}
                 localSlug={slug ?? null}
+                token={token}
                 onCancel={setConfirmCancel}
-                onManagePlayers={setManagePlayers}
+                onPlayersChanged={() => { if (token) load(token); }}
               />
             ))
           )}
@@ -219,15 +219,6 @@ export default function MyReservationsPage() {
           busy={cancelling}
           onConfirm={() => cancel(confirmCancel)}
           onCancel={() => setConfirmCancel(null)}
-        />
-      )}
-      {managePlayers && token && (
-        <ManagePlayersModal
-          reservation={managePlayers}
-          token={token}
-          canEdit={isPlayerChangeOpen(managePlayers, now ?? Date.now())}
-          onClose={() => setManagePlayers(null)}
-          onChanged={() => { if (token) load(token); }}
         />
       )}
     </Screen>

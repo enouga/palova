@@ -57,7 +57,8 @@ function renderPanel(props: Partial<React.ComponentProps<typeof DayPanel>> = {})
     <ThemeProvider>
       <DayPanel
         dayKey="2026-06-12" entries={entries} localSlug={null}
-        onCancel={jest.fn()}
+        token="abc" now={Date.now()}
+        onCancel={jest.fn()} onPlayersChanged={jest.fn()}
         onReserve={jest.fn()} reserveLabel="Réserver un créneau" {...props}
       />
     </ThemeProvider>,
@@ -140,11 +141,12 @@ describe('DayPanel', () => {
       entries: buildCalendarEntries([resWithPlayers], [], [], NOW),
       dayKey: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(future)),
       localSlug: 'bordeaux-pala',
-      onManagePlayers: jest.fn(),
     });
     expect(screen.getByText('Terrain 2')).toBeInTheDocument();
     expect(screen.getByText('Org A')).toBeInTheDocument();
     expect(screen.getByText('Emma Bernard')).toBeInTheDocument();
-    expect(screen.getAllByText('Place libre')).toHaveLength(2);
+    // Édition ouverte : la 1re place libre devient le bouton « Ajouter un joueur », l'autre reste « Place libre ».
+    expect(screen.getByRole('button', { name: /Ajouter un joueur/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Place libre')).toHaveLength(1);
   });
 });

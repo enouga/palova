@@ -9,6 +9,7 @@ import { isCancellationOpen } from '@/lib/reservations';
 import { clubUrl } from '@/lib/clubUrl';
 import { KIND_LABEL } from '@/lib/events';
 import { PlayerPills } from '@/components/player/PlayerPills';
+import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -22,12 +23,13 @@ function fmtDate(iso: string, tz: string): string {
  * `localSlug` = club courant (sous-domaine), ou null sur la plateforme. Une entrée d'un AUTRE club
  * (« étrangère ») devient une carte-lien qui renvoie vers l'app de ce club, sans actions inline.
  */
-export function MyAgendaListItem({ item, now, localSlug, onCancel, onManagePlayers }: {
+export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged }: {
   item: AgendaListItem;
   now: number;
   localSlug: string | null;
+  token: string | null;
   onCancel: (r: MyReservation) => void;
-  onManagePlayers: (r: MyReservation) => void;
+  onPlayersChanged: () => void;
 }) {
   const { th } = useTheme();
   const color = agendaKindMeta(item.kind).color;
@@ -68,12 +70,13 @@ export function MyAgendaListItem({ item, now, localSlug, onCancel, onManagePlaye
           <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
           {isForeign ? goHint : (!item.past && (
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              <button onClick={() => onManagePlayers(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Joueurs</button>
               <button onClick={() => onCancel(r)} disabled={!canCancel} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? '#ff7a4d' : th.textFaint }}>Annuler</button>
             </span>
           ))}
         </div>
-        {(r.participants?.length ?? 0) > 0 && (
+        {!isForeign && !item.past && token ? (
+          <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
+        ) : (r.participants?.length ?? 0) > 0 ? (
           <div style={{ marginTop: 9 }}>
             <PlayerPills
               players={r.participants ?? []}
@@ -81,7 +84,7 @@ export function MyAgendaListItem({ item, now, localSlug, onCancel, onManagePlaye
               size="sm"
             />
           </div>
-        )}
+        ) : null}
       </>
     );
   } else if (item.kind === 'tournament') {

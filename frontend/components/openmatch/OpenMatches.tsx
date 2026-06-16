@@ -9,6 +9,7 @@ import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
+import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -101,12 +102,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                       canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
                       busy={busy}
                       firstSpotSlot={m.viewerIsOrganizer ? (
-                        <button type="button" disabled={busy} aria-label={`Ajouter un joueur à ${m.resourceName}`}
-                          onClick={() => setAddingId((prev) => (prev === m.id ? null : m.id))}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.accent}`, background: 'transparent', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>
-                          <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.accent}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, lineHeight: 1 }}>+</span>
-                          Ajouter un joueur
-                        </button>
+                        <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`}
+                          onClick={() => setAddingId((prev) => (prev === m.id ? null : m.id))} />
                       ) : undefined}
                     />
                   </div>
