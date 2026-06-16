@@ -23,6 +23,7 @@ jest.mock('../lib/api', () => ({
     updateMyClubMembership: jest.fn(),
     uploadMyAvatar: jest.fn(),
     getMyRating: jest.fn().mockResolvedValue(null),
+    getRatingHistory: jest.fn().mockResolvedValue([]),
     calibrateRating: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),

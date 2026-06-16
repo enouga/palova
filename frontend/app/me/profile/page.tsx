@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MyClubMembership, MyProfile, MyRating, Sex } from '@/lib/api';
+import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
+import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
@@ -50,6 +51,7 @@ export default function MyProfilePage() {
 
   // Niveau padel
   const [rating, setRating] = useState<MyRating | null>(null);
+  const [history, setHistory] = useState<RatingPoint[]>([]);
   const [calibrating, setCalibrating] = useState(false);
   const [ratingBusy, setRatingBusy] = useState(false);
 
@@ -72,6 +74,7 @@ export default function MyProfilePage() {
         setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
         setSex(p.sex);
         api.getMyRating(token).then(setRating).catch(() => {});
+        api.getRatingHistory(token).then(setHistory).catch(() => {});
         if (slug) {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
@@ -231,13 +234,16 @@ export default function MyProfilePage() {
             <section style={card} aria-label="Mon niveau padel">
               <div style={cardTitle}>Mon niveau padel</div>
               {rating && !calibrating ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <LevelBadge rating={rating} />
-                  <button type="button" onClick={() => setCalibrating(true)}
-                    style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
-                    Réévaluer
-                  </button>
-                </div>
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <LevelBadge rating={rating} />
+                    <button type="button" onClick={() => setCalibrating(true)}
+                      style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                      Réévaluer
+                    </button>
+                  </div>
+                  {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
+                </>
               ) : (
                 <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
               )}
