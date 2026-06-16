@@ -16,6 +16,8 @@ jest.mock('../lib/api', () => ({
     joinOpenMatch:    jest.fn().mockResolvedValue({ id: 'm1' }),
     leaveOpenMatch:   jest.fn().mockResolvedValue({ id: 'm1' }),
     removeOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
+    searchClubMembers: jest.fn().mockResolvedValue([]),
+    addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
   },
 }));
 import { api } from '../lib/api';
@@ -94,5 +96,23 @@ describe('OpenMatches', () => {
 
     expect(await screen.findByText('Emma Bernard')).toBeInTheDocument();
     expect(screen.queryByLabelText('Retirer Emma Bernard')).not.toBeInTheDocument();
+  });
+
+  it('permet à l organisateur d ajouter un joueur sur une place libre', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: true, spotsLeft: 2 })] as never);
+    (mocked.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }]);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un joueur' }));
+    fireEvent.focus(screen.getByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('New Player'));
+    await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
+  });
+
+  it('ne montre pas « Ajouter un joueur » à un non-organisateur', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: false, spotsLeft: 2 })] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ajouter un joueur' })).not.toBeInTheDocument();
   });
 });

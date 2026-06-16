@@ -9,6 +9,7 @@ import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
+import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -36,6 +37,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [error, setError]     = useState('');
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -115,10 +117,19 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                       );
                     })}
                     {Array.from({ length: m.spotsLeft }).map((_, i) => (
-                      <span key={`e${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
-                        <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.lineStrong}` }} />
-                        Place libre
-                      </span>
+                      m.viewerIsOrganizer && i === 0 ? (
+                        <button key="add" type="button" disabled={busy} aria-label="Ajouter un joueur"
+                          onClick={() => setAddingId(addingId === m.id ? null : m.id)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.accent}`, background: 'transparent', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>
+                          <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.accent}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, lineHeight: 1 }}>+</span>
+                          Ajouter un joueur
+                        </button>
+                      ) : (
+                        <span key={`e${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+                          <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.lineStrong}` }} />
+                          Place libre
+                        </span>
+                      )
                     ))}
                   </div>
                   {m.viewerIsOrganizer ? (
@@ -129,6 +140,18 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                     <Btn icon="plus" disabled={busy || m.full} onClick={() => act(m, () => api.joinOpenMatch(club.slug, m.id, token!))}>Rejoindre</Btn>
                   )}
                 </div>
+                {m.viewerIsOrganizer && addingId === m.id && (
+                  <div style={{ marginTop: 12 }}>
+                    <PartnerSearch
+                      slug={club.slug} token={token!} selected={null}
+                      excludeIds={m.players.map((p) => p.userId)}
+                      onSelect={(member) => { setAddingId(null); act(m, () => api.addOpenMatchPlayer(club.slug, m.id, member.id, token!)); }}
+                      onClear={() => {}}
+                      disabled={busy}
+                    />
+                    <button type="button" onClick={() => setAddingId(null)} style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
+                  </div>
+                )}
               </div>
             );
           })}
