@@ -7,12 +7,14 @@ import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
+import { RatingService } from '../services/rating.service';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 
 const router = Router();
 const reservationService = new ReservationService();
 const tournamentService = new TournamentService();
 const eventService = new EventService();
+const ratingService = new RatingService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
@@ -167,6 +169,31 @@ router.get('/tournaments', authMiddleware, async (req: AuthRequest, res: Respons
 router.get('/events', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await eventService.listUserRegistrations(req.user!.id)); }
   catch (err) { next(err); }
+});
+
+// Niveau du joueur connecté pour un sport (défaut padel). null = pas encore calibré.
+router.get('/rating', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    res.json(await ratingService.getForDisplay(req.user!.id, sport));
+  } catch (err) {
+    if (err instanceof Error && err.message === 'SPORT_NOT_FOUND') return res.status(404).json({ error: 'SPORT_NOT_FOUND' });
+    next(err);
+  }
+});
+
+// Auto-évaluation du niveau. selfLevel 1–8, ou null pour « passer » (départ neutre).
+router.post('/rating/calibrate', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sport = typeof req.body.sport === 'string' ? req.body.sport : 'padel';
+    const raw = req.body.selfLevel;
+    const selfLevel = raw === null || raw === undefined ? null : Number(raw);
+    res.json(await ratingService.calibrate(req.user!.id, sport, selfLevel));
+  } catch (err) {
+    if (err instanceof Error && err.message === 'VALIDATION_ERROR') return res.status(400).json({ error: 'VALIDATION_ERROR' });
+    if (err instanceof Error && err.message === 'SPORT_NOT_FOUND') return res.status(404).json({ error: 'SPORT_NOT_FOUND' });
+    next(err);
+  }
 });
 
 export default router;
