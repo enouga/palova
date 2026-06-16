@@ -63,3 +63,23 @@ describe('calibrate', () => {
     await expect(service.getForDisplay('u1', 'inconnu')).rejects.toThrow('SPORT_NOT_FOUND');
   });
 });
+
+describe('getLevelsForUsers', () => {
+  it('renvoie une map userId → niveau pour les joueurs ayant un rating', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'u1', displayLevel: 4, isProvisional: false },
+      { userId: 'u2', displayLevel: 2.4, isProvisional: true },
+    ] as any);
+    const map = await service.getLevelsForUsers(['u1', 'u2', 'u3'], 'padel');
+    expect(map.u1).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+    expect(map.u2.level).toBeCloseTo(2.4);
+    expect(map.u3).toBeUndefined();
+  });
+
+  it('liste vide → map vide, sans requête', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    const map = await service.getLevelsForUsers([], 'padel');
+    expect(map).toEqual({});
+  });
+});

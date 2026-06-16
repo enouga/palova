@@ -4,6 +4,8 @@ import {
   isProvisional, levelToRating, namedTier, ratingToLevel,
 } from './rating/level';
 
+export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
+
 export interface RatingDisplay {
   calibrated: boolean;     // a fait l'auto-éval OU a déjà joué
   level: number;           // 0–8
@@ -62,5 +64,18 @@ export class RatingService {
       update: data,
     });
     return this.toDisplay(row as Row);
+  }
+
+  /** Niveaux d'un lot de joueurs pour un sport. Map userId → niveau (absent si pas de rating). */
+  async getLevelsForUsers(userIds: string[], sportKey: string): Promise<Record<string, UserLevel>> {
+    if (userIds.length === 0) return {};
+    const sportId = await this.sportId(sportKey);
+    const rows = await prisma.playerRating.findMany({
+      where: { sportId, userId: { in: userIds } },
+      select: { userId: true, displayLevel: true, isProvisional: true },
+    });
+    const map: Record<string, UserLevel> = {};
+    for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+    return map;
   }
 }
