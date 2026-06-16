@@ -10,6 +10,7 @@ import { Icon } from '@/components/ui/Icon';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
+import { MatchResultModal } from '@/components/match/MatchResultModal';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -38,6 +39,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [error, setError]     = useState('');
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [recordingFor, setRecordingFor] = useState<OpenMatch | null>(null);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -107,13 +109,18 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                       ) : undefined}
                     />
                   </div>
-                  {m.viewerIsOrganizer ? (
-                    <Chip tone="line" icon="check">Vous organisez</Chip>
-                  ) : m.viewerIsParticipant ? (
-                    <Btn variant="surface" disabled={busy} onClick={() => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!))}>Quitter</Btn>
-                  ) : (
-                    <Btn icon="plus" disabled={busy || m.full} onClick={() => act(m, () => api.joinOpenMatch(club.slug, m.id, token!))}>Rejoindre</Btn>
-                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                    {m.viewerIsOrganizer ? (
+                      <Chip tone="line" icon="check">Vous organisez</Chip>
+                    ) : m.viewerIsParticipant ? (
+                      <Btn variant="surface" disabled={busy} onClick={() => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!))}>Quitter</Btn>
+                    ) : (
+                      <Btn icon="plus" disabled={busy || m.full} onClick={() => act(m, () => api.joinOpenMatch(club.slug, m.id, token!))}>Rejoindre</Btn>
+                    )}
+                    {new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
+                      <Btn variant="surface" disabled={busy} onClick={() => setRecordingFor(m)}>Saisir le résultat</Btn>
+                    )}
+                  </div>
                 </div>
                 {m.viewerIsOrganizer && addingId === m.id && (
                   <div style={{ marginTop: 12 }}>
@@ -132,6 +139,15 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           })}
         </div>
       </div>
+      {recordingFor && token && (
+        <MatchResultModal
+          reservationId={recordingFor.id}
+          players={recordingFor.players.map(({ userId, firstName, lastName, avatarUrl }) => ({ userId, firstName, lastName, avatarUrl }))}
+          token={token}
+          onClose={() => setRecordingFor(null)}
+          onSaved={() => { setRecordingFor(null); load(); }}
+        />
+      )}
     </Screen>
   );
 }

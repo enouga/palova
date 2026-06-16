@@ -18,6 +18,7 @@ jest.mock('../lib/api', () => ({
     removeOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
     searchClubMembers: jest.fn().mockResolvedValue([]),
     addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
+    recordMatchResult: jest.fn().mockResolvedValue({ id: 'mr1', status: 'PENDING' }),
   },
 }));
 import { api } from '../lib/api';
