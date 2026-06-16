@@ -103,7 +103,7 @@ describe('OpenMatches', () => {
     (mocked.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }]);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un joueur' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Ajouter un joueur/ }));
     fireEvent.focus(screen.getByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('New Player'));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
@@ -113,6 +113,6 @@ describe('OpenMatches', () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: false, spotsLeft: 2 })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
     expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Ajouter un joueur' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ajouter un joueur/ })).not.toBeInTheDocument();
   });
 });

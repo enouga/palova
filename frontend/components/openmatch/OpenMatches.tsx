@@ -118,8 +118,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                     })}
                     {Array.from({ length: m.spotsLeft }).map((_, i) => (
                       m.viewerIsOrganizer && i === 0 ? (
-                        <button key="add" type="button" disabled={busy} aria-label="Ajouter un joueur"
-                          onClick={() => setAddingId(addingId === m.id ? null : m.id)}
+                        <button key="add" type="button" disabled={busy} aria-label={`Ajouter un joueur à ${m.resourceName}`}
+                          onClick={() => setAddingId((prev) => (prev === m.id ? null : m.id))}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.accent}`, background: 'transparent', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>
                           <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.accent}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, lineHeight: 1 }}>+</span>
                           Ajouter un joueur
