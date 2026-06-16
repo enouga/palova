@@ -325,6 +325,32 @@ export async function notifyOpenMatchRemoved(reservationId: string, removedUserI
   await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
 }
 
+/** Prévient un joueur que l'organisateur l'a ajouté à une partie ouverte. */
+export async function notifyOpenMatchAdded(reservationId: string, addedUserId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+    },
+  });
+  if (!resa) return;
+  const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
+  const added = resa.participants.find((p) => p.userId === addedUserId)?.user;
+  if (!added?.email) return;
+  const club = resa.resource.club;
+  const mail = buildMatchInviteEmail({
+    recipientFirstName: added.firstName,
+    byName: organizer ? fullName(organizer) : null,
+    resourceName: resa.resource.name,
+    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
+    clubName: club.name,
+    url: clubAppUrl(club.slug, '/parties'),
+    brand: brandOf(club),
+  });
+  await sendMail({ to: added.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
 /** Prévient l'organisateur qu'un joueur a quitté sa partie ouverte. */
 export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
