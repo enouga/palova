@@ -118,6 +118,48 @@ describe('confirm / dispute', () => {
   });
 });
 
+describe('autoValidateDue', () => {
+  it('finalise chaque match PENDING périmé', async () => {
+    prismaMock.match.findMany.mockResolvedValue([{ id: 'm1' }, { id: 'm2' }] as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    const n = await service.autoValidateDue(new Date('2026-06-20T00:00:00Z'));
+    expect(n).toBe(2);
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  it('un échec de finalisation n interrompt pas les autres', async () => {
+    prismaMock.match.findMany.mockResolvedValue([{ id: 'm1' }, { id: 'm2' }] as any);
+    const spy = jest.spyOn(service, 'finalize')
+      .mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(undefined as any);
+    const n = await service.autoValidateDue(new Date());
+    expect(n).toBe(1);
+    spy.mockRestore();
+  });
+});
+
+describe('resolveDispute', () => {
+  it('VALIDATE re-PENDING puis finalise', async () => {
+    prismaMock.match.update.mockResolvedValue({} as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    await service.resolveDispute('m1', 'VALIDATE');
+    expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'PENDING' }),
+    }));
+    expect(spy).toHaveBeenCalledWith('m1');
+    spy.mockRestore();
+  });
+
+  it('CANCEL passe le match CANCELLED sans finaliser', async () => {
+    prismaMock.match.update.mockResolvedValue({} as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    await service.resolveDispute('m1', 'CANCEL');
+    expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'CANCELLED' } }));
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
 describe('finalize', () => {
   const playedAt = new Date('2026-06-10T10:00:00Z');
 

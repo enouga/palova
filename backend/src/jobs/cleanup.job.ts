@@ -2,8 +2,11 @@ import cron from 'node-cron';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { SSEService } from '../services/sse.service';
+import { MatchService } from '../services/match.service';
 
 const HOLD_EXPIRY_MINUTES = 10;
+
+const matchService = new MatchService();
 
 export function startCleanupJob(): void {
   cron.schedule('* * * * *', async () => {
@@ -38,6 +41,13 @@ export function startCleanupJob(): void {
       console.log(`[cleanup] ${expired.length} réservation(s) PENDING expirée(s) annulées`);
     } catch (err) {
       console.error('[cleanup] Erreur:', (err as Error).message);
+    }
+
+    try {
+      const finalized = await matchService.autoValidateDue(new Date());
+      if (finalized > 0) console.log(`[match] ${finalized} match(s) auto-validé(s)`);
+    } catch (err) {
+      console.error('[match] auto-validation:', (err as Error).message);
     }
   });
 

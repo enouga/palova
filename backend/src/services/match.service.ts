@@ -107,6 +107,32 @@ export class MatchService {
     await prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
   }
 
+  /** Finalise tous les matchs PENDING dont le délai de confirmation est passé. Renvoie le nb finalisés. */
+  async autoValidateDue(now: Date): Promise<number> {
+    const due = await prisma.match.findMany({
+      where: { status: 'PENDING', confirmDeadline: { lte: now } },
+      select: { id: true },
+    });
+    let done = 0;
+    for (const m of due) {
+      try { await this.finalize(m.id); done++; }
+      catch (err) { console.error(`[match] auto-validation ${m.id} échouée:`, (err as Error).message); }
+    }
+    return done;
+  }
+
+  /** Résolution staff d'un litige. VALIDATE (avec sets corrigés optionnels) ou CANCEL. */
+  async resolveDispute(matchId: string, action: 'VALIDATE' | 'CANCEL', sets?: SetScore[]): Promise<void> {
+    if (action === 'CANCEL') {
+      await prisma.match.update({ where: { id: matchId }, data: { status: 'CANCELLED' } });
+      return;
+    }
+    const data: { status: 'PENDING'; sets?: object; winningTeam?: number } = { status: 'PENDING' };
+    if (sets && sets.length) { data.sets = sets as unknown as object; data.winningTeam = winningTeam(sets); }
+    await prisma.match.update({ where: { id: matchId }, data });
+    await this.finalize(matchId);
+  }
+
   /** Finalise un match confirmé : applique Glicko aux 4 joueurs (idempotent, transaction Serializable). */
   async finalize(matchId: string): Promise<void> {
     await prisma.$transaction(async (tx) => {
