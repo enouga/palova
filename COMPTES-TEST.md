@@ -63,3 +63,24 @@ Email : `<prenom>.<nom>@multi.demo.fr`
 | `yanis.lopez@multi.demo.fr` | Lyon, Marseille, Toulouse |
 | `camille.faure@multi.demo.fr` | Paris, Marseille, Toulouse |
 | `hugo.marchand@multi.demo.fr` | Bordeaux, Toulouse |
+
+
+
+Pour le contrôle visuel (1 min, si tu veux)
+
+  Comptes (mot de passe password123), URLs *.localhost:3000 :
+  - Réglage : connecte owner@bordeaux-pala.fr → bordeaux-pala.localhost:3000/admin/settings → carte « Page Mes réservations » (case décochée par défaut).
+  - Effet joueur : avec un compte membre de 2 clubs, fais une réservation dans chacun, puis ouvre Mes réservations sur un sous-domaine club → par défaut tu ne vois
+  que ce club ; coche la case côté admin → l'autre club apparaît, et cliquer dessus ouvre son app.
+
+  Problème : quand j'ai renommé la migration 20260615120000_add_club_show_other_clubs_reservations → 20260615140000_…, la base de dev avait déjà l'ancienne référence
+  enregistrée dans _prisma_migrations. Résultat : divergence → les nouvelles migrations (reçus, remboursement auto) ne peuvent pas s'appliquer → le planning plante  car le backend cherche la colonne receipt_no qui n'existe pas encore.
+  Action : npx prisma migrate reset --force sur la base de dev locale (localhost:5432, conteneur Docker). Ça va :
+  1. Supprimer toutes les données de la base locale (irréversible)
+  2. Réappliquer toutes les migrations dans l'ordre
+  3. La base sera vide — il faudra relancer npm run db:seed
+
+
+
+  Il reste 2 choses avant un éventuel déploiement (rien d'urgent) :
+  1. Pousser : git push origin main (quand tu valides)  2. Variables d'env Stripe à poser en prod : STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
