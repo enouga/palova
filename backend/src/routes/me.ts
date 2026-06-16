@@ -202,6 +202,19 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
   } catch (err) { next(err); }
 });
 
+// Historique de progression du niveau (snapshots ratingAfter par match confirmé).
+router.get('/rating/history', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    const rows = await prisma.matchPlayer.findMany({
+      where: { userId: req.user!.id, ratingAfter: { not: null }, match: { sport: { key: sport }, status: 'CONFIRMED' } },
+      orderBy: { match: { playedAt: 'asc' } },
+      select: { ratingAfter: true, match: { select: { playedAt: true } } },
+    });
+    res.json(rows.map((r) => ({ playedAt: r.match.playedAt, level: r.ratingAfter })));
+  } catch (err) { next(err); }
+});
+
 // Auto-évaluation du niveau. selfLevel 1–8, ou null pour « passer » (départ neutre).
 router.post('/rating/calibrate', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

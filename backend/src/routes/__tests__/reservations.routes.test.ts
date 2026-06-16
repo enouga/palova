@@ -101,3 +101,78 @@ describe('DELETE /api/reservations/:id (annulation)', () => {
     expect(res.body.error).toBe('CANCELLATION_TOO_LATE');
   });
 });
+
+describe('POST /api/reservations/hold — fourchette de niveau (targetLevelMin/Max)', () => {
+  beforeEach(() => {
+    redisMock.set.mockResolvedValue('OK');
+    prismaMock.reservation.count.mockResolvedValue(0 as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isSubscriber: false } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.reservationParticipant.createMany.mockResolvedValue({ count: 1 } as any);
+    mockDouble();
+  });
+
+  it('201 : persiste targetLevelMin et targetLevelMax si fournis', async () => {
+    prismaMock.reservation.create.mockResolvedValue({
+      id: 'res-2', resourceId: 'court-1', status: 'PENDING', totalPrice: 25, visibility: 'PUBLIC',
+      targetLevelMin: 3, targetLevelMax: 6, startTime: new Date(), endTime: new Date(), createdAt: new Date(),
+    } as any);
+
+    const res = await request(app)
+      .post('/api/reservations/hold')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot(), visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 6 });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.reservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ targetLevelMin: 3, targetLevelMax: 6 }),
+    }));
+  });
+
+  it('400 VALIDATION_ERROR si targetLevelMin > targetLevelMax', async () => {
+    const res = await request(app)
+      .post('/api/reservations/hold')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot(), visibility: 'PUBLIC', targetLevelMin: 7, targetLevelMax: 3 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('400 VALIDATION_ERROR si targetLevelMin hors [0,8]', async () => {
+    const res = await request(app)
+      .post('/api/reservations/hold')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot(), visibility: 'PUBLIC', targetLevelMin: -1, targetLevelMax: 5 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('400 VALIDATION_ERROR si targetLevelMax hors [0,8]', async () => {
+    const res = await request(app)
+      .post('/api/reservations/hold')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot(), visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 9 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('201 sans fourchette : targetLevelMin/Max absents → null dans la résa', async () => {
+    prismaMock.reservation.create.mockResolvedValue({
+      id: 'res-3', resourceId: 'court-1', status: 'PENDING', totalPrice: 25, visibility: 'PRIVATE',
+      targetLevelMin: null, targetLevelMax: null, startTime: new Date(), endTime: new Date(), createdAt: new Date(),
+    } as any);
+
+    const res = await request(app)
+      .post('/api/reservations/hold')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ resourceId: 'court-1', ...slot() });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.reservation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ targetLevelMin: null, targetLevelMax: null }),
+    }));
+  });
+});

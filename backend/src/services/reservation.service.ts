@@ -20,6 +20,8 @@ interface HoldSlotParams {
   endTime: Date;
   partnerUserIds?: string[];               // partenaires invités (membres du club)
   visibility?: 'PRIVATE' | 'PUBLIC';       // PUBLIC = partie ouverte (rejoignable)
+  targetLevelMin?: number | null;          // fourchette de niveau cible (parties ouvertes)
+  targetLevelMax?: number | null;
 }
 
 const HOLD_TTL_SECONDS = 600; // 10 minutes
@@ -170,7 +172,7 @@ export class ReservationService {
     if (count >= limit) throw new Error(errCode);
   }
 
-  async holdSlot({ resourceId, userId, startTime, endTime, partnerUserIds, visibility }: HoldSlotParams) {
+  async holdSlot({ resourceId, userId, startTime, endTime, partnerUserIds, visibility, targetLevelMin, targetLevelMax }: HoldSlotParams) {
     const lockKey = this.lockKey(resourceId, startTime);
 
     const acquired = await redis.set(lockKey, userId, 'EX', HOLD_TTL_SECONDS, 'NX');
@@ -226,7 +228,12 @@ export class ReservationService {
       // Résa + lignes participant (organisateur + partenaires) dans une transaction.
       const reservation = await prisma.$transaction(async (tx) => {
         const created = await tx.reservation.create({
-          data: { resourceId, userId, startTime, endTime, status: 'PENDING', totalPrice, visibility: visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE' },
+          data: {
+            resourceId, userId, startTime, endTime, status: 'PENDING', totalPrice,
+            visibility: visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
+            targetLevelMin: targetLevelMin ?? null,
+            targetLevelMax: targetLevelMax ?? null,
+          },
         });
         await tx.reservationParticipant.createMany({
           data: this.participantRows(created.id, userId, partners, priceCents),

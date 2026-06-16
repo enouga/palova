@@ -43,3 +43,29 @@ describe('POST /api/me/rating/calibrate', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('GET /api/me/rating/history', () => {
+  const d1 = new Date('2026-05-01T10:00:00Z');
+  const d2 = new Date('2026-06-01T10:00:00Z');
+
+  it('200 + tableau trié par date avec level', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      { ratingAfter: 3.6, match: { playedAt: d1 } },
+      { ratingAfter: 4.0, match: { playedAt: d2 } },
+    ] as any);
+
+    const res = await request(app)
+      .get('/api/me/rating/history?sport=padel')
+      .set('Authorization', `Bearer ${token()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0]).toMatchObject({ playedAt: d1.toISOString(), level: 3.6 });
+    expect(res.body[1]).toMatchObject({ playedAt: d2.toISOString(), level: 4.0 });
+  });
+
+  it('401 sans token', async () => {
+    const res = await request(app).get('/api/me/rating/history');
+    expect(res.status).toBe(401);
+  });
+});

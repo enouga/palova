@@ -58,7 +58,7 @@ const handleError = (err: unknown, res: Response, next: NextFunction) => {
 
 router.post('/hold', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { resourceId, startTime, endTime, partnerUserIds, visibility } = req.body;
+    const { resourceId, startTime, endTime, partnerUserIds, visibility, targetLevelMin, targetLevelMax } = req.body;
     if (!resourceId || !startTime || !endTime) {
       return void res.status(400).json({ error: 'resourceId, startTime, endTime requis' });
     }
@@ -68,11 +68,29 @@ router.post('/hold', authMiddleware, async (req: AuthRequest, res: Response, nex
     if (partnerUserIds !== undefined && (!Array.isArray(partnerUserIds) || partnerUserIds.some((id: unknown) => typeof id !== 'string'))) {
       return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     }
+    // Validate optional level range: each must be in [0,8], and min <= max if both provided.
+    if (targetLevelMin !== undefined && targetLevelMin !== null) {
+      if (typeof targetLevelMin !== 'number' || targetLevelMin < 0 || targetLevelMin > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMax !== undefined && targetLevelMax !== null) {
+      if (typeof targetLevelMax !== 'number' || targetLevelMax < 0 || targetLevelMax > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMin !== undefined && targetLevelMin !== null && targetLevelMax !== undefined && targetLevelMax !== null) {
+      if (targetLevelMin > targetLevelMax) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
     const reservation = await reservationService.holdSlot({
       resourceId, userId: req.user!.id,
       startTime: new Date(startTime),
       endTime:   new Date(endTime),
       partnerUserIds, visibility,
+      targetLevelMin: (targetLevelMin !== undefined && targetLevelMin !== null) ? Number(targetLevelMin) : null,
+      targetLevelMax: (targetLevelMax !== undefined && targetLevelMax !== null) ? Number(targetLevelMax) : null,
     });
     res.status(201).json(reservation);
   } catch (err) { handleError(err, res, next); }
