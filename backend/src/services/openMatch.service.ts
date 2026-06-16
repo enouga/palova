@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
-import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved } from '../email/notifications';
+import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
@@ -160,6 +160,55 @@ export class OpenMatchService {
     // Best-effort après commit : prévenir la bonne personne.
     if (outcome.isSelf) await this.safeNotify(() => notifyOpenMatchLeft(reservationId, targetUserId));
     else                await this.safeNotify(() => notifyOpenMatchRemoved(reservationId, targetUserId));
+    return { id: reservationId };
+  }
+
+  /**
+   * Ajout d'un joueur à une partie ouverte par l'organisateur.
+   * Seul l'organisateur peut ajouter (NOT_ORGANIZER sinon) ; la cible doit être membre ACTIVE.
+   * Miroir du join : transaction Serializable + FOR UPDATE, recalcul des parts, notif best-effort.
+   */
+  async addOpenMatchPlayer(slug: string, reservationId: string, organizerUserId: string, targetUserId: string) {
+    const club = await this.resolveActiveMember(slug, organizerUserId);
+
+    await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
+        SELECT status, visibility, start_time, resource_id, total_price FROM reservations WHERE id = ${reservationId} FOR UPDATE
+      `;
+      const r = locked[0];
+      if (!r) throw new Error('RESERVATION_NOT_FOUND');
+
+      const resource = await tx.resource.findUnique({ where: { id: r.resource_id }, select: { clubId: true, attributes: true } });
+      if (!resource || resource.clubId !== club.id) throw new Error('CLUB_MISMATCH');
+      if (r.visibility !== 'PUBLIC' || r.status !== 'CONFIRMED') throw new Error('MATCH_NOT_JOINABLE');
+      if (new Date(r.start_time).getTime() <= Date.now()) throw new Error('MATCH_IN_PAST');
+
+      const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
+      const parts = await tx.reservationParticipant.findMany({
+        where: { reservationId },
+        select: { id: true, userId: true, isOrganizer: true },
+      });
+      const actor = parts.find((p) => p.userId === organizerUserId);
+      if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
+
+      const targetMembership = await tx.clubMembership.findUnique({
+        where: { userId_clubId: { userId: targetUserId, clubId: club.id } },
+        select: { status: true },
+      });
+      if (!targetMembership) throw new Error('MEMBERSHIP_REQUIRED');
+      if (targetMembership.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
+
+      if (parts.some((p) => p.userId === targetUserId)) throw new Error('ALREADY_JOINED');
+      if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
+
+      const created = await tx.reservationParticipant.create({
+        data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0) },
+      });
+      const priceCents = Math.round(Number(r.total_price) * 100);
+      await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    await this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
     return { id: reservationId };
   }
 
