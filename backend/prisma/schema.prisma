@@ -520,6 +520,9 @@ model Reservation {
   status      ReservationStatus @default(PENDING)
   type        ReservationType   @default(COURT)
   visibility  ReservationVisibility @default(PRIVATE) // PUBLIC = partie ouverte (rejoignable par les membres du club)
+  // Fourchette de niveau cible (0–8) d'une partie ouverte (visibility PUBLIC). null = pas de cible.
+  targetLevelMin Float? @map("target_level_min")
+  targetLevelMax Float? @map("target_level_max")
   title       String?
   totalPrice  Decimal           @map("total_price") @db.Decimal(10, 2)
   notes       String?
