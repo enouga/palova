@@ -19,6 +19,7 @@ export const ACCENTS = {
   coral: '#ff7a4d',
   violet: '#bda6ff',
   apricot: '#ef9f6a',
+  emerald: '#34b27b',
 } as const;
 
 export type AccentKey = keyof typeof ACCENTS;
