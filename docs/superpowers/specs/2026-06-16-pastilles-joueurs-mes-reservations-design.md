@@ -25,7 +25,9 @@ et dans la pop-up**, à l'identique de Parties (décision utilisateur : « Carte
 Dans le périmètre :
 - Nouveau composant présentiel partagé `PlayerPills`.
 - Refacto de `OpenMatches` pour qu'il consomme `PlayerPills` (source de vérité unique du look).
-- Pastilles en **lecture seule** sur la carte `MyAgendaListItem` (réservations uniquement).
+- Pastilles en **lecture seule** sur les cartes de réservation des **deux vues** de « Mes
+  réservations » : `DayPanel` (onglet Calendrier — c'est la carte de la capture d'écran) et
+  `MyAgendaListItem` (onglets À venir / Passées).
 - Pastilles (avec retrait) dans `ManagePlayersModal`, le champ d'ajout `PartnerSearch` conservé.
 - 2 enrichissements de payload backend (additifs).
 
@@ -91,16 +93,19 @@ Types front (`lib/api.ts`) :
 
 Tous les ajouts sont additifs : aucun consommateur existant n'est cassé.
 
-## Carte « Mes réservations » (`MyAgendaListItem`)
+## Cartes « Mes réservations » (`DayPanel` + `MyAgendaListItem`)
 
-Pour `item.kind === 'reservation'` uniquement :
-- ajouter une **rangée de pastilles** sous la ligne heure/prix (`metaRow`), en **lecture seule** :
-  `<PlayerPills players={r.participants} spotsLeft={Math.max(0, r.capacity - r.participants.length)}
-   size="sm" />` (pas de `onRemove`).
-- Réservation passée : pastilles affichées, carte déjà atténuée (`opacity 0.7`), pas de × (lecture seule).
+Les deux composants rendent une carte de réservation à partir d'un `MyReservation` (`e.r` /
+`item.r`). Pour la branche `kind === 'reservation'` **uniquement**, dans chacun :
+- ajouter une **rangée de pastilles** sous la ligne heure/prix, en **lecture seule** :
+  `<PlayerPills players={r.participants ?? []}
+   spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))} size="sm" />`
+  (pas de `onRemove`). Le `?? []` protège les fixtures de test qui ne fournissent pas `participants`.
+- Réservation passée : pastilles affichées, carte déjà atténuée, pas de × (lecture seule).
 - Les boutons « Joueurs » / « Annuler » restent inchangés (l'édition passe par la pop-up).
 
-Tournoi / event : aucun changement (pas de pastilles).
+`DayPanel` = la carte de la capture (onglet Calendrier). `MyAgendaListItem` = onglets À venir /
+Passées. Tournoi / event : aucun changement (pas de pastilles).
 
 ## Pop-up `ManagePlayersModal`
 
@@ -125,6 +130,8 @@ Les boutons d'action (Rejoindre / Quitter / « Vous organisez ») restent **hors
 - **Nouveau** `frontend/__tests__/PlayerPills.test.tsx` : rend les pastilles (nom, badge orga,
   cases « Place libre » = `spotsLeft`), affiche le × seulement si `onRemove` + `canRemove`,
   `×` désactivé si `busy`.
+- **Nouveau** `frontend/__tests__/DayPanel.test.tsx` : une carte de réservation avec
+  `participants` + `capacity` affiche les noms des joueurs et les cases « Place libre ».
 - **Maj** `frontend/__tests__/OpenMatches.test.tsx` : ajuster les assertions au nouveau rendu
   (les noms de joueurs et le comportement de retrait doivent rester verts).
 - **Back** `me.routes.test.ts` : la réponse `/api/me/reservations` contient `participants` + `capacity`.
