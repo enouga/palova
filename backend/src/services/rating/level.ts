@@ -8,6 +8,9 @@ export const DEFAULT_VOLATILITY = 0.06;
 export const PROVISIONAL_RD_THRESHOLD = 110; // au-dessus = « en calibrage »
 export const SKIP_DEFAULT_LEVEL = 3;  // auto-éval « passée » → départ neutre
 
+/** Nb minimum de matchs joués pour figurer au classement du club. */
+export const MIN_RANKED_MATCHES = 5;
+
 // 1 → 8, dans l'ordre du référentiel.
 export const TIERS = [
   'Débutant', 'Perfectionnement', 'Élémentaire', 'Intermédiaire',

@@ -5,6 +5,7 @@ import { bySortOrder } from './resource.service';
 import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
+import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -380,6 +381,72 @@ export class ClubService {
     const userIds = members.map((m) => m.user.id);
     const levels = await this.ratingService.getLevelsForUsers(userIds, 'padel');
     return members.map((m) => ({ ...m.user, level: levels[m.user.id] ?? null }));
+  }
+
+  /** Classement du club pour un sport : membres ACTIFS opt-in avec >= MIN_RANKED_MATCHES, triés par niveau. */
+  async clubLeaderboard(slug: string, callerUserId: string, sportKey = 'padel') {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const caller = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: callerUserId, clubId: club.id } },
+      select: { status: true },
+    });
+    if (!caller || caller.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
+
+    const sport = await prisma.sport.findUnique({ where: { key: sportKey }, select: { id: true } });
+    if (!sport) throw new Error('SPORT_NOT_FOUND');
+
+    const rows = await prisma.clubMembership.findMany({
+      where: {
+        clubId: club.id,
+        status: 'ACTIVE',
+        user: {
+          showInLeaderboard: true,
+          playerRatings: { some: { sportId: sport.id, matchesPlayed: { gte: MIN_RANKED_MATCHES } } },
+        },
+      },
+      select: {
+        user: {
+          select: {
+            id: true, firstName: true, lastName: true, avatarUrl: true,
+            playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, rating: true, matchesPlayed: true } },
+          },
+        },
+      },
+    });
+
+    const entries = rows
+      .map((m) => ({ u: m.user, r: m.user.playerRatings[0] }))
+      .filter((x) => x.r)
+      .sort((a, b) => b.r.displayLevel - a.r.displayLevel || b.r.rating - a.r.rating)
+      .map((x, i) => ({
+        rank: i + 1,
+        userId: x.u.id,
+        firstName: x.u.firstName,
+        lastName: x.u.lastName,
+        avatarUrl: x.u.avatarUrl,
+        level: x.r.displayLevel,
+        tier: namedTier(x.r.displayLevel),
+        matchesPlayed: x.r.matchesPlayed,
+      }));
+
+    const meUser = await prisma.user.findUnique({
+      where: { id: callerUserId },
+      select: { showInLeaderboard: true, playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, matchesPlayed: true } } },
+    });
+    const myRating = meUser?.playerRatings[0] ?? null;
+    const matchesPlayed = myRating?.matchesPlayed ?? 0;
+    const myRank = entries.find((e) => e.userId === callerUserId)?.rank ?? null;
+    const me = {
+      optedIn: meUser?.showInLeaderboard ?? false,
+      ranked: myRank !== null,
+      rank: myRank,
+      level: myRating?.displayLevel ?? null,
+      matchesPlayed,
+      matchesToGo: Math.max(0, MIN_RANKED_MATCHES - matchesPlayed),
+    };
+
+    return { sport: sportKey, entries, me };
   }
 
   /** Adhésion du joueur connecté à ce club (licence / statut). */

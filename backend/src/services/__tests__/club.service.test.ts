@@ -124,6 +124,57 @@ describe('ClubService — mon adhésion (licence)', () => {
   });
 });
 
+describe('clubLeaderboard', () => {
+  const service = new ClubService();
+  const activeClub = { id: 'club-1', status: 'ACTIVE' };
+
+  function mockBase() {
+    prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+  }
+
+  it('classe les joueurs par niveau décroissant puis rating, avec rangs', async () => {
+    mockBase();
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u2', firstName: 'Bea', lastName: 'B', avatarUrl: null, playerRatings: [{ displayLevel: 5.0, rating: 1700, matchesPlayed: 12 }] } },
+      { user: { id: 'u1', firstName: 'Ana', lastName: 'A', avatarUrl: null, playerRatings: [{ displayLevel: 6.2, rating: 1820, matchesPlayed: 30 }] } },
+      { user: { id: 'u3', firstName: 'Cy', lastName: 'C', avatarUrl: null, playerRatings: [{ displayLevel: 5.0, rating: 1750, matchesPlayed: 8 }] } },
+    ] as any);
+    prismaMock.user.findUnique.mockResolvedValue({ showInLeaderboard: true, playerRatings: [{ displayLevel: 6.2, matchesPlayed: 30 }] } as any);
+
+    const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
+    expect(res.entries.map((e) => [e.rank, e.userId])).toEqual([[1, 'u1'], [2, 'u3'], [3, 'u2']]);
+    expect(res.entries[0].tier).toBe('Avancé'); // namedTier(6.2)
+    expect(res.me).toEqual({ optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0 });
+  });
+
+  it('me non classé : opt-in mais pas assez de matchs → matchesToGo', async () => {
+    mockBase();
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+    prismaMock.user.findUnique.mockResolvedValue({ showInLeaderboard: true, playerRatings: [{ displayLevel: 3.4, matchesPlayed: 3 }] } as any);
+
+    const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
+    expect(res.entries).toEqual([]);
+    expect(res.me).toEqual({ optedIn: true, ranked: false, rank: null, level: 3.4, matchesPlayed: 3, matchesToGo: 2 });
+  });
+
+  it('me non opté : optedIn false, ranked false', async () => {
+    mockBase();
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+    prismaMock.user.findUnique.mockResolvedValue({ showInLeaderboard: false, playerRatings: [] } as any);
+
+    const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
+    expect(res.me).toEqual({ optedIn: false, ranked: false, rank: null, level: null, matchesPlayed: 0, matchesToGo: 5 });
+  });
+
+  it('refuse un non-membre (MEMBERSHIP_REQUIRED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.clubLeaderboard('padel-arena', 'uX', 'padel')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+});
+
 describe('ClubService.resolveSlug', () => {
   const service = new ClubService();
 
