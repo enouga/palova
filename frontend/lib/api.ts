@@ -387,6 +387,9 @@ export const api = {
   calibrateRating: (selfLevel: number | null, token: string, sport = 'padel') =>
     request<MyRating>('/api/me/rating/calibrate', { method: 'POST', body: JSON.stringify({ sport, selfLevel }) }, token),
 
+  getRatingHistory: (token: string, sport = 'padel') =>
+    request<RatingPoint[]>(`/api/me/rating/history?sport=${encodeURIComponent(sport)}`, {}, token),
+
   // Upload d'avatar en FormData — fetch dédié : request() force Content-Type JSON.
   uploadMyAvatar: async (file: File, token: string): Promise<MyProfile> => {
     const form = new FormData();
@@ -558,7 +561,7 @@ export interface MyReservation {
   totalPrice: string;
   resource: { id: string; name: string; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
-  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null }[];
+  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null }[];
 }
 
 export interface MyMatch {
@@ -748,6 +751,8 @@ export interface HoldParams {
   endTime: string;
   partnerUserIds?: string[];
   visibility?: 'PRIVATE' | 'PUBLIC';
+  targetLevelMin?: number | null;
+  targetLevelMax?: number | null;
 }
 
 export interface OpenMatchPlayer {
@@ -756,6 +761,7 @@ export interface OpenMatchPlayer {
   lastName: string;
   avatarUrl: string | null;
   isOrganizer: boolean;
+  level?: UserLevel | null;
 }
 
 export interface OpenMatch {
@@ -769,6 +775,8 @@ export interface OpenMatch {
   viewerIsParticipant: boolean;
   viewerIsOrganizer: boolean;
   players: OpenMatchPlayer[];
+  targetLevelMin?: number | null;
+  targetLevelMax?: number | null;
 }
 
 export interface CreateClubBody {
@@ -1204,6 +1212,8 @@ export interface TournamentParticipant {
   status: RegistrationStatus;
   captain: { firstName: string; lastName: string; avatarUrl: string | null };
   partner: { firstName: string; lastName: string; avatarUrl: string | null };
+  captainLevel?: UserLevel | null;
+  partnerLevel?: UserLevel | null;
 }
 
 export interface MyTournamentRegistration {
@@ -1238,10 +1248,14 @@ export interface MyRating {
   matchesPlayed: number;
 }
 
+export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
+export interface RatingPoint { playedAt: string; level: number; }
+
 export interface ClubMemberSearchResult {
   id: string;
   firstName: string;
   lastName: string;
+  level?: UserLevel | null;
 }
 
 export interface MyClubMembership {
@@ -1318,6 +1332,7 @@ export interface EventParticipant {
   id: string;
   status: RegistrationStatus;
   user: { firstName: string; lastName: string; avatarUrl: string | null };
+  level?: UserLevel | null;
 }
 
 export interface MyEventRegistration {
