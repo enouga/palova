@@ -163,6 +163,14 @@ router.get('/:slug/members/search', authMiddleware, async (req: AuthRequest, res
   catch (err) { handleError(err, res, next); }
 });
 
+// Classement des joueurs du club par niveau (réservé aux membres ; opt-in pour y figurer).
+router.get('/:slug/leaderboard', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    res.json(await clubService.clubLeaderboard(asString(req.params.slug), req.user!.id, sport));
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Parties ouvertes du club (réservé aux membres) : découverte + rejoindre / quitter.
 router.get('/:slug/open-matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user!.id)); }
