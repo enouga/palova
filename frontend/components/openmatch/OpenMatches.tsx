@@ -11,6 +11,8 @@ import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { inRange, rangeLabel } from '@/lib/levelMatch';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -40,6 +42,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [error, setError]     = useState('');
   const [addingId, setAddingId] = useState<string | null>(null);
   const [recordingFor, setRecordingFor] = useState<OpenMatch | null>(null);
+  const [myLevel, setMyLevel] = useState<number | null>(null);
+  const [filterMyLevel, setFilterMyLevel] = useState(false);
+  const [joinWarning, setJoinWarning] = useState<OpenMatch | null>(null);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -51,6 +56,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   useEffect(() => { if (ready) load(); }, [ready, load]);
 
+  useEffect(() => {
+    if (!token) return;
+    api.getMyRating(token).then((r) => setMyLevel(r?.level ?? null)).catch(() => {});
+  }, [token]);
+
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
     if (!token) return;
     setBusyId(m.id); setError('');
@@ -58,6 +68,20 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     catch (e) { setError(JOIN_ERRORS[(e as Error).message] ?? (e as Error).message); }
     finally { setBusyId(null); }
   };
+
+  const handleJoin = (m: OpenMatch) => {
+    const min = m.targetLevelMin ?? null;
+    const max = m.targetLevelMax ?? null;
+    if (!inRange(myLevel, min, max)) {
+      setJoinWarning(m);
+    } else {
+      act(m, () => api.joinOpenMatch(club.slug, m.id, token!));
+    }
+  };
+
+  const visibleMatches = filterMyLevel
+    ? matches.filter((m) => inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null))
+    : matches;
 
   return (
     <Screen>
@@ -68,6 +92,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
             Rejoignez la partie publique d&apos;un autre membre, ou créez la vôtre en choisissant « Partie ouverte » au moment de réserver.
           </p>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, userSelect: 'none' }}>
+            <input type="checkbox" checked={filterMyLevel} onChange={(e) => setFilterMyLevel(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
+            À mon niveau
+          </label>
         </div>
 
         {error && (
@@ -79,16 +108,21 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
           ) : !token ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Connectez-vous pour voir les parties ouvertes.</div>
-          ) : matches.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucune partie ouverte pour le moment.</div>
-          ) : matches.map((m) => {
+          ) : visibleMatches.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+              {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
+            </div>
+          ) : visibleMatches.map((m) => {
             const busy = busyId === m.id;
             return (
               <div key={m.id} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                   <Icon name="users" size={18} color={th.accent} />
                   <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{m.resourceName}</span>
-                  <span style={{ marginLeft: 'auto' }}>
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {(m.targetLevelMin != null || m.targetLevelMax != null) && (
+                      <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
+                    )}
                     <Chip tone={m.full ? 'mute' : 'accent'}>{m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''}`}</Chip>
                   </span>
                 </div>
@@ -115,7 +149,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                     ) : m.viewerIsParticipant ? (
                       <Btn variant="surface" disabled={busy} onClick={() => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!))}>Quitter</Btn>
                     ) : (
-                      <Btn icon="plus" disabled={busy || m.full} onClick={() => act(m, () => api.joinOpenMatch(club.slug, m.id, token!))}>Rejoindre</Btn>
+                      <Btn icon="plus" disabled={busy || m.full} onClick={() => handleJoin(m)}>Rejoindre</Btn>
                     )}
                     {new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
                       <Btn variant="surface" disabled={busy} onClick={() => setRecordingFor(m)}>Saisir le résultat</Btn>
@@ -146,6 +180,17 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           token={token}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); load(); }}
+        />
+      )}
+      {joinWarning && (
+        <ConfirmDialog
+          title="Niveau hors fourchette"
+          message="Cette partie est hors de ta fourchette de niveau. Rejoindre quand même ?"
+          confirmLabel="Rejoindre quand même"
+          cancelLabel="Annuler"
+          busy={busyId === joinWarning.id}
+          onConfirm={() => { const m = joinWarning; setJoinWarning(null); act(m, () => api.joinOpenMatch(club.slug, m.id, token!)); }}
+          onCancel={() => setJoinWarning(null)}
         />
       )}
     </Screen>
