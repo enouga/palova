@@ -1,4 +1,5 @@
 'use client';
+import { Fragment } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
@@ -15,7 +16,7 @@ export interface PlayerPillData {
 // Rangée de pastilles de joueurs façon Parties ouvertes : avatar coloré (couleur par userId),
 // badge « orga », × de retrait optionnel, puis N cases « Place libre » en pointillés.
 export function PlayerPills({
-  players, spotsLeft = 0, onRemove, canRemove, busy = false, size = 'md', showOrgaBadge = true,
+  players, spotsLeft = 0, onRemove, canRemove, busy = false, size = 'md', showOrgaBadge = true, firstSpotSlot,
 }: {
   players: PlayerPillData[];
   spotsLeft?: number;
@@ -24,6 +25,7 @@ export function PlayerPills({
   busy?: boolean;
   size?: 'sm' | 'md';
   showOrgaBadge?: boolean;
+  firstSpotSlot?: React.ReactNode;
 }) {
   const { th } = useTheme();
   const av = size === 'sm' ? 20 : 22;
@@ -53,12 +55,16 @@ export function PlayerPills({
           </span>
         );
       })}
-      {Array.from({ length: Math.max(0, spotsLeft) }).map((_, i) => (
-        <span key={`spot-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
-          <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.lineStrong}` }} />
-          Place libre
-        </span>
-      ))}
+      {Array.from({ length: Math.max(0, spotsLeft) }).map((_, i) =>
+        i === 0 && firstSpotSlot ? (
+          <Fragment key="first-spot">{firstSpotSlot}</Fragment>
+        ) : (
+          <span key={`spot-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+            <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.lineStrong}` }} />
+            Place libre
+          </span>
+        ),
+      )}
     </div>
   );
 }

@@ -36,4 +36,10 @@ describe('PlayerPills', () => {
     wrap(<PlayerPills players={players} onRemove={jest.fn()} canRemove={() => true} busy />);
     expect(screen.getByLabelText('Retirer Emma Bernard')).toBeDisabled();
   });
+
+  it('remplace la première place libre par firstSpotSlot', () => {
+    wrap(<PlayerPills players={players} spotsLeft={2} firstSpotSlot={<button>Ajouter</button>} />);
+    expect(screen.getByText('Ajouter')).toBeInTheDocument();
+    expect(screen.getAllByText('Place libre')).toHaveLength(1);
+  });
 });
