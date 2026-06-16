@@ -594,6 +594,7 @@ model Tournament {
   name                 String
   category             String                                   // "P25","P50","P100",…
   gender               TournamentGender
+  openToWomen          Boolean          @default(true) @map("open_to_women") // n'a de sens que pour MEN : true = tableau "open" (toute composition) ; false = 100% hommes
   description          String?
   contactInfo          String?          @map("contact_info")     // contact affiché quand les inscriptions sont closes (ex. Juge Arbitre)
   startTime            DateTime         @map("start_time") @db.Timestamptz

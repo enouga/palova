@@ -6,7 +6,7 @@ import { TournamentDetail } from '../lib/api';
 const NOW = new Date('2026-06-10T12:00:00Z');
 
 const tournament = (over: Partial<TournamentDetail> = {}): TournamentDetail => ({
-  id: 't1', clubId: 'c1', clubSportId: 'cs1', name: 'Grand Prix Messieurs', category: 'P500', gender: 'MEN',
+  id: 't1', clubId: 'c1', clubSportId: 'cs1', name: 'Grand Prix Messieurs', category: 'P500', gender: 'MEN', openToWomen: false,
   description: null, contactInfo: null, startTime: '2026-07-09T12:01:00Z', endTime: null,
   registrationDeadline: '2026-07-04T12:01:00Z', maxTeams: 12, entryFee: '40', status: 'PUBLISHED',
   confirmedCount: 7, waitlistCount: 0,
@@ -52,6 +52,22 @@ describe('TournamentHero', () => {
     wrap(<TournamentHero t={tournament({ maxTeams: null })} now={NOW} />);
     expect(screen.queryByTestId('hero-fill')).not.toBeInTheDocument();
     expect(screen.getByText('7 binômes')).toBeInTheDocument();
+  });
+
+  it('Messieurs ouvert aux femmes → pill « Ouvert aux femmes »', () => {
+    wrap(<TournamentHero t={tournament({ gender: 'MEN', openToWomen: true })} now={NOW} />);
+    expect(screen.getByText('Messieurs')).toBeInTheDocument();
+    expect(screen.getByText('Ouvert aux femmes')).toBeInTheDocument();
+  });
+
+  it('Messieurs NON ouvert aux femmes → pas de pill « Ouvert aux femmes »', () => {
+    wrap(<TournamentHero t={tournament({ gender: 'MEN', openToWomen: false })} now={NOW} />);
+    expect(screen.queryByText('Ouvert aux femmes')).not.toBeInTheDocument();
+  });
+
+  it('Mixte avec openToWomen=true → pas de pill « Ouvert aux femmes » (réservé à Messieurs)', () => {
+    wrap(<TournamentHero t={tournament({ gender: 'MIXED', openToWomen: true })} now={NOW} />);
+    expect(screen.queryByText('Ouvert aux femmes')).not.toBeInTheDocument();
   });
 });
 

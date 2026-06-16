@@ -14,7 +14,7 @@ const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
 ];
 
 const emptyForm = (clubSportId: string): CreateTournamentBody => ({
-  clubSportId, name: '', category: 'P100', gender: 'MEN',
+  clubSportId, name: '', category: 'P100', gender: 'MEN', openToWomen: true,
   description: '', contactInfo: '', startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
 });
 
@@ -109,6 +109,17 @@ export default function AdminTournamentsPage() {
               </select>
             </div>
           </div>
+          {form.gender === 'MEN' && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
+                <input type="checkbox" checked={form.openToWomen ?? true} onChange={(e) => setForm({ ...form, openToWomen: e.target.checked })} />
+                Ouvert aux femmes
+              </label>
+              <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 4 }}>
+                Tableau « open » : une femme peut s&apos;inscrire (composition libre). Décochez pour un tournoi 100% masculin.
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={label}>Nb max de binômes (vide = illimité)</div>

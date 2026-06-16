@@ -10,7 +10,11 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 export function TournamentHero({ t, now }: { t: TournamentDetail; now: Date | null }) {
   return (
     <AgendaHero
-      pills={[{ label: t.category, strong: true }, { label: GENDER_LABEL[t.gender] ?? t.gender }]}
+      pills={[
+        { label: t.category, strong: true },
+        { label: GENDER_LABEL[t.gender] ?? t.gender },
+        ...(t.gender === 'MEN' && t.openToWomen ? [{ label: 'Ouvert aux femmes' }] : []),
+      ]}
       title={t.name}
       subtitle={t.club.name}
       deadline={t.registrationDeadline}

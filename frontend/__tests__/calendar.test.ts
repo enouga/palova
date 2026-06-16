@@ -52,6 +52,7 @@ function makeRegistration(over: {
       name: 'P100 Messieurs',
       category: 'P100',
       gender: 'MEN',
+      openToWomen: false,
       description: null,
       contactInfo: null,
       startTime: over.startTime ?? '2026-06-13T07:00:00.000Z',

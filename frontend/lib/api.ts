@@ -1052,6 +1052,7 @@ export interface Tournament {
   name: string;
   category: string;
   gender: TournamentGender;
+  openToWomen: boolean; // Messieurs uniquement : true = tableau "open" (femmes admises), false = 100% hommes
   description: string | null;
   contactInfo: string | null;
   startTime: string;
@@ -1143,6 +1144,7 @@ export type CreateTournamentBody = {
   name: string;
   category: string;
   gender: TournamentGender;
+  openToWomen?: boolean;
   description?: string | null;
   contactInfo?: string | null;
   startTime: string;

@@ -13,7 +13,17 @@ jest.mock('../../email/notifications');
 const FUTURE = new Date(Date.now() + 86_400_000); // +24h
 
 function tournament(overrides: Record<string, unknown> = {}) {
-  return { id: 't1', clubId: 'club-demo', gender: 'MEN', status: 'PUBLISHED', registrationDeadline: FUTURE, maxTeams: 8, ...overrides };
+  return { id: 't1', clubId: 'club-demo', gender: 'MEN', openToWomen: true, status: 'PUBLISHED', registrationDeadline: FUTURE, maxTeams: 8, ...overrides };
+}
+
+/** Mocke l'éligibilité (membre ACTIVE + tél + licence + sexe) d'un binôme aux sexes choisis. */
+function mockEligibleWithSexes(captainSex: 'MALE' | 'FEMALE', partnerSex: 'MALE' | 'FEMALE') {
+  mockEligibleHappyPath();
+  prismaMock.user.findUnique.mockImplementation((args: any) => {
+    if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: captainSex, phone: '0600000001' }) as any;
+    if (args.where.id === 'partner') return Promise.resolve({ id: 'partner', sex: partnerSex, phone: '0600000002' }) as any;
+    return Promise.resolve(null) as any;
+  });
 }
 
 /** Configure le chemin nominal d'éligibilité (2 hommes membres ACTIVE, tél + licence + sexe OK). */
@@ -135,6 +145,30 @@ describe('TournamentService.register', () => {
     await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('GENDER_MISMATCH');
   });
 
+  it('Messieurs ouvert aux femmes : accepte un binôme 1 homme + 1 femme', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ gender: 'MEN', openToWomen: true }) as any);
+    mockEligibleWithSexes('MALE', 'FEMALE');
+    prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
+
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ status: 'CONFIRMED' });
+  });
+
+  it('Messieurs ouvert aux femmes : accepte un binôme de 2 femmes', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ gender: 'MEN', openToWomen: true }) as any);
+    mockEligibleWithSexes('FEMALE', 'FEMALE');
+    prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
+
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ status: 'CONFIRMED' });
+  });
+
+  it('Messieurs NON ouvert aux femmes : refuse un binôme mixte (GENDER_MISMATCH)', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ gender: 'MEN', openToWomen: false }) as any);
+    mockEligibleWithSexes('MALE', 'FEMALE');
+    await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('GENDER_MISMATCH');
+  });
+
   it('lève ALREADY_REGISTERED si un joueur est déjà engagé', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament() as any);
     mockEligibleHappyPath();
@@ -169,6 +203,24 @@ describe('TournamentService.changePartner / cancelRegistration', () => {
       where: { id: 'reg-1' },
       data: { partnerUserId: 'newp' },
     });
+  });
+
+  it('changePartner respecte « ouvert aux femmes » : nouveau coéquipier femme accepté', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ gender: 'MEN', openToWomen: true }) as any);
+    prismaMock.tournamentRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'reg-1' } as any) // inscription du capitaine
+      .mockResolvedValueOnce(null as any);            // pas de doublon
+    prismaMock.user.findUnique.mockImplementation((args: any) => {
+      if (args.where.id === 'captain') return Promise.resolve({ id: 'captain', sex: 'MALE', phone: '0600' }) as any;
+      if (args.where.id === 'newp') return Promise.resolve({ id: 'newp', sex: 'FEMALE', phone: '0602' }) as any;
+      return Promise.resolve(null) as any;
+    });
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', membershipNo: 'L' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-1', partnerUserId: 'newp' } as any);
+
+    await expect(service.changePartner('t1', 'captain', 'newp')).resolves.toMatchObject({ partnerUserId: 'newp' });
   });
 
   it('lève REGISTRATION_LOCKED si on modifie après la deadline', async () => {
@@ -249,6 +301,17 @@ describe('TournamentService — admin & lectures', () => {
     expect(arg.data.name).toBe('Open P100');
     expect(arg.data.maxTeams).toBe(16);
     expect(arg.data.gender).toBe('MIXED');
+  });
+
+  it('createTournament enregistre openToWomen', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.tournament.create.mockResolvedValue({ id: 't1' } as any);
+    await service.createTournament('club-demo', {
+      clubSportId: 'cs1', name: 'Open', category: 'P100', gender: 'MEN',
+      startTime: FUTURE, registrationDeadline: FUTURE, openToWomen: false,
+    } as any);
+    const arg = (prismaMock.tournament.create as jest.Mock).mock.calls[0][0];
+    expect(arg.data.openToWomen).toBe(false);
   });
 
   it('deleteTournament refuse si des inscriptions actives existent', async () => {

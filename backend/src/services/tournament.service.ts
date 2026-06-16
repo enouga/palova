@@ -9,6 +9,7 @@ export interface CreateTournamentInput {
   name: string;
   category: string;
   gender: TournamentGender;
+  openToWomen?: boolean;
   description?: string | null;
   contactInfo?: string | null;
   startTime: string | Date;
@@ -31,7 +32,7 @@ export class TournamentService {
   async register(tournamentId: string, captainUserId: string, partnerUserId: string) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      select: { id: true, clubId: true, gender: true, status: true, registrationDeadline: true, maxTeams: true },
+      select: { id: true, clubId: true, gender: true, openToWomen: true, status: true, registrationDeadline: true, maxTeams: true },
     });
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
     if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
@@ -67,7 +68,7 @@ export class TournamentService {
   async changePartner(tournamentId: string, captainUserId: string, partnerUserId: string) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      select: { id: true, clubId: true, gender: true, status: true, registrationDeadline: true },
+      select: { id: true, clubId: true, gender: true, openToWomen: true, status: true, registrationDeadline: true },
     });
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
     if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
@@ -336,6 +337,7 @@ export class TournamentService {
       if (!['MEN', 'WOMEN', 'MIXED'].includes(input.gender as string)) throw new Error('VALIDATION_ERROR');
       data.gender = input.gender;
     }
+    if (input.openToWomen !== undefined) data.openToWomen = Boolean(input.openToWomen);
     if (input.description !== undefined) data.description = (input.description ?? '')?.toString().trim() || null;
     if (input.contactInfo !== undefined) data.contactInfo = (input.contactInfo ?? '')?.toString().trim() || null;
 
@@ -359,7 +361,7 @@ export class TournamentService {
 
   /** Vérifie l'éligibilité du capitaine et du coéquipier (résolus par id). */
   private async resolveAndAssertEligible(
-    tournament: { clubId: string; gender: TournamentGender },
+    tournament: { clubId: string; gender: TournamentGender; openToWomen: boolean },
     captainUserId: string,
     partnerUserId: string,
   ): Promise<void> {
@@ -392,10 +394,12 @@ export class TournamentService {
     if (!captain.sex) throw appError('SEX_REQUIRED', 'self');
     if (!partner.sex) throw appError('SEX_REQUIRED', 'partner');
 
-    this.assertGender(tournament.gender, captain.sex as Sex, partner.sex as Sex);
+    this.assertGender(tournament.gender, captain.sex as Sex, partner.sex as Sex, tournament.openToWomen);
   }
 
-  private assertGender(gender: TournamentGender, a: Sex, b: Sex): void {
+  private assertGender(gender: TournamentGender, a: Sex, b: Sex, openToWomen: boolean): void {
+    // Tableau "Messieurs" ouvert aux femmes (convention FFT) = tableau open : toute composition acceptée.
+    if (gender === 'MEN' && openToWomen) return;
     const ok =
       gender === 'MEN'   ? a === 'MALE' && b === 'MALE' :
       gender === 'WOMEN' ? a === 'FEMALE' && b === 'FEMALE' :
