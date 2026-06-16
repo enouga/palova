@@ -17,6 +17,7 @@ import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
 import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonths } from '@/lib/calendar';
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
+import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { canRecordResult } from '@/lib/match';
 
 function fmtDate(iso: string, tz: string): string {
@@ -36,7 +37,7 @@ export default function MyReservationsPage() {
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
   const [evts, setEvts]       = useState<MyEventRegistration[]>([]);
-  const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar'>('calendar');
+  const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar' | 'matches'>('calendar');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
@@ -147,11 +148,12 @@ export default function MyReservationsPage() {
         </div>
 
         <div style={{ padding: '16px 20px 0' }}>
-          <Segmented<'upcoming' | 'past' | 'calendar'> value={tab} onChange={setTab}
+          <Segmented<'upcoming' | 'past' | 'calendar' | 'matches'> value={tab} onChange={setTab}
             options={[
               { value: 'calendar', label: 'Calendrier' },
               { value: 'upcoming', label: `À venir · ${upcoming.length}` },
               { value: 'past', label: `Passées · ${past.length}` },
+              { value: 'matches', label: 'Matchs' },
             ]} />
         </div>
 
@@ -185,6 +187,14 @@ export default function MyReservationsPage() {
                 />
               </>
             )}
+          </div>
+        ) : tab === 'matches' ? (
+          <div style={{ padding: '18px 20px 0' }}>
+            <MyMatchesList
+              matches={matches}
+              token={token!}
+              onChanged={() => { if (token) api.getMyMatches(token).then(setMatches).catch(() => {}); }}
+            />
           </div>
         ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13, padding: '18px 20px 0' }}>
