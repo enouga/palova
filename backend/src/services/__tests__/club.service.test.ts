@@ -18,10 +18,12 @@ describe('ClubService — recherche de membres', () => {
     prismaMock.clubMembership.findMany.mockResolvedValue([
       { user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont' } },
     ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
 
     const result = await service.searchMembers('demo', 'caller', '');
 
-    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont' }]);
+    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null }]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.user).toBeUndefined(); // pas de filtre nom quand la requête est vide
     expect(arg.take).toBe(20);
@@ -34,12 +36,14 @@ describe('ClubService — recherche de membres', () => {
       { user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont' } },
       { user: { id: 'u2', firstName: 'Julie', lastName: 'Dupond' } },
     ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
 
     const result = await service.searchMembers('demo', 'caller', 'dup');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont' },
-      { id: 'u2', firstName: 'Julie', lastName: 'Dupond' },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null },
+      { id: 'u2', firstName: 'Julie', lastName: 'Dupond', level: null },
     ]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.userId).toEqual({ not: 'caller' });
@@ -47,6 +51,24 @@ describe('ClubService — recherche de membres', () => {
     expect(arg.where.user).toBeDefined(); // filtre nom appliqué quand la requête est non vide
     expect(arg.take).toBe(20);
   });
+  it('enrichit chaque membre avec son niveau padel (level)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont' } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'u1', displayLevel: 5, isProvisional: false },
+    ] as any);
+
+    const result = await service.searchMembers('demo', 'caller', '');
+
+    expect(result).toEqual([
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false } },
+    ]);
+  });
+
   it('refuse un membre bloqué (MEMBERSHIP_REQUIRED)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);

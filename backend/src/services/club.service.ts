@@ -4,6 +4,7 @@ import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
 import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
+import { RatingService } from './rating.service';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -57,6 +58,8 @@ interface CreateClubParams {
 }
 
 export class ClubService {
+  private ratingService = new RatingService();
+
   /** Crée un club et rattache l'auteur comme OWNER (transaction). */
   async createClub(params: CreateClubParams) {
     const name = (params.name ?? '').trim();
@@ -374,7 +377,9 @@ export class ClubService {
       take: 20,
       select: { user: { select: { id: true, firstName: true, lastName: true } } },
     });
-    return members.map((m) => m.user);
+    const userIds = members.map((m) => m.user.id);
+    const levels = await this.ratingService.getLevelsForUsers(userIds, 'padel');
+    return members.map((m) => ({ ...m.user, level: levels[m.user.id] ?? null }));
   }
 
   /** Adhésion du joueur connecté à ce club (licence / statut). */
