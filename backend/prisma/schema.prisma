@@ -362,6 +362,7 @@ model User {
   avatarUrl String?   @map("avatar_url")
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
   locale    String?   @default("fr")
+  showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
   emailVerified Boolean @default(false) @map("email_verified")
   isSuperAdmin Boolean @default(false) @map("is_super_admin")
   createdAt    DateTime @default(now()) @map("created_at")
