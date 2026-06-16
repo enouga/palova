@@ -1,5 +1,11 @@
 import { prisma } from '../db/prisma';
+import { Prisma } from '@prisma/client';
 import { SetScore, winningTeam } from './rating/score';
+import { applyMatchRatings, decayForInactivity, TeamPlayer } from './rating/match-rating';
+import {
+  DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
+  isProvisional, levelToRating, ratingToLevel,
+} from './rating/level';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -101,8 +107,60 @@ export class MatchService {
     await prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
   }
 
-  /** Implémenté en Task 5. Stub temporaire pour compiler. */
-  async finalize(_matchId: string): Promise<void> {
-    /* no-op (remplacé Task 5) */
+  /** Finalise un match confirmé : applique Glicko aux 4 joueurs (idempotent, transaction Serializable). */
+  async finalize(matchId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: { players: { select: { userId: true, team: true } } },
+      });
+      if (!match) throw new Error('MATCH_NOT_FOUND');
+      if (match.ratingsAppliedAt) return; // déjà appliqué → idempotent
+
+      const playedAt = match.playedAt;
+      const states: (TeamPlayer & { userId: string; before: number })[] = [];
+      for (const p of match.players) {
+        const existing = await tx.playerRating.findUnique({
+          where: { userId_sportId: { userId: p.userId, sportId: match.sportId } },
+        });
+        const base = existing
+          ? { rating: existing.rating, rd: existing.rd, volatility: existing.volatility, last: existing.lastMatchAt }
+          : { rating: levelToRating(SKIP_DEFAULT_LEVEL), rd: DEFAULT_RD, volatility: DEFAULT_VOLATILITY, last: null as Date | null };
+        const days = base.last ? Math.max(0, (playedAt.getTime() - base.last.getTime()) / 86400000) : 0;
+        const decayed = decayForInactivity({ rating: base.rating, rd: base.rd, volatility: base.volatility }, days);
+        states.push({ ...decayed, team: p.team as 1 | 2, userId: p.userId, before: ratingToLevel(decayed.rating) });
+      }
+
+      const updated = applyMatchRatings(states, match.sets as unknown as [number, number][]);
+
+      for (let i = 0; i < states.length; i++) {
+        const s = states[i];
+        const u = updated[i];
+        const displayLevel = ratingToLevel(u.rating);
+        await tx.playerRating.upsert({
+          where: { userId_sportId: { userId: s.userId, sportId: match.sportId } },
+          create: {
+            userId: s.userId, sportId: match.sportId,
+            rating: u.rating, rd: u.rd, volatility: u.volatility,
+            displayLevel, isProvisional: isProvisional(u.rd),
+            matchesPlayed: 1, lastMatchAt: playedAt, initialSelfLevel: null,
+          },
+          update: {
+            rating: u.rating, rd: u.rd, volatility: u.volatility,
+            displayLevel, isProvisional: isProvisional(u.rd),
+            matchesPlayed: { increment: 1 }, lastMatchAt: playedAt,
+          },
+        });
+        await tx.matchPlayer.update({
+          where: { matchId_userId: { matchId, userId: s.userId } },
+          data: { ratingBefore: s.before, ratingAfter: displayLevel },
+        });
+      }
+
+      await tx.match.update({
+        where: { id: matchId },
+        data: { status: 'CONFIRMED', ratingsAppliedAt: new Date() },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 }

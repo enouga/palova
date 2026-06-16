@@ -1,5 +1,6 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+import { Prisma } from '@prisma/client';
 import { MatchService } from '../match.service';
 
 const service = new MatchService();
@@ -114,5 +115,51 @@ describe('confirm / dispute', () => {
   it('refuse un joueur étranger au match', async () => {
     prismaMock.match.findUnique.mockResolvedValue(matchRow() as any);
     await expect(service.confirm('m1', 'uX')).rejects.toThrow('NOT_A_MATCH_PLAYER');
+  });
+});
+
+describe('finalize', () => {
+  const playedAt = new Date('2026-06-10T10:00:00Z');
+
+  function txMock() {
+    const ratings: Record<string, any> = {};
+    return {
+      match: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'm1', status: 'PENDING', sportId: 'sport-padel', playedAt, ratingsAppliedAt: null,
+          players: [
+            { userId: 'u1', team: 1 }, { userId: 'u2', team: 1 },
+            { userId: 'u3', team: 2 }, { userId: 'u4', team: 2 },
+          ],
+          sets: [[6, 2], [6, 2]],
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      playerRating: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockImplementation((a: any) => { ratings[a.create.userId] = a.create; return Promise.resolve(a.create); }),
+      },
+      matchPlayer: { update: jest.fn().mockResolvedValue({}) },
+      _ratings: ratings,
+    };
+  }
+
+  it('applique les niveaux des 4 joueurs et passe le match CONFIRMED', async () => {
+    const tx = txMock();
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.finalize('m1');
+    expect(tx.match.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'CONFIRMED' }),
+    }));
+    expect(tx.playerRating.upsert).toHaveBeenCalledTimes(4);
+    expect(tx.matchPlayer.update).toHaveBeenCalledTimes(4);
+  });
+
+  it('idempotent : si ratingsAppliedAt déjà set, ne réapplique pas', async () => {
+    const tx = txMock();
+    tx.match.findUnique.mockResolvedValue({ id: 'm1', status: 'CONFIRMED', ratingsAppliedAt: new Date(), players: [], sets: [] } as any);
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.finalize('m1');
+    expect(tx.playerRating.upsert).not.toHaveBeenCalled();
   });
 });
