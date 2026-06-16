@@ -5,8 +5,9 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
-import { Btn, Chip } from '@/components/ui/atoms';
+import { Btn, Chip, Segmented } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
@@ -45,6 +46,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [myLevel, setMyLevel] = useState<number | null>(null);
   const [filterMyLevel, setFilterMyLevel] = useState(false);
   const [joinWarning, setJoinWarning] = useState<OpenMatch | null>(null);
+  const [view, setView] = useState<'parties' | 'classement'>('parties');
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -87,6 +89,15 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
+        <div style={{ padding: '16px 20px 0' }}>
+          <Segmented<'parties' | 'classement'>
+            value={view}
+            onChange={setView}
+            options={[{ value: 'parties', label: 'Parties' }, { value: 'classement', label: 'Classement' }]}
+          />
+        </div>
+        {view === 'parties' ? (
+          <>
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
@@ -172,6 +183,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             );
           })}
         </div>
+          </>
+        ) : (
+          <Leaderboard club={club} viewerUserId={null} />
+        )}
       </div>
       {recordingFor && token && (
         <MatchResultModal
