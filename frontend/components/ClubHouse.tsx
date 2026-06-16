@@ -119,10 +119,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         </div>
       )}
 
-      {/* Parties pour toi : recos à ton niveau, top 3 (le bloc re-filtre en interne) */}
+      {/* Parties pour toi : recos à ton niveau, top 3 (calculées une fois, ci-dessus) */}
       {matchRecos.length > 0 && (
         <div style={{ padding: '22px 20px 0' }}>
-          <MatchesForYou matches={openMatches} myLevel={myLevel} timezone={club.timezone} />
+          <MatchesForYou recos={matchRecos} timezone={club.timezone} />
         </div>
       )}
 

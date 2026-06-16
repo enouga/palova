@@ -14,19 +14,15 @@ function m(over: Partial<OpenMatch> & { id: string }): OpenMatch {
   };
 }
 
-it('affiche jusqu’à 3 recos + lien Voir tout', () => {
-  wrap(<MatchesForYou matches={[m({ id: 'a', resourceName: 'Court A' }), m({ id: 'b', resourceName: 'Court B' })]} myLevel={5} timezone="Europe/Paris" />);
+it('affiche les recos reçues + lien Voir tout', () => {
+  wrap(<MatchesForYou recos={[m({ id: 'a', resourceName: 'Court A' }), m({ id: 'b', resourceName: 'Court B' })]} timezone="Europe/Paris" />);
   expect(screen.getByText('Parties pour toi')).toBeInTheDocument();
   expect(screen.getByText('Court A')).toBeInTheDocument();
+  expect(screen.getByText('Court B')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Voir tout/i })).toHaveAttribute('href', '/parties');
 });
 
 it('masqué si aucune reco', () => {
-  const { container } = wrap(<MatchesForYou matches={[m({ id: 'x', full: true })]} myLevel={5} timezone="Europe/Paris" />);
-  expect(container).toBeEmptyDOMElement();
-});
-
-it('masqué si niveau inconnu', () => {
-  const { container } = wrap(<MatchesForYou matches={[m({ id: 'a' })]} myLevel={null} timezone="Europe/Paris" />);
+  const { container } = wrap(<MatchesForYou recos={[]} timezone="Europe/Paris" />);
   expect(container).toBeEmptyDOMElement();
 });

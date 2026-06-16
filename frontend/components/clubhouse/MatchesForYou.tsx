@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { OpenMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
-import { recommendMatches } from '@/lib/recommend';
 import { rangeLabel } from '@/lib/levelMatch';
 
 function formatWhen(iso: string, tz: string): string {
@@ -11,11 +10,10 @@ function formatWhen(iso: string, tz: string): string {
     .format(new Date(iso)).replace(':', 'h');
 }
 
-// Bloc Club-house « Parties pour toi » : top 3 des parties ouvertes à ton niveau.
-// Masqué (null) si aucune reco ou niveau inconnu. Cartes compactes → /parties.
-export function MatchesForYou({ matches, myLevel, timezone }: { matches: OpenMatch[]; myLevel: number | null; timezone: string }) {
+// Bloc Club-house « Parties pour toi » : présentationnel. Reçoit les recos déjà
+// calculées par le parent (cf. recommendMatches). Masqué (null) si vide. Cartes → /parties.
+export function MatchesForYou({ recos, timezone }: { recos: OpenMatch[]; timezone: string }) {
   const { th } = useTheme();
-  const recos = recommendMatches(matches, myLevel, new Date()).slice(0, 3);
   if (recos.length === 0) return null;
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
