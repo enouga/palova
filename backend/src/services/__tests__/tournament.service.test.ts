@@ -362,14 +362,34 @@ describe('TournamentService — admin & lectures', () => {
   it('listParticipants renvoie les binômes actifs (noms + avatar)', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
     prismaMock.tournamentRegistration.findMany.mockResolvedValue([
-      { id: 'r1', status: 'CONFIRMED', captain: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' }, partner: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+      { id: 'r1', status: 'CONFIRMED', captainUserId: 'cap1', partnerUserId: 'par1', captain: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' }, partner: { firstName: 'B', lastName: 'B', avatarUrl: null } },
     ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
     const res = await service.listParticipants('t1');
     expect(res).toHaveLength(1);
     expect(res[0]).toMatchObject({ status: 'CONFIRMED', captain: { firstName: 'A', avatarUrl: '/uploads/avatars/a.jpg' }, partner: { avatarUrl: null } });
     const select = (prismaMock.tournamentRegistration.findMany.mock.calls[0][0] as any).select;
     expect(select.captain.select.avatarUrl).toBe(true);
     expect(select.partner.select.avatarUrl).toBe(true);
+  });
+
+  it('listParticipants enrichit les entrées avec captainLevel et partnerLevel', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', captainUserId: 'cap1', partnerUserId: 'par1',
+        captain: { firstName: 'A', lastName: 'A', avatarUrl: null },
+        partner: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'cap1', displayLevel: 4, isProvisional: false },
+    ] as any);
+
+    const res = await service.listParticipants('t1');
+
+    expect(res[0].captainLevel).toEqual({ level: 4, tier: expect.any(String), isProvisional: false });
+    expect(res[0].partnerLevel).toBeNull();
   });
 });
 

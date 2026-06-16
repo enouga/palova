@@ -1,6 +1,7 @@
 import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as notify from '../email/notifications';
+import { RatingService } from './rating.service';
 
 type Sex = 'MALE' | 'FEMALE';
 
@@ -162,20 +163,30 @@ export class TournamentService {
     return withCount;
   }
 
-  /** Liste publique des binômes inscrits (noms + avatar), confirmés puis liste d'attente. DRAFT masqué. */
+  /** Liste publique des binômes inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
   async listParticipants(tournamentId: string) {
     const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { status: true } });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
-    return prisma.tournamentRegistration.findMany({
+    const registrations = await prisma.tournamentRegistration.findMany({
       where: { tournamentId, status: { not: 'CANCELLED' } },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }], // CONFIRMED avant WAITLISTED, puis ordre d'inscription
       select: {
         id: true,
         status: true,
+        captainUserId: true,
+        partnerUserId: true,
         captain: { select: { firstName: true, lastName: true, avatarUrl: true } },
         partner: { select: { firstName: true, lastName: true, avatarUrl: true } },
       },
     });
+    const allUserIds = [...new Set(registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]))];
+    const ratingService = new RatingService();
+    const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, 'padel') : {};
+    return registrations.map(({ captainUserId, partnerUserId, ...r }) => ({
+      ...r,
+      captainLevel: levels[captainUserId] ?? null,
+      partnerLevel: levels[partnerUserId] ?? null,
+    }));
   }
 
   /** Inscriptions actives du joueur connecté (capitaine OU partenaire), tous clubs, avec tél + licence du binôme. */

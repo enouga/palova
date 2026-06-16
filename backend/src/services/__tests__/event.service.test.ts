@@ -212,14 +212,35 @@ describe('EventService lectures', () => {
   it('listParticipants : inscrits actifs (noms + avatar, jamais l e-mail)', async () => {
     prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
     prismaMock.eventRegistration.findMany.mockResolvedValue([
-      { id: 'r1', status: 'CONFIRMED', user: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' } },
+      { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' } },
     ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
     const out = await service.listParticipants('e1');
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ status: 'CONFIRMED', user: { firstName: 'A', avatarUrl: '/uploads/avatars/a.jpg' } });
     const args = (prismaMock.eventRegistration.findMany.mock.calls[0][0] as any);
     expect(args.select.user.select).toEqual({ firstName: true, lastName: true, avatarUrl: true });
     expect(args.orderBy).toEqual([{ status: 'asc' }, { createdAt: 'asc' }]);
+  });
+
+  it('listParticipants enrichit les entrées avec level (UserLevel ou null)', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.eventRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+      { id: 'r2', status: 'CONFIRMED', userId: 'user-b', user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'user-a', displayLevel: 5, isProvisional: true },
+    ] as any);
+
+    const out = await service.listParticipants('e1');
+
+    expect(out[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: true });
+    expect(out[1].level).toBeNull();
+    // userId ne doit pas fuiter dans la réponse
+    expect((out[0] as any).userId).toBeUndefined();
   });
 
   it('listUserRegistrations : inscriptions actives avec event + club', async () => {

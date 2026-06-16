@@ -1,6 +1,7 @@
 import { ClubEventKind, ClubEventStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as notify from '../email/notifications';
+import { RatingService } from './rating.service';
 
 export interface CreateEventInput {
   name: string;
@@ -148,19 +149,27 @@ export class EventService {
     return withCount;
   }
 
-  /** Liste publique des inscrits (noms + avatar), confirmés puis liste d'attente. DRAFT masqué. */
+  /** Liste publique des inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
   async listParticipants(eventId: string) {
     const e = await prisma.clubEvent.findUnique({ where: { id: eventId }, select: { status: true } });
     if (!e || e.status === 'DRAFT') throw new Error('EVENT_NOT_FOUND');
-    return prisma.eventRegistration.findMany({
+    const registrations = await prisma.eventRegistration.findMany({
       where: { eventId, status: { not: 'CANCELLED' } },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }], // CONFIRMED avant WAITLISTED, puis ordre d'inscription
       select: {
         id: true,
         status: true,
+        userId: true,
         user: { select: { firstName: true, lastName: true, avatarUrl: true } },
       },
     });
+    const allUserIds = registrations.map((r) => r.userId);
+    const ratingService = new RatingService();
+    const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, 'padel') : {};
+    return registrations.map(({ userId, ...r }) => ({
+      ...r,
+      level: levels[userId] ?? null,
+    }));
   }
 
   /** Inscriptions actives du joueur connecté, tous clubs, avec event + club. */
