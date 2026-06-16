@@ -190,13 +190,14 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
       orderBy: { match: { playedAt: 'desc' } },
       select: {
         confirmation: true, team: true, ratingAfter: true,
-        match: { select: { id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true } },
+        match: { select: { id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true, reservationId: true } },
       },
     });
     res.json(rows.map((r) => ({
       matchId: r.match.id, status: r.match.status, sets: r.match.sets, playedAt: r.match.playedAt,
       winningTeam: r.match.winningTeam, myTeam: r.team, myConfirmation: r.confirmation,
       needsMyConfirmation: r.match.status === 'PENDING' && r.confirmation === 'PENDING',
+      reservationId: r.match.reservationId,
     })));
   } catch (err) { next(err); }
 });
