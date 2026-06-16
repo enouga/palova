@@ -10,7 +10,7 @@ export function agendaKindMeta(kind: AgendaKind): { color: string; label: string
   switch (kind) {
     case 'reservation': return { color: ACCENTS.blue,    label: 'Réservation' };
     case 'tournament':  return { color: ACCENTS.apricot, label: 'Tournoi' };
-    case 'event':       return { color: ACCENTS.cyan,    label: 'Event' };
+    case 'event':       return { color: ACCENTS.emerald, label: 'Event' };
   }
 }
 
