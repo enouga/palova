@@ -173,6 +173,13 @@ describe('clubLeaderboard', () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
     await expect(service.clubLeaderboard('padel-arena', 'uX', 'padel')).rejects.toThrow('MEMBERSHIP_REQUIRED');
   });
+
+  it('sport inconnu → SPORT_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue(null as any);
+    await expect(service.clubLeaderboard('padel-arena', 'u1', 'curling')).rejects.toThrow('SPORT_NOT_FOUND');
+  });
 });
 
 describe('ClubService.resolveSlug', () => {

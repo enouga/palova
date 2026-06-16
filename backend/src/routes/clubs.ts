@@ -32,6 +32,7 @@ const ERROR_STATUS: Record<string, number> = {
   SLUG_RESERVED:         400,
   SLUG_TAKEN:            409,
   CLUB_NOT_FOUND:        404,
+  SPORT_NOT_FOUND:       404,
   PAGE_NOT_FOUND:        404,
   MEMBERSHIP_REQUIRED:   403,
   MEMBERSHIP_BLOCKED:    403,
