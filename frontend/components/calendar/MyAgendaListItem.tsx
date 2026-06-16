@@ -23,13 +23,16 @@ function fmtDate(iso: string, tz: string): string {
  * `localSlug` = club courant (sous-domaine), ou null sur la plateforme. Une entrée d'un AUTRE club
  * (« étrangère ») devient une carte-lien qui renvoie vers l'app de ce club, sans actions inline.
  */
-export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged }: {
+export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged, onRecordResult, canRecord, existingMatchStatus }: {
   item: AgendaListItem;
   now: number;
   localSlug: string | null;
   token: string | null;
   onCancel: (r: MyReservation) => void;
   onPlayersChanged: () => void;
+  onRecordResult?: (r: MyReservation) => void;
+  canRecord?: (r: MyReservation) => boolean;
+  existingMatchStatus?: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
 }) {
   const { th } = useTheme();
   const color = agendaKindMeta(item.kind).color;
@@ -58,6 +61,8 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   if (item.kind === 'reservation') {
     const r = item.r;
     const canCancel = isCancellationOpen(r, now);
+    const showRecord = item.past && !isForeign && canRecord?.(r) && !existingMatchStatus;
+    const MATCH_STATUS_LABEL: Record<string, string> = { PENDING: 'À confirmer', CONFIRMED: 'Résultat enregistré', DISPUTED: 'En litige' };
     body = (
       <>
         <div style={headRow}>
@@ -74,6 +79,14 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
             </span>
           ))}
         </div>
+        {showRecord && onRecordResult && (
+          <div style={{ marginTop: 8 }}>
+            <button onClick={() => onRecordResult(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Saisir le résultat</button>
+          </div>
+        )}
+        {item.past && !isForeign && existingMatchStatus && MATCH_STATUS_LABEL[existingMatchStatus] && (
+          <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{MATCH_STATUS_LABEL[existingMatchStatus]}</div>
+        )}
         {!isForeign && !item.past && token ? (
           <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
         ) : (r.participants?.length ?? 0) > 0 ? (

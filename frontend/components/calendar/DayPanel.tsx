@@ -25,6 +25,7 @@ function dayTitle(dayKey: string): string {
 
 export function DayPanel({
   dayKey, entries, localSlug, token, now, onCancel, onPlayersChanged, onReserve, reserveLabel,
+  onRecordResult, canRecord,
 }: {
   dayKey: string;
   entries: CalendarEntry[];
@@ -35,6 +36,8 @@ export function DayPanel({
   onPlayersChanged: () => void;
   onReserve: () => void;
   reserveLabel: string;
+  onRecordResult?: (r: MyReservation) => void;
+  canRecord?: (r: MyReservation) => boolean;
 }) {
   const { th } = useTheme();
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
@@ -105,6 +108,11 @@ export function DayPanel({
                       />
                     </div>
                   ) : null}
+                  {e.past && !isForeign && canRecord?.(r) && onRecordResult && (
+                    <div style={{ marginTop: 8 }}>
+                      <button onClick={() => onRecordResult(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Saisir le résultat</button>
+                    </div>
+                  )}
                 </>,
                 `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
               );

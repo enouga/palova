@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, CancelledWithRefund } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, CancelledWithRefund, MyMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -16,6 +16,8 @@ import { DayPanel } from '@/components/calendar/DayPanel';
 import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
 import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonths } from '@/lib/calendar';
 import { toCents, fmtEuros } from '@/lib/caisse';
+import { MatchResultModal } from '@/components/match/MatchResultModal';
+import { canRecordResult } from '@/lib/match';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -40,6 +42,8 @@ export default function MyReservationsPage() {
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
   const [refundMsg, setRefundMsg] = useState<string | null>(null);
+  const [matches, setMatches] = useState<MyMatch[]>([]);
+  const [recordingFor, setRecordingFor] = useState<MyReservation | null>(null);
   const [ym, setYm] = useState(() => {
     const [y, m] = todayKey().split('-').map(Number);
     return { year: y, month: m };
@@ -65,7 +69,12 @@ export default function MyReservationsPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (token) load(token); }, [token, load]);
+  useEffect(() => {
+    if (token) {
+      load(token);
+      api.getMyMatches(token).then(setMatches).catch(() => {});
+    }
+  }, [token, load]);
 
   // Horloge posée en effet (jamais new Date() au rendu → pas de mismatch d'hydration).
   const [now, setNow] = useState<number | null>(null);
@@ -93,6 +102,8 @@ export default function MyReservationsPage() {
     () => entriesByDay(buildCalendarEntries(fItems, fRegs, fEvts, nowDate)),
     [fItems, fRegs, fEvts, nowDate],
   );
+  const matchFor = (rid: string) => matches.find((m) => m.reservationId === rid);
+
   const cancel = async (r: MyReservation) => {
     if (!token) return;
     setCancelling(true);
@@ -169,6 +180,8 @@ export default function MyReservationsPage() {
                   onPlayersChanged={() => { if (token) load(token); }}
                   onReserve={() => router.push(reserveHref)}
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
+                  canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
+                  onRecordResult={(r) => setRecordingFor(r)}
                 />
               </>
             )}
@@ -196,6 +209,9 @@ export default function MyReservationsPage() {
                 token={token}
                 onCancel={setConfirmCancel}
                 onPlayersChanged={() => { if (token) load(token); }}
+                canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
+                onRecordResult={(r) => setRecordingFor(r)}
+                existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
               />
             ))
           )}
@@ -219,6 +235,15 @@ export default function MyReservationsPage() {
           busy={cancelling}
           onConfirm={() => cancel(confirmCancel)}
           onCancel={() => setConfirmCancel(null)}
+        />
+      )}
+      {recordingFor && token && (
+        <MatchResultModal
+          reservationId={recordingFor.id}
+          players={recordingFor.participants ?? []}
+          token={token}
+          onClose={() => setRecordingFor(null)}
+          onSaved={() => { setRecordingFor(null); api.getMyMatches(token).then(setMatches).catch(() => {}); }}
         />
       )}
     </Screen>
