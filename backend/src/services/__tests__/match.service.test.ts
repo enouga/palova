@@ -56,3 +56,63 @@ describe('createFromReservation', () => {
       .rejects.toThrow('VALIDATION_ERROR');
   });
 });
+
+describe('confirm / dispute', () => {
+  const matchRow = (overrides = {}) => ({
+    id: 'm1', status: 'PENDING',
+    players: [
+      { userId: 'u1', confirmation: 'CONFIRMED' },
+      { userId: 'u2', confirmation: 'CONFIRMED' },
+      { userId: 'u3', confirmation: 'CONFIRMED' },
+      { userId: 'u4', confirmation: 'PENDING' },
+    ],
+    ...overrides,
+  });
+
+  it('confirmer le dernier joueur déclenche la finalisation', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(matchRow() as any);
+    prismaMock.matchPlayer.update.mockResolvedValue({} as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    await service.confirm('m1', 'u4');
+    expect(prismaMock.matchPlayer.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { confirmation: 'CONFIRMED' },
+    }));
+    expect(spy).toHaveBeenCalledWith('m1');
+    spy.mockRestore();
+  });
+
+  it('confirmer un joueur non dernier ne finalise pas', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(matchRow({
+      players: [
+        { userId: 'u1', confirmation: 'CONFIRMED' }, { userId: 'u2', confirmation: 'PENDING' },
+        { userId: 'u3', confirmation: 'PENDING' }, { userId: 'u4', confirmation: 'PENDING' },
+      ],
+    }) as any);
+    prismaMock.matchPlayer.update.mockResolvedValue({} as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    await service.confirm('m1', 'u2');
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('contester met le match en DISPUTED, pas de finalisation', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(matchRow() as any);
+    prismaMock.matchPlayer.update.mockResolvedValue({} as any);
+    prismaMock.match.update.mockResolvedValue({} as any);
+    const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
+    await service.dispute('m1', 'u4');
+    expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'DISPUTED' } }));
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('refuse de confirmer un match déjà CONFIRMED', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(matchRow({ status: 'CONFIRMED' }) as any);
+    await expect(service.confirm('m1', 'u4')).rejects.toThrow('MATCH_NOT_PENDING');
+  });
+
+  it('refuse un joueur étranger au match', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(matchRow() as any);
+    await expect(service.confirm('m1', 'uX')).rejects.toThrow('NOT_A_MATCH_PLAYER');
+  });
+});

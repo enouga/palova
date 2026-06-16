@@ -67,4 +67,42 @@ export class MatchService {
       include: { players: true },
     });
   }
+
+  private async loadPending(matchId: string, userId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { players: { select: { userId: true, confirmation: true } } },
+    });
+    if (!match) throw new Error('MATCH_NOT_FOUND');
+    if (!match.players.some((p) => p.userId === userId)) throw new Error('NOT_A_MATCH_PLAYER');
+    if (match.status !== 'PENDING') throw new Error('MATCH_NOT_PENDING');
+    return match;
+  }
+
+  /** Le joueur confirme le résultat. Si les 4 sont confirmés → finalisation. */
+  async confirm(matchId: string, userId: string): Promise<void> {
+    const match = await this.loadPending(matchId, userId);
+    await prisma.matchPlayer.update({
+      where: { matchId_userId: { matchId, userId } },
+      data: { confirmation: 'CONFIRMED' },
+    });
+    const allConfirmed = match.players.every((p) =>
+      p.userId === userId ? true : p.confirmation === 'CONFIRMED');
+    if (allConfirmed) await this.finalize(matchId);
+  }
+
+  /** Le joueur conteste : le match passe DISPUTED, aucun impact sur les niveaux. */
+  async dispute(matchId: string, userId: string): Promise<void> {
+    await this.loadPending(matchId, userId);
+    await prisma.matchPlayer.update({
+      where: { matchId_userId: { matchId, userId } },
+      data: { confirmation: 'DISPUTED' },
+    });
+    await prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
+  }
+
+  /** Implémenté en Task 5. Stub temporaire pour compiler. */
+  async finalize(_matchId: string): Promise<void> {
+    /* no-op (remplacé Task 5) */
+  }
 }
