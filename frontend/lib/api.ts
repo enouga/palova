@@ -367,6 +367,13 @@ export const api = {
   updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
+  // --- Niveau Glicko-2 ---
+  getMyRating: (token: string, sport = 'padel') =>
+    request<MyRating | null>(`/api/me/rating?sport=${encodeURIComponent(sport)}`, {}, token),
+
+  calibrateRating: (selfLevel: number | null, token: string, sport = 'padel') =>
+    request<MyRating>('/api/me/rating/calibrate', { method: 'POST', body: JSON.stringify({ sport, selfLevel }) }, token),
+
   // Upload d'avatar en FormData — fetch dédié : request() force Content-Type JSON.
   uploadMyAvatar: async (file: File, token: string): Promise<MyProfile> => {
     const form = new FormData();
@@ -1185,6 +1192,14 @@ export interface MyProfile {
   avatarUrl: string | null;
   locale: string | null;
   isSuperAdmin: boolean;
+}
+
+export interface MyRating {
+  calibrated: boolean;
+  level: number;
+  tier: string;
+  isProvisional: boolean;
+  matchesPlayed: number;
 }
 
 export interface ClubMemberSearchResult {
