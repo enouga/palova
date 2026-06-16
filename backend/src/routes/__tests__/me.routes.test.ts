@@ -29,7 +29,7 @@ if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environ
 const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, process.env.JWT_SECRET!);
 const PROFILE = {
   id: 'u1', email: 'test@x.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: null, sex: null,
-  birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false,
+  birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
 };
 
 // PNG 1x1 minimal (entête valide suffisante : le backend ne décode pas l'image).
@@ -69,6 +69,20 @@ describe('PATCH /api/me', () => {
     const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ birthDate: null });
     expect(res.status).toBe(200);
     expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { birthDate: null } }));
+  });
+
+  it('rejette showInLeaderboard non booléen (400)', async () => {
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ showInLeaderboard: 'oui' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('showInLeaderboard invalide');
+  });
+
+  it('met à jour showInLeaderboard', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, showInLeaderboard: true } as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ showInLeaderboard: true });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { showInLeaderboard: true } }));
+    expect(res.body.showInLeaderboard).toBe(true);
   });
 });
 

@@ -19,7 +19,7 @@ const ratingService = new RatingService();
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
   id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
-  birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true,
+  birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true, showInLeaderboard: true,
 } as const;
 
 const LOCALES = ['fr', 'en', 'es'] as const;
@@ -99,8 +99,8 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, n
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
@@ -120,6 +120,10 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     if (locale !== undefined) {
       if (locale !== null && !LOCALES.includes(locale)) return void res.status(400).json({ error: 'locale invalide' });
       data.locale = locale;
+    }
+    if (showInLeaderboard !== undefined) {
+      if (typeof showInLeaderboard !== 'boolean') return void res.status(400).json({ error: 'showInLeaderboard invalide' });
+      data.showInLeaderboard = showInLeaderboard;
     }
     const user = await prisma.user.update({ where: { id: req.user!.id }, data, select: PROFILE_SELECT });
     res.json(user);
