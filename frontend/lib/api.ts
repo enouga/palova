@@ -73,6 +73,19 @@ export const api = {
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
+  // --- Résultats de matchs (Lot 2) ---
+  recordMatchResult: (reservationId: string, body: { teams: Record<1 | 2, string[]>; sets: [number, number][] }, token: string) =>
+    request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
+  getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
+  confirmMatch: (matchId: string, token: string) =>
+    request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
+  disputeMatch: (matchId: string, token: string) =>
+    request<{ ok: true }>(`/api/matches/${matchId}/dispute`, { method: 'POST' }, token),
+  getClubMatches: (clubId: string, status: string, token: string) =>
+    request<ClubMatch[]>(`/api/clubs/${clubId}/admin/matches?status=${encodeURIComponent(status)}`, {}, token),
+  resolveClubMatch: (clubId: string, matchId: string, body: { action: 'VALIDATE' | 'CANCEL'; sets?: [number, number][] }, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/matches/${matchId}/resolve`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   // Adhésions du joueur (clubs dont il est membre + statut abonné).
   getMyMemberships: (token: string) => request<PlayerMembership[]>('/api/me/memberships', {}, token),
 
@@ -546,6 +559,29 @@ export interface MyReservation {
   resource: { id: string; name: string; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null }[];
+}
+
+export interface MyMatch {
+  matchId: string;
+  reservationId: string | null;
+  status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
+  sets: [number, number][];
+  playedAt: string;
+  winningTeam: number | null;
+  myTeam: number;
+  myConfirmation: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
+  ratingAfter: number | null;
+  needsMyConfirmation: boolean;
+}
+
+export interface ClubMatchPlayer {
+  userId: string; team: number; confirmation: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
+  user: { firstName: string; lastName: string };
+}
+export interface ClubMatch {
+  id: string; status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
+  sets: [number, number][]; playedAt: string; winningTeam: number | null; confirmDeadline: string;
+  players: ClubMatchPlayer[];
 }
 
 export interface ReservationPlayer {
