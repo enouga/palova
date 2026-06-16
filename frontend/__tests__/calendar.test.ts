@@ -317,7 +317,7 @@ describe('agendaKindMeta', () => {
   it('associe une couleur ACCENTS et un libellé à chaque type', () => {
     expect(agendaKindMeta('reservation')).toEqual({ color: ACCENTS.blue, label: 'Réservation' });
     expect(agendaKindMeta('tournament')).toEqual({ color: ACCENTS.apricot, label: 'Tournoi' });
-    expect(agendaKindMeta('event')).toEqual({ color: ACCENTS.cyan, label: 'Event' });
+    expect(agendaKindMeta('event')).toEqual({ color: ACCENTS.emerald, label: 'Event' });
   });
 });
 
