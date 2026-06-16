@@ -1257,13 +1257,13 @@ describe('ReservationService', () => {
   });
 
   describe('getOwnReservationPlayers', () => {
-    it('renvoie capacité + joueurs pour le propriétaire', async () => {
+    it('renvoie capacité + joueurs (avec avatarUrl) pour le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', userId: 'user-1',
         resource: { attributes: { format: 'double' } },
         participants: [
-          { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, user: { firstName: 'Eric', lastName: 'N' } },
-          { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  user: { firstName: 'Sam',  lastName: 'P' } },
+          { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
+          { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
         ],
       } as any);
 
@@ -1271,7 +1271,8 @@ describe('ReservationService', () => {
 
       expect(out.capacity).toBe(4);
       expect(out.participants).toHaveLength(2);
-      expect(out.participants[0]).toMatchObject({ id: 'p1', isOrganizer: true, firstName: 'Eric', share: '25.00' });
+      expect(out.participants[0]).toMatchObject({ id: 'p1', isOrganizer: true, firstName: 'Eric', share: '25.00', avatarUrl: '/uploads/avatars/eric.png' });
+      expect(out.participants[1].avatarUrl).toBeNull();
     });
 
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {

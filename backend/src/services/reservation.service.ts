@@ -888,7 +888,7 @@ export class ReservationService {
   private mapOwnPlayers(r: {
     id: string;
     resource: { attributes: Prisma.JsonValue };
-    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; user: { firstName: string; lastName: string } }>;
+    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; user: { firstName: string; lastName: string; avatarUrl: string | null } }>;
   }) {
     const format = (r.resource.attributes as { format?: string } | null)?.format;
     return {
@@ -897,6 +897,7 @@ export class ReservationService {
       participants: r.participants.map((p) => ({
         id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
         firstName: p.user.firstName, lastName: p.user.lastName,
+        avatarUrl: p.user.avatarUrl,
         share: Number(p.share).toFixed(2),
       })),
     };
@@ -910,7 +911,7 @@ export class ReservationService {
         resource: { select: { attributes: true } },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { id: true, userId: true, isOrganizer: true, share: true, user: { select: { firstName: true, lastName: true } } },
+          select: { id: true, userId: true, isOrganizer: true, share: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
     });
