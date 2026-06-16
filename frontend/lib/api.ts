@@ -377,7 +377,7 @@ export const api = {
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
 
-  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null }, token: string) =>
+  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
   // --- Niveau Glicko-2 ---
@@ -389,6 +389,9 @@ export const api = {
 
   getRatingHistory: (token: string, sport = 'padel') =>
     request<RatingPoint[]>(`/api/me/rating/history?sport=${encodeURIComponent(sport)}`, {}, token),
+
+  getClubLeaderboard: (slug: string, token: string, sport = 'padel') =>
+    request<ClubLeaderboard>(`/api/clubs/${encodeURIComponent(slug)}/leaderboard?sport=${encodeURIComponent(sport)}`, {}, token),
 
   // Upload d'avatar en FormData — fetch dédié : request() force Content-Type JSON.
   uploadMyAvatar: async (file: File, token: string): Promise<MyProfile> => {
@@ -1238,6 +1241,7 @@ export interface MyProfile {
   avatarUrl: string | null;
   locale: string | null;
   isSuperAdmin: boolean;
+  showInLeaderboard: boolean;
 }
 
 export interface MyRating {
@@ -1250,6 +1254,32 @@ export interface MyRating {
 
 export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
 export interface RatingPoint { playedAt: string; level: number; }
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  level: number;
+  tier: string;
+  matchesPlayed: number;
+}
+
+export interface LeaderboardMe {
+  optedIn: boolean;
+  ranked: boolean;
+  rank: number | null;
+  level: number | null;
+  matchesPlayed: number;
+  matchesToGo: number;
+}
+
+export interface ClubLeaderboard {
+  sport: string;
+  entries: LeaderboardEntry[];
+  me: LeaderboardMe;
+}
 
 export interface ClubMemberSearchResult {
   id: string;
