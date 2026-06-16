@@ -9,6 +9,7 @@ import { isCancellationOpen } from '@/lib/reservations';
 import { clubUrl } from '@/lib/clubUrl';
 import { KIND_LABEL } from '@/lib/events';
 import { PlayerPills } from '@/components/player/PlayerPills';
+import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -23,13 +24,15 @@ function dayTitle(dayKey: string): string {
 }
 
 export function DayPanel({
-  dayKey, entries, localSlug, onCancel, onManagePlayers, onReserve, reserveLabel,
+  dayKey, entries, localSlug, token, now, onCancel, onPlayersChanged, onReserve, reserveLabel,
 }: {
   dayKey: string;
   entries: CalendarEntry[];
   localSlug: string | null;
+  token: string | null;
+  now: number;
   onCancel: (r: MyReservation) => void;
-  onManagePlayers?: (r: MyReservation) => void;
+  onPlayersChanged: () => void;
   onReserve: () => void;
   reserveLabel: string;
 }) {
@@ -84,20 +87,16 @@ export function DayPanel({
                       <a href={clubUrl(r.resource.club.slug, '/me/reservations')} style={linkStyle}>Voir</a>
                     ) : (!e.past && (
                       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                        {onManagePlayers && (
-                          <button onClick={() => onManagePlayers(r)}
-                            style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            Joueurs
-                          </button>
-                        )}
-                        <button onClick={() => onCancel(r)} disabled={!isCancellationOpen(r, Date.now())}
-                          style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: isCancellationOpen(r, Date.now()) ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: isCancellationOpen(r, Date.now()) ? '#ff7a4d' : th.textFaint }}>
+                        <button onClick={() => onCancel(r)} disabled={!isCancellationOpen(r, now)}
+                          style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: isCancellationOpen(r, now) ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: isCancellationOpen(r, now) ? '#ff7a4d' : th.textFaint }}>
                           Annuler
                         </button>
                       </span>
                     ))}
                   </div>
-                  {(r.participants?.length ?? 0) > 0 && (
+                  {!isForeign && !e.past && token ? (
+                    <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
+                  ) : (r.participants?.length ?? 0) > 0 ? (
                     <div style={{ marginTop: 10 }}>
                       <PlayerPills
                         players={r.participants ?? []}
@@ -105,7 +104,7 @@ export function DayPanel({
                         size="sm"
                       />
                     </div>
-                  )}
+                  ) : null}
                 </>,
                 `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
               );
