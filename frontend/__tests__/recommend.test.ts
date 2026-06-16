@@ -7,7 +7,7 @@ const past = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString()
 
 function m(over: Partial<OpenMatch> & { id: string }): OpenMatch {
   return {
-    id: over.id, resourceName: 'Court 1', startTime: future(2), endTime: future(3),
+    resourceName: 'Court 1', startTime: future(2), endTime: future(3),
     maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
     players: [], targetLevelMin: null, targetLevelMax: null, ...over,
   };

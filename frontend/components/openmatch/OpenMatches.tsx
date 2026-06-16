@@ -5,15 +5,12 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
-import { Btn, Chip, Segmented } from '@/components/ui/atoms';
-import { Icon } from '@/components/ui/Icon';
+import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
-import { PartnerSearch } from '@/components/tournament/PartnerSearch';
-import { PlayerPills } from '@/components/player/PlayerPills';
-import { AddPlayerPill } from '@/components/player/AddPlayerPill';
+import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { inRange, rangeLabel } from '@/lib/levelMatch';
+import { inRange } from '@/lib/levelMatch';
 
 const JOIN_ERRORS: Record<string, string> = {
   MATCH_FULL:            'Cette partie est complète.',
@@ -27,11 +24,6 @@ const JOIN_ERRORS: Record<string, string> = {
   CANNOT_REMOVE_ORGANIZER: "L'organisateur ne peut pas être retiré.",
   PARTICIPANT_NOT_FOUND:  "Ce joueur n'est plus dans la partie.",
 };
-
-function formatWhen(iso: string, tz: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz })
-    .format(new Date(iso)).replace(':', 'h');
-}
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -123,65 +115,24 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
               {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
             </div>
-          ) : visibleMatches.map((m) => {
-            const busy = busyId === m.id;
-            return (
-              <div key={m.id} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <Icon name="users" size={18} color={th.accent} />
-                  <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{m.resourceName}</span>
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {(m.targetLevelMin != null || m.targetLevelMax != null) && (
-                      <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
-                    )}
-                    <Chip tone={m.full ? 'mute' : 'accent'}>{m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''}`}</Chip>
-                  </span>
-                </div>
-                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 12 }}>
-                  {formatWhen(m.startTime, club.timezone)} → {formatWhen(m.endTime, club.timezone)}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <PlayerPills
-                      players={m.players}
-                      spotsLeft={m.spotsLeft}
-                      onRemove={(p) => act(m, () => api.removeOpenMatchPlayer(club.slug, m.id, p.userId, token!))}
-                      canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
-                      busy={busy}
-                      firstSpotSlot={m.viewerIsOrganizer ? (
-                        <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`}
-                          onClick={() => setAddingId((prev) => (prev === m.id ? null : m.id))} />
-                      ) : undefined}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                    {m.viewerIsOrganizer ? (
-                      <Chip tone="line" icon="check">Vous organisez</Chip>
-                    ) : m.viewerIsParticipant ? (
-                      <Btn variant="surface" disabled={busy} onClick={() => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!))}>Quitter</Btn>
-                    ) : (
-                      <Btn icon="plus" disabled={busy || m.full} onClick={() => handleJoin(m)}>Rejoindre</Btn>
-                    )}
-                    {new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
-                      <Btn variant="surface" disabled={busy} onClick={() => setRecordingFor(m)}>Saisir le résultat</Btn>
-                    )}
-                  </div>
-                </div>
-                {m.viewerIsOrganizer && addingId === m.id && (
-                  <div style={{ marginTop: 12 }}>
-                    <PartnerSearch
-                      slug={club.slug} token={token!} selected={null}
-                      excludeIds={m.players.map((p) => p.userId)}
-                      onSelect={(member) => { setAddingId(null); act(m, () => api.addOpenMatchPlayer(club.slug, m.id, member.id, token!)); }}
-                      onClear={() => {}}
-                      disabled={busy}
-                    />
-                    <button type="button" onClick={() => setAddingId(null)} style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          ) : visibleMatches.map((m) => (
+            <OpenMatchCard
+              key={m.id}
+              match={m}
+              timezone={club.timezone}
+              slug={club.slug}
+              token={token!}
+              busy={busyId === m.id}
+              addingOpen={addingId === m.id}
+              onJoin={handleJoin}
+              onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token!))}
+              onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token!))}
+              onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token!)); }}
+              onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
+              onCancelAdd={() => setAddingId(null)}
+              onRecordResult={(mm) => setRecordingFor(mm)}
+            />
+          ))}
         </div>
           </>
         ) : (
