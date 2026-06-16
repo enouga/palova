@@ -163,6 +163,11 @@ router.delete('/:slug/open-matches/:id/participants/:userId', authMiddleware, as
   catch (err) { handleError(err, res, next); }
 });
 
+router.post('/:slug/open-matches/:id/participants', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.addOpenMatchPlayer(asString(req.params.slug), asString(req.params.id), req.user!.id, asString((req.body as { userId?: unknown }).userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
 // Adhésion du joueur connecté à ce club (licence / statut).
 router.get('/:slug/me/membership', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubService.getMyMembership(asString(req.params.slug), req.user!.id)); }
