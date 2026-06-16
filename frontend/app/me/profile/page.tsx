@@ -105,6 +105,14 @@ export default function MyProfilePage() {
     finally { setSavingLocale(false); }
   };
 
+  const changeLeaderboard = async (next: boolean) => {
+    if (!token || !profile) return;
+    setError(null);
+    setProfile({ ...profile, showInLeaderboard: next }); // optimiste
+    try { setProfile(await api.updateMyProfile({ showInLeaderboard: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const saveLicense = async () => {
     if (!token || !slug) return;
     setSavingLicense(true); setSavedLicense(false); setError(null);
@@ -291,6 +299,14 @@ export default function MyProfilePage() {
                 <span style={label}>Thème</span>
                 <Segmented<ThemeMode> value={mode} onChange={setMode}
                   options={[{ value: 'daylight', label: 'Clair' }, { value: 'floodlit', label: 'Sombre' }]} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={label}>Apparaître dans les classements</span>
+                <Segmented<'oui' | 'non'>
+                  value={profile.showInLeaderboard ? 'oui' : 'non'}
+                  onChange={(v) => changeLeaderboard(v === 'oui')}
+                  options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                />
               </div>
             </section>
 

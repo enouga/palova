@@ -33,7 +33,7 @@ const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 
 const profile = {
   id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
-  birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false,
+  birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
 };
 
 const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
