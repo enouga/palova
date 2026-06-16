@@ -25,6 +25,10 @@ describe('OpenMatchService', () => {
     mockNotifyAdded.mockReset().mockResolvedValue(undefined);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    // Default: sport found (needed by RatingService.getLevelsForUsers in listOpenMatches)
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    // Default: no ratings (additive — tests that need specific ratings override this)
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
   });
 
   describe('listOpenMatches', () => {
@@ -61,6 +65,36 @@ describe('OpenMatchService', () => {
     it('lève CLUB_NOT_FOUND si le club n existe pas', async () => {
       prismaMock.club.findUnique.mockResolvedValue(null as any);
       await expect(service.listOpenMatches('inconnu', 'viewer')).rejects.toThrow('CLUB_NOT_FOUND');
+    });
+
+    it('annote les joueurs avec leur niveau et expose la fourchette cible', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'm2', startTime: future(48), endTime: future(49),
+          targetLevelMin: 3, targetLevelMax: 5,
+          resource: { id: 'court-2', name: 'Court 2', attributes: { format: 'double' } },
+          participants: [
+            { userId: 'player-rated', isOrganizer: true, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
+            { userId: 'player-no-rating', isOrganizer: false, user: { firstName: 'Bob', lastName: 'B', avatarUrl: null } },
+          ],
+        },
+      ] as any);
+
+      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([
+        { userId: 'player-rated', displayLevel: 4, isProvisional: false },
+      ] as any);
+
+      const out = await service.listOpenMatches('club-demo', 'viewer');
+
+      expect(out[0].targetLevelMin).toBe(3);
+      expect(out[0].targetLevelMax).toBe(5);
+
+      const ratedPlayer = out[0].players.find((p: any) => p.userId === 'player-rated');
+      expect(ratedPlayer?.level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+
+      const unratedPlayer = out[0].players.find((p: any) => p.userId === 'player-no-rating');
+      expect(unratedPlayer?.level).toBeNull();
     });
   });
 

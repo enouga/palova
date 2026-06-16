@@ -2,10 +2,12 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
+import { RatingService } from './rating.service';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
 export class OpenMatchService {
+  private ratingService = new RatingService();
   /** Résout un club ACTIVE par slug et vérifie que l'appelant en est membre ACTIVE. */
   private async resolveActiveMember(slug: string, userId: string): Promise<{ id: string }> {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
@@ -61,10 +63,18 @@ export class OpenMatchService {
           select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
+      // targetLevelMin / targetLevelMax are top-level scalar fields returned by include by default
     });
+
+    // Collect all participant userIds across all matches in one pass.
+    const allUserIds = [...new Set(matches.flatMap((m) => m.participants.map((p) => p.userId)))];
+    const levels = allUserIds.length > 0
+      ? await this.ratingService.getLevelsForUsers(allUserIds, 'padel')
+      : {};
 
     return matches.map((m) => {
       const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
+      const row = m as typeof m & { targetLevelMin: number | null; targetLevelMax: number | null };
       return {
         id: m.id,
         resourceName: m.resource.name,
@@ -75,8 +85,11 @@ export class OpenMatchService {
         full: m.participants.length >= maxPlayers,
         viewerIsParticipant: m.participants.some((p) => p.userId === viewerUserId),
         viewerIsOrganizer: m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
+        targetLevelMin: row.targetLevelMin ?? null,
+        targetLevelMax: row.targetLevelMax ?? null,
         players: m.participants.map((p) => ({
           userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
+          level: levels[p.userId] ?? null,
         })),
       };
     });
