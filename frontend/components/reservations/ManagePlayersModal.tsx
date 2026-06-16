@@ -4,6 +4,7 @@ import { api, MyReservation, ReservationPlayers } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { Btn } from '@/components/ui/atoms';
+import { PlayerPills } from '@/components/player/PlayerPills';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -55,13 +56,9 @@ export function ManagePlayersModal({ reservation, token, canEdit, onClose, onCha
   };
 
   const participants = data?.participants ?? [];
-  const organizer    = participants.find((p) => p.isOrganizer);
-  const others       = participants.filter((p) => !p.isOrganizer);
   const capacity     = data?.capacity ?? 0;
   const full         = capacity > 0 && participants.length >= capacity;
   const excludeIds   = participants.map((p) => p.userId);
-
-  const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: th.surface, borderRadius: 12, padding: '11px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -81,30 +78,26 @@ export function ManagePlayersModal({ reservation, token, canEdit, onClose, onCha
         {loading ? (
           <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {organizer && (
-              <div style={rowStyle}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.text }}>{organizer.firstName} {organizer.lastName}</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>Organisateur</span>
-              </div>
-            )}
-            {others.map((p) => (
-              <div key={p.id} style={rowStyle}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.text }}>{p.firstName} {p.lastName}</span>
-                {canEdit && (
-                  <button onClick={() => remove(p.id)} disabled={busy} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '4px 10px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Retirer</button>
-                )}
-              </div>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <PlayerPills
+              players={participants.map((p) => ({
+                userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+                avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id,
+              }))}
+              spotsLeft={Math.max(0, capacity - participants.length)}
+              onRemove={(p) => remove(p.participantId!)}
+              canRemove={(p) => canEdit && !p.isOrganizer}
+              busy={busy}
+            />
 
             {!canEdit ? (
-              <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+              <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                 La modification des joueurs est fermée pour cette réservation.
               </div>
             ) : full ? (
-              <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>La partie est complète.</div>
+              <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>La partie est complète.</div>
             ) : (
-              <div style={{ marginTop: 10 }}>
+              <div>
                 <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'block', marginBottom: 7 }}>Ajouter un joueur</span>
                 <PartnerSearch
                   slug={reservation.resource.club.slug}
