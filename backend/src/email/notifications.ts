@@ -14,6 +14,7 @@ import {
   buildMatchRemovedEmail,
   buildMatchLeftEmail,
   buildRefundEmail,
+  buildMatchConfirmEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
 
@@ -426,4 +427,48 @@ export async function notifyReservationRefunded(
     url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
   });
   await sendMail({ to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+// ---------------------------------------------------------- Confirmation match
+
+/** Transforme [[6,4],[6,3]] → "6-4 / 6-3". */
+function setsToScoreLine(sets: unknown): string {
+  if (!Array.isArray(sets)) return '';
+  return (sets as [number, number][])
+    .map(([a, b]) => `${a}-${b}`)
+    .join(' / ');
+}
+
+/**
+ * Envoie aux 3 joueurs NON-auteurs un email leur demandant de confirmer (ou contester) le résultat.
+ * Peut lever (DB/SMTP) ; l'appelant (match.service) enveloppe en best-effort.
+ */
+export async function notifyMatchPendingConfirmation(matchId: string): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      creator: { select: { firstName: true, lastName: true } },
+      players: { include: { user: { select: { email: true, firstName: true } } } },
+    },
+  });
+  if (!match) return;
+
+  const scoreLine = setsToScoreLine(match.sets);
+  const brand = brandOf(match.club);
+  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+  const authorName = fullName(match.creator);
+
+  for (const mp of match.players) {
+    if (mp.userId === match.createdByUserId) continue;
+    if (!mp.user.email) continue;
+    const mail = buildMatchConfirmEmail({
+      brand,
+      recipientFirstName: mp.user.firstName,
+      scoreLine,
+      matchUrl,
+      authorName,
+    });
+    await sendMail({ to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  }
 }

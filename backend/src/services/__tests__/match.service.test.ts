@@ -1,3 +1,5 @@
+jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn() }));
+
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { Prisma } from '@prisma/client';

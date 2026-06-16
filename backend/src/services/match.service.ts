@@ -6,6 +6,7 @@ import {
   DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
   isProvisional, levelToRating, ratingToLevel,
 } from './rating/level';
+import { notifyMatchPendingConfirmation } from '../email/notifications';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -51,7 +52,7 @@ export class MatchService {
     const teamOf = (userId: string): number => (t1.includes(userId) ? 1 : 2);
     const confirmDeadline = new Date(now.getTime() + CONFIRM_WINDOW_HOURS * 3600 * 1000);
 
-    return prisma.match.create({
+    const match = await prisma.match.create({
       data: {
         clubId: reservation.resource.clubId,
         sportId: reservation.resource.clubSport.sportId,
@@ -72,6 +73,13 @@ export class MatchService {
       },
       include: { players: true },
     });
+    this.safeNotify(() => notifyMatchPendingConfirmation(match.id));
+    return match;
+  }
+
+  /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
+  private safeNotify(fn: () => Promise<void>): void {
+    Promise.resolve(fn()).catch((err) => console.error('[notifications] envoi email échoué (match) :', err));
   }
 
   private async loadPending(matchId: string, userId: string) {

@@ -316,6 +316,44 @@ export function buildRefundEmail(i: RefundEmailInput): BuiltEmail {
   return { subject, html, text };
 }
 
+export interface MatchConfirmEmailInput {
+  brand: Brand;
+  recipientFirstName: string;
+  /** ex. "6-4 / 6-3" */
+  scoreLine: string;
+  matchUrl: string;
+  /** Prénom + nom de celui qui a saisi le résultat. */
+  authorName: string;
+}
+
+/** Email envoyé aux 3 autres joueurs pour confirmer (ou contester) le résultat d'un match. */
+export function buildMatchConfirmEmail(i: MatchConfirmEmailInput): BuiltEmail {
+  const subject = `Confirme le résultat de ton match`;
+  const heading = 'Résultat en attente de confirmation';
+  const intro =
+    `<strong>${escapeHtml(i.authorName)}</strong> a saisi le résultat de votre match : ` +
+    `<strong>${escapeHtml(i.scoreLine)}</strong>. ` +
+    `Confirmez ou contestez ce résultat depuis votre espace.`;
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p><p style="margin:0;">${intro}</p>`;
+  const html = renderLayout({
+    brand: i.brand,
+    preheader: subject,
+    heading,
+    introHtml,
+    ctaLabel: 'Voir mes matchs',
+    ctaUrl: i.matchUrl,
+  });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`,
+    '',
+    `${i.authorName} a saisi le résultat de votre match : ${i.scoreLine}.`,
+    'Confirmez ou contestez ce résultat depuis votre espace.',
+    '',
+    `Voir mes matchs : ${i.matchUrl}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 /** Retire les balises HTML pour produire la version texte. */
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '');
