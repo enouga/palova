@@ -1,0 +1,65 @@
+import '../../__mocks__/prisma';
+import { prismaMock } from '../../__mocks__/prisma';
+import { RatingService } from '../rating.service';
+
+const service = new RatingService();
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+});
+
+describe('getForDisplay', () => {
+  it('renvoie null si le joueur n a pas de niveau', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValue(null as any);
+    expect(await service.getForDisplay('u1', 'padel')).toBeNull();
+  });
+
+  it('mappe la ligne en affichage (niveau, palier, provisoire)', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValue({
+      displayLevel: 4, isProvisional: true, matchesPlayed: 0, initialSelfLevel: 4,
+    } as any);
+    const d = await service.getForDisplay('u1', 'padel');
+    expect(d).toEqual({ calibrated: true, level: 4, tier: 'Intermédiaire', isProvisional: true, matchesPlayed: 0 });
+  });
+});
+
+describe('calibrate', () => {
+  it('crée un niveau provisoire au palier choisi', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValue(null as any);
+    prismaMock.playerRating.upsert.mockImplementation((args: any) =>
+      Promise.resolve({ ...args.create, matchesPlayed: 0 }) as any);
+    const d = await service.calibrate('u1', 'padel', 5);
+    expect(d.level).toBeCloseTo(5, 1);
+    expect(d.tier).toBe('Confirmé');
+    expect(d.isProvisional).toBe(true);
+    expect(prismaMock.playerRating.upsert).toHaveBeenCalled();
+  });
+
+  it('« passer » (null) → départ neutre niveau 3', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValue(null as any);
+    prismaMock.playerRating.upsert.mockImplementation((args: any) =>
+      Promise.resolve({ ...args.create, matchesPlayed: 0 }) as any);
+    const d = await service.calibrate('u1', 'padel', null);
+    expect(d.level).toBeCloseTo(3, 1);
+    expect(d.calibrated).toBe(false);
+  });
+
+  it('ne réécrit pas un niveau déjà rodé par des matchs', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValue({
+      displayLevel: 6, isProvisional: false, matchesPlayed: 20, initialSelfLevel: null,
+    } as any);
+    const d = await service.calibrate('u1', 'padel', 2);
+    expect(d.level).toBe(6);
+    expect(prismaMock.playerRating.upsert).not.toHaveBeenCalled();
+  });
+
+  it('palier hors 1–8 → VALIDATION_ERROR', async () => {
+    await expect(service.calibrate('u1', 'padel', 9)).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('sport inconnu → SPORT_NOT_FOUND', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue(null as any);
+    await expect(service.getForDisplay('u1', 'inconnu')).rejects.toThrow('SPORT_NOT_FOUND');
+  });
+});
