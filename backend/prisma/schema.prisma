@@ -145,6 +145,19 @@ enum ClubPageSource {
   CUSTOM   // contenu édité par le club
 }
 
+enum MatchStatus {
+  PENDING
+  CONFIRMED
+  DISPUTED
+  CANCELLED
+}
+
+enum MatchPlayerConfirmation {
+  PENDING
+  CONFIRMED
+  DISPUTED
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -161,6 +174,7 @@ model Sport {
 
   clubSports    ClubSport[]
   playerRatings PlayerRating[]
+  matches       Match[]
 
   @@map("sports")
 }
@@ -221,6 +235,7 @@ model Club {
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
   clubSports  ClubSport[]
+  matches     Match[]
   resources   Resource[]
   members     ClubMember[]
   clubMemberships ClubMembership[]
@@ -355,6 +370,8 @@ model User {
   reservations    Reservation[]
   reservationParticipations ReservationParticipant[]
   playerRatings   PlayerRating[]
+  matchPlayers    MatchPlayer[]
+  createdMatches  Match[]       @relation("MatchCreator")
   staffRoles      ClubMember[]
   clubMemberships ClubMembership[]
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
@@ -391,6 +408,54 @@ model PlayerRating {
   @@unique([userId, sportId])
   @@index([sportId, displayLevel])
   @@map("player_ratings")
+}
+
+/// Résultat d'un match 2v2 enregistré (depuis une réservation COURT à 4 joueurs).
+/// Sa confirmation déclenche la mise à jour Glicko des 4 PlayerRating (une seule fois).
+model Match {
+  id               String      @id @default(cuid())
+  clubId           String      @map("club_id")
+  sportId          String      @map("sport_id")
+  reservationId    String?     @map("reservation_id")
+  playedAt         DateTime    @map("played_at") @db.Timestamptz
+  status           MatchStatus @default(PENDING)
+  createdByUserId  String      @map("created_by_user_id")
+  sets             Json
+  winningTeam      Int?        @map("winning_team")
+  confirmDeadline  DateTime    @map("confirm_deadline")
+  ratingsAppliedAt DateTime?   @map("ratings_applied_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  club        Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sport       Sport         @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  reservation Reservation?  @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  creator     User          @relation("MatchCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  players     MatchPlayer[]
+
+  @@index([clubId, status, playedAt])
+  @@index([status, confirmDeadline])
+  @@index([reservationId])
+  @@map("matches")
+}
+
+/// Un des 4 joueurs d'un match, son équipe et sa confirmation. Snapshots de niveau pour audit/courbe.
+model MatchPlayer {
+  id           String                  @id @default(cuid())
+  matchId      String                  @map("match_id")
+  userId       String                  @map("user_id")
+  team         Int
+  confirmation MatchPlayerConfirmation @default(PENDING)
+  ratingBefore Float?                  @map("rating_before")
+  ratingAfter  Float?                  @map("rating_after")
+  createdAt    DateTime                @default(now()) @map("created_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([userId])
+  @@map("match_players")
 }
 
 /// Code de validation d'email à usage unique (inscription). Un par utilisateur non vérifié.
@@ -466,6 +531,7 @@ model Reservation {
   user         User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
   payments     Payment[]
   participants ReservationParticipant[]
+  matches      Match[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
