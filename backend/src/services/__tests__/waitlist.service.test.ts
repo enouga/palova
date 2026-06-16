@@ -329,9 +329,11 @@ describe('liste d attente — actions du club (admin)', () => {
 describe('liste d attente — affichage', () => {
   it('listParticipants : confirmés d abord, puis liste d attente, chacun par ordre d arrivée', async () => {
     prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
     prismaMock.eventRegistration.findMany.mockResolvedValue([
-      { id: 'r1', status: 'CONFIRMED', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
-      { id: 'r2', status: 'WAITLISTED', user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+      { id: 'r1', status: 'CONFIRMED', userId: 'u1', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+      { id: 'r2', status: 'WAITLISTED', userId: 'u2', user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
     ] as any);
 
     await service.listParticipants('e1');
