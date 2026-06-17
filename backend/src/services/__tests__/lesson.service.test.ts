@@ -63,6 +63,28 @@ describe('LessonService.adminEnrollStudent', () => {
     prismaMock.clubMembership.findFirst.mockResolvedValue({ status: 'BLOCKED' } as any);
     await expect(lessonService.adminEnrollStudent('l1', 'u1', 'club-demo')).rejects.toThrow('MEMBERSHIP_BLOCKED');
   });
+
+  it('ALREADY_ENROLLED si une inscription active existe déjà', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue(lessonPerSession as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue({ id: 'e1', status: 'CONFIRMED' } as any);
+    await expect(lessonService.adminEnrollStudent('l1', 'u1', 'club-demo')).rejects.toThrow('ALREADY_ENROLLED');
+  });
+
+  it('série en PER_SESSION : conteneur = lesson (capacity lesson, where lessonId)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 3, seriesId: 's1', series: { id: 's1', capacity: 1, enrollmentMode: 'PER_SESSION' } } as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue(null);
+    prismaMock.lessonEnrollment.count.mockResolvedValue(0);
+    prismaMock.lessonEnrollment.create.mockResolvedValue({ id: 'e5', status: 'CONFIRMED' } as any);
+    await lessonService.adminEnrollStudent('l1', 'u5', 'club-demo');
+    expect(prismaMock.lessonEnrollment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ lessonId: 'l1', seriesId: null }),
+    }));
+    expect(prismaMock.lessonEnrollment.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ lessonId: 'l1', status: 'CONFIRMED' }),
+    }));
+  });
 });
 
 describe('LessonService.adminRemoveStudent — promotion auto', () => {

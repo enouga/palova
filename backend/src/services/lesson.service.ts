@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, EnrollmentMode } from '@prisma/client';
 import { prisma } from '../db/prisma';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function resolveContainer(lesson: {
   id: string;
   capacity: number;
   seriesId: string | null;
-  series: { id: string; capacity: number | null; enrollmentMode: string | null } | null;
+  series: { id: string; capacity: number | null; enrollmentMode: EnrollmentMode | null } | null;
 }): Container {
   const useSeries =
     lesson.seriesId != null &&
@@ -76,6 +76,17 @@ function resolveContainer(lesson: {
 // ──────────────────────────────────────────────────────────────────────────────
 
 class LessonService {
+  /**
+   * SELECT ... FOR UPDATE sur le conteneur (tagged-template = PrismaPg-safe).
+   */
+  private async lockContainer(tx: Prisma.TransactionClient, c: Container) {
+    if (c.lockTable === 'reservation_series') {
+      await tx.$queryRaw`SELECT id FROM reservation_series WHERE id = ${c.lockId} FOR UPDATE`;
+    } else {
+      await tx.$queryRaw`SELECT id FROM lessons WHERE id = ${c.lockId} FOR UPDATE`;
+    }
+  }
+
   /**
    * Charge la lesson + sa série et vérifie que le club correspond.
    */
@@ -112,12 +123,7 @@ class LessonService {
 
     return prisma.$transaction(
       async (tx) => {
-        // SELECT ... FOR UPDATE sur le conteneur (tagged-template = PrismaPg-safe)
-        if (container.lockTable === 'reservation_series') {
-          await tx.$queryRaw`SELECT id FROM reservation_series WHERE id = ${container.lockId} FOR UPDATE`;
-        } else {
-          await tx.$queryRaw`SELECT id FROM lessons WHERE id = ${container.lockId} FOR UPDATE`;
-        }
+        await this.lockContainer(tx, container);
 
         // Unicité : pas de double inscription active
         const uniqueWhere =
@@ -176,12 +182,7 @@ class LessonService {
 
     const { cancelledId, promotedId } = await prisma.$transaction(
       async (tx) => {
-        // FOR UPDATE sur le conteneur
-        if (container.lockTable === 'reservation_series') {
-          await tx.$queryRaw`SELECT id FROM reservation_series WHERE id = ${container.lockId} FOR UPDATE`;
-        } else {
-          await tx.$queryRaw`SELECT id FROM lessons WHERE id = ${container.lockId} FOR UPDATE`;
-        }
+        await this.lockContainer(tx, container);
 
         // Vérifie que l'inscription appartient bien au conteneur
         const enrollment = await tx.lessonEnrollment.findFirst({
