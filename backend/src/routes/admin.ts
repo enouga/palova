@@ -20,6 +20,7 @@ import { AccountingService } from '../services/accounting.service';
 import { StripeService } from '../services/stripe.service';
 import { ClubPageService } from '../services/clubPage.service';
 import { matchService } from '../services/match.service';
+import { CoachService } from '../services/coach.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -34,6 +35,7 @@ const packageService = new PackageService();
 const refundService = new RefundService();
 const accountingService = new AccountingService();
 const clubPageService = new ClubPageService();
+const coachService = new CoachService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -77,6 +79,9 @@ const ERROR_STATUS: Record<string, number> = {
   STRIPE_ERROR:           500,
   PAGE_NOT_FOUND:         404,
   FAQ_ITEM_NOT_FOUND:     404,
+  COACH_NOT_FOUND:        404,
+  SERIES_NOT_FOUND:       404,
+  SERIES_TOO_LONG:        400,
 };
 
 function asString(v: unknown): string {
@@ -526,6 +531,20 @@ router.patch('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next
 });
 router.delete('/sponsors/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await sponsorService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Coachs ---
+router.get('/coaches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await coachService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/coaches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await coachService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/coaches/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await coachService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/coaches/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await coachService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Tournois ---
