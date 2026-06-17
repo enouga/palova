@@ -25,7 +25,7 @@ export function TournamentsAlaUne({ items, timezone, now = null }: { items: Agen
         <Icon name="trophy" size={14} color={th.textMute} />Prochains events
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {items.map((item) => {
+        {items.filter((item) => item.source !== 'lesson').map((item) => {
           const isT = item.source === 'tournament';
           const id = isT ? item.tournament.id : item.event.id;
           const name = isT ? item.tournament.name : item.event.name;

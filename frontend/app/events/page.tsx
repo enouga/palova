@@ -3,10 +3,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { api, Tournament, ClubEvent, TournamentGender, ClubEventKind } from '@/lib/api';
+import { api, Tournament, ClubEvent, TournamentGender, ClubEventKind, LessonSummary } from '@/lib/api';
 import { mergeAgenda, applyAgendaFilters, agendaFacets, eventPlacesLabel, AgendaFilter, KIND_LABEL } from '@/lib/events';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
+import { lessonKindLabel } from '@/lib/lessons';
+import { fillRatioLesson } from '@/lib/lessons';
 import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
@@ -15,7 +17,7 @@ import { Pill, PillTabs } from '@/components/ui/atoms';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 const FILTERS: { key: AgendaFilter; label: string }[] = [
-  { key: 'tout', label: 'Tout' }, { key: 'competitions', label: 'Compétitions' }, { key: 'animations', label: 'Animations' },
+  { key: 'tout', label: 'Tout' }, { key: 'competitions', label: 'Compétitions' }, { key: 'animations', label: 'Animations' }, { key: 'cours', label: 'Cours' },
 ];
 
 export default function EventsPage() {
@@ -30,6 +32,7 @@ export default function EventsPage() {
   const [memberOnly, setMemberOnly] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
   const [events, setEvents] = useState<ClubEvent[] | null>(null);
+  const [lessons, setLessons] = useState<LessonSummary[]>([]);
   // Horloge unique : null au premier rendu (hydration-safe), pour countdowns et jauges.
   const [now, setNow] = useState<Date | null>(null);
 
@@ -43,7 +46,7 @@ export default function EventsPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const initial = q.get('filtre');
-    if (initial === 'competitions' || initial === 'animations' || initial === 'tout') setFilter(initial);
+    if (initial === 'competitions' || initial === 'animations' || initial === 'tout' || initial === 'cours') setFilter(initial);
     const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
     const cats = split('cat'); if (cats.length) setCategories(new Set(cats));
     const gen = split('genre') as TournamentGender[]; if (gen.length) setGenders(new Set(gen));
@@ -76,12 +79,13 @@ export default function EventsPage() {
     if (!club) return;
     api.getClubTournaments(club.slug).then(setTournaments).catch(() => setTournaments([]));
     api.getClubEvents(club.slug).then(setEvents).catch(() => setEvents([]));
+    api.getClubLessons(club.slug).then(setLessons).catch(() => setLessons([]));
   }, [club?.slug]);
 
   // Agenda complet (toutes sources) pour dériver les facettes présentes ; puis filtrage.
   const allItems = useMemo(
-    () => (tournaments && events ? mergeAgenda(tournaments, events, new Date()) : null),
-    [tournaments, events],
+    () => (tournaments && events ? mergeAgenda(tournaments, events, lessons, new Date()) : null),
+    [tournaments, events, lessons],
   );
   const facets = useMemo(() => (allItems ? agendaFacets(allItems) : null), [allItems]);
   const items = useMemo(
@@ -149,26 +153,57 @@ export default function EventsPage() {
           {items === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
           {items?.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Rien de prévu pour le moment.</div>}
           {items?.map((item) => {
-            const isT = item.source === 'tournament';
-            const id = isT ? item.tournament.id : item.event.id;
+            if (item.source === 'tournament') {
+              return (
+                <AgendaCard
+                  key={`tournament-${item.tournament.id}`}
+                  icon="trophy"
+                  accent={ACCENTS.apricot}
+                  tag={`${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}`}
+                  title={item.tournament.name}
+                  dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
+                  deadline={item.tournament.registrationDeadline}
+                  now={now}
+                  ratio={fillRatio(item.tournament)}
+                  places={tournamentPlacesLabel(item.tournament)}
+                  extra={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
+                  onClick={() => router.push(`/tournois/${item.tournament.id}`)}
+                />
+              );
+            }
+            if (item.source === 'event') {
+              return (
+                <AgendaCard
+                  key={`event-${item.event.id}`}
+                  icon="bolt"
+                  accent={ACCENTS.cyan}
+                  tag={KIND_LABEL[item.event.kind]}
+                  title={item.event.name}
+                  dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
+                  deadline={item.event.registrationDeadline}
+                  now={now}
+                  ratio={fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
+                  places={eventPlacesLabel(item.event)}
+                  extra={[item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
+                  onClick={() => router.push(`/events/${item.event.id}`)}
+                />
+              );
+            }
+            // source === 'lesson'
             return (
               <AgendaCard
-                key={`${item.source}-${id}`}
-                icon={isT ? 'trophy' : 'bolt'}
-                accent={isT ? ACCENTS.apricot : ACCENTS.cyan}
-                tag={isT ? `${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}` : KIND_LABEL[item.event.kind]}
-                title={isT ? item.tournament.name : item.event.name}
+                key={`lesson-${item.lesson.id}`}
+                icon="user"
+                accent={ACCENTS.blue}
+                tag={lessonKindLabel(item.lesson.lessonKind)}
+                title={item.lesson.series?.title ?? 'Cours'}
                 dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
-                deadline={isT ? item.tournament.registrationDeadline : item.event.registrationDeadline}
+                deadline={item.startTime}
                 now={now}
-                ratio={isT
-                  ? fillRatio(item.tournament)
-                  : fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
-                places={isT ? tournamentPlacesLabel(item.tournament) : eventPlacesLabel(item.event)}
-                extra={isT
-                  ? (item.tournament.entryFee ? `${item.tournament.entryFee} €` : null)
-                  : [item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
-                onClick={() => router.push(isT ? `/tournois/${id}` : `/events/${id}`)}
+                ratio={fillRatioLesson(item.lesson.confirmedCount, item.lesson.capacity)}
+                places={{ text: `${item.lesson.confirmedCount} / ${item.lesson.capacity} inscrits`, urgent: item.lesson.confirmedCount >= item.lesson.capacity }}
+                extra={`Coach : ${item.lesson.coach.name}`}
+                onClick={() => router.push(`/cours/${item.lesson.id}`)}
               />
             );
           })}

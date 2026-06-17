@@ -99,7 +99,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const restAnn = hero ? ann.slice(1) : ann;
   const now = new Date();
   const slots = pickUpcomingSlots(avail, now);
-  const nextEvents = mergeAgenda(tournaments, events, now).slice(0, 3);
+  const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const matchRecos = recommendMatches(openMatches, myLevel, now).slice(0, 3);
 
   const empty = !hero && slots.length === 0 && nextEvents.length === 0 && restAnn.length === 0 && spons.length === 0 && next.length === 0 && matchRecos.length === 0;

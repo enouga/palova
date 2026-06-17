@@ -1,8 +1,8 @@
-import type { Tournament, ClubEvent, ClubEventKind, TournamentGender } from '@/lib/api';
+import type { Tournament, ClubEvent, ClubEventKind, TournamentGender, LessonSummary } from '@/lib/api';
 
-// Helpers purs de la page Events : fusion tournois + animations, filtre, libellés.
+// Helpers purs de la page Events : fusion tournois + animations + cours, filtre, libellés.
 
-export type AgendaFilter = 'tout' | 'competitions' | 'animations';
+export type AgendaFilter = 'tout' | 'competitions' | 'animations' | 'cours';
 
 // Ladder des catégories tournoi, pour trier les facettes (miroir de CATEGORIES côté admin).
 export const CATEGORY_ORDER = ['P25', 'P50', 'P100', 'P250', 'P500', 'P1000', 'P1500', 'P2000'];
@@ -11,14 +11,15 @@ const KIND_ORDER: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', '
 
 export type AgendaItem =
   | { source: 'tournament'; startTime: string; endTime: string | null; tournament: Tournament }
-  | { source: 'event'; startTime: string; endTime: string | null; event: ClubEvent };
+  | { source: 'event'; startTime: string; endTime: string | null; event: ClubEvent }
+  | { source: 'lesson'; startTime: string; endTime: string | null; lesson: LessonSummary };
 
 export const KIND_LABEL: Record<ClubEventKind, string> = {
   MELEE: 'Mêlée', STAGE: 'Stage', SOIREE: 'Soirée', INITIATION: 'Initiation', AUTRE: 'Événement',
 };
 
-/** Fusionne tournois + animations PUBLISHED à venir, triés par date de début. */
-export function mergeAgenda(tournaments: Tournament[], events: ClubEvent[], now: Date): AgendaItem[] {
+/** Fusionne tournois + animations PUBLISHED + cours à venir, triés par date de début. */
+export function mergeAgenda(tournaments: Tournament[], events: ClubEvent[], lessons: LessonSummary[], now: Date): AgendaItem[] {
   const items: AgendaItem[] = [
     ...tournaments
       .filter((t) => t.status === 'PUBLISHED' && new Date(t.startTime) > now)
@@ -26,6 +27,9 @@ export function mergeAgenda(tournaments: Tournament[], events: ClubEvent[], now:
     ...events
       .filter((e) => e.status === 'PUBLISHED' && new Date(e.startTime) > now)
       .map((e) => ({ source: 'event' as const, startTime: e.startTime, endTime: e.endTime, event: e })),
+    ...lessons
+      .filter((l) => new Date(l.reservation.startTime) > now)
+      .map((l) => ({ source: 'lesson' as const, startTime: l.reservation.startTime, endTime: l.reservation.endTime, lesson: l })),
   ];
   // ISO UTC : ordre lexicographique = ordre chronologique
   return items.sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -34,6 +38,7 @@ export function mergeAgenda(tournaments: Tournament[], events: ClubEvent[], now:
 export function filterAgenda(items: AgendaItem[], filter: AgendaFilter): AgendaItem[] {
   if (filter === 'competitions') return items.filter((i) => i.source === 'tournament');
   if (filter === 'animations') return items.filter((i) => i.source === 'event');
+  if (filter === 'cours') return items.filter((i) => i.source === 'lesson');
   return items;
 }
 
@@ -78,10 +83,11 @@ export function agendaFacets(items: AgendaItem[]): {
     if (i.source === 'tournament') {
       categories.add(i.tournament.category);
       genders.add(i.tournament.gender);
-    } else {
+    } else if (i.source === 'event') {
       kinds.add(i.event.kind);
       if (i.event.memberOnly) hasMemberOnly = true;
     }
+    // source === 'lesson' : pas de facettes secondaires pour les cours (YAGNI)
   }
   const byOrder = <T>(order: T[]) => (a: T, b: T) => order.indexOf(a) - order.indexOf(b);
   return {
@@ -103,6 +109,10 @@ export function applyAgendaFilters(items: AgendaItem[], state: EventFilterState)
     if (i.source === 'tournament') {
       if (state.categories.size > 0 && !state.categories.has(i.tournament.category)) return false;
       if (state.genders.size > 0 && !state.genders.has(i.tournament.gender)) return false;
+      return true;
+    }
+    if (i.source === 'lesson') {
+      // Pas de facettes secondaires pour les cours — ils passent toujours.
       return true;
     }
     if (state.kinds.size > 0 && !state.kinds.has(i.event.kind)) return false;
