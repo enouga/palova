@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:demo": "ts-node prisma/seed-demo.ts",
-    "db:seed:events": "ts-node prisma/seed-events.ts"
+    "db:seed:events": "ts-node prisma/seed-events.ts",
+    "db:seed:open-matches": "ts-node prisma/seed-open-matches.ts"
   },
   "keywords": [],
   "author": "",

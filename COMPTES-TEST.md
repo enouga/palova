@@ -1,13 +1,17 @@
 # Comptes de test — Palova (données de démo)
 
-> Générés par `backend/prisma/seed-demo.ts`. Pour (re)créer/rafraîchir ces données :
+> Générés par les seeds `backend/prisma/seed-*.ts`. Pour (re)créer/rafraîchir **tout** le jeu de démo :
 > ```bash
 > # 1. Docker (PostgreSQL + Redis) doit tourner
 > "C:\Program Files\Docker\Docker\resources\bin\docker-compose-v1.exe" up -d
-> # 2. depuis backend/
-> npm run db:seed:demo
+> # 2. depuis backend/, dans l'ordre :
+> npm run db:seed:demo          # clubs + membres + tournois
+> npm run db:seed:events        # events / animations
+> npm run db:seed:open-matches  # parties ouvertes (résas PUBLIC rejoignables)
 > ```
-> Le seed est **idempotent** (upsert) : il n'efface rien, il ajoute/met à jour.
+> Seeds **rejouables** : clubs/membres en upsert (rien d'effacé), tandis que tournois,
+> events et parties ouvertes sont supprimés-recréés par club à chaque exécution (les parties
+> ouvertes via le marqueur `notes='seed:open-match'`, donc les tiennes faites à la main sont préservées).
 
 **Mot de passe commun à tous les comptes : `password123`**
 
@@ -51,6 +55,19 @@ Accès club : `padel-arena-paris.localhost:3000` (sauf le super-admin, sur l'hô
 
 > Le préfixe de la ville dans les emails membres : `paris`, `lyon`, `marseille`, `bordeaux`, `toulouse`.
 > Préfixe licence (3 lettres) : `PAR`, `LYO`, `MAR`, `BOR`, `TOU`.
+
+### Contenu de démo (par club)
+
+Chaque club est rempli pour exercer toutes les surfaces de l'app :
+
+| Contenu | Par club | Variété couverte |
+|---|---|---|
+| **Tournois** | 6 | Messieurs / Dames / Mixte, complets + liste d'attente, partiels, **passé**, **brouillon** |
+| **Events / animations** | 8 | Mêlée, stage, soirée, initiation ; complet + attente, ouvert aux non-membres, sans capacité, **passé**, **brouillon**, **annulé** |
+| **Parties ouvertes** | 6 | Terrain double (3 / 2 / 1 place libre + **complète**) et single (1 place), **avec et sans fourchette de niveau** cible |
+
+> Les parties ouvertes sont visibles sur `/parties` (connecté comme **membre** du club). Pour en
+> rejoindre une, prends un membre qui n'y est pas encore — ex. `abonne@padel-arena-paris.fr` sur Paris.
 
 ### Joueurs multi-clubs
 
