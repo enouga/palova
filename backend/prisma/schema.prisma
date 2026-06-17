@@ -168,6 +168,7 @@ model Sport {
   defaultDurationsMin Int[]    @default([60, 90, 120]) @map("default_durations_min")
   surfaces            String[] @default([])
   published           Boolean  @default(false)
+  hasLighting         Boolean  @default(false) @map("has_lighting")
   icon                String?
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
@@ -332,7 +333,7 @@ model Resource {
   clubId       String   @map("club_id")
   clubSportId  String   @map("club_sport_id")
   name         String
-  attributes   Json     @default("{}") // ex { "surface": "indoor" }
+  attributes   Json     @default("{}") // ex { "surface": "Résine", "coverage": "indoor", "lighting": false, "format": "double" }
   isActive     Boolean  @default(true) @map("is_active")
   price        Decimal  @db.Decimal(10, 2) // prix du CRÉNEAU (la réservation), quelle que soit sa durée — pas un tarif horaire
   offPeakPrice Decimal? @map("off_peak_price") @db.Decimal(10, 2) // prix d'un créneau ENTIÈREMENT en heures creuses ; null = pas de remise (= price)
