@@ -1,9 +1,11 @@
 'use client';
 import { UserLevel } from '@/lib/api';
+import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 
 // Pastille niveau compacte : « 4.2 » + point orange si provisoire. null → rien.
 export function LevelChip({ level, size = 'sm' }: { level: UserLevel | null | undefined; size?: 'xs' | 'sm' }) {
-  if (!level) return null;
+  const enabled = useLevelSystemEnabled();
+  if (!enabled || !level) return null;
   const pad = size === 'xs' ? '1px 5px' : '2px 7px';
   const fs = size === 'xs' ? 10 : 11;
   return (

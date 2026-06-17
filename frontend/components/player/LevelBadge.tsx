@@ -1,8 +1,10 @@
 'use client';
 import { MyRating } from '@/lib/api';
+import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 
 // Pastille niveau réutilisable (profil v1 ; pastilles joueurs au Lot 3).
 export function LevelBadge({ rating }: { rating: MyRating }) {
+  if (!useLevelSystemEnabled()) return null;
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
