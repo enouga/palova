@@ -150,3 +150,55 @@ describe('adminCreateSeries — cours', () => {
     expect(prismaMock.lesson.create).not.toHaveBeenCalled();
   });
 });
+
+describe('adminCreateReservation — cours ponctuel', () => {
+  let reservationService: ReservationService;
+  beforeEach(() => {
+    reservationService = new ReservationService();
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+
+  it('crée un Lesson 1-pour-1 quand lessonParams fourni', async () => {
+    prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+    prismaMock.reservation.count.mockResolvedValue(0);
+    prismaMock.reservation.create.mockResolvedValue({ id: 'res9', startTime: new Date('2026-09-01T16:00:00Z'), endTime: new Date('2026-09-01T17:00:00Z') } as any);
+    prismaMock.lesson.create.mockResolvedValue({ id: 'l9' } as any);
+
+    await reservationService.adminCreateReservation({
+      clubId: 'club-demo', resourceId: 'r1', date: '2026-09-01', startTime: '18:00', endTime: '19:00',
+      type: 'COACHING', title: 'Cours perso',
+      lessonParams: { coachId: 'c1', capacity: 1, lessonKind: 'INDIVIDUAL', allowSelfEnroll: false },
+    });
+    expect(prismaMock.lesson.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      reservationId: 'res9', clubId: 'club-demo', coachId: 'c1', capacity: 1, lessonKind: 'INDIVIDUAL', allowSelfEnroll: false, seriesId: null,
+    }) }));
+  });
+
+  it('sans lessonParams : pas de Lesson (réservation simple)', async () => {
+    prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+    prismaMock.reservation.count.mockResolvedValue(0);
+    prismaMock.reservation.create.mockResolvedValue({ id: 'res10', startTime: new Date(), endTime: new Date() } as any);
+    await reservationService.adminCreateReservation({
+      clubId: 'club-demo', resourceId: 'r1', date: '2026-09-01', startTime: '18:00', endTime: '19:00', type: 'COURT',
+    });
+    expect(prismaMock.lesson.create).not.toHaveBeenCalled();
+  });
+
+  it('rejette VALIDATION_ERROR si type != COACHING avec lessonParams', async () => {
+    prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+    await expect(reservationService.adminCreateReservation({
+      clubId: 'club-demo', resourceId: 'r1', date: '2026-09-01', startTime: '18:00', endTime: '19:00',
+      type: 'COURT',
+      lessonParams: { coachId: 'c1', capacity: 1, lessonKind: 'INDIVIDUAL', allowSelfEnroll: false },
+    })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('rejette VALIDATION_ERROR si capacity < 1', async () => {
+    prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+    await expect(reservationService.adminCreateReservation({
+      clubId: 'club-demo', resourceId: 'r1', date: '2026-09-01', startTime: '18:00', endTime: '19:00',
+      type: 'COACHING',
+      lessonParams: { coachId: 'c1', capacity: 0, lessonKind: 'INDIVIDUAL', allowSelfEnroll: false },
+    })).rejects.toThrow('VALIDATION_ERROR');
+  });
+});

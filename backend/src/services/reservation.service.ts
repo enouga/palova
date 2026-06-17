@@ -620,6 +620,12 @@ export class ReservationService {
     title?: string;
     memberUserId?: string;
     price?: number;
+    lessonParams?: {
+      coachId: string;
+      capacity: number;
+      lessonKind: 'INDIVIDUAL' | 'COLLECTIVE';
+      allowSelfEnroll: boolean;
+    };
   }) {
     const { clubId, resourceId, date, startTime, endTime, type, title, memberUserId, price } = params;
 
@@ -635,6 +641,8 @@ export class ReservationService {
     const end   = DateTime.fromISO(`${date}T${endTime}`, { zone: tz });
     if (!start.isValid || !end.isValid || end <= start) throw new Error('VALIDATION_ERROR');
     if (price !== undefined && (Number.isNaN(price) || price < 0)) throw new Error('VALIDATION_ERROR');
+    if (params.lessonParams && type !== 'COACHING') throw new Error('VALIDATION_ERROR');
+    if (params.lessonParams && params.lessonParams.capacity < 1) throw new Error('VALIDATION_ERROR');
 
     const startUtc = start.toUTC().toJSDate();
     const endUtc   = end.toUTC().toJSDate();
@@ -664,7 +672,7 @@ export class ReservationService {
       });
       if (conflicts > 0) throw new Error('SLOT_NOT_AVAILABLE');
 
-      return tx.reservation.create({
+      const reservation = await tx.reservation.create({
         data: {
           resourceId,
           userId,
@@ -676,6 +684,20 @@ export class ReservationService {
           totalPrice,
         },
       });
+
+      if (params.lessonParams) {
+        await tx.lesson.create({ data: {
+          reservationId: reservation.id,
+          clubId,
+          coachId: params.lessonParams.coachId,
+          capacity: params.lessonParams.capacity,
+          lessonKind: params.lessonParams.lessonKind,
+          allowSelfEnroll: params.lessonParams.allowSelfEnroll,
+          seriesId: null,
+        } });
+      }
+
+      return reservation;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       timeout: 10_000,
