@@ -56,6 +56,7 @@ export function validateResourceFields(input: ResourceFieldInput): ResourceField
   if (!openValid) errors.openHour = MSG.openHour;
 
   const closeInBounds = close !== null && Number.isInteger(close) && close >= 0 && close <= 24;
+  // On ne compare l'ordre que si les deux heures sont valides (les casts sont sûrs sous cette garde).
   const ordering = openValid && closeInBounds ? (open as number) >= (close as number) : false;
   if (!closeInBounds || ordering) errors.closeHour = MSG.closeHour;
 

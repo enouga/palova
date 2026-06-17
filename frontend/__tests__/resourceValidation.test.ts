@@ -54,6 +54,18 @@ describe('validateResourceFields', () => {
     expect(validateResourceFields({ ...valid, slotStepMin: '20' }).slotStepMin).toBeTruthy();
   });
 
+  it('créneau: bornes 15 et 240 valides, 241 invalide', () => {
+    expect(validateResourceFields({ ...valid, slotStepMin: '15' }).slotStepMin).toBeUndefined();
+    expect(validateResourceFields({ ...valid, slotStepMin: '240' }).slotStepMin).toBeUndefined();
+    expect(validateResourceFields({ ...valid, slotStepMin: '241' }).slotStepMin).toBeTruthy();
+  });
+
+  it('signale les deux champs quand ouverture et fermeture sont mal formées', () => {
+    const errs = validateResourceFields({ ...valid, openHour: 'abc', closeHour: 'xyz' });
+    expect(errs.openHour).toBeTruthy();
+    expect(errs.closeHour).toBeTruthy();
+  });
+
   it('accepte des entrées numériques (pas seulement string)', () => {
     expect(validateResourceFields({ ...valid, price: 52, openHour: 9, closeHour: 22 })).toEqual({});
   });
