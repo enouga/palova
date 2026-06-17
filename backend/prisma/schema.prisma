@@ -215,6 +215,8 @@ model Club {
   // « Mes réservations » sur l'app de ce club : false (défaut) = n'affiche que ce club ;
   // true = affiche aussi les réservations/tournois/events des autres clubs du joueur.
   showOtherClubsReservations Boolean @default(false) @map("show_other_clubs_reservations")
+  // Active le système de niveau de joueur (Glicko-2) pour ce club. Opt-out.
+  levelSystemEnabled Boolean @default(true) @map("level_system_enabled")
   // Rembourse automatiquement les paiements d'une réservation annulée dans la fenêtre d'annulation. Opt-in.
   refundOnCancelWithinCutoff Boolean @default(false) @map("refund_on_cancel_within_cutoff")
   // Stripe Connect : compte propre au club (Express, direct charges).
