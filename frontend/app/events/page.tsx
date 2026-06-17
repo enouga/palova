@@ -11,6 +11,7 @@ import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
+import { Pill, PillTabs } from '@/components/ui/atoms';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 const FILTERS: { key: AgendaFilter; label: string }[] = [
@@ -93,21 +94,6 @@ export default function EventsPage() {
     return <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>Chargement…</div>;
   }
 
-  const chip = (active: boolean) => ({
-    border: 'none', cursor: 'pointer', borderRadius: 999, padding: '8px 16px',
-    fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
-    background: active ? th.ink : th.surface, color: active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute,
-    boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-  });
-
-  // Pastille de facette secondaire (multi-sélection, plus petite que la rangée 1).
-  const secChip = (active: boolean) => ({
-    border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 12px',
-    fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600,
-    background: active ? th.accent : th.surface, color: active ? th.onAccent : th.textMute,
-    boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-  });
-
   // Toggle générique d'une valeur dans un Set d'état (immutable pour déclencher le rendu).
   function toggle<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) {
     setter((prev) => { const next = new Set(prev); if (next.has(value)) next.delete(value); else next.add(value); return next; });
@@ -129,27 +115,29 @@ export default function EventsPage() {
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Events</div>
         </div>
 
-        <div style={{ padding: '16px 20px 0', display: 'flex', gap: 8 }}>
-          {FILTERS.map((f) => (
-            <button key={f.key} onClick={() => selectSource(f.key)} style={chip(filter === f.key)}>{f.label}</button>
-          ))}
+        <div style={{ padding: '16px 20px 0' }}>
+          <PillTabs<AgendaFilter>
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+            value={filter}
+            onChange={selectSource}
+          />
         </div>
 
         {showSecondaryRow && (
           <div style={{ padding: '12px 20px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
             {showCategories && facets!.categories.map((c) => (
-              <button key={`cat-${c}`} onClick={() => toggle(setCategories, c)} style={secChip(categories.has(c))}>{c}</button>
+              <Pill key={`cat-${c}`} size="sm" activeBg={th.text} label={c} active={categories.has(c)} onClick={() => toggle(setCategories, c)} />
             ))}
             {showGenders && (showCategories ? sep : null)}
             {showGenders && facets!.genders.map((g) => (
-              <button key={`gen-${g}`} onClick={() => toggle(setGenders, g)} style={secChip(genders.has(g))}>{GENDER_LABEL[g]}</button>
+              <Pill key={`gen-${g}`} size="sm" activeBg={th.text} label={GENDER_LABEL[g]} active={genders.has(g)} onClick={() => toggle(setGenders, g)} />
             ))}
             {showKinds && (showCategories ? sep : null)}
             {showKinds && facets!.kinds.map((k) => (
-              <button key={`kind-${k}`} onClick={() => toggle(setKinds, k)} style={secChip(kinds.has(k))}>{KIND_LABEL[k]}</button>
+              <Pill key={`kind-${k}`} size="sm" activeBg={th.text} label={KIND_LABEL[k]} active={kinds.has(k)} onClick={() => toggle(setKinds, k)} />
             ))}
             {showMemberOnly && (
-              <button onClick={() => setMemberOnly((v) => !v)} style={secChip(memberOnly)}>Membres</button>
+              <Pill size="sm" activeBg={th.text} label="Membres" active={memberOnly} onClick={() => setMemberOnly((v) => !v)} />
             )}
             {hasSecondary && (
               <button onClick={clearFacets} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint, padding: '5px 8px' }}>Effacer</button>
