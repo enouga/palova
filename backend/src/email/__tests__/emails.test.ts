@@ -65,6 +65,23 @@ describe('buildPlayerEmail', () => {
     expect(mail.html).not.toContain('Coéquipier');
   });
 
+  it('buildPlayerEmail gère activityType lesson', () => {
+    const m = buildPlayerEmail({
+      firstName: 'Sophie',
+      action: 'confirmed',
+      activityType: 'lesson',
+      activityName: 'Cours collectif',
+      clubName: 'Padel Arena',
+      dateLabel: 'samedi 12 juillet 2026 à 10h00',
+      url: 'https://arena.palova.fr/cours/c1',
+      brand,
+    });
+    expect(m.subject).toContain('Cours collectif');
+    expect(m.html).toContain('Cours collectif');
+    expect(m.html).toContain('Voir le cours');
+    expect(m.text).toContain('Voir le cours');
+  });
+
   it('échappe le HTML des intitulés dynamiques', () => {
     const mail = buildPlayerEmail({ ...baseTournament, activityName: 'Open <script>', action: 'confirmed' });
     expect(mail.html).not.toContain('<script>');

@@ -1,6 +1,15 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+
+// Mock des notifications — doit être avant l'import du service
+jest.mock('../../email/notifications', () => ({
+  notifyLessonEnrollment: jest.fn().mockResolvedValue(undefined),
+  notifyLessonCancellation: jest.fn().mockResolvedValue(undefined),
+  notifyLessonPromotion: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { lessonService } from '../lesson.service';
+import * as notifications from '../../email/notifications';
 
 beforeEach(() => {
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
@@ -180,6 +189,64 @@ describe('LessonService.cancelEnrollment (joueur) — cas bloquants', () => {
     prismaMock.lessonEnrollment.update.mockResolvedValue({} as any);
     const r = await lessonService.cancelEnrollment('l1', 'u1');
     expect(r.promotedEnrollmentId).toBe('e2');
+  });
+});
+
+// ─────────────────────────────────────────────────────── notifications (Lot 3)
+
+describe('LessonService notifications', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("enroll : appelle notifyLessonEnrollment avec l'id de l'enrollment", async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true,
+      seriesId: null, series: null,
+      reservation: { startTime: new Date(Date.now() + 86400000) },
+    } as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue(null);
+    prismaMock.lessonEnrollment.count.mockResolvedValue(0);
+    prismaMock.lessonEnrollment.create.mockResolvedValue({ id: 'e-new', status: 'CONFIRMED' } as any);
+
+    await lessonService.enroll('l1', 'u1');
+
+    expect(notifications.notifyLessonEnrollment).toHaveBeenCalledWith('e-new');
+  });
+
+  it("enroll : un echec email ne bloque pas l'inscription", async () => {
+    (notifications.notifyLessonEnrollment as jest.Mock).mockRejectedValueOnce(new Error('SMTP down'));
+
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true,
+      seriesId: null, series: null,
+      reservation: { startTime: new Date(Date.now() + 86400000) },
+    } as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue(null);
+    prismaMock.lessonEnrollment.count.mockResolvedValue(0);
+    prismaMock.lessonEnrollment.create.mockResolvedValue({ id: 'e-smtp', status: 'CONFIRMED' } as any);
+
+    // Ne doit PAS lever
+    await expect(lessonService.enroll('l1', 'u1')).resolves.toMatchObject({ id: 'e-smtp' });
+  });
+
+  it('cancelEnrollment : appelle notifyLessonCancellation et notifyLessonPromotion si promu', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true,
+      seriesId: null, series: null,
+      reservation: { startTime: new Date(Date.now() + 86400000) },
+    } as any);
+    prismaMock.lessonEnrollment.findFirst
+      .mockResolvedValueOnce({ id: 'e-cancelled', status: 'CONFIRMED' } as any)
+      .mockResolvedValueOnce({ id: 'e-promoted', status: 'WAITLISTED' } as any);
+    prismaMock.lessonEnrollment.update.mockResolvedValue({} as any);
+
+    await lessonService.cancelEnrollment('l1', 'u1');
+
+    expect(notifications.notifyLessonCancellation).toHaveBeenCalledWith('e-cancelled');
+    expect(notifications.notifyLessonPromotion).toHaveBeenCalledWith('e-promoted');
   });
 });
 

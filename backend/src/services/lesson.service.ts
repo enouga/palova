@@ -1,5 +1,10 @@
 import { Prisma, EnrollmentMode } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import {
+  notifyLessonEnrollment,
+  notifyLessonCancellation,
+  notifyLessonPromotion,
+} from '../email/notifications';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types de sortie supplémentaires (Lot 3 — côté joueur)
@@ -119,6 +124,15 @@ class LessonService {
     }
   }
 
+  /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
+  private async safeNotify(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      console.error('[notifications] envoi email échoué (cours) :', err);
+    }
+  }
+
   /**
    * Charge la lesson + sa série et vérifie que le club correspond.
    */
@@ -153,7 +167,7 @@ class LessonService {
 
     const container = resolveContainer(lesson);
 
-    return prisma.$transaction(
+    const result = await prisma.$transaction(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -200,6 +214,9 @@ class LessonService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
     );
+
+    await this.safeNotify(() => notifyLessonEnrollment(result.id));
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────── adminRemoveStudent
@@ -250,6 +267,9 @@ class LessonService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
     );
+
+    await this.safeNotify(() => notifyLessonCancellation(cancelledId));
+    if (promotedId) await this.safeNotify(() => notifyLessonPromotion(promotedId));
 
     return { cancelledEnrollmentId: cancelledId, promotedEnrollmentId: promotedId };
   }
@@ -428,7 +448,7 @@ class LessonService {
 
     const container = resolveContainer(lesson);
 
-    return prisma.$transaction(
+    const result = await prisma.$transaction(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -464,6 +484,9 @@ class LessonService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
     );
+
+    await this.safeNotify(() => notifyLessonEnrollment(result.id));
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────── cancelEnrollment (joueur)
@@ -527,6 +550,9 @@ class LessonService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
     );
+
+    await this.safeNotify(() => notifyLessonCancellation(cancelledId));
+    if (promotedId) await this.safeNotify(() => notifyLessonPromotion(promotedId));
 
     return { cancelledEnrollmentId: cancelledId, promotedEnrollmentId: promotedId };
   }

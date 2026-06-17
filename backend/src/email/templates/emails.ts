@@ -1,6 +1,6 @@
 import { Brand, InfoRow, escapeHtml, renderLayout } from './layout';
 
-export type ActivityType = 'tournament' | 'event';
+export type ActivityType = 'tournament' | 'event' | 'lesson';
 export type PlayerAction = 'confirmed' | 'waitlisted' | 'cancelled' | 'promoted';
 export type OrganizerKind = 'registration' | 'cancellation';
 
@@ -10,11 +10,15 @@ export interface BuiltEmail {
   text: string;
 }
 
-/** Vocabulaire selon le type d'activité (tournoi vs événement). */
+/** Vocabulaire selon le type d'activité (tournoi vs événement vs cours). */
 function words(type: ActivityType) {
-  return type === 'tournament'
-    ? { article: 'au tournoi', noun: 'le tournoi', voir: 'Voir le tournoi', gerer: 'Gérer le tournoi' }
-    : { article: "à l'événement", noun: "l'événement", voir: "Voir l'événement", gerer: "Gérer l'événement" };
+  if (type === 'tournament') {
+    return { article: 'au tournoi', noun: 'le tournoi', voir: 'Voir le tournoi', gerer: 'Gérer le tournoi' };
+  }
+  if (type === 'lesson') {
+    return { article: 'au cours', noun: 'le cours', voir: 'Voir le cours', gerer: 'Gérer les cours' };
+  }
+  return { article: "à l'événement", noun: "l'événement", voir: "Voir l'événement", gerer: "Gérer l'événement" };
 }
 
 export interface PlayerEmailInput {

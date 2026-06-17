@@ -60,7 +60,14 @@ async function notifyOrganizers(opts: {
 }): Promise<void> {
   const staff = await organizers(opts.clubId);
   if (staff.length === 0) return;
-  const adminUrl = clubAppUrl(opts.slug, opts.activityType === 'tournament' ? '/admin/tournaments' : '/admin/events');
+  const adminUrl = clubAppUrl(
+    opts.slug,
+    opts.activityType === 'tournament'
+      ? '/admin/tournaments'
+      : opts.activityType === 'lesson'
+        ? '/admin/lessons'
+        : '/admin/events',
+  );
   for (const s of staff) {
     const mail = buildOrganizerEmail({
       staffFirstName: s.firstName,
@@ -427,6 +434,137 @@ export async function notifyReservationRefunded(
     url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
   });
   await sendMail({ to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+// ------------------------------------------------------------------- Cours (Lesson)
+
+/**
+ * Charge un LessonEnrollment avec tout le contexte nécessaire pour les emails.
+ * Un enrollment peut être sur une lesson individuelle (lessonId) OU sur une série (seriesId).
+ * Les deux cas sont gérés : on déduit club/coach/date depuis la source disponible.
+ */
+async function loadLessonEnrollment(enrollmentId: string) {
+  return prisma.lessonEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: {
+      lesson: {
+        include: {
+          coach: { select: { name: true } },
+          reservation: { select: { startTime: true, endTime: true } },
+          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        },
+      },
+      series: {
+        include: {
+          coach: { select: { name: true } },
+          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        },
+      },
+      user: { select: { email: true, firstName: true, lastName: true } },
+    },
+  });
+}
+
+type LessonEnrollmentLoaded = NonNullable<Awaited<ReturnType<typeof loadLessonEnrollment>>>;
+
+/**
+ * Construit le contexte commun (club, brand, dateLabel, url, activityName) à partir
+ * d'un enrollment chargé — gère le cas lesson ET le cas series-only.
+ */
+function lessonEmailContext(enr: LessonEnrollmentLoaded) {
+  const club = enr.lesson?.club ?? enr.series?.club;
+  if (!club) return null;
+
+  const brand = brandOf(club);
+  const coachName = enr.lesson?.coach?.name ?? enr.series?.coach?.name ?? null;
+  const activityName = coachName ? `Cours — ${coachName}` : 'Cours';
+
+  let dateLabel: string;
+  let url: string;
+
+  if (enr.lesson) {
+    const res = enr.lesson.reservation;
+    dateLabel = formatDateRangeFr(res.startTime, res.endTime, club.timezone);
+    url = clubAppUrl(club.slug, `/cours/${enr.lessonId}`);
+  } else {
+    // Inscription sur série uniquement — pas de séance unique de référence.
+    dateLabel = ''; // la date précise n'est pas connue sans occurrence
+    url = clubAppUrl(club.slug, '/events');
+  }
+
+  return { club, brand, activityName, dateLabel, url };
+}
+
+async function sendLessonPlayerEmail(enr: LessonEnrollmentLoaded, action: PlayerAction): Promise<void> {
+  if (!enr.user.email) return;
+  const ctx = lessonEmailContext(enr);
+  if (!ctx) return;
+
+  const mail = buildPlayerEmail({
+    firstName: enr.user.firstName,
+    action,
+    activityType: 'lesson',
+    activityName: ctx.activityName,
+    clubName: ctx.club.name,
+    dateLabel: ctx.dateLabel,
+    url: ctx.url,
+    brand: ctx.brand,
+  });
+  await sendMail({ to: enr.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+export async function notifyLessonEnrollment(enrollmentId: string): Promise<void> {
+  const enr = await loadLessonEnrollment(enrollmentId);
+  if (!enr) return;
+  const action: PlayerAction = enr.status === 'WAITLISTED' ? 'waitlisted' : 'confirmed';
+  await sendLessonPlayerEmail(enr, action);
+  const ctx = lessonEmailContext(enr);
+  if (!ctx) return;
+
+  // Comptage des CONFIRMED dans le conteneur (lesson ou series)
+  const confirmedCount = enr.lessonId
+    ? await prisma.lessonEnrollment.count({ where: { lessonId: enr.lessonId, status: 'CONFIRMED' } })
+    : enr.seriesId
+      ? await prisma.lessonEnrollment.count({ where: { seriesId: enr.seriesId, status: 'CONFIRMED' } })
+      : null;
+
+  await notifyOrganizers({
+    clubId: ctx.club.id,
+    brand: ctx.brand,
+    slug: ctx.club.slug,
+    activityType: 'lesson',
+    activityName: ctx.activityName,
+    kind: 'registration',
+    playerNames: fullName(enr.user),
+    statusLabel: action === 'waitlisted' ? "en liste d'attente" : 'confirmée',
+    confirmedCount,
+  });
+}
+
+export async function notifyLessonCancellation(enrollmentId: string): Promise<void> {
+  const enr = await loadLessonEnrollment(enrollmentId);
+  if (!enr) return;
+  await sendLessonPlayerEmail(enr, 'cancelled');
+  const ctx = lessonEmailContext(enr);
+  if (!ctx) return;
+
+  await notifyOrganizers({
+    clubId: ctx.club.id,
+    brand: ctx.brand,
+    slug: ctx.club.slug,
+    activityType: 'lesson',
+    activityName: ctx.activityName,
+    kind: 'cancellation',
+    playerNames: fullName(enr.user),
+    statusLabel: '',
+    confirmedCount: null,
+  });
+}
+
+export async function notifyLessonPromotion(enrollmentId: string): Promise<void> {
+  const enr = await loadLessonEnrollment(enrollmentId);
+  if (!enr) return;
+  await sendLessonPlayerEmail(enr, 'promoted');
 }
 
 // ---------------------------------------------------------- Confirmation match
