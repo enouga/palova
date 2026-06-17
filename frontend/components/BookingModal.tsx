@@ -12,6 +12,7 @@ import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { LevelChip } from '@/components/player/LevelChip';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { Icon } from '@/components/ui/Icon';
+import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -75,6 +76,7 @@ export default function BookingModal({
   clubId, requireOnlinePayment, requireCardFingerprint,
 }: BookingModalProps) {
   const { th } = useTheme();
+  const levelEnabled = useLevelSystemEnabled();
   const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
@@ -120,7 +122,7 @@ export default function BookingModal({
         ...(showPartners ? {
           partnerUserIds: partners.map((p) => p.id),
           visibility,
-          ...(visibility === 'PUBLIC' ? { targetLevelMin, targetLevelMax } : {}),
+          ...(visibility === 'PUBLIC' && levelEnabled ? { targetLevelMin, targetLevelMax } : {}),
         } : {}),
       }, token);
       setReservation(res);
@@ -224,7 +226,7 @@ export default function BookingModal({
                       : 'Visible uniquement par vous et vos partenaires.'}
                   </div>
 
-                  {visibility === 'PUBLIC' && (
+                  {visibility === 'PUBLIC' && levelEnabled && (
                     <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <label htmlFor="bm-level-min" style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute, fontWeight: 600 }}>Niveau min</label>
@@ -274,7 +276,7 @@ export default function BookingModal({
               </span>
             </div>
             {(() => {
-              const levelRangeInvalid = visibility === 'PUBLIC' && showPartners &&
+              const levelRangeInvalid = visibility === 'PUBLIC' && showPartners && levelEnabled &&
                 targetLevelMin !== null && targetLevelMax !== null && targetLevelMin > targetLevelMax;
               return (
                 <div style={{ display: 'flex', gap: 11 }}>

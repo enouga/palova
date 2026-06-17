@@ -3,6 +3,11 @@ import BookingModal from '../components/BookingModal';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot } from '../lib/api';
 
+let mockClub: { levelSystemEnabled?: boolean } | null = null;
+jest.mock('../lib/ClubProvider', () => ({
+  useClub: () => ({ slug: 'club-demo', club: mockClub, loading: false }),
+}));
+
 jest.mock('../lib/api', () => ({
   api: {
     holdSlot:           jest.fn(),
@@ -39,7 +44,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal
 }
 
 describe('BookingModal', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockClub = null; });
 
   it('appelle holdSlot et affiche le countdown après clic Pré-réserver', async () => {
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
@@ -115,6 +120,32 @@ describe('BookingModal', () => {
       expect.objectContaining({ resourceId: 'court-1', partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
       'jwt-token',
     ));
+  });
+
+  it('partie ouverte : masque la fourchette de niveau cible quand le système de niveau est OFF, et n envoie pas targetLevel*', async () => {
+    mockClub = { levelSystemEnabled: false };
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
+
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+
+    expect(screen.queryByLabelText(/Niveau min/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Niveau max/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
+    await waitFor(() => expect(api.holdSlot).toHaveBeenCalled());
+    const payload = (api.holdSlot as jest.Mock).mock.calls[0][0];
+    expect(payload).not.toHaveProperty('targetLevelMin');
+    expect(payload).not.toHaveProperty('targetLevelMax');
+  });
+
+  it('partie ouverte : affiche la fourchette de niveau cible quand le système de niveau est ON', () => {
+    mockClub = { levelSystemEnabled: true };
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+
+    expect(screen.getByLabelText(/Niveau min/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Niveau max/)).toBeInTheDocument();
   });
 
   it('sans slug (mode simple), n envoie ni partnerUserIds ni visibility', async () => {
