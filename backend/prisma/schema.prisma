@@ -267,6 +267,7 @@ model Club {
   faqItems         ClubFaqItem[]
   coaches          Coach[]
   reservationSeries ReservationSeries[]
+  lessons          Lesson[]
 
   @@map("clubs")
 }
@@ -935,6 +936,7 @@ model Lesson {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
+  club        Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
   reservation Reservation        @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   coach       Coach              @relation(fields: [coachId], references: [id], onDelete: Restrict)
   series      ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)

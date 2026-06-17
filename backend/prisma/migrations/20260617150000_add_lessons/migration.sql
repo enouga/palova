@@ -35,6 +35,7 @@ CREATE INDEX "lesson_enrollments_lesson_id_status_created_at_idx" ON "lesson_enr
 CREATE INDEX "lesson_enrollments_series_id_status_created_at_idx" ON "lesson_enrollments"("series_id", "status", "created_at");
 CREATE INDEX "lesson_enrollments_user_id_idx" ON "lesson_enrollments"("user_id");
 
+ALTER TABLE "lessons" ADD CONSTRAINT "lessons_club_id_fkey" FOREIGN KEY ("club_id") REFERENCES "clubs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "lessons" ADD CONSTRAINT "lessons_reservation_id_fkey" FOREIGN KEY ("reservation_id") REFERENCES "reservations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "lessons" ADD CONSTRAINT "lessons_coach_id_fkey" FOREIGN KEY ("coach_id") REFERENCES "coaches"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "lessons" ADD CONSTRAINT "lessons_series_id_fkey" FOREIGN KEY ("series_id") REFERENCES "reservation_series"("id") ON DELETE SET NULL ON UPDATE CASCADE;
