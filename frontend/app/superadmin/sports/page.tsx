@@ -9,7 +9,7 @@ import { Btn, Field } from '@/components/ui/atoms';
 const NOUNS = ['terrain', 'court', 'table', 'piste', 'baie'];
 const DURATION_PRESETS = [30, 45, 60, 90, 120];
 const STEP_OPTIONS = [15, 30, 60];
-const emptyForm = (): SportCatalogBody => ({ name: '', icon: '', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90], surfaces: [] });
+const emptyForm = (): SportCatalogBody => ({ name: '', icon: '', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90], surfaces: [], hasLighting: false });
 
 export default function SuperAdminSportsPage() {
   const { th } = useTheme();
@@ -34,7 +34,7 @@ export default function SuperAdminSportsPage() {
 
   const startCreate = () => { setForm(emptyForm()); setEditId(''); setSurfaceInput(''); setOtherDuration(''); };
   const startEdit = (s: Sport) => {
-    setForm({ name: s.name, icon: s.icon ?? '', resourceNoun: s.resourceNoun, defaultSlotStepMin: s.defaultSlotStepMin, defaultDurationsMin: [...s.defaultDurationsMin], surfaces: [...s.surfaces] });
+    setForm({ name: s.name, icon: s.icon ?? '', resourceNoun: s.resourceNoun, defaultSlotStepMin: s.defaultSlotStepMin, defaultDurationsMin: [...s.defaultDurationsMin], surfaces: [...s.surfaces], hasLighting: s.hasLighting });
     setEditId(s.id); setSurfaceInput(''); setOtherDuration('');
   };
 
@@ -132,6 +132,11 @@ export default function SuperAdminSportsPage() {
               </div>
             </div>
 
+            <label style={{ ...lbl, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={form.hasLighting} onChange={(e) => setForm((f) => ({ ...f, hasLighting: e.target.checked }))} />
+              Éclairage disponible (terrains jouables le soir)
+            </label>
+
             <div style={{ display: 'flex', gap: 11, marginTop: 6 }}>
               <Btn variant="surface" onClick={() => setEditId(null)} disabled={busy}>Annuler</Btn>
               <Btn onClick={save} disabled={busy}>{busy ? '…' : 'Enregistrer'}</Btn>
@@ -155,6 +160,7 @@ export default function SuperAdminSportsPage() {
                 <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>
                   Durées : {s.defaultDurationsMin.map(durationLabel).join(', ')}
                   {s.surfaces.length > 0 && <> · Surfaces : {s.surfaces.join(', ')}</>}
+                  {s.hasLighting && <> · Éclairage</>}
                 </div>
               </div>
               <Btn variant="surface" onClick={() => togglePublished(s)} disabled={busy}>{s.published ? 'Dépublier' : 'Publier'}</Btn>
