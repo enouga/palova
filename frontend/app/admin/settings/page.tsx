@@ -141,6 +141,7 @@ export default function AdminSettingsPage() {
         city: club.city ?? '', timezone: club.timezone, logoUrl: club.logoUrl ?? '',
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
+        levelSystemEnabled: club.levelSystemEnabled,
         publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
         bookingReleaseMode: club.bookingReleaseMode,
         publicReleaseHour: Number(club.publicReleaseHour), memberReleaseHour: Number(club.memberReleaseHour),
@@ -302,6 +303,15 @@ export default function AdminSettingsPage() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
           <input type="checkbox" checked={club.showOtherClubsReservations} onChange={(e) => set('showOtherClubsReservations', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
           <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher aussi les réservations des autres clubs</span>
+        </label>
+      </div>
+
+      <div style={card}>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Système de niveau de joueur</h2>
+        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Active le classement par niveau (Glicko-2), la saisie des résultats de matchs, le leaderboard et le matchmaking par niveau. Décoché, ces fonctionnalités et le menu « Matchs » sont masqués.</p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={club.levelSystemEnabled} onChange={(e) => set('levelSystemEnabled', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Activer le système de niveau de joueur</span>
         </label>
       </div>
 

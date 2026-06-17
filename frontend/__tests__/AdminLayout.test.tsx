@@ -14,7 +14,10 @@ jest.mock('../lib/useAuth', () => ({
   useAuth: () => ({ token: 'abc', clubId: null, ready: true }),
 }));
 
-const mockClubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null }, loading: false };
+// Objets club STABLES (identité préservée entre les rendus, cf. deps du useEffect des droits).
+const clubOn = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null };
+const clubOff = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, levelSystemEnabled: false };
+const mockClubCtx = { slug: 'demo', club: clubOn as Record<string, unknown>, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubCtx }));
 
 jest.mock('../lib/api', () => ({
@@ -48,7 +51,20 @@ describe('AdminLayout — toggle de la sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockClubCtx.club = clubOn; // restaure le club ON par défaut (objet stable)
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
+  });
+
+  it('club OFF : pas de lien nav « Matchs »', async () => {
+    mockClubCtx.club = clubOff; // objet stable avec levelSystemEnabled: false
+    await wrap();
+    expect(screen.getByText('Espace club')).toBeInTheDocument(); // sidebar rendue
+    expect(screen.queryByText('Matchs')).not.toBeInTheDocument();
+  });
+
+  it('club ON : lien nav « Matchs » présent', async () => {
+    await wrap();
+    expect(screen.getByText('Matchs')).toBeInTheDocument();
   });
 
   it("affiche le nom du club dans l'en-tête, même sans logo", async () => {
