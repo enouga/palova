@@ -1,11 +1,14 @@
 'use client';
-import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useMemo, CSSProperties } from 'react';
 import { api, Member } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+// minuscules + suppression des accents, pour une recherche tolérante (« benoit » trouve « Benoît »)
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function AdminMembersPage() {
   const { th } = useTheme();
@@ -15,6 +18,18 @@ export default function AdminMembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [query, setQuery]     = useState('');
+
+  // recherche locale : tous les membres sont déjà chargés. Chaque mot tapé doit
+  // matcher (ET), en sous-chaîne, sur nom complet / email / tél. / N° adhérent.
+  const filtered = useMemo(() => {
+    const terms = norm(query).split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return members;
+    return members.filter((m) => {
+      const hay = norm(`${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''} ${m.membershipNo ?? ''}`);
+      return terms.every((t) => hay.includes(t));
+    });
+  }, [members, query]);
 
   const [email, setEmail]     = useState('');
   const [adding, setAdding]   = useState(false);
@@ -104,6 +119,33 @@ export default function AdminMembersPage() {
 
       {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
+      {/* Recherche */}
+      {!loading && members.length > 0 && (
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 360 }}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Rechercher un membre (nom, email, tél., n° adhérent)…"
+              aria-label="Rechercher un membre"
+              style={{ ...input, width: '100%', height: 40, paddingRight: query ? 32 : 8 }}
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                aria-label="Effacer la recherche"
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: 4 }}
+              >×</button>
+            )}
+          </div>
+          {query.trim() && (
+            <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+              {filtered.length} sur {members.length}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Liste */}
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -118,8 +160,12 @@ export default function AdminMembersPage() {
               </tr>
             </thead>
             <tbody>
-              {members.length === 0 && <tr><td colSpan={8} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 14px' }}>Aucun membre pour l'instant.</td></tr>}
-              {members.map((m) => (
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 14px' }}>
+                  {members.length === 0 ? "Aucun membre pour l'instant." : `Aucun membre ne correspond à « ${query.trim()} ».`}
+                </td></tr>
+              )}
+              {filtered.map((m) => (
                 <tr key={m.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: m.status === 'BLOCKED' ? 0.55 : 1 }}>
                   <td style={{ ...cell, fontWeight: 600, whiteSpace: 'nowrap' }}>{m.firstName} {m.lastName}</td>
                   <td style={{ ...cell, color: th.textMute }}>{m.email}</td>
