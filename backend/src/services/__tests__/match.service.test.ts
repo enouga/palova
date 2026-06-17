@@ -276,3 +276,53 @@ describe('recomputeSportRatings', () => {
     expect(tx._updated.ghost).toBeUndefined();
   });
 });
+
+describe('voidMatch', () => {
+  function txMock(match: any) {
+    return {
+      match: { findUnique: jest.fn().mockResolvedValue(match), update: jest.fn().mockResolvedValue({}) },
+      matchPlayer: { updateMany: jest.fn().mockResolvedValue({}) },
+      playerRating: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue({}) },
+    };
+  }
+
+  it('refuse un motif vide (400)', async () => {
+    await expect(service.voidMatch('m1', 'c1', 'staff1', '   ')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('refuse un motif trop long (>200)', async () => {
+    await expect(service.voidMatch('m1', 'c1', 'staff1', 'x'.repeat(201))).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('404 si le match est d un autre club', async () => {
+    const tx = txMock({ clubId: 'AUTRE', sportId: 's', status: 'CONFIRMED', ratingsAppliedAt: new Date(), players: [] });
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await expect(service.voidMatch('m1', 'c1', 'staff1', 'erreur de saisie')).rejects.toThrow('MATCH_NOT_FOUND');
+  });
+
+  it('409 si déjà annulé', async () => {
+    const tx = txMock({ clubId: 'c1', sportId: 's', status: 'CANCELLED', ratingsAppliedAt: null, players: [] });
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await expect(service.voidMatch('m1', 'c1', 'staff1', 'erreur de saisie')).rejects.toThrow('ALREADY_CANCELLED');
+  });
+
+  it('PENDING : annule, pose l audit, NE recalcule PAS', async () => {
+    const tx: any = txMock({ clubId: 'c1', sportId: 's', status: 'PENDING', ratingsAppliedAt: null, players: [{ userId: 'u1' }] });
+    tx.match.findMany = jest.fn().mockResolvedValue([]);
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.voidMatch('m1', 'c1', 'staff1', 'doublon');
+    expect(tx.match.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'CANCELLED', cancelledByUserId: 'staff1', cancelledReason: 'doublon' }),
+    }));
+    expect(tx.match.findMany).not.toHaveBeenCalled();
+    expect(tx.matchPlayer.updateMany).toHaveBeenCalledWith({ where: { matchId: 'm1' }, data: { ratingBefore: null, ratingAfter: null } });
+  });
+
+  it('CONFIRMED : annule ET recalcule (lit l historique confirmé)', async () => {
+    const tx: any = txMock({ clubId: 'c1', sportId: 's', status: 'CONFIRMED', ratingsAppliedAt: new Date(), players: [{ userId: 'u1' }] });
+    tx.match.findMany = jest.fn().mockResolvedValue([]);
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.voidMatch('m1', 'c1', 'staff1', 'score truqué');
+    expect(tx.match.findMany).toHaveBeenCalled();
+  });
+});

@@ -7,6 +7,7 @@ import {
   isProvisional, levelToRating, ratingToLevel,
 } from './rating/level';
 import { notifyMatchPendingConfirmation } from '../email/notifications';
+import { recomputeSportRatings } from './rating/recompute';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -143,6 +144,31 @@ export class MatchService {
     if (sets && sets.length) { data.sets = sets as unknown as object; data.winningTeam = winningTeam(sets); }
     await prisma.match.update({ where: { id: matchId }, data });
     await this.finalize(matchId);
+  }
+
+  /** Annulation staff d'un match (scopée club). Motif obligatoire. Recalcule les niveaux si le match était confirmé. */
+  async voidMatch(matchId: string, clubId: string, staffUserId: string, reason: string): Promise<void> {
+    const trimmed = (reason ?? '').trim();
+    if (!trimmed || trimmed.length > 200) throw new Error('VALIDATION_ERROR');
+
+    await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        select: { clubId: true, sportId: true, status: true, ratingsAppliedAt: true, players: { select: { userId: true } } },
+      });
+      if (!match || match.clubId !== clubId) throw new Error('MATCH_NOT_FOUND');
+      if (match.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
+
+      await tx.match.update({
+        where: { id: matchId },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledByUserId: staffUserId, cancelledReason: trimmed },
+      });
+      await tx.matchPlayer.updateMany({ where: { matchId }, data: { ratingBefore: null, ratingAfter: null } });
+
+      if (match.ratingsAppliedAt) {
+        await recomputeSportRatings(tx, match.sportId, match.players.map((p) => p.userId));
+      }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   /** Finalise un match confirmé : applique Glicko aux 4 joueurs (idempotent, transaction Serializable). */
