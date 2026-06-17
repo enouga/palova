@@ -33,6 +33,7 @@ export default function MyReservationsPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
+  const levelEnabled = club?.levelSystemEnabled !== false;
   // Sur un sous-domaine club, réserver dans CE club (même host) ; sur la plateforme, l'annuaire.
   const reserveHref = slug ? '/reserver' : '/clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
@@ -60,6 +61,10 @@ export default function MyReservationsPage() {
     if (!token || !slug) { setQuotaStatus(null); return; }
     api.getMyQuotaStatus(slug, token).then(setQuotaStatus).catch(() => setQuotaStatus(null));
   }, [token, slug]);
+
+  // Si le club a désactivé le système de niveau, l'onglet « Matchs » n'existe pas :
+  // on rebascule sur l'onglet par défaut pour ne pas afficher une vue vide.
+  useEffect(() => { if (!levelEnabled && tab === 'matches') setTab('calendar'); }, [levelEnabled, tab]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
@@ -167,7 +172,7 @@ export default function MyReservationsPage() {
               { value: 'calendar', label: 'Calendrier' },
               { value: 'upcoming', label: `À venir · ${upcoming.length}` },
               { value: 'past', label: `Passées · ${past.length}` },
-              { value: 'matches', label: 'Matchs' },
+              ...(levelEnabled ? [{ value: 'matches' as const, label: 'Matchs' }] : []),
             ]} />
         </div>
 
@@ -197,7 +202,7 @@ export default function MyReservationsPage() {
                   onReserve={() => router.push(reserveHref)}
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
                   canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
-                  onRecordResult={(r) => setRecordingFor(r)}
+                  onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
                 />
               </>
             )}
@@ -234,7 +239,7 @@ export default function MyReservationsPage() {
                 onCancel={setConfirmCancel}
                 onPlayersChanged={() => { if (token) load(token); }}
                 canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
-                onRecordResult={(r) => setRecordingFor(r)}
+                onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
                 existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
               />
             ))

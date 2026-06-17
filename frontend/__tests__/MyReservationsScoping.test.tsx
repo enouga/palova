@@ -15,7 +15,7 @@ jest.mock('../components/ClubNav', () => ({ ClubNav: () => <div data-testid="nav
 jest.mock('../components/ProfileMenu', () => ({ ProfileMenu: () => <div data-testid="profile" /> }));
 
 // useClub mutable : chaque test règle le club courant + sa préférence.
-let mockClubState: { slug: string | null; club: { name: string; showOtherClubsReservations?: boolean } | null };
+let mockClubState: { slug: string | null; club: { name: string; showOtherClubsReservations?: boolean; levelSystemEnabled?: boolean } | null };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubState }));
 
 jest.mock('../lib/api', () => ({
@@ -78,5 +78,12 @@ describe('Mes réservations — cloisonnement par club', () => {
     await openUpcoming();
     expect(await screen.findByText('Court Local')).toBeInTheDocument();
     expect(screen.getByText('Court Autre')).toBeInTheDocument();
+  });
+
+  it('club OFF : pas d onglet « Matchs »', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', levelSystemEnabled: false } };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    expect(await screen.findByText('Mes réservations')).toBeInTheDocument();
+    expect(screen.queryByText('Matchs')).not.toBeInTheDocument();
   });
 });

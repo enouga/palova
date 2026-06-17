@@ -238,24 +238,26 @@ export default function MyProfilePage() {
               </div>
             </section>
 
-            {/* Niveau padel */}
-            <section style={card} aria-label="Mon niveau padel">
-              <div style={cardTitle}>Mon niveau padel</div>
-              {rating && !calibrating ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <LevelBadge rating={rating} />
-                    <button type="button" onClick={() => setCalibrating(true)}
-                      style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
-                      Réévaluer
-                    </button>
-                  </div>
-                  {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
-                </>
-              ) : (
-                <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
-              )}
-            </section>
+            {/* Niveau padel — masqué si le club a désactivé le système de niveau */}
+            {club?.levelSystemEnabled !== false && (
+              <section style={card} aria-label="Mon niveau padel">
+                <div style={cardTitle}>Mon niveau padel</div>
+                {rating && !calibrating ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <LevelBadge rating={rating} />
+                      <button type="button" onClick={() => setCalibrating(true)}
+                        style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                        Réévaluer
+                      </button>
+                    </div>
+                    {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
+                  </>
+                ) : (
+                  <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
+                )}
+              </section>
+            )}
 
             {/* Informations modifiables */}
             <section style={card} aria-label="Informations">

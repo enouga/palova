@@ -7,7 +7,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Contexte club contrôlable : slug null = hôte plateforme, sinon hôte club.
-let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string } | null; loading: boolean } =
+let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; levelSystemEnabled?: boolean } | null; loading: boolean } =
   { slug: null, club: null, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => clubCtx }));
 
@@ -126,5 +126,12 @@ describe('Page Mon profil', () => {
     wrap();
     await screen.findByText('Eric');
     expect(screen.queryByLabelText('N° de licence / adhérent')).not.toBeInTheDocument();
+  });
+
+  it('club OFF : pas de section niveau', async () => {
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
+    wrap();
+    await screen.findByText('Eric');
+    expect(screen.queryByText('Mon niveau padel')).not.toBeInTheDocument();
   });
 });
