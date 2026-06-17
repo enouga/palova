@@ -25,6 +25,7 @@ export default function AdminResourcesPage() {
   const [nr, setNr] = useState({ name: '', clubSportId: '', surface: '', coverage: 'outdoor', lighting: false, format: 'double', price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
   const [createErrors, setCreateErrors] = useState<ResourceFieldErrors>({});
+  const [rowErrors, setRowErrors] = useState<Record<string, ResourceFieldErrors>>({});
   const [dragId, setDragId]     = useState<string | null>(null);
   const [dirty, setDirty]       = useState<Set<string>>(new Set());
   const [saving, setSaving]     = useState(false);
@@ -55,9 +56,18 @@ export default function AdminResourcesPage() {
 
   const markDirty = (id: string) => setDirty((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
 
+  const clearRowErr = (id: string, k: ResourceFieldKey) =>
+    setRowErrors((m) => {
+      const e = m[id];
+      if (!e || !e[k]) return m;
+      const ne = { ...e }; delete ne[k];
+      return { ...m, [id]: ne };
+    });
+
   const editField = (id: string, field: 'name' | 'price' | 'offPeakPrice' | 'openHour' | 'closeHour', value: string) => {
     setResources((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
     markDirty(id);
+    clearRowErr(id, field);
   };
 
   // Édite un sous-champ d'attributes (surface/format) en préservant les autres clés (dont sortOrder).
@@ -81,6 +91,7 @@ export default function AdminResourcesPage() {
   const editStep = (id: string, value: string) => {
     setResources((prev) => prev.map((r) => (r.id === id ? { ...r, slotStepMin: value === '' ? null : Number(value) } : r)));
     markDirty(id);
+    clearRowErr(id, 'slotStepMin');
   };
 
   const defaultStep = (r: AdminResource) => r.clubSport.slotStepMin ?? r.clubSport.sport.defaultSlotStepMin;
@@ -89,7 +100,20 @@ export default function AdminResourcesPage() {
   const saveAll = async () => {
     if (!token || !clubId || dirty.size === 0) return;
     const toSave = resources.filter((r) => dirty.has(r.id));
-    if (toSave.some((r) => !r.name.trim())) { setError('Le nom d\'un terrain ne peut pas être vide.'); return; }
+    const errsByRow: Record<string, ResourceFieldErrors> = {};
+    for (const r of toSave) {
+      const e = validateResourceFields({
+        name: r.name, price: r.price, offPeakPrice: r.offPeakPrice,
+        openHour: r.openHour, closeHour: r.closeHour, slotStepMin: r.slotStepMin,
+      });
+      if (Object.keys(e).length) errsByRow[r.id] = e;
+    }
+    if (Object.keys(errsByRow).length) {
+      setRowErrors(errsByRow);
+      setError('Corrigez les champs en rouge avant d\'enregistrer.');
+      return;
+    }
+    setRowErrors({});
     setSaving(true);
     setError(null);
     const results = await Promise.allSettled(toSave.map((r) =>
@@ -199,7 +223,8 @@ export default function AdminResourcesPage() {
                     <Icon name="grip" size={18} color={th.textFaint} />
                   </td>
                   <td style={cell}>
-                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 200, fontWeight: 600 }} />
+                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 200, fontWeight: 600, ...errBorder(rowErrors[r.id]?.name) }} />
+                    {rowErrors[r.id]?.name && <div style={errText}>{rowErrors[r.id]!.name}</div>}
                   </td>
                   <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
                   <td style={cell}>
@@ -229,10 +254,22 @@ export default function AdminResourcesPage() {
                       {COURT_FORMATS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </td>
-                  <td style={cell}><input type="number" min={1} step="0.5" value={r.price} onChange={(e) => editField(r.id, 'price', e.target.value)} style={{ ...input, width: 90 }} /></td>
-                  <td style={cell}><input type="number" min={1} step="0.5" placeholder="—" value={r.offPeakPrice ?? ''} onChange={(e) => editField(r.id, 'offPeakPrice', e.target.value)} style={{ ...input, width: 90 }} /></td>
-                  <td style={cell}><input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
-                  <td style={cell}><input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60 }} /></td>
+                  <td style={cell}>
+                    <input type="number" min={1} step="0.5" value={r.price} onChange={(e) => editField(r.id, 'price', e.target.value)} style={{ ...input, width: 90, ...errBorder(rowErrors[r.id]?.price) }} />
+                    {rowErrors[r.id]?.price && <div style={errText}>{rowErrors[r.id]!.price}</div>}
+                  </td>
+                  <td style={cell}>
+                    <input type="number" min={1} step="0.5" placeholder="—" value={r.offPeakPrice ?? ''} onChange={(e) => editField(r.id, 'offPeakPrice', e.target.value)} style={{ ...input, width: 90, ...errBorder(rowErrors[r.id]?.offPeakPrice) }} />
+                    {rowErrors[r.id]?.offPeakPrice && <div style={errText}>{rowErrors[r.id]!.offPeakPrice}</div>}
+                  </td>
+                  <td style={cell}>
+                    <input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60, ...errBorder(rowErrors[r.id]?.openHour) }} />
+                    {rowErrors[r.id]?.openHour && <div style={errText}>{rowErrors[r.id]!.openHour}</div>}
+                  </td>
+                  <td style={cell}>
+                    <input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60, ...errBorder(rowErrors[r.id]?.closeHour) }} />
+                    {rowErrors[r.id]?.closeHour && <div style={errText}>{rowErrors[r.id]!.closeHour}</div>}
+                  </td>
                   <td style={cell}>
                     <select value={r.slotStepMin ?? ''} onChange={(e) => editStep(r.id, e.target.value)} style={{ ...input, width: 110 }}>
                       <option value="">Défaut ({defaultStep(r)} min)</option>
