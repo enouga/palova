@@ -10,7 +10,9 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { LevelChip } from '@/components/player/LevelChip';
+import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
+import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { Icon } from '@/components/ui/Icon';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 
@@ -85,8 +87,11 @@ export default function BookingModal({
   const [stripeStep, setStripeStep]   = useState(false);
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
-  const [targetLevelMin, setTargetLevelMin] = useState<number | null>(null);
-  const [targetLevelMax, setTargetLevelMax] = useState<number | null>(null);
+  // Fourchette de niveau d'une partie ouverte : interrupteur + curseur double, mémorisés.
+  const [levelLimited, setLevelLimited] = useState(false);
+  const [levelMin, setLevelMin] = useState(3);
+  const [levelMax, setLevelMax] = useState(5);
+  const [myLevel, setMyLevel] = useState<number | null>(null);
 
   // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
@@ -104,6 +109,21 @@ export default function BookingModal({
   const perPlayer = euros(Math.floor(totalCents / nbPlayers));
   const durLabel = durationLabel(duration);
 
+  // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
+  // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
+  useEffect(() => {
+    if (!showPartners || !levelEnabled) return;
+    const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
+    const pref = loadLevelPref();
+    if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
+    if (!token) return;
+    api.getMyRating(token).then((r) => {
+      const lvl = r?.level ?? null;
+      setMyLevel(lvl);
+      if (!pref && lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
+    }).catch(() => {});
+  }, [showPartners, token, levelEnabled]);
+
   useEffect(() => {
     if (phase !== 'pending') return;
     if (secondsLeft <= 0) {
@@ -116,15 +136,19 @@ export default function BookingModal({
   }, [phase, secondsLeft]);
 
   const handleHold = async () => {
+    // Fourchette envoyée seulement si le système de niveau du club est actif, partie
+    // ouverte ET interrupteur activé ; sinon null (tous niveaux) ou rien (club OFF).
+    const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
     try {
       const res = await api.holdSlot({
         resourceId, startTime: slot.startTime, endTime: slot.endTime,
         ...(showPartners ? {
           partnerUserIds: partners.map((p) => p.id),
           visibility,
-          ...(visibility === 'PUBLIC' && levelEnabled ? { targetLevelMin, targetLevelMax } : {}),
+          ...(visibility === 'PUBLIC' && levelEnabled ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null } : {}),
         } : {}),
       }, token);
+      if (showPartners) saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
       setReservation(res);
       setSecondsLeft(HOLD_SECONDS);
       setPhase('pending');
@@ -227,34 +251,19 @@ export default function BookingModal({
                   </div>
 
                   {visibility === 'PUBLIC' && levelEnabled && (
-                    <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <label htmlFor="bm-level-min" style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute, fontWeight: 600 }}>Niveau min</label>
-                        <select
-                          id="bm-level-min"
-                          value={targetLevelMin ?? ''}
-                          onChange={(e) => setTargetLevelMin(e.target.value === '' ? null : Number(e.target.value))}
-                          style={{ fontFamily: th.fontUI, fontSize: 13, background: th.surface2, color: th.text, border: `1px solid ${th.lineStrong}`, borderRadius: 8, padding: '5px 8px', cursor: 'pointer' }}
-                        >
-                          <option value="">—</option>
-                          {[0,1,2,3,4,5,6,7,8].map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
+                        <button type="button" role="switch" aria-checked={levelLimited} aria-label="Limiter le niveau"
+                          onClick={() => setLevelLimited((v) => !v)}
+                          style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: levelLimited ? th.accent : th.lineStrong, transition: 'background .15s' }}>
+                          <span style={{ position: 'absolute', top: 3, left: levelLimited ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <label htmlFor="bm-level-max" style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute, fontWeight: 600 }}>Niveau max</label>
-                        <select
-                          id="bm-level-max"
-                          value={targetLevelMax ?? ''}
-                          onChange={(e) => setTargetLevelMax(e.target.value === '' ? null : Number(e.target.value))}
-                          style={{ fontFamily: th.fontUI, fontSize: 13, background: th.surface2, color: th.text, border: `1px solid ${th.lineStrong}`, borderRadius: 8, padding: '5px 8px', cursor: 'pointer' }}
-                        >
-                          <option value="">—</option>
-                          {[0,1,2,3,4,5,6,7,8].map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                      </div>
-                      {targetLevelMin !== null && targetLevelMax !== null && targetLevelMin > targetLevelMax && (
-                        <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.accent, fontWeight: 600, alignSelf: 'flex-end', paddingBottom: 6 }}>
-                          Min &gt; Max
+                      {levelLimited && (
+                        <div style={{ marginTop: 14 }}>
+                          <LevelRangeSlider min={levelMin} max={levelMax} myLevel={myLevel}
+                            onChange={(lo, hi) => { setLevelMin(lo); setLevelMax(hi); }} />
                         </div>
                       )}
                     </div>
@@ -275,16 +284,10 @@ export default function BookingModal({
                 Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.
               </span>
             </div>
-            {(() => {
-              const levelRangeInvalid = visibility === 'PUBLIC' && showPartners && levelEnabled &&
-                targetLevelMin !== null && targetLevelMax !== null && targetLevelMin > targetLevelMax;
-              return (
-                <div style={{ display: 'flex', gap: 11 }}>
-                  <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
-                  <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }} disabled={levelRangeInvalid}>Pré-réserver</Btn>
-                </div>
-              );
-            })()}
+            <div style={{ display: 'flex', gap: 11 }}>
+              <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
+              <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>
+            </div>
           </>
         )}
 

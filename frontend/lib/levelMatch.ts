@@ -5,10 +5,15 @@ export function inRange(level: number | null, min: number | null, max: number | 
   if (max != null && level > max) return false;
   return true;
 }
+/** Format français d'un niveau : entier tel quel, sinon un dixième avec virgule (3,2). */
+export function fmtLevel(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
+}
 export function rangeLabel(min: number | null, max: number | null): string {
-  if (min != null && max != null) return `Niveau ${min} à ${max}`;
-  if (min != null) return `Niveau ${min} et +`;
-  if (max != null) return `Niveau ${max} et -`;
+  if (min != null && max != null) return `Niveau ${fmtLevel(min)} à ${fmtLevel(max)}`;
+  if (min != null) return `Niveau ${fmtLevel(min)} et +`;
+  if (max != null) return `Niveau ${fmtLevel(max)} et -`;
   return 'Tous niveaux';
 }
 /** Distance d'un niveau à une cible (tri « à mon niveau »). Niveau inconnu = Infinity. */

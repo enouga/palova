@@ -14,6 +14,7 @@ jest.mock('../lib/api', () => ({
     confirmReservation: jest.fn(),
     cancelReservation:  jest.fn(),
     searchClubMembers:  jest.fn(),
+    getMyRating:        jest.fn().mockResolvedValue(null),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -122,15 +123,14 @@ describe('BookingModal', () => {
     ));
   });
 
-  it('partie ouverte : masque la fourchette de niveau cible quand le système de niveau est OFF, et n envoie pas targetLevel*', async () => {
+  it('partie ouverte : masque le réglage de niveau quand le système de niveau est OFF, et n envoie pas targetLevel*', async () => {
     mockClub = { levelSystemEnabled: false };
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
 
     renderModal({ slug: 'club-demo', maxPlayers: 4 });
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
 
-    expect(screen.queryByLabelText(/Niveau min/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Niveau max/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /Limiter le niveau/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
     await waitFor(() => expect(api.holdSlot).toHaveBeenCalled());
@@ -139,13 +139,17 @@ describe('BookingModal', () => {
     expect(payload).not.toHaveProperty('targetLevelMax');
   });
 
-  it('partie ouverte : affiche la fourchette de niveau cible quand le système de niveau est ON', () => {
+  it('partie ouverte : l interrupteur de niveau apparaît quand le système est ON et révèle le curseur', () => {
     mockClub = { levelSystemEnabled: true };
     renderModal({ slug: 'club-demo', maxPlayers: 4 });
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
 
-    expect(screen.getByLabelText(/Niveau min/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Niveau max/)).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /Limiter le niveau/ });
+    expect(toggle).toBeInTheDocument();
+
+    fireEvent.click(toggle); // activer la limite → le curseur min/max apparaît
+    expect(screen.getByLabelText('Niveau minimum')).toBeInTheDocument();
+    expect(screen.getByLabelText('Niveau maximum')).toBeInTheDocument();
   });
 
   it('sans slug (mode simple), n envoie ni partnerUserIds ni visibility', async () => {

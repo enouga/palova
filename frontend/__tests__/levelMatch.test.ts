@@ -1,4 +1,4 @@
-import { inRange, rangeLabel, levelDistance } from '@/lib/levelMatch';
+import { inRange, rangeLabel, levelDistance, fmtLevel } from '@/lib/levelMatch';
 
 describe('inRange', () => {
   it('null fourchette → toujours dans la zone', () => expect(inRange(4, null, null)).toBe(true));
@@ -7,8 +7,15 @@ describe('inRange', () => {
   it('au-dessus', () => expect(inRange(6, 3, 5)).toBe(false));
   it('niveau inconnu (null) → considéré dans la zone', () => expect(inRange(null, 3, 5)).toBe(true));
 });
+describe('fmtLevel', () => {
+  it('entier sans décimale', () => expect(fmtLevel(3)).toBe('3'));
+  it('décimal avec virgule', () => expect(fmtLevel(3.2)).toBe('3,2'));
+  it('arrondi au dixième', () => expect(fmtLevel(5.44)).toBe('5,4'));
+  it('5.0 → entier', () => expect(fmtLevel(5.0)).toBe('5'));
+});
 describe('rangeLabel', () => {
-  it('fourchette complète', () => expect(rangeLabel(3, 5)).toBe('Niveau 3 à 5'));
+  it('fourchette complète (entiers)', () => expect(rangeLabel(3, 5)).toBe('Niveau 3 à 5'));
+  it('fourchette décimale', () => expect(rangeLabel(3.2, 5.4)).toBe('Niveau 3,2 à 5,4'));
   it('min seul', () => expect(rangeLabel(3, null)).toBe('Niveau 3 et +'));
   it('max seul', () => expect(rangeLabel(null, 5)).toBe("Niveau 5 et -"));
   it('aucune', () => expect(rangeLabel(null, null)).toBe('Tous niveaux'));
