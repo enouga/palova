@@ -7,7 +7,7 @@ const RESOURCE_NOUNS = ['terrain', 'court', 'table', 'piste', 'baie'];
 export interface SportInput {
   name?: unknown; key?: unknown; icon?: unknown; resourceNoun?: unknown;
   defaultSlotStepMin?: unknown; defaultDurationsMin?: unknown; surfaces?: unknown;
-  published?: unknown;
+  published?: unknown; hasLighting?: unknown;
 }
 
 function parseDurations(v: unknown): number[] {
@@ -37,7 +37,7 @@ export class SportCatalogService {
       orderBy: { name: 'asc' },
       select: {
         id: true, key: true, name: true, resourceNoun: true,
-        defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, published: true,
+        defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, published: true, hasLighting: true,
       },
     });
   }
@@ -56,6 +56,7 @@ export class SportCatalogService {
           defaultSlotStepMin: parseStep(input.defaultSlotStepMin),
           defaultDurationsMin: parseDurations(input.defaultDurationsMin),
           surfaces: parseSurfaces(input.surfaces),
+          hasLighting: Boolean(input.hasLighting),
         },
       });
     } catch (err) {
@@ -77,6 +78,7 @@ export class SportCatalogService {
     if (input.defaultDurationsMin !== undefined) data.defaultDurationsMin = parseDurations(input.defaultDurationsMin);
     if (input.surfaces !== undefined) data.surfaces = parseSurfaces(input.surfaces);
     if (input.published !== undefined) data.published = Boolean(input.published);
+    if (input.hasLighting !== undefined) data.hasLighting = Boolean(input.hasLighting);
     // `key` volontairement jamais repris : identifiant immuable.
     if (Object.keys(data).length === 0) throw new Error('VALIDATION_ERROR');
     try {

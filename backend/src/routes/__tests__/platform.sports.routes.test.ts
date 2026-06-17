@@ -50,6 +50,17 @@ describe('POST /api/platform/sports', () => {
     const res = await request(app).post('/api/platform/sports').send({ name: 'X', defaultDurationsMin: [90] });
     expect(res.status).toBe(401);
   });
+
+  it('201 crée un sport avec hasLighting:true', async () => {
+    asSuper();
+    prismaMock.sport.create.mockResolvedValue({ id: 's2', key: 'tennis', name: 'Tennis', hasLighting: true } as any);
+    const res = await request(app).post('/api/platform/sports').set('Authorization', `Bearer ${superToken}`)
+      .send({ name: 'Tennis', resourceNoun: 'court', defaultDurationsMin: [60, 90], hasLighting: true });
+    expect(res.status).toBe(201);
+    expect(prismaMock.sport.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ hasLighting: true }),
+    }));
+  });
 });
 
 describe('PATCH /api/platform/sports/:id', () => {
