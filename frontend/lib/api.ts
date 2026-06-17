@@ -1206,6 +1206,7 @@ export interface ClubReservation {
   participants: ParticipantBill[];
   hasCardFingerprint?: boolean;
   seriesId?: string | null;
+  lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE' } | null;
 }
 
 export interface ClubReservationsResponse {

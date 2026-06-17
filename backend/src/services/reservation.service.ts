@@ -1291,6 +1291,7 @@ export class ReservationService {
           orderBy: { joinedAt: 'asc' },
           select: { id: true, userId: true, share: true, isOrganizer: true, user: { select: { firstName: true, lastName: true } } },
         },
+        lesson: { select: { id: true, capacity: true, lessonKind: true } },
       },
     });
 

@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody, Coach } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody, Coach, LessonStudent } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
+import { capacityLabel } from '@/lib/lessons';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots, validatePaymentAmount } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
@@ -132,6 +133,7 @@ export default function AdminPlanningPage() {
   const [cAllowSelfEnroll, setCAllowSelfEnroll] = useState(false);
   const [cEnrollMode, setCEnrollMode]       = useState<'SERIES' | 'PER_SESSION'>('SERIES');
   const [coaches, setCoaches]               = useState<Coach[]>([]);
+  const [students, setStudents]             = useState<LessonStudent[]>([]);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -155,6 +157,20 @@ export default function AdminPlanningPage() {
   }, [token, clubId, date]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+
+  const loadStudents = useCallback((lessonId: string) => {
+    if (!token || !clubId) return;
+    api.adminListLessonStudents(clubId, lessonId, token).then(setStudents).catch(() => setStudents([]));
+  }, [token, clubId]);
+
+  // Charge la liste des élèves quand la modale de détail s'ouvre sur un cours.
+  useEffect(() => {
+    if (selected?.lesson?.id) {
+      loadStudents(selected.lesson.id);
+    } else {
+      setStudents([]);
+    }
+  }, [selected?.lesson?.id, loadStudents]);
 
   // Suivi de l'état plein écran.
   useEffect(() => {
@@ -827,6 +843,67 @@ export default function AdminPlanningPage() {
               </div>
               );
             })()}
+
+            {/* élèves (cours) */}
+            {selected.lesson?.id && selected.status !== 'CANCELLED' && (
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>
+                  Élèves {capacityLabel(students.filter((s) => s.status === 'CONFIRMED').length, selected.lesson.capacity)}
+                </div>
+                {students.length === 0 && (
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginBottom: 8 }}>Aucun élève inscrit.</div>
+                )}
+                {students.filter((s) => s.status !== 'CANCELLED').map((s) => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '6px 10px', borderRadius: 9, background: th.surface2 }}>
+                    <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
+                      {s.firstName} {s.lastName}
+                      {s.status === 'WAITLISTED' && (
+                        <span style={{ color: th.textMute }}> · attente {s.waitlistPosition}</span>
+                      )}
+                    </span>
+                    {s.status === 'WAITLISTED' && (
+                      <button type="button" disabled={busy}
+                        onClick={() => { setBusy(true); api.adminPromoteStudent(clubId!, selected.lesson!.id, s.id, token!).then(() => loadStudents(selected.lesson!.id)).catch(() => {}).finally(() => setBusy(false)); }}
+                        style={{ border: `1px solid ${th.line}`, background: th.surface, color: th.text, borderRadius: 8, padding: '4px 10px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
+                        Promouvoir
+                      </button>
+                    )}
+                    <button type="button" disabled={busy} aria-label={`Retirer ${s.firstName} ${s.lastName}`}
+                      onClick={() => { setBusy(true); api.adminRemoveStudent(clubId!, selected.lesson!.id, s.id, token!).then(() => loadStudents(selected.lesson!.id)).catch(() => {}).finally(() => setBusy(false)); }}
+                      style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+                  </div>
+                ))}
+                <div style={{ marginTop: 8 }}>
+                  <PlayerPicker
+                    members={members}
+                    value={null}
+                    onSelect={(m) => {
+                      setBusy(true);
+                      api.adminEnrollStudent(clubId!, selected.lesson!.id, m.userId, token!)
+                        .then(() => loadStudents(selected.lesson!.id))
+                        .catch(() => {})
+                        .finally(() => setBusy(false));
+                    }}
+                    onClear={() => {}}
+                    onCreate={async (body) => {
+                      const r = await api.adminCreateMember(clubId!, body, token!);
+                      const mem = await api.adminGetMembers(clubId!, token!);
+                      setMembers(mem);
+                      const created = mem.find((mm) => mm.email.toLowerCase() === body.email.toLowerCase());
+                      if (created) {
+                        setBusy(true);
+                        await api.adminEnrollStudent(clubId!, selected.lesson!.id, created.userId, token!)
+                          .then(() => loadStudents(selected.lesson!.id))
+                          .catch(() => {})
+                          .finally(() => setBusy(false));
+                      }
+                      return r;
+                    }}
+                    placeholder="+ Ajouter un élève…"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* annulation */}
             {selected.status !== 'CANCELLED' && (
