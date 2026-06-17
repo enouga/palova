@@ -96,3 +96,46 @@ describe('POST /api/clubs/:clubId/admin/matches/:matchId/resolve', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('POST /api/clubs/:clubId/admin/matches/:matchId/void', () => {
+  it('annule avec un motif (200) et passe l id staff', async () => {
+    const spy = jest.spyOn(require('../../services/match.service').matchService, 'voidMatch').mockResolvedValue(undefined);
+    const res = await request(app)
+      .post('/api/clubs/c1/admin/matches/m1/void')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ reason: 'score truqué' });
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('m1', 'c1', 'staff1', 'score truqué');
+    spy.mockRestore();
+  });
+
+  it('400 si motif manquant', async () => {
+    jest.spyOn(require('../../services/match.service').matchService, 'voidMatch')
+      .mockRejectedValue(new Error('VALIDATION_ERROR'));
+    const res = await request(app)
+      .post('/api/clubs/c1/admin/matches/m1/void')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('404 si match introuvable / autre club', async () => {
+    jest.spyOn(require('../../services/match.service').matchService, 'voidMatch')
+      .mockRejectedValue(new Error('MATCH_NOT_FOUND'));
+    const res = await request(app)
+      .post('/api/clubs/c1/admin/matches/mX/void')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ reason: 'x' });
+    expect(res.status).toBe(404);
+  });
+
+  it('409 si déjà annulé', async () => {
+    jest.spyOn(require('../../services/match.service').matchService, 'voidMatch')
+      .mockRejectedValue(new Error('ALREADY_CANCELLED'));
+    const res = await request(app)
+      .post('/api/clubs/c1/admin/matches/m1/void')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ reason: 'x' });
+    expect(res.status).toBe(409);
+  });
+});

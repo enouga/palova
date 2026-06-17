@@ -19,7 +19,7 @@ import { RefundService } from '../services/refund.service';
 import { AccountingService } from '../services/accounting.service';
 import { StripeService } from '../services/stripe.service';
 import { ClubPageService } from '../services/clubPage.service';
-import { MatchService } from '../services/match.service';
+import { matchService } from '../services/match.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -34,7 +34,6 @@ const packageService = new PackageService();
 const refundService = new RefundService();
 const accountingService = new AccountingService();
 const clubPageService = new ClubPageService();
-const matchService = new MatchService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -741,6 +740,19 @@ router.post('/matches/:matchId/resolve', async (req: ClubScopedRequest, res: Res
   } catch (err) {
     if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
     if (err instanceof Error && err.message === 'MATCH_NOT_DISPUTED') { res.status(409).json({ error: 'MATCH_NOT_DISPUTED' }); return; }
+    next(err as Error);
+  }
+});
+
+router.post('/matches/:matchId/void', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const reason = typeof req.body.reason === 'string' ? req.body.reason : '';
+    await matchService.voidMatch(asString(req.params.matchId), asString(req.params.clubId), req.user!.id, reason);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof Error && err.message === 'VALIDATION_ERROR') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
+    if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
+    if (err instanceof Error && err.message === 'ALREADY_CANCELLED') { res.status(409).json({ error: 'ALREADY_CANCELLED' }); return; }
     next(err as Error);
   }
 });

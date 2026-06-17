@@ -229,3 +229,6 @@ export class MatchService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 }
+
+/** Singleton partagé (routes + tests). */
+export const matchService = new MatchService();
