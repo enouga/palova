@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
@@ -63,6 +63,19 @@ function fmtHM(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
+// weekday Luxon (1=lundi..7=dimanche) depuis une date "YYYY-MM-DD".
+function weekdayOf(dateISO: string): number {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  const js = d.getUTCDay(); // 0=dimanche..6=samedi
+  return js === 0 ? 7 : js;
+}
+// durée en minutes entre deux "HH:mm" (>0 supposé, validé à la soumission).
+function durationMinutes(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
 export default function AdminPlanningPage() {
   const { th } = useTheme();
   const isDesktop = useIsDesktop();
@@ -111,6 +124,8 @@ export default function AdminPlanningPage() {
   const [cTitle, setCTitle]     = useState('');
   const [cMember, setCMember] = useState<Member | null>(null);
   const [cPrice, setCPrice]     = useState('');
+  const [cRecurring, setCRecurring] = useState(false);
+  const [cEndDate, setCEndDate]     = useState('');
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -398,23 +413,42 @@ export default function AdminPlanningPage() {
     setCEnd(endTimeFrom(start, defaultDurOf(rid), resById.get(rid)?.closeHour ?? maxClose));
     setCTitle(''); setCMember(null); setCPrice('');
     setError(null);
+    setCRecurring(false);
+    setCEndDate(date);
     setCreateOpen(true);
   };
 
   const submitCreate = async () => {
     if (!token || !clubId) return;
     if (!cResourceId) { setError('Choisis un terrain.'); return; }
-    if (cEnd <= cStart) { setError('L’heure de fin doit être après le début.'); return; }
+    if (cEnd <= cStart) { setError("L'heure de fin doit être après le début."); return; }
     setBusy(true);
     try {
       setError(null);
-      await api.adminCreateReservation(clubId, {
-        resourceId: cResourceId, date: cDate, startTime: cStart, endTime: cEnd,
-        type: cType,
-        title: cTitle.trim() || undefined,
-        memberUserId: cMember?.userId ?? undefined,
-        price: cPrice ? Number(cPrice) : undefined,
-      }, token);
+      if (cRecurring) {
+        if (!cEndDate || cEndDate < cDate) { setError('La date de fin doit être après la date de début.'); setBusy(false); return; }
+        const res = await api.adminCreateSeries(clubId, {
+          resourceId: cResourceId,
+          type: cType,
+          title: cTitle.trim() || undefined,
+          weekday: weekdayOf(cDate),
+          startLocal: cStart,
+          durationMin: durationMinutes(cStart, cEnd),
+          startDate: cDate,
+          endDate: cEndDate,
+        }, token);
+        if (res.skipped.length > 0) {
+          alert(`${res.created} séance(s) créée(s). ${res.skipped.length} ignorée(s) (créneau déjà pris).`);
+        }
+      } else {
+        await api.adminCreateReservation(clubId, {
+          resourceId: cResourceId, date: cDate, startTime: cStart, endTime: cEnd,
+          type: cType,
+          title: cTitle.trim() || undefined,
+          memberUserId: cMember?.userId ?? undefined,
+          price: cPrice ? Number(cPrice) : undefined,
+        }, token);
+      }
       setCreateOpen(false);
       await load();
     } catch (e) { setError((e as Error).message); }
@@ -873,6 +907,22 @@ export default function AdminPlanningPage() {
                 onCreate={createForResa}
                 placeholder="Cliquez pour voir les membres, ou tapez un nom…"
               />
+            </div>
+
+            <div style={{ marginTop: 14, borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, cursor: 'pointer' }}>
+                <input type="checkbox" checked={cRecurring} onChange={(e) => setCRecurring(e.target.checked)} />
+                Répéter chaque semaine
+              </label>
+              {cRecurring && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 12, color: th.textMute, marginBottom: 6 }}>
+                    Tous les <strong style={{ color: th.text }}>{['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][weekdayOf(cDate) - 1]}s</strong> à {cStart}, jusqu&apos;au :
+                  </div>
+                  <DateField value={cEndDate} onChange={setCEndDate} size="sm" />
+                  <div style={{ fontSize: 11.5, color: th.textMute, marginTop: 6 }}>Le membre et le prix ne s&apos;appliquent pas à une série.</div>
+                </div>
+              )}
             </div>
 
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
