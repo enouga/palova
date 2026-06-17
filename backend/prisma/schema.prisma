@@ -158,6 +158,18 @@ enum MatchPlayerConfirmation {
   DISPUTED
 }
 
+/// Type de cours : individuel (capacité 1) ou collectif (capacité N). Utilisé en Lot 2.
+enum LessonKind {
+  INDIVIDUAL
+  COLLECTIVE
+}
+
+/// Mode d'inscription d'un cours récurrent : à la série (trimestre) ou séance par séance. Lot 2.
+enum EnrollmentMode {
+  SERIES
+  PER_SESSION
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -253,6 +265,8 @@ model Club {
   stripeCustomers  ClubStripeCustomer[]
   pages            ClubPage[]
   faqItems         ClubFaqItem[]
+  coaches          Coach[]
+  reservationSeries ReservationSeries[]
 
   @@map("clubs")
 }
@@ -346,6 +360,7 @@ model Resource {
   club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
   clubSport    ClubSport     @relation(fields: [clubSportId], references: [id], onDelete: Cascade)
   reservations Reservation[]
+  series       ReservationSeries[]
 
   @@index([clubId])
   @@index([clubSportId])
@@ -532,6 +547,7 @@ model Reservation {
   // Fourchette de niveau cible (0–8) d'une partie ouverte (visibility PUBLIC). null = pas de cible.
   targetLevelMin Float? @map("target_level_min")
   targetLevelMax Float? @map("target_level_max")
+  seriesId    String?           @map("series_id") // occurrence d'une série (récurrence admin)
   title       String?
   totalPrice  Decimal           @map("total_price") @db.Decimal(10, 2)
   notes       String?
@@ -544,11 +560,13 @@ model Reservation {
   payments     Payment[]
   participants ReservationParticipant[]
   matches      Match[]
+  series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
   @@index([userId, startTime]) // comptage des quotas par joueur
   @@index([visibility, status, startTime]) // liste des parties ouvertes à venir
+  @@index([seriesId])
   @@map("reservations")
 }
 
@@ -845,4 +863,57 @@ model EventRegistration {
   @@unique([eventId, userId]) // une seule ligne par joueur et par événement (réinscription = update)
   @@index([eventId, status, createdAt])
   @@map("event_registrations")
+}
+
+/// Coach/moniteur géré par le club (indépendant des comptes staff). Suppression = soft (isActive=false).
+model Coach {
+  id        String   @id @default(cuid())
+  clubId    String   @map("club_id")
+  name      String
+  photoUrl  String?  @map("photo_url")
+  bio       String?
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  club   Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  series ReservationSeries[]
+
+  @@index([clubId])
+  @@map("coaches")
+}
+
+/// Récurrence hebdomadaire générique (tous types). Génère des Reservation (Reservation.seriesId).
+/// Les colonnes « cours » (coachId/capacity/lessonKind/allowSelfEnroll/enrollmentMode) sont posées
+/// dès maintenant mais exploitées au Lot 2 — null/false en Lot 1.
+model ReservationSeries {
+  id          String          @id @default(cuid())
+  clubId      String          @map("club_id")
+  resourceId  String          @map("resource_id")
+  type        ReservationType @default(COURT)
+  title       String?
+  weekday     Int                                    // 1=lundi … 7=dimanche (Luxon)
+  startLocal  String          @map("start_local")
+  durationMin Int             @map("duration_min")
+  startDate   DateTime        @map("start_date") @db.Date
+  endDate     DateTime        @map("end_date") @db.Date
+  coachId         String?         @map("coach_id")
+  capacity        Int?
+  lessonKind      LessonKind?     @map("lesson_kind")
+  allowSelfEnroll Boolean         @default(false) @map("allow_self_enroll")
+  enrollmentMode  EnrollmentMode? @map("enrollment_mode")
+  cancelledAt DateTime?       @map("cancelled_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  resource     Resource      @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  coach        Coach?        @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  reservations Reservation[]
+
+  @@index([clubId])
+  @@index([resourceId])
+  @@index([coachId])
+  @@map("reservation_series")
 }
