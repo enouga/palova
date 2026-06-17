@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
-import { api } from '@/lib/api';
+import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -96,9 +96,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* marque + identité club */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 6px' }}>
           {club.logoUrl
-            ? <img src={club.logoUrl} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+            ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
             : <Logotype size={22} />}
-          <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{club.name}</span>
           <button type="button" aria-label="Masquer le menu" title="Masquer le menu" onClick={() => setCollapsed(true)} style={{
             marginLeft: 'auto', flexShrink: 0, width: 28, height: 28, borderRadius: 8, cursor: 'pointer',
             background: 'transparent', border: `1px solid ${th.line}`, color: th.textMute,
