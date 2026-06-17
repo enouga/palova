@@ -13,6 +13,8 @@ import {
 export interface PublicLessonRow {
   id: string;
   clubId: string;
+  lessonKind: string;
+  seriesId: string | null;
   coach: { name: string; photoUrl: string | null };
   reservation: {
     startTime: Date;
@@ -348,6 +350,8 @@ class LessonService {
     lesson: {
       id: string;
       clubId: string;
+      lessonKind: string;
+      seriesId: string | null;
       capacity: number;
       allowSelfEnroll: boolean;
       coach: { name: string; photoUrl: string | null };
@@ -361,6 +365,8 @@ class LessonService {
     return {
       id: lesson.id,
       clubId: lesson.clubId,
+      lessonKind: lesson.lessonKind,
+      seriesId: lesson.seriesId,
       coach: lesson.coach,
       reservation: {
         startTime: lesson.reservation.startTime,
@@ -486,7 +492,7 @@ class LessonService {
     );
 
     await this.safeNotify(() => notifyLessonEnrollment(result.id));
-    return result;
+    return { id: result.id, status: result.status, lessonId: result.lessonId, seriesId: result.seriesId };
   }
 
   // ─────────────────────────────────────────────────────────── cancelEnrollment (joueur)

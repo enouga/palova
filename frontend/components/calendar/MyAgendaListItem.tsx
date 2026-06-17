@@ -41,7 +41,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   const isForeign = item.kind !== 'lesson' && localSlug != null && itemSlug !== localSlug;
   const tz = item.kind === 'reservation' ? item.r.resource.club.timezone
     : item.kind === 'tournament' ? item.reg.tournament.club.timezone
-    : item.kind === 'lesson' ? 'UTC'
+    : item.kind === 'lesson' ? item.enrollment.lesson.club.timezone
     : item.ev.event.club.timezone;
 
   const foreignHref = item.kind === 'reservation' ? clubUrl(itemSlug, '/me/reservations')

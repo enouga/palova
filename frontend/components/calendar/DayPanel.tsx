@@ -151,6 +151,7 @@ export function DayPanel({
               const res = lesson.reservation;
               const startTime = res.startTime;
               const endTime = res.endTime;
+              const lessonTz = lesson.club.timezone;
               return card(
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -161,7 +162,7 @@ export function DayPanel({
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Icon name="clock" size={14} color={th.textMute} />{fmtHour(startTime, 'UTC')}–{fmtHour(endTime, 'UTC')}
+                      <Icon name="clock" size={14} color={th.textMute} />{fmtHour(startTime, lessonTz)}–{fmtHour(endTime, lessonTz)}
                     </span>
                     <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
                   </div>

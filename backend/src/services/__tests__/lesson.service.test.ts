@@ -250,6 +250,34 @@ describe('LessonService notifications', () => {
   });
 });
 
+describe('LessonService.getPublicLesson — lessonKind + seriesId présents dans le row public', () => {
+  it('retourne lessonKind et seriesId depuis la lesson', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'l1',
+      clubId: 'club-demo',
+      lessonKind: 'INDIVIDUAL',
+      seriesId: 's1',
+      capacity: 4,
+      allowSelfEnroll: true,
+      coach: { name: 'Coach A', photoUrl: null },
+      reservation: {
+        startTime: new Date('2026-07-01T09:00:00Z'),
+        endTime: new Date('2026-07-01T10:00:00Z'),
+        resource: { name: 'T1' },
+      },
+      series: { id: 's1', capacity: 4, enrollmentMode: 'SERIES', title: 'Cours débutants' },
+      club: { slug: 'club-demo', name: 'Club Démo', timezone: 'Europe/Paris' },
+    } as any);
+    (prismaMock.lessonEnrollment.groupBy as jest.Mock).mockResolvedValue([
+      { status: 'CONFIRMED', _count: 2 },
+    ]);
+
+    const row = await lessonService.getPublicLesson('l1');
+    expect(row.lessonKind).toBe('INDIVIDUAL');
+    expect(row.seriesId).toBe('s1');
+  });
+});
+
 describe('LessonService.listUserEnrollments', () => {
   it('listUserEnrollments : une inscription série est dépliée en occurrences futures', async () => {
     // L'enrollment série n'a pas de lessonId → le service cherche les lessons via lesson.findMany
