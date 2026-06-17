@@ -21,6 +21,7 @@ import { StripeService } from '../services/stripe.service';
 import { ClubPageService } from '../services/clubPage.service';
 import { matchService } from '../services/match.service';
 import { CoachService } from '../services/coach.service';
+import { lessonService } from '../services/lesson.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -82,6 +83,10 @@ const ERROR_STATUS: Record<string, number> = {
   COACH_NOT_FOUND:        404,
   SERIES_NOT_FOUND:       404,
   SERIES_TOO_LONG:        400,
+  LESSON_NOT_FOUND:       404,
+  ENROLLMENT_NOT_FOUND:   404,
+  ALREADY_ENROLLED:       409,
+  MEMBERSHIP_BLOCKED:     403,
 };
 
 function asString(v: unknown): string {
@@ -580,6 +585,20 @@ router.delete('/reservation-series/:id', async (req: ClubScopedRequest, res: Res
   try {
     res.json(await reservationService.adminCancelSeries(asString(req.params.id), req.membership!.clubId));
   } catch (err) { handleError(err, res, next); }
+});
+
+// --- Cours : élèves ---
+router.get('/lessons/:id/students', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await lessonService.listStudents(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/lessons/:id/students', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await lessonService.adminEnrollStudent(asString(req.params.id), asString(req.body.userId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await lessonService.adminPromoteStudent(asString(req.params.id), asString(req.params.enrollId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await lessonService.adminRemoveStudent(asString(req.params.id), asString(req.params.enrollId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Tournois ---
