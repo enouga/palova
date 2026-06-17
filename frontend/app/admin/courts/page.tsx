@@ -4,7 +4,7 @@ import { api, AdminResource, AdminClubSport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { COURT_FORMATS, COVERAGE_OPTIONS } from '@/lib/courtType';
+import { COURT_FORMATS, COVERAGE_OPTIONS, Coverage } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 
@@ -62,7 +62,7 @@ export default function AdminResourcesPage() {
   };
 
   const editCoverage = (id: string, coverage: string) => {
-    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, attributes: { ...r.attributes, coverage } } : r)));
+    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, attributes: { ...r.attributes, coverage: coverage as Coverage } } : r)));
     markDirty(id);
   };
   const editLighting = (id: string, lighting: boolean) => {
