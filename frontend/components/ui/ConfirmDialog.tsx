@@ -13,6 +13,8 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Désactive les boutons et l'overlay pendant la requête. */
   busy?: boolean;
+  /** Désactive le bouton d'action (ex. champ obligatoire vide). */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -23,7 +25,7 @@ interface ConfirmDialogProps {
  */
 export function ConfirmDialog({
   title, detail, message, confirmLabel = 'Confirmer', cancelLabel = 'Retour',
-  busy = false, onConfirm, onCancel,
+  busy = false, confirmDisabled = false, onConfirm, onCancel,
 }: ConfirmDialogProps) {
   const { th } = useTheme();
   return (
@@ -39,7 +41,7 @@ export function ConfirmDialog({
         )}
         <div style={{ display: 'flex', gap: 11, marginTop: 24 }}>
           <Btn variant="surface" onClick={onCancel} disabled={busy} style={{ flex: '0 0 42%' }}>{cancelLabel}</Btn>
-          <Btn variant="danger" onClick={onConfirm} disabled={busy} style={{ flex: 1 }}>{busy ? '…' : confirmLabel}</Btn>
+          <Btn variant="danger" onClick={onConfirm} disabled={busy || confirmDisabled} style={{ flex: 1 }}>{busy ? '…' : confirmLabel}</Btn>
         </div>
         <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '18px auto 0' }} />
       </div>

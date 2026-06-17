@@ -85,6 +85,8 @@ export const api = {
     request<ClubMatch[]>(`/api/clubs/${clubId}/admin/matches?status=${encodeURIComponent(status)}`, {}, token),
   resolveClubMatch: (clubId: string, matchId: string, body: { action: 'VALIDATE' | 'CANCEL'; sets?: [number, number][] }, token: string) =>
     request<{ ok: true }>(`/api/clubs/${clubId}/admin/matches/${matchId}/resolve`, { method: 'POST', body: JSON.stringify(body) }, token),
+  voidClubMatch: (clubId: string, matchId: string, body: { reason: string }, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/matches/${matchId}/void`, { method: 'POST', body: JSON.stringify(body) }, token),
 
   // Adhésions du joueur (clubs dont il est membre + statut abonné).
   getMyMemberships: (token: string) => request<PlayerMembership[]>('/api/me/memberships', {}, token),
@@ -588,6 +590,8 @@ export interface ClubMatch {
   id: string; status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
   sets: [number, number][]; playedAt: string; winningTeam: number | null; confirmDeadline: string;
   players: ClubMatchPlayer[];
+  cancelledAt?: string | null;
+  cancelledReason?: string | null;
 }
 
 export interface ReservationPlayer {
