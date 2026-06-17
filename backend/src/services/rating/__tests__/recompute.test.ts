@@ -57,4 +57,16 @@ describe('replayRatings', () => {
     const out = replayRatings([{ userId: 'x', initialSelfLevel: null }], []);
     expect(out.players[0].rating).toBeCloseTo(levelToRating(SKIP_DEFAULT_LEVEL), 6);
   });
+
+  it('lève si un match référence un joueur absent des baselines', () => {
+    const orphan: ReplayMatchInput = {
+      matchId: 'mX', playedAt: d('2026-06-10T10:00:00Z'), sets: [[6, 0]],
+      players: [
+        { userId: 'a', team: 1 }, { userId: 'b', team: 1 },
+        { userId: 'c', team: 2 }, { userId: 'd', team: 2 },
+      ],
+    };
+    expect(() => replayRatings([{ userId: 'a', initialSelfLevel: null }], [orphan]))
+      .toThrow(/REPLAY_MISSING_BASELINE/);
+  });
 });

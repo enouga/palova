@@ -266,4 +266,13 @@ describe('recomputeSportRatings', () => {
     expect(tx._updated.solo.matchesPlayed).toBe(0);
     expect(tx._updated.solo.lastMatchAt).toBeNull();
   });
+
+  it('ignore les joueurs sans ligne PlayerRating (aucun update fantôme)', async () => {
+    // 'ghost' est demandé via extraUserIds mais n'a aucune ligne PlayerRating
+    const tx = txMock([], [{ userId: 'solo', initialSelfLevel: 5 }]);
+    await recomputeSportRatings(tx as any, 'sport-padel', ['solo', 'ghost']);
+    expect(tx.playerRating.update).toHaveBeenCalledTimes(1); // seulement 'solo'
+    expect(tx._updated.solo).toBeDefined();
+    expect(tx._updated.ghost).toBeUndefined();
+  });
 });

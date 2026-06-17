@@ -79,6 +79,7 @@ export function replayRatings(baselines: ReplayBaseline[], matches: ReplayMatchI
  * Recalcule les niveaux d'un sport par rejeu complet des matchs CONFIRMED, dans la transaction `tx`.
  * `extraUserIds` = joueurs à inclure même s'ils n'ont plus de match confirmé (ex. les 4 du match
  * qu'on vient d'annuler) afin qu'ils retombent sur leur calibration.
+ * Les joueurs sans ligne PlayerRating sont ignorés (pas de ligne créée).
  */
 export async function recomputeSportRatings(
   tx: Prisma.TransactionClient,
@@ -99,6 +100,7 @@ export async function recomputeSportRatings(
     select: { userId: true, initialSelfLevel: true },
   });
   const selfLevel = new Map(rows.map((r) => [r.userId, r.initialSelfLevel]));
+  const existing = new Set(rows.map((r) => r.userId));
   const baselines: ReplayBaseline[] = [...userIds].map((userId) => ({
     userId, initialSelfLevel: selfLevel.get(userId) ?? null,
   }));
@@ -113,6 +115,7 @@ export async function recomputeSportRatings(
   const out = replayRatings(baselines, matches);
 
   for (const p of out.players) {
+    if (!existing.has(p.userId)) continue;
     await tx.playerRating.update({
       where: { userId_sportId: { userId: p.userId, sportId } },
       data: {
