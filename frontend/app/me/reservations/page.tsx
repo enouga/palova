@@ -109,8 +109,7 @@ export default function MyReservationsPage() {
   const fItems   = useMemo(() => (showAll ? items : items.filter((r) => r.resource.club.slug === slug)), [showAll, items, slug]);
   const fRegs    = useMemo(() => (showAll ? regs  : regs.filter((r) => r.tournament.club.slug === slug)), [showAll, regs, slug]);
   const fEvts    = useMemo(() => (showAll ? evts  : evts.filter((e) => e.event.club.slug === slug)), [showAll, evts, slug]);
-  // LessonSummary n'expose pas de slug de club — on affiche tous les cours (pas de filtre par club).
-  const fLessons = useMemo(() => lessons, [lessons]);
+  const fLessons = useMemo(() => (showAll ? lessons : lessons.filter((l) => l.lesson.club.slug === slug)), [showAll, lessons, slug]);
 
   const agenda   = useMemo(() => buildAgendaList(fItems, fRegs, fEvts, fLessons, nowDate), [fItems, fRegs, fEvts, fLessons, nowDate]);
   const upcoming = useMemo(() => agenda.filter((i) => !i.past), [agenda]);

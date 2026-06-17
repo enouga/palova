@@ -1580,8 +1580,13 @@ export interface LessonEnrollmentRecord {
   seriesId: string | null;
 }
 
+/** Shape retournée par /api/me/lessons : LessonSummary enrichie du club (pour dayKey tz-aware). */
+export type MyLessonSummary = LessonSummary & {
+  club: { slug: string; name: string; timezone: string };
+};
+
 export interface MyLessonEnrollment {
   enrollmentId: string;
   status: string;
-  lesson: LessonSummary;
+  lesson: MyLessonSummary;
 }

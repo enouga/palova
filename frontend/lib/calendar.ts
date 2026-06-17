@@ -160,9 +160,7 @@ export function buildCalendarEntries(
   for (const enrollment of lessons) {
     if (enrollment.status === 'CANCELLED') continue;
     const startTime = enrollment.lesson.reservation.startTime;
-    // Lessons have no club timezone in LessonSummary — use UTC day key (same approach as reservations use club tz,
-    // but LessonSummary only has resource.name, not club; use UTC as safe fallback).
-    const dayKey = startTime.slice(0, 10);
+    const dayKey = dayKeyInTz(startTime, enrollment.lesson.club.timezone);
     entries.push({
       kind: 'lesson',
       id: enrollment.enrollmentId,
@@ -267,6 +265,6 @@ export function buildAgendaList(
 export function agendaItemClubSlug(item: AgendaListItem): string {
   if (item.kind === 'reservation') return item.r.resource.club.slug;
   if (item.kind === 'tournament') return item.reg.tournament.club.slug;
-  if (item.kind === 'lesson') return ''; // LessonSummary ne contient pas de slug de club
+  if (item.kind === 'lesson') return item.enrollment.lesson.club.slug;
   return item.ev.event.club.slug;
 }

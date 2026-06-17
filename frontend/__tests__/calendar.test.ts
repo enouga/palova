@@ -107,6 +107,8 @@ function makeLessonEnrollment(over: {
   endTime?: string;
   coachName?: string;
   resourceName?: string;
+  timezone?: string;
+  clubSlug?: string;
 } = {}): MyLessonEnrollment {
   return {
     enrollmentId: over.enrollmentId ?? 'enroll-1',
@@ -126,6 +128,7 @@ function makeLessonEnrollment(over: {
         endTime: over.endTime ?? '2026-06-15T18:00:00.000Z',
         resource: { name: over.resourceName ?? 'Court 1' },
       },
+      club: { slug: over.clubSlug ?? 'padel-arena', name: 'Padel Arena', timezone: over.timezone ?? 'Europe/Paris' },
     },
   };
 }
@@ -363,10 +366,10 @@ describe('agendaKindMeta', () => {
 });
 
 describe('agendaItemClubSlug', () => {
-  it('renvoie le slug du club selon le type d item (les 3 types)', () => {
-    const list = buildAgendaList([makeReservation()], [makeRegistration()], [makeEventReg()], [], NOW);
+  it('renvoie le slug du club selon le type d item (les 4 types)', () => {
+    const list = buildAgendaList([makeReservation()], [makeRegistration()], [makeEventReg()], [makeLessonEnrollment()], NOW);
     // Les fixtures utilisent toutes le slug 'padel-arena' ; on vérifie chaque branche du switch.
-    for (const kind of ['reservation', 'tournament', 'event'] as const) {
+    for (const kind of ['reservation', 'tournament', 'event', 'lesson'] as const) {
       const item = list.find((i) => i.kind === kind)!;
       expect(agendaItemClubSlug(item)).toBe('padel-arena');
     }
@@ -416,6 +419,27 @@ describe('cours (lessons)', () => {
       NOW,
     );
     expect(list.filter((i) => i.kind === 'lesson')).toHaveLength(0);
+  });
+
+  it('dayKey cours au fuseau du club — 22h30 UTC = lendemain à Paris (Europe/Paris)', () => {
+    // 2026-06-13T22:30:00Z = 2026-06-14T00:30:00 en heure d'été Paris (UTC+2)
+    const lessons = [makeLessonEnrollment({
+      startTime: '2026-06-13T22:30:00.000Z',
+      endTime: '2026-06-13T23:30:00.000Z',
+      timezone: 'Europe/Paris',
+    })];
+    const entries = buildCalendarEntries([], [], [], lessons, NOW);
+    expect(entries[0]).toMatchObject({ kind: 'lesson', dayKey: '2026-06-14' });
+  });
+
+  it('dayKey cours UTC — 22h30 UTC reste le même jour en UTC', () => {
+    const lessons = [makeLessonEnrollment({
+      startTime: '2026-06-13T22:30:00.000Z',
+      endTime: '2026-06-13T23:30:00.000Z',
+      timezone: 'UTC',
+    })];
+    const entries = buildCalendarEntries([], [], [], lessons, NOW);
+    expect(entries[0]).toMatchObject({ kind: 'lesson', dayKey: '2026-06-13' });
   });
 });
 
