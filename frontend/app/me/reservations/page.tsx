@@ -207,7 +207,7 @@ export default function MyReservationsPage() {
               </>
             )}
           </div>
-        ) : tab === 'matches' ? (
+        ) : levelEnabled && tab === 'matches' ? (
           <div style={{ padding: '18px 20px 0' }}>
             <MyMatchesList
               matches={matches}
