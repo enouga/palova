@@ -7,6 +7,8 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { COURT_FORMATS, COVERAGE_OPTIONS, Coverage } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ACCENTS } from '@/lib/theme';
+import { validateResourceFields, ResourceFieldErrors, ResourceFieldKey } from '@/lib/resourceValidation';
 
 const STEP_OPTIONS = [15, 30, 45, 60, 90, 120];
 
@@ -22,6 +24,7 @@ export default function AdminResourcesPage() {
 
   const [nr, setNr] = useState({ name: '', clubSportId: '', surface: '', coverage: 'outdoor', lighting: false, format: 'double', price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
+  const [createErrors, setCreateErrors] = useState<ResourceFieldErrors>({});
   const [dragId, setDragId]     = useState<string | null>(null);
   const [dirty, setDirty]       = useState<Set<string>>(new Set());
   const [saving, setSaving]     = useState(false);
@@ -29,6 +32,8 @@ export default function AdminResourcesPage() {
   const cell: CSSProperties = { padding: '14px 18px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
+  const errText: CSSProperties = { color: ACCENTS.coral, fontSize: 11.5, fontWeight: 600, fontFamily: th.fontUI, marginTop: 2 };
+  const errBorder = (on?: string): CSSProperties => (on ? { borderColor: ACCENTS.coral } : {});
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -130,8 +135,14 @@ export default function AdminResourcesPage() {
     }
   };
 
+  const clearCreateErr = (k: ResourceFieldKey) =>
+    setCreateErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+
   const create = async () => {
     if (!token || !clubId || !nr.clubSportId) return;
+    const errs = validateResourceFields(nr);
+    if (Object.keys(errs).length > 0) { setCreateErrors(errs); return; }
+    setCreateErrors({});
     setCreating(true);
     try {
       setError(null);
@@ -145,8 +156,7 @@ export default function AdminResourcesPage() {
       setNr((n) => ({ ...n, name: '', surface: surfacesFor(n.clubSportId)[0] ?? '', coverage: 'outdoor', lighting: false, price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
       await load();
     } catch (e) {
-      const msg = (e as Error).message === 'VALIDATION_ERROR' ? 'champs invalides (tarif > 0, ouverture < fermeture, créneau multiple de 15)' : (e as Error).message;
-      setError(`Création : ${msg}`);
+      setError(`Création : ${(e as Error).message}`);
     } finally { setCreating(false); }
   };
 
@@ -252,7 +262,8 @@ export default function AdminResourcesPage() {
             </select>
           </label>
           <label style={label}>Nom
-            <input value={nr.name} onChange={(e) => setNr({ ...nr, name: e.target.value })} placeholder="Terrain 4" style={{ ...input, width: 170 }} />
+            <input value={nr.name} onChange={(e) => { setNr({ ...nr, name: e.target.value }); clearCreateErr('name'); }} placeholder="Terrain 4" style={{ ...input, width: 170, ...errBorder(createErrors.name) }} />
+            {createErrors.name && <span style={errText}>{createErrors.name}</span>}
           </label>
           {surfacesFor(nr.clubSportId).length > 0 && (
             <label style={label}>Surface
@@ -278,16 +289,20 @@ export default function AdminResourcesPage() {
             </select>
           </label>
           <label style={label}>€ créneau plein
-            <input type="number" min={1} step="0.5" value={nr.price} onChange={(e) => setNr({ ...nr, price: e.target.value })} style={{ ...input, width: 90 }} />
+            <input type="number" min={1} step="0.5" value={nr.price} onChange={(e) => { setNr({ ...nr, price: e.target.value }); clearCreateErr('price'); }} style={{ ...input, width: 90, ...errBorder(createErrors.price) }} />
+            {createErrors.price && <span style={errText}>{createErrors.price}</span>}
           </label>
           <label style={label}>€ créneau creux
-            <input type="number" min={1} step="0.5" placeholder="—" value={nr.offPeakPrice} onChange={(e) => setNr({ ...nr, offPeakPrice: e.target.value })} style={{ ...input, width: 90 }} />
+            <input type="number" min={1} step="0.5" placeholder="—" value={nr.offPeakPrice} onChange={(e) => { setNr({ ...nr, offPeakPrice: e.target.value }); clearCreateErr('offPeakPrice'); }} style={{ ...input, width: 90, ...errBorder(createErrors.offPeakPrice) }} />
+            {createErrors.offPeakPrice && <span style={errText}>{createErrors.offPeakPrice}</span>}
           </label>
           <label style={label}>Ouv.
-            <input type="number" min={0} max={24} value={nr.openHour} onChange={(e) => setNr({ ...nr, openHour: e.target.value })} style={{ ...input, width: 60 }} />
+            <input type="number" min={0} max={24} value={nr.openHour} onChange={(e) => { setNr({ ...nr, openHour: e.target.value }); clearCreateErr('openHour'); }} style={{ ...input, width: 60, ...errBorder(createErrors.openHour) }} />
+            {createErrors.openHour && <span style={errText}>{createErrors.openHour}</span>}
           </label>
           <label style={label}>Ferm.
-            <input type="number" min={0} max={24} value={nr.closeHour} onChange={(e) => setNr({ ...nr, closeHour: e.target.value })} style={{ ...input, width: 60 }} />
+            <input type="number" min={0} max={24} value={nr.closeHour} onChange={(e) => { setNr({ ...nr, closeHour: e.target.value }); clearCreateErr('closeHour'); }} style={{ ...input, width: 60, ...errBorder(createErrors.closeHour) }} />
+            {createErrors.closeHour && <span style={errText}>{createErrors.closeHour}</span>}
           </label>
           <label style={label}>Créneau
             <select value={nr.slotStepMin} onChange={(e) => setNr({ ...nr, slotStepMin: e.target.value })} style={input}>
