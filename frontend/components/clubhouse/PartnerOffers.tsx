@@ -8,14 +8,39 @@ import { offerIsActive } from '@/lib/clubhouse';
 import { deadlineCountdown } from '@/lib/tournament';
 import { HERO_GRADIENT } from '@/components/agenda/AgendaHero';
 
+// Révélation au scroll, hydration-safe : false au premier rendu (serveur ET
+// client → pas de mismatch), passe à true au mount via IntersectionObserver.
+// Observer indisponible (SSR/jsdom) → on révèle tout de suite : jamais de
+// contenu bloqué invisible.
+function useInView<T extends HTMLElement>(): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    const el = ref.current;
+    if (!el) { setInView(true); return; }
+    const obs = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setInView(true); obs.disconnect(); }
+    }, { threshold: 0.12 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return [ref, inView];
+}
+
 // Offres partenaires : carte « à la une » (pinned) sur dégradé signature,
 // grille de cartes pour les offres actives, logos seuls pour le reste.
 // Une offre expirée (offerUntil dépassé) redescend en logo seul.
 // `now` null avant le mount (hydration-safe) : pas de countdown, expiration ignorée.
+//
+// Animation « entrée + halo subtil » (CSS pur, désactivée sous
+// prefers-reduced-motion) : chaque bloc apparaît en fade + slide-up en cascade
+// au scroll, un halo lumineux respire sur la carte à la une, micro-zoom au survol.
 export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; now?: Date | null }) {
   const { th } = useTheme();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sectionRef, inView] = useInView<HTMLDivElement>();
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   if (sponsors.length === 0) return null;
@@ -42,9 +67,9 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
     return c ? { ...c, text: c.text.startsWith('J-') ? `Expire ${c.text}` : c.text } : null;
   };
 
-  const logoTile = (s: Sponsor, size: number) => (
+  const logoTile = (s: Sponsor, size: number, className?: string) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={assetUrl(s.logoUrl) ?? undefined} alt={s.name} style={{ height: size, width: size + 18, objectFit: 'contain', borderRadius: 12, background: '#fff', padding: 6, flexShrink: 0, boxSizing: 'border-box' }} />
+    <img className={className} src={assetUrl(s.logoUrl) ?? undefined} alt={s.name} style={{ height: size, width: size + 22, objectFit: 'contain', borderRadius: 13, background: '#fff', padding: 7, flexShrink: 0, boxSizing: 'border-box' }} />
   );
 
   const codeButton = (s: Sponsor, onGradient = false) => s.offerCode && (
@@ -54,7 +79,7 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
         border: `1px dashed ${onGradient ? 'rgba(255,255,255,0.55)' : th.lineStrong}`,
         background: onGradient ? 'rgba(255,255,255,0.14)' : th.surface2,
         color: onGradient ? '#fff' : th.text,
-        borderRadius: 9, padding: '7px 12px', fontFamily: th.fontMono, fontSize: 13, fontWeight: 600, letterSpacing: 0.8,
+        borderRadius: 9, padding: '8px 14px', fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 600, letterSpacing: 0.8,
       }}>
       {copiedId === s.id ? 'Copié !' : s.offerCode}
     </button>
@@ -82,51 +107,96 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
   };
 
   return (
-    <div style={{ padding: '26px 20px 0' }}>
-      <style>{`.po-grid{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:600px){.po-grid{grid-template-columns:1fr 1fr}}`}</style>
-      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Offres partenaires</div>
+    <div ref={sectionRef} className={`po-sec${inView ? ' is-in' : ''}`} style={{ padding: '30px 20px 0' }}>
+      <style>{`
+        .po-grid{display:grid;grid-template-columns:1fr;gap:14px}
+        @media(min-width:600px){.po-grid{grid-template-columns:1fr 1fr}}
+
+        /* Entrée en cascade (fade + slide-up) déclenchée par .is-in */
+        .po-sec .po-block{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+        .po-sec.is-in .po-block{opacity:1;transform:none}
+        .po-sec.is-in .po-d1{transition-delay:.09s}
+        .po-sec.is-in .po-d2{transition-delay:.18s}
+
+        /* Carte à la une : halo lumineux qui dérive et respire */
+        .po-featured{position:relative;overflow:hidden}
+        .po-halo{position:absolute;inset:-45%;pointer-events:none;border-radius:50%;
+          background:radial-gradient(circle at 32% 30%,rgba(255,255,255,0.26),rgba(255,255,255,0) 62%);
+          animation:po-drift 9s ease-in-out infinite}
+        @keyframes po-drift{
+          0%{transform:translate(-6%,-4%) scale(1);opacity:.65}
+          50%{transform:translate(9%,7%) scale(1.18);opacity:1}
+          100%{transform:translate(-6%,-4%) scale(1);opacity:.65}}
+        .po-featured:hover .po-halo{opacity:1;transform:translate(9%,7%) scale(1.22)}
+
+        /* Micro-zoom au survol */
+        .po-card{transition:transform .25s ease,box-shadow .25s ease}
+        .po-card:hover{transform:scale(1.03);box-shadow:0 10px 26px rgba(0,0,0,0.10)}
+        .po-logo{transition:transform .25s ease}
+        .po-logo:hover{transform:scale(1.07)}
+
+        /* Cartes partenaires (logos seuls) : grille + reflet qui balaye au survol */
+        .po-pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+        .po-pcard{position:relative;overflow:hidden}
+        .po-pcard .po-shine{position:absolute;top:0;left:-120%;width:55%;height:100%;
+          background:linear-gradient(115deg,transparent,rgba(255,255,255,0.45),transparent);
+          transform:skewX(-18deg);transition:left .7s ease;pointer-events:none}
+        .po-pcard:hover .po-shine{left:150%}
+
+        @media(prefers-reduced-motion:reduce){
+          .po-sec .po-block{opacity:1!important;transform:none!important;transition:none!important}
+          .po-halo{animation:none!important}
+          .po-featured:hover .po-halo{transform:none!important}
+          .po-card:hover,.po-logo:hover{transform:none!important}
+          .po-pcard .po-shine{display:none!important}
+        }
+      `}</style>
+      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, marginBottom: 14 }}>{(featured || gridSponsors.length > 0) ? 'Offres partenaires' : 'Nos partenaires'}</div>
 
       {/* Partenaire à la une */}
       {featured && (
-        <div data-testid="featured-partner" style={{ background: HERO_GRADIENT, borderRadius: 18, padding: '20px 20px', color: '#fff', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {clickable(featured, (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.8 }}>Partenaire à la une</span>
-                <span style={{ flex: 1 }} />
-                {expiryChip(featured, true)}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
-                {logoTile(featured, 52)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, opacity: 0.85 }}>{featured.name}</div>
-                  <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 21, letterSpacing: -0.3, lineHeight: 1.25, marginTop: 3 }}>{featured.offerText}</div>
+        <div data-testid="featured-partner" className="po-block po-featured" style={{ background: HERO_GRADIENT, borderRadius: 20, padding: '26px 24px', color: '#fff', marginBottom: 14 }}>
+          <div className="po-halo" aria-hidden="true" />
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {clickable(featured, (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.8 }}>Partenaire à la une</span>
+                  <span style={{ flex: 1 }} />
+                  {expiryChip(featured, true)}
                 </div>
-                {featured.linkUrl && <Icon name="chevR" size={18} color="rgba(255,255,255,0.8)" />}
-              </div>
-            </>
-          ), { display: 'block' })}
-          {codeButton(featured, true)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 14 }}>
+                  {logoTile(featured, 64)}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, opacity: 0.85 }}>{featured.name}</div>
+                    <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4, lineHeight: 1.2, marginTop: 4 }}>{featured.offerText}</div>
+                  </div>
+                  {featured.linkUrl && <Icon name="chevR" size={20} color="rgba(255,255,255,0.8)" />}
+                </div>
+              </>
+            ), { display: 'block' })}
+            {codeButton(featured, true)}
+          </div>
         </div>
       )}
 
       {/* Offres actives en grille */}
       {gridSponsors.length > 0 && (
-        <div className="po-grid">
+        <div className="po-grid po-block po-d1">
           {gridSponsors.map((s) => (
-            <div key={s.id} data-testid={`partner-${s.id}`} style={{ background: th.surface, borderRadius: 16, padding: '13px 15px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div key={s.id} data-testid={`partner-${s.id}`} className="po-card" style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {clickable(s, (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {logoTile(s, 44)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  {logoTile(s, 54)}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text }}>{s.name}</span>
+                      <span style={{ fontFamily: th.fontUI, fontSize: 15.5, fontWeight: 700, color: th.text }}>{s.name}</span>
                       <span style={{ flex: 1 }} />
                       {expiryChip(s)}
                     </div>
-                    <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 2, lineHeight: 1.4 }}>{s.offerText}</div>
+                    <div style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, marginTop: 3, lineHeight: 1.4 }}>{s.offerText}</div>
                   </div>
-                  {s.linkUrl && <Icon name="chevR" size={16} color={th.textFaint} />}
+                  {s.linkUrl && <Icon name="chevR" size={18} color={th.textFaint} />}
                 </div>
               ), { display: 'block' })}
               {codeButton(s)}
@@ -135,20 +205,29 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
         </div>
       )}
 
-      {/* Partenaires sans offre (ou offre expirée) : logos seuls */}
+      {/* Partenaires sans offre (ou offre expirée) : grandes cartes logo + nom */}
       {logoOnly.length > 0 && (
-        <div style={{ marginTop: (featured || gridSponsors.length > 0) ? 16 : 0 }}>
+        <div className="po-block po-d2" style={{ marginTop: (featured || gridSponsors.length > 0) ? 20 : 0 }}>
           {(featured || gridSponsors.length > 0) && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textFaint, marginBottom: 8 }}>Ils soutiennent le club</div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textFaint, marginBottom: 12 }}>Ils soutiennent le club</div>
           )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {logoOnly.map((s) => (
-              <span key={s.id} style={{ display: 'inline-flex' }}>
-                {s.linkUrl
-                  ? <a href={s.linkUrl} target="_blank" rel="noreferrer" title={s.name}>{logoTile(s, 38)}</a>
-                  : logoTile(s, 38)}
-              </span>
-            ))}
+          <div className="po-pgrid">
+            {logoOnly.map((s) => {
+              const card = (
+                <>
+                  <div className="po-shine" aria-hidden="true" />
+                  {logoTile(s, 56)}
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text, textAlign: 'center', lineHeight: 1.25, position: 'relative' }}>{s.name}</div>
+                </>
+              );
+              const cardStyle: React.CSSProperties = {
+                background: th.surface, borderRadius: 16, padding: '20px 14px', boxShadow: `inset 0 0 0 1px ${th.line}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+              };
+              return s.linkUrl
+                ? <a key={s.id} className="po-card po-pcard" href={s.linkUrl} target="_blank" rel="noreferrer" aria-label={`Voir le site de ${s.name}`} style={{ textDecoration: 'none', color: 'inherit', ...cardStyle }}>{card}</a>
+                : <div key={s.id} className="po-card po-pcard" style={cardStyle}>{card}</div>;
+            })}
           </div>
         </div>
       )}
