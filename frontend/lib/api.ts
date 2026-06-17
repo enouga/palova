@@ -543,6 +543,7 @@ export interface Sport {
   icon: string | null;
   surfaces: string[];
   published: boolean;
+  hasLighting: boolean;
 }
 
 export interface SportCatalogBody {
@@ -552,6 +553,7 @@ export interface SportCatalogBody {
   defaultSlotStepMin: number;
   defaultDurationsMin: number[];
   surfaces: string[];
+  hasLighting: boolean;
 }
 
 export interface ManagedClub {
@@ -615,7 +617,7 @@ export interface ReservationPlayers {
 export interface Resource {
   id: string;
   name: string;
-  attributes: { surface?: string; covered?: boolean } & Record<string, unknown>;
+  attributes: { surface?: string; coverage?: 'indoor' | 'outdoor' | 'semi'; lighting?: boolean } & Record<string, unknown>;
   price: string;
   openHour: number;
   closeHour: number;
@@ -701,7 +703,7 @@ export type OffPeakHours = Record<number, Array<OffPeakRange>>;
 export interface PublicResource {
   id: string;
   name: string;
-  attributes: { surface?: string; covered?: boolean } & Record<string, unknown>;
+  attributes: { surface?: string; coverage?: 'indoor' | 'outdoor' | 'semi'; lighting?: boolean } & Record<string, unknown>;
   price: string;
   offPeakPrice: string | null;
   openHour: number;
@@ -722,7 +724,7 @@ export interface ClubAvailability {
   resource: {
     id: string;
     name: string;
-    attributes: { surface?: string; format?: string; covered?: boolean } & Record<string, unknown>;
+    attributes: { surface?: string; format?: string; coverage?: 'indoor' | 'outdoor' | 'semi'; lighting?: boolean } & Record<string, unknown>;
     price: string;
     offPeakPrice: string | null;
     sport: { key: string; name: string };
@@ -951,20 +953,20 @@ export interface AdminClubSport {
   id: string;
   slotStepMin: number | null;
   durationsMin: number[];
-  sport: { id: string; key: string; name: string; resourceNoun: string; defaultDurationsMin: number[]; surfaces: string[] };
+  sport: { id: string; key: string; name: string; resourceNoun: string; defaultDurationsMin: number[]; surfaces: string[]; hasLighting: boolean };
 }
 
 export interface AdminResource {
   id: string;
   name: string;
-  attributes: { surface?: string; format?: string; covered?: boolean } & Record<string, unknown>;
+  attributes: { surface?: string; format?: string; coverage?: 'indoor' | 'outdoor' | 'semi'; lighting?: boolean } & Record<string, unknown>;
   isActive: boolean;
   price: string;
   offPeakPrice: string | null;
   openHour: number;
   closeHour: number;
   slotStepMin: number | null;
-  clubSport: { id: string; slotStepMin: number | null; durationsMin: number[]; sport: { key: string; name: string; resourceNoun: string; defaultSlotStepMin: number; defaultDurationsMin: number[]; surfaces: string[] } };
+  clubSport: { id: string; slotStepMin: number | null; durationsMin: number[]; sport: { key: string; name: string; resourceNoun: string; defaultSlotStepMin: number; defaultDurationsMin: number[]; surfaces: string[]; hasLighting: boolean } };
 }
 
 export interface CreateResourceBody {
