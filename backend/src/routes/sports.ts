@@ -11,7 +11,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       orderBy: { name: 'asc' },
       select: {
         id: true, key: true, name: true, resourceNoun: true,
-        defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, published: true,
+        defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, published: true, hasLighting: true,
       },
     });
     res.json(sports);

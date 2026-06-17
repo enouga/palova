@@ -123,17 +123,17 @@ async function main() {
       create: { clubId: club.id, sportId: padel.id, durationsMin: [90] },
     });
 
-    // Terrains — covered: true = couvert/indoor ; surface = matériau parmi PADEL_SURFACES
+    // Terrains — coverage: 'indoor'|'semi'|'outdoor' ; surface = matériau parmi PADEL_SURFACES
     for (let n = 1; n <= 5; n++) {
-      const covered = n <= 3;
-      const material = covered ? PADEL_SURFACES[0] : PADEL_SURFACES[2];
+      const coverage = n <= 3 ? 'indoor' : n === 4 ? 'semi' : 'outdoor';
+      const material = coverage === 'outdoor' ? PADEL_SURFACES[2] : PADEL_SURFACES[0];
       const format = n <= 3 ? 'double' : 'single';
       await prisma.resource.upsert({
         where: { id: `${cdef.slug}-court-${n}` },
         update: { name: `Terrain ${n}` },
         create: {
           id: `${cdef.slug}-court-${n}`, clubId: club.id, clubSportId: clubSport.id,
-          name: `Terrain ${n}`, attributes: { covered, surface: material, format }, price: n <= 3 ? 25 : 18,
+          name: `Terrain ${n}`, attributes: { coverage, surface: material, format }, price: n <= 3 ? 25 : 18,
         },
       });
     }

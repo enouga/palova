@@ -153,7 +153,7 @@ export class ClubService {
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
-            sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true } },
+            sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultSlotStepMin: true, defaultDurationsMin: true, icon: true, surfaces: true, hasLighting: true } },
             resources: {
               where: { isActive: true },
               orderBy: { name: 'asc' },
@@ -491,7 +491,7 @@ export class ClubService {
       where: { clubId },
       select: {
         id: true, slotStepMin: true, durationsMin: true,
-        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true, surfaces: true } },
+        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true, surfaces: true, hasLighting: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
