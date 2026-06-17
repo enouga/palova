@@ -6,7 +6,7 @@ import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStat
 import { packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
-import { coveredType, courtFormat, SINGLE_COLOR, playerCount } from '@/lib/courtType';
+import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
 import { Chip, Placeholder, Segmented } from '@/components/ui/atoms';
@@ -181,12 +181,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     ) : (
                     <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(({ resource, slots }) => {
-                        const ct = coveredType(resource.attributes?.covered === true);
+                        const ct = coverageType(resource.attributes?.coverage);
                         return (
                           <div key={resource.id} style={{ background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                               <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{resource.name}</span>
                               <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
+                              {resource.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
                               {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
                               {typeof resource.attributes?.surface === 'string' && resource.attributes.surface && (
                                 <span title="Surface" style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{resource.attributes.surface}</span>
@@ -235,7 +236,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
                 {cs.resources.map((r) => {
-                  const ct = coveredType(r.attributes?.covered === true);
+                  const ct = coverageType(r.attributes?.coverage);
                   return (
                     <Link key={r.id} href={`/courts/${r.id}`} style={{ textDecoration: 'none' }}>
                       <div style={{ background: th.surface, borderRadius: 18, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
@@ -243,6 +244,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                           <Placeholder label={r.name} height={92} radius={0} />
                           <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6 }}>
                             <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
+                            {r.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
                             {courtFormat(typeof r.attributes?.format === 'string' ? r.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
                             {typeof r.attributes?.surface === 'string' && r.attributes.surface && (
                               <Chip>{r.attributes.surface}</Chip>
