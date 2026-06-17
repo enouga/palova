@@ -266,6 +266,20 @@ export default function AdminPlanningPage() {
     finally { setBusy(false); }
   };
 
+  const cancelSeries = async () => {
+    if (!token || !clubId || !selected?.seriesId) return;
+    if (!confirm('Annuler toutes les séances FUTURES de cette série ? Le passé est conservé.')) return;
+    setBusy(true);
+    try {
+      setError(null);
+      const res = await api.adminCancelSeries(clubId, selected.seriesId, token);
+      alert(`${res.cancelled} séance(s) future(s) annulée(s).`);
+      setSelected(null);
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   // Encaisse le montant saisi avec la méthode cliquée (boutons 1-clic).
   const payNow = async (method: PaymentMethod) => {
     if (!token || !clubId || !selected) return;
@@ -807,7 +821,15 @@ export default function AdminPlanningPage() {
                     <button onClick={() => setConfirmCancel(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5 }}>Retour</button>
                   </div>
                 ) : (
-                  <button onClick={() => setConfirmCancel(true)} style={{ border: `1px solid ${th.line}`, background: 'transparent', color: '#ff7a4d', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Annuler la réservation</button>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button onClick={() => setConfirmCancel(true)} style={{ border: `1px solid ${th.line}`, background: 'transparent', color: '#ff7a4d', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Annuler la réservation</button>
+                    {selected.seriesId && (
+                      <button type="button" onClick={cancelSeries} disabled={busy}
+                        style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
+                        Annuler toute la série
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}

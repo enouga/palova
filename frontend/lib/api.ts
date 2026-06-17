@@ -1190,6 +1190,7 @@ export interface ClubReservation {
   payments: Payment[];
   participants: ParticipantBill[];
   hasCardFingerprint?: boolean;
+  seriesId?: string | null;
 }
 
 export interface ClubReservationsResponse {
