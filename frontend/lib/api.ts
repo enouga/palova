@@ -664,6 +664,7 @@ export interface ClubDetail {
   showOtherClubsReservations: boolean;
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  levelSystemEnabled: boolean;
   clubSports: ClubSportPublic[];
 }
 
@@ -846,6 +847,7 @@ export interface ClubAdminDetail {
   stripeAccountStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  levelSystemEnabled: boolean;
   legalEntityName: string | null;
   legalForm: string | null;
   siret: string | null;
@@ -933,6 +935,7 @@ export type UpdateClubBody = Partial<{
   refundOnCancelWithinCutoff: boolean;
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  levelSystemEnabled: boolean;
   legalEntityName: string;
   legalForm: string;
   siret: string;
