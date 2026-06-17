@@ -146,6 +146,30 @@ export function DayPanel({
               );
             }
 
+            if (e.kind === 'lesson') {
+              const lesson = e.enrollment.lesson;
+              const res = lesson.reservation;
+              const startTime = res.startTime;
+              const endTime = res.endTime;
+              return card(
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>
+                      Cours · {lesson.coach.name} · {res.resource.name}
+                    </span>
+                    <Chip color={agendaKindMeta('lesson').color}>{e.enrollment.status === 'CONFIRMED' ? 'Inscrit' : e.enrollment.status}</Chip>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="clock" size={14} color={th.textMute} />{fmtHour(startTime, 'UTC')}–{fmtHour(endTime, 'UTC')}
+                    </span>
+                    <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
+                  </div>
+                </>,
+                `lesson-${e.enrollment.enrollmentId}`, agendaKindMeta('lesson').color, e.past,
+              );
+            }
+
             const ev = e.ev.event;
             const tz = ev.club.timezone;
             return card(

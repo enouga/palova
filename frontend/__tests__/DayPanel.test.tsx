@@ -50,7 +50,7 @@ const eventReg = {
 } as MyEventRegistration;
 
 const NOW = new Date('2026-06-10T12:00:00.000Z');
-const entries = buildCalendarEntries([reservation], [registration], [], NOW);
+const entries = buildCalendarEntries([reservation], [registration], [], [], NOW);
 
 function renderPanel(props: Partial<React.ComponentProps<typeof DayPanel>> = {}) {
   return render(
@@ -94,7 +94,7 @@ describe('DayPanel', () => {
   });
 
   it('affiche la carte event avec un lien Voir vers la fiche event (sous-domaine club)', () => {
-    renderPanel({ entries: buildCalendarEntries([], [], [eventReg], NOW), dayKey: '2026-06-12' });
+    renderPanel({ entries: buildCalendarEntries([], [], [eventReg], [], NOW), dayKey: '2026-06-12' });
     expect(screen.getByText('Mêlée du vendredi')).toBeInTheDocument();
     expect(screen.getByText(/Mêlée · Padel Arena/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/events/ev-1'));
@@ -109,7 +109,7 @@ describe('DayPanel', () => {
   });
 
   it('résa d un AUTRE club (localSlug différent) : pas d actions, mais un lien vers l app du club', () => {
-    renderPanel({ entries: buildCalendarEntries([reservation], [], [], NOW), localSlug: 'un-autre-club' });
+    renderPanel({ entries: buildCalendarEntries([reservation], [], [], [], NOW), localSlug: 'un-autre-club' });
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Joueurs' })).toBeNull();
     expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/me/reservations'));
@@ -117,7 +117,7 @@ describe('DayPanel', () => {
 
   it('ne propose pas d actions sur une réservation passée', () => {
     const pastRes = { ...reservation, startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' };
-    renderPanel({ entries: buildCalendarEntries([pastRes], [], [], NOW) });
+    renderPanel({ entries: buildCalendarEntries([pastRes], [], [], [], NOW) });
     expect(screen.queryByRole('button', { name: 'Déplacer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
   });
@@ -138,7 +138,7 @@ describe('DayPanel', () => {
       resource: { id: 'court-1', name: 'Terrain 2', club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris' } },
     };
     renderPanel({
-      entries: buildCalendarEntries([resWithPlayers], [], [], NOW),
+      entries: buildCalendarEntries([resWithPlayers], [], [], [], NOW),
       dayKey: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(future)),
       localSlug: 'bordeaux-pala',
     });

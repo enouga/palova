@@ -45,7 +45,7 @@ const eventReg = {
   },
 } as MyEventRegistration;
 
-const byDay = entriesByDay(buildCalendarEntries([reservation], [registration], [eventReg], new Date('2026-06-10T12:00:00.000Z')));
+const byDay = entriesByDay(buildCalendarEntries([reservation], [registration], [eventReg], [], new Date('2026-06-10T12:00:00.000Z')));
 
 function renderCal(props: Partial<React.ComponentProps<typeof MonthCalendar>> = {}) {
   return render(

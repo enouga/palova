@@ -24,6 +24,7 @@ jest.mock('../lib/api', () => ({
     getMyReservations: jest.fn(),
     getMyTournaments: jest.fn(),
     getMyEvents: jest.fn(),
+    getMyLessons: jest.fn().mockResolvedValue([]),
     cancelReservation: jest.fn(),
     getMyMatches: jest.fn().mockResolvedValue([]),
     recordMatchResult: jest.fn(),

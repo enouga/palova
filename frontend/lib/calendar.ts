@@ -1,7 +1,7 @@
-import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '@/lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration, MyLessonEnrollment } from '@/lib/api';
 import { ACCENTS } from '@/lib/theme';
 
-export type AgendaKind = 'reservation' | 'tournament' | 'event';
+export type AgendaKind = 'reservation' | 'tournament' | 'event' | 'lesson';
 
 /** Couleur + libellé par type d'item d'agenda — source de vérité unique (listes + calendrier).
  *  Couleurs prises dans ACCENTS (constantes), pas th.accent/th.accentWarm qui peuvent être
@@ -11,6 +11,7 @@ export function agendaKindMeta(kind: AgendaKind): { color: string; label: string
     case 'reservation': return { color: ACCENTS.blue,    label: 'Réservation' };
     case 'tournament':  return { color: ACCENTS.apricot, label: 'Tournoi' };
     case 'event':       return { color: ACCENTS.emerald, label: 'Event' };
+    case 'lesson':      return { color: ACCENTS.violet,  label: 'Cours' };
   }
 }
 
@@ -34,7 +35,8 @@ export type CalendarEntry =
   | {
       kind: 'event'; id: string; dayKeys: string[]; startKey: string; endKey: string;
       past: boolean; ev: MyEventRegistration;
-    };
+    }
+  | { kind: 'lesson'; id: string; dayKey: string; past: boolean; enrollment: MyLessonEnrollment };
 
 /**
  * Clé jour YYYY-MM-DD d'un instant ISO dans le fuseau donné.
@@ -102,11 +104,12 @@ export function enumerateDayKeys(startKey: string, endKey: string): string[] {
   return out;
 }
 
-/** Fusionne réservations terrain, inscriptions tournois et inscriptions events en entrées calendrier. */
+/** Fusionne réservations terrain, inscriptions tournois, inscriptions events et cours en entrées calendrier. */
 export function buildCalendarEntries(
   reservations: MyReservation[],
   regs: MyTournamentRegistration[],
   events: MyEventRegistration[],
+  lessons: MyLessonEnrollment[],
   now: Date,
 ): CalendarEntry[] {
   const entries: CalendarEntry[] = [];
@@ -154,6 +157,21 @@ export function buildCalendarEntries(
     });
   }
 
+  for (const enrollment of lessons) {
+    if (enrollment.status === 'CANCELLED') continue;
+    const startTime = enrollment.lesson.reservation.startTime;
+    // Lessons have no club timezone in LessonSummary — use UTC day key (same approach as reservations use club tz,
+    // but LessonSummary only has resource.name, not club; use UTC as safe fallback).
+    const dayKey = startTime.slice(0, 10);
+    entries.push({
+      kind: 'lesson',
+      id: enrollment.enrollmentId,
+      dayKey,
+      past: new Date(enrollment.lesson.reservation.endTime) < now,
+      enrollment,
+    });
+  }
+
   return entries;
 }
 
@@ -161,11 +179,12 @@ export function buildCalendarEntries(
 function entryStart(e: CalendarEntry): string {
   if (e.kind === 'reservation') return e.r.startTime;
   if (e.kind === 'tournament') return e.reg.tournament.startTime;
+  if (e.kind === 'lesson') return e.enrollment.lesson.reservation.startTime;
   return e.ev.event.startTime;
 }
 
-// Ordre d'affichage intra-jour : tournois, puis events, puis réservations.
-const KIND_RANK: Record<CalendarEntry['kind'], number> = { tournament: 0, event: 1, reservation: 2 };
+// Ordre d'affichage intra-jour : tournois, puis events, puis réservations, puis cours.
+const KIND_RANK: Record<CalendarEntry['kind'], number> = { tournament: 0, event: 1, reservation: 2, lesson: 3 };
 
 /** Index par jour ; tournois/events multi-jours apparaissent sur chacun de leurs jours, avant les réservations. */
 export function entriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
@@ -177,7 +196,7 @@ export function entriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntr
   };
 
   for (const e of entries) {
-    if (e.kind === 'reservation') push(e.dayKey, e);
+    if (e.kind === 'reservation' || e.kind === 'lesson') push(e.dayKey, e);
     else for (const key of e.dayKeys) push(key, e);
   }
 
@@ -193,10 +212,11 @@ export function entriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntr
 export type AgendaListItem =
   | { kind: 'reservation'; id: string; start: string; past: boolean; r: MyReservation }
   | { kind: 'tournament'; id: string; start: string; past: boolean; reg: MyTournamentRegistration }
-  | { kind: 'event'; id: string; start: string; past: boolean; ev: MyEventRegistration };
+  | { kind: 'event'; id: string; start: string; past: boolean; ev: MyEventRegistration }
+  | { kind: 'lesson'; id: string; start: string; past: boolean; enrollment: MyLessonEnrollment };
 
 /**
- * Fusionne réservations + inscriptions tournois + inscriptions events en une liste à plat,
+ * Fusionne réservations + inscriptions tournois + inscriptions events + cours en une liste à plat,
  * triée chronologiquement par instant de début (ISO UTC), tie-break stable par id.
  * Exclut les éléments annulés (réservation, inscription ou tournoi/event sous-jacent).
  * `past` = terminé avant `now` (repli sur le début si pas d'heure de fin).
@@ -205,6 +225,7 @@ export function buildAgendaList(
   reservations: MyReservation[],
   regs: MyTournamentRegistration[],
   events: MyEventRegistration[],
+  lessons: MyLessonEnrollment[],
   now: Date,
 ): AgendaListItem[] {
   const items: AgendaListItem[] = [];
@@ -226,6 +247,18 @@ export function buildAgendaList(
     items.push({ kind: 'event', id: ev.id, start: e.startTime, past: new Date(e.endTime ?? e.startTime) < now, ev });
   }
 
+  for (const enrollment of lessons) {
+    if (enrollment.status === 'CANCELLED') continue;
+    const startTime = enrollment.lesson.reservation.startTime;
+    items.push({
+      kind: 'lesson',
+      id: enrollment.enrollmentId,
+      start: startTime,
+      past: new Date(enrollment.lesson.reservation.endTime) < now,
+      enrollment,
+    });
+  }
+
   // ISO UTC : localeCompare = chronologique ; tie-break id → tri stable et déterministe.
   return items.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
 }
@@ -234,5 +267,6 @@ export function buildAgendaList(
 export function agendaItemClubSlug(item: AgendaListItem): string {
   if (item.kind === 'reservation') return item.r.resource.club.slug;
   if (item.kind === 'tournament') return item.reg.tournament.club.slug;
+  if (item.kind === 'lesson') return ''; // LessonSummary ne contient pas de slug de club
   return item.ev.event.club.slug;
 }

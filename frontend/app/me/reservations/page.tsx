@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, CancelledWithRefund, MyMatch, MyQuotaStatus } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, MyLessonEnrollment, CancelledWithRefund, MyMatch, MyQuotaStatus } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -39,6 +39,7 @@ export default function MyReservationsPage() {
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
   const [evts, setEvts]       = useState<MyEventRegistration[]>([]);
+  const [lessons, setLessons] = useState<MyLessonEnrollment[]>([]);
   const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar' | 'matches'>('calendar');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -70,14 +71,16 @@ export default function MyReservationsPage() {
     setLoading(true);
     try {
       setError(null);
-      const [reservations, tournaments, events] = await Promise.all([
+      const [reservations, tournaments, events, myLessons] = await Promise.all([
         api.getMyReservations(t),
         api.getMyTournaments(t).catch(() => []), // agenda sans tournois si l'appel échoue
         api.getMyEvents(t).catch(() => []),      // agenda sans events si l'appel échoue
+        api.getMyLessons(t).catch(() => []),     // agenda sans cours si l'appel échoue
       ]);
       setItems(reservations);
       setRegs(tournaments);
       setEvts(events);
+      setLessons(myLessons);
     }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
@@ -103,18 +106,20 @@ export default function MyReservationsPage() {
   // Cloisonnement par club : sur l'app d'un club (slug défini), on ne montre que CE club
   // sauf si le club a ouvert la vision des autres. Sur la plateforme (pas de slug), vue globale.
   const showAll = !slug || !!club?.showOtherClubsReservations;
-  const fItems = useMemo(() => (showAll ? items : items.filter((r) => r.resource.club.slug === slug)), [showAll, items, slug]);
-  const fRegs  = useMemo(() => (showAll ? regs  : regs.filter((r) => r.tournament.club.slug === slug)), [showAll, regs, slug]);
-  const fEvts  = useMemo(() => (showAll ? evts  : evts.filter((e) => e.event.club.slug === slug)), [showAll, evts, slug]);
+  const fItems   = useMemo(() => (showAll ? items : items.filter((r) => r.resource.club.slug === slug)), [showAll, items, slug]);
+  const fRegs    = useMemo(() => (showAll ? regs  : regs.filter((r) => r.tournament.club.slug === slug)), [showAll, regs, slug]);
+  const fEvts    = useMemo(() => (showAll ? evts  : evts.filter((e) => e.event.club.slug === slug)), [showAll, evts, slug]);
+  // LessonSummary n'expose pas de slug de club — on affiche tous les cours (pas de filtre par club).
+  const fLessons = useMemo(() => lessons, [lessons]);
 
-  const agenda   = useMemo(() => buildAgendaList(fItems, fRegs, fEvts, nowDate), [fItems, fRegs, fEvts, nowDate]);
+  const agenda   = useMemo(() => buildAgendaList(fItems, fRegs, fEvts, fLessons, nowDate), [fItems, fRegs, fEvts, fLessons, nowDate]);
   const upcoming = useMemo(() => agenda.filter((i) => !i.past), [agenda]);
   const past     = useMemo(() => agenda.filter((i) =>  i.past), [agenda]);
   const list = tab === 'past' ? past : upcoming;
 
   const byDay = useMemo(
-    () => entriesByDay(buildCalendarEntries(fItems, fRegs, fEvts, nowDate)),
-    [fItems, fRegs, fEvts, nowDate],
+    () => entriesByDay(buildCalendarEntries(fItems, fRegs, fEvts, fLessons, nowDate)),
+    [fItems, fRegs, fEvts, fLessons, nowDate],
   );
   const matchFor = (rid: string) => matches.find((m) => m.reservationId === rid);
 

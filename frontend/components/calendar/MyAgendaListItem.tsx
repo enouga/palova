@@ -37,13 +37,16 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   const { th } = useTheme();
   const color = agendaKindMeta(item.kind).color;
   const itemSlug = agendaItemClubSlug(item);
-  const isForeign = localSlug != null && itemSlug !== localSlug;
+  // Les cours (lesson) n'ont pas de slug de club — jamais « étrangers ».
+  const isForeign = item.kind !== 'lesson' && localSlug != null && itemSlug !== localSlug;
   const tz = item.kind === 'reservation' ? item.r.resource.club.timezone
     : item.kind === 'tournament' ? item.reg.tournament.club.timezone
+    : item.kind === 'lesson' ? 'UTC'
     : item.ev.event.club.timezone;
 
   const foreignHref = item.kind === 'reservation' ? clubUrl(itemSlug, '/me/reservations')
     : item.kind === 'tournament' ? clubUrl(itemSlug, `/tournois/${item.reg.tournament.id}`)
+    : item.kind === 'lesson' ? `/cours/${item.enrollment.lesson.id}`
     : clubUrl(itemSlug, `/events/${item.ev.event.id}`);
 
   const title = { fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text } as const;
@@ -98,6 +101,23 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
             />
           </div>
         ) : null}
+      </>
+    );
+  } else if (item.kind === 'lesson') {
+    const lesson = item.enrollment.lesson;
+    const res = lesson.reservation;
+    body = (
+      <>
+        <div style={headRow}>
+          <span style={title}>Cours · {lesson.coach.name} · {res.resource.name}</span>
+          <Chip color={color}>{item.enrollment.status === 'CONFIRMED' ? 'Inscrit' : item.enrollment.status}</Chip>
+        </div>
+        <div style={metaRow}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="clock" size={14} color={th.textMute} />{fmtHour(res.startTime, tz)}–{fmtHour(res.endTime, tz)}
+          </span>
+          <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
+        </div>
       </>
     );
   } else if (item.kind === 'tournament') {

@@ -12,7 +12,7 @@ import {
   agendaItemClubSlug,
   CalendarEntry,
 } from '@/lib/calendar';
-import { MyReservation, MyTournamentRegistration, MyEventRegistration } from '@/lib/api';
+import { MyReservation, MyTournamentRegistration, MyEventRegistration, MyLessonEnrollment } from '@/lib/api';
 import { ACCENTS } from '@/lib/theme';
 
 function makeReservation(over: Partial<MyReservation> = {}): MyReservation {
@@ -99,6 +99,37 @@ function makeEventReg(over: {
   };
 }
 
+function makeLessonEnrollment(over: {
+  enrollmentId?: string;
+  status?: string;
+  lessonId?: string;
+  startTime?: string;
+  endTime?: string;
+  coachName?: string;
+  resourceName?: string;
+} = {}): MyLessonEnrollment {
+  return {
+    enrollmentId: over.enrollmentId ?? 'enroll-1',
+    status: over.status ?? 'CONFIRMED',
+    lesson: {
+      id: over.lessonId ?? 'lesson-1',
+      clubId: 'club-demo',
+      lessonKind: 'COLLECTIVE',
+      allowSelfEnroll: true,
+      capacity: 4,
+      confirmedCount: 2,
+      waitlistCount: 0,
+      seriesId: null,
+      coach: { name: over.coachName ?? 'Coach X', photoUrl: null },
+      reservation: {
+        startTime: over.startTime ?? '2026-06-15T17:00:00.000Z',
+        endTime: over.endTime ?? '2026-06-15T18:00:00.000Z',
+        resource: { name: over.resourceName ?? 'Court 1' },
+      },
+    },
+  };
+}
+
 const NOW = new Date('2026-06-10T12:00:00.000Z');
 
 describe('dayKeyInTz', () => {
@@ -165,6 +196,7 @@ describe('buildCalendarEntries', () => {
         makeRegistration({ id: 'reg-3', tournamentStatus: 'CANCELLED' }),
       ],
       [],
+      [],
       NOW,
     );
     expect(entries.map((e) => e.id).sort()).toEqual(['reg-1', 'res-1']);
@@ -174,7 +206,7 @@ describe('buildCalendarEntries', () => {
     // 22h30 UTC la veille = 00h30 à Paris le 13
     const entries = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-12T22:30:00.000Z', endTime: '2026-06-12T23:30:00.000Z' })],
-      [], [], NOW,
+      [], [], [], NOW,
     );
     expect(entries[0]).toMatchObject({ kind: 'reservation', dayKey: '2026-06-13', past: false });
   });
@@ -182,7 +214,7 @@ describe('buildCalendarEntries', () => {
   it('étale un tournoi multi-jours sur toutes ses journées', () => {
     const entries = buildCalendarEntries([], [makeRegistration({
       startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z',
-    })], [], NOW);
+    })], [], [], NOW);
     expect(entries[0]).toMatchObject({
       kind: 'tournament',
       startKey: '2026-06-13',
@@ -192,7 +224,7 @@ describe('buildCalendarEntries', () => {
   });
 
   it('un tournoi sans endTime tient sur un seul jour', () => {
-    const entries = buildCalendarEntries([], [makeRegistration({ endTime: null })], [], NOW);
+    const entries = buildCalendarEntries([], [makeRegistration({ endTime: null })], [], [], NOW);
     expect(entries[0]).toMatchObject({ startKey: '2026-06-13', endKey: '2026-06-13', dayKeys: ['2026-06-13'] });
   });
 
@@ -200,6 +232,7 @@ describe('buildCalendarEntries', () => {
     const entries = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' })],
       [makeRegistration({ startTime: '2026-06-02T07:00:00.000Z', endTime: '2026-06-03T16:00:00.000Z' })],
+      [],
       [],
       NOW,
     );
@@ -211,7 +244,7 @@ describe('buildCalendarEntries', () => {
       makeEventReg(),
       makeEventReg({ id: 'evt-2', status: 'CANCELLED' }),
       makeEventReg({ id: 'evt-3', eventStatus: 'CANCELLED' }),
-    ], NOW);
+    ], [], NOW);
     expect(entries.map((e) => e.id)).toEqual(['evt-1']);
   });
 
@@ -219,14 +252,14 @@ describe('buildCalendarEntries', () => {
     // 22h30 UTC la veille = 00h30 à Paris le 13
     const entries = buildCalendarEntries([], [], [
       makeEventReg({ startTime: '2026-06-12T22:30:00.000Z', endTime: null }),
-    ], NOW);
+    ], [], NOW);
     expect(entries[0]).toMatchObject({ kind: 'event', startKey: '2026-06-13', endKey: '2026-06-13', dayKeys: ['2026-06-13'], past: false });
   });
 
   it('étale un event multi-jours sur toutes ses journées et marque past si terminé', () => {
     const entries = buildCalendarEntries([], [], [
       makeEventReg({ startTime: '2026-06-01T17:00:00.000Z', endTime: '2026-06-03T20:00:00.000Z' }),
-    ], NOW);
+    ], [], NOW);
     expect(entries[0]).toMatchObject({
       kind: 'event', dayKeys: ['2026-06-01', '2026-06-02', '2026-06-03'], past: true,
     });
@@ -238,6 +271,7 @@ describe('entriesByDay', () => {
     const entries: CalendarEntry[] = buildCalendarEntries(
       [makeReservation({ startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
       [makeRegistration({ startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
+      [],
       [],
       NOW,
     );
@@ -253,6 +287,7 @@ describe('entriesByDay', () => {
       [makeReservation({ startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
       [makeRegistration({ startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
       [makeEventReg({ startTime: '2026-06-14T15:00:00.000Z', endTime: '2026-06-14T18:00:00.000Z' })],
+      [],
       NOW,
     ));
     expect(byDay.get('2026-06-14')!.map((e) => e.kind)).toEqual(['tournament', 'event', 'reservation']);
@@ -264,7 +299,7 @@ describe('entriesByDay', () => {
         makeReservation({ id: 'r-soir', startTime: '2026-06-12T18:00:00.000Z', endTime: '2026-06-12T19:00:00.000Z' }),
         makeReservation({ id: 'r-matin', startTime: '2026-06-12T08:00:00.000Z', endTime: '2026-06-12T09:00:00.000Z' }),
       ],
-      [], [], NOW,
+      [], [], [], NOW,
     ));
     expect(byDay.get('2026-06-12')!.map((e) => e.id)).toEqual(['r-matin', 'r-soir']);
   });
@@ -276,6 +311,7 @@ describe('buildAgendaList', () => {
       [makeReservation({ id: 'res-1', startTime: '2026-06-14T08:00:00.000Z', endTime: '2026-06-14T09:00:00.000Z' })],
       [makeRegistration({ id: 'reg-1', startTime: '2026-06-13T07:00:00.000Z', endTime: '2026-06-15T16:00:00.000Z' })],
       [makeEventReg({ id: 'evt-1', startTime: '2026-06-13T17:00:00.000Z', endTime: '2026-06-13T20:00:00.000Z' })],
+      [],
       NOW,
     );
     expect(list.map((i) => i.id)).toEqual(['reg-1', 'evt-1', 'res-1']);
@@ -286,6 +322,7 @@ describe('buildAgendaList', () => {
       [makeReservation(), makeReservation({ id: 'res-x', status: 'CANCELLED' })],
       [makeRegistration(), makeRegistration({ id: 'reg-x', status: 'CANCELLED' }), makeRegistration({ id: 'reg-y', tournamentStatus: 'CANCELLED' })],
       [makeEventReg(), makeEventReg({ id: 'evt-x', status: 'CANCELLED' }), makeEventReg({ id: 'evt-y', eventStatus: 'CANCELLED' })],
+      [],
       NOW,
     );
     expect(list.map((i) => i.id).sort()).toEqual(['evt-1', 'reg-1', 'res-1']);
@@ -296,6 +333,7 @@ describe('buildAgendaList', () => {
       [makeReservation({ id: 'r-past', startTime: '2026-06-01T16:00:00.000Z', endTime: '2026-06-01T17:00:00.000Z' })],
       [],
       [makeEventReg({ id: 'e-future', startTime: '2026-06-20T17:00:00.000Z', endTime: null })],
+      [],
       NOW,
     );
     expect(list.find((i) => i.id === 'r-past')!.past).toBe(true);
@@ -308,6 +346,7 @@ describe('buildAgendaList', () => {
       [],
       [makeRegistration({ id: 'b', startTime: '2026-06-20T10:00:00.000Z', endTime: '2026-06-20T16:00:00.000Z' })],
       [makeEventReg({ id: 'a', startTime: '2026-06-20T10:00:00.000Z', endTime: '2026-06-20T12:00:00.000Z' })],
+      [],
       NOW,
     );
     expect(list.map((i) => i.id)).toEqual(['a', 'b']);
@@ -319,17 +358,64 @@ describe('agendaKindMeta', () => {
     expect(agendaKindMeta('reservation')).toEqual({ color: ACCENTS.blue, label: 'Réservation' });
     expect(agendaKindMeta('tournament')).toEqual({ color: ACCENTS.apricot, label: 'Tournoi' });
     expect(agendaKindMeta('event')).toEqual({ color: ACCENTS.emerald, label: 'Event' });
+    expect(agendaKindMeta('lesson')).toEqual({ color: ACCENTS.violet, label: 'Cours' });
   });
 });
 
 describe('agendaItemClubSlug', () => {
   it('renvoie le slug du club selon le type d item (les 3 types)', () => {
-    const list = buildAgendaList([makeReservation()], [makeRegistration()], [makeEventReg()], NOW);
+    const list = buildAgendaList([makeReservation()], [makeRegistration()], [makeEventReg()], [], NOW);
     // Les fixtures utilisent toutes le slug 'padel-arena' ; on vérifie chaque branche du switch.
     for (const kind of ['reservation', 'tournament', 'event'] as const) {
       const item = list.find((i) => i.kind === kind)!;
       expect(agendaItemClubSlug(item)).toBe('padel-arena');
     }
+  });
+});
+
+describe('cours (lessons)', () => {
+  it('buildCalendarEntries inclut les cours (single-day)', () => {
+    const lessons = [makeLessonEnrollment()];
+    const entries = buildCalendarEntries([], [], [], lessons, NOW);
+    expect(entries.some((e) => e.kind === 'lesson')).toBe(true);
+  });
+
+  it('buildCalendarEntries masque les cours annulés', () => {
+    const lessons = [
+      makeLessonEnrollment(),
+      makeLessonEnrollment({ enrollmentId: 'enroll-2', status: 'CANCELLED' }),
+    ];
+    const entries = buildCalendarEntries([], [], [], lessons, NOW);
+    expect(entries.map((e) => e.id)).toEqual(['enroll-1']);
+  });
+
+  it('buildCalendarEntries marque past les cours terminés avant now', () => {
+    const past = makeLessonEnrollment({ startTime: '2026-06-01T10:00:00.000Z', endTime: '2026-06-01T11:00:00.000Z' });
+    const future = makeLessonEnrollment({ enrollmentId: 'enroll-2', startTime: '2026-06-20T10:00:00.000Z', endTime: '2026-06-20T11:00:00.000Z' });
+    const entries = buildCalendarEntries([], [], [], [past, future], NOW);
+    expect(entries.find((e) => e.id === 'enroll-1')!.past).toBe(true);
+    expect(entries.find((e) => e.id === 'enroll-2')!.past).toBe(false);
+  });
+
+  it('buildAgendaList inclut les cours triés chronologiquement', () => {
+    const list = buildAgendaList(
+      [],
+      [],
+      [],
+      [makeLessonEnrollment({ enrollmentId: 'l1', startTime: '2026-06-15T17:00:00.000Z', endTime: '2026-06-15T18:00:00.000Z' })],
+      NOW,
+    );
+    expect(list.some((i) => i.kind === 'lesson')).toBe(true);
+    expect(list.find((i) => i.kind === 'lesson')!.id).toBe('l1');
+  });
+
+  it('buildAgendaList exclut les cours annulés', () => {
+    const list = buildAgendaList(
+      [], [], [],
+      [makeLessonEnrollment({ status: 'CANCELLED' })],
+      NOW,
+    );
+    expect(list.filter((i) => i.kind === 'lesson')).toHaveLength(0);
   });
 });
 
