@@ -112,7 +112,7 @@ export default function StripePaymentStep(props: Props) {
   }
 
   return (
-    <Elements stripe={getStripe(stripeAccountId)} options={{ clientSecret }}>
+    <Elements stripe={getStripe(stripeAccountId)} options={{ clientSecret, locale: 'fr' }}>
       <StripeForm {...props} />
     </Elements>
   );
