@@ -88,10 +88,10 @@ export default function BookingModal({
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
   // Fourchette de niveau d'une partie ouverte : interrupteur + curseur double, mémorisés.
-  const [levelLimited, setLevelLimited] = useState(false);
+  // Limite ACTIVE par défaut (sauf si un choix mémorisé dit le contraire).
+  const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
-  const [myLevel, setMyLevel] = useState<number | null>(null);
 
   // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
@@ -117,10 +117,10 @@ export default function BookingModal({
     const pref = loadLevelPref();
     if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
     if (!token) return;
+    if (pref) return; // choix mémorisé prioritaire : pas besoin du niveau pour le défaut
     api.getMyRating(token).then((r) => {
       const lvl = r?.level ?? null;
-      setMyLevel(lvl);
-      if (!pref && lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
+      if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
   }, [showPartners, token, levelEnabled]);
 
@@ -197,7 +197,7 @@ export default function BookingModal({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
       <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', background: th.bgElev, borderRadius: '0 0 28px 28px', padding: '12px 20px 36px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', padding: '12px 20px 36px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
         {phase === 'confirm' && (
           <>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -262,7 +262,7 @@ export default function BookingModal({
                       </div>
                       {levelLimited && (
                         <div style={{ marginTop: 14 }}>
-                          <LevelRangeSlider min={levelMin} max={levelMax} myLevel={myLevel}
+                          <LevelRangeSlider min={levelMin} max={levelMax}
                             onChange={(lo, hi) => { setLevelMin(lo); setLevelMax(hi); }} />
                         </div>
                       )}

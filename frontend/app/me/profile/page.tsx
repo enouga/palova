@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
+import { LevelSourceNote } from '@/components/player/LevelSourceNote';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeMode } from '@/lib/theme';
@@ -252,6 +253,7 @@ export default function MyProfilePage() {
                       </button>
                     </div>
                     {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
+                    <LevelSourceNote style={{ marginTop: 10 }} />
                   </>
                 ) : (
                   <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />

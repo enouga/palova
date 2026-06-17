@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { tierForLevel } from '@/lib/level';
+import { LevelSourceNote } from '@/components/player/LevelSourceNote';
 
 interface Props {
   onSelect: (level: number) => void;
@@ -59,6 +60,8 @@ export function LevelCalibration({ onSelect, onSkip, busy }: Props) {
           Passer
         </button>
       </div>
+
+      <div className="mt-3"><LevelSourceNote /></div>
     </div>
   );
 }

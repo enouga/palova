@@ -139,17 +139,19 @@ describe('BookingModal', () => {
     expect(payload).not.toHaveProperty('targetLevelMax');
   });
 
-  it('partie ouverte : l interrupteur de niveau apparaît quand le système est ON et révèle le curseur', () => {
+  it('partie ouverte : limite de niveau ACTIVE par défaut (curseur visible) quand le système est ON', () => {
     mockClub = { levelSystemEnabled: true };
     renderModal({ slug: 'club-demo', maxPlayers: 4 });
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
 
     const toggle = screen.getByRole('switch', { name: /Limiter le niveau/ });
-    expect(toggle).toBeInTheDocument();
-
-    fireEvent.click(toggle); // activer la limite → le curseur min/max apparaît
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    // curseur min/max visible d'emblée
     expect(screen.getByLabelText('Niveau minimum')).toBeInTheDocument();
     expect(screen.getByLabelText('Niveau maximum')).toBeInTheDocument();
+
+    fireEvent.click(toggle); // désactiver → le curseur disparaît
+    expect(screen.queryByLabelText('Niveau minimum')).not.toBeInTheDocument();
   });
 
   it('sans slug (mode simple), n envoie ni partnerUserIds ni visibility', async () => {

@@ -1,9 +1,17 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
+import { ThemeProvider } from '@/lib/ThemeProvider';
+
+const renderCal = (props: Partial<React.ComponentProps<typeof LevelCalibration>> = {}) =>
+  render(
+    <ThemeProvider>
+      <LevelCalibration onSelect={() => {}} onSkip={() => {}} busy={false} {...props} />
+    </ThemeProvider>,
+  );
 
 describe('LevelCalibration', () => {
   it('affiche le niveau courant et son palier (défaut 4,0 → Intermédiaire)', () => {
-    render(<LevelCalibration onSelect={() => {}} onSkip={() => {}} busy={false} />);
+    renderCal();
     expect(screen.getByRole('slider')).toBeInTheDocument();
     expect(screen.getByText('4,0')).toBeInTheDocument();
     expect(screen.getByText('Intermédiaire')).toBeInTheDocument();
@@ -11,7 +19,7 @@ describe('LevelCalibration', () => {
 
   it('le curseur permet un niveau au dixième et Valider renvoie la valeur exacte', () => {
     const onSelect = jest.fn();
-    render(<LevelCalibration onSelect={onSelect} onSkip={() => {}} busy={false} />);
+    renderCal({ onSelect });
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '7.2' } });
     expect(screen.getByText('7,2')).toBeInTheDocument();
@@ -22,8 +30,13 @@ describe('LevelCalibration', () => {
 
   it('« Passer » appelle onSkip', () => {
     const onSkip = jest.fn();
-    render(<LevelCalibration onSelect={() => {}} onSkip={onSkip} busy={false} />);
+    renderCal({ onSkip });
     fireEvent.click(screen.getByText('Passer'));
     expect(onSkip).toHaveBeenCalled();
+  });
+
+  it('crédite la grille Padel Magazine (mention cliquable)', () => {
+    renderCal();
+    expect(screen.getByText('grille Padel Magazine')).toBeInTheDocument();
   });
 });
