@@ -1,11 +1,24 @@
 import { IconName } from '@/components/ui/Icon';
 
-/** Couvert / découvert (attributes.covered). */
-export function coveredType(covered?: boolean): { label: string; icon: IconName; color: string } {
-  return covered
-    ? { label: 'Couvert', icon: 'indoor', color: '#5e93da' }   // bleu Palova
-    : { label: 'Découvert', icon: 'sun', color: '#ef9f6a' };    // apricot (soleil)
+export type Coverage = 'indoor' | 'outdoor' | 'semi';
+
+/** Couverture du terrain (attributes.coverage). Absent ⇒ Extérieur (rétrocompat). */
+export function coverageType(coverage?: Coverage): { label: string; icon: IconName; color: string } {
+  switch (coverage) {
+    case 'indoor': return { label: 'Intérieur', icon: 'indoor', color: '#5e93da' };
+    case 'semi':   return { label: 'Semi-couvert', icon: 'home', color: '#7aa889' };
+    default:       return { label: 'Extérieur', icon: 'sun', color: '#ef9f6a' };
+  }
 }
+
+export const COVERAGE_OPTIONS = [
+  { value: 'indoor',  label: 'Intérieur' },
+  { value: 'outdoor', label: 'Extérieur' },
+  { value: 'semi',    label: 'Semi-couvert' },
+] as const;
+
+/** Badge éclairage (attributes.lighting). */
+export const LIGHTING_BADGE = { label: 'Éclairage', icon: 'bolt' as IconName, color: '#e6b84d' };
 
 /** Format du terrain (attributes.format) : double (standard) / single (2 joueurs). */
 export function courtFormat(format?: string): string | null {
