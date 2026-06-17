@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody, Coach } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots, validatePaymentAmount } from '@/lib/caisse';
@@ -126,6 +126,12 @@ export default function AdminPlanningPage() {
   const [cPrice, setCPrice]     = useState('');
   const [cRecurring, setCRecurring] = useState(false);
   const [cEndDate, setCEndDate]     = useState('');
+  const [cIsCourse, setCIsCourse]           = useState(false);
+  const [cCoachId, setCCoachId]             = useState('');
+  const [cCapacity, setCCapacity]           = useState('1');
+  const [cAllowSelfEnroll, setCAllowSelfEnroll] = useState(false);
+  const [cEnrollMode, setCEnrollMode]       = useState<'SERIES' | 'PER_SESSION'>('SERIES');
+  const [coaches, setCoaches]               = useState<Coach[]>([]);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -143,6 +149,7 @@ export default function AdminPlanningPage() {
       setResources(res.filter((r) => r.isActive));
       setRes(resv.reservations);
       setMembers(mem);
+      api.adminListCoaches(clubId, token).then((cs) => setCoaches(cs.filter((c) => c.isActive))).catch(() => {});
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, [token, clubId, date]);
@@ -429,6 +436,11 @@ export default function AdminPlanningPage() {
     setError(null);
     setCRecurring(false);
     setCEndDate(date);
+    setCIsCourse(false);
+    setCCoachId('');
+    setCCapacity('1');
+    setCAllowSelfEnroll(false);
+    setCEnrollMode('SERIES');
     setCreateOpen(true);
   };
 
@@ -439,6 +451,9 @@ export default function AdminPlanningPage() {
     setBusy(true);
     try {
       setError(null);
+      const courseParams = (cIsCourse && cType === 'COACHING')
+        ? { coachId: cCoachId, capacity: Number(cCapacity), lessonKind: (Number(cCapacity) <= 1 ? 'INDIVIDUAL' : 'COLLECTIVE') as 'INDIVIDUAL' | 'COLLECTIVE', allowSelfEnroll: cAllowSelfEnroll }
+        : null;
       if (cRecurring) {
         if (!cEndDate || cEndDate < cDate) { setError('La date de fin doit être après la date de début.'); setBusy(false); return; }
         const res = await api.adminCreateSeries(clubId, {
@@ -450,6 +465,7 @@ export default function AdminPlanningPage() {
           durationMin: durationMinutes(cStart, cEnd),
           startDate: cDate,
           endDate: cEndDate,
+          ...(courseParams ? { ...courseParams, enrollmentMode: cEnrollMode } : {}),
         }, token);
         if (res.skipped.length > 0) {
           alert(`${res.created} séance(s) créée(s). ${res.skipped.length} ignorée(s) (créneau déjà pris).`);
@@ -461,6 +477,7 @@ export default function AdminPlanningPage() {
           title: cTitle.trim() || undefined,
           memberUserId: cMember?.userId ?? undefined,
           price: cPrice ? Number(cPrice) : undefined,
+          ...(courseParams ? { lessonParams: courseParams } : {}),
         }, token);
       }
       setCreateOpen(false);
@@ -931,6 +948,43 @@ export default function AdminPlanningPage() {
               />
             </div>
 
+            {cType === 'COACHING' && (
+              <div style={{ marginTop: 14, borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={cIsCourse} onChange={(e) => setCIsCourse(e.target.checked)} />
+                  Cours encadré (coach + élèves)
+                </label>
+                {cIsCourse && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Coach
+                      <select value={cCoachId} onChange={(e) => setCCoachId(e.target.value)}
+                        style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
+                        <option value="">— choisir —</option>
+                        {coaches.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Capacité (élèves max)
+                      <input type="number" min={1} value={cCapacity} onChange={(e) => setCCapacity(e.target.value)}
+                        style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, color: th.text, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cAllowSelfEnroll} onChange={(e) => setCAllowSelfEnroll(e.target.checked)} />
+                      Ouvert à l&apos;auto-inscription des joueurs
+                    </label>
+                    {cRecurring && (
+                      <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Inscription
+                        <select value={cEnrollMode} onChange={(e) => setCEnrollMode(e.target.value as 'SERIES' | 'PER_SESSION')}
+                          style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
+                          <option value="SERIES">À la série (trimestre)</option>
+                          <option value="PER_SESSION">Séance par séance</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ marginTop: 14, borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, cursor: 'pointer' }}>
                 <input type="checkbox" checked={cRecurring} onChange={(e) => setCRecurring(e.target.checked)} />
@@ -952,7 +1006,7 @@ export default function AdminPlanningPage() {
                 <input type="number" min={0} step="0.5" value={cPrice} onChange={(e) => setCPrice(e.target.value)} placeholder="0" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
               </label>
               <div style={{ flex: 1 }} />
-              <Btn type="button" icon="check" onClick={submitCreate} disabled={busy}>{busy ? '…' : 'Créer'}</Btn>
+              <Btn type="button" icon="check" onClick={submitCreate} disabled={busy || (cIsCourse && !cCoachId)}>{busy ? '…' : 'Créer'}</Btn>
             </div>
           </div>
         </div>
