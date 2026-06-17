@@ -795,6 +795,47 @@ export class ReservationService {
     return { seriesId, created: createdList.length, skipped };
   }
 
+  /**
+   * Annulation d'une série par un gestionnaire : passe en CANCELLED toutes les occurrences
+   * FUTURES (startTime > maintenant) encore actives, conserve le passé, clôt la série
+   * (cancelledAt). Libère les locks Redis + SSE slot_released par occurrence. Vérifie le club.
+   */
+  async adminCancelSeries(seriesId: string, adminClubId: string): Promise<{ cancelled: number }> {
+    const series = await prisma.reservationSeries.findUnique({
+      where: { id: seriesId },
+      select: { id: true, clubId: true },
+    });
+    if (!series)                          throw new Error('SERIES_NOT_FOUND');
+    if (series.clubId !== adminClubId)    throw new Error('CLUB_MISMATCH');
+
+    const now = new Date();
+    const future = await prisma.reservation.findMany({
+      where: { seriesId, status: { not: 'CANCELLED' }, startTime: { gt: now } },
+      select: { id: true, resourceId: true, startTime: true, endTime: true },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.reservation.updateMany({
+        where: { seriesId, status: { not: 'CANCELLED' }, startTime: { gt: now } },
+        data: { status: 'CANCELLED', cancelledAt: now },
+      });
+      await tx.reservationSeries.update({ where: { id: seriesId }, data: { cancelledAt: now } });
+    });
+
+    for (const r of future) {
+      await redis.del(this.lockKey(r.resourceId, r.startTime));
+      SSEService.getInstance().broadcast(r.resourceId, {
+        type: 'slot_released',
+        resourceId: r.resourceId,
+        reservationId: r.id,
+        startTime: r.startTime.toISOString(),
+        endTime: r.endTime.toISOString(),
+      });
+    }
+
+    return { cancelled: future.length };
+  }
+
   /** Change le type d'une réservation (Terrain/Coaching/Tournoi/Événement). Vérifie le club. */
   async setReservationType(reservationId: string, adminClubId: string, type: ReservationType) {
     const reservation = await prisma.reservation.findUnique({

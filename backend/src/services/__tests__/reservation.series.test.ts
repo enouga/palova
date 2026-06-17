@@ -65,3 +65,40 @@ describe('ReservationService.adminCreateSeries', () => {
     expect(prismaMock.reservationSeries.create).not.toHaveBeenCalled();
   });
 });
+
+describe('ReservationService.adminCancelSeries', () => {
+  let service: ReservationService;
+  beforeEach(() => {
+    service = new ReservationService();
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+
+  it('annule les occurrences futures et clôt la série', async () => {
+    prismaMock.reservationSeries.findUnique.mockResolvedValue({ id: 'ser1', clubId: 'club-demo' } as any);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { id: 'r1', resourceId: 'res1', startTime: new Date('2999-01-01T10:00:00Z'), endTime: new Date('2999-01-01T11:00:00Z') },
+    ] as any);
+    prismaMock.reservation.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.reservationSeries.update.mockResolvedValue({ id: 'ser1' } as any);
+
+    const out = await service.adminCancelSeries('ser1', 'club-demo');
+    expect(out.cancelled).toBe(1);
+    expect(prismaMock.reservation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(prismaMock.reservationSeries.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'ser1' },
+      data: expect.objectContaining({ cancelledAt: expect.any(Date) }),
+    }));
+  });
+
+  it('rejette SERIES_NOT_FOUND', async () => {
+    prismaMock.reservationSeries.findUnique.mockResolvedValue(null as any);
+    await expect(service.adminCancelSeries('ser1', 'club-demo')).rejects.toThrow('SERIES_NOT_FOUND');
+  });
+
+  it('rejette CLUB_MISMATCH', async () => {
+    prismaMock.reservationSeries.findUnique.mockResolvedValue({ id: 'ser1', clubId: 'autre' } as any);
+    await expect(service.adminCancelSeries('ser1', 'club-demo')).rejects.toThrow('CLUB_MISMATCH');
+  });
+});
