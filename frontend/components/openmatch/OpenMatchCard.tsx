@@ -27,13 +27,14 @@ export interface OpenMatchCardProps {
   onToggleAdd: (m: OpenMatch) => void;
   onCancelAdd: () => void;
   onRecordResult: (m: OpenMatch) => void;
+  canRecordResult: boolean;
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
 // Extraite d'OpenMatches pour être réutilisée dans la section « Pour toi ».
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
-  onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult,
+  onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   return (
@@ -73,7 +74,7 @@ export function OpenMatchCard({
           ) : (
             <Btn icon="plus" disabled={busy || m.full} onClick={() => onJoin(m)}>Rejoindre</Btn>
           )}
-          {new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
+          {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
             <Btn variant="surface" disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
           )}
         </div>

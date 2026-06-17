@@ -137,4 +137,18 @@ describe('OpenMatches', () => {
     expect(screen.getByText('Autres parties')).toBeInTheDocument();
     expect(screen.getByText('Court B')).toBeInTheDocument();
   });
+
+  it('club OFF : pas d onglet « Classement » ni reco « Pour toi »', async () => {
+    const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+    mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'reco', resourceName: 'Court A', startTime: at(2), endTime: at(3), players: [], targetLevelMin: 5, targetLevelMax: 5 }),
+    ] as never);
+    const clubOff = { id: 'c1', slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris', levelSystemEnabled: false } as never;
+    render(<ThemeProvider><OpenMatches club={clubOff} /></ThemeProvider>);
+
+    expect(await screen.findByText('Court A')).toBeInTheDocument();
+    expect(screen.queryByText('Classement')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pour toi/i)).not.toBeInTheDocument();
+  });
 });

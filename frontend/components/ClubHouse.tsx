@@ -120,7 +120,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
       )}
 
       {/* Parties pour toi : recos à ton niveau, top 3 (calculées une fois, ci-dessus) */}
-      {matchRecos.length > 0 && (
+      {club.levelSystemEnabled !== false && matchRecos.length > 0 && (
         <div style={{ padding: '22px 20px 0' }}>
           <MatchesForYou recos={matchRecos} timezone={club.timezone} />
         </div>

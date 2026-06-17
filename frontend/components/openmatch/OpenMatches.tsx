@@ -30,6 +30,7 @@ const JOIN_ERRORS: Record<string, string> = {
 export function OpenMatches({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
+  const levelEnabled = club.levelSystemEnabled !== false;
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
@@ -79,7 +80,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     : matches;
 
   // Section « Pour toi » : parties recommandées à mon niveau, retirées de la liste « Autres ».
-  const recommended = recommendMatches(matches, myLevel, new Date());
+  // Désactivée si le club n'utilise pas le système de niveau.
+  const recommended = levelEnabled ? recommendMatches(matches, myLevel, new Date()) : [];
   const recoIds = new Set(recommended.map((m) => m.id));
   const otherMatches = visibleMatches.filter((m) => !recoIds.has(m.id));
 
@@ -87,25 +89,29 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
-        <div style={{ padding: '16px 20px 0' }}>
-          <Segmented<'parties' | 'classement'>
-            value={view}
-            onChange={setView}
-            options={[{ value: 'parties', label: 'Parties' }, { value: 'classement', label: 'Classement' }]}
-          />
-        </div>
-        {view === 'parties' ? (
+        {levelEnabled && (
+          <div style={{ padding: '16px 20px 0' }}>
+            <Segmented<'parties' | 'classement'>
+              value={view}
+              onChange={setView}
+              options={[{ value: 'parties', label: 'Parties' }, { value: 'classement', label: 'Classement' }]}
+            />
+          </div>
+        )}
+        {!levelEnabled || view === 'parties' ? (
           <>
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
             Rejoignez la partie publique d&apos;un autre membre, ou créez la vôtre en choisissant « Partie ouverte » au moment de réserver.
           </p>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, userSelect: 'none' }}>
-            <input type="checkbox" checked={filterMyLevel} onChange={(e) => setFilterMyLevel(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
-            À mon niveau
-          </label>
+          {levelEnabled && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, userSelect: 'none' }}>
+              <input type="checkbox" checked={filterMyLevel} onChange={(e) => setFilterMyLevel(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
+              À mon niveau
+            </label>
+          )}
         </div>
 
         {error && (
@@ -127,6 +133,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
                   onCancelAdd={() => setAddingId(null)}
                   onRecordResult={(mm) => setRecordingFor(mm)}
+                  canRecordResult={levelEnabled}
                 />
               ))}
             </div>
@@ -165,6 +172,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
               onCancelAdd={() => setAddingId(null)}
               onRecordResult={(mm) => setRecordingFor(mm)}
+              canRecordResult={levelEnabled}
             />
           ))}
         </div>
