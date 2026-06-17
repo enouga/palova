@@ -10,7 +10,7 @@ const service = new MatchService();
 
 const RES = {
   id: 'r1', type: 'COURT', startTime: new Date('2026-06-10T10:00:00Z'),
-  resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' } },
+  resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' }, club: { levelSystemEnabled: true } },
   participants: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }, { userId: 'u4' }],
 };
 const NOW = new Date('2026-06-11T10:00:00Z');
@@ -58,6 +58,15 @@ describe('createFromReservation', () => {
     const bad = { 1: ['u1', 'u2', 'u3'], 2: ['u4'] } as Record<1 | 2, string[]>;
     await expect(service.createFromReservation('r1', 'u1', { teams: bad, sets, now: NOW }))
       .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('refuse la saisie si le système de niveau est désactivé pour le club', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      ...RES,
+      resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' }, club: { levelSystemEnabled: false } },
+    } as any);
+    await expect(service.createFromReservation('r1', 'u1', { teams, sets, now: NOW }))
+      .rejects.toThrow('LEVEL_SYSTEM_DISABLED');
   });
 });
 

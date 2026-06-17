@@ -20,7 +20,7 @@ describe('POST /api/reservations/:id/match', () => {
   it('409 si un match existe déjà', async () => {
     prismaMock.reservation.findUnique.mockResolvedValue({
       id: 'r1', type: 'COURT', startTime: new Date('2020-01-01T00:00:00Z'),
-      resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' } },
+      resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' }, club: { levelSystemEnabled: true } },
       participants: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }, { userId: 'u4' }],
     } as any);
     prismaMock.match.findFirst.mockResolvedValue({ id: 'existing' } as any);
@@ -28,6 +28,18 @@ describe('POST /api/reservations/:id/match', () => {
       .set('Authorization', `Bearer ${token()}`)
       .send({ teams: { 1: ['u1', 'u2'], 2: ['u3', 'u4'] }, sets: [[6, 4], [6, 3]] });
     expect(res.status).toBe(409);
+  });
+
+  it('POST /:id/match → 403 si système de niveau désactivé', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'r1', type: 'COURT', startTime: new Date('2020-01-01T00:00:00Z'),
+      resource: { clubId: 'c1', clubSport: { sportId: 'sport-padel' }, club: { levelSystemEnabled: false } },
+      participants: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }, { userId: 'u4' }],
+    } as any);
+    const res = await request(app).post('/api/reservations/r1/match')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ teams: { 1: ['u1', 'u2'], 2: ['u3', 'u4'] }, sets: [[6, 4], [6, 3]] });
+    expect(res.status).toBe(403);
   });
 });
 

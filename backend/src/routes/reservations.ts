@@ -41,6 +41,7 @@ const ERROR_STATUS: Record<string, number> = {
   PARTICIPANT_NOT_FOUND:    404,
   CANNOT_REMOVE_ORGANIZER:  409,
   RESERVATION_HAS_NO_MEMBER: 409,
+  LEVEL_SYSTEM_DISABLED:     403,
 };
 
 function asString(v: unknown): string {

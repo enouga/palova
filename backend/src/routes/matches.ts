@@ -16,6 +16,7 @@ export function matchError(err: unknown, res: Response, next: NextFunction): voi
     VALIDATION_ERROR: 400, RESERVATION_NOT_FOUND: 404, NOT_A_COURT_RESERVATION: 400,
     NOT_A_PARTICIPANT: 403, NEEDS_FOUR_PLAYERS: 400, MATCH_NOT_PLAYED_YET: 400,
     MATCH_ALREADY_EXISTS: 409, MATCH_NOT_FOUND: 404, NOT_A_MATCH_PLAYER: 403, MATCH_NOT_PENDING: 409,
+    LEVEL_SYSTEM_DISABLED: 403,
   };
   if (err instanceof Error && map[err.message]) { res.status(map[err.message]).json({ error: err.message }); return; }
   next(err as Error);

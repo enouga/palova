@@ -32,7 +32,7 @@ export class MatchService {
       where: { id: reservationId },
       include: {
         participants: { select: { userId: true } },
-        resource: { select: { clubId: true, clubSport: { select: { sportId: true } } } },
+        resource: { select: { clubId: true, clubSport: { select: { sportId: true } }, club: { select: { levelSystemEnabled: true } } } },
       },
     });
     if (!reservation) throw new Error('RESERVATION_NOT_FOUND');
@@ -43,6 +43,7 @@ export class MatchService {
     if (participantIds.size !== 4) throw new Error('NEEDS_FOUR_PLAYERS');
     if (!all.every((id) => participantIds.has(id))) throw new Error('VALIDATION_ERROR');
     if (reservation.startTime.getTime() > now.getTime()) throw new Error('MATCH_NOT_PLAYED_YET');
+    if (!reservation.resource.club.levelSystemEnabled) throw new Error('LEVEL_SYSTEM_DISABLED');
 
     const existing = await prisma.match.findFirst({
       where: { reservationId, status: { in: ['PENDING', 'CONFIRMED'] } },
