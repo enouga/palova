@@ -72,6 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/packages',     label: 'Offres prépayées', icon: 'bolt' as const },
     { href: '/admin/tournaments', label: 'Tournois',         icon: 'trophy' as const },
     { href: '/admin/events',       label: 'Events',          icon: 'bolt' as const },
+    { href: '/admin/coaches',      label: 'Coachs',          icon: 'users' as const },
     // Lien « Matchs » masqué quand le système de niveau est désactivé pour le club.
     ...(club.levelSystemEnabled === false
       ? []
