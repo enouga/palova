@@ -4,6 +4,7 @@ import { CSSProperties, ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/lib/ThemeProvider';
+import { inkOn } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
@@ -205,6 +206,49 @@ export function Segmented<T extends string | number>({
             }}>{o.label}</button>
         );
       })}
+    </div>
+  );
+}
+
+type PillSize = 'md' | 'sm';
+
+const PILL_SIZE: Record<PillSize, { padding: string; fontSize: number }> = {
+  md: { padding: '8px 16px', fontSize: 14 },
+  sm: { padding: '5px 13px', fontSize: 13 },
+};
+
+// Pastille de filtre (standard Palova). Actif = fond plein `activeBg` (défaut accent),
+// texte lisible via inkOn ; inactif = blanc + fin filet + texte plein. Theme-safe.
+export function Pill({ label, active, onClick, size = 'md', activeBg, ...rest }: {
+  label: ReactNode; active: boolean; onClick: () => void;
+  size?: PillSize; activeBg?: string; 'aria-label'?: string;
+}) {
+  const { th } = useTheme();
+  const bg = activeBg ?? th.accent;
+  const s = PILL_SIZE[size];
+  return (
+    <button onClick={onClick} aria-pressed={active} {...rest}
+      style={{
+        border: 'none', cursor: 'pointer', borderRadius: 999, padding: s.padding,
+        fontFamily: th.fontUI, fontSize: s.fontSize, fontWeight: active ? 700 : 600,
+        background: active ? bg : th.surface,
+        color: active ? inkOn(bg) : th.text,
+        boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
+        transition: 'all .15s',
+      }}>{label}</button>
+  );
+}
+
+// Groupe de pastilles single-select bâti sur Pill.
+export function PillTabs<T extends string | number>({ options, value, onChange, size = 'md', activeBg }: {
+  options: { value: T; label: ReactNode }[];
+  value: T; onChange: (v: T) => void; size?: PillSize; activeBg?: string;
+}) {
+  return (
+    <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: size === 'sm' ? 6 : 8 }}>
+      {options.map((o) => (
+        <Pill key={String(o.value)} label={o.label} active={o.value === value} size={size} activeBg={activeBg} onClick={() => onChange(o.value)} />
+      ))}
     </div>
   );
 }
