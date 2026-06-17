@@ -1,5 +1,6 @@
 import { Prisma, ReservationType } from '@prisma/client';
 import { DateTime } from 'luxon';
+import { weeklyOccurrences } from './recurrence';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { stripe } from '../db/stripe';
@@ -689,6 +690,109 @@ export class ReservationService {
     });
 
     return created;
+  }
+
+  /**
+   * Création d'une SÉRIE récurrente hebdo par un gestionnaire (tous types). Génère une
+   * Reservation CONFIRMED par occurrence (totalPrice 0, userId null), liée par seriesId.
+   * Les créneaux déjà occupés sont SAUTÉS et remontés dans `skipped` (un conflit isolé
+   * ne bloque pas la série). Lot 1 : pas de Lesson ni de params cours (Lot 2).
+   */
+  async adminCreateSeries(params: {
+    clubId: string;
+    resourceId: string;
+    type: ReservationType;
+    title?: string;
+    weekday: number;
+    startLocal: string;   // "HH:mm"
+    durationMin: number;
+    startDate: string;    // "YYYY-MM-DD"
+    endDate: string;      // "YYYY-MM-DD"
+  }): Promise<{ seriesId: string; created: number; skipped: Array<{ start: string; reason: string }> }> {
+    const resource = await prisma.resource.findUnique({
+      where: { id: params.resourceId },
+      select: { clubId: true, club: { select: { timezone: true } } },
+    });
+    if (!resource)                          throw new Error('RESOURCE_NOT_FOUND');
+    if (resource.clubId !== params.clubId)  throw new Error('CLUB_MISMATCH');
+
+    // Calcule les occurrences AVANT toute écriture (lève VALIDATION_ERROR / SERIES_TOO_LONG).
+    const occurrences = weeklyOccurrences({
+      weekday: params.weekday, startLocal: params.startLocal, durationMin: params.durationMin,
+      startDate: params.startDate, endDate: params.endDate, tz: resource.club.timezone,
+    });
+
+    const title = params.title?.trim() || null;
+    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+
+    const { seriesId, createdList, skipped } = await prisma.$transaction(async (tx) => {
+      const series = await tx.reservationSeries.create({
+        data: {
+          clubId: params.clubId,
+          resourceId: params.resourceId,
+          type: params.type,
+          title,
+          weekday: params.weekday,
+          startLocal: params.startLocal,
+          durationMin: params.durationMin,
+          startDate: new Date(`${params.startDate}T00:00:00.000Z`),
+          endDate:   new Date(`${params.endDate}T00:00:00.000Z`),
+        },
+      });
+
+      const createdList: Array<{ id: string; startUtc: Date; endUtc: Date }> = [];
+      const skipped: Array<{ start: string; reason: string }> = [];
+
+      for (const occ of occurrences) {
+        const conflicts = await tx.reservation.count({
+          where: {
+            resourceId: params.resourceId,
+            OR: [
+              { status: 'CONFIRMED' },
+              { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+            ],
+            startTime: { lt: occ.endUtc },
+            endTime:   { gt: occ.startUtc },
+          },
+        });
+        if (conflicts > 0) {
+          skipped.push({ start: occ.startUtc.toISOString(), reason: 'SLOT_NOT_AVAILABLE' });
+          continue;
+        }
+        const created = await tx.reservation.create({
+          data: {
+            resourceId: params.resourceId,
+            userId: null,
+            startTime: occ.startUtc,
+            endTime: occ.endUtc,
+            status: 'CONFIRMED',
+            type: params.type,
+            title,
+            totalPrice: new Prisma.Decimal(0),
+            seriesId: series.id,
+          },
+        });
+        createdList.push({ id: created.id, startUtc: occ.startUtc, endUtc: occ.endUtc });
+      }
+
+      return { seriesId: series.id, createdList, skipped };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 20_000,
+    });
+
+    // SSE après commit : les vues live des autres clients se mettent à jour.
+    for (const r of createdList) {
+      SSEService.getInstance().broadcast(params.resourceId, {
+        type: 'slot_confirmed',
+        resourceId: params.resourceId,
+        reservationId: r.id,
+        startTime: r.startUtc.toISOString(),
+        endTime: r.endUtc.toISOString(),
+      });
+    }
+
+    return { seriesId, created: createdList.length, skipped };
   }
 
   /** Change le type d'une réservation (Terrain/Coaching/Tournoi/Événement). Vérifie le club. */
