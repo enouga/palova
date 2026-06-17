@@ -27,6 +27,7 @@ jest.mock('../lib/api', () => ({
     cancelReservation: jest.fn(),
     getMyMatches: jest.fn().mockResolvedValue([]),
     recordMatchResult: jest.fn(),
+    getMyQuotaStatus: jest.fn().mockResolvedValue(null),
   },
 }));
 import { api } from '../lib/api';

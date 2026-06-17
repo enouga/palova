@@ -13,6 +13,16 @@ export type BookingQuotas = {
   nonSubscriber: QuotaLimits;
 };
 
+// État du quota d'un joueur, renvoyé pour affichage côté joueur (compteur « 3/5 »).
+// Une classe à null = limite illimitée → non affichée. Source de comptage identique
+// à l'enforcement (assertQuota) pour qu'affichage et blocage ne dérivent jamais.
+export type QuotaCount = { used: number; limit: number };
+export type QuotaStatus = {
+  model: 'UPCOMING' | 'WEEKLY';
+  peak: QuotaCount | null;
+  offPeak: QuotaCount | null;
+};
+
 const MODELS = ['UPCOMING', 'WEEKLY'];
 
 function normalizeLimits(input: unknown): QuotaLimits {

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, CancelledWithRefund, MyMatch } from '@/lib/api';
+import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, CancelledWithRefund, MyMatch, MyQuotaStatus } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -18,6 +18,7 @@ import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonth
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
+import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { canRecordResult } from '@/lib/match';
 
 function fmtDate(iso: string, tz: string): string {
@@ -50,8 +51,15 @@ export default function MyReservationsPage() {
     return { year: y, month: m };
   });
   const [selectedDay, setSelectedDay] = useState(() => todayKey());
+  // Quotas du joueur sur le club courant (sous-domaine club uniquement) — null si pas de quota.
+  const [quotaStatus, setQuotaStatus] = useState<MyQuotaStatus | null>(null);
 
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
+
+  useEffect(() => {
+    if (!token || !slug) { setQuotaStatus(null); return; }
+    api.getMyQuotaStatus(slug, token).then(setQuotaStatus).catch(() => setQuotaStatus(null));
+  }, [token, slug]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
@@ -146,6 +154,12 @@ export default function MyReservationsPage() {
         <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
           Mes réservations
         </div>
+
+        {quotaStatus && (
+          <div style={{ padding: '14px 20px 0' }}>
+            <QuotaStatus status={quotaStatus} />
+          </div>
+        )}
 
         <div style={{ padding: '16px 20px 0' }}>
           <Segmented<'upcoming' | 'past' | 'calendar' | 'matches'> value={tab} onChange={setTab}

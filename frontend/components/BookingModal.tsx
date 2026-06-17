@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult } from '@/lib/api';
+import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { durationLabel } from '@/lib/duration';
@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { LevelChip } from '@/components/player/LevelChip';
+import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { Icon } from '@/components/ui/Icon';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
@@ -27,6 +28,8 @@ interface BookingModalProps {
   maxPlayers?: number;
   /** Soldes prépayés utilisables du joueur sur ce club (option « payer avec mon carnet »). */
   packages?: MemberPackage[];
+  /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
+  quotaStatus?: MyQuotaStatus | null;
   onClose: () => void;
   onConfirmed: (reservation: Reservation) => void;
   /** ID du club (pour les appels Stripe). */
@@ -68,7 +71,7 @@ const BOOKING_ERRORS: Record<string, string> = {
 };
 
 export default function BookingModal({
-  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, packages = [], onClose, onConfirmed,
+  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, packages = [], quotaStatus, onClose, onConfirmed,
   clubId, requireOnlinePayment, requireCardFingerprint,
 }: BookingModalProps) {
   const { th } = useTheme();
@@ -294,6 +297,11 @@ export default function BookingModal({
             </div>
             <div style={{ textAlign: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.3 }}>Créneau bloqué pour vous</div>
             <div style={{ textAlign: 'center', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 6 }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {totalPrice}€</div>
+            {quotaStatus && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+                <QuotaStatus status={quotaStatus} />
+              </div>
+            )}
             {(packages.length > 0 || errorMsg) && (
               <div style={{ marginTop: 16 }}>
                 {errorMsg && (

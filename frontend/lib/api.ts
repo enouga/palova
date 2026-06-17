@@ -425,6 +425,9 @@ export const api = {
   getMyClubPackages: (slug: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${slug}/me/packages`, {}, token),
 
+  getMyQuotaStatus: (slug: string, token: string) =>
+    request<MyQuotaStatus | null>(`/api/clubs/${slug}/me/quota-status`, {}, token),
+
   getMyTournaments: (token: string) => request<MyTournamentRegistration[]>('/api/me/tournaments', {}, token),
 
   getMyEvents: (token: string) => request<MyEventRegistration[]>('/api/me/events', {}, token),
@@ -896,6 +899,15 @@ export interface BookingQuotas {
   model: 'UPCOMING' | 'WEEKLY';
   subscriber: QuotaLimits;
   nonSubscriber: QuotaLimits;
+}
+
+// État du quota du joueur (compteur « 3/5 »). Une classe à null = illimitée (non affichée) ;
+// l'objet entier est null si le club n'a pas de quotas ou si toutes les limites sont illimitées.
+export interface QuotaCount { used: number; limit: number }
+export interface MyQuotaStatus {
+  model: 'UPCOMING' | 'WEEKLY';
+  peak: QuotaCount | null;
+  offPeak: QuotaCount | null;
 }
 
 export type UpdateClubBody = Partial<{

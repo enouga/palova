@@ -10,6 +10,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { OpenMatchService } from '../services/openMatch.service';
+import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { iconService } from '../services/icon.service';
 import { prisma } from '../db/prisma';
@@ -26,6 +27,7 @@ const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
 const openMatchService = new OpenMatchService();
+const reservationService = new ReservationService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -215,6 +217,12 @@ router.patch('/:slug/me/membership', authMiddleware, async (req: AuthRequest, re
 // Soldes prépayés (carnets / porte-monnaie) du joueur connecté sur ce club.
 router.get('/:slug/me/packages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.listMyPackagesBySlug(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// État des quotas de réservation du joueur connecté sur ce club (compteur « 3/5 »).
+router.get('/:slug/me/quota-status', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await reservationService.getMyQuotaStatus(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 

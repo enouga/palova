@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage } from '@/lib/api';
+import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
@@ -15,6 +15,7 @@ import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
 import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
+import { QuotaStatus } from '@/components/quota/QuotaStatus';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -44,6 +45,12 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
   // Soldes prépayés du joueur sur ce club (chips + option de paiement à la confirmation).
   const [myPackages, setMyPackages] = useState<MemberPackage[]>([]);
+  // État des quotas de réservation du joueur (compteur « 3/5 ») — null si pas de quota.
+  const [quotaStatus, setQuotaStatus] = useState<MyQuotaStatus | null>(null);
+  const refreshQuota = useCallback(() => {
+    if (!token) { setQuotaStatus(null); return; }
+    api.getMyQuotaStatus(club.slug, token).then(setQuotaStatus).catch(() => setQuotaStatus(null));
+  }, [token, club.slug]);
   // Ref des durées courantes : l'effet [date] recharge chaque sport à SA durée sans relancer
   // tous les sports quand une seule durée change.
   const durationsRef = useRef(durationBySport);
@@ -75,6 +82,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     if (!token) { setMyPackages([]); return; }
     api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => setMyPackages([]));
   }, [token, club.slug]);
+
+  useEffect(() => { refreshQuota(); }, [refreshQuota]);
 
   const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
     setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
@@ -127,6 +136,12 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             {myPackages.map((p) => (
               <Chip key={p.id}>{packageLabel(p)}</Chip>
             ))}
+          </div>
+        )}
+
+        {quotaStatus && (
+          <div style={{ margin: '14px 20px 0' }}>
+            <QuotaStatus status={quotaStatus} />
           </div>
         )}
 
@@ -257,6 +272,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           slug={club.slug}
           maxPlayers={playerCount(booking.format)}
           packages={myPackages}
+          quotaStatus={quotaStatus}
           clubId={club.id}
           requireOnlinePayment={club.requireOnlinePayment}
           requireCardFingerprint={club.requireCardFingerprint}
@@ -265,6 +281,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             setBooking(null);
             setConfirmed(true);
             if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
+            refreshQuota();
             reloadAll();
           }}
         />

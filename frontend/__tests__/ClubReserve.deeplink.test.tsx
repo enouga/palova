@@ -18,6 +18,7 @@ jest.mock('../lib/api', () => ({
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     getMyClubPackages: jest.fn().mockResolvedValue([]),
+    getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     // Chargé au montage par ProfileMenu (info-bulle d'identité dans le header) ; menu jamais ouvert ici.
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),

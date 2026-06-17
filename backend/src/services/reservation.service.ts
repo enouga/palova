@@ -5,7 +5,7 @@ import { redis } from '../redis/client';
 import { stripe } from '../db/stripe';
 import { SSEService } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
-import { BookingQuotas } from './quotas';
+import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
@@ -145,14 +145,33 @@ export class ReservationService {
     const errCode = cls === 'OFF_PEAK' ? 'QUOTA_OFFPEAK_REACHED' : 'QUOTA_PEAK_REACHED';
     if (limit === 0) throw new Error(errCode);
 
-    let window: Prisma.DateTimeFilter;
-    if (quotas.model === 'WEEKLY') {
-      const weekStart = DateTime.fromJSDate(startTime).setZone(tz).startOf('week'); // Luxon : lundi
-      window = { gte: weekStart.toJSDate(), lt: weekStart.plus({ days: 7 }).toJSDate() };
-    } else {
-      window = { gt: new Date() };
-    }
+    const window = this.quotaWindow(quotas.model, startTime, tz);
+    const counts = await this.countActiveByClass(off, tz, clubId, userId, window, excludeReservationId);
+    if (counts[cls] >= limit) throw new Error(errCode);
+  }
 
+  /** Fenêtre de comptage d'un quota : semaine calendaire du `ref` (WEEKLY) ou futur (UPCOMING). */
+  private quotaWindow(model: 'UPCOMING' | 'WEEKLY', ref: Date, tz: string): Prisma.DateTimeFilter {
+    if (model === 'WEEKLY') {
+      const weekStart = DateTime.fromJSDate(ref).setZone(tz).startOf('week'); // Luxon : lundi
+      return { gte: weekStart.toJSDate(), lt: weekStart.plus({ days: 7 }).toJSDate() };
+    }
+    return { gt: new Date() };
+  }
+
+  /**
+   * Compte les résas COURT actives du joueur (CONFIRMED + PENDING < 10 min, même filtre
+   * que les conflits) dans une fenêtre, ventilées par classe d'heures. Source unique de
+   * vérité partagée par l'enforcement (assertQuota) et l'affichage (getMyQuotaStatus).
+   */
+  private async countActiveByClass(
+    off: OffPeakHours | null,
+    tz: string,
+    clubId: string,
+    userId: string,
+    window: Prisma.DateTimeFilter,
+    excludeReservationId?: string,
+  ): Promise<{ PEAK: number; OFF_PEAK: number }> {
     const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
     const existing = await prisma.reservation.findMany({
       where: {
@@ -168,8 +187,42 @@ export class ReservationService {
       },
       select: { startTime: true, endTime: true },
     });
-    const count = existing.filter((r) => classifySlot(off, r.startTime, r.endTime, tz) === cls).length;
-    if (count >= limit) throw new Error(errCode);
+    const counts = { PEAK: 0, OFF_PEAK: 0 };
+    for (const r of existing) counts[classifySlot(off, r.startTime, r.endTime, tz)]++;
+    return counts;
+  }
+
+  /**
+   * État des quotas du joueur sur ce club, pour affichage (« 3/5 cette semaine »).
+   * null si le club n'a pas de quotas ou si toutes les limites du joueur sont illimitées.
+   * Pas de membership → non-abonné (comme l'enforcement, qui crée le membership à la volée).
+   */
+  async getMyQuotaStatus(slug: string, userId: string): Promise<QuotaStatus | null> {
+    const club = await prisma.club.findUnique({
+      where: { slug },
+      select: { id: true, status: true, timezone: true, offPeakHours: true, bookingQuotas: true },
+    });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+
+    const quotas = club.bookingQuotas as BookingQuotas | null;
+    if (!quotas) return null;
+
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId: club.id } },
+      select: { isSubscriber: true },
+    });
+    const limits = membership?.isSubscriber ? quotas.subscriber : quotas.nonSubscriber;
+    if (limits.peak == null && limits.offPeak == null) return null;
+
+    const off = club.offPeakHours as OffPeakHours | null;
+    const window = this.quotaWindow(quotas.model, new Date(), club.timezone);
+    const counts = await this.countActiveByClass(off, club.timezone, club.id, userId, window);
+
+    return {
+      model: quotas.model,
+      peak: limits.peak == null ? null : { used: counts.PEAK, limit: limits.peak },
+      offPeak: limits.offPeak == null ? null : { used: counts.OFF_PEAK, limit: limits.offPeak },
+    };
   }
 
   async holdSlot({ resourceId, userId, startTime, endTime, partnerUserIds, visibility, targetLevelMin, targetLevelMax }: HoldSlotParams) {

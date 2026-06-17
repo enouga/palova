@@ -564,6 +564,88 @@ describe('ReservationService', () => {
     });
   });
 
+  describe('getMyQuotaStatus', () => {
+    const tz = 'Europe/Paris';
+    const futureSlot = (plusDays = 2, hour = 10, minutes = 60) => {
+      const start = DateTime.now().setZone(tz).plus({ days: plusDays }).set({ hour, minute: 0, second: 0, millisecond: 0 });
+      return { startTime: start.toJSDate(), endTime: start.plus({ minutes }).toJSDate() };
+    };
+    const mockClub = (bookingQuotas: unknown, offPeakHours: unknown = null) => {
+      prismaMock.club.findUnique.mockResolvedValue({
+        id: 'club-demo', status: 'ACTIVE', timezone: tz, offPeakHours, bookingQuotas,
+      } as any);
+    };
+    const QUOTAS = { model: 'UPCOMING', subscriber: { peak: 5, offPeak: 3 }, nonSubscriber: { peak: 2, offPeak: 1 } };
+
+    beforeEach(() => {
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ isSubscriber: false } as any);
+      prismaMock.reservation.findMany.mockResolvedValue([] as any);
+    });
+
+    it('UPCOMING : compte les résas à venir par classe, jeu non-abonné', async () => {
+      mockClub(QUOTAS);
+      prismaMock.reservation.findMany.mockResolvedValue([futureSlot(3), futureSlot(4)] as any); // 2 pleines à venir
+
+      const status = await service.getMyQuotaStatus('demo', 'user-1');
+
+      expect(status).toEqual({ model: 'UPCOMING', peak: { used: 2, limit: 2 }, offPeak: { used: 0, limit: 1 } });
+      const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      expect(arg.where.startTime).toEqual({ gt: expect.any(Date) });
+    });
+
+    it('abonné → prend le jeu de limites abonné', async () => {
+      mockClub(QUOTAS);
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ isSubscriber: true } as any);
+
+      const status = await service.getMyQuotaStatus('demo', 'user-1');
+      expect(status).toEqual({ model: 'UPCOMING', peak: { used: 0, limit: 5 }, offPeak: { used: 0, limit: 3 } });
+    });
+
+    it('WEEKLY : fenêtre = semaine calendaire courante (fuseau club)', async () => {
+      mockClub({ ...QUOTAS, model: 'WEEKLY' });
+
+      await service.getMyQuotaStatus('demo', 'user-1');
+
+      const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      const weekStart = DateTime.now().setZone(tz).startOf('week');
+      expect(arg.where.startTime.gte).toEqual(weekStart.toJSDate());
+      expect(arg.where.startTime.lt).toEqual(weekStart.plus({ days: 7 }).toJSDate());
+    });
+
+    it('pas de membership → traité comme non-abonné (pas d erreur)', async () => {
+      mockClub(QUOTAS);
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+
+      const status = await service.getMyQuotaStatus('demo', 'user-1');
+      expect(status).toEqual({ model: 'UPCOMING', peak: { used: 0, limit: 2 }, offPeak: { used: 0, limit: 1 } });
+    });
+
+    it('quotas désactivés → null, aucun comptage', async () => {
+      mockClub(null);
+      const status = await service.getMyQuotaStatus('demo', 'user-1');
+      expect(status).toBeNull();
+      expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
+    });
+
+    it('classe illimitée masquée ; les deux illimitées → null', async () => {
+      // Non-abonné avec peak limité, offPeak illimité → offPeak masqué.
+      mockClub({ model: 'UPCOMING', subscriber: { peak: null, offPeak: null }, nonSubscriber: { peak: 2, offPeak: null } });
+      expect(await service.getMyQuotaStatus('demo', 'user-1')).toEqual({ model: 'UPCOMING', peak: { used: 0, limit: 2 }, offPeak: null });
+
+      // Abonné : tout illimité → null global, sans comptage.
+      jest.clearAllMocks();
+      mockClub({ model: 'UPCOMING', subscriber: { peak: null, offPeak: null }, nonSubscriber: { peak: 2, offPeak: null } });
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ isSubscriber: true } as any);
+      expect(await service.getMyQuotaStatus('demo', 'user-1')).toBeNull();
+      expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
+    });
+
+    it('club introuvable / inactif → CLUB_NOT_FOUND', async () => {
+      prismaMock.club.findUnique.mockResolvedValue(null as any);
+      await expect(service.getMyQuotaStatus('demo', 'user-1')).rejects.toThrow('CLUB_NOT_FOUND');
+    });
+  });
+
   describe('listClubReservations', () => {
     beforeEach(() => {
       prismaMock.club.findUniqueOrThrow.mockResolvedValue({ timezone: 'Europe/Paris', offPeakHours: null } as any);
