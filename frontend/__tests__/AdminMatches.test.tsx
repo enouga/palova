@@ -4,10 +4,12 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 
 const getClubMatches = jest.fn();
 const resolveClubMatch = jest.fn();
+const voidClubMatch = jest.fn();
 jest.mock('../lib/api', () => ({
   api: {
     getClubMatches: (...a: unknown[]) => getClubMatches(...a),
     resolveClubMatch: (...a: unknown[]) => resolveClubMatch(...a),
+    voidClubMatch: (...a: unknown[]) => voidClubMatch(...a),
   },
 }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
@@ -27,6 +29,7 @@ beforeEach(() => {
     ],
   }]);
   resolveClubMatch.mockResolvedValue({ ok: true });
+  voidClubMatch.mockResolvedValue({ ok: true });
 });
 
 it('liste les litiges et permet d annuler', async () => {
@@ -47,4 +50,27 @@ it('affiche un état vide sans litige', async () => {
   getClubMatches.mockResolvedValue([]);
   renderPage();
   expect(await screen.findByText('Aucun litige.')).toBeInTheDocument();
+});
+
+it('le segment « Matchs confirmés » charge les confirmés et permet d annuler avec motif', async () => {
+  voidClubMatch.mockResolvedValue({ ok: true });
+  getClubMatches.mockImplementation((_c: string, status: string) =>
+    Promise.resolve(status === 'CONFIRMED'
+      ? [{ id: 'm9', status: 'CONFIRMED', sets: [[6, 1]], playedAt: '2026-06-09T10:00:00Z', winningTeam: 1, confirmDeadline: '',
+          players: [
+            { userId: 'u1', team: 1, confirmation: 'CONFIRMED', user: { firstName: 'Alice', lastName: 'A' } },
+            { userId: 'u3', team: 2, confirmation: 'CONFIRMED', user: { firstName: 'Carl', lastName: 'C' } },
+          ] }]
+      : []));
+  renderPage();
+  fireEvent.click(screen.getByText('Matchs confirmés'));
+  expect(await screen.findByText('6-1')).toBeInTheDocument();
+  // ouvrir le dialogue (bouton de la carte)
+  fireEvent.click(screen.getByRole('button', { name: 'Annuler le match' }));
+  // saisir un motif
+  fireEvent.change(screen.getByPlaceholderText(/motif/i), { target: { value: 'score truqué' } });
+  // confirmer : il y a maintenant 2 boutons « Annuler le match » (carte + dialogue) → prendre le dernier (dialogue)
+  const confirmButtons = screen.getAllByRole('button', { name: 'Annuler le match' });
+  fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+  await waitFor(() => expect(voidClubMatch).toHaveBeenCalledWith('c1', 'm9', { reason: 'score truqué' }, 'tok'));
 });
