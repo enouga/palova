@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/useAuth';
 import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
-import { Chip, Placeholder, Segmented } from '@/components/ui/atoms';
+import { Chip, Placeholder, PillTabs } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
@@ -31,6 +31,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const router = useRouter();
   const { token } = useAuth();
   const [tab, setTab]           = useState<'book' | 'courts'>('book');
+  const [selectedSportId, setSelectedSportId] = useState<string>(club.clubSports[0]?.id ?? '');
   const [date, setDate]         = useState(todayISO());
   // Durée choisie PAR sport (clé = clubSport.id) : chaque sport propose ses propres durées.
   const [durationBySport, setDurationBySport] = useState<Record<string, number>>(
@@ -111,6 +112,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       const res = (availBySport[cs.id] ?? []).find((a) => a.resource.id === deepSlot.resourceId);
       const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
       if (res && slot) {
+        setSelectedSportId(cs.id);
         setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined });
         setDeepSlot(null);
         return;
@@ -159,19 +161,31 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
-            {/* grille : une section par sport — durée propre + terrains + créneaux libres */}
+            {/* filtre par sport — affiché seulement si le club propose plusieurs sports */}
+            {club.clubSports.length > 1 && (
+              <div style={{ padding: '12px 20px 0' }}>
+                <PillTabs<string>
+                  options={club.clubSports.map((cs) => ({ value: cs.id, label: cs.sport.name }))}
+                  value={selectedSportId}
+                  onChange={setSelectedSportId}
+                />
+              </div>
+            )}
+            {/* grille : section du sport sélectionné — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
-              {club.clubSports.map((cs) => {
+              {club.clubSports.filter((cs) => cs.id === selectedSportId).map((cs) => {
                 const durations = effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin);
                 const selDur = durationBySport[cs.id];
                 const items = availBySport[cs.id];
                 const loading = loadingBySport[cs.id];
                 return (
                   <div key={cs.id} style={{ marginTop: 14 }}>
-                    <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
+                    {club.clubSports.length === 1 && (
+                      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
+                    )}
                     {durations.length > 1 && (
                       <div style={{ marginBottom: 12 }}>
-                        <Segmented<number> value={selDur} onChange={(d) => changeDuration(cs.id, d)} options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
+                        <PillTabs<number> size="sm" activeBg={th.text} value={selDur} onChange={(d) => changeDuration(cs.id, d)} options={durations.map((d) => ({ value: d, label: durationLabel(d) }))} />
                       </div>
                     )}
                     {items === undefined ? (

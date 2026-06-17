@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ClubReserve } from '../components/ClubReserve';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -47,9 +47,15 @@ describe('ClubReserve — durée par sport', () => {
     expect(calls).toContainEqual([45, 'cs2']); // Squash : défaut = 1re durée (45)
   });
 
-  it('affiche les deux sections de sport', async () => {
+  it('affiche les onglets sport et bascule la section au clic', async () => {
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
-    expect(await screen.findByText('Padel')).toBeInTheDocument();
-    expect(await screen.findByText('Squash')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Padel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Squash' })).toBeInTheDocument();
+    // Par défaut Padel (durée unique) → aucune pastille de durée propre à Squash.
+    expect(screen.queryByText('45 min')).not.toBeInTheDocument();
+    // Bascule sur Squash → ses durées (45/60) apparaissent.
+    fireEvent.click(screen.getByRole('button', { name: 'Squash' }));
+    expect(await screen.findByText('45 min')).toBeInTheDocument();
+    expect(screen.getByText('1 h')).toBeInTheDocument();
   });
 });
