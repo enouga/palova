@@ -708,6 +708,13 @@ export class ReservationService {
     durationMin: number;
     startDate: string;    // "YYYY-MM-DD"
     endDate: string;      // "YYYY-MM-DD"
+    lessonParams?: {
+      coachId: string;
+      capacity: number;
+      lessonKind: 'INDIVIDUAL' | 'COLLECTIVE';
+      allowSelfEnroll: boolean;
+      enrollmentMode: 'SERIES' | 'PER_SESSION';
+    };
   }): Promise<{ seriesId: string; created: number; skipped: Array<{ start: string; reason: string }> }> {
     const resource = await prisma.resource.findUnique({
       where: { id: params.resourceId },
@@ -715,6 +722,11 @@ export class ReservationService {
     });
     if (!resource)                          throw new Error('RESOURCE_NOT_FOUND');
     if (resource.clubId !== params.clubId)  throw new Error('CLUB_MISMATCH');
+
+    if (params.lessonParams) {
+      if (params.type !== 'COACHING') throw new Error('VALIDATION_ERROR');
+      if (params.lessonParams.capacity < 1) throw new Error('VALIDATION_ERROR');
+    }
 
     // Calcule les occurrences AVANT toute écriture (lève VALIDATION_ERROR / SERIES_TOO_LONG).
     const occurrences = weeklyOccurrences({
@@ -737,6 +749,13 @@ export class ReservationService {
           durationMin: params.durationMin,
           startDate: new Date(`${params.startDate}T00:00:00.000Z`),
           endDate:   new Date(`${params.endDate}T00:00:00.000Z`),
+          ...(params.lessonParams ? {
+            coachId: params.lessonParams.coachId,
+            capacity: params.lessonParams.capacity,
+            lessonKind: params.lessonParams.lessonKind,
+            allowSelfEnroll: params.lessonParams.allowSelfEnroll,
+            enrollmentMode: params.lessonParams.enrollmentMode,
+          } : {}),
         },
       });
 
@@ -773,6 +792,17 @@ export class ReservationService {
           },
         });
         createdList.push({ id: created.id, startUtc: occ.startUtc, endUtc: occ.endUtc });
+        if (params.lessonParams) {
+          await tx.lesson.create({ data: {
+            reservationId: created.id,
+            clubId: params.clubId,
+            coachId: params.lessonParams.coachId,
+            capacity: params.lessonParams.capacity,
+            lessonKind: params.lessonParams.lessonKind,
+            allowSelfEnroll: params.lessonParams.allowSelfEnroll,
+            seriesId: series.id,
+          } });
+        }
       }
 
       return { seriesId: series.id, createdList, skipped };
