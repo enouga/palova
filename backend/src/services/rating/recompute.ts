@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { SetScore } from './score';
 import { applyMatchRatings, decayForInactivity, TeamPlayer } from './match-rating';
 import { RatingState } from './glicko2';
@@ -72,4 +73,59 @@ export function replayRatings(baselines: ReplayBaseline[], matches: ReplayMatchI
   }));
 
   return { players, matchPlayers };
+}
+
+/**
+ * Recalcule les niveaux d'un sport par rejeu complet des matchs CONFIRMED, dans la transaction `tx`.
+ * `extraUserIds` = joueurs à inclure même s'ils n'ont plus de match confirmé (ex. les 4 du match
+ * qu'on vient d'annuler) afin qu'ils retombent sur leur calibration.
+ */
+export async function recomputeSportRatings(
+  tx: Prisma.TransactionClient,
+  sportId: string,
+  extraUserIds: string[] = [],
+): Promise<void> {
+  const confirmed = await tx.match.findMany({
+    where: { sportId, status: 'CONFIRMED' },
+    orderBy: { playedAt: 'asc' },
+    select: { id: true, playedAt: true, sets: true, players: { select: { userId: true, team: true } } },
+  });
+
+  const userIds = new Set<string>(extraUserIds);
+  for (const m of confirmed) for (const p of m.players) userIds.add(p.userId);
+
+  const rows = await tx.playerRating.findMany({
+    where: { sportId, userId: { in: [...userIds] } },
+    select: { userId: true, initialSelfLevel: true },
+  });
+  const selfLevel = new Map(rows.map((r) => [r.userId, r.initialSelfLevel]));
+  const baselines: ReplayBaseline[] = [...userIds].map((userId) => ({
+    userId, initialSelfLevel: selfLevel.get(userId) ?? null,
+  }));
+
+  const matches: ReplayMatchInput[] = confirmed.map((m) => ({
+    matchId: m.id,
+    playedAt: m.playedAt,
+    sets: m.sets as unknown as [number, number][],
+    players: m.players.map((p) => ({ userId: p.userId, team: p.team as 1 | 2 })),
+  }));
+
+  const out = replayRatings(baselines, matches);
+
+  for (const p of out.players) {
+    await tx.playerRating.update({
+      where: { userId_sportId: { userId: p.userId, sportId } },
+      data: {
+        rating: p.rating, rd: p.rd, volatility: p.volatility,
+        displayLevel: p.displayLevel, isProvisional: p.isProvisional,
+        matchesPlayed: p.matchesPlayed, lastMatchAt: p.lastMatchAt,
+      },
+    });
+  }
+  for (const mp of out.matchPlayers) {
+    await tx.matchPlayer.update({
+      where: { matchId_userId: { matchId: mp.matchId, userId: mp.userId } },
+      data: { ratingBefore: mp.before, ratingAfter: mp.after },
+    });
+  }
 }

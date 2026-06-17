@@ -4,6 +4,7 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { Prisma } from '@prisma/client';
 import { MatchService } from '../match.service';
+import { recomputeSportRatings } from '../rating/recompute';
 
 const service = new MatchService();
 
@@ -224,5 +225,45 @@ describe('finalize', () => {
     (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
     await service.finalize('m1');
     expect(tx.playerRating.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('recomputeSportRatings', () => {
+  function txMock(confirmed: any[], ratingRows: any[]) {
+    const updated: Record<string, any> = {};
+    return {
+      match: { findMany: jest.fn().mockResolvedValue(confirmed) },
+      playerRating: {
+        findMany: jest.fn().mockResolvedValue(ratingRows),
+        update: jest.fn().mockImplementation((a: any) => { updated[a.where.userId_sportId.userId] = a.data; return Promise.resolve(a.data); }),
+      },
+      matchPlayer: { update: jest.fn().mockResolvedValue({}) },
+      _updated: updated,
+    };
+  }
+
+  it('réinitialise + rejoue les confirmés et persiste chaque joueur concerné', async () => {
+    const confirmed = [{
+      id: 'm1', playedAt: new Date('2026-06-10T10:00:00Z'), sets: [[6, 2], [6, 2]],
+      players: [
+        { userId: 'u1', team: 1 }, { userId: 'u2', team: 1 },
+        { userId: 'u3', team: 2 }, { userId: 'u4', team: 2 },
+      ],
+    }];
+    const ratingRows = ['u1', 'u2', 'u3', 'u4'].map((userId) => ({ userId, initialSelfLevel: null }));
+    const tx = txMock(confirmed, ratingRows);
+    await recomputeSportRatings(tx as any, 'sport-padel', []);
+    expect(tx.playerRating.update).toHaveBeenCalledTimes(4);
+    expect(tx.matchPlayer.update).toHaveBeenCalledTimes(4);
+    expect(tx._updated.u1.matchesPlayed).toBe(1);
+    expect(tx._updated.u1.displayLevel).toBeGreaterThan(tx._updated.u3.displayLevel);
+  });
+
+  it('inclut extraUserIds (joueurs du match annulé, désormais sans match) et les remet à leur calibration', async () => {
+    const tx = txMock([], [{ userId: 'solo', initialSelfLevel: 5 }]);
+    await recomputeSportRatings(tx as any, 'sport-padel', ['solo']);
+    expect(tx.playerRating.update).toHaveBeenCalledTimes(1);
+    expect(tx._updated.solo.matchesPlayed).toBe(0);
+    expect(tx._updated.solo.lastMatchAt).toBeNull();
   });
 });
