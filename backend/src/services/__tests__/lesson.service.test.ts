@@ -112,3 +112,38 @@ describe('LessonService.listStudents', () => {
     expect(list[1].waitlistPosition).toBe(1);
   });
 });
+
+// ─────────────────────────────────────────────── méthodes joueur (Lot 3)
+
+describe('LessonService.enroll (joueur)', () => {
+  it('refuse si allowSelfEnroll=false → SELF_ENROLL_DISABLED', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: false, seriesId: null, series: null, reservation: { startTime: new Date(Date.now() + 86400000) } } as any);
+    await expect(lessonService.enroll('l1', 'u1')).rejects.toThrow('SELF_ENROLL_DISABLED');
+  });
+  it('inscrit CONFIRMED si ouvert et place libre', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true, seriesId: null, series: null, reservation: { startTime: new Date(Date.now() + 86400000) } } as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue(null);
+    prismaMock.lessonEnrollment.count.mockResolvedValue(0);
+    prismaMock.lessonEnrollment.create.mockResolvedValue({ id: 'e1', status: 'CONFIRMED' } as any);
+    const r = await lessonService.enroll('l1', 'u1');
+    expect(r.status).toBe('CONFIRMED');
+  });
+});
+
+describe('LessonService.cancelEnrollment (joueur)', () => {
+  it('refuse si la séance est passée → ENROLLMENT_LOCKED', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true, seriesId: null, series: null, reservation: { startTime: new Date(Date.now() - 86400000) } } as any);
+    await expect(lessonService.cancelEnrollment('l1', 'u1')).rejects.toThrow('ENROLLMENT_LOCKED');
+  });
+});
+
+describe('LessonService.listParticipants (public)', () => {
+  it('renvoie le roster sans userId', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, allowSelfEnroll: true, seriesId: null, series: null, reservation: { startTime: new Date() } } as any);
+    prismaMock.lessonEnrollment.findMany.mockResolvedValue([{ id: 'e1', status: 'CONFIRMED', createdAt: new Date(1), userId: 'u1', user: { firstName: 'A', lastName: 'B', avatarUrl: null } }] as any);
+    const list = await lessonService.listParticipants('l1');
+    expect((list[0] as any).userId).toBeUndefined();
+    expect(list[0].firstName).toBe('A');
+  });
+});
