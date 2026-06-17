@@ -223,6 +223,42 @@ describe('ClubService.createClub — slugs réservés / alias', () => {
   });
 });
 
+describe('levelSystemEnabled exposition', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('getClubBySlug renvoie levelSystemEnabled', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'c1', slug: 'demo', name: 'Demo', status: 'ACTIVE', levelSystemEnabled: false, clubSports: [],
+    } as any);
+    const res = await svc.getClubBySlug('demo');
+    expect(res.levelSystemEnabled).toBe(false);
+    const arg = (prismaMock.club.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.select.levelSystemEnabled).toBe(true);
+  });
+
+  it('getClubForAdmin sélectionne levelSystemEnabled', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
+    expect(arg.select.levelSystemEnabled).toBe(true);
+  });
+
+  it('updateClub accepte levelSystemEnabled', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('c1', { levelSystemEnabled: false } as any);
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.levelSystemEnabled).toBe(false);
+  });
+
+  it('updateClub ignore levelSystemEnabled absent', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('c1', { name: 'X' });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.levelSystemEnabled).toBeUndefined();
+  });
+});
+
 describe('slugify', () => {
   it('pas de tiret final quand la coupe à 60 tombe sur un tiret', () => {
     const { slugify } = require('../club.service');

@@ -149,6 +149,7 @@ export class ClubService {
         showOtherClubsReservations: true,
         requireOnlinePayment: true,
         requireCardFingerprint: true,
+        levelSystemEnabled: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -180,6 +181,7 @@ export class ClubService {
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
         showOtherClubsReservations: true,
         refundOnCancelWithinCutoff: true,
+        levelSystemEnabled: true,
         stripeAccountId: true,
         stripeAccountStatus: true,
         requireOnlinePayment: true,
@@ -204,6 +206,7 @@ export class ClubService {
     cancellationCutoffHours?: number;
     showOtherClubsReservations?: boolean;
     refundOnCancelWithinCutoff?: boolean;
+    levelSystemEnabled?: boolean;
     requireOnlinePayment?: boolean;
     requireCardFingerprint?: boolean;
     legalEntityName?: string;
@@ -242,6 +245,7 @@ export class ClubService {
         ...(typeof params.cancellationCutoffHours === 'number' ? { cancellationCutoffHours: clamp(params.cancellationCutoffHours) } : {}),
         ...(typeof params.showOtherClubsReservations === 'boolean' ? { showOtherClubsReservations: params.showOtherClubsReservations } : {}),
         ...(typeof params.refundOnCancelWithinCutoff === 'boolean' ? { refundOnCancelWithinCutoff: params.refundOnCancelWithinCutoff } : {}),
+        ...(typeof params.levelSystemEnabled === 'boolean' ? { levelSystemEnabled: params.levelSystemEnabled } : {}),
         ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
         ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),
