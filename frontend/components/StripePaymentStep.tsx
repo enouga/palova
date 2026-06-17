@@ -1,19 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { useStripe, useElements } from '@stripe/react-stripe-js';
+// Imports statiques volontaires : ce composant est déjà 'use client' et il est
+// monté via dynamic({ ssr:false }) dans BookingModal, donc rien ne s'exécute côté
+// serveur. Charger Elements et PaymentElement via deux dynamic() séparés crée deux
+// frontières de chargement indépendantes : le PaymentElement peut ne jamais se
+// monter dans le groupe d'Elements alors que useElements() renvoie déjà une
+// instance → confirmPayment() échoue avec « no mounted Payment Element ».
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { api } from '@/lib/api';
 import { getStripe } from '@/lib/stripe';
 import { Btn } from '@/components/ui/atoms';
-
-const Elements = dynamic(
-  () => import('@stripe/react-stripe-js').then((m) => m.Elements),
-  { ssr: false },
-);
-const PaymentElement = dynamic(
-  () => import('@stripe/react-stripe-js').then((m) => m.PaymentElement),
-  { ssr: false },
-);
 
 interface Props {
   reservationId: string;
@@ -81,6 +77,7 @@ function StripeForm({ reservationId, type, amountLabel, token, onSuccess, onCanc
 
 export default function StripePaymentStep(props: Props) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,7 +86,10 @@ export default function StripePaymentStep(props: Props) {
       { reservationId: props.reservationId, type: props.type },
       props.token,
     )
-      .then((r) => setClientSecret(r.clientSecret))
+      .then((r) => {
+        setStripeAccountId(r.stripeAccountId ?? null);
+        setClientSecret(r.clientSecret);
+      })
       .catch(() => setFetchError('Impossible d\'initialiser le paiement.'));
   }, [props.slug, props.reservationId, props.type, props.token]);
 
@@ -112,7 +112,7 @@ export default function StripePaymentStep(props: Props) {
   }
 
   return (
-    <Elements stripe={getStripe()} options={{ clientSecret }}>
+    <Elements stripe={getStripe(stripeAccountId)} options={{ clientSecret }}>
       <StripeForm {...props} />
     </Elements>
   );

@@ -135,7 +135,7 @@ export const api = {
     body: { reservationId: string; type: 'payment' | 'setup' },
     token: string,
   ) =>
-    request<{ clientSecret: string; type: 'payment' | 'setup' }>(
+    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
       `/api/clubs/${slug}/stripe/intent`,
       { method: 'POST', body: JSON.stringify(body) },
       token,

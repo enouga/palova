@@ -260,12 +260,12 @@ router.post('/:slug/stripe/intent', authMiddleware, async (req: AuthRequest, res
       const result = await svc.createPaymentIntent({
         clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId), amountCents,
       });
-      return void res.json({ ...result, type: 'payment' });
+      return void res.json({ ...result, type: 'payment', stripeAccountId: club.stripeAccountId });
     } else {
       const result = await svc.createSetupIntent({
         clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId),
       });
-      return void res.json({ ...result, type: 'setup' });
+      return void res.json({ ...result, type: 'setup', stripeAccountId: club.stripeAccountId });
     }
   } catch (err) { handleError(err, res, next); }
 });
