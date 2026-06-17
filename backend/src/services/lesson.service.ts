@@ -321,6 +321,44 @@ class LessonService {
   }
 
   /**
+   * Construit un `PublicLessonRow` depuis une lesson déjà hydratée (coach, reservation, series, club)
+   * et les compteurs issus de `withCounts`. Unique source de vérité pour la forme publique.
+   */
+  private mapToPublicRow(
+    lesson: {
+      id: string;
+      clubId: string;
+      capacity: number;
+      allowSelfEnroll: boolean;
+      coach: { name: string; photoUrl: string | null };
+      reservation: { startTime: Date; endTime: Date; resource: { name: string } };
+      series: { id: string; capacity: number | null; enrollmentMode: EnrollmentMode | null; title: string | null } | null;
+      club: { slug: string; name: string; timezone: string };
+    },
+    confirmedCount: number,
+    waitlistCount: number,
+  ): PublicLessonRow {
+    return {
+      id: lesson.id,
+      clubId: lesson.clubId,
+      coach: lesson.coach,
+      reservation: {
+        startTime: lesson.reservation.startTime,
+        endTime: lesson.reservation.endTime,
+        resource: lesson.reservation.resource,
+      },
+      series: lesson.series
+        ? { enrollmentMode: lesson.series.enrollmentMode, title: lesson.series.title }
+        : null,
+      club: lesson.club,
+      confirmedCount,
+      waitlistCount,
+      capacity: lesson.capacity,
+      allowSelfEnroll: lesson.allowSelfEnroll,
+    };
+  }
+
+  /**
    * Extrait un mapping roster (même logique que listStudents) depuis un tableau d'enrollments.
    * userId n'est PAS exposé.
    */
@@ -544,24 +582,7 @@ class LessonService {
 
     const { confirmedCount, waitlistCount } = await this.withCounts(lesson);
 
-    return {
-      id: lesson.id,
-      clubId: lesson.clubId,
-      coach: lesson.coach,
-      reservation: {
-        startTime: lesson.reservation.startTime,
-        endTime: lesson.reservation.endTime,
-        resource: lesson.reservation.resource,
-      },
-      series: lesson.series
-        ? { enrollmentMode: lesson.series.enrollmentMode, title: lesson.series.title }
-        : null,
-      club: lesson.club,
-      confirmedCount,
-      waitlistCount,
-      capacity: lesson.capacity,
-      allowSelfEnroll: lesson.allowSelfEnroll,
-    };
+    return this.mapToPublicRow(lesson, confirmedCount, waitlistCount);
   }
 
   // ─────────────────────────────────────────────────────────── listPublicByClubSlug
@@ -605,24 +626,7 @@ class LessonService {
     return Promise.all(
       lessons.map(async (lesson) => {
         const { confirmedCount, waitlistCount } = await this.withCounts(lesson);
-        return {
-          id: lesson.id,
-          clubId: lesson.clubId,
-          coach: lesson.coach,
-          reservation: {
-            startTime: lesson.reservation.startTime,
-            endTime: lesson.reservation.endTime,
-            resource: lesson.reservation.resource,
-          },
-          series: lesson.series
-            ? { enrollmentMode: lesson.series.enrollmentMode, title: lesson.series.title }
-            : null,
-          club: lesson.club,
-          confirmedCount,
-          waitlistCount,
-          capacity: lesson.capacity,
-          allowSelfEnroll: lesson.allowSelfEnroll,
-        };
+        return this.mapToPublicRow(lesson, confirmedCount, waitlistCount);
       }),
     );
   }
@@ -682,29 +686,13 @@ class LessonService {
           orderBy: { reservation: { startTime: 'asc' } },
         });
 
+        // TODO(Lot 3 follow-up) : N+1 withCounts par occurrence d'une série — batcher en un groupBy si volumétrie élevée (faible cardinalité par joueur en pratique).
         for (const lesson of futureLessons) {
           const { confirmedCount, waitlistCount } = await this.withCounts(lesson);
           results.push({
             enrollmentId: enrollment.id,
             status: enrollment.status,
-            lesson: {
-              id: lesson.id,
-              clubId: lesson.clubId,
-              coach: lesson.coach,
-              reservation: {
-                startTime: lesson.reservation.startTime,
-                endTime: lesson.reservation.endTime,
-                resource: lesson.reservation.resource,
-              },
-              series: lesson.series
-                ? { enrollmentMode: lesson.series.enrollmentMode, title: lesson.series.title }
-                : null,
-              club: lesson.club,
-              confirmedCount,
-              waitlistCount,
-              capacity: lesson.capacity,
-              allowSelfEnroll: lesson.allowSelfEnroll,
-            },
+            lesson: this.mapToPublicRow(lesson, confirmedCount, waitlistCount),
           });
         }
       }
