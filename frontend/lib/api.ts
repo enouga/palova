@@ -529,6 +529,26 @@ export const api = {
     request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/faq/${id}`, { method: 'DELETE' }, token),
   adminReorderFaq: (clubId: string, orderedIds: string[], token: string) =>
     request<AdminFaqItem[]>(`/api/clubs/${clubId}/admin/faq/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
+
+  // --- Coachs (back-office club) ---
+  adminListCoaches: (clubId: string, token: string) =>
+    request<Coach[]>(`/api/clubs/${clubId}/admin/coaches`, {}, token),
+
+  adminCreateCoach: (clubId: string, body: CoachBody, token: string) =>
+    request<Coach>(`/api/clubs/${clubId}/admin/coaches`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminUpdateCoach: (clubId: string, id: string, body: CoachBody, token: string) =>
+    request<Coach>(`/api/clubs/${clubId}/admin/coaches/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+
+  adminDeleteCoach: (clubId: string, id: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/coaches/${id}`, { method: 'DELETE' }, token),
+
+  // --- Séries de réservations (back-office club) ---
+  adminCreateSeries: (clubId: string, body: CreateSeriesBody, token: string) =>
+    request<CreateSeriesResult>(`/api/clubs/${clubId}/admin/reservation-series`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminCancelSeries: (clubId: string, id: string, token: string) =>
+    request<{ cancelled: number }>(`/api/clubs/${clubId}/admin/reservation-series/${id}`, { method: 'DELETE' }, token),
 };
 
 // --- Types ---
@@ -1439,4 +1459,42 @@ export interface PlatformClub {
 export interface CreateClubByPlatformBody {
   club: { name: string; city?: string; timezone?: string; sportKey?: string };
   owner: { firstName: string; lastName: string; email: string; password: string };
+}
+
+// --- Coachs ---
+
+export interface Coach {
+  id: string;
+  clubId: string;
+  name: string;
+  photoUrl: string | null;
+  bio: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface CoachBody {
+  name?: string;
+  bio?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+// --- Séries de réservations ---
+
+export interface CreateSeriesBody {
+  resourceId: string;
+  type: ReservationType;
+  title?: string;
+  weekday: number;       // 1–7 (1=lundi)
+  startLocal: string;    // "HH:mm"
+  durationMin: number;
+  startDate: string;     // "YYYY-MM-DD"
+  endDate: string;       // "YYYY-MM-DD"
+}
+
+export interface CreateSeriesResult {
+  seriesId: string;
+  created: number;
+  skipped: Array<{ start: string; reason: string }>;
 }
