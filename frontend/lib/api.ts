@@ -562,6 +562,21 @@ export const api = {
 
   adminRemoveStudent: (clubId: string, lessonId: string, enrollId: string, token: string) =>
     request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students/${enrollId}`, { method: 'DELETE' }, token),
+
+  // --- Cours (joueur) ---
+  getClubLessons: (slug: string) => request<LessonSummary[]>(`/api/clubs/${slug}/lessons`),
+
+  getLesson: (id: string) => request<LessonDetail>(`/api/lessons/${id}`),
+
+  getLessonParticipants: (id: string) => request<LessonParticipant[]>(`/api/lessons/${id}/participants`),
+
+  enrollLesson: (id: string, token: string) =>
+    request<LessonEnrollmentRecord>(`/api/lessons/${id}/enrollment`, { method: 'POST' }, token),
+
+  cancelLessonEnrollment: (id: string, token: string) =>
+    request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/lessons/${id}/enrollment`, { method: 'DELETE' }, token),
+
+  getMyLessons: (token: string) => request<MyLessonEnrollment[]>('/api/me/lessons', {}, token),
 };
 
 // --- Types ---
@@ -1529,4 +1544,44 @@ export interface CreateSeriesResult {
   seriesId: string;
   created: number;
   skipped: Array<{ start: string; reason: string }>;
+}
+
+// --- Cours joueur (Lot 3) ---
+
+export interface LessonSummary {
+  id: string;
+  clubId: string;
+  lessonKind: 'INDIVIDUAL' | 'COLLECTIVE';
+  allowSelfEnroll: boolean;
+  capacity: number;
+  confirmedCount: number;
+  waitlistCount: number;
+  seriesId: string | null;
+  coach: { name: string; photoUrl: string | null };
+  reservation: { startTime: string; endTime: string; resource: { name: string } };
+  series?: { enrollmentMode: 'SERIES' | 'PER_SESSION'; title: string | null } | null;
+}
+
+export type LessonDetail = LessonSummary & { club: { slug: string; name: string; timezone: string } };
+
+export interface LessonParticipant {
+  id: string;
+  status: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  waitlistPosition: number | null;
+}
+
+export interface LessonEnrollmentRecord {
+  id: string;
+  status: string;
+  lessonId: string | null;
+  seriesId: string | null;
+}
+
+export interface MyLessonEnrollment {
+  enrollmentId: string;
+  status: string;
+  lesson: LessonSummary;
 }
