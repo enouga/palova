@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-import { Prisma, ClubPageKind } from '@prisma/client';
+import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
@@ -545,6 +545,41 @@ router.patch('/coaches/:id', async (req: ClubScopedRequest, res: Response, next:
 });
 router.delete('/coaches/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await coachService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Séries récurrentes (tous types) ---
+router.post('/reservation-series', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { resourceId, title, weekday, startLocal, durationMin, startDate, endDate } = req.body;
+    const type = asString(req.body.type);
+    if (typeof resourceId !== 'string' || !resourceId) return void res.status(400).json({ error: 'resourceId requis' });
+    if (!RESERVATION_TYPES.includes(type as typeof RESERVATION_TYPES[number])) return void res.status(400).json({ error: 'type invalide' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(asString(startDate)) || !/^\d{4}-\d{2}-\d{2}$/.test(asString(endDate))) {
+      return void res.status(400).json({ error: 'dates doivent être YYYY-MM-DD' });
+    }
+    if (!/^\d{2}:\d{2}$/.test(asString(startLocal))) return void res.status(400).json({ error: 'startLocal doit être HH:mm' });
+    if (!Number.isInteger(Number(weekday)) || !Number.isInteger(Number(durationMin))) {
+      return void res.status(400).json({ error: 'weekday/durationMin invalides' });
+    }
+    const created = await reservationService.adminCreateSeries({
+      clubId: req.membership!.clubId,
+      resourceId,
+      type: type as ReservationType,
+      title: typeof title === 'string' ? title : undefined,
+      weekday: Number(weekday),
+      startLocal: asString(startLocal),
+      durationMin: Number(durationMin),
+      startDate: asString(startDate),
+      endDate: asString(endDate),
+    });
+    res.status(201).json(created);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/reservation-series/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await reservationService.adminCancelSeries(asString(req.params.id), req.membership!.clubId));
+  } catch (err) { handleError(err, res, next); }
 });
 
 // --- Tournois ---
