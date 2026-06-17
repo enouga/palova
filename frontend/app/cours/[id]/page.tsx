@@ -12,7 +12,7 @@ import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
-import { AboutCard, RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
+import { RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
 
 const ERROR_LABEL: Record<string, string> = {
@@ -48,16 +48,19 @@ export default function LessonDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
 
   const load = useCallback(() => {
-    api.getLesson(id).then(setLesson).catch(() => setNotFound(true));
+    const lessonPromise = api.getLesson(id).catch(() => null);
+    lessonPromise.then((l) => { if (l) setLesson(l); else setNotFound(true); });
     api.getLessonParticipants(id).then(setParticipants).catch(() => setParticipants([]));
     if (token) {
-      // Load lesson and enrollments in parallel, then match by lessonId (or seriesId if available)
-      Promise.all([api.getLesson(id).catch(() => null), api.getMyLessons(token).catch(() => [])])
+      // Load lesson and enrollments in parallel, then match by lessonId (or seriesId in SERIES mode only)
+      Promise.all([lessonPromise, api.getMyLessons(token).catch(() => [])])
         .then(([loadedLesson, list]) => {
           const found = list.find(
             (x) =>
               x.lesson.id === id ||
-              (loadedLesson?.seriesId && x.lesson.seriesId && x.lesson.seriesId === loadedLesson.seriesId)
+              (loadedLesson?.series?.enrollmentMode === 'SERIES' &&
+                loadedLesson?.seriesId &&
+                x.lesson.seriesId === loadedLesson.seriesId)
           ) ?? null;
           setMyReg(found);
         });
