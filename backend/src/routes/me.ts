@@ -7,6 +7,7 @@ import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
+import { lessonService } from '../services/lesson.service';
 import { RatingService } from '../services/rating.service';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 
@@ -172,6 +173,12 @@ router.get('/tournaments', authMiddleware, async (req: AuthRequest, res: Respons
 // Inscriptions actives du joueur aux animations (tous clubs).
 router.get('/events', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await eventService.listUserRegistrations(req.user!.id)); }
+  catch (err) { next(err); }
+});
+
+// Inscriptions du joueur aux séances de cours (tous clubs).
+router.get('/lessons', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await lessonService.listUserEnrollments(req.user!.id)); }
   catch (err) { next(err); }
 });
 

@@ -8,6 +8,7 @@ import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
+import { lessonService } from '../services/lesson.service';
 import { PackageService } from '../services/package.service';
 import { OpenMatchService } from '../services/openMatch.service';
 import { ReservationService } from '../services/reservation.service';
@@ -143,6 +144,12 @@ router.get('/:slug/tournaments', async (req, res, next) => {
 // Animations publiées d'un club (à venir).
 router.get('/:slug/events', async (req, res, next) => {
   try { res.json(await eventService.listPublicByClubSlug(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Séances publiées d'un club (allowSelfEnroll=true, à venir).
+router.get('/:slug/lessons', async (req, res, next) => {
+  try { res.json(await lessonService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
 });
 
