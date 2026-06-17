@@ -549,6 +549,19 @@ export const api = {
 
   adminCancelSeries: (clubId: string, id: string, token: string) =>
     request<{ cancelled: number }>(`/api/clubs/${clubId}/admin/reservation-series/${id}`, { method: 'DELETE' }, token),
+
+  // --- Élèves d'un cours (back-office club) ---
+  adminListLessonStudents: (clubId: string, lessonId: string, token: string) =>
+    request<LessonStudent[]>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students`, {}, token),
+
+  adminEnrollStudent: (clubId: string, lessonId: string, userId: string, token: string) =>
+    request<LessonStudent>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+
+  adminPromoteStudent: (clubId: string, lessonId: string, enrollId: string, token: string) =>
+    request<LessonStudent>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students/${enrollId}`, { method: 'PATCH' }, token),
+
+  adminRemoveStudent: (clubId: string, lessonId: string, enrollId: string, token: string) =>
+    request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students/${enrollId}`, { method: 'DELETE' }, token),
 };
 
 // --- Types ---
@@ -1017,6 +1030,8 @@ export interface CreateReservationBody {
   title?: string;
   memberUserId?: string;
   price?: number;
+  // Cours (Lot 2) — paramètres optionnels si type=COACHING
+  lessonParams?: { coachId: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; allowSelfEnroll: boolean };
 }
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
@@ -1464,6 +1479,15 @@ export interface CreateClubByPlatformBody {
 
 // --- Coachs ---
 
+export interface LessonStudent {
+  id: string;
+  status: 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED';
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  waitlistPosition: number | null;
+}
+
 export interface Coach {
   id: string;
   clubId: string;
@@ -1492,6 +1516,12 @@ export interface CreateSeriesBody {
   durationMin: number;
   startDate: string;     // "YYYY-MM-DD"
   endDate: string;       // "YYYY-MM-DD"
+  // Cours (Lot 2)
+  coachId?: string;
+  capacity?: number;
+  lessonKind?: 'INDIVIDUAL' | 'COLLECTIVE';
+  allowSelfEnroll?: boolean;
+  enrollmentMode?: 'SERIES' | 'PER_SESSION';
 }
 
 export interface CreateSeriesResult {
