@@ -401,6 +401,7 @@ model User {
   memberPackages MemberPackage[]
   paymentsCreated Payment[] @relation("PaymentsCreated")
   stripeCustomers  ClubStripeCustomer[]
+  lessonEnrollments LessonEnrollment[]
 
   @@map("users")
 }
@@ -561,6 +562,7 @@ model Reservation {
   participants ReservationParticipant[]
   matches      Match[]
   series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  lesson       Lesson?
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
@@ -879,6 +881,7 @@ model Coach {
 
   club   Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
   series ReservationSeries[]
+  lessons Lesson[]
 
   @@index([clubId])
   @@map("coaches")
@@ -911,9 +914,53 @@ model ReservationSeries {
   resource     Resource      @relation(fields: [resourceId], references: [id], onDelete: Restrict)
   coach        Coach?        @relation(fields: [coachId], references: [id], onDelete: SetNull)
   reservations Reservation[]
+  lessons      Lesson[]
+  enrollments  LessonEnrollment[]
 
   @@index([clubId])
   @@index([resourceId])
   @@index([coachId])
   @@map("reservation_series")
+}
+
+model Lesson {
+  id              String     @id @default(cuid())
+  reservationId   String     @unique @map("reservation_id")
+  clubId          String     @map("club_id")
+  coachId         String     @map("coach_id")
+  capacity        Int
+  lessonKind      LessonKind @map("lesson_kind")
+  allowSelfEnroll Boolean    @default(false) @map("allow_self_enroll")
+  seriesId        String?    @map("series_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  reservation Reservation        @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  coach       Coach              @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  series      ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  enrollments LessonEnrollment[]
+  @@index([clubId])
+  @@index([seriesId])
+  @@map("lessons")
+}
+
+model LessonEnrollment {
+  id          String             @id @default(cuid())
+  lessonId    String?            @map("lesson_id")
+  seriesId    String?            @map("series_id")
+  userId      String             @map("user_id")
+  status      RegistrationStatus @default(CONFIRMED)
+  cancelledAt DateTime?          @map("cancelled_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  lesson Lesson?            @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  series ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([lessonId, userId])
+  @@unique([seriesId, userId])
+  @@index([lessonId, status, createdAt])
+  @@index([seriesId, status, createdAt])
+  @@index([userId])
+  @@map("lesson_enrollments")
 }
