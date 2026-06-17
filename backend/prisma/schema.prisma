@@ -373,6 +373,7 @@ model User {
   playerRatings   PlayerRating[]
   matchPlayers    MatchPlayer[]
   createdMatches  Match[]       @relation("MatchCreator")
+  cancelledMatches Match[]      @relation("MatchCancelledBy")
   staffRoles      ClubMember[]
   clubMemberships ClubMembership[]
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
@@ -425,6 +426,9 @@ model Match {
   winningTeam      Int?        @map("winning_team")
   confirmDeadline  DateTime    @map("confirm_deadline")
   ratingsAppliedAt DateTime?   @map("ratings_applied_at")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelledByUserId String?   @map("cancelled_by_user_id")
+  cancelledReason   String?   @map("cancelled_reason")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -432,6 +436,7 @@ model Match {
   sport       Sport         @relation(fields: [sportId], references: [id], onDelete: Restrict)
   reservation Reservation?  @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   creator     User          @relation("MatchCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  cancelledBy User?         @relation("MatchCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   players     MatchPlayer[]
 
   @@index([clubId, status, playedAt])
