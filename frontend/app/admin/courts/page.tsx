@@ -32,7 +32,7 @@ export default function AdminResourcesPage() {
   const cell: CSSProperties = { padding: '14px 18px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
-  const errText: CSSProperties = { color: ACCENTS.coral, fontSize: 11.5, fontWeight: 600, fontFamily: th.fontUI, marginTop: 2 };
+  const errText: CSSProperties = { color: ACCENTS.coral, fontSize: 11.5, fontWeight: 600, fontFamily: th.fontUI, marginTop: 2, maxWidth: 170, lineHeight: 1.25 };
   const errBorder = (on?: string): CSSProperties => (on ? { borderColor: ACCENTS.coral } : {});
 
   const load = useCallback(async () => {
