@@ -17,6 +17,8 @@ const asMember = (role = 'OWNER') =>
 beforeEach(() => {
   jest.clearAllMocks();
   asMember();
+  // Par défaut, le système de niveau est activé pour le club (assertLevelSystem).
+  prismaMock.club.findUnique.mockResolvedValue({ levelSystemEnabled: true } as any);
 });
 
 describe('GET /api/clubs/:clubId/admin/matches', () => {
@@ -36,6 +38,13 @@ describe('GET /api/clubs/:clubId/admin/matches', () => {
     prismaMock.match.findMany.mockResolvedValue([] as any);
     const res = await request(app)
       .get('/api/clubs/c1/admin/matches')
+      .set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /admin/matches → 403 si club OFF', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ levelSystemEnabled: false } as any);
+    const res = await request(app).get('/api/clubs/c1/admin/matches?status=DISPUTED')
       .set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(403);
   });

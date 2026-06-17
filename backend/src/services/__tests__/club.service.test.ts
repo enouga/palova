@@ -126,7 +126,7 @@ describe('ClubService — mon adhésion (licence)', () => {
 
 describe('clubLeaderboard', () => {
   const service = new ClubService();
-  const activeClub = { id: 'club-1', status: 'ACTIVE' };
+  const activeClub = { id: 'club-1', status: 'ACTIVE', levelSystemEnabled: true };
 
   function mockBase() {
     prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
@@ -179,6 +179,12 @@ describe('clubLeaderboard', () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.sport.findUnique.mockResolvedValue(null as any);
     await expect(service.clubLeaderboard('padel-arena', 'u1', 'curling')).rejects.toThrow('SPORT_NOT_FOUND');
+  });
+
+  it('clubLeaderboard refuse si le club a désactivé le niveau', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', levelSystemEnabled: false } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    await expect(service.clubLeaderboard('demo', 'u1')).rejects.toThrow('LEVEL_SYSTEM_DISABLED');
   });
 });
 

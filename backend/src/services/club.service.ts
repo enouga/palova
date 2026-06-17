@@ -389,13 +389,14 @@ export class ClubService {
 
   /** Classement du club pour un sport : membres ACTIFS opt-in avec >= MIN_RANKED_MATCHES, triés par niveau. */
   async clubLeaderboard(slug: string, callerUserId: string, sportKey = 'padel') {
-    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true, levelSystemEnabled: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
     const caller = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId: callerUserId, clubId: club.id } },
       select: { status: true },
     });
     if (!caller || caller.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
+    if (!club.levelSystemEnabled) throw new Error('LEVEL_SYSTEM_DISABLED');
 
     const sport = await prisma.sport.findUnique({ where: { key: sportKey }, select: { id: true } });
     if (!sport) throw new Error('SPORT_NOT_FOUND');

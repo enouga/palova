@@ -85,6 +85,11 @@ function asString(v: unknown): string {
   return '';
 }
 
+async function assertLevelSystem(clubId: string): Promise<void> {
+  const c = await prisma.club.findUnique({ where: { id: clubId }, select: { levelSystemEnabled: true } });
+  if (!c || !c.levelSystemEnabled) throw new Error('LEVEL_SYSTEM_DISABLED');
+}
+
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
   const message = (err as Error).message;
   const status  = ERROR_STATUS[message];
@@ -717,6 +722,7 @@ router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, r
 
 router.get('/matches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
+    await assertLevelSystem(asString(req.params.clubId));
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const where: { clubId: string; status?: any } = { clubId: asString(req.params.clubId) };
     if (status) where.status = status;
@@ -728,16 +734,21 @@ router.get('/matches', async (req: ClubScopedRequest, res: Response, next: NextF
       },
     });
     res.json(matches);
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
+    next(err);
+  }
 });
 
 router.post('/matches/:matchId/resolve', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
+    await assertLevelSystem(asString(req.params.clubId));
     const { action, sets } = req.body;
     if (action !== 'VALIDATE' && action !== 'CANCEL') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
     await matchService.resolveDispute(asString(req.params.matchId), asString(req.params.clubId), action, sets);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
     if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
     if (err instanceof Error && err.message === 'MATCH_NOT_DISPUTED') { res.status(409).json({ error: 'MATCH_NOT_DISPUTED' }); return; }
     next(err as Error);
@@ -746,10 +757,12 @@ router.post('/matches/:matchId/resolve', async (req: ClubScopedRequest, res: Res
 
 router.post('/matches/:matchId/void', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
+    await assertLevelSystem(asString(req.params.clubId));
     const reason = typeof req.body.reason === 'string' ? req.body.reason : '';
     await matchService.voidMatch(asString(req.params.matchId), asString(req.params.clubId), req.user!.id, reason);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
     if (err instanceof Error && err.message === 'VALIDATION_ERROR') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
     if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
     if (err instanceof Error && err.message === 'ALREADY_CANCELLED') { res.status(409).json({ error: 'ALREADY_CANCELLED' }); return; }
