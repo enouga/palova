@@ -3,6 +3,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
+import { ReservationService } from '../../services/reservation.service';
 
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
 const token = () => jwt.sign({ id: 'u1', email: 'owner@x.fr' }, process.env.JWT_SECRET!);
@@ -53,6 +54,22 @@ describe('routes admin /reservation-series', () => {
       .set(auth)
       .send({ ...validBody, startDate: '02/06/2026' });
     expect(res.status).toBe(400);
+  });
+
+  it('forwarde les params cours à adminCreateSeries', async () => {
+    const spy = jest.spyOn(ReservationService.prototype, 'adminCreateSeries').mockResolvedValue({ seriesId: 's1', created: 1, skipped: [] } as any);
+    await request(app)
+      .post(`${base}/reservation-series`)
+      .set(auth)
+      .send({
+        resourceId: 'r1', type: 'COACHING', weekday: 2, startLocal: '18:00', durationMin: 60,
+        startDate: '2026-09-01', endDate: '2026-09-15',
+        coachId: 'c1', capacity: 4, lessonKind: 'COLLECTIVE', allowSelfEnroll: false, enrollmentMode: 'SERIES',
+      });
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      lessonParams: expect.objectContaining({ coachId: 'c1', capacity: 4, lessonKind: 'COLLECTIVE', enrollmentMode: 'SERIES' }),
+    }));
+    spy.mockRestore();
   });
 
   it('DELETE /reservation-series/:id → 200, cancelled count', async () => {

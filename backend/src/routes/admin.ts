@@ -361,6 +361,14 @@ router.post('/reservations', async (req: ClubScopedRequest, res: Response, next:
       title:        typeof title === 'string' ? title : undefined,
       memberUserId: typeof memberUserId === 'string' && memberUserId ? memberUserId : undefined,
       price:        price !== undefined && price !== null ? Number(price) : undefined,
+      lessonParams: (req.body.lessonParams && typeof req.body.lessonParams === 'object')
+        ? {
+            coachId: asString(req.body.lessonParams.coachId),
+            capacity: Number(req.body.lessonParams.capacity),
+            lessonKind: req.body.lessonParams.lessonKind,
+            allowSelfEnroll: Boolean(req.body.lessonParams.allowSelfEnroll),
+          }
+        : undefined,
     });
     res.status(201).json(created);
   } catch (err) { handleError(err, res, next); }
@@ -556,6 +564,7 @@ router.delete('/coaches/:id', async (req: ClubScopedRequest, res: Response, next
 router.post('/reservation-series', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { resourceId, title, weekday, startLocal, durationMin, startDate, endDate } = req.body;
+    const { coachId, capacity, lessonKind, allowSelfEnroll, enrollmentMode } = req.body;
     const type = asString(req.body.type);
     if (typeof resourceId !== 'string' || !resourceId) return void res.status(400).json({ error: 'resourceId requis' });
     if (!RESERVATION_TYPES.includes(type as typeof RESERVATION_TYPES[number])) return void res.status(400).json({ error: 'type invalide' });
@@ -576,6 +585,15 @@ router.post('/reservation-series', async (req: ClubScopedRequest, res: Response,
       durationMin: Number(durationMin),
       startDate: asString(startDate),
       endDate: asString(endDate),
+      lessonParams: coachId
+        ? {
+            coachId: asString(coachId),
+            capacity: Number(capacity),
+            lessonKind,
+            allowSelfEnroll: Boolean(allowSelfEnroll),
+            enrollmentMode,
+          }
+        : undefined,
     });
     res.status(201).json(created);
   } catch (err) { handleError(err, res, next); }

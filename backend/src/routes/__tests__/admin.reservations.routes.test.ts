@@ -3,6 +3,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
+import { ReservationService } from '../../services/reservation.service';
 
 const SECRET = process.env.JWT_SECRET!;
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
@@ -51,6 +52,22 @@ describe('POST /api/clubs/:clubId/admin/reservations', () => {
     const res = await request(app).post(url).set('Authorization', `Bearer ${token}`).send(body);
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('SLOT_NOT_AVAILABLE');
+  });
+
+  it('forwarde lessonParams à adminCreateReservation', async () => {
+    asMember(); okResource();
+    const spy = jest.spyOn(ReservationService.prototype, 'adminCreateReservation').mockResolvedValue({ id: 'res1' } as any);
+    await request(app)
+      .post(url)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        resourceId: 'r1', date: '2026-09-01', startTime: '18:00', endTime: '19:00', type: 'COACHING',
+        lessonParams: { coachId: 'c1', capacity: 1, lessonKind: 'INDIVIDUAL', allowSelfEnroll: false },
+      });
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      lessonParams: expect.objectContaining({ coachId: 'c1', capacity: 1, lessonKind: 'INDIVIDUAL' }),
+    }));
+    spy.mockRestore();
   });
 });
 
