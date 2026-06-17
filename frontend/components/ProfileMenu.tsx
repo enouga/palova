@@ -7,14 +7,15 @@ import { Theme } from '@/lib/theme';
 import { useAuth, logout } from '@/lib/useAuth';
 import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { useClub } from '@/lib/ClubProvider';
-import { platformUrl } from '@/lib/clubUrl';
+import { platformUrl, clubUrl } from '@/lib/clubUrl';
 import { packageLabel, isUsable } from '@/lib/packages';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 
 // Icône profil (header) + menu déroulant : identité, soldes prépayés du club courant,
-// liens (page profil, résas, clubs, back-office, superadmin), déconnexion.
+// liens (page profil, clubs, « Espace club » si gérant — visible sur tout hôte, superadmin),
+// déconnexion.
 // L'édition du profil vit sur la page dédiée /me/profile.
 // Ne s'affiche que connecté. `direction="up"` ouvre le panneau vers le haut (pieds de sidebar) ;
 // `align="left"` l'aligne sur le bord gauche du bouton pour qu'il s'étende vers la droite
@@ -74,7 +75,6 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const isMember = membership !== undefined && membership !== null;
   const incomplete = profile != null && (!profile.phone || !profile.sex || (isMember && !membership.membershipNo));
   const soldes = packages.filter((p) => isUsable(p));
-  const managesClub = !!club && managed.some((m) => m.clubId === club.id);
   const avatarSrc = assetUrl(profile?.avatarUrl ?? null);
   // Info-bulle de survol : « Prénom Nom · e-mail » (l'icône reste inchangée, aucune empreinte au repos).
   const who = profile ? `${profile.firstName} ${profile.lastName}`.trim() : '';
@@ -141,9 +141,19 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           {/* Liens */}
           <div style={{ paddingTop: 6 }}>
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
-            <MenuItem th={th} icon="ticket" label="Mes réservations" onClick={() => go('/me/reservations')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
-            {managesClub && <MenuItem th={th} icon="settings" label="Espace club" onClick={() => go('/admin')} />}
+            {/* « Espace club » pour chaque club géré : lien direct /admin si on est déjà sur son
+                sous-domaine, sinon navigation cross-sous-domaine vers le back-office du club. */}
+            {managed.map((m) => {
+              const onCurrentHost = !!club && m.clubId === club.id;
+              return (
+                <MenuItem key={m.clubId} th={th} icon="settings"
+                  label={managed.length > 1 ? `Espace club — ${m.name}` : 'Espace club'}
+                  onClick={onCurrentHost
+                    ? () => go('/admin')
+                    : () => { setOpen(false); window.location.assign(clubUrl(m.slug, '/admin')); }} />
+              );
+            })}
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}
             {installState !== 'hidden' && (
               <MenuItem th={th} icon="home" label="Installer l'application"

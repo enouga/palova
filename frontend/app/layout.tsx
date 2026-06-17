@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 import { permanentRedirect } from 'next/navigation';
 import { Geist, Geist_Mono, Righteous } from 'next/font/google';
@@ -30,6 +30,10 @@ const righteous = Righteous({
 });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// viewport-fit=cover : active env(safe-area-inset-*) sous l'encoche/la barre gestuelle en PWA
+// installée (utilisé par la nav club figée en haut pour ne pas passer sous l'encoche iOS).
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 // L'apple-touch-icon est par club sur un hôte club (iOS ne lit pas le manifest pour
 // l'icône d'accueil et ne supporte pas le SVG) ; le backend gère le repli Palova.

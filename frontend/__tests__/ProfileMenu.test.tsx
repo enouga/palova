@@ -106,7 +106,7 @@ describe('ProfileMenu', () => {
     // Initiales à deux endroits : l'avatar du bouton + l'identité du menu ouvert.
     expect(screen.getAllByText('MB')).toHaveLength(2);
     expect(screen.getByText('Se déconnecter')).toBeInTheDocument();
-    expect(screen.getByText('Mes réservations')).toBeInTheDocument();
+    expect(screen.queryByText('Mes réservations')).not.toBeInTheDocument();
     expect(screen.getByText('Mes clubs')).toBeInTheDocument();
   });
 
@@ -152,13 +152,32 @@ describe('ProfileMenu', () => {
     expect(screen.queryByText('Superadmin')).not.toBeInTheDocument();
   });
 
-  it("lien « Espace club » seulement si gérant du club courant", async () => {
+  it("lien « Espace club » si on gère le club courant", async () => {
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'OWNER' }]);
     wrap();
     openMenu();
     expect(await screen.findByText('Espace club')).toBeInTheDocument();
+  });
+
+  it("lien « Espace club » visible aussi sur l'hôte plateforme dès qu'on gère un club", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: null, club: null, loading: false }; // hôte plateforme
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'ADMIN' }]);
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Espace club')).toBeInTheDocument();
+  });
+
+  it("pas de lien « Espace club » si on ne gère aucun club", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getMyClubs.mockResolvedValue([]); // membre simple, pas gérant
+    wrap();
+    openMenu();
+    await screen.findByText('Mes clubs'); // menu chargé
+    expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
   });
 
   it('Échap et clic extérieur ferment le menu', async () => {

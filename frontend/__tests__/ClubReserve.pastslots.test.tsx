@@ -24,7 +24,6 @@ jest.mock('../lib/api', () => ({
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     getMyClubPackages: jest.fn().mockResolvedValue([]),
-    getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
   },
@@ -53,11 +52,15 @@ describe('ClubReserve — créneaux déjà commencés', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
-  it('masque le créneau dont le début est déjà passé, garde le créneau à venir', async () => {
+  it('affiche tous les créneaux du jour : le créneau à venir est cliquable, le créneau passé est affiché mais non cliquable', async () => {
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
-    // Le créneau à venir s'affiche…
-    expect(await screen.findByText(fmt(future))).toBeInTheDocument();
-    // …et le créneau déjà commencé est absent de la liste.
-    expect(screen.queryByText(fmt(past))).not.toBeInTheDocument();
+    // Le créneau à venir s'affiche et reste réservable (bouton).
+    const futureEl = await screen.findByText(fmt(future));
+    expect(futureEl.closest('button')).not.toBeNull();
+    // Le créneau déjà commencé reste affiché (même graphisme que les indisponibles)
+    // mais n'est pas réservable (pas un bouton).
+    const pastEl = screen.getByText(fmt(past));
+    expect(pastEl).toBeInTheDocument();
+    expect(pastEl.closest('button')).toBeNull();
   });
 });
