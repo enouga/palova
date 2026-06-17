@@ -198,9 +198,9 @@ export function Segmented<T extends string | number>({
           <button key={String(o.value)} onClick={() => onChange(o.value)}
             style={{
               flex: 1, border: 'none', cursor: 'pointer', borderRadius: 10, padding: '10px 6px',
-              fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5,
+              fontFamily: th.fontUI, fontWeight: active ? 700 : 600, fontSize: 14.5,
               background: active ? th.surface : 'transparent',
-              color: active ? th.text : th.textMute,
+              color: th.text,
               boxShadow: active ? th.shadowSoft : 'none', transition: 'all .15s',
             }}>{o.label}</button>
         );
