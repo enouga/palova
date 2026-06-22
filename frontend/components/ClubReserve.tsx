@@ -297,6 +297,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           clubId={club.id}
           requireOnlinePayment={club.requireOnlinePayment}
           requireCardFingerprint={club.requireCardFingerprint}
+          stripeActive={club.stripeAccountStatus === 'ACTIVE'}
           cancellationCutoffHours={club.cancellationCutoffHours}
           refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}
           onClose={() => setBooking(null)}

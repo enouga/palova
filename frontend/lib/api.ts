@@ -143,7 +143,7 @@ export const api = {
   // --- Stripe Intent (joueur) ---
   createStripeIntent: (
     slug: string,
-    body: { reservationId: string; type: 'payment' | 'setup' },
+    body: { reservationId: string; type: 'payment' | 'setup'; payShare?: boolean },
     token: string,
   ) =>
     request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(

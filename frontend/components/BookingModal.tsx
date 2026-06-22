@@ -49,6 +49,8 @@ interface BookingModalProps {
   requireOnlinePayment?: boolean;
   /** Exige une empreinte bancaire (anti-no-show). */
   requireCardFingerprint?: boolean;
+  /** Le compte Stripe Connect du club est ACTIF — le paiement en ligne facultatif est proposable. */
+  stripeActive?: boolean;
   /** Délai d'annulation gratuite du club (heures avant le début) — affichage récap. */
   cancellationCutoffHours?: number;
   /** Remboursement en cas d'annulation dans les délais — affichage récap. */
@@ -87,7 +89,7 @@ const BOOKING_ERRORS: Record<string, string> = {
 
 export default function BookingModal({
   slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], quotaStatus, onClose, onConfirmed,
-  clubId, requireOnlinePayment, requireCardFingerprint, cancellationCutoffHours, refundOnCancelWithinCutoff,
+  clubId, requireOnlinePayment, requireCardFingerprint, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
@@ -95,8 +97,12 @@ export default function BookingModal({
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
-  const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = régler au club
+  const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [stripeStep, setStripeStep]   = useState(false);
+  // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
+  const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
+  // En ligne : régler sa part (par personne) ou le total.
+  const [payAmount, setPayAmount]     = useState<'share' | 'full'>('full');
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
   // Fourchette de niveau d'une partie ouverte : interrupteur + curseur double, mémorisés.
@@ -123,8 +129,18 @@ export default function BookingModal({
 
   // Récap : capacité nominale du terrain (sport + format) → prix par personne (toujours affiché).
   const capacity = capacityFor(sportKey, format);
-  const perPerson = euros(Math.round(totalCents / capacity));
+  const shareCents = Math.round(totalCents / capacity);
+  const perPerson = euros(shareCents);
+  const shareTooSmall = shareCents < 50; // minimum Stripe (0,50 €) → le backend refuse (AMOUNT_TOO_SMALL)
   const cancellationProvided = cancellationCutoffHours !== undefined || refundOnCancelWithinCutoff !== undefined;
+
+  // Le paiement en ligne est-il disponible ? (compte Stripe actif, ou imposé par le club)
+  const onlineAvailable = !!stripeActive || !!requireOnlinePayment;
+  // Cas défensif : le club EXIGE le paiement en ligne mais son compte Stripe n'est pas actif.
+  const onlineRequiredButUnavailable = !!requireOnlinePayment && !stripeActive;
+  // Montant effectif réglé en ligne (part repli sur total si la part est trop faible).
+  const onlineShare = payAmount === 'share' && !shareTooSmall;
+  const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
@@ -177,11 +193,16 @@ export default function BookingModal({
 
   const handleConfirm = async () => {
     if (!reservation) return;
-    // Si paiement/empreinte Stripe requis et pas de package sélectionné → afficher l'étape Stripe
-    if ((requireOnlinePayment || requireCardFingerprint) && !paySource) {
+    // Avenue carnet (prépayé) : confirme avec la source, inchangé.
+    if (paySource) {
+      // (chute dans le confirmReservation ci-dessous)
+    }
+    // Avenue en ligne : étape Stripe (paiement) — ou empreinte requise (setup intent).
+    else if ((payMode === 'online' && onlineAvailable) || requireCardFingerprint) {
       setStripeStep(true);
       return;
     }
+    // Sinon : régler au club (autorisé seulement si le paiement en ligne n'est pas imposé).
     try {
       const confirmed = await api.confirmReservation(
         reservation.id, token,
@@ -357,22 +378,63 @@ export default function BookingModal({
                 <QuotaStatus status={quotaStatus} />
               </div>
             )}
-            {(packages.length > 0 || errorMsg) && (
-              <div style={{ marginTop: 16 }}>
-                {errorMsg && (
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginBottom: 10 }}>{errorMsg}</div>
+            <div style={{ marginTop: 16 }}>
+              {errorMsg && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginBottom: 10 }}>{errorMsg}</div>
+              )}
+
+              {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
+              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>Mode de paiement</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
+                {!requireOnlinePayment && (
+                  <button type="button" onClick={() => { setPayMode('club'); setPaySource(null); }}
+                    style={{ textAlign: 'left', border: `1.5px solid ${(payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                    Régler au club
+                  </button>
                 )}
-                {packages.length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <button type="button" onClick={() => setPaySource(null)}
-                      style={{ border: `1.5px solid ${paySource === null ? th.accent : th.lineStrong}`, background: paySource === null ? th.surface2 : 'transparent', borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                      Régler au club
+
+                {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
+                {onlineAvailable && (
+                  <div style={{ border: `1.5px solid ${(payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
+                    <button type="button" disabled={onlineRequiredButUnavailable}
+                      onClick={() => { setPayMode('online'); setPaySource(null); }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, padding: 0 }}>
+                      Payer en ligne
                     </button>
+                    {onlineRequiredButUnavailable ? (
+                      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                        Paiement en ligne momentanément indisponible — contactez le club.
+                      </div>
+                    ) : (payMode === 'online' && !paySource) && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" disabled={shareTooSmall} onClick={() => setPayAmount('share')}
+                            style={{ flex: 1, border: `1.5px solid ${onlineShare ? th.accent : th.lineStrong}`, background: onlineShare ? th.surface : 'transparent', borderRadius: 10, padding: '8px 6px', cursor: shareTooSmall ? 'default' : 'pointer', opacity: shareTooSmall ? 0.5 : 1, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                            Ma part ({perPerson}€)
+                          </button>
+                          <button type="button" onClick={() => setPayAmount('full')}
+                            style={{ flex: 1, border: `1.5px solid ${!onlineShare ? th.accent : th.lineStrong}`, background: !onlineShare ? th.surface : 'transparent', borderRadius: 10, padding: '8px 6px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                            Total ({totalPrice}€)
+                          </button>
+                        </div>
+                        {shareTooSmall && (
+                          <div style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, marginTop: 6 }}>Ma part trop faible (minimum 0,50 €) — réglez le total.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
+                {packages.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {packages.map((p) => {
                       const ok = canCover(p, totalEuros);
                       return (
                         <button key={p.id} type="button" disabled={!ok} onClick={() => setPaySource(p.id)}
-                          style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '7px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                          style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
                           {packageLabel(p)}
                         </button>
                       );
@@ -380,10 +442,14 @@ export default function BookingModal({
                   </div>
                 )}
               </div>
-            )}
+            </div>
             <div style={{ display: 'flex', gap: 11, marginTop: 22 }}>
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
-              <Btn icon="arrowR" onClick={handleConfirm} style={{ flex: 1 }}>{paySource ? 'Confirmer avec mon solde' : 'Confirmer et payer'}</Btn>
+              <Btn icon="arrowR" onClick={handleConfirm} disabled={!paySource && payMode === 'online' && onlineRequiredButUnavailable} style={{ flex: 1 }}>
+                {paySource ? 'Confirmer avec mon solde'
+                  : (payMode === 'online' && onlineAvailable) ? `Payer ${onlineAmountLabel}`
+                  : 'Confirmer et payer'}
+              </Btn>
             </div>
             {stripeStep && reservation && (
               <div style={{ marginTop: 20, padding: '16px 0 0', borderTop: `1px solid ${th.lineStrong}` }}>
@@ -391,8 +457,9 @@ export default function BookingModal({
                   reservationId={reservation.id}
                   slug={slug ?? ''}
                   clubId={clubId ?? ''}
-                  type={requireOnlinePayment ? 'payment' : 'setup'}
-                  amountLabel={`${totalPrice}€`}
+                  type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
+                  payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
+                  amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
                   token={token}
                   onSuccess={() => {
                     setStripeStep(false);

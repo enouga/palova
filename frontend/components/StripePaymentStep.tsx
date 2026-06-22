@@ -18,6 +18,8 @@ interface Props {
   type: 'payment' | 'setup';
   amountLabel: string;
   token: string;
+  /** Régler uniquement sa part (par personne) plutôt que le total — paiement seulement. */
+  payShare?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -83,7 +85,7 @@ export default function StripePaymentStep(props: Props) {
   useEffect(() => {
     api.createStripeIntent(
       props.slug,
-      { reservationId: props.reservationId, type: props.type },
+      { reservationId: props.reservationId, type: props.type, payShare: props.type === 'payment' ? props.payShare : undefined },
       props.token,
     )
       .then((r) => {
@@ -91,7 +93,7 @@ export default function StripePaymentStep(props: Props) {
         setClientSecret(r.clientSecret);
       })
       .catch(() => setFetchError('Impossible d\'initialiser le paiement.'));
-  }, [props.slug, props.reservationId, props.type, props.token]);
+  }, [props.slug, props.reservationId, props.type, props.token, props.payShare]);
 
   if (fetchError) {
     return (
