@@ -69,6 +69,17 @@ export const api = {
   resendCode: (email: string) =>
     request<{ ok: boolean; devCode?: string }>('/api/auth/resend-code', { method: 'POST', body: JSON.stringify({ email }) }),
 
+  // Mot de passe oublié : demande un code (réponse neutre), puis réinitialise.
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean; devCode?: string }>('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    request<AuthResponse>('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, code, newPassword }) }),
+
+  // Changement de mot de passe par l'utilisateur connecté (fournit l'ancien).
+  changePassword: (currentPassword: string, newPassword: string, token: string) =>
+    request<{ ok: boolean }>('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }, token),
+
   getMyClubs: (token: string) => request<ManagedClub[]>('/api/me/clubs', {}, token),
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),

@@ -387,3 +387,28 @@ export function buildVerificationEmail(code: string, brand: Brand): BuiltEmail {
   ].join('\n');
   return { subject, html, text };
 }
+
+/** Email de réinitialisation de mot de passe : code à 6 chiffres mis en avant. */
+export function buildPasswordResetEmail(code: string, brand: Brand): BuiltEmail {
+  const subject = 'Réinitialisation de votre mot de passe Palova';
+  const introHtml =
+    "<p style=\"margin:0;\">Vous avez demandé à réinitialiser votre mot de passe. Saisissez ce code pour en choisir un nouveau.</p>";
+  const html = renderLayout({
+    brand,
+    preheader: `${subject} — il expire dans 15 minutes.`,
+    heading: 'Réinitialisation du mot de passe 🔒',
+    introHtml,
+    codeBlock: { code, caption: 'Votre code' },
+    footerNote:
+      "Ce code expire dans 15 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email : votre mot de passe reste inchangé.",
+  });
+  const text = [
+    'Réinitialisation de votre mot de passe Palova',
+    '',
+    `Votre code : ${code}`,
+    'Il expire dans 15 minutes.',
+    '',
+    "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email : votre mot de passe reste inchangé.",
+  ].join('\n');
+  return { subject, html, text };
+}

@@ -62,6 +62,14 @@ export default function MyProfilePage() {
   const [savingLicense, setSavingLicense] = useState(false);
   const [savedLicense, setSavedLicense] = useState(false);
 
+  // Mot de passe
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [savedPassword, setSavedPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
   useEffect(() => {
@@ -122,6 +130,28 @@ export default function MyProfilePage() {
       setSavedLicense(true);
     } catch (e) { setError((e as Error).message); }
     finally { setSavingLicense(false); }
+  };
+
+  const PASSWORD_ERR_FR: Record<string, string> = {
+    INVALID_PASSWORD: 'Mot de passe actuel incorrect.',
+    SAME_PASSWORD: 'Le nouveau mot de passe doit être différent de l’actuel.',
+  };
+
+  const changePassword = async () => {
+    if (!token) return;
+    setSavedPassword(false); setPasswordError(null);
+    if (newPassword.length < 8) { setPasswordError('Le mot de passe doit faire au moins 8 caractères.'); return; }
+    if (newPassword !== confirmPassword) { setPasswordError('Les mots de passe ne correspondent pas.'); return; }
+    setSavingPassword(true);
+    try {
+      await api.changePassword(currentPassword, newPassword, token);
+      setSavedPassword(true);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (e) {
+      const msg = (e as Error).message;
+      setPasswordError(PASSWORD_ERR_FR[msg] || msg || 'Une erreur est survenue.');
+    }
+    finally { setSavingPassword(false); }
   };
 
   const handleCalibrate = async (selfLevel: number | null) => {
@@ -311,6 +341,38 @@ export default function MyProfilePage() {
                   onChange={(v) => changeLeaderboard(v === 'oui')}
                   options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
                 />
+              </div>
+            </section>
+
+            {/* Mot de passe */}
+            <section style={card} aria-label="Mot de passe">
+              <div style={cardTitle}>Mot de passe</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={label}>Mot de passe actuel</span>
+                <input type="password" value={currentPassword} autoComplete="current-password"
+                  onChange={(e) => { setCurrentPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                  aria-label="Mot de passe actuel" style={input} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={label}>Nouveau mot de passe</span>
+                <input type="password" value={newPassword} autoComplete="new-password"
+                  onChange={(e) => { setNewPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                  aria-label="Nouveau mot de passe" placeholder="8 caractères minimum" style={input} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={label}>Confirmer le nouveau mot de passe</span>
+                <input type="password" value={confirmPassword} autoComplete="new-password"
+                  onChange={(e) => { setConfirmPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                  aria-label="Confirmer le nouveau mot de passe" style={input} />
+              </div>
+              {passwordError && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 11, padding: '9px 12px' }}>
+                  {passwordError}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={changePassword} disabled={savingPassword} style={primaryBtn(savingPassword)}>Modifier le mot de passe</button>
+                {savedPassword && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Modifié ✓</span>}
               </div>
             </section>
 

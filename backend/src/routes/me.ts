@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import bcrypt from 'bcrypt';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
@@ -256,6 +257,29 @@ router.post('/rating/calibrate', authMiddleware, async (req: AuthRequest, res: R
     if (err instanceof Error && err.message === 'SPORT_NOT_FOUND') return res.status(404).json({ error: 'SPORT_NOT_FOUND' });
     next(err);
   }
+});
+
+// Changement de mot de passe par l'utilisateur connecté (il fournit l'ancien).
+router.post('/password', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || typeof currentPassword !== 'string') {
+      return void res.status(400).json({ error: 'currentPassword et newPassword requis' });
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return void res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum)' });
+    }
+    if (newPassword === currentPassword) {
+      return void res.status(400).json({ error: 'SAME_PASSWORD' });
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { password: true } });
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      return void res.status(401).json({ error: 'INVALID_PASSWORD' });
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: req.user!.id }, data: { password: hashed } });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 export default router;

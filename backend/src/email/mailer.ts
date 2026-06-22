@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import { Brand, PALOVA_BRAND } from './templates/layout';
-import { buildVerificationEmail } from './templates/emails';
+import { buildVerificationEmail, buildPasswordResetEmail } from './templates/emails';
 import { platformAsset } from './links';
 
 const FROM = process.env.SMTP_FROM || 'Palova <noreply@palova.fr>';
@@ -48,5 +48,15 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
     return;
   }
   const mail = buildVerificationEmail(code, PALOVA_BRAND_EMAIL);
+  await transporter.sendMail({ from: FROM, to, subject: mail.subject, html: mail.html, text: mail.text });
+}
+
+export async function sendPasswordResetEmail(to: string, code: string): Promise<void> {
+  if (!transporter) {
+    // Fallback dev : pas d'envoi réel, on logge le code.
+    console.log(`[mailer:dev] Code de réinitialisation pour ${to} : ${code}`);
+    return;
+  }
+  const mail = buildPasswordResetEmail(code, PALOVA_BRAND_EMAIL);
   await transporter.sendMail({ from: FROM, to, subject: mail.subject, html: mail.html, text: mail.text });
 }

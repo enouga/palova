@@ -2,6 +2,7 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
 
@@ -177,5 +178,67 @@ describe('GET /api/me/matches', () => {
     expect(res.status).toBe(200);
     expect(res.body[0].resource).toBeNull();
     expect(res.body[0].ratingAfter).toBe(6.2);
+  });
+});
+
+describe('POST /api/me/password', () => {
+  it('refuse sans token (401)', async () => {
+    const res = await request(app).post('/api/me/password').send({ currentPassword: 'a', newPassword: 'b' });
+    expect(res.status).toBe(401);
+  });
+
+  it('change le mot de passe avec le bon mot de passe actuel', async () => {
+    const current = await bcrypt.hash('oldpass123', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', password: current } as any);
+    let storedHash = '';
+    prismaMock.user.update.mockImplementation((args: any) => { storedHash = args.data.password; return Promise.resolve({}) as any; });
+
+    const res = await request(app).post('/api/me/password').set('Authorization', `Bearer ${token()}`)
+      .send({ currentPassword: 'oldpass123', newPassword: 'newpass456' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u1' } }));
+    // Le nouveau mot de passe est bien stocké hashé (jamais en clair).
+    expect(storedHash).not.toBe('newpass456');
+    expect(await bcrypt.compare('newpass456', storedHash)).toBe(true);
+  });
+
+  it('rejette un mot de passe actuel incorrect (401 INVALID_PASSWORD)', async () => {
+    const current = await bcrypt.hash('oldpass123', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', password: current } as any);
+    const res = await request(app).post('/api/me/password').set('Authorization', `Bearer ${token()}`)
+      .send({ currentPassword: 'wrongpass', newPassword: 'newpass456' });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('INVALID_PASSWORD');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejette un nouveau mot de passe trop court (400)', async () => {
+    const current = await bcrypt.hash('oldpass123', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', password: current } as any);
+    const res = await request(app).post('/api/me/password').set('Authorization', `Bearer ${token()}`)
+      .send({ currentPassword: 'oldpass123', newPassword: 'court' });
+    expect(res.status).toBe(400);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejette un currentPassword non-string sans planter (400)', async () => {
+    const current = await bcrypt.hash('oldpass123', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', password: current } as any);
+    const res = await request(app).post('/api/me/password').set('Authorization', `Bearer ${token()}`)
+      .send({ currentPassword: 12345, newPassword: 'newpass456' });
+    expect(res.status).toBe(400);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejette un nouveau mot de passe identique à l\'actuel (400 SAME_PASSWORD)', async () => {
+    const current = await bcrypt.hash('oldpass123', 10);
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', password: current } as any);
+    const res = await request(app).post('/api/me/password').set('Authorization', `Bearer ${token()}`)
+      .send({ currentPassword: 'oldpass123', newPassword: 'oldpass123' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('SAME_PASSWORD');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 });

@@ -399,6 +399,7 @@ model User {
   partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
   eventRegistrations   EventRegistration[]
   emailVerification EmailVerification?
+  passwordReset  PasswordReset?
   memberPackages MemberPackage[]
   paymentsCreated Payment[] @relation("PaymentsCreated")
   stripeCustomers  ClubStripeCustomer[]
@@ -496,6 +497,22 @@ model EmailVerification {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("email_verifications")
+}
+
+/// Code de réinitialisation de mot de passe à usage unique (mot de passe oublié).
+/// Un par utilisateur ; miroir d'EmailVerification, distinct pour ne pas entrer en
+/// collision avec une vérification d'email en cours.
+model PasswordReset {
+  id         String   @id @default(cuid())
+  userId     String   @unique @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String   @map("code_hash")
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("password_resets")
 }
 
 /// Adhésion d'un joueur à un club : la base du fichier-membres géré par le club.

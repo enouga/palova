@@ -1,11 +1,10 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, AuthResponse } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { setSession } from '@/lib/session';
 import { useClub } from '@/lib/ClubProvider';
-import { clubUrl } from '@/lib/clubUrl';
+import { finishAuth } from '@/lib/postAuth';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
 import { VerifyCodeForm } from '@/components/VerifyCodeForm';
@@ -19,27 +18,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verify, setVerify] = useState<{ email: string; devCode?: string } | null>(null);
-
-  // Routation post-authentification (login réussi OU code validé) selon le rôle.
-  async function finishAuth(auth: AuthResponse) {
-    if (!slug && auth.user?.isSuperAdmin) {
-      setSession(auth.token, null);
-      router.push('/superadmin');
-      return;
-    }
-    const memberships = await api.getMyClubs(auth.token).catch(() => []);
-    if (slug) {
-      await api.joinClub(slug, auth.token).catch(() => {}); // adhésion automatique au club du host
-      const m = memberships.find((x) => x.slug === slug);
-      setSession(auth.token, m?.clubId ?? null);
-      router.push(m ? '/admin' : '/'); // staff du club → back-office, sinon réservation
-    } else {
-      const managed = memberships[0];
-      setSession(auth.token, managed?.clubId ?? null);
-      if (managed) window.location.assign(clubUrl(managed.slug, '/admin'));
-      else router.push('/clubs');
-    }
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -62,7 +40,7 @@ export default function LoginPage() {
         setError(data.error || 'Erreur de connexion');
         return;
       }
-      await finishAuth(data);
+      await finishAuth(data, slug, router);
     } catch {
       setError('Impossible de contacter le serveur');
     } finally {
@@ -81,7 +59,7 @@ export default function LoginPage() {
 
         {verify ? (
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={finishAuth} />
+            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={(a) => finishAuth(a, slug, router)} />
             <button type="button" onClick={() => setVerify(null)}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
               Retour à la connexion
@@ -106,6 +84,10 @@ export default function LoginPage() {
               )}
               <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
               <Field label="Mot de passe" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
+              <button type="button" onClick={() => router.push('/forgot-password')}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, padding: '2px 0', alignSelf: 'flex-end', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                Mot de passe oublié ?
+              </button>
               <div style={{ height: 4 }} />
               <Btn type="submit" full icon="arrowR" disabled={loading}>
                 {loading ? 'Connexion…' : 'Se connecter'}

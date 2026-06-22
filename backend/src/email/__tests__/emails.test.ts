@@ -1,4 +1,4 @@
-import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail, buildRefundEmail } from '../templates/emails';
+import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildPasswordResetEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail, buildRefundEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -174,6 +174,23 @@ describe('buildVerificationEmail', () => {
     const mail = buildVerificationEmail('<x>', palova);
     expect(mail.html).not.toContain('<x>');
     expect(mail.html).toContain('&lt;x&gt;');
+  });
+});
+
+describe('buildPasswordResetEmail', () => {
+  const palova: Brand = { ...PALOVA_BRAND, logoUrl: 'https://palova.fr/icon-192.png' };
+
+  it('met le code en avant dans le sujet, le HTML et le texte de repli', () => {
+    const mail = buildPasswordResetEmail('724193', palova);
+    expect(mail.subject).toContain('mot de passe');
+    expect(mail.html).toContain('724193');
+    expect(mail.html).toContain('15 minutes');
+    expect(mail.text).toContain('724193');
+  });
+
+  it('intègre le logo Palova (URL absolue) dans l en-tête', () => {
+    const mail = buildPasswordResetEmail('000000', palova);
+    expect(mail.html).toContain('https://palova.fr/icon-192.png');
   });
 });
 

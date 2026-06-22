@@ -25,6 +25,7 @@ jest.mock('../lib/api', () => ({
     getMyRating: jest.fn().mockResolvedValue(null),
     getRatingHistory: jest.fn().mockResolvedValue([]),
     calibrateRating: jest.fn(),
+    changePassword: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -50,6 +51,7 @@ describe('Page Mon profil', () => {
     api.getMyClubPackages.mockResolvedValue([]);
     api.updateMyProfile.mockResolvedValue(profile);
     api.uploadMyAvatar.mockResolvedValue({ ...profile, avatarUrl: '/uploads/avatars/u1-2.png' });
+    api.changePassword.mockResolvedValue({ ok: true });
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
@@ -133,5 +135,35 @@ describe('Page Mon profil', () => {
     wrap();
     await screen.findByText('Eric');
     expect(screen.queryByText('Mon niveau padel')).not.toBeInTheDocument();
+  });
+
+  it('changer le mot de passe appelle api.changePassword puis affiche le succès', async () => {
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
+    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'newpass456' } });
+    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'newpass456' } });
+    fireEvent.click(screen.getByText('Modifier le mot de passe'));
+    await waitFor(() => expect(api.changePassword).toHaveBeenCalledWith('oldpass123', 'newpass456', 'abc'));
+    expect(await screen.findByText('Modifié ✓')).toBeInTheDocument();
+  });
+
+  it('refuse si la confirmation ne correspond pas, sans appeler l\'API', async () => {
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
+    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'newpass456' } });
+    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'different' } });
+    fireEvent.click(screen.getByText('Modifier le mot de passe'));
+    expect(await screen.findByText('Les mots de passe ne correspondent pas.')).toBeInTheDocument();
+    expect(api.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('refuse un nouveau mot de passe trop court, sans appeler l\'API', async () => {
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
+    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'court' } });
+    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'court' } });
+    fireEvent.click(screen.getByText('Modifier le mot de passe'));
+    expect(await screen.findByText('Le mot de passe doit faire au moins 8 caractères.')).toBeInTheDocument();
+    expect(api.changePassword).not.toHaveBeenCalled();
   });
 });
