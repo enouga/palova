@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, ClubSummary, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
@@ -9,6 +10,7 @@ import { ClubCard } from '@/components/ClubCard';
 // pour être réutilisé sur /clubs comme sur l'accueil plateforme.
 export function ClubDirectory() {
   const { th } = useTheme();
+  const { token } = useAuth();
   const [sports, setSports] = useState<Sport[]>([]);
   const [clubs, setClubs]   = useState<ClubSummary[]>([]);
   const [q, setQ]           = useState('');
@@ -17,6 +19,14 @@ export function ClubDirectory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { api.getSports().then(setSports).catch(() => setSports([])); }, []);
+
+  // Pré-sélectionne le sport préféré du joueur connecté (modifiable librement ensuite).
+  useEffect(() => {
+    if (!token) return;
+    api.getMyProfile(token).then((p) => {
+      if (p.preferredSport?.key) setSport((cur) => cur || p.preferredSport!.key);
+    }).catch(() => {});
+  }, [token]);
 
   const load = useCallback(async () => {
     setLoading(true);
