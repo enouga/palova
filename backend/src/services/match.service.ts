@@ -6,7 +6,7 @@ import {
   DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
   isProvisional, levelToRating, ratingToLevel,
 } from './rating/level';
-import { notifyMatchPendingConfirmation } from '../email/notifications';
+import { notifyMatchPendingConfirmation, notifyNewMatchComment } from '../email/notifications';
 import { recomputeSportRatings } from './rating/recompute';
 
 const CONFIRM_WINDOW_HOURS = 72;
@@ -115,6 +115,61 @@ export class MatchService {
       data: { confirmation: 'DISPUTED' },
     });
     await prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
+  }
+
+  /** Autorise l'accès au fil d'un match : l'un des 4 joueurs, OU un staff du club. Sinon jette. */
+  private async assertMatchAccess(matchId: string, userId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: { id: true, clubId: true, status: true, players: { select: { userId: true } } },
+    });
+    if (!match) throw new Error('MATCH_NOT_FOUND');
+    const isPlayer = match.players.some((p) => p.userId === userId);
+    if (!isPlayer) {
+      const staff = await prisma.clubMember.findUnique({
+        where: { userId_clubId: { userId, clubId: match.clubId } },
+        select: { role: true },
+      });
+      if (!staff) throw new Error('FORBIDDEN'); // toute adhésion ClubMember = staff (OWNER/ADMIN/STAFF)
+    }
+    return match;
+  }
+
+  /** Fil de discussion d'un match (lecture). `isStaff` qualifie l'AUTEUR de chaque message. */
+  async listComments(matchId: string, userId: string) {
+    const match = await this.assertMatchAccess(matchId, userId);
+    const [comments, staff] = await Promise.all([
+      prisma.matchComment.findMany({
+        where: { matchId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true, userId: true, body: true, createdAt: true,
+          user: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        },
+      }),
+      prisma.clubMember.findMany({ where: { clubId: match.clubId }, select: { userId: true } }),
+    ]);
+    const staffIds = new Set(staff.map((s) => s.userId));
+    return {
+      status: match.status,
+      comments: comments.map((c) => ({
+        id: c.id,
+        body: c.body,
+        createdAt: c.createdAt,
+        isStaff: staffIds.has(c.userId),
+        author: { firstName: c.user.firstName, lastName: c.user.lastName, avatarUrl: c.user.avatarUrl },
+      })),
+    };
+  }
+
+  /** Ajoute un message au fil. Écriture autorisée seulement tant que le match est DISPUTED. */
+  async addComment(matchId: string, userId: string, body: string): Promise<void> {
+    const trimmed = (body ?? '').trim();
+    if (!trimmed || trimmed.length > 1000) throw new Error('VALIDATION_ERROR');
+    const match = await this.assertMatchAccess(matchId, userId);
+    if (match.status !== 'DISPUTED') throw new Error('MATCH_NOT_DISPUTED');
+    await prisma.matchComment.create({ data: { matchId, userId, body: trimmed } });
+    this.safeNotify(() => notifyNewMatchComment(matchId, userId, { isFirst: false }));
   }
 
   /** Finalise tous les matchs PENDING dont le délai de confirmation est passé. Renvoie le nb finalisés. */

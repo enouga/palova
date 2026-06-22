@@ -1,4 +1,8 @@
-jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn() }));
+jest.mock('../../email/notifications', () => ({
+  __esModule: true,
+  notifyMatchPendingConfirmation: jest.fn(),
+  notifyNewMatchComment: jest.fn(),
+}));
 
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
@@ -333,5 +337,70 @@ describe('voidMatch', () => {
     (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
     await service.voidMatch('m1', 'c1', 'staff1', 'score truqué');
     expect(tx.match.findMany).toHaveBeenCalled();
+  });
+});
+
+describe('commentaires de litige', () => {
+  const disputedMatch = {
+    id: 'm1', clubId: 'c1', status: 'DISPUTED',
+    players: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }, { userId: 'u4' }],
+  };
+
+  it('listComments : joueur autorisé, messages triés + isStaff par auteur', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(disputedMatch as any);
+    prismaMock.matchComment.findMany.mockResolvedValue([
+      { id: 'k1', userId: 'u1', body: 'Le score est faux', createdAt: new Date('2026-06-11T10:00:00Z'),
+        user: { firstName: 'Manon', lastName: 'Membre', avatarUrl: null } },
+      { id: 'k2', userId: 's1', body: 'On regarde', createdAt: new Date('2026-06-11T11:00:00Z'),
+        user: { firstName: 'Sam', lastName: 'Staff', avatarUrl: null } },
+    ] as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([{ userId: 's1' }] as any);
+    const res = await service.listComments('m1', 'u1');
+    expect(res.status).toBe('DISPUTED');
+    expect(res.comments).toHaveLength(2);
+    expect(res.comments[0].isStaff).toBe(false);
+    expect(res.comments[1].isStaff).toBe(true);
+    expect(res.comments[1].author.firstName).toBe('Sam');
+  });
+
+  it('assertMatchAccess : staff (non-joueur) autorisé', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(disputedMatch as any);
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'ADMIN' } as any);
+    prismaMock.matchComment.findMany.mockResolvedValue([] as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([{ userId: 's1' }] as any);
+    await expect(service.listComments('m1', 's1')).resolves.toBeDefined();
+  });
+
+  it('assertMatchAccess : tiers (ni joueur ni staff) → FORBIDDEN', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(disputedMatch as any);
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    await expect(service.listComments('m1', 'uX')).rejects.toThrow('FORBIDDEN');
+  });
+
+  it('listComments : match inexistant → MATCH_NOT_FOUND', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(null as any);
+    await expect(service.listComments('mZ', 'u1')).rejects.toThrow('MATCH_NOT_FOUND');
+  });
+
+  it('addComment : joueur écrit sur un match DISPUTED', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(disputedMatch as any);
+    prismaMock.matchComment.create.mockResolvedValue({ id: 'k9' } as any);
+    await service.addComment('m1', 'u2', '  Je conteste aussi  ');
+    expect(prismaMock.matchComment.create).toHaveBeenCalledWith({
+      data: { matchId: 'm1', userId: 'u2', body: 'Je conteste aussi' },
+    });
+  });
+
+  it('addComment : refusé si le match n est pas en litige (lecture seule)', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ ...disputedMatch, status: 'CONFIRMED' } as any);
+    await expect(service.addComment('m1', 'u2', 'trop tard')).rejects.toThrow('MATCH_NOT_DISPUTED');
+  });
+
+  it('addComment : refuse un corps vide', async () => {
+    await expect(service.addComment('m1', 'u2', '   ')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('addComment : refuse un corps > 1000 caractères', async () => {
+    await expect(service.addComment('m1', 'u2', 'x'.repeat(1001))).rejects.toThrow('VALIDATION_ERROR');
   });
 });

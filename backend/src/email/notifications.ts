@@ -567,6 +567,19 @@ export async function notifyLessonPromotion(enrollmentId: string): Promise<void>
   await sendLessonPlayerEmail(enr, 'promoted');
 }
 
+// ---------------------------------------------------------- Commentaires de litige
+
+/**
+ * Prévient les autres participants d'un litige (4 joueurs + staff OWNER/ADMIN/STAFF − l'auteur)
+ * qu'un nouveau message a été posté. Peut lever ; l'appelant enveloppe en best-effort.
+ * (Implémentation complète ajoutée en Task 4 avec le builder email.)
+ */
+export async function notifyNewMatchComment(
+  _matchId: string, _authorUserId: string, _opts: { isFirst: boolean },
+): Promise<void> {
+  // TODO (Task 4): implémenter avec buildMatchCommentEmail
+}
+
 // ---------------------------------------------------------- Confirmation match
 
 /** Transforme [[6,4],[6,3]] → "6-4 / 6-3". */
