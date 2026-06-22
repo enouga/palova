@@ -90,8 +90,12 @@ export const api = {
   getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
   confirmMatch: (matchId: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
-  disputeMatch: (matchId: string, token: string) =>
-    request<{ ok: true }>(`/api/matches/${matchId}/dispute`, { method: 'POST' }, token),
+  disputeMatch: (matchId: string, message: string, token: string) =>
+    request<{ ok: true }>(`/api/matches/${matchId}/dispute`, { method: 'POST', body: JSON.stringify({ message }) }, token),
+  getMatchComments: (matchId: string, token: string) =>
+    request<MatchThread>(`/api/matches/${matchId}/comments`, {}, token),
+  postMatchComment: (matchId: string, body: string, token: string) =>
+    request<{ ok: true }>(`/api/matches/${matchId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }, token),
   getClubMatches: (clubId: string, status: string, token: string) =>
     request<ClubMatch[]>(`/api/clubs/${clubId}/admin/matches?status=${encodeURIComponent(status)}`, {}, token),
   resolveClubMatch: (clubId: string, matchId: string, body: { action: 'VALIDATE' | 'CANCEL'; sets?: [number, number][] }, token: string) =>
@@ -642,6 +646,18 @@ export interface MyMatchPlayer {
   isMe: boolean;
 }
 
+export interface MatchComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  isStaff: boolean;
+  author: { firstName: string; lastName: string; avatarUrl: string | null };
+}
+export interface MatchThread {
+  status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
+  comments: MatchComment[];
+}
+
 export interface MyMatch {
   matchId: string;
   reservationId: string | null;
@@ -653,6 +669,7 @@ export interface MyMatch {
   myConfirmation: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
   ratingAfter: number | null;
   needsMyConfirmation: boolean;
+  commentCount: number;
   club: { name: string };
   sport: { name: string };
   resource: { name: string } | null;
@@ -667,6 +684,7 @@ export interface ClubMatch {
   id: string; status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
   sets: [number, number][]; playedAt: string; winningTeam: number | null; confirmDeadline: string;
   players: ClubMatchPlayer[];
+  commentCount: number;
   cancelledAt?: string | null;
   cancelledReason?: string | null;
 }
