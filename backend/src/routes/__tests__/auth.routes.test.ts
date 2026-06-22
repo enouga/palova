@@ -40,6 +40,41 @@ describe('POST /api/auth/register', () => {
   });
 });
 
+describe('POST /api/auth/register — preferredSportId', () => {
+  it('enregistre le preferredSportId fourni si le sport est publié', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel', published: true } as any);
+    prismaMock.user.findUnique.mockResolvedValue(null as any);
+    prismaMock.user.create.mockResolvedValue({ id: 'u2', email: 'pref@x.fr' } as any);
+    prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+
+    await request(app).post('/api/auth/register').send({
+      email: 'pref@x.fr', password: 'password123', firstName: 'P', lastName: 'Q',
+      preferredSportId: 'sport-padel',
+    });
+
+    expect(prismaMock.user.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ preferredSportId: 'sport-padel' }),
+    }));
+  });
+
+  it('ignore un preferredSportId inconnu et inscrit quand même', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue(null as any);
+    prismaMock.user.findUnique.mockResolvedValue(null as any);
+    prismaMock.user.create.mockResolvedValue({ id: 'u3', email: 'nopref@x.fr' } as any);
+    prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+
+    const res = await request(app).post('/api/auth/register').send({
+      email: 'nopref@x.fr', password: 'password123', firstName: 'N', lastName: 'P',
+      preferredSportId: 'sport-inconnu',
+    });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ preferredSportId: 'sport-inconnu' }),
+    }));
+  });
+});
+
 describe('POST /api/auth/verify-email', () => {
   it('valide le bon code et renvoie un token', async () => {
     const codeHash = await bcrypt.hash('123456', 10);

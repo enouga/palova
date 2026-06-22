@@ -72,7 +72,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
 router.post('/register', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, firstName, lastName, phone } = req.body;
+    const { email, password, firstName, lastName, phone, preferredSportId } = req.body;
     if (!email || !password || !firstName || !lastName) {
       res.status(400).json({ error: 'email, password, firstName, lastName requis' });
       return;
@@ -80,6 +80,13 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     if (typeof password !== 'string' || password.length < 8) {
       res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum)' });
       return;
+    }
+
+    // Validation optionnelle du sport préféré : un id invalide ou non publié est ignoré (non bloquant).
+    let validPreferredSportId: string | null = null;
+    if (typeof preferredSportId === 'string' && preferredSportId) {
+      const sport = await prisma.sport.findUnique({ where: { id: preferredSportId }, select: { id: true, published: true } });
+      if (sport && sport.published) validPreferredSportId = sport.id;
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -92,7 +99,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
     const user = existing
       ? await prisma.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
-      : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null } });
+      : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
 
     const code = await issueCode(user.id, email);
     res.status(201).json({ pendingVerification: true, email, ...(emailDevMode ? { devCode: code } : {}) });
