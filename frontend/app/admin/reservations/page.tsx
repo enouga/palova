@@ -58,8 +58,9 @@ export default function AdminReservationsPage() {
   const [fromHour, setFrom] = useState<number | null>(null);
   const [toHour, setTo]     = useState<number | null>(null);
   const [solderMethod, setSolderMethod] = useState<PaymentMethod>('CASH');
+  const [soldering, setSoldering] = useState<string | null>(null); // id de la résa en cours de solde
   // moyen « Solder » par défaut mémorisé
-  useEffect(() => { const v = typeof window !== 'undefined' ? window.localStorage.getItem('palova:solder-method') : null; if (v) setSolderMethod(v as PaymentMethod); }, []);
+  useEffect(() => { const v = window.localStorage.getItem('palova:solder-method'); if (v) setSolderMethod(v as PaymentMethod); }, []);
   const pickSolder = (m: PaymentMethod) => { setSolderMethod(m); try { window.localStorage.setItem('palova:solder-method', m); } catch { /* stockage indispo */ } };
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
@@ -117,7 +118,7 @@ export default function AdminReservationsPage() {
   const visible = (data?.reservations ?? []).filter((r) =>
     matchesQuery(r, query) &&
     outstandingFilter(outMode, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED') &&
-    (fromHour == null || toHour == null || overlapsHourWindow(r, fromHour, toHour, tz)),
+    ((fromHour == null && toHour == null) || overlapsHourWindow(r, fromHour ?? openH, toHour ?? closeH, tz)),
   );
   const sumDue  = visible.reduce((s, r) => s + dueOf(r), 0);
   const sumPaid = visible.reduce((s, r) => s + toCents(r.paidAmount), 0);
@@ -206,10 +207,10 @@ export default function AdminReservationsPage() {
                   <td style={cell}><span style={statusStyle(r.status)}>{STATUS_LABEL[r.status]}</span></td>
                   <td style={{ ...cell, whiteSpace: 'nowrap' }}>
                     {(() => { const rest = Math.max(0, dueOf(r) - toCents(r.paidAmount)); if (r.status === 'CANCELLED' || rest <= 0) return null;
-                      const solder = async () => { if (!token || !clubId) return; try { setError(null); await api.adminAddPayment(clubId, r.id, { amount: rest / 100, method: solderMethod }, token); await load(); } catch (e) { setError((e as Error).message); } };
+                      const solder = async () => { if (!token || !clubId || soldering) return; setSoldering(r.id); try { setError(null); await api.adminAddPayment(clubId, r.id, { amount: rest / 100, method: solderMethod }, token); await load(); } catch (e) { setError((e as Error).message); } finally { setSoldering(null); } };
                       return (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
-                          <button onClick={solder} title={`Solder ${fmtEuros(rest)} en ${METHOD_LABEL[solderMethod]}`} style={{ border: `1px solid ${th.line}`, background: th.surface2, cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Solder</button>
+                          <button onClick={solder} disabled={soldering === r.id} title={`Solder ${fmtEuros(rest)} en ${METHOD_LABEL[solderMethod]}`} style={{ border: `1px solid ${th.line}`, background: th.surface2, cursor: soldering === r.id ? 'default' : 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text, opacity: soldering === r.id ? 0.6 : 1 }}>Solder</button>
                           <select value={solderMethod} onChange={(e) => pickSolder(e.target.value as PaymentMethod)} title="Moyen par défaut" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '5px 4px', fontSize: 12 }}>
                             {(['CASH', 'CARD', 'TRANSFER'] as PaymentMethod[]).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
                           </select>
