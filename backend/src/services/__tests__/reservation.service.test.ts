@@ -69,7 +69,7 @@ describe('ReservationService', () => {
 
       expect(redisMock.set).toHaveBeenCalledWith(
         expect.stringContaining('lock:resource:court-1:'),
-        'user-1', 'EX', 600, 'NX',
+        'user-1', 'EX', 300, 'NX',
       );
       expect(prismaMock.reservation.create).toHaveBeenCalledWith(
         expect.objectContaining({

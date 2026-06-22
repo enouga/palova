@@ -13,6 +13,7 @@ import { playerCount } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
+import { HOLD_TTL_SECONDS } from './holdWindow';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -25,7 +26,6 @@ interface HoldSlotParams {
   targetLevelMax?: number | null;
 }
 
-const HOLD_TTL_SECONDS = 600; // 10 minutes
 const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
 
 export class ReservationService {
@@ -161,7 +161,7 @@ export class ReservationService {
   }
 
   /**
-   * Compte les résas COURT actives du joueur (CONFIRMED + PENDING < 10 min, même filtre
+   * Compte les résas COURT actives du joueur (CONFIRMED + PENDING < 5 min, même filtre
    * que les conflits) dans une fenêtre, ventilées par classe d'heures. Source unique de
    * vérité partagée par l'enforcement (assertQuota) et l'affichage (getMyQuotaStatus).
    */
@@ -173,7 +173,7 @@ export class ReservationService {
     window: Prisma.DateTimeFilter,
     excludeReservationId?: string,
   ): Promise<{ PEAK: number; OFF_PEAK: number }> {
-    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+    const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
     const existing = await prisma.reservation.findMany({
       where: {
         userId,
@@ -182,7 +182,7 @@ export class ReservationService {
         ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
         OR: [
           { status: 'CONFIRMED' },
-          { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+          { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
         ],
         startTime: window,
       },
@@ -247,14 +247,14 @@ export class ReservationService {
       const { isSubscriber } = await this.assertMembershipAndWindow(resource, userId, startTime);
       await this.assertQuota(resource.club, resource.clubId, userId, isSubscriber, startTime, endTime);
 
-      const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+      const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
 
       const conflicts = await prisma.reservation.count({
         where: {
           resourceId,
           OR: [
             { status: 'CONFIRMED' },
-            { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+            { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
           ],
           startTime: { lt: endTime },
           endTime: { gt: startTime },
@@ -657,14 +657,14 @@ export class ReservationService {
       userId = memberUserId;
     }
 
-    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+    const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
     const created = await prisma.$transaction(async (tx) => {
       const conflicts = await tx.reservation.count({
         where: {
           resourceId,
           OR: [
             { status: 'CONFIRMED' },
-            { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+            { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
           ],
           startTime: { lt: endUtc },
           endTime:   { gt: startUtc },
@@ -757,7 +757,7 @@ export class ReservationService {
     });
 
     const title = params.title?.trim() || null;
-    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MS);
+    const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
 
     const { seriesId, createdList, skipped } = await prisma.$transaction(async (tx) => {
       const series = await tx.reservationSeries.create({
@@ -790,7 +790,7 @@ export class ReservationService {
             resourceId: params.resourceId,
             OR: [
               { status: 'CONFIRMED' },
-              { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+              { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
             ],
             startTime: { lt: occ.endUtc },
             endTime:   { gt: occ.startUtc },

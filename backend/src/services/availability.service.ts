@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
+import { HOLD_EXPIRY_MINUTES } from './holdWindow';
 
 export interface TimeSlot {
   startTime: string;
@@ -10,8 +11,6 @@ export interface TimeSlot {
   price: string;    // prix du créneau (tarif creux si entièrement en heures creuses)
   offPeak: boolean; // true si le créneau est ENTIÈREMENT en heures creuses
 }
-
-const HOLD_EXPIRY_MINUTES = 10;
 
 export class AvailabilityService {
   async getAvailableSlots(
@@ -42,14 +41,14 @@ export class AvailabilityService {
     const open = dayStartLocal.set({ hour: resource.openHour }).toUTC();
     const close = dayStartLocal.set({ hour: resource.closeHour }).toUTC();
 
-    const tenMinutesAgo = new Date(Date.now() - HOLD_EXPIRY_MINUTES * 60 * 1000);
+    const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MINUTES * 60 * 1000);
 
     const activeReservations = await prisma.reservation.findMany({
       where: {
         resourceId,
         OR: [
           { status: 'CONFIRMED' },
-          { status: 'PENDING', createdAt: { gt: tenMinutesAgo } },
+          { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
         ],
         startTime: { lt: close.toJSDate() },
         endTime: { gt: open.toJSDate() },

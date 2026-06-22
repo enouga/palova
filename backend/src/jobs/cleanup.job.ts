@@ -3,8 +3,7 @@ import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { SSEService } from '../services/sse.service';
 import { MatchService } from '../services/match.service';
-
-const HOLD_EXPIRY_MINUTES = 10;
+import { HOLD_EXPIRY_MINUTES } from '../services/holdWindow';
 
 const matchService = new MatchService();
 

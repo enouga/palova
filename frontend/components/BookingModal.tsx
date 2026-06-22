@@ -43,7 +43,7 @@ interface BookingModalProps {
   requireCardFingerprint?: boolean;
 }
 
-const HOLD_SECONDS = 600;
+const HOLD_SECONDS = 300; // miroir de HOLD_TTL_SECONDS (backend)
 
 function formatHour(iso: string, tz = 'Europe/Paris'): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz })
@@ -281,7 +281,7 @@ export default function BookingModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
               <Icon name="clock" size={15} color={th.textMute} />
               <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>
-                Le créneau sera bloqué <b style={{ color: th.text }}>10 minutes</b> le temps de confirmer.
+                Le créneau sera bloqué <b style={{ color: th.text }}>5 minutes</b> le temps de confirmer.
               </span>
             </div>
             <div style={{ display: 'flex', gap: 11 }}>
