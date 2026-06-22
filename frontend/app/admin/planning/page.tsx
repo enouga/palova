@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, PaymentMethod, OffPeakHours, Member, MemberPackage, CreateMemberBody, Coach, LessonStudent } from '@/lib/api';
-import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
+import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent } from '@/lib/api';
 import { capacityLabel } from '@/lib/lessons';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, centsToInput, dueCents, quickAmounts, fmtEuros, paymentDots, validatePaymentAmount } from '@/lib/caisse';
+import { toCents, dueCents, fmtEuros, paymentDots } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { CollectPanel } from '@/components/admin/CollectPanel';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -25,10 +25,6 @@ const TYPE_META: Record<ReservationType, { label: string; color: string }> = {
   EVENT:      { label: 'Événement', color: '#a98bf0' },
 };
 const TYPE_ORDER: ReservationType[] = ['COURT', 'COACHING', 'TOURNAMENT', 'EVENT'];
-// Libellés des méthodes de paiement affichées dans le panneau d'encaissement.
-const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
-// Méthodes encaissables en caisse, en boutons 1-clic (les prépayés ont leurs boutons de package).
-const COUNTER_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'MEMBER', 'OTHER'];
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 // Dimensions de la grille verticale (terrains en colonnes, heures en lignes).
 const HOUR_H = 68, TIME_W = 56, COL_MIN_W = 120, HEADER_H = 52;
@@ -103,13 +99,6 @@ export default function AdminPlanningPage() {
   const [error, setError]         = useState<string | null>(null);
   const [hidden, setHidden]       = useState<Set<ReservationType>>(new Set());
   const [selected, setSelected]   = useState<ClubReservation | null>(null);
-  const [payParticipantId, setPayParticipantId] = useState<string | null>(null); // encaissement attribué à un joueur (null = résa entière)
-  const [payAmount, setPayAmount] = useState('');
-  const [voucherOpen, setVoucherOpen]     = useState(false);
-  const [voucherRef, setVoucherRef]       = useState('');
-  const [voucherIssuer, setVoucherIssuer] = useState('');
-  const [selPackages, setSelPackages]     = useState<MemberPackage[]>([]);
-  const [pkgLoading, setPkgLoading]       = useState(false);
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<string | null>(null);
@@ -135,8 +124,8 @@ export default function AdminPlanningPage() {
   const [coaches, setCoaches]               = useState<Coach[]>([]);
   const [students, setStudents]             = useState<LessonStudent[]>([]);
 
-  const load = useCallback(async () => {
-    if (!token || !clubId) return;
+  const load = useCallback(async (): Promise<ClubReservation[]> => {
+    if (!token || !clubId) return [] as ClubReservation[];
     setLoading(true);
     try {
       setError(null);
@@ -152,9 +141,16 @@ export default function AdminPlanningPage() {
       setRes(resv.reservations);
       setMembers(mem);
       api.adminListCoaches(clubId, token).then((cs) => setCoaches(cs.filter((c) => c.isActive))).catch(() => {});
-    } catch (e) { setError((e as Error).message); }
+      return resv.reservations;
+    } catch (e) { setError((e as Error).message); return [] as ClubReservation[]; }
     finally { setLoading(false); }
   }, [token, clubId, date]);
+
+  // Après une mutation du CollectPanel : recharge et garde la modale à jour.
+  const refreshSelected = useCallback(async (updated?: ClubReservation) => {
+    const list = await load();
+    setSelected((cur) => (updated ?? (cur ? list.find((r) => r.id === cur.id) ?? cur : cur)));
+  }, [load]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
@@ -257,21 +253,7 @@ export default function AdminPlanningPage() {
   );
 
   // --- Actions modale ---
-  const openRes = (rv: ClubReservation) => {
-    setSelected(rv);
-    setConfirmCancel(false);
-    setPayAmount(centsToInput(Math.max(0, dueOf(rv) - toCents(rv.paidAmount))));
-    setVoucherOpen(false);
-    setVoucherRef(''); setVoucherIssuer('');
-    setSelPackages([]);
-    if (rv.user && token && clubId) {
-      setPkgLoading(true);
-      api.adminGetMemberPackages(clubId, rv.user.id, token)
-        .then((pkgs) => setSelPackages(pkgs.filter((p) => isUsable(p))))
-        .catch(() => setSelPackages([]))
-        .finally(() => setPkgLoading(false));
-    }
-  };
+  const openRes = (rv: ClubReservation) => { setSelected(rv); setConfirmCancel(false); setError(null); };
 
   const changeType = async (t: ReservationType) => {
     if (!token || !clubId || !selected) return;
@@ -301,131 +283,6 @@ export default function AdminPlanningPage() {
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
-  };
-
-  // Encaisse le montant saisi avec la méthode cliquée (boutons 1-clic).
-  const payNow = async (method: PaymentMethod) => {
-    if (!token || !clubId || !selected) return;
-    const amount = Number(payAmount);
-    if (!amount || amount <= 0) { setError('Montant invalide.'); return; }
-    setBusy(true);
-    try {
-      setError(null);
-      await api.adminAddPayment(clubId, selected.id, {
-        amount, method,
-        participantId: payParticipantId ?? undefined,
-        voucherRef: method === 'VOUCHER' ? voucherRef.trim() || undefined : undefined,
-        voucherIssuer: method === 'VOUCHER' ? voucherIssuer.trim() || undefined : undefined,
-      }, token);
-      setPayParticipantId(null); setSelected(null); await load();
-    } catch (e) {
-      setError((e as Error).message === 'PAYMENT_EXCEEDS_DUE'
-        ? (payParticipantId ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le prix de la réservation.')
-        : (e as Error).message);
-    }
-    finally { setBusy(false); }
-  };
-
-  // Solde la résa avec un package du joueur (1 entrée de carnet, ou débit du porte-monnaie).
-  const payWithPackage = async (pkg: MemberPackage) => {
-    if (!token || !clubId || !selected) return;
-    const activePart = payParticipantId ? selected.participants?.find((p) => p.id === payParticipantId) : null;
-    const remaining = activePart
-      ? toCents(activePart.outstanding) / 100
-      : Math.max(0, dueOf(selected) - toCents(selected.paidAmount)) / 100;
-    if (remaining <= 0) { setError('Rien à encaisser.'); return; }
-    setBusy(true);
-    try {
-      setError(null);
-      await api.adminAddPayment(clubId, selected.id, {
-        amount: remaining,
-        method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
-        sourcePackageId: pkg.id,
-        participantId: payParticipantId ?? undefined,
-      }, token);
-      setPayParticipantId(null); setSelected(null); await load();
-    } catch (e) {
-      setError((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.' : (e as Error).message);
-    }
-    finally { setBusy(false); }
-  };
-
-  // Associer / changer le joueur de la résa sélectionnée (au comptoir).
-  const assignPlayer = async (m: Member) => {
-    if (!token || !clubId || !selected) return;
-    setBusy(true);
-    try {
-      setError(null);
-      await api.adminAssignReservationMember(clubId, selected.id, m.userId, token);
-      setSelected({ ...selected, user: { id: m.userId, firstName: m.firstName, lastName: m.lastName, email: m.email } });
-      setPkgLoading(true);
-      const pkgs = await api.adminGetMemberPackages(clubId, m.userId, token).catch(() => []);
-      setSelPackages(pkgs.filter((p) => isUsable(p)));
-      setPkgLoading(false);
-      await load();
-    } catch (e) {
-      setError((e as Error).message === 'MEMBER_NOT_FOUND' ? "Ce joueur n'est pas membre actif du club." : (e as Error).message);
-    } finally { setBusy(false); }
-  };
-
-  // Création à la volée + affectation (panneau Encaisser).
-  const createAndAssign = async (body: CreateMemberBody) => {
-    if (!token || !clubId) return { tempPassword: null, existed: false };
-    const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    setMembers(mem);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await assignPlayer(created);
-    return r;
-  };
-
-  // Messages FR pour les erreurs de gestion des participants.
-  const participantErr = (code: string): string => ({
-    TOO_MANY_PLAYERS:          'Terrain complet.',
-    CANNOT_REMOVE_ORGANIZER:   "Impossible de retirer l'organisateur.",
-    RESERVATION_HAS_NO_MEMBER: "Associez d'abord un joueur à la réservation.",
-    PARTNER_DUPLICATE:         'Ce joueur est déjà ajouté.',
-    MEMBER_NOT_FOUND:          "Ce joueur n'est pas membre actif du club.",
-  }[code] ?? code);
-
-  // Ajouter un joueur à la répartition par joueur (panneau Encaisser).
-  const addParticipant = async (m: Member) => {
-    if (!token || !clubId || !selected) return;
-    setBusy(true);
-    try {
-      setError(null);
-      const updated = await api.adminAddReservationParticipant(clubId, selected.id, m.userId, token);
-      setSelected(updated);
-      await load();
-    } catch (e) {
-      setError(participantErr((e as Error).message));
-    } finally { setBusy(false); }
-  };
-
-  // Création à la volée + ajout comme participant.
-  const createAndAddParticipant = async (body: CreateMemberBody) => {
-    if (!token || !clubId) return { tempPassword: null, existed: false };
-    const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    setMembers(mem);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await addParticipant(created);
-    return r;
-  };
-
-  // Retirer un joueur de la répartition (recalcule les parts côté serveur).
-  const removeParticipant = async (participantId: string) => {
-    if (!token || !clubId || !selected) return;
-    setBusy(true);
-    try {
-      setError(null);
-      const updated = await api.adminRemoveReservationParticipant(clubId, selected.id, participantId, token);
-      if (payParticipantId === participantId) setPayParticipantId(null);
-      setSelected(updated);
-      await load();
-    } catch (e) {
-      setError(participantErr((e as Error).message));
-    } finally { setBusy(false); }
   };
 
   // Création à la volée + sélection (formulaire de création de résa).
@@ -700,149 +557,21 @@ export default function AdminPlanningPage() {
               </div>
             </div>
 
-            {/* joueur rattaché à la résa (associer à l'encaissement) */}
             {selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 4 }}>Joueur</div>
-                <PlayerPicker
+                <CollectPanel
+                  reservation={selected}
+                  due={dueOf(selected)}
+                  players={playersOf(selected)}
                   members={members}
-                  value={selected.user ? { firstName: selected.user.firstName, lastName: selected.user.lastName } : null}
-                  onSelect={assignPlayer}
-                  onClear={() => {}}
-                  onCreate={createAndAssign}
-                  placeholder="Cliquez pour voir les membres, ou tapez un nom…"
+                  clubId={clubId!}
+                  token={token!}
+                  onChanged={refreshSelected}
+                  onPaid={() => setSelected(null)}
+                  onError={(msg) => setError(msg)}
                 />
               </div>
             )}
-
-            {/* encaissement rapide */}
-            {selected.status !== 'CANCELLED' && (() => {
-              const players = playersOf(selected);
-              const due = dueOf(selected);
-              const bills = selected.participants ?? [];
-              const activePart = payParticipantId ? bills.find((p) => p.id === payParticipantId) ?? null : null;
-              const maxPayable = activePart ? toCents(activePart.outstanding) : Math.max(0, due - toCents(selected.paidAmount));
-              const amountC = toCents(payAmount);
-              const overCap = due > 0 && amountC > maxPayable;
-              const cannotPay = busy || !validatePaymentAmount(amountC, maxPayable);
-              const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
-              return (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Par joueur</div>
-                  {bills.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {bills.map((p) => {
-                        const rest = toCents(p.outstanding);
-                        const settled = rest <= 0;
-                        const on = payParticipantId === p.id;
-                        const canRemove = !(p.isOrganizer && bills.length > 1); // l'orga ne part pas tant qu'il reste des joueurs
-                        return (
-                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: on ? tint(th.text) : th.surface2, border: `1px solid ${on ? th.text : 'transparent'}` }}>
-                            <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
-                              {p.firstName} {p.lastName}{p.isOrganizer ? <span style={{ color: th.textFaint }}> · orga</span> : null}
-                            </span>
-                            <span style={{ fontFamily: th.fontMono, fontSize: 12.5, color: settled ? SETTLED_COLOR : th.textMute }}>
-                              {fmtEuros(toCents(p.paid))} / {fmtEuros(toCents(p.share))}
-                            </span>
-                            {settled ? (
-                              <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: SETTLED_COLOR }}>réglé</span>
-                            ) : (
-                              <button type="button" disabled={busy}
-                                onClick={() => { setPayParticipantId(p.id); setPayAmount(centsToInput(rest)); }}
-                                style={{ border: `1px solid ${th.line}`, background: th.surface, color: th.text, borderRadius: 8, padding: '5px 10px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-                                Régler
-                              </button>
-                            )}
-                            {canRemove && (
-                              <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur"
-                                onClick={() => removeParticipant(p.id)}
-                                style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {activePart && (
-                    <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.text }}>
-                      Encaissement pour <b>{activePart.firstName} {activePart.lastName}</b> ·{' '}
-                      <button type="button" onClick={() => setPayParticipantId(null)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, textDecoration: 'underline' }}>résa entière</button>
-                    </div>
-                  )}
-                  <div style={{ marginTop: 10 }}>
-                    {bills.length >= players ? (
-                      <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({players} joueurs).</div>
-                    ) : (
-                      <PlayerPicker
-                        members={members}
-                        value={null}
-                        onSelect={addParticipant}
-                        onClear={() => {}}
-                        onCreate={createAndAddParticipant}
-                        placeholder="+ Ajouter un joueur…"
-                      />
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Encaisser €
-                    <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ border: `1px solid ${overCap ? '#ff7a4d' : th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
-                  </label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 3 }}>
-                    {quickAmounts(due, toCents(selected.paidAmount), players).map((q) => (
-                      <button key={q.key} type="button" onClick={() => setPayAmount(centsToInput(q.cents))}
-                        style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-                        {q.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* moyens de paiement : 1 clic = encaissé (Ticket CE demande d'abord sa référence) */}
-                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {COUNTER_METHODS.map((m) => (
-                    <button key={m} type="button" disabled={cannotPay} title={capTitle}
-                      onClick={() => (m === 'VOUCHER' ? setVoucherOpen(true) : payNow(m))}
-                      style={{ border: `1.5px solid ${m === 'VOUCHER' && voucherOpen ? th.text : th.line}`, background: th.surface2, borderRadius: 10, padding: '8px 13px', cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.5 : 1, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                      {METHOD_LABEL[m]}
-                    </button>
-                  ))}
-                </div>
-                {voucherOpen && (
-                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
-                      <input type="text" value={voucherRef} onChange={(e) => setVoucherRef(e.target.value)} placeholder="N° ticket" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 100 }} />
-                    </label>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
-                      <input type="text" value={voucherIssuer} onChange={(e) => setVoucherIssuer(e.target.value)} placeholder="ANCV…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
-                    </label>
-                    <Btn onClick={() => payNow('VOUCHER')} icon="check" disabled={cannotPay}>{busy ? '…' : 'Valider Ticket CE'}</Btn>
-                    <button type="button" onClick={() => setVoucherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
-                  </div>
-                )}
-                {selPackages.length > 0 ? (
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {selPackages.map((p) => {
-                      const remaining = Math.max(0, Number(selected.totalPrice) - Number(selected.paidAmount));
-                      const ok = canCover(p, remaining);
-                      return (
-                        <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
-                          title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
-                          style={{ border: `1.5px solid ${th.line}`, background: th.surface2, borderRadius: 10, padding: '7px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                          {packageLabel(p)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (!pkgLoading && (() => {
-                  const msg = prepaidHint(!!selected.user, selPackages.length, maxPayable);
-                  return msg ? (
-                    <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div>
-                  ) : null;
-                })())}
-              </div>
-              );
-            })()}
 
             {/* élèves (cours) */}
             {selected.lesson?.id && selected.status !== 'CANCELLED' && (
