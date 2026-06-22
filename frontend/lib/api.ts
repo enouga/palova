@@ -395,7 +395,7 @@ export const api = {
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
 
-  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean }, token: string) =>
+  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; preferredSportId?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
   // --- Niveau Glicko-2 ---
@@ -901,6 +901,7 @@ export interface RegisterBody {
   firstName: string;
   lastName: string;
   phone?: string;
+  preferredSportId?: string;
 }
 
 export interface AuthResponse {
@@ -1362,6 +1363,7 @@ export interface MyProfile {
   locale: string | null;
   isSuperAdmin: boolean;
   showInLeaderboard: boolean;
+  preferredSport: { id: string; key: string; name: string } | null;
 }
 
 export interface MyRating {
