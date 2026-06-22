@@ -83,3 +83,23 @@ describe('getLevelsForUsers', () => {
     expect(map).toEqual({});
   });
 });
+
+describe('getLevelsBySport', () => {
+  it('getLevelsBySport mappe les niveaux par (userId, sportKey)', async () => {
+    prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }, { id: 'sport-tennis', key: 'tennis' }] as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'u1', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
+      { userId: 'u1', sportId: 'sport-tennis', displayLevel: 6, isProvisional: true },
+    ] as any);
+    const map = await service.getLevelsBySport([
+      { userId: 'u1', sportKey: 'padel' }, { userId: 'u1', sportKey: 'tennis' },
+    ]);
+    expect(map['u1:padel'].level).toBe(4);
+    expect(map['u1:tennis'].level).toBe(6);
+    expect(map['u1:tennis'].isProvisional).toBe(true);
+  });
+
+  it('getLevelsBySport renvoie {} pour une liste vide', async () => {
+    expect(await service.getLevelsBySport([])).toEqual({});
+  });
+});

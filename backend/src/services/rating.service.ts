@@ -78,4 +78,23 @@ export class RatingService {
     for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
     return map;
   }
+
+  /** Niveaux d'un lot de paires (userId, sportKey). Clé de retour : `${userId}:${sportKey}`. Un seul findMany. */
+  async getLevelsBySport(pairs: { userId: string; sportKey: string }[]): Promise<Record<string, UserLevel>> {
+    if (pairs.length === 0) return {};
+    const sportKeys = [...new Set(pairs.map((p) => p.sportKey))];
+    const sports = await prisma.sport.findMany({ where: { key: { in: sportKeys } }, select: { id: true, key: true } });
+    const keyById = new Map(sports.map((s) => [s.id, s.key]));
+    const userIds = [...new Set(pairs.map((p) => p.userId))];
+    const rows = await prisma.playerRating.findMany({
+      where: { sportId: { in: sports.map((s) => s.id) }, userId: { in: userIds } },
+      select: { userId: true, sportId: true, displayLevel: true, isProvisional: true },
+    });
+    const map: Record<string, UserLevel> = {};
+    for (const r of rows) {
+      const key = keyById.get(r.sportId);
+      if (key) map[`${r.userId}:${key}`] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+    }
+    return map;
+  }
 }
