@@ -52,6 +52,8 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
       ? (side === 0 ? [Math.max(0, Math.min(7, s[0] + delta)), s[1]] : [s[0], Math.max(0, Math.min(7, s[1] + delta))]) as SetScore
       : s)));
 
+  const removeSet = (i: number) => setSets((prev) => prev.filter((_, idx) => idx !== i));
+
   const teamFull = (t: 1 | 2, userId: string) => (t === 1 ? t1 : t2).length >= 2 && team[userId] !== t;
 
   const save = async () => {
@@ -115,6 +117,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
             <span className="w-[92px] text-center text-xs font-semibold" style={{ color: TEAM_COLORS[1] }}>Éq. 1</span>
             <span className="w-[92px] text-center text-xs font-semibold" style={{ color: TEAM_COLORS[2] }}>Éq. 2</span>
           </div>
+          <span className="w-6" aria-hidden="true" />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -133,6 +136,12 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
                   );
                 })}
               </div>
+              <span className="flex w-6 justify-center">
+                {sets.length > 1 && (
+                  <button type="button" data-testid={`set${i}-remove`} aria-label={`Retirer le set ${i + 1}`}
+                    onClick={() => removeSet(i)} className="text-base leading-none" style={{ color: th.textMute }}>×</button>
+                )}
+              </span>
             </div>
           ))}
         </div>

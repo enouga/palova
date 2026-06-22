@@ -99,3 +99,14 @@ it('pas de badge vainqueur si les sets sont à égalité (1 set chacun)', () => 
   for (let i = 0; i < 6; i++) fireEvent.click(screen.getByTestId('set1-team2-plus'));
   expect(screen.queryByText(/gagne/)).toBeNull();
 });
+
+it('permet de retirer un set ajouté (pas de bouton retirer avec un seul set)', () => {
+  renderModal();
+  expect(screen.queryByTestId('set0-remove')).toBeNull();
+  fireEvent.click(screen.getByText('+ Ajouter un set'));
+  expect(screen.getByTestId('set0-remove')).toBeInTheDocument();
+  expect(screen.getByTestId('set1-remove')).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('set1-remove'));
+  expect(screen.queryByTestId('set1-remove')).toBeNull();
+  expect(screen.queryByTestId('set0-remove')).toBeNull();
+});
