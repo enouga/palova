@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { ClubPageKind } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { ClubService } from '../services/club.service';
 import { ClubPageService } from '../services/clubPage.service';
 import { AvailabilityService } from '../services/availability.service';
@@ -178,7 +179,7 @@ router.get('/:slug/members/search', authMiddleware, async (req: AuthRequest, res
 // Classement des joueurs du club par niveau (réservé aux membres ; opt-in pour y figurer).
 router.get('/:slug/leaderboard', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    const sport = await resolvePreferredSportKey(req.user!.id, req.query.sport);
     res.json(await clubService.clubLeaderboard(asString(req.params.slug), req.user!.id, sport));
   } catch (err) { handleError(err, res, next); }
 });
