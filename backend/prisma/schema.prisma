@@ -391,6 +391,7 @@ model User {
   reservationParticipations ReservationParticipant[]
   playerRatings   PlayerRating[]
   matchPlayers    MatchPlayer[]
+  matchComments   MatchComment[]
   createdMatches  Match[]       @relation("MatchCreator")
   cancelledMatches Match[]      @relation("MatchCancelledBy")
   staffRoles      ClubMember[]
@@ -459,6 +460,7 @@ model Match {
   creator     User          @relation("MatchCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   cancelledBy User?         @relation("MatchCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   players     MatchPlayer[]
+  comments    MatchComment[]
 
   @@index([clubId, status, playedAt])
   @@index([status, confirmDeadline])
@@ -483,6 +485,21 @@ model MatchPlayer {
   @@unique([matchId, userId])
   @@index([userId])
   @@map("match_players")
+}
+
+/// Message d'un fil de discussion attaché à un match (litige). 4 joueurs + staff.
+model MatchComment {
+  id        String   @id @default(cuid())
+  matchId   String   @map("match_id")
+  userId    String   @map("user_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@map("match_comments")
 }
 
 /// Code de validation d'email à usage unique (inscription). Un par utilisateur non vérifié.
