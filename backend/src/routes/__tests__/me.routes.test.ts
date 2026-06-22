@@ -118,3 +118,63 @@ describe('POST /api/me/avatar', () => {
     expect(fs.existsSync(path.join(AVATARS_DIR, oldName))).toBe(false);
   });
 });
+
+describe('GET /api/me/matches', () => {
+  it('renvoie joueurs, club, sport, terrain et isMe', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      {
+        confirmation: 'PENDING', team: 2, ratingAfter: null,
+        match: {
+          id: 'm1', status: 'PENDING', sets: [[6, 4], [6, 3]],
+          playedAt: new Date('2026-06-20T16:30:00Z'), winningTeam: 1,
+          confirmDeadline: new Date('2026-06-23T16:30:00Z'), reservationId: 'r1',
+          club: { name: 'Padel Arena Paris' },
+          sport: { name: 'Padel' },
+          reservation: { resource: { name: 'Court 2' } },
+          players: [
+            { userId: 'u1', team: 2, user: { firstName: 'Eric', lastName: 'Nougayrede' } },
+            { userId: 'u2', team: 2, user: { firstName: 'Marie', lastName: 'Durand' } },
+            { userId: 'u3', team: 1, user: { firstName: 'Paul', lastName: 'Roy' } },
+            { userId: 'u4', team: 1, user: { firstName: 'Lea', lastName: 'Martin' } },
+          ],
+        },
+      },
+    ] as any);
+    const res = await request(app).get('/api/me/matches').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toEqual(expect.objectContaining({
+      matchId: 'm1',
+      club: { name: 'Padel Arena Paris' },
+      sport: { name: 'Padel' },
+      resource: { name: 'Court 2' },
+    }));
+    expect(res.body[0].players).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: 'u1', team: 2, firstName: 'Eric', lastName: 'Nougayrede', isMe: true }),
+      expect.objectContaining({ userId: 'u2', team: 2, firstName: 'Marie', lastName: 'Durand', isMe: false }),
+    ]));
+  });
+
+  it('resource = null si le match n a pas de réservation', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      {
+        confirmation: 'CONFIRMED', team: 1, ratingAfter: 6.2,
+        match: {
+          id: 'm2', status: 'CONFIRMED', sets: [[6, 0], [6, 0]],
+          playedAt: new Date('2026-06-15T10:00:00Z'), winningTeam: 1,
+          confirmDeadline: new Date('2026-06-18T10:00:00Z'), reservationId: null,
+          club: { name: 'Padel Arena Paris' }, sport: { name: 'Padel' },
+          reservation: null,
+          players: [
+            { userId: 'u1', team: 1, user: { firstName: 'Eric', lastName: 'N' } },
+            { userId: 'u2', team: 1, user: { firstName: 'A', lastName: 'B' } },
+            { userId: 'u3', team: 2, user: { firstName: 'C', lastName: 'D' } },
+            { userId: 'u4', team: 2, user: { firstName: 'E', lastName: 'F' } },
+          ],
+        },
+      },
+    ] as any);
+    const res = await request(app).get('/api/me/matches').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body[0].resource).toBeNull();
+  });
+});

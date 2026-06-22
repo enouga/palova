@@ -196,19 +196,37 @@ router.get('/rating', authMiddleware, async (req: AuthRequest, res: Response, ne
 // Historique des matchs du joueur connecté.
 router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const meId = req.user!.id;
     const rows = await prisma.matchPlayer.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: meId },
       orderBy: { match: { playedAt: 'desc' } },
       select: {
         confirmation: true, team: true, ratingAfter: true,
-        match: { select: { id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true, reservationId: true } },
+        match: {
+          select: {
+            id: true, status: true, sets: true, playedAt: true, winningTeam: true,
+            confirmDeadline: true, reservationId: true,
+            club: { select: { name: true } },
+            sport: { select: { name: true } },
+            reservation: { select: { resource: { select: { name: true } } } },
+            players: { select: { userId: true, team: true, user: { select: { firstName: true, lastName: true } } } },
+          },
+        },
       },
     });
     res.json(rows.map((r) => ({
       matchId: r.match.id, status: r.match.status, sets: r.match.sets, playedAt: r.match.playedAt,
       winningTeam: r.match.winningTeam, myTeam: r.team, myConfirmation: r.confirmation,
+      ratingAfter: r.ratingAfter,
       needsMyConfirmation: r.match.status === 'PENDING' && r.confirmation === 'PENDING',
       reservationId: r.match.reservationId,
+      club: { name: r.match.club.name },
+      sport: { name: r.match.sport.name },
+      resource: r.match.reservation?.resource ? { name: r.match.reservation.resource.name } : null,
+      players: r.match.players.map((p) => ({
+        userId: p.userId, team: p.team, firstName: p.user.firstName, lastName: p.user.lastName,
+        isMe: p.userId === meId,
+      })),
     })));
   } catch (err) { next(err); }
 });
