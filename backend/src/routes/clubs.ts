@@ -275,15 +275,13 @@ router.post('/:slug/stripe/intent', authMiddleware, async (req: AuthRequest, res
     if (type === 'payment') {
       // « Payer ma part » : on n'encaisse en ligne que la part par personne
       // (total ÷ capacité nominale du terrain) ; le reste devient un dû au club.
-      const format = typeof reservation.resource.attributes === 'object' && reservation.resource.attributes
-        ? (reservation.resource.attributes as any).format
-        : undefined;
+      const format = (reservation.resource.attributes as { format?: string } | null)?.format;
       const sportKey = reservation.resource.clubSport.sport.key;
       const capacity = capacityFor(sportKey, format);
       const totalCents = Math.round(Number(reservation.totalPrice) * 100);
       const shareCents = Math.round(totalCents / capacity);
       const amountCents = payShare ? shareCents : totalCents;
-      if (amountCents < 50) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
+      if (amountCents < 50) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' }); // minimum Stripe : 0,50 €
       const result = await svc.createPaymentIntent({
         clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId), amountCents,
       });
