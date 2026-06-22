@@ -333,10 +333,11 @@ model ClubSport {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  club      Club       @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  sport     Sport      @relation(fields: [sportId], references: [id], onDelete: Restrict)
-  resources Resource[]
+  club       Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sport      Sport       @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  resources  Resource[]
   tournaments Tournament[]
+  clubEvents ClubEvent[]
 
   @@unique([clubId, sportId])
   @@index([clubId])
@@ -880,7 +881,10 @@ model ClubEvent {
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
+  clubSportId   String?             @map("club_sport_id")
+
   club          Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubSport     ClubSport?          @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
   registrations EventRegistration[]
 
   @@index([clubId, status, startTime])
