@@ -182,4 +182,44 @@ describe('Page Mon profil', () => {
       expect.objectContaining({ preferredSportId: 'sport-tennis' }), expect.any(String),
     ));
   });
+
+  it('niveau par sport : changer de sport recharge le rating', async () => {
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
+    ]);
+    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } });
+    api.getMyRating.mockResolvedValue({ level: 3.5, calibrated: false, gamesPlayed: 0, tier: 'INTERMEDIATE', sport: 'padel' });
+    api.getRatingHistory.mockResolvedValue([]);
+    wrap();
+    // Le sélecteur de la section niveau doit apparaître
+    const sel = await screen.findByLabelText(/sport du niveau/i);
+    expect(sel).toBeInTheDocument();
+    // Initialement il est sur 'padel' (sport préféré)
+    expect(sel).toHaveValue('padel');
+    // Changer vers tennis
+    fireEvent.change(sel, { target: { value: 'tennis' } });
+    await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'tennis'));
+    await waitFor(() => expect(api.getRatingHistory).toHaveBeenCalledWith(expect.any(String), 'tennis'));
+  });
+
+  it('niveau par sport : le calibrage utilise le sport sélectionné', async () => {
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
+    ]);
+    // getMyRating retourne null → LevelCalibration s'affiche
+    api.getMyRating.mockResolvedValue(null);
+    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } });
+    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, gamesPlayed: 0, tier: 'UPPER_INTERMEDIATE', sport: 'tennis' });
+    wrap();
+    // Changer le sport du niveau vers tennis
+    const sel = await screen.findByLabelText(/sport du niveau/i);
+    fireEvent.change(sel, { target: { value: 'tennis' } });
+    // Attendre que le LevelCalibration soit visible (rating null → calibration)
+    // Cliquer sur Passer (onSkip) pour déclencher calibrateRating(null, token, 'tennis')
+    const skipBtn = await screen.findByRole('button', { name: /passer|skip/i });
+    fireEvent.click(skipBtn);
+    await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'tennis'));
+  });
 });

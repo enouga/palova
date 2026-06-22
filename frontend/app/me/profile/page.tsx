@@ -55,6 +55,8 @@ export default function MyProfilePage() {
   const [history, setHistory] = useState<RatingPoint[]>([]);
   const [calibrating, setCalibrating] = useState(false);
   const [ratingBusy, setRatingBusy] = useState(false);
+  // Sport sélectionné pour la section niveau (distinct du sport préféré identité)
+  const [ratingSport, setRatingSport] = useState<string>('padel');
 
   // Sports disponibles (pour le sélecteur de sport préféré)
   const [sports, setSports] = useState<Sport[]>([]);
@@ -87,8 +89,8 @@ export default function MyProfilePage() {
         setPhone(p.phone ?? '');
         setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
         setSex(p.sex);
-        api.getMyRating(token).then(setRating).catch(() => {});
-        api.getRatingHistory(token).then(setHistory).catch(() => {});
+        // Initialiser le sport du niveau sur le sport préféré
+        if (p.preferredSport?.key) setRatingSport(p.preferredSport.key);
         if (slug) {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
@@ -98,6 +100,14 @@ export default function MyProfilePage() {
       finally { setLoading(false); }
     })();
   }, [token, slug]);
+
+  // Charger rating + historique quand le token ou le sport du niveau change
+  useEffect(() => {
+    if (!token) return;
+    api.getMyRating(token, ratingSport).then(setRating).catch(() => {});
+    api.getRatingHistory(token, ratingSport).then(setHistory).catch(() => {});
+    setCalibrating(false);
+  }, [token, ratingSport]);
 
   const saveInfo = async () => {
     if (!token) return;
@@ -170,7 +180,7 @@ export default function MyProfilePage() {
     if (!token) return;
     setRatingBusy(true);
     try {
-      const r = await api.calibrateRating(selfLevel, token);
+      const r = await api.calibrateRating(selfLevel, token, ratingSport);
       setRating(r);
       setCalibrating(false);
     } finally {
@@ -281,10 +291,24 @@ export default function MyProfilePage() {
               </div>
             </section>
 
-            {/* Niveau padel — masqué si le club a désactivé le système de niveau */}
+            {/* Niveau — masqué si le club a désactivé le système de niveau */}
             {club?.levelSystemEnabled !== false && (
               <section style={card} aria-label="Mon niveau padel">
-                <div style={cardTitle}>Mon niveau padel</div>
+                <div style={cardTitle}>Mon niveau</div>
+                {sports.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label htmlFor="rating-sport" style={label}>Sport du niveau</label>
+                    <select
+                      id="rating-sport"
+                      value={ratingSport}
+                      onChange={(e) => setRatingSport(e.target.value)}
+                      style={{ ...input, cursor: 'pointer' }}
+                      aria-label="Sport du niveau"
+                    >
+                      {sports.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 {rating && !calibrating ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
