@@ -31,7 +31,7 @@ interface BookingModalProps {
   slug?: string;
   /** Nombre max de joueurs du terrain (single = 2, double = 4) — plafonne les partenaires. */
   maxPlayers?: number;
-  /** Clé du sport (padel, tennis…) — capacité nominale + contexte au récap. */
+  /** Clé du sport (padel, tennis…) — capacité nominale du terrain. */
   sportKey?: string;
   /** Format du terrain (single/double) — badge au récap. */
   format?: string;
@@ -219,10 +219,10 @@ export default function BookingModal({
           <>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 52, lineHeight: 1, color: th.text, letterSpacing: -1 }}>{totalPrice}€</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durLabel}{slot.offPeak ? ' · heures creuses' : ''}</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>total</span>
             </div>
             <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
-              {/* Type de court : nom + badge Single/Double + sport */}
+              {/* Type de court : nom + badge Single/Double */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
                 <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Type de court</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
