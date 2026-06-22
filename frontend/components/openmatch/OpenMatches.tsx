@@ -186,6 +186,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           reservationId={recordingFor.id}
           players={recordingFor.players.map(({ userId, firstName, lastName, avatarUrl }) => ({ userId, firstName, lastName, avatarUrl }))}
           token={token}
+          context={{ whenIso: recordingFor.startTime, tz: club.timezone, courtName: recordingFor.resourceName }}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); load(); }}
         />

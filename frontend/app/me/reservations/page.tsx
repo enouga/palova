@@ -275,6 +275,7 @@ export default function MyReservationsPage() {
           reservationId={recordingFor.id}
           players={recordingFor.participants ?? []}
           token={token}
+          context={{ whenIso: recordingFor.startTime, tz: recordingFor.resource.club.timezone, courtName: recordingFor.resource.name }}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); api.getMyMatches(token).then(setMatches).catch(() => {}); }}
         />
