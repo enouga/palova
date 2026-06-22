@@ -45,7 +45,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal
 }
 
 describe('BookingModal', () => {
-  beforeEach(() => { jest.clearAllMocks(); mockClub = null; });
+  beforeEach(() => { jest.clearAllMocks(); mockClub = null; localStorage.clear(); });
 
   it('appelle holdSlot et affiche le countdown après clic Pré-réserver', async () => {
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
@@ -164,5 +164,30 @@ describe('BookingModal', () => {
       { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
       'jwt-token',
     ));
+  });
+
+  it('getMyRating est appelé avec le sportKey du terrain (pas de padel forcé)', async () => {
+    mockClub = { levelSystemEnabled: true };
+    // Rendu avec sportKey='tennis' et slug pour déclencher l'effet partie ouverte
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
+    // Basculer en partie ouverte pour déclencher l'useEffect niveau
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+
+    await waitFor(() =>
+      expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'tennis')
+    );
+  });
+
+  it('getMyRating sans sportKey n ajoute pas de sport dans l URL (sport optionnel)', async () => {
+    mockClub = { levelSystemEnabled: true };
+    // Rendu SANS sportKey → le correctif A doit appeler getMyRating(token) sans 2e arg
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+
+    await waitFor(() => expect(api.getMyRating).toHaveBeenCalled());
+    // getMyRating ne doit PAS avoir reçu 'padel' en 2e argument
+    const calls = (api.getMyRating as jest.Mock).mock.calls;
+    const sportArgs = calls.map((c: unknown[]) => c[1]);
+    expect(sportArgs.every((s: unknown) => s === undefined)).toBe(true);
   });
 });

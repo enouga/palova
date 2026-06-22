@@ -399,14 +399,14 @@ export const api = {
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
   // --- Niveau Glicko-2 ---
-  getMyRating: (token: string, sport = 'padel') =>
-    request<MyRating | null>(`/api/me/rating?sport=${encodeURIComponent(sport)}`, {}, token),
+  getMyRating: (token: string, sport?: string) =>
+    request<MyRating | null>(`/api/me/rating${sport ? `?sport=${encodeURIComponent(sport)}` : ''}`, {}, token),
 
-  calibrateRating: (selfLevel: number | null, token: string, sport = 'padel') =>
-    request<MyRating>('/api/me/rating/calibrate', { method: 'POST', body: JSON.stringify({ sport, selfLevel }) }, token),
+  calibrateRating: (selfLevel: number | null, token: string, sport?: string) =>
+    request<MyRating>('/api/me/rating/calibrate', { method: 'POST', body: JSON.stringify({ selfLevel, ...(sport ? { sport } : {}) }) }, token),
 
-  getRatingHistory: (token: string, sport = 'padel') =>
-    request<RatingPoint[]>(`/api/me/rating/history?sport=${encodeURIComponent(sport)}`, {}, token),
+  getRatingHistory: (token: string, sport?: string) =>
+    request<RatingPoint[]>(`/api/me/rating/history${sport ? `?sport=${encodeURIComponent(sport)}` : ''}`, {}, token),
 
   getClubLeaderboard: (slug: string, token: string, sport = 'padel') =>
     request<ClubLeaderboard>(`/api/clubs/${encodeURIComponent(slug)}/leaderboard?sport=${encodeURIComponent(sport)}`, {}, token),

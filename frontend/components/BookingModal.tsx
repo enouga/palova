@@ -160,7 +160,7 @@ export default function BookingModal({
     if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
     if (!token) return;
     if (pref) return; // choix mémorisé prioritaire : pas besoin du niveau pour le défaut
-    api.getMyRating(token).then((r) => {
+    api.getMyRating(token, sportKey).then((r) => {
       const lvl = r?.level ?? null;
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
