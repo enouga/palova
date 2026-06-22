@@ -69,3 +69,32 @@ describe('GET /api/me/rating/history', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('GET /api/me/rating — sport préféré', () => {
+  it('sans ?sport utilise le sport préféré du joueur', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ preferredSport: { key: 'tennis' } } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
+    prismaMock.playerRating.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/api/me/rating').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'tennis' } }));
+  });
+
+  it('sans préférence retombe sur padel', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ preferredSport: null } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/api/me/rating').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'padel' } }));
+  });
+
+  it('respecte un ?sport explicite sans consulter les préférences', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findUnique.mockResolvedValue(null);
+    await request(app).get('/api/me/rating?sport=padel').set('Authorization', `Bearer ${token()}`);
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'padel' } }));
+    // user.findUnique NE doit PAS avoir été appelé pour résoudre le sport préféré
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+});

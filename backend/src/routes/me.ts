@@ -10,6 +10,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { RatingService } from '../services/rating.service';
+import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 
 const router = Router();
@@ -194,10 +195,10 @@ router.get('/lessons', authMiddleware, async (req: AuthRequest, res: Response, n
   catch (err) { next(err); }
 });
 
-// Niveau du joueur connecté pour un sport (défaut padel). null = pas encore calibré.
+// Niveau du joueur connecté pour un sport (défaut = sport préféré du joueur, sinon padel).
 router.get('/rating', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    const sport = await resolvePreferredSportKey(req.user!.id, req.query.sport);
     res.json(await ratingService.getForDisplay(req.user!.id, sport));
   } catch (err) {
     if (err instanceof Error && err.message === 'SPORT_NOT_FOUND') return res.status(404).json({ error: 'SPORT_NOT_FOUND' });
@@ -248,7 +249,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
 // Historique de progression du niveau (snapshots ratingAfter par match confirmé).
 router.get('/rating/history', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const sport = typeof req.query.sport === 'string' ? req.query.sport : 'padel';
+    const sport = await resolvePreferredSportKey(req.user!.id, req.query.sport);
     const rows = await prisma.matchPlayer.findMany({
       where: { userId: req.user!.id, ratingAfter: { not: null }, match: { sport: { key: sport }, status: 'CONFIRMED' } },
       orderBy: { match: { playedAt: 'asc' } },
@@ -261,7 +262,7 @@ router.get('/rating/history', authMiddleware, async (req: AuthRequest, res: Resp
 // Auto-évaluation du niveau. selfLevel 1–8, ou null pour « passer » (départ neutre).
 router.post('/rating/calibrate', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const sport = typeof req.body.sport === 'string' ? req.body.sport : 'padel';
+    const sport = await resolvePreferredSportKey(req.user!.id, req.body.sport);
     const raw = req.body.selfLevel;
     const selfLevel = raw === null || raw === undefined ? null : Number(raw);
     res.json(await ratingService.calibrate(req.user!.id, sport, selfLevel));
