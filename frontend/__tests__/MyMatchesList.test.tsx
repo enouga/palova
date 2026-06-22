@@ -5,7 +5,11 @@ import { MyMatchesList } from '@/components/match/MyMatchesList';
 jest.mock('@/lib/api', () => ({
   __esModule: true,
   assetUrl: () => null,
-  api: { confirmMatch: jest.fn().mockResolvedValue({ ok: true }), disputeMatch: jest.fn().mockResolvedValue({ ok: true }) },
+  api: {
+    confirmMatch: jest.fn().mockResolvedValue({ ok: true }),
+    disputeMatch: jest.fn().mockResolvedValue({ ok: true }),
+    getMatchComments: jest.fn().mockResolvedValue({ status: 'DISPUTED', comments: [] }),
+  },
 }));
 import { api } from '@/lib/api';
 
@@ -49,4 +53,21 @@ it('un match sans confirmation requise ne montre pas les boutons', () => {
 it('affiche Victoire quand mon équipe gagne', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, status: 'CONFIRMED', winningTeam: 2, needsMyConfirmation: false }] as any} token="t" onChanged={() => {}} />);
   expect(screen.getByText('Victoire')).toBeInTheDocument();
+});
+
+it('le « Contester » exige un motif avant envoi', async () => {
+  renderWithTheme(<MyMatchesList matches={[{ ...base }] as any} token="t" onChanged={() => {}} />);
+  fireEvent.click(screen.getByText('Contester'));
+  const send = screen.getByRole('button', { name: 'Envoyer la contestation' });
+  expect(send).toBeDisabled(); // désactivé tant que le motif est vide
+  fireEvent.change(screen.getByPlaceholderText(/Expliquez le litige/i), { target: { value: 'Score faux' } });
+  expect(send).not.toBeDisabled();
+  fireEvent.click(send);
+  await waitFor(() => expect(api.disputeMatch).toHaveBeenCalledWith('m1', 'Score faux', 't'));
+});
+
+it('un match en litige propose la discussion', () => {
+  const disputed = { ...base, status: 'DISPUTED', needsMyConfirmation: false, commentCount: 2 };
+  renderWithTheme(<MyMatchesList matches={[disputed] as any} token="t" onChanged={() => {}} />);
+  expect(screen.getByText(/Discussion/)).toBeInTheDocument();
 });
