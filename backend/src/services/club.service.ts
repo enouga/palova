@@ -6,6 +6,7 @@ import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
 import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
+import { resolvePreferredSportKey } from './rating/preferredSport';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -386,7 +387,8 @@ export class ClubService {
       select: { user: { select: { id: true, firstName: true, lastName: true } } },
     });
     const userIds = members.map((m) => m.user.id);
-    const levels = await this.ratingService.getLevelsForUsers(userIds, 'padel');
+    const sportKey = await resolvePreferredSportKey(callerUserId);
+    const levels = await this.ratingService.getLevelsForUsers(userIds, sportKey);
     return members.map((m) => ({ ...m.user, level: levels[m.user.id] ?? null }));
   }
 

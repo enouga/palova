@@ -69,6 +69,21 @@ describe('ClubService — recherche de membres', () => {
     ]);
   });
 
+  it('searchMembers utilise le sport préféré de l\'appelant', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-arena', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u2', firstName: 'Alice', lastName: 'Martin' } },
+    ] as any);
+    prismaMock.user.findUnique.mockResolvedValue({ preferredSport: { key: 'tennis' } } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+    await service.searchMembers('arena', 'caller-1', '');
+
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'tennis' } }));
+  });
+
   it('refuse un membre bloqué (MEMBERSHIP_REQUIRED)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);
