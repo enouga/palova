@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubMatch } from '@/lib/api';
 import { scoreLine } from '@/lib/match';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { MatchDiscussion } from '@/components/match/MatchDiscussion';
 
 // Matchs du club : segment « Litiges » (le staff valide/annule) et « Matchs confirmés » (annulation avec motif).
 export default function AdminMatchesPage() {
@@ -18,6 +19,7 @@ export default function AdminMatchesPage() {
   const [error, setError] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<ClubMatch | null>(null);
   const [reason, setReason] = useState('');
+  const [openThread, setOpenThread] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     if (!club || !token) return;
@@ -89,6 +91,7 @@ export default function AdminMatchesPage() {
                   <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 4 }}>
                     {teamNames(m, 1)} <span style={{ opacity: 0.6 }}>vs</span> {teamNames(m, 2)}
                   </div>
+                  <MatchDiscussion matchId={m.id} token={token} canWrite />
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button type="button" disabled={busy === m.id} onClick={() => resolve(m.id, 'VALIDATE')}
                       style={{ fontFamily: th.fontUI, background: th.accent, color: th.onAccent, border: 'none', borderRadius: 10, padding: '7px 16px', fontWeight: 600, cursor: 'pointer', opacity: busy === m.id ? 0.5 : 1 }}>
@@ -126,6 +129,15 @@ export default function AdminMatchesPage() {
                   <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 4 }}>
                     {teamNames(m, 1)} <span style={{ opacity: 0.6 }}>vs</span> {teamNames(m, 2)}
                   </div>
+                  {m.commentCount > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <button type="button" onClick={() => setOpenThread(openThread === m.id ? null : m.id)}
+                        style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                        💬 Voir la discussion ({m.commentCount})
+                      </button>
+                      {openThread === m.id && <MatchDiscussion matchId={m.id} token={token} canWrite={false} />}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button type="button" disabled={busy === m.id} onClick={() => { setVoiding(m); setReason(''); }}
                       style={{ fontFamily: th.fontUI, background: 'transparent', color: th.text, border: `1px solid ${th.line}`, borderRadius: 10, padding: '7px 16px', cursor: 'pointer', opacity: busy === m.id ? 0.5 : 1 }}>

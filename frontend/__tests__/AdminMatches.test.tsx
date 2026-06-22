@@ -6,10 +6,14 @@ const getClubMatches = jest.fn();
 const resolveClubMatch = jest.fn();
 const voidClubMatch = jest.fn();
 jest.mock('../lib/api', () => ({
+  __esModule: true,
+  assetUrl: (u: string | null) => u,
   api: {
     getClubMatches: (...a: unknown[]) => getClubMatches(...a),
     resolveClubMatch: (...a: unknown[]) => resolveClubMatch(...a),
     voidClubMatch: (...a: unknown[]) => voidClubMatch(...a),
+    getMatchComments: jest.fn().mockResolvedValue({ status: 'DISPUTED', comments: [] }),
+    postMatchComment: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
