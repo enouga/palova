@@ -185,7 +185,7 @@ export function Field({
   );
 }
 
-interface SegOption<T> { value: T; label: string; }
+interface SegOption<T> { value: T; label: string; icon?: IconName; count?: number; }
 
 export function Segmented<T extends string | number>({
   options, value, onChange,
@@ -195,15 +195,28 @@ export function Segmented<T extends string | number>({
     <div style={{ display: 'flex', gap: 4, background: th.surface2, borderRadius: 13, padding: 4 }}>
       {options.map((o) => {
         const active = o.value === value;
+        const withIcon = o.icon != null;
         return (
           <button key={String(o.value)} onClick={() => onChange(o.value)}
+            className={withIcon ? 'sp-seg-tab' : undefined}
             style={{
               flex: 1, border: 'none', cursor: 'pointer', borderRadius: 10, padding: '10px 6px',
               fontFamily: th.fontUI, fontWeight: active ? 700 : 600, fontSize: 14.5,
               background: active ? th.surface : 'transparent',
               color: th.text,
               boxShadow: active ? th.shadowSoft : 'none', transition: 'all .15s',
-            }}>{o.label}</button>
+            }}>
+            {withIcon && (
+              <span className="sp-seg-icon">
+                <Icon name={o.icon!} size={20} color={active ? th.accent : th.textFaint} />
+                {o.count != null && (
+                  <span className="sp-seg-badge" style={{ background: th.accent, color: th.onAccent }}>{o.count}</span>
+                )}
+              </span>
+            )}
+            {withIcon ? <span className="sp-seg-label">{o.label}</span> : o.label}
+            {withIcon && o.count != null && <span className="sp-seg-count-inline">{` · ${o.count}`}</span>}
+          </button>
         );
       })}
     </div>
