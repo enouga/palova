@@ -211,6 +211,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
             sport: { select: { name: true } },
             reservation: { select: { resource: { select: { name: true } } } },
             players: { select: { userId: true, team: true, user: { select: { firstName: true, lastName: true } } } },
+            _count: { select: { comments: true } },
           },
         },
       },
@@ -228,6 +229,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
         userId: p.userId, team: p.team, firstName: p.user.firstName, lastName: p.user.lastName,
         isMe: p.userId === meId,
       })),
+      commentCount: r.match._count.comments,
     })));
   } catch (err) { next(err); }
 });

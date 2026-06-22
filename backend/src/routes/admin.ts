@@ -822,9 +822,14 @@ router.get('/matches', async (req: ClubScopedRequest, res: Response, next: NextF
       select: {
         id: true, status: true, sets: true, playedAt: true, winningTeam: true, confirmDeadline: true,
         players: { select: { userId: true, team: true, confirmation: true, user: { select: { firstName: true, lastName: true } } } },
+        _count: { select: { comments: true } },
       },
     });
-    res.json(matches);
+    res.json(matches.map((m) => ({
+      id: m.id, status: m.status, sets: m.sets, playedAt: m.playedAt,
+      winningTeam: m.winningTeam, confirmDeadline: m.confirmDeadline,
+      players: m.players, commentCount: m._count.comments,
+    })));
   } catch (err) {
     if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
     next(err);

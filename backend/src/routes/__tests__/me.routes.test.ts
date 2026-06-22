@@ -138,6 +138,7 @@ describe('GET /api/me/matches', () => {
             { userId: 'u3', team: 1, user: { firstName: 'Paul', lastName: 'Roy' } },
             { userId: 'u4', team: 1, user: { firstName: 'Lea', lastName: 'Martin' } },
           ],
+          _count: { comments: 0 },
         },
       },
     ] as any);
@@ -171,6 +172,7 @@ describe('GET /api/me/matches', () => {
             { userId: 'u3', team: 2, user: { firstName: 'C', lastName: 'D' } },
             { userId: 'u4', team: 2, user: { firstName: 'E', lastName: 'F' } },
           ],
+          _count: { comments: 3 },
         },
       },
     ] as any);
@@ -178,6 +180,7 @@ describe('GET /api/me/matches', () => {
     expect(res.status).toBe(200);
     expect(res.body[0].resource).toBeNull();
     expect(res.body[0].ratingAfter).toBe(6.2);
+    expect(res.body[0].commentCount).toBe(3);
   });
 });
 

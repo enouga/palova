@@ -24,13 +24,14 @@ beforeEach(() => {
 describe('GET /api/clubs/:clubId/admin/matches', () => {
   it('liste les litiges du club', async () => {
     prismaMock.match.findMany.mockResolvedValue([
-      { id: 'm1', status: 'DISPUTED', sets: [[6, 4]], players: [] },
+      { id: 'm1', status: 'DISPUTED', sets: [[6, 4]], players: [], _count: { comments: 2 } },
     ] as any);
     const res = await request(app)
       .get('/api/clubs/c1/admin/matches?status=DISPUTED')
       .set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
+    expect(res.body[0].commentCount).toBe(2);
   });
 
   it('403 si non membre', async () => {
