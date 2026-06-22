@@ -256,6 +256,18 @@ describe('levelSystemEnabled exposition', () => {
     expect(arg.select.refundOnCancelWithinCutoff).toBe(true);
   });
 
+  it('getClubBySlug expose stripeAccountStatus (mais pas stripeAccountId) dans le payload public', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'c1', slug: 'demo', name: 'Demo', status: 'ACTIVE',
+      stripeAccountStatus: 'ACTIVE', clubSports: [],
+    } as any);
+    const res = await svc.getClubBySlug('demo');
+    expect((res as any).stripeAccountStatus).toBe('ACTIVE');
+    const arg = (prismaMock.club.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.select.stripeAccountStatus).toBe(true);
+    expect(arg.select.stripeAccountId).toBeUndefined();
+  });
+
   it('getClubForAdmin sélectionne levelSystemEnabled', async () => {
     prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
     await svc.getClubForAdmin('club-1');

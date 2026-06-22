@@ -14,6 +14,7 @@ import { OpenMatchService } from '../services/openMatch.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { iconService } from '../services/icon.service';
+import { capacityFor } from '../utils/courtType';
 import { prisma } from '../db/prisma';
 
 const router = Router();
@@ -247,7 +248,7 @@ router.get('/:slug/icon/:file', async (req: Request, res: Response, next: NextFu
 // Créer un PaymentIntent ou SetupIntent pour un joueur (paiement/empreinte à la réservation).
 router.post('/:slug/stripe/intent', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { reservationId, type } = req.body;
+    const { reservationId, type, payShare } = req.body;
     if (!reservationId || !['payment', 'setup'].includes(type as string)) {
       return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     }
@@ -256,14 +257,33 @@ router.post('/:slug/stripe/intent', authMiddleware, async (req: AuthRequest, res
 
     const reservation = await prisma.reservation.findUnique({
       where: { id: asString(reservationId) },
-      select: { totalPrice: true, userId: true },
+      select: {
+        totalPrice: true,
+        userId: true,
+        resource: {
+          select: {
+            attributes: true,
+            clubSport: { select: { sport: { select: { key: true } } } },
+          },
+        },
+      },
     });
     if (!reservation) return void res.status(404).json({ error: 'RESERVATION_NOT_FOUND' });
     if (reservation.userId !== req.user!.id) return void res.status(403).json({ error: 'UNAUTHORIZED' });
 
     const svc = new StripeService();
     if (type === 'payment') {
-      const amountCents = Math.round(Number(reservation.totalPrice) * 100);
+      // « Payer ma part » : on n'encaisse en ligne que la part par personne
+      // (total ÷ capacité nominale du terrain) ; le reste devient un dû au club.
+      const format = typeof reservation.resource.attributes === 'object' && reservation.resource.attributes
+        ? (reservation.resource.attributes as any).format
+        : undefined;
+      const sportKey = reservation.resource.clubSport.sport.key;
+      const capacity = capacityFor(sportKey, format);
+      const totalCents = Math.round(Number(reservation.totalPrice) * 100);
+      const shareCents = Math.round(totalCents / capacity);
+      const amountCents = payShare ? shareCents : totalCents;
+      if (amountCents < 50) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
       const result = await svc.createPaymentIntent({
         clubId: club.id, userId: req.user!.id, reservationId: asString(reservationId), amountCents,
       });

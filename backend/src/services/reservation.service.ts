@@ -364,6 +364,7 @@ export class ReservationService {
     }
 
     let stripePaymentMethodId: string | null = null;
+    let chargedCents: number | null = null;
 
     if (options?.stripePaymentIntentId && club?.stripeAccountId) {
       const pi = await stripe.paymentIntents.retrieve(
@@ -372,6 +373,9 @@ export class ReservationService {
         { stripeAccount: club.stripeAccountId },
       );
       if (pi.status !== 'succeeded') throw new Error('PAYMENT_NOT_SUCCEEDED');
+      // Montant réellement encaissé (peut n'être que la part par personne) ; le
+      // dû résiduel = totalPrice − Σ paiements capturés est dérivé ailleurs.
+      chargedCents = pi.amount_received ?? pi.amount;
       stripePaymentMethodId = typeof pi.payment_method === 'string' ? pi.payment_method : null;
       if (stripePaymentMethodId) {
         await prisma.clubStripeCustomer.updateMany({
@@ -459,7 +463,9 @@ export class ReservationService {
             reservationId,
             participantId: organizer?.id ?? null,
             clubId: reservation.resource.clubId,
-            amount: new Prisma.Decimal(reservation.totalPrice),
+            amount: new Prisma.Decimal(
+              chargedCents != null ? chargedCents : Math.round(Number(reservation.totalPrice) * 100),
+            ).div(100),
             method: 'ONLINE',
             status: 'CAPTURED',
             stripePaymentIntentId: options.stripePaymentIntentId,

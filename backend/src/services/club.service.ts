@@ -149,6 +149,7 @@ export class ClubService {
         showOtherClubsReservations: true,
         requireOnlinePayment: true,
         requireCardFingerprint: true,
+        stripeAccountStatus: true,
         levelSystemEnabled: true,
         cancellationCutoffHours: true,
         refundOnCancelWithinCutoff: true,

@@ -903,6 +903,38 @@ describe('ReservationService', () => {
       }));
     });
 
+    it('le Payment ONLINE enregistre le montant RÉELLEMENT encaissé (la part), pas le total', async () => {
+      // totalPrice=25 mais le PI n'a encaissé que la part (1000 cents = 10 €).
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+      (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'succeeded', payment_method: 'pm_xxx', amount_received: 1000, amount: 2500 });
+      prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 } as any);
+      mockHappyTx();
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+
+      const arg = (prismaMock.payment.create as jest.Mock).mock.calls[0][0];
+      expect(arg.data.method).toBe('ONLINE');
+      expect(Number(arg.data.amount)).toBe(10); // 1000 cents encaissés, PAS le total 25
+    });
+
+    it('Payment ONLINE : repli sur amount si amount_received absent', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+      (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'succeeded', payment_method: 'pm_xxx', amount: 2500 });
+      prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 } as any);
+      mockHappyTx();
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+
+      const arg = (prismaMock.payment.create as jest.Mock).mock.calls[0][0];
+      expect(Number(arg.data.amount)).toBe(25);
+    });
+
     it('leve CARD_FINGERPRINT_REQUIRED si requireCardFingerprint=true sans stripeSetupIntentId', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
 

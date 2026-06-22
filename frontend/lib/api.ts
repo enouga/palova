@@ -737,6 +737,9 @@ export interface ClubDetail {
   showOtherClubsReservations: boolean;
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  // Statut du compte Stripe Connect du club (enum non nullable côté Prisma,
+  // défaut NONE). Sert à savoir si le paiement en ligne est réellement actif.
+  stripeAccountStatus: string;
   levelSystemEnabled: boolean;
   cancellationCutoffHours: number;
   refundOnCancelWithinCutoff: boolean;
