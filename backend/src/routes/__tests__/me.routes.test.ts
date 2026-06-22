@@ -184,6 +184,36 @@ describe('GET /api/me/matches', () => {
   });
 });
 
+describe('PATCH /api/me — preferredSportId', () => {
+  it('PATCH /api/me enregistre preferredSportId après vérif du sport', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel', published: true } as any);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } } as any);
+    const res = await request(app).patch('/api/me')
+      .set('Authorization', `Bearer ${token()}`).send({ preferredSportId: 'sport-padel' });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ preferredSportId: 'sport-padel' }),
+    }));
+  });
+
+  it('PATCH /api/me rejette un preferredSportId inconnu', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue(null);
+    const res = await request(app).patch('/api/me')
+      .set('Authorization', `Bearer ${token()}`).send({ preferredSportId: 'sport-xxx' });
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH /api/me efface le sport préféré avec null', async () => {
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', preferredSport: null } as any);
+    const res = await request(app).patch('/api/me')
+      .set('Authorization', `Bearer ${token()}`).send({ preferredSportId: null });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ preferredSportId: null }),
+    }));
+  });
+});
+
 describe('POST /api/me/password', () => {
   it('refuse sans token (401)', async () => {
     const res = await request(app).post('/api/me/password').send({ currentPassword: 'a', newPassword: 'b' });

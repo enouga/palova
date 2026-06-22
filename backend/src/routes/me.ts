@@ -22,6 +22,7 @@ const ratingService = new RatingService();
 const PROFILE_SELECT = {
   id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
   birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true, showInLeaderboard: true,
+  preferredSport: { select: { id: true, key: true, name: true } },
 } as const;
 
 const LOCALES = ['fr', 'en', 'es'] as const;
@@ -101,8 +102,8 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, n
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale, showInLeaderboard } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard, preferredSportId } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; preferredSportId?: string | null } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
@@ -126,6 +127,16 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     if (showInLeaderboard !== undefined) {
       if (typeof showInLeaderboard !== 'boolean') return void res.status(400).json({ error: 'showInLeaderboard invalide' });
       data.showInLeaderboard = showInLeaderboard;
+    }
+    if (preferredSportId !== undefined) {
+      if (preferredSportId === null) {
+        data.preferredSportId = null;
+      } else {
+        if (typeof preferredSportId !== 'string') return void res.status(400).json({ error: 'preferredSportId invalide' });
+        const sport = await prisma.sport.findUnique({ where: { id: preferredSportId }, select: { id: true, published: true } });
+        if (!sport || !sport.published) return void res.status(400).json({ error: 'preferredSportId invalide' });
+        data.preferredSportId = preferredSportId;
+      }
     }
     const user = await prisma.user.update({ where: { id: req.user!.id }, data, select: PROFILE_SELECT });
     res.json(user);
