@@ -360,7 +360,7 @@ describe('TournamentService — admin & lectures', () => {
   });
 
   it('listParticipants renvoie les binômes actifs (noms + avatar)', async () => {
-    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: { sport: { key: 'padel' } } } as any);
     prismaMock.tournamentRegistration.findMany.mockResolvedValue([
       { id: 'r1', status: 'CONFIRMED', captainUserId: 'cap1', partnerUserId: 'par1', captain: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' }, partner: { firstName: 'B', lastName: 'B', avatarUrl: null } },
     ] as any);
@@ -375,7 +375,7 @@ describe('TournamentService — admin & lectures', () => {
   });
 
   it('listParticipants enrichit les entrées avec captainLevel et partnerLevel', async () => {
-    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.tournament.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: { sport: { key: 'padel' } } } as any);
     prismaMock.tournamentRegistration.findMany.mockResolvedValue([
       { id: 'r1', status: 'CONFIRMED', captainUserId: 'cap1', partnerUserId: 'par1',
         captain: { firstName: 'A', lastName: 'A', avatarUrl: null },
@@ -390,6 +390,32 @@ describe('TournamentService — admin & lectures', () => {
 
     expect(res[0].captainLevel).toEqual({ level: 4, tier: expect.any(String), isProvisional: false });
     expect(res[0].partnerLevel).toBeNull();
+  });
+
+  it('listParticipants utilise le sport du tournoi (tennis) pour les niveaux', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      status: 'PUBLISHED',
+      clubSport: { sport: { key: 'tennis' } },
+    } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', captainUserId: 'cap1', partnerUserId: 'par1',
+        captain: { firstName: 'A', lastName: 'A', avatarUrl: null },
+        partner: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+    ] as any);
+    // sport.findUnique retourne un sport tennis
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'cap1', displayLevel: 5, isProvisional: false },
+    ] as any);
+
+    const res = await service.listParticipants('t1');
+
+    // Le niveau doit être celui du sport tennis (displayLevel 5)
+    expect(res[0].captainLevel).toEqual({ level: 5, tier: expect.any(String), isProvisional: false });
+    // On vérifie que sport.findUnique a été appelé avec la clé 'tennis' (pas 'padel')
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { key: 'tennis' } })
+    );
   });
 });
 

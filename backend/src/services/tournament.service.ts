@@ -165,7 +165,10 @@ export class TournamentService {
 
   /** Liste publique des binômes inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
   async listParticipants(tournamentId: string) {
-    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { status: true } });
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { status: true, clubSport: { select: { sport: { select: { key: true } } } } },
+    });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
     const registrations = await prisma.tournamentRegistration.findMany({
       where: { tournamentId, status: { not: 'CANCELLED' } },
@@ -181,7 +184,8 @@ export class TournamentService {
     });
     const allUserIds = [...new Set(registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]))];
     const ratingService = new RatingService();
-    const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, 'padel') : {};
+    const sportKey = t.clubSport?.sport?.key ?? 'padel';
+    const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, sportKey) : {};
     return registrations.map(({ captainUserId, partnerUserId, ...r }) => ({
       ...r,
       captainLevel: levels[captainUserId] ?? null,
