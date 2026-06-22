@@ -364,6 +364,7 @@ export class ReservationService {
       throw new Error('CARD_FINGERPRINT_REQUIRED');
     }
     // CGV obligatoires dès qu'une carte est en jeu (PI = paiement, ou SI = empreinte/enregistrement).
+    // Pas d'intent = réglé au club (ou solde/carnet) : aucun contrat Stripe, CGV non requises.
     const hasCardIntent = !!(options?.stripePaymentIntentId || options?.stripeSetupIntentId);
     if (hasCardIntent && !options?.cgvAccepted) {
       throw new Error('CGV_NOT_ACCEPTED');

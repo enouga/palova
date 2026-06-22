@@ -30,7 +30,7 @@ const ERROR_STATUS: Record<string, number> = {
   CARD_FINGERPRINT_REQUIRED: 402,
   PAYMENT_NOT_SUCCEEDED:     402,
   SETUP_NOT_SUCCEEDED:       402,
-  CGV_NOT_ACCEPTED:          402,
+  CGV_NOT_ACCEPTED:          402, // pré-condition au paiement, comme les gardes Stripe frères
   QUOTA_PEAK_REACHED:       409,
   QUOTA_OFFPEAK_REACHED:    409,
   TOO_MANY_PLAYERS:         409,
