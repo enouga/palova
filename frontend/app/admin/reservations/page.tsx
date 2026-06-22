@@ -10,6 +10,7 @@ import { CollectPanel } from '@/components/admin/CollectPanel';
 import { Receipt } from '@/components/admin/Receipt';
 import { dueCents, toCents, fmtEuros } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
+import { overlapsHourWindow, outstandingFilter, matchesQuery, OutstandingMode } from '@/lib/collect';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -51,6 +52,15 @@ export default function AdminReservationsPage() {
   const [clubDetail, setClubDetail]   = useState<ClubAdminDetail | null>(null);
   const [selected, setSelected]       = useState<ClubReservation | null>(null);
   const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
+
+  const [query, setQuery]   = useState('');
+  const [outMode, setOut]   = useState<OutstandingMode>('all');
+  const [fromHour, setFrom] = useState<number | null>(null);
+  const [toHour, setTo]     = useState<number | null>(null);
+  const [solderMethod, setSolderMethod] = useState<PaymentMethod>('CASH');
+  // moyen « Solder » par défaut mémorisé
+  useEffect(() => { const v = typeof window !== 'undefined' ? window.localStorage.getItem('palova:solder-method') : null; if (v) setSolderMethod(v as PaymentMethod); }, []);
+  const pickSolder = (m: PaymentMethod) => { setSolderMethod(m); try { window.localStorage.setItem('palova:solder-method', m); } catch { /* stockage indispo */ } };
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
 
@@ -102,6 +112,17 @@ export default function AdminReservationsPage() {
     setSelected((cur) => (updated ?? (cur ? list.find((r) => r.id === cur.id) ?? cur : cur)));
   }, [load]);
 
+  const openH  = resources.length ? Math.min(...resources.map((r) => r.openHour)) : 8;
+  const closeH = resources.length ? Math.max(...resources.map((r) => r.closeHour)) : 22;
+  const visible = (data?.reservations ?? []).filter((r) =>
+    matchesQuery(r, query) &&
+    outstandingFilter(outMode, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED') &&
+    (fromHour == null || toHour == null || overlapsHourWindow(r, fromHour, toHour, tz)),
+  );
+  const sumDue  = visible.reduce((s, r) => s + dueOf(r), 0);
+  const sumPaid = visible.reduce((s, r) => s + toCents(r.paidAmount), 0);
+  const nowHour = () => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }).format(new Date()));
+
   return (
     <div>
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 20px', color: th.text }}>Réservations & paiements</h1>
@@ -114,13 +135,38 @@ export default function AdminReservationsPage() {
         {date && <button onClick={() => setDate('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.accent }}>Tout afficher</button>}
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Rechercher un client…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 14, minWidth: 220 }} />
+        {(['all', 'due', 'paid'] as OutstandingMode[]).map((m) => (
+          <button key={m} type="button" onClick={() => setOut(m)} style={{ border: `1px solid ${outMode === m ? th.accent : th.line}`, background: outMode === m ? `${th.accent}22` : 'transparent', color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+            {m === 'all' ? 'Tout' : m === 'due' ? 'À encaisser' : 'Payées'}
+          </button>
+        ))}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+          De
+          <select value={fromHour ?? ''} onChange={(e) => setFrom(e.target.value === '' ? null : Number(e.target.value))} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px' }}>
+            <option value="">—</option>
+            {Array.from({ length: closeH - openH }, (_, i) => openH + i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>)}
+          </select>
+          à
+          <select value={toHour ?? ''} onChange={(e) => setTo(e.target.value === '' ? null : Number(e.target.value))} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px' }}>
+            <option value="">—</option>
+            {Array.from({ length: closeH - openH + 1 }, (_, i) => openH + i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>)}
+          </select>
+        </span>
+        <button type="button" onClick={() => { setDate(todayISO()); setFrom(nowHour()); setTo(closeH); }} style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>En ce moment</button>
+        {(fromHour != null || toHour != null || outMode !== 'all' || query) && (
+          <button type="button" onClick={() => { setFrom(null); setTo(null); setOut('all'); setQuery(''); }} style={{ border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Effacer</button>
+        )}
+      </div>
+
+      {error &&<div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
       {data && (
         <div style={{ display: 'flex', gap: 24, marginBottom: 16, fontFamily: th.fontUI, fontSize: 14, flexWrap: 'wrap' }}>
-          <span style={{ color: th.textMute }}>Total dû : <b style={{ color: th.text }}>{data.summary.total} €</b></span>
-          <span style={{ color: th.textMute }}>Encaissé : <b style={{ color: th.mode === 'floodlit' ? th.accent : th.ink }}>{data.summary.paid} €</b></span>
-          <span style={{ color: th.textMute }}>Reste dû : <b style={{ color: '#ff7a4d' }}>{data.summary.outstanding} €</b></span>
+          <span style={{ color: th.textMute }}>Total dû : <b style={{ color: th.text }}>{fmtEuros(sumDue)}</b></span>
+          <span style={{ color: th.textMute }}>Encaissé : <b style={{ color: th.mode === 'floodlit' ? th.accent : th.ink }}>{fmtEuros(sumPaid)}</b></span>
+          <span style={{ color: th.textMute }}>Reste dû : <b style={{ color: '#ff7a4d' }}>{fmtEuros(Math.max(0, sumDue - sumPaid))}</b></span>
         </div>
       )}
 
@@ -137,10 +183,10 @@ export default function AdminReservationsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.reservations.length === 0 && (
+              {visible.length === 0 && (
                 <tr><td colSpan={7} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '32px 16px' }}>Aucune réservation</td></tr>
               )}
-              {data?.reservations.map((r) => (
+              {visible.map((r) => (
                 <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}` }}>
                   <td style={{ ...cell, fontWeight: 600 }}>{r.resource.name}</td>
                   <td style={cell}>{r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement'}{r.user && <div style={{ fontSize: 12, color: th.textFaint }}>{r.user.email}</div>}</td>
@@ -159,6 +205,16 @@ export default function AdminReservationsPage() {
                   </td>
                   <td style={cell}><span style={statusStyle(r.status)}>{STATUS_LABEL[r.status]}</span></td>
                   <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                    {(() => { const rest = Math.max(0, dueOf(r) - toCents(r.paidAmount)); if (r.status === 'CANCELLED' || rest <= 0) return null;
+                      const solder = async () => { if (!token || !clubId) return; try { setError(null); await api.adminAddPayment(clubId, r.id, { amount: rest / 100, method: solderMethod }, token); await load(); } catch (e) { setError((e as Error).message); } };
+                      return (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+                          <button onClick={solder} title={`Solder ${fmtEuros(rest)} en ${METHOD_LABEL[solderMethod]}`} style={{ border: `1px solid ${th.line}`, background: th.surface2, cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Solder</button>
+                          <select value={solderMethod} onChange={(e) => pickSolder(e.target.value as PaymentMethod)} title="Moyen par défaut" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '5px 4px', fontSize: 12 }}>
+                            {(['CASH', 'CARD', 'TRANSFER'] as PaymentMethod[]).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
+                          </select>
+                        </span>
+                      ); })()}
                     {r.status !== 'CANCELLED' && (
                       <button onClick={() => setSelected(r)} style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, background: th.accent, color: th.onAccent, marginRight: 8 }}>
                         Encaisser{r.payments.length ? ` (${r.payments.length})` : ''}
