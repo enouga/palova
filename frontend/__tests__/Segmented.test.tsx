@@ -21,6 +21,7 @@ describe('Segmented', () => {
     expect(upcoming.textContent).toContain('3');
     const calendar = screen.getByText('Calendrier').closest('button')!;
     expect(calendar.querySelector('.sp-seg-badge')).toBeNull();
+    expect(calendar.querySelector('.sp-seg-count-inline')).toBeNull();
   });
 
   it('reste un simple bouton texte quand aucune icône (autres usages inchangés)', () => {
