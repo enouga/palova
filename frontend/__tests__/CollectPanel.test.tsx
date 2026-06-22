@@ -53,4 +53,39 @@ describe('CollectPanel', () => {
     fireEvent.change(screen.getByLabelText(/Encaisser/i), { target: { value: '80' } });
     expect(screen.getByRole('button', { name: 'Espèces' })).toBeDisabled();
   });
+
+  it('« Régler » un joueur cible son participantId dans l\'encaissement', async () => {
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [part] });
+    fireEvent.click(screen.getByRole('button', { name: 'Régler' }));
+    expect((screen.getByLabelText(/Encaisser/i) as HTMLInputElement).value).toBe('13');
+    fireEvent.click(screen.getByRole('button', { name: 'Espèces' }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ amount: 13, method: 'CASH', participantId: 'pt-1' }), 'tok',
+    ));
+  });
+
+  it('paiement par carnet → adminAddPayment en PACK_CREDIT avec sourcePackageId', async () => {
+    (api.adminGetMemberPackages as jest.Mock).mockResolvedValueOnce([
+      { id: 'pk-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5, amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null, template: { name: 'Carnet 10' } },
+    ]);
+    renderPanel({ user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } });
+    const btn = await screen.findByRole('button', { name: /Carnet/ });
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pk-1', amount: 52 }), 'tok',
+    ));
+  });
+
+  it('le montant se recalcule quand le payé change (panneau resté ouvert)', () => {
+    const onChanged = jest.fn();
+    const { rerender } = render(
+      <ThemeProvider><CollectPanel reservation={RV()} due={5200} players={4} members={[]} clubId="club-1" token="tok" onChanged={onChanged} /></ThemeProvider>,
+    );
+    expect((screen.getByLabelText(/Encaisser/i) as HTMLInputElement).value).toBe('52');
+    rerender(
+      <ThemeProvider><CollectPanel reservation={RV({ paidAmount: '20.00' })} due={5200} players={4} members={[]} clubId="club-1" token="tok" onChanged={onChanged} /></ThemeProvider>,
+    );
+    expect((screen.getByLabelText(/Encaisser/i) as HTMLInputElement).value).toBe('32');
+  });
 });

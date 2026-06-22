@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { api, ClubReservation, Member, MemberPackage, CreateMemberBody, PaymentMethod } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { toCents, centsToInput, quickAmounts, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
@@ -36,7 +36,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const [pkgLoading, setPkgLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const fail = useCallback((msg: string) => onError?.(msg), [onError]);
+  const fail = (msg: string) => onError?.(msg);
   const remaining = Math.max(0, due - toCents(reservation.paidAmount));
 
   // Réinitialise montant + voucher quand la résa cible change (ouverture / reload).
@@ -45,7 +45,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     setPayParticipantId(null);
     setVoucherOpen(false); setVoucherRef(''); setVoucherIssuer('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reservation.id]);
+  }, [reservation.id, reservation.paidAmount]);
 
   // Carnets/porte-monnaie utilisables du joueur de la résa.
   const userId = reservation.user?.id ?? null;
@@ -145,6 +145,8 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const createAndAssign = (body: CreateMemberBody) => createThen(body, assignPlayer);
   const createAndAddParticipant = (body: CreateMemberBody) => createThen(body, addParticipant);
 
+  const coverAmt = activePart ? toCents(activePart.outstanding) / 100 : remaining / 100;
+
   const input = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 } as const;
   const tint = (hex: string) => (th.mode === 'floodlit' ? `${hex}2e` : `${hex}24`);
 
@@ -170,6 +172,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
               const rest = toCents(p.outstanding);
               const settled = rest <= 0;
               const on = payParticipantId === p.id;
+              // L'organisateur ne peut être retiré que s'il est seul (sinon on ne laisse pas un terrain sans orga).
               const canRemove = !(p.isOrganizer && bills.length > 1);
               return (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: on ? tint(th.text) : th.surface2, border: `1px solid ${on ? th.text : 'transparent'}` }}>
@@ -256,7 +259,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
       {selPackages.length > 0 ? (
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {selPackages.map((p) => {
-            const ok = canCover(p, remaining / 100);
+            const ok = canCover(p, coverAmt);
             return (
               <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
                 title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
