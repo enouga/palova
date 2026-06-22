@@ -15,15 +15,46 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   const [loading, setLoading] = useState(true);
   const [optingIn, setOptingIn] = useState(false);
 
+  // Liste des sports proposés par le club (key + name)
+  const clubSportsList = club.clubSports?.map((cs) => ({ key: cs.sport.key, name: cs.sport.name })) ?? [];
+  const firstSportKey = clubSportsList[0]?.key ?? 'padel';
+
+  // Sport sélectionné pour le leaderboard : initialisé à la préférence (si disponible dans le club), sinon 1er sport
+  const [lbSport, setLbSport] = useState<string>(firstSportKey);
+  const [sportInitialized, setSportInitialized] = useState(false);
+
+  // Charge le profil pour connaître le sport préféré, SEULEMENT si plusieurs sports disponibles
+  useEffect(() => {
+    if (!token || sportInitialized || clubSportsList.length <= 1) {
+      // Pas de choix possible → considéré comme initialisé
+      if (!sportInitialized) setSportInitialized(true);
+      return;
+    }
+    api.getMyProfile(token).then((profile) => {
+      const preferred = profile?.preferredSport?.key;
+      if (preferred && clubSportsList.some((s) => s.key === preferred)) {
+        setLbSport(preferred);
+      }
+      setSportInitialized(true);
+    }).catch(() => {
+      setSportInitialized(true);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   const load = useCallback(async () => {
     if (!token) { setData(null); setLoading(false); return; }
     setLoading(true);
-    try { setData(await api.getClubLeaderboard(club.slug, token)); }
+    try { setData(await api.getClubLeaderboard(club.slug, token, lbSport)); }
     catch { setData(null); }
     finally { setLoading(false); }
-  }, [club.slug, token]);
+  }, [club.slug, token, lbSport]);
 
-  useEffect(() => { if (ready) load(); }, [ready, load]);
+  // Charge le leaderboard dès que ready ET sport initialisé
+  useEffect(() => {
+    if (!ready || !sportInitialized) return;
+    load();
+  }, [ready, load, sportInitialized]);
 
   const optIn = async () => {
     if (!token) return;
@@ -47,6 +78,29 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
 
   return (
     <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Sélecteur de sport (masqué si un seul sport) */}
+      {clubSportsList.length > 1 && (
+        <select
+          value={lbSport}
+          onChange={(e) => setLbSport(e.target.value)}
+          style={{
+            alignSelf: 'flex-start',
+            fontFamily: th.fontUI,
+            fontSize: 14,
+            color: th.text,
+            background: th.surface,
+            border: `1px solid ${th.line}`,
+            borderRadius: 8,
+            padding: '6px 10px',
+            cursor: 'pointer',
+          }}
+        >
+          {clubSportsList.map((s) => (
+            <option key={s.key} value={s.key}>{s.name}</option>
+          ))}
+        </select>
+      )}
+
       {/* Panneau « moi » */}
       <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none' }}>
         {me.ranked ? (
