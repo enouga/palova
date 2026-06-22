@@ -1,7 +1,7 @@
 'use client';
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, AuthResponse } from '@/lib/api';
+import { api, AuthResponse, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { setSession } from '@/lib/session';
 import { useClub } from '@/lib/ClubProvider';
@@ -21,6 +21,12 @@ export default function RegisterPage() {
   const [loading, setLoading]     = useState(false);
   const [step, setStep]           = useState<'form' | 'verify'>('form');
   const [pending, setPending]     = useState<{ email: string; devCode?: string } | null>(null);
+  const [sports, setSports]       = useState<Sport[]>([]);
+  const [preferredSportId, setPreferredSportId] = useState('');
+
+  useEffect(() => {
+    api.getSports().then(setSports).catch(() => {});
+  }, []);
 
   // Compte activé après validation du code → ouvre la session et redirige.
   const finish = async (auth: AuthResponse) => {
@@ -35,7 +41,7 @@ export default function RegisterPage() {
     if (password.length < 8) { setError('Mot de passe : 8 caractères minimum.'); return; }
     setLoading(true);
     try {
-      const r = await api.register({ email, password, firstName, lastName });
+      const r = await api.register({ email, password, firstName, lastName, ...(preferredSportId ? { preferredSportId } : {}) });
       setPending({ email: r.email, devCode: r.devCode });
       setStep('verify');
     } catch (err) {
@@ -83,6 +89,21 @@ export default function RegisterPage() {
               </div>
               <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
               <Field label="Mot de passe (8+ caractères)" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="new-password" />
+              {sports.length > 0 && (
+                <label style={{ display: 'block' }}>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' as const, color: th.textMute, display: 'block', marginBottom: 8 }}>
+                    Sport préféré (facultatif)
+                  </span>
+                  <select
+                    value={preferredSportId}
+                    onChange={(e) => setPreferredSportId(e.target.value)}
+                    style={{ width: '100%', height: 54, padding: '0 16px', borderRadius: 14, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 16 }}
+                  >
+                    <option value="">— Aucun —</option>
+                    {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
+                  </select>
+                </label>
+              )}
               <div style={{ height: 4 }} />
               <Btn type="submit" full icon="arrowR" disabled={loading}>{loading ? 'Envoi du code…' : 'Créer mon compte'}</Btn>
               <button type="button" onClick={() => router.push('/login')}
