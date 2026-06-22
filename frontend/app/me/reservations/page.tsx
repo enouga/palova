@@ -173,10 +173,10 @@ export default function MyReservationsPage() {
         <div style={{ padding: '16px 20px 0' }}>
           <Segmented<'upcoming' | 'past' | 'calendar' | 'matches'> value={tab} onChange={setTab}
             options={[
-              { value: 'calendar', label: 'Calendrier' },
-              { value: 'upcoming', label: `À venir · ${upcoming.length}` },
-              { value: 'past', label: `Passées · ${past.length}` },
-              ...(levelEnabled ? [{ value: 'matches' as const, label: 'Matchs' }] : []),
+              { value: 'calendar', label: 'Calendrier', icon: 'calendar' },
+              { value: 'upcoming', label: 'À venir', icon: 'clock', count: upcoming.length },
+              { value: 'past', label: 'Passées', icon: 'check', count: past.length },
+              ...(levelEnabled ? [{ value: 'matches' as const, label: 'Matchs', icon: 'trophy' as const }] : []),
             ]} />
         </div>
 
