@@ -107,14 +107,20 @@ export class MatchService {
     if (allConfirmed) await this.finalize(matchId);
   }
 
-  /** Le joueur conteste : le match passe DISPUTED, aucun impact sur les niveaux. */
-  async dispute(matchId: string, userId: string): Promise<void> {
+  /** Le joueur conteste : motif obligatoire (= 1er message), match → DISPUTED, aucun impact niveaux. */
+  async dispute(matchId: string, userId: string, message: string): Promise<void> {
+    const trimmed = (message ?? '').trim();
+    if (!trimmed || trimmed.length > 1000) throw new Error('VALIDATION_ERROR');
     await this.loadPending(matchId, userId);
-    await prisma.matchPlayer.update({
-      where: { matchId_userId: { matchId, userId } },
-      data: { confirmation: 'DISPUTED' },
+    await prisma.$transaction(async (tx) => {
+      await tx.matchPlayer.update({
+        where: { matchId_userId: { matchId, userId } },
+        data: { confirmation: 'DISPUTED' },
+      });
+      await tx.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
+      await tx.matchComment.create({ data: { matchId, userId, body: trimmed } });
     });
-    await prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
+    this.safeNotify(() => notifyNewMatchComment(matchId, userId, { isFirst: true }));
   }
 
   /** Autorise l'accès au fil d'un match : l'un des 4 joueurs, OU un staff du club. Sinon jette. */

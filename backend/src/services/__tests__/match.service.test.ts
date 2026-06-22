@@ -112,15 +112,26 @@ describe('confirm / dispute', () => {
     spy.mockRestore();
   });
 
-  it('contester met le match en DISPUTED, pas de finalisation', async () => {
+  it('contester met le match en DISPUTED + crée le 1er message, pas de finalisation', async () => {
     prismaMock.match.findUnique.mockResolvedValue(matchRow() as any);
-    prismaMock.matchPlayer.update.mockResolvedValue({} as any);
-    prismaMock.match.update.mockResolvedValue({} as any);
+    const tx = {
+      matchPlayer: { update: jest.fn().mockResolvedValue({}) },
+      match: { update: jest.fn().mockResolvedValue({}) },
+      matchComment: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
     const spy = jest.spyOn(service, 'finalize').mockResolvedValue(undefined as any);
-    await service.dispute('m1', 'u4');
-    expect(prismaMock.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'DISPUTED' } }));
+    await service.dispute('m1', 'u4', '  Le 2e set était 6-4 pas 6-3  ');
+    expect(tx.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'DISPUTED' } }));
+    expect(tx.matchComment.create).toHaveBeenCalledWith({
+      data: { matchId: 'm1', userId: 'u4', body: 'Le 2e set était 6-4 pas 6-3' },
+    });
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it('contester refuse un motif vide', async () => {
+    await expect(service.dispute('m1', 'u4', '   ')).rejects.toThrow('VALIDATION_ERROR');
   });
 
   it('refuse de confirmer un match déjà CONFIRMED', async () => {
