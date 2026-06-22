@@ -15,6 +15,8 @@ import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { Icon } from '@/components/ui/Icon';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { capacityFor, courtFormat } from '@/lib/courtType';
+import { cancellationPolicyLabel } from '@/lib/reservations';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -29,6 +31,12 @@ interface BookingModalProps {
   slug?: string;
   /** Nombre max de joueurs du terrain (single = 2, double = 4) — plafonne les partenaires. */
   maxPlayers?: number;
+  /** Clé du sport (padel, tennis…) — capacité nominale + contexte au récap. */
+  sportKey?: string;
+  /** Format du terrain (single/double) — badge au récap. */
+  format?: string;
+  /** Nom du terrain (ex. « Court 1 ») — affiché au récap. */
+  resourceName?: string;
   /** Soldes prépayés utilisables du joueur sur ce club (option « payer avec mon carnet »). */
   packages?: MemberPackage[];
   /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
@@ -41,6 +49,10 @@ interface BookingModalProps {
   requireOnlinePayment?: boolean;
   /** Exige une empreinte bancaire (anti-no-show). */
   requireCardFingerprint?: boolean;
+  /** Délai d'annulation gratuite du club (heures avant le début) — affichage récap. */
+  cancellationCutoffHours?: number;
+  /** Remboursement en cas d'annulation dans les délais — affichage récap. */
+  refundOnCancelWithinCutoff?: boolean;
 }
 
 const HOLD_SECONDS = 300; // miroir de HOLD_TTL_SECONDS (backend)
@@ -74,8 +86,8 @@ const BOOKING_ERRORS: Record<string, string> = {
 };
 
 export default function BookingModal({
-  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, packages = [], quotaStatus, onClose, onConfirmed,
-  clubId, requireOnlinePayment, requireCardFingerprint,
+  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], quotaStatus, onClose, onConfirmed,
+  clubId, requireOnlinePayment, requireCardFingerprint, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
@@ -108,6 +120,11 @@ export default function BookingModal({
   const totalPrice = totalCents % 100 === 0 ? String(totalCents / 100) : (totalCents / 100).toFixed(2).replace('.', ',');
   const perPlayer = euros(Math.floor(totalCents / nbPlayers));
   const durLabel = durationLabel(duration);
+
+  // Récap : capacité nominale du terrain (sport + format) → prix par personne (toujours affiché).
+  const capacity = capacityFor(sportKey, format);
+  const perPerson = euros(Math.round(totalCents / capacity));
+  const cancellationProvided = cancellationCutoffHours !== undefined || refundOnCancelWithinCutoff !== undefined;
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
@@ -205,10 +222,43 @@ export default function BookingModal({
               <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{durLabel}{slot.offPeak ? ' · heures creuses' : ''}</span>
             </div>
             <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0' }}>
+              {/* Type de court : nom + badge Single/Double + sport */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Type de court</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {resourceName && <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{resourceName}</span>}
+                  <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, color: th.textMute, background: th.bgElev, border: `1px solid ${th.lineStrong}`, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
+                </span>
+              </div>
+              {/* Date */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Date</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, textTransform: 'capitalize' }}>
+                  {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone }).format(new Date(slot.startTime))}
+                </span>
+              </div>
+              {/* Horaire */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
                 <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Horaire</span>
                 <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)}</span>
               </div>
+              {/* Durée */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Durée</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{durLabel}{slot.offPeak ? ' · heures creuses' : ''}</span>
+              </div>
+              {/* Prix par personne — toujours affiché (le total reste l'en-tête hero) */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', ...(cancellationProvided ? { borderBottom: `1px solid ${th.line}` } : {}) }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Prix par personne</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>≈ {perPerson} € / personne · {capacity} joueurs</span>
+              </div>
+              {/* Annulation (lecture seule) */}
+              {cancellationProvided && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '13px 0' }}>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Annulation</span>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, lineHeight: 1.4 }}>{cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)}</span>
+                </div>
+              )}
             </div>
 
             {showPartners && (

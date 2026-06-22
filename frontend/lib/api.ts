@@ -738,6 +738,8 @@ export interface ClubDetail {
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
   levelSystemEnabled: boolean;
+  cancellationCutoffHours: number;
+  refundOnCancelWithinCutoff: boolean;
   clubSports: ClubSportPublic[];
 }
 

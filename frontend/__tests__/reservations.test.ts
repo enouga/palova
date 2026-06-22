@@ -1,4 +1,4 @@
-import { isPlayerChangeOpen, isCancellationOpen } from '@/lib/reservations';
+import { isPlayerChangeOpen, isCancellationOpen, cancellationPolicyLabel } from '@/lib/reservations';
 import { MyReservation } from '@/lib/api';
 
 const NOW = Date.now();
@@ -30,5 +30,25 @@ describe('isPlayerChangeOpen / isCancellationOpen', () => {
     expect(isPlayerChangeOpen(r(5, 0, 'CANCELLED'), NOW)).toBe(false);
     expect(isCancellationOpen(r(5, 0, 'CANCELLED'), NOW)).toBe(false);
     expect(isPlayerChangeOpen(r(5, 0, 'PENDING'), NOW)).toBe(false);
+  });
+});
+
+describe('cancellationPolicyLabel', () => {
+  it('cutoff 0 → gratuit jusqu au début', () => {
+    expect(cancellationPolicyLabel(0, false)).toBe('Annulation gratuite jusqu’au début.');
+    expect(cancellationPolicyLabel(0, true)).toBe('Annulation gratuite jusqu’au début.');
+  });
+  it('cutoff undefined → gratuit jusqu au début', () => {
+    expect(cancellationPolicyLabel(undefined, true)).toBe('Annulation gratuite jusqu’au début.');
+  });
+  it('cutoff > 0 avec remboursement → mention du remboursement', () => {
+    const out = cancellationPolicyLabel(24, true);
+    expect(out).toContain('Annulation gratuite jusqu’à 24 h avant le début.');
+    expect(out).toContain('Remboursement si vous annulez à temps.');
+  });
+  it('cutoff > 0 sans remboursement → mention aucun remboursement', () => {
+    const out = cancellationPolicyLabel(24, false);
+    expect(out).toContain('Annulation gratuite jusqu’à 24 h avant le début.');
+    expect(out).toContain('Aucun remboursement passé ce délai.');
   });
 });

@@ -15,3 +15,11 @@ export function isPlayerChangeOpen(r: MyReservation, now: number): boolean {
 export function isCancellationOpen(r: MyReservation, now: number): boolean {
   return r.status !== 'CANCELLED' && withinWindow(r.startTime, r.resource.club.cancellationCutoffHours, now);
 }
+
+/** Phrase d'affichage de la politique d'annulation du club (lecture seule). */
+export function cancellationPolicyLabel(cutoffHours: number | undefined, refunds: boolean): string {
+  if (!cutoffHours || cutoffHours <= 0) return 'Annulation gratuite jusqu’au début.';
+  const head = `Annulation gratuite jusqu’à ${cutoffHours} h avant le début.`;
+  const tail = refunds ? 'Remboursement si vous annulez à temps.' : 'Aucun remboursement passé ce délai.';
+  return `${head} ${tail}`;
+}

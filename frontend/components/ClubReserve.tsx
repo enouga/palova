@@ -39,7 +39,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   );
   const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
-  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string } | null>(null);
+  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
@@ -113,16 +113,16 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
       if (res && slot) {
         setSelectedSportId(cs.id);
-        setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined });
+        setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined, sportKey: cs.sport.key, resourceName: res.resource.name });
         setDeepSlot(null);
         return;
       }
     }
   }, [deepSlot, availBySport, token, club.clubSports, durationBySport]);
 
-  const onSlot = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string) => {
+  const onSlot = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string, sportKey?: string, resourceName?: string) => {
     if (!token) { router.push('/login'); return; }
-    setBooking({ resourceId, price, slot, duration, format });
+    setBooking({ resourceId, price, slot, duration, format, sportKey, resourceName });
   };
 
   return (
@@ -219,7 +219,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                   // Créneaux du jour déjà commencés → affichés mais non réservables.
                                   const isPast = new Date(s.startTime).getTime() <= nowMs;
                                   return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
-                                    <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                    <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
                                       style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                       {formatHour(s.startTime, club.timezone)}
                                       {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
@@ -289,11 +289,16 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           timezone={club.timezone}
           slug={club.slug}
           maxPlayers={playerCount(booking.format)}
+          sportKey={booking.sportKey}
+          format={booking.format}
+          resourceName={booking.resourceName}
           packages={myPackages}
           quotaStatus={quotaStatus}
           clubId={club.id}
           requireOnlinePayment={club.requireOnlinePayment}
           requireCardFingerprint={club.requireCardFingerprint}
+          cancellationCutoffHours={club.cancellationCutoffHours}
+          refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}
           onClose={() => setBooking(null)}
           onConfirmed={() => {
             setBooking(null);

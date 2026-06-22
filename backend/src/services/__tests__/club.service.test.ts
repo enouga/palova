@@ -243,6 +243,19 @@ describe('levelSystemEnabled exposition', () => {
     expect(arg.select.levelSystemEnabled).toBe(true);
   });
 
+  it('getClubBySlug expose la politique d\'annulation (cutoff + remboursement)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'c1', slug: 'demo', name: 'Demo', status: 'ACTIVE',
+      cancellationCutoffHours: 24, refundOnCancelWithinCutoff: true, clubSports: [],
+    } as any);
+    const res = await svc.getClubBySlug('demo');
+    expect(res.cancellationCutoffHours).toBe(24);
+    expect(res.refundOnCancelWithinCutoff).toBe(true);
+    const arg = (prismaMock.club.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.select.cancellationCutoffHours).toBe(true);
+    expect(arg.select.refundOnCancelWithinCutoff).toBe(true);
+  });
+
   it('getClubForAdmin sélectionne levelSystemEnabled', async () => {
     prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
     await svc.getClubForAdmin('club-1');

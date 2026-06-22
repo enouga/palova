@@ -150,6 +150,8 @@ export class ClubService {
         requireOnlinePayment: true,
         requireCardFingerprint: true,
         levelSystemEnabled: true,
+        cancellationCutoffHours: true,
+        refundOnCancelWithinCutoff: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
