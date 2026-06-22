@@ -86,6 +86,18 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { refreshQuota(); }, [refreshQuota]);
 
+  // Sport par défaut = sport préféré du joueur si le club le propose, sinon clubSports[0].
+  // On ne réécrase pas un changement manuel : on bascule uniquement si la valeur courante
+  // est encore le défaut initial (clubSports[0]).
+  useEffect(() => {
+    if (!token) return;
+    const defaultId = club.clubSports[0]?.id ?? '';
+    api.getMyProfile(token).then((p) => {
+      const match = club.clubSports.find((cs) => cs.sport.key === p.preferredSport?.key);
+      if (match) setSelectedSportId((cur) => (cur === defaultId ? match.id : cur));
+    }).catch(() => {});
+  }, [token, club.clubSports]);
+
   const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
     setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
     try { const a = await api.getClubAvailability(club.slug, dateArg, dur, clubSportId); setAvailBySport((s) => ({ ...s, [clubSportId]: a })); }
