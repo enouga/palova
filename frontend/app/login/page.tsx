@@ -73,7 +73,7 @@ export default function LoginPage() {
                 Réservez votre<br />terrain en<br /><span style={{ fontStyle: 'italic' }}>quelques</span> secondes.
               </div>
               <div style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 16, lineHeight: 1.5, maxWidth: 300 }}>
-                Disponibilités en direct, créneaux bloqués 10 minutes le temps de confirmer.
+                Disponibilités en direct, créneaux bloqués 5 minutes le temps de confirmer.
               </div>
             </div>
 
