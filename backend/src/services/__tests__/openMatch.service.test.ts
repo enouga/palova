@@ -25,8 +25,9 @@ describe('OpenMatchService', () => {
     mockNotifyAdded.mockReset().mockResolvedValue(undefined);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
-    // Default: sport found (needed by RatingService.getLevelsForUsers in listOpenMatches)
+    // Default: sport found (needed by RatingService.getLevelsBySport in listOpenMatches)
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
     // Default: no ratings (additive — tests that need specific ratings override this)
     prismaMock.playerRating.findMany.mockResolvedValue([] as any);
   });
@@ -36,7 +37,7 @@ describe('OpenMatchService', () => {
       prismaMock.reservation.findMany.mockResolvedValue([
         {
           id: 'm1', startTime: future(48), endTime: future(49),
-          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' } },
+          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [
             { userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
             { userId: 'viewer', isOrganizer: false, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
@@ -72,7 +73,7 @@ describe('OpenMatchService', () => {
         {
           id: 'm2', startTime: future(48), endTime: future(49),
           targetLevelMin: 3, targetLevelMax: 5,
-          resource: { id: 'court-2', name: 'Court 2', attributes: { format: 'double' } },
+          resource: { id: 'court-2', name: 'Court 2', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [
             { userId: 'player-rated', isOrganizer: true, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
             { userId: 'player-no-rating', isOrganizer: false, user: { firstName: 'Bob', lastName: 'B', avatarUrl: null } },
@@ -80,9 +81,9 @@ describe('OpenMatchService', () => {
         },
       ] as any);
 
-      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'player-rated', displayLevel: 4, isProvisional: false },
+        { userId: 'player-rated', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
       ] as any);
 
       const out = await service.listOpenMatches('club-demo', 'viewer');
@@ -95,6 +96,45 @@ describe('OpenMatchService', () => {
 
       const unratedPlayer = out[0].players.find((p: any) => p.userId === 'player-no-rating');
       expect(unratedPlayer?.level).toBeNull();
+    });
+
+    it('attribue le niveau du sport du terrain (padel vs tennis) à chaque joueur', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'match-padel', startTime: future(48), endTime: future(49),
+          resource: { id: 'court-padel', name: 'Court Padel', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
+          participants: [
+            { userId: 'player-a', isOrganizer: true, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
+          ],
+        },
+        {
+          id: 'match-tennis', startTime: future(48), endTime: future(49),
+          resource: { id: 'court-tennis', name: 'Court Tennis', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
+          participants: [
+            { userId: 'player-a', isOrganizer: false, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
+          ],
+        },
+      ] as any);
+
+      // getLevelsBySport : sport.findMany + playerRating.findMany
+      prismaMock.sport.findMany.mockResolvedValue([
+        { id: 'sport-padel', key: 'padel' },
+        { id: 'sport-tennis', key: 'tennis' },
+      ] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([
+        { userId: 'player-a', sportId: 'sport-padel', displayLevel: 5, isProvisional: false },
+        { userId: 'player-a', sportId: 'sport-tennis', displayLevel: 7, isProvisional: true },
+      ] as any);
+
+      const out = await service.listOpenMatches('club-demo', 'viewer');
+
+      // Partie padel : player-a doit avoir niveau padel (5)
+      const padelMatch = out.find((m: any) => m.id === 'match-padel');
+      expect(padelMatch?.players[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: false });
+
+      // Partie tennis : player-a doit avoir niveau tennis (7)
+      const tennisMatch = out.find((m: any) => m.id === 'match-tennis');
+      expect(tennisMatch?.players[0].level).toEqual({ level: 7, tier: expect.any(String), isProvisional: true });
     });
   });
 

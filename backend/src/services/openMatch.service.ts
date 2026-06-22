@@ -57,7 +57,7 @@ export class OpenMatchService {
       },
       orderBy: { startTime: 'asc' },
       include: {
-        resource: { select: { id: true, name: true, attributes: true } },
+        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
           select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
@@ -66,15 +66,18 @@ export class OpenMatchService {
       // targetLevelMin / targetLevelMax are top-level scalar fields returned by include by default
     });
 
-    // Collect all participant userIds across all matches in one pass.
-    const allUserIds = [...new Set(matches.flatMap((m) => m.participants.map((p) => p.userId)))];
-    const levels = allUserIds.length > 0
-      ? await this.ratingService.getLevelsForUsers(allUserIds, 'padel')
+    // Collect (userId, sportKey) pairs — one per participant per match — for a single batched lookup.
+    const pairs = matches.flatMap((m) =>
+      m.participants.map((p) => ({ userId: p.userId, sportKey: m.resource.clubSport.sport.key })),
+    );
+    const levels = pairs.length > 0
+      ? await this.ratingService.getLevelsBySport(pairs)
       : {};
 
     return matches.map((m) => {
       const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
       const row = m as typeof m & { targetLevelMin: number | null; targetLevelMax: number | null };
+      const sportKey = m.resource.clubSport.sport.key;
       return {
         id: m.id,
         resourceName: m.resource.name,
@@ -89,7 +92,7 @@ export class OpenMatchService {
         targetLevelMax: row.targetLevelMax ?? null,
         players: m.participants.map((p) => ({
           userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
-          level: levels[p.userId] ?? null,
+          level: levels[`${p.userId}:${sportKey}`] ?? null,
         })),
       };
     });
