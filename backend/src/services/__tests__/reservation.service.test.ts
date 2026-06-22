@@ -883,7 +883,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
       (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'requires_payment_method', payment_method: null });
 
-      await expect(service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' }))
+      await expect(service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: true }))
         .rejects.toThrow('PAYMENT_NOT_SUCCEEDED');
     });
 
@@ -896,7 +896,7 @@ describe('ReservationService', () => {
       prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
 
-      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: true });
 
       expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ method: 'ONLINE', stripePaymentIntentId: 'pi_xxx' }),
@@ -913,7 +913,7 @@ describe('ReservationService', () => {
       prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
 
-      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: true });
 
       const arg = (prismaMock.payment.create as jest.Mock).mock.calls[0][0];
       expect(arg.data.method).toBe('ONLINE');
@@ -929,7 +929,7 @@ describe('ReservationService', () => {
       prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
 
-      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' });
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: true });
 
       const arg = (prismaMock.payment.create as jest.Mock).mock.calls[0][0];
       expect(Number(arg.data.amount)).toBe(25);
@@ -940,6 +940,55 @@ describe('ReservationService', () => {
 
       await expect(service.confirmReservation('res-1', 'user-1', {}))
         .rejects.toThrow('CARD_FINGERPRINT_REQUIRED');
+    });
+
+    it('confirme avec PI + cgvAccepted=true et enregistre cgvAcceptedAt', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+      (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'succeeded', payment_method: 'pm_xxx' });
+      prismaMock.clubStripeCustomer.updateMany.mockResolvedValue({ count: 1 } as any);
+      mockHappyTx();
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: true });
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'CONFIRMED', cgvAcceptedAt: expect.any(Date) }),
+      }));
+    });
+
+    it('leve CGV_NOT_ACCEPTED avec un PI mais cgvAccepted absent (ne confirme pas)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx' }))
+        .rejects.toThrow('CGV_NOT_ACCEPTED');
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('leve CGV_NOT_ACCEPTED avec un PI mais cgvAccepted=false', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', { stripePaymentIntentId: 'pi_xxx', cgvAccepted: false }))
+        .rejects.toThrow('CGV_NOT_ACCEPTED');
+    });
+
+    it('leve CGV_NOT_ACCEPTED avec un SetupIntent sans cgvAccepted (l empreinte exige aussi les CGV)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', { stripeSetupIntentId: 'seti_xxx' }))
+        .rejects.toThrow('CGV_NOT_ACCEPTED');
+    });
+
+    it('« régler au club » (aucun intent, aucun cgvAccepted) confirme sans cgvAcceptedAt', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe() as any);
+      mockHappyTx();
+
+      await service.confirmReservation('res-1', 'user-1', {});
+
+      const arg = (prismaMock.reservation.update as jest.Mock).mock.calls[0][0];
+      expect(arg.data.status).toBe('CONFIRMED');
+      expect(arg.data.cgvAcceptedAt).toBeUndefined();
     });
   });
 

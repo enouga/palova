@@ -30,6 +30,7 @@ const ERROR_STATUS: Record<string, number> = {
   CARD_FINGERPRINT_REQUIRED: 402,
   PAYMENT_NOT_SUCCEEDED:     402,
   SETUP_NOT_SUCCEEDED:       402,
+  CGV_NOT_ACCEPTED:          402,
   QUOTA_PEAK_REACHED:       409,
   QUOTA_OFFPEAK_REACHED:    409,
   TOO_MANY_PLAYERS:         409,
@@ -106,6 +107,7 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
         paymentSource: typeof packageId === 'string' && packageId ? { packageId } : undefined,
         stripePaymentIntentId: typeof req.body?.stripePaymentIntentId === 'string' ? req.body.stripePaymentIntentId : undefined,
         stripeSetupIntentId:   typeof req.body?.stripeSetupIntentId   === 'string' ? req.body.stripeSetupIntentId   : undefined,
+        cgvAccepted:           req.body?.cgvAccepted === true,
       },
     );
     res.json(confirmed);

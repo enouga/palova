@@ -321,6 +321,7 @@ export class ReservationService {
       paymentSource?: { packageId: string };
       stripePaymentIntentId?: string;
       stripeSetupIntentId?: string;
+      cgvAccepted?: boolean;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -362,6 +363,12 @@ export class ReservationService {
     if (club?.requireCardFingerprint && !club.requireOnlinePayment && !options?.stripeSetupIntentId) {
       throw new Error('CARD_FINGERPRINT_REQUIRED');
     }
+    // CGV obligatoires dès qu'une carte est en jeu (PI = paiement, ou SI = empreinte/enregistrement).
+    const hasCardIntent = !!(options?.stripePaymentIntentId || options?.stripeSetupIntentId);
+    if (hasCardIntent && !options?.cgvAccepted) {
+      throw new Error('CGV_NOT_ACCEPTED');
+    }
+    const cgvAcceptedAt = (hasCardIntent && options?.cgvAccepted) ? new Date() : undefined;
 
     let stripePaymentMethodId: string | null = null;
     let chargedCents: number | null = null;
@@ -477,7 +484,7 @@ export class ReservationService {
 
       return tx.reservation.update({
         where: { id: reservationId },
-        data:  { status: 'CONFIRMED' },
+        data:  { status: 'CONFIRMED', ...(cgvAcceptedAt ? { cgvAcceptedAt } : {}) },
       });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

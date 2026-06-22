@@ -102,6 +102,23 @@ describe('DELETE /api/reservations/:id (annulation)', () => {
   });
 });
 
+describe('POST /api/reservations/:id/confirm — garde CGV', () => {
+  it('402 CGV_NOT_ACCEPTED avec stripePaymentIntentId et cgvAccepted:false', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'user-1', status: 'PENDING', createdAt: new Date(),
+      resourceId: 'court-1', startTime: new Date(), endTime: new Date(), totalPrice: 25,
+      resource: { clubId: 'club-demo', club: { requireOnlinePayment: true, requireCardFingerprint: false, stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/confirm').set('Authorization', `Bearer ${token}`)
+      .send({ stripePaymentIntentId: 'pi_xxx', cgvAccepted: false });
+
+    expect(res.status).toBe(402);
+    expect(res.body.error).toBe('CGV_NOT_ACCEPTED');
+    expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/reservations/hold — fourchette de niveau (targetLevelMin/Max)', () => {
   beforeEach(() => {
     redisMock.set.mockResolvedValue('OK');
