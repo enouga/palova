@@ -20,11 +20,13 @@ interface Props {
   token: string;
   /** Régler uniquement sa part (par personne) plutôt que le total — paiement seulement. */
   payShare?: boolean;
+  /** Acceptation des CGV (paiement/empreinte) — transmise au backend, qui l'exige. */
+  cgvAccepted?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function StripeForm({ reservationId, type, amountLabel, token, onSuccess, onCancel }: Props) {
+function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, onSuccess, onCancel }: Props) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,7 @@ function StripeForm({ reservationId, type, amountLabel, token, onSuccess, onCanc
       await api.confirmReservation(reservationId, token, {
         stripePaymentIntentId: type === 'payment' ? result.paymentIntent?.id : undefined,
         stripeSetupIntentId: type === 'setup' ? result.setupIntent?.id : undefined,
+        cgvAccepted,
       });
       onSuccess();
     } catch (e: any) {

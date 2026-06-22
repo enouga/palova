@@ -9,6 +9,7 @@ jest.mock('../lib/api', () => ({
     confirmReservation: jest.fn(),
     cancelReservation:  jest.fn(),
     getMyRating:        jest.fn().mockResolvedValue(null),
+    getClubPage:        jest.fn().mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' }),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -17,10 +18,11 @@ jest.mock('../lib/api', () => ({
 // les props reçues (type / payShare / amountLabel) pour pouvoir les asserter.
 jest.mock('../components/StripePaymentStep', () => ({
   __esModule: true,
-  default: (props: { type: string; payShare?: boolean; amountLabel: string }) => (
+  default: (props: { type: string; payShare?: boolean; amountLabel: string; cgvAccepted?: boolean }) => (
     <div data-testid="stripe-step"
       data-type={props.type}
       data-payshare={String(!!props.payShare)}
+      data-cgv={String(!!props.cgvAccepted)}
       data-amount={props.amountLabel} />
   ),
 }));
@@ -91,6 +93,7 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     await openPending({ stripeActive: true });
     fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
     fireEvent.click(screen.getByRole('button', { name: /Ma part/ })); // 40 € / 4 = 10 €
+    fireEvent.click(screen.getByRole('checkbox', { name: /conditions générales/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Payer 10€/ }));
 
     const step = await screen.findByTestId('stripe-step');
@@ -102,6 +105,7 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
   it('en ligne + « Total » → étape Stripe avec payShare=false et le total', async () => {
     await openPending({ stripeActive: true });
     fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /conditions générales/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Payer 40€/ }));
 
     const step = await screen.findByTestId('stripe-step');
@@ -111,6 +115,7 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
 
   it('empreinte requise (sans paiement en ligne) → étape Stripe setup, payShare ignoré', async () => {
     await openPending({ requireCardFingerprint: true, stripeActive: false });
+    fireEvent.click(screen.getByRole('checkbox', { name: /conditions générales/i }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
 
     const step = await screen.findByTestId('stripe-step');
@@ -127,5 +132,81 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     const confirm = screen.getByRole('button', { name: /Payer 40€|Confirmer/ });
     expect(confirm).toBeDisabled();
     expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
+  });
+});
+
+describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
+  });
+
+  it('paiement en ligne → case CGV affichée ; bouton désactivé tant que non cochée, puis cgvAccepted=true à l\'étape Stripe', async () => {
+    await openPending({ stripeActive: true });
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+
+    const checkbox = screen.getByRole('checkbox', { name: /conditions générales/i });
+    expect(checkbox).toBeInTheDocument();
+
+    const payBtn = screen.getByRole('button', { name: /^Payer 40€/ });
+    expect(payBtn).toBeDisabled();
+
+    fireEvent.click(checkbox);
+    expect(payBtn).not.toBeDisabled();
+
+    fireEvent.click(payBtn);
+    const step = await screen.findByTestId('stripe-step');
+    expect(step).toHaveAttribute('data-cgv', 'true');
+  });
+
+  it('« Régler au club » → pas de case CGV, confirmation non bloquée', async () => {
+    await openPending({ stripeActive: true });
+    // payMode par défaut = 'club' quand le paiement en ligne n'est pas imposé.
+    expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: /Confirmer et payer/ });
+    expect(confirm).not.toBeDisabled();
+  });
+
+  it('carnet prépayé sélectionné → pas de case CGV', async () => {
+    await openPending({ stripeActive: true, packages: [{ id: 'pkg-1', kind: 'ENTRIES', creditsRemaining: 10 } as any] });
+    fireEvent.click(screen.getByRole('button', { name: /Carnet — 10 entrées/ }));
+    expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
+  });
+
+  it('getClubPage rejette (PAGE_NOT_FOUND) → case CGV TOUJOURS affichée + note de repli, toujours requise', async () => {
+    (api.getClubPage as jest.Mock).mockRejectedValue(new Error('PAGE_NOT_FOUND'));
+    await openPending({ stripeActive: true });
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+
+    const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
+    expect(checkbox).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/conditions générales de la plateforme/i)).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: /^Payer 40€/ })).toBeDisabled();
+  });
+
+  it('empreinte bancaire (setup intent) → case CGV affichée et requise', async () => {
+    await openPending({ requireCardFingerprint: true, stripeActive: false });
+    const checkbox = screen.getByRole('checkbox', { name: /conditions générales/i });
+    expect(checkbox).toBeInTheDocument();
+
+    const confirm = screen.getByRole('button', { name: /Confirmer et payer/ });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(checkbox);
+    expect(confirm).not.toBeDisabled();
+  });
+
+  it('liens CGV / confidentialité = ancres vers les pages publiques (nouvel onglet)', async () => {
+    await openPending({ stripeActive: true });
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+
+    const cgvLink = screen.getByRole('link', { name: /conditions générales de vente/i });
+    expect(cgvLink).toHaveAttribute('href', '/cgv');
+    expect(cgvLink).toHaveAttribute('target', '_blank');
+    expect(cgvLink).toHaveAttribute('rel', expect.stringContaining('noopener'));
+
+    const privacyLink = screen.getByRole('link', { name: /politique de confidentialité/i });
+    expect(privacyLink).toHaveAttribute('href', '/confidentialite');
+    expect(privacyLink).toHaveAttribute('target', '_blank');
   });
 });

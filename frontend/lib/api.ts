@@ -120,6 +120,7 @@ export const api = {
       paymentSource?: { packageId: string };
       stripePaymentIntentId?: string;
       stripeSetupIntentId?: string;
+      cgvAccepted?: boolean;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/confirm`, {

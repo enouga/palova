@@ -99,6 +99,10 @@ export default function BookingModal({
   const [errorMsg, setErrorMsg]       = useState('');
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [stripeStep, setStripeStep]   = useState(false);
+  // Acceptation CGV — requise dès qu'on passe par une empreinte/paiement CB Stripe.
+  const [cgvAccepted, setCgvAccepted] = useState(false);
+  // Le club a-t-il publié ses CGV ? ('published' → lien /cgv ; 'fallback' → CGV plateforme).
+  const [cgvStatus, setCgvStatus]     = useState<'published' | 'fallback' | null>(null);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
   // En ligne : régler sa part (par personne) ou le total.
@@ -142,6 +146,11 @@ export default function BookingModal({
   const onlineShare = payAmount === 'share' && !shareTooSmall;
   const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
 
+  // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
+  // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
+  // on exige l'acceptation des CGV (le backend l'impose aussi côté serveur).
+  const cardIntentPath = !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint);
+
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
   useEffect(() => {
@@ -156,6 +165,20 @@ export default function BookingModal({
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
   }, [showPartners, token, levelEnabled]);
+
+  // Au moment où le chemin CB Stripe devient actif, on vérifie (une seule fois) si le
+  // club a publié ses CGV. Publié → lien vers /cgv ; sinon (PAGE_NOT_FOUND ou erreur) →
+  // repli sur les conditions générales de la plateforme. La case reste requise dans tous
+  // les cas (le serveur l'exige aussi).
+  useEffect(() => {
+    if (!cardIntentPath || cgvStatus !== null) return;
+    if (!slug) { setCgvStatus('fallback'); return; }
+    let cancelled = false;
+    api.getClubPage(slug, 'CGV')
+      .then(() => { if (!cancelled) setCgvStatus('published'); })
+      .catch(() => { if (!cancelled) setCgvStatus('fallback'); });
+    return () => { cancelled = true; };
+  }, [cardIntentPath, slug, cgvStatus]);
 
   useEffect(() => {
     if (phase !== 'pending') return;
@@ -196,7 +219,7 @@ export default function BookingModal({
     // Sans carnet : si une avenue en ligne est requise (paiement) ou une empreinte
     // bancaire (setup intent), bascule vers l'étape Stripe. Sinon on enchaîne sur le
     // confirmReservation ci-dessous (carnet → avec source ; régler au club → sans source).
-    if (!paySource && ((payMode === 'online' && onlineAvailable) || requireCardFingerprint)) {
+    if (cardIntentPath) {
       setStripeStep(true);
       return;
     }
@@ -440,9 +463,30 @@ export default function BookingModal({
                 )}
               </div>
             </div>
+
+            {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
+            {cardIntentPath && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 16, cursor: 'pointer' }}>
+                <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
+                  aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+                <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.45 }}>
+                  J'accepte les{' '}
+                  <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>conditions générales de vente</a>
+                  {' '}et la{' '}
+                  <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>politique de confidentialité</a>.
+                  {cgvStatus === 'fallback' && (
+                    <span style={{ display: 'block', color: th.textFaint, fontSize: 11.5, marginTop: 3 }}>
+                      Les conditions générales de la plateforme s'appliquent.
+                    </span>
+                  )}
+                </span>
+              </label>
+            )}
+
             <div style={{ display: 'flex', gap: 11, marginTop: 22 }}>
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
-              <Btn icon="arrowR" onClick={handleConfirm} disabled={!paySource && payMode === 'online' && onlineRequiredButUnavailable} style={{ flex: 1 }}>
+              <Btn icon="arrowR" onClick={handleConfirm} disabled={(!paySource && payMode === 'online' && onlineRequiredButUnavailable) || (cardIntentPath && !cgvAccepted)} style={{ flex: 1 }}>
                 {paySource ? 'Confirmer avec mon solde'
                   : (payMode === 'online' && onlineAvailable) ? `Payer ${onlineAmountLabel}`
                   : 'Confirmer et payer'}
@@ -457,6 +501,7 @@ export default function BookingModal({
                   type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
                   payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
                   amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
+                  cgvAccepted={cgvAccepted}
                   token={token}
                   onSuccess={() => {
                     setStripeStep(false);
