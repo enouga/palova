@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex } from '@/lib/api';
+import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
 import { LevelSourceNote } from '@/components/player/LevelSourceNote';
@@ -56,6 +56,9 @@ export default function MyProfilePage() {
   const [calibrating, setCalibrating] = useState(false);
   const [ratingBusy, setRatingBusy] = useState(false);
 
+  // Sports disponibles (pour le sélecteur de sport préféré)
+  const [sports, setSports] = useState<Sport[]>([]);
+
   // Préférences & licence
   const [savingLocale, setSavingLocale] = useState(false);
   const [license, setLicense] = useState('');
@@ -71,6 +74,8 @@ export default function MyProfilePage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
+
+  useEffect(() => { api.getSports().then(setSports).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -119,6 +124,13 @@ export default function MyProfilePage() {
     setError(null);
     setProfile({ ...profile, showInLeaderboard: next }); // optimiste
     try { setProfile(await api.updateMyProfile({ showInLeaderboard: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
+  const handlePreferredSport = async (id: string) => {
+    if (!token) return;
+    setError(null);
+    try { setProfile(await api.updateMyProfile({ preferredSportId: id || null }, token)); }
     catch (e) { setError((e as Error).message); }
   };
 
@@ -342,6 +354,21 @@ export default function MyProfilePage() {
                   options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
                 />
               </div>
+              {sports.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label htmlFor="pref-sport" style={label}>Sport préféré</label>
+                  <select
+                    id="pref-sport"
+                    value={profile.preferredSport?.id ?? ''}
+                    onChange={(e) => handlePreferredSport(e.target.value)}
+                    style={{ ...input, cursor: 'pointer' }}
+                    aria-label="Sport préféré"
+                  >
+                    <option value="">Aucun</option>
+                    {sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+              )}
             </section>
 
             {/* Mot de passe */}

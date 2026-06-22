@@ -26,6 +26,7 @@ jest.mock('../lib/api', () => ({
     getRatingHistory: jest.fn().mockResolvedValue([]),
     calibrateRating: jest.fn(),
     changePassword: jest.fn(),
+    getSports: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -165,5 +166,20 @@ describe('Page Mon profil', () => {
     fireEvent.click(screen.getByText('Modifier le mot de passe'));
     expect(await screen.findByText('Le mot de passe doit faire au moins 8 caractères.')).toBeInTheDocument();
     expect(api.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('enregistre le sport préféré', async () => {
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
+    ]);
+    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: null });
+    api.updateMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-tennis', key: 'tennis', name: 'Tennis' } });
+    wrap();
+    const select = await screen.findByLabelText(/sport préféré/i);
+    fireEvent.change(select, { target: { value: 'sport-tennis' } });
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredSportId: 'sport-tennis' }), expect.any(String),
+    ));
   });
 });
