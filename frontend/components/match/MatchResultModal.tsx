@@ -42,7 +42,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
 
   const wins: [number, number] = sets.reduce<[number, number]>(
     (acc, [a, b]) => { if (a > b) acc[0]++; else if (b > a) acc[1]++; return acc; }, [0, 0]);
-  const winner = compositionOk && setsOk ? winnerFromSets(sets) : null;
+  const winner = compositionOk && setsOk && wins[0] !== wins[1] ? winnerFromSets(sets) : null;
 
   const assign = (userId: string, t: 1 | 2) =>
     setTeam((prev) => ({ ...prev, [userId]: prev[userId] === t ? undefined : t }));
@@ -67,10 +67,10 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
   const stepBtn = { border: `1px solid ${th.lineStrong}`, color: th.textMute } as const;
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="match-result-title" className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
       <div className="w-full max-w-md rounded-t-2xl p-4 sm:rounded-2xl" style={{ background: th.surface, color: th.text, fontFamily: th.fontUI }}>
         <div className="mb-4">
-          <h2 className="text-lg font-semibold">Saisir le résultat</h2>
+          <h2 id="match-result-title" className="text-lg font-semibold">Saisir le résultat</h2>
           {context && <p className="mt-0.5 text-sm" style={{ color: th.textMute }}>{fmtContext(context)}</p>}
         </div>
 
@@ -96,7 +96,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
                 {([1, 2] as const).map((t) => {
                   const active = team[p.userId] === t;
                   return (
-                    <button key={t} type="button" data-testid={`team${t}-${p.userId}`} disabled={teamFull(t, p.userId)}
+                    <button key={t} type="button" data-testid={`team${t}-${p.userId}`} aria-label={`Équipe ${t}`} disabled={teamFull(t, p.userId)}
                       onClick={() => assign(p.userId, t)}
                       className="px-3 py-1 text-sm font-semibold disabled:opacity-40"
                       style={active ? { background: TEAM_COLORS[t], color: inkOn(TEAM_COLORS[t]) } : { background: th.surface2, color: th.textMute }}>

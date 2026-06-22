@@ -78,3 +78,24 @@ it('aucune ligne de contexte quand context est absent', () => {
   renderModal();
   expect(screen.queryByText(/Court 2/)).toBeNull();
 });
+
+it('affiche le vainqueur Équipe 2 quand elle gagne', () => {
+  renderModal();
+  assignTeams();
+  for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('set0-team1-plus'));
+  for (let i = 0; i < 6; i++) fireEvent.click(screen.getByTestId('set0-team2-plus'));
+  expect(screen.getByText(/Équipe 2 gagne/)).toBeInTheDocument();
+});
+
+it('pas de badge vainqueur si les sets sont à égalité (1 set chacun)', () => {
+  renderModal();
+  assignTeams();
+  // set 1 : 6-4 (équipe 1)
+  for (let i = 0; i < 6; i++) fireEvent.click(screen.getByTestId('set0-team1-plus'));
+  for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('set0-team2-plus'));
+  // ajoute set 2 : 4-6 (équipe 2)
+  fireEvent.click(screen.getByText('+ Ajouter un set'));
+  for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('set1-team1-plus'));
+  for (let i = 0; i < 6; i++) fireEvent.click(screen.getByTestId('set1-team2-plus'));
+  expect(screen.queryByText(/gagne/)).toBeNull();
+});
