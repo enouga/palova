@@ -210,7 +210,7 @@ describe('EventService lectures', () => {
   });
 
   it('listParticipants : inscrits actifs (noms + avatar, jamais l e-mail)', async () => {
-    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: null } as any);
     prismaMock.eventRegistration.findMany.mockResolvedValue([
       { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: '/uploads/avatars/a.jpg' } },
     ] as any);
@@ -225,7 +225,7 @@ describe('EventService lectures', () => {
   });
 
   it('listParticipants enrichit les entrées avec level (UserLevel ou null)', async () => {
-    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED' } as any);
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: { sport: { key: 'padel' } } } as any);
     prismaMock.eventRegistration.findMany.mockResolvedValue([
       { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
       { id: 'r2', status: 'CONFIRMED', userId: 'user-b', user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
@@ -241,6 +241,39 @@ describe('EventService lectures', () => {
     expect(out[1].level).toBeNull();
     // userId ne doit pas fuiter dans la réponse
     expect((out[0] as any).userId).toBeUndefined();
+  });
+
+  it('listParticipants AVEC sport : niveaux calculés pour le sport de l event', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: { sport: { key: 'tennis' } } } as any);
+    prismaMock.eventRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'user-a', displayLevel: 3, isProvisional: false },
+    ] as any);
+
+    const out = await service.listParticipants('e1');
+
+    expect(out[0].level).toEqual({ level: 3, tier: expect.any(String), isProvisional: false });
+    // doit avoir appelé getLevelsForUsers avec le sport de l event (tennis)
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ key: 'tennis' }),
+    }));
+  });
+
+  it('listParticipants SANS sport : aucun niveau, getLevelsForUsers pas appelé', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ status: 'PUBLISHED', clubSport: null } as any);
+    prismaMock.eventRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', userId: 'user-a', user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+    ] as any);
+
+    const out = await service.listParticipants('e1');
+
+    expect(out[0].level).toBeNull();
+    // sport.findUnique ne doit PAS être appelé (on ne calcule pas de niveau)
+    expect(prismaMock.sport.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.playerRating.findMany).not.toHaveBeenCalled();
   });
 
   it('listUserRegistrations : inscriptions actives avec event + club', async () => {
@@ -290,6 +323,64 @@ describe('EventService admin', () => {
     prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
     prismaMock.eventRegistration.count.mockResolvedValue(3 as any);
     await expect(service.deleteEvent('e1', 'club-demo')).rejects.toThrow('HAS_REGISTRATIONS');
+  });
+
+  it('createEvent : accepte clubSportId valide appartenant au club', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.clubEvent.create.mockResolvedValue({ id: 'e1' } as any);
+    await service.createEvent('club-demo', { ...validInput, clubSportId: 'cs1' });
+    expect(prismaMock.clubSport.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'cs1', clubId: 'club-demo' }),
+    }));
+    expect(prismaMock.clubEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubSportId: 'cs1' }),
+    }));
+  });
+
+  it('createEvent : refuse un clubSportId qui n appartient pas au club', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue(null as any);
+    await expect(service.createEvent('club-demo', { ...validInput, clubSportId: 'cs-autre' }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('createEvent : accepte clubSportId null (pas de sport)', async () => {
+    prismaMock.clubEvent.create.mockResolvedValue({ id: 'e1' } as any);
+    await service.createEvent('club-demo', { ...validInput, clubSportId: null });
+    // pas de vérification clubSport
+    expect(prismaMock.clubSport.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.clubEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubSportId: null }),
+    }));
+  });
+
+  it('updateEvent : accepte clubSportId valide appartenant au club', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
+    await service.updateEvent('e1', 'club-demo', { clubSportId: 'cs1' });
+    expect(prismaMock.clubSport.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'cs1', clubId: 'club-demo' }),
+    }));
+    expect(prismaMock.clubEvent.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubSportId: 'cs1' }),
+    }));
+  });
+
+  it('updateEvent : refuse un clubSportId qui n appartient pas au club', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubSport.findFirst.mockResolvedValue(null as any);
+    await expect(service.updateEvent('e1', 'club-demo', { clubSportId: 'cs-autre' }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('updateEvent : accepte clubSportId null pour retirer le sport', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
+    await service.updateEvent('e1', 'club-demo', { clubSportId: null });
+    expect(prismaMock.clubSport.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.clubEvent.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubSportId: null }),
+    }));
   });
 
   it('adminRemoveRegistration : annule et promeut sous verrou', async () => {

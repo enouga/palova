@@ -13,6 +13,7 @@ export interface CreateEventInput {
   capacity?: number | null;
   price?: number | null;
   memberOnly?: boolean;
+  clubSportId?: string | null;
 }
 export type UpdateEventInput = Partial<CreateEventInput & { status: ClubEventStatus }>;
 
@@ -151,7 +152,10 @@ export class EventService {
 
   /** Liste publique des inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
   async listParticipants(eventId: string) {
-    const e = await prisma.clubEvent.findUnique({ where: { id: eventId }, select: { status: true } });
+    const e = await prisma.clubEvent.findUnique({
+      where: { id: eventId },
+      select: { status: true, clubSport: { select: { sport: { select: { key: true } } } } },
+    });
     if (!e || e.status === 'DRAFT') throw new Error('EVENT_NOT_FOUND');
     const registrations = await prisma.eventRegistration.findMany({
       where: { eventId, status: { not: 'CANCELLED' } },
@@ -164,8 +168,9 @@ export class EventService {
       },
     });
     const allUserIds = registrations.map((r) => r.userId);
+    const sportKey = e.clubSport?.sport.key ?? null;
     const ratingService = new RatingService();
-    const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, 'padel') : {};
+    const levels = sportKey && allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, sportKey) : {};
     return registrations.map(({ userId, ...r }) => ({
       ...r,
       level: levels[userId] ?? null,
@@ -217,6 +222,11 @@ export class EventService {
 
   async createEvent(clubId: string, input: CreateEventInput) {
     const data = this.validateEventInput(input, true);
+    if (input.clubSportId != null) {
+      const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId } });
+      if (!cs) throw new Error('VALIDATION_ERROR');
+    }
+    (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
     return prisma.clubEvent.create({ data: { clubId, ...data } as Prisma.ClubEventUncheckedCreateInput });
   }
 
@@ -227,6 +237,13 @@ export class EventService {
     if (input.status !== undefined) {
       if (!['DRAFT', 'PUBLISHED', 'CANCELLED'].includes(input.status as string)) throw new Error('VALIDATION_ERROR');
       (data as Record<string, unknown>).status = input.status;
+    }
+    if ('clubSportId' in input) {
+      if (input.clubSportId != null) {
+        const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId } });
+        if (!cs) throw new Error('VALIDATION_ERROR');
+      }
+      (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
     }
     return prisma.clubEvent.update({ where: { id: eventId }, data });
   }
