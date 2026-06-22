@@ -4,7 +4,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
 
-jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn() }));
+jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn(), notifyNewMatchComment: jest.fn() }));
 
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant');
 const token = (id = 'u1') => jwt.sign({ id, email: 'x@x.fr' }, process.env.JWT_SECRET!);
@@ -59,5 +59,46 @@ describe('POST /api/matches/:id/confirm', () => {
     }));
     const res = await request(app).post('/api/matches/m1/confirm').set('Authorization', `Bearer ${token('u4')}`);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /api/matches/:id/comments', () => {
+  it('renvoie le fil pour un joueur du match', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({
+      id: 'm1', clubId: 'c1', status: 'DISPUTED', players: [{ userId: 'u1' }],
+    } as any);
+    prismaMock.matchComment.findMany.mockResolvedValue([] as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([] as any);
+    const res = await request(app).get('/api/matches/m1/comments').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('DISPUTED');
+  });
+
+  it('403 pour un tiers', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ id: 'm1', clubId: 'c1', status: 'DISPUTED', players: [{ userId: 'uX' }] } as any);
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    const res = await request(app).get('/api/matches/m1/comments').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN');
+  });
+});
+
+describe('POST /api/matches/:id/comments', () => {
+  it('409 si le match n est pas en litige', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ id: 'm1', clubId: 'c1', status: 'CONFIRMED', players: [{ userId: 'u1' }] } as any);
+    const res = await request(app).post('/api/matches/m1/comments')
+      .set('Authorization', `Bearer ${token()}`).send({ body: 'salut' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('MATCH_NOT_DISPUTED');
+  });
+});
+
+describe('POST /api/matches/:id/dispute', () => {
+  it('400 si le motif est absent', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ id: 'm1', status: 'PENDING', players: [{ userId: 'u1', confirmation: 'PENDING' }] } as any);
+    const res = await request(app).post('/api/matches/m1/dispute')
+      .set('Authorization', `Bearer ${token()}`).send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 });
