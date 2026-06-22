@@ -193,16 +193,13 @@ export default function BookingModal({
 
   const handleConfirm = async () => {
     if (!reservation) return;
-    // Avenue carnet (prépayé) : confirme avec la source, inchangé.
-    if (paySource) {
-      // (chute dans le confirmReservation ci-dessous)
-    }
-    // Avenue en ligne : étape Stripe (paiement) — ou empreinte requise (setup intent).
-    else if ((payMode === 'online' && onlineAvailable) || requireCardFingerprint) {
+    // Sans carnet : si une avenue en ligne est requise (paiement) ou une empreinte
+    // bancaire (setup intent), bascule vers l'étape Stripe. Sinon on enchaîne sur le
+    // confirmReservation ci-dessous (carnet → avec source ; régler au club → sans source).
+    if (!paySource && ((payMode === 'online' && onlineAvailable) || requireCardFingerprint)) {
       setStripeStep(true);
       return;
     }
-    // Sinon : régler au club (autorisé seulement si le paiement en ligne n'est pas imposé).
     try {
       const confirmed = await api.confirmReservation(
         reservation.id, token,
@@ -433,7 +430,7 @@ export default function BookingModal({
                     {packages.map((p) => {
                       const ok = canCover(p, totalEuros);
                       return (
-                        <button key={p.id} type="button" disabled={!ok} onClick={() => setPaySource(p.id)}
+                        <button key={p.id} type="button" disabled={!ok} onClick={() => { setPaySource(p.id); setPayMode('club'); }}
                           style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
                           {packageLabel(p)}
                         </button>
