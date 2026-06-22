@@ -27,3 +27,22 @@ export function winnerFromSets(sets: SetScore[]): 1 | 2 {
   for (const [a, b] of sets) { if (a > b) s1++; else if (b > a) s2++; }
   return s1 >= s2 ? 1 : 2;
 }
+
+export interface MatchPlayerLite {
+  userId: string;
+  team: number;
+  firstName: string;
+  lastName: string;
+  isMe: boolean;
+}
+
+/** Partenaire(s) = ma propre équipe sans moi ; adversaires = l'autre équipe. */
+export function splitTeams(players: MatchPlayerLite[], myTeam: number): {
+  partners: MatchPlayerLite[];
+  opponents: MatchPlayerLite[];
+} {
+  return {
+    partners: players.filter((p) => p.team === myTeam && !p.isMe),
+    opponents: players.filter((p) => p.team !== myTeam),
+  };
+}

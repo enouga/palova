@@ -1,4 +1,4 @@
-import { scoreLine, canRecordResult, validSets, winnerFromSets } from '@/lib/match';
+import { scoreLine, canRecordResult, validSets, winnerFromSets, splitTeams } from '@/lib/match';
 
 describe('scoreLine', () => {
   it('formate les sets', () => expect(scoreLine([[6, 4], [3, 6], [7, 5]])).toBe('6-4 / 3-6 / 7-5'));
@@ -23,5 +23,26 @@ describe('validSets / winnerFromSets', () => {
   it('vainqueur au nombre de sets', () => {
     expect(winnerFromSets([[6, 4], [3, 6], [6, 2]])).toBe(1);
     expect(winnerFromSets([[4, 6], [3, 6]])).toBe(2);
+  });
+});
+
+const players = [
+  { userId: 'u1', team: 2, firstName: 'Eric', lastName: 'Nougayrede', isMe: true },
+  { userId: 'u2', team: 2, firstName: 'Marie', lastName: 'Durand', isMe: false },
+  { userId: 'u3', team: 1, firstName: 'Paul', lastName: 'Roy', isMe: false },
+  { userId: 'u4', team: 1, firstName: 'Lea', lastName: 'Martin', isMe: false },
+];
+
+describe('splitTeams', () => {
+  it('sépare partenaire (mon équipe sans moi) et adversaires', () => {
+    const { partners, opponents } = splitTeams(players, 2);
+    expect(partners.map((p) => p.userId)).toEqual(['u2']);
+    expect(opponents.map((p) => p.userId).sort()).toEqual(['u3', 'u4']);
+  });
+
+  it('tolère une liste partielle (pas de partenaire)', () => {
+    const { partners, opponents } = splitTeams([players[0], players[2]], 2);
+    expect(partners).toEqual([]);
+    expect(opponents.map((p) => p.userId)).toEqual(['u3']);
   });
 });

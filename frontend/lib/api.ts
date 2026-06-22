@@ -622,6 +622,14 @@ export interface MyReservation {
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null }[];
 }
 
+export interface MyMatchPlayer {
+  userId: string;
+  team: number;
+  firstName: string;
+  lastName: string;
+  isMe: boolean;
+}
+
 export interface MyMatch {
   matchId: string;
   reservationId: string | null;
@@ -633,6 +641,10 @@ export interface MyMatch {
   myConfirmation: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
   ratingAfter: number | null;
   needsMyConfirmation: boolean;
+  club: { name: string };
+  sport: { name: string };
+  resource: { name: string } | null;
+  players: MyMatchPlayer[];
 }
 
 export interface ClubMatchPlayer {
