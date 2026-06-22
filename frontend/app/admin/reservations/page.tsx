@@ -155,7 +155,7 @@ export default function AdminReservationsPage() {
             {Array.from({ length: closeH - openH + 1 }, (_, i) => openH + i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>)}
           </select>
         </span>
-        <button type="button" onClick={() => { setDate(todayISO()); setFrom(nowHour()); setTo(closeH); }} style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>En ce moment</button>
+        <button type="button" onClick={() => { setDate(todayISO()); setFrom(Math.min(Math.max(nowHour(), openH), closeH - 1)); setTo(closeH); }} style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>En ce moment</button>
         {(fromHour != null || toHour != null || outMode !== 'all' || query) && (
           <button type="button" onClick={() => { setFrom(null); setTo(null); setOut('all'); setQuery(''); }} style={{ border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Effacer</button>
         )}
