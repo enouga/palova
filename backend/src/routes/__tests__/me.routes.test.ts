@@ -176,5 +176,6 @@ describe('GET /api/me/matches', () => {
     const res = await request(app).get('/api/me/matches').set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(200);
     expect(res.body[0].resource).toBeNull();
+    expect(res.body[0].ratingAfter).toBe(6.2);
   });
 });
