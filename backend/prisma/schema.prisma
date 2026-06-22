@@ -185,9 +185,10 @@ model Sport {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  clubSports    ClubSport[]
-  playerRatings PlayerRating[]
-  matches       Match[]
+  clubSports       ClubSport[]
+  playerRatings    PlayerRating[]
+  matches          Match[]
+  preferredByUsers User[] @relation("UserPreferredSport")
 
   @@map("sports")
 }
@@ -382,6 +383,8 @@ model User {
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
   locale    String?   @default("fr")
   showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
+  preferredSportId String? @map("preferred_sport_id")
+  preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
   isSuperAdmin Boolean @default(false) @map("is_super_admin")
   createdAt    DateTime @default(now()) @map("created_at")
