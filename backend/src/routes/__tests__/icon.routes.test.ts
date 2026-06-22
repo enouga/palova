@@ -68,6 +68,23 @@ describe('GET /api/clubs/:slug/icon/:file', () => {
     fetchMock.mockRestore();
   });
 
+  it('icône « any » 192 → fond transparent (coin alpha 0) ; maskable → fond plein (coin opaque)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ ...CLUB, logoUrl: 'https://logos.example/x.png' } as any);
+    const logo = await sharp({ create: { width: 60, height: 40, channels: 4, background: '#ff0000' } }).png().toBuffer();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array(logo), { status: 200 }) as any);
+
+    const cornerAlpha = async (file: string): Promise<number> => {
+      const res = await request(app).get(`/api/clubs/demo/icon/${file}`);
+      expect(res.status).toBe(200);
+      const { data, info } = await sharp(res.body as Buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return data[info.channels - 1]; // alpha du pixel (0,0)
+    };
+
+    expect(await cornerAlpha('192.png')).toBe(0);          // any → transparent
+    expect(await cornerAlpha('maskable-192.png')).toBe(255); // maskable → fond plein
+    fetchMock.mockRestore();
+  });
+
   it('logo uploadé localement (/uploads/logos/...) → lu sur disque, sans fetch HTTP', async () => {
     const logo = await sharp({ create: { width: 50, height: 50, channels: 4, background: '#00ff00' } }).png().toBuffer();
     const logosDir = path.join(UPLOADS_DIR, 'logos');

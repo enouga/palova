@@ -9,10 +9,14 @@ import { ICONS_DIR, UPLOADS_DIR } from '../utils/uploads';
 // (jamais tronqué), cache disque uploads/icons (hash de l'URL du logo = invalidation
 // naturelle au changement de logo), repli silencieux sur les PNG Palova embarqués.
 
-interface IconVariant { size: number; markRatio: number } // markRatio < 1 : zone de sécurité (maskable)
+// markRatio < 1 : zone de sécurité (maskable). transparent : fond transparent au lieu du
+// carré accentColor — réservé aux icônes « any » 192/512 (bureau/Windows, affichées telles
+// quelles). Les maskable (Android masque → comblerait le vide en noir) et apple-180 (iOS
+// noircit la transparence) gardent un fond plein.
+interface IconVariant { size: number; markRatio: number; transparent?: boolean }
 export const ICON_VARIANTS: Record<string, IconVariant> = {
-  '192': { size: 192, markRatio: 0.86 },
-  '512': { size: 512, markRatio: 0.86 },
+  '192': { size: 192, markRatio: 0.86, transparent: true },
+  '512': { size: 512, markRatio: 0.86, transparent: true },
   'maskable-192': { size: 192, markRatio: 0.62 },
   'maskable-512': { size: 512, markRatio: 0.62 },
   'apple-180': { size: 180, markRatio: 0.74 },
@@ -23,8 +27,11 @@ export function fallbackIconPath(variant: string): string {
   return path.join(FALLBACK_DIR, `icon-${variant}.png`);
 }
 
+// Version de rendu : à incrémenter quand le rendu des icônes change, pour invalider le
+// cache disque (le hash dépend sinon du seul logoUrl, inchangé ⇒ anciennes icônes servies).
+const RENDER_VERSION = 'v2-transparent';
 export function iconCacheFile(clubId: string, variant: string, logoUrl: string): string {
-  const hash = crypto.createHash('md5').update(logoUrl).digest('hex').slice(0, 12);
+  const hash = crypto.createHash('md5').update(`${RENDER_VERSION}:${logoUrl}`).digest('hex').slice(0, 12);
   return path.join(ICONS_DIR, `${clubId}-${variant}-${hash}.png`);
 }
 
@@ -53,7 +60,8 @@ async function renderIcon(logo: Buffer, accentColor: string, v: IconVariant): Pr
   const resized = await sharp(logo)
     .resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png().toBuffer();
-  return sharp({ create: { width: v.size, height: v.size, channels: 4, background: accentColor } })
+  const background = v.transparent ? { r: 0, g: 0, b: 0, alpha: 0 } : accentColor;
+  return sharp({ create: { width: v.size, height: v.size, channels: 4, background } })
     .composite([{ input: resized, gravity: 'centre' }])
     .png().toBuffer();
 }
