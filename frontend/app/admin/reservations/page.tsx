@@ -1,15 +1,29 @@
 'use client';
-import { useState, useEffect, useCallback, Fragment, CSSProperties } from 'react';
-import { api, ClubReservation, ClubReservationsResponse, PaymentMethod } from '@/lib/api';
+import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminResource, OffPeakHours, Member, ClubAdminDetail, Payment, CaissePayment } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { CollectPanel } from '@/components/admin/CollectPanel';
+import { Receipt } from '@/components/admin/Receipt';
+import { dueCents, toCents, fmtEuros } from '@/lib/caisse';
+import { playerCount } from '@/lib/courtType';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function todayISO(): string { return new Date().toISOString().slice(0, 10); }
+
+// Adapte un paiement de réservation au format attendu par le reçu (Receipt).
+function toCaissePayment(p: Payment, rv: ClubReservation): CaissePayment {
+  return {
+    ...p,
+    reservation: { id: rv.id, startTime: rv.startTime, resource: { name: rv.resource.name }, user: rv.user ? { firstName: rv.user.firstName, lastName: rv.user.lastName } : null },
+    memberPackage: null,
+  };
 }
 
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
@@ -24,17 +38,21 @@ export default function AdminReservationsPage() {
   const { club } = useClub();
   const clubId = club?.id;
   const [data, setData]   = useState<ClubReservationsResponse | null>(null);
-  const [date, setDate]   = useState('');
+  const [date, setDate]   = useState(todayISO());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [form, setForm] = useState<{ amount: string; method: PaymentMethod; payerName: string }>({ amount: '', method: 'CASH', payerName: '' });
-  const [saving, setSaving] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<ClubReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
 
+  const [resources, setResources]     = useState<AdminResource[]>([]);
+  const [peak, setPeak]               = useState<OffPeakHours | null>(null);
+  const [tz, setTz]                   = useState('Europe/Paris');
+  const [members, setMembers]         = useState<Member[]>([]);
+  const [clubDetail, setClubDetail]   = useState<ClubAdminDetail | null>(null);
+  const [selected, setSelected]       = useState<ClubReservation | null>(null);
+  const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
+
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
-  const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
 
   const statusStyle = (s: string): CSSProperties => ({
     borderRadius: 999, padding: '4px 11px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600,
@@ -42,11 +60,25 @@ export default function AdminReservationsPage() {
     color: s === 'CONFIRMED' ? (th.mode === 'floodlit' ? th.accent : th.ink) : s === 'CANCELLED' ? th.textFaint : th.textMute,
   });
 
-  const load = useCallback(async () => {
-    if (!token || !clubId) return;
+  const load = useCallback(async (): Promise<ClubReservation[]> => {
+    if (!token || !clubId) return [];
     setLoading(true);
-    try { setError(null); setData(await api.adminGetReservations(clubId, date ? { date } : {}, token)); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      setError(null);
+      const [detail, res, resv, mem] = await Promise.all([
+        api.adminGetClub(clubId, token),
+        api.adminGetResources(clubId, token),
+        api.adminGetReservations(clubId, date ? { date } : {}, token),
+        api.adminGetMembers(clubId, token),
+      ]);
+      setClubDetail(detail);
+      setTz(detail.timezone);
+      setPeak(detail.offPeakHours ?? null);
+      setResources(res.filter((r) => r.isActive));
+      setMembers(mem);
+      setData(resv);
+      return resv.reservations;
+    } catch (e) { setError((e as Error).message); return []; }
     finally { setLoading(false); }
   }, [token, clubId, date]);
 
@@ -60,26 +92,15 @@ export default function AdminReservationsPage() {
     finally { setCancelling(false); }
   };
 
-  const openPanel = (r: ClubReservation) => {
-    if (openId === r.id) { setOpenId(null); return; }
-    setOpenId(r.id);
-    const remaining = Math.max(0, Number(r.totalPrice) - Number(r.paidAmount));
-    setForm({ amount: remaining ? String(remaining) : '', method: 'CASH', payerName: '' });
-  };
+  // Derived helpers
+  const resById = new Map(resources.map((r) => [r.id, r]));
+  const dueOf = (r: ClubReservation) => dueCents(r, resById.get(r.resourceId), peak, tz);
+  const playersOf = (r: ClubReservation) => playerCount(typeof resById.get(r.resourceId)?.attributes?.format === 'string' ? (resById.get(r.resourceId)!.attributes.format as string) : undefined);
 
-  const addPayment = async (r: ClubReservation) => {
-    if (!token || !clubId) return;
-    const amount = Number(form.amount);
-    if (!amount || amount <= 0) { setError('Montant invalide.'); return; }
-    setSaving(true);
-    try {
-      setError(null);
-      await api.adminAddPayment(clubId, r.id, { amount, method: form.method, payerName: form.payerName || undefined }, token);
-      await load();
-      setOpenId(null);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSaving(false); }
-  };
+  const refreshSelected = useCallback(async (updated?: ClubReservation) => {
+    const list = await load();
+    setSelected((cur) => (updated ?? (cur ? list.find((r) => r.id === cur.id) ?? cur : cur)));
+  }, [load]);
 
   return (
     <div>
@@ -119,81 +140,90 @@ export default function AdminReservationsPage() {
               {data?.reservations.length === 0 && (
                 <tr><td colSpan={7} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '32px 16px' }}>Aucune réservation</td></tr>
               )}
-              {data?.reservations.map((r) => {
-                const remaining = Math.max(0, Number(r.totalPrice) - Number(r.paidAmount));
-                const fullyPaid = remaining <= 0 && r.status !== 'CANCELLED';
-                const open = openId === r.id;
-                return (
-                  <Fragment key={r.id}>
-                    <tr style={{ borderBottom: open ? 'none' : `1px solid ${th.line}` }}>
-                      <td style={{ ...cell, fontWeight: 600 }}>{r.resource.name}</td>
-                      <td style={cell}>{r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement'}{r.user && <div style={{ fontSize: 12, color: th.textFaint }}>{r.user.email}</div>}</td>
-                      <td style={{ ...cell, fontFamily: th.fontMono, fontSize: 13 }}>{fmt(r.startTime)}</td>
-                      <td style={cell}>{r.totalPrice} €</td>
-                      <td style={cell}>
-                        <span style={{ fontWeight: 600, color: fullyPaid ? (th.mode === 'floodlit' ? th.accent : th.ink) : th.text }}>{r.paidAmount} €</span>
-                        {r.status !== 'CANCELLED' && remaining > 0 && <span style={{ fontSize: 12, color: '#ff7a4d', marginLeft: 6 }}>reste {remaining.toFixed(2)} €</span>}
+              {data?.reservations.map((r) => (
+                <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}` }}>
+                  <td style={{ ...cell, fontWeight: 600 }}>{r.resource.name}</td>
+                  <td style={cell}>{r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement'}{r.user && <div style={{ fontSize: 12, color: th.textFaint }}>{r.user.email}</div>}</td>
+                  <td style={{ ...cell, fontFamily: th.fontMono, fontSize: 13 }}>{fmt(r.startTime)}</td>
+                  <td style={cell}>{fmtEuros(dueOf(r))}</td>
+                  <td style={cell}>
+                    {(() => {
+                      const rest = Math.max(0, dueOf(r) - toCents(r.paidAmount));
+                      const fullyPaid = rest <= 0 && r.status !== 'CANCELLED' && dueOf(r) > 0;
+                      return (<>
+                        <span style={{ fontWeight: 600, color: fullyPaid ? (th.mode === 'floodlit' ? th.accent : th.ink) : th.text }}>{fmtEuros(toCents(r.paidAmount))}</span>
+                        {r.status !== 'CANCELLED' && rest > 0 && <span style={{ fontSize: 12, color: '#ff7a4d', marginLeft: 6 }}>reste {fmtEuros(rest)}</span>}
                         {fullyPaid && <span style={{ fontSize: 12, color: th.textMute, marginLeft: 6 }}>✓</span>}
-                      </td>
-                      <td style={cell}><span style={statusStyle(r.status)}>{STATUS_LABEL[r.status]}</span></td>
-                      <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                        {r.status !== 'CANCELLED' && (
-                          <button onClick={() => openPanel(r)} style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, background: th.accent, color: th.onAccent, marginRight: 8 }}>
-                            Encaisser{r.payments.length ? ` (${r.payments.length})` : ''}
-                          </button>
-                        )}
-                        {r.status !== 'CANCELLED' && (
-                          <button onClick={() => setConfirmCancel(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
-                        )}
-                      </td>
-                    </tr>
-                    {open && (
-                      <tr style={{ borderBottom: `1px solid ${th.line}` }}>
-                        <td colSpan={7} style={{ padding: '0 16px 16px', background: th.bgElev }}>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, paddingTop: 14 }}>
-                            {/* liste paiements */}
-                            <div style={{ flex: 1, minWidth: 240 }}>
-                              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Encaissements</div>
-                              {r.payments.length === 0 ? (
-                                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint }}>Aucun encaissement.</div>
-                              ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                  {r.payments.map((p) => (
-                                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-                                      <span style={{ fontWeight: 700, minWidth: 64 }}>{p.amount} €</span>
-                                      <span style={{ color: th.textMute }}>{METHOD_LABEL[p.method]}</span>
-                                      {p.payerName && <span style={{ color: th.textMute }}>· {p.payerName}</span>}
-                                      <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint, marginLeft: 'auto' }}>{fmt(p.createdAt)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            {/* formulaire ajout */}
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                              <label style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Montant €
-                                <input type="number" min={0} step="0.5" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={{ ...input, width: 90 }} />
-                              </label>
-                              <label style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
-                                <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value as PaymentMethod })} style={input}>
-                                  {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                                </select>
-                              </label>
-                              <label style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Payé par
-                                <input value={form.payerName} onChange={(e) => setForm({ ...form, payerName: e.target.value })} placeholder="(optionnel)" style={{ ...input, width: 140 }} />
-                              </label>
-                              <Btn onClick={() => addPayment(r)} icon="check" disabled={saving}>{saving ? '…' : 'Encaisser'}</Btn>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
+                      </>);
+                    })()}
+                  </td>
+                  <td style={cell}><span style={statusStyle(r.status)}>{STATUS_LABEL[r.status]}</span></td>
+                  <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                    {r.status !== 'CANCELLED' && (
+                      <button onClick={() => setSelected(r)} style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, background: th.accent, color: th.onAccent, marginRight: 8 }}>
+                        Encaisser{r.payments.length ? ` (${r.payments.length})` : ''}
+                      </button>
                     )}
-                  </Fragment>
-                );
-              })}
+                    {r.status !== 'CANCELLED' && (
+                      <button onClick={() => setConfirmCancel(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Annuler</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {selected && (
+        <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 28, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, color: th.text }}>{selected.resource.name}</div>
+                <div style={{ fontFamily: th.fontMono, fontSize: 13, color: th.textMute, marginTop: 2 }}>{fmt(selected.startTime)} · {STATUS_LABEL[selected.status]}</div>
+              </div>
+              <button onClick={() => setSelected(null)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 32, height: 32, color: th.textMute, fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 18, fontFamily: th.fontUI, fontSize: 13 }}>
+              <span style={{ color: th.textMute }}>Total : <b style={{ color: th.text }}>{fmtEuros(dueOf(selected))}</b></span>
+              <span style={{ color: th.textMute }}>Payé : <b style={{ color: th.text }}>{fmtEuros(toCents(selected.paidAmount))}</b></span>
+              <span style={{ color: th.textMute }}>Reste : <b style={{ color: '#ff7a4d' }}>{fmtEuros(Math.max(0, dueOf(selected) - toCents(selected.paidAmount)))}</b></span>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
+            </div>
+            {selected.payments.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Encaissements</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {selected.payments.map((p) => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
+                      <span style={{ fontWeight: 700, minWidth: 64 }}>{fmtEuros(toCents(p.amount))}</span>
+                      <span style={{ color: th.textMute }}>{METHOD_LABEL[p.method]}</span>
+                      <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '4px 9px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600 }}>Reçu</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {receiptTarget && clubDetail && (
+        <>
+          <style>{`@media print { body * { visibility: hidden !important; } .receipt-print-overlay, .receipt-print-overlay * { visibility: visible !important; } .receipt-print-overlay { position: absolute; inset: 0; background: #fff !important; } .receipt-print-overlay .no-print { display: none !important; } }`}</style>
+          <div className="receipt-print-overlay" onClick={() => setReceiptTarget(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+              <Receipt payment={toCaissePayment(receiptTarget.payment, receiptTarget.rv)} clubName={clubDetail.name} clubAddress={clubDetail.address} />
+              <div className="no-print" style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
+                <button type="button" onClick={() => window.print()} style={{ flex: 1, border: 'none', background: '#111', color: '#fff', borderRadius: 10, padding: '10px 0', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 700 }}>Imprimer</button>
+                <button type="button" onClick={() => setReceiptTarget(null)} style={{ border: '1px solid #ccc', background: 'transparent', color: '#555', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14 }}>Fermer</button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {confirmCancel && (
