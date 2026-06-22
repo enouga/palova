@@ -15,6 +15,7 @@ import {
   buildMatchLeftEmail,
   buildRefundEmail,
   buildMatchConfirmEmail,
+  buildMatchCommentEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
 
@@ -572,12 +573,56 @@ export async function notifyLessonPromotion(enrollmentId: string): Promise<void>
 /**
  * Prévient les autres participants d'un litige (4 joueurs + staff OWNER/ADMIN/STAFF − l'auteur)
  * qu'un nouveau message a été posté. Peut lever ; l'appelant enveloppe en best-effort.
- * (Implémentation complète ajoutée en Task 4 avec le builder email.)
  */
 export async function notifyNewMatchComment(
-  _matchId: string, _authorUserId: string, _opts: { isFirst: boolean },
+  matchId: string, authorUserId: string, opts: { isFirst: boolean },
 ): Promise<void> {
-  // TODO (Task 4): implémenter avec buildMatchCommentEmail
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      players: { include: { user: { select: { id: true, email: true, firstName: true } } } },
+    },
+  });
+  if (!match) return;
+
+  const last = await prisma.matchComment.findFirst({
+    where: { matchId, userId: authorUserId },
+    orderBy: { createdAt: 'desc' },
+    select: { body: true, user: { select: { firstName: true, lastName: true } } },
+  });
+  if (!last) return;
+
+  const authorName = fullName(last.user);
+  const excerpt = last.body.length > 280 ? last.body.slice(0, 277) + '…' : last.body;
+  const scoreLine = setsToScoreLine(match.sets);
+  const brand = brandOf(match.club);
+  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+
+  const staff = await prisma.clubMember.findMany({
+    where: { clubId: match.club.id, role: { in: [ClubRole.OWNER, ClubRole.ADMIN, ClubRole.STAFF] } },
+    select: { userId: true, user: { select: { email: true, firstName: true } } },
+  });
+
+  // Destinataires dédupliqués par email, l'auteur exclu.
+  const recipients = new Map<string, { email: string; firstName: string }>();
+  for (const mp of match.players) {
+    const u = mp.user;
+    if (u.id !== authorUserId && u.email) recipients.set(u.email, { email: u.email, firstName: u.firstName });
+  }
+  for (const s of staff) {
+    if (s.userId !== authorUserId && s.user?.email) {
+      recipients.set(s.user.email, { email: s.user.email, firstName: s.user.firstName });
+    }
+  }
+
+  for (const r of recipients.values()) {
+    const mail = buildMatchCommentEmail({
+      recipientFirstName: r.firstName, authorName, isFirst: opts.isFirst,
+      scoreLine, excerpt, matchUrl, brand,
+    });
+    await sendMail({ to: r.email, subject: mail.subject, html: mail.html, text: mail.text });
+  }
 }
 
 // ---------------------------------------------------------- Confirmation match

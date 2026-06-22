@@ -336,3 +336,28 @@ describe('buildRefundEmail', () => {
     expect(mail.html.toLowerCase()).not.toContain('carnet');
   });
 });
+
+import { buildMatchCommentEmail } from '../templates/emails';
+
+describe('buildMatchCommentEmail', () => {
+  const base = {
+    recipientFirstName: 'Karim', authorName: 'Manon Membre', scoreLine: '6-4 / 6-3',
+    excerpt: 'Le 2e set était faux', matchUrl: 'https://club.palova.fr/me/reservations',
+    brand: { name: 'Padel Arena', logoUrl: null, accentColor: '#5e93da' },
+  };
+  it('1er message → sujet de contestation', () => {
+    const mail = buildMatchCommentEmail({ ...base, isFirst: true });
+    expect(mail.subject).toContain('a contesté le résultat');
+    expect(mail.html).toContain('Manon Membre');
+    expect(mail.text).toContain('Le 2e set était faux');
+  });
+  it('message suivant → sujet « nouveau message »', () => {
+    const mail = buildMatchCommentEmail({ ...base, isFirst: false });
+    expect(mail.subject).toContain('Nouveau message');
+  });
+  it('échappe le HTML du contenu', () => {
+    const mail = buildMatchCommentEmail({ ...base, isFirst: false, excerpt: '<script>x</script>' });
+    expect(mail.html).not.toContain('<script>x</script>');
+    expect(mail.html).toContain('&lt;script&gt;');
+  });
+});

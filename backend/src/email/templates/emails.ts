@@ -412,3 +412,41 @@ export function buildPasswordResetEmail(code: string, brand: Brand): BuiltEmail 
   ].join('\n');
   return { subject, html, text };
 }
+
+export interface MatchCommentEmailInput {
+  recipientFirstName: string;
+  authorName: string;
+  isFirst: boolean;
+  scoreLine: string;
+  excerpt: string;
+  matchUrl: string;
+  brand: Brand;
+}
+
+/** Email « nouveau message sur le litige » (ou « a contesté » pour le 1er message). */
+export function buildMatchCommentEmail(i: MatchCommentEmailInput): BuiltEmail {
+  const subject = i.isFirst
+    ? `${i.authorName} a contesté le résultat de votre match`
+    : 'Nouveau message sur le litige de votre match';
+  const heading = i.isFirst ? 'Résultat contesté' : 'Nouveau message';
+  const lead = i.isFirst
+    ? `<strong>${escapeHtml(i.authorName)}</strong> a contesté le résultat (<strong>${escapeHtml(i.scoreLine)}</strong>) et a laissé un message :`
+    : `<strong>${escapeHtml(i.authorName)}</strong> a écrit dans la discussion du litige (<strong>${escapeHtml(i.scoreLine)}</strong>) :`;
+  const introHtml =
+    `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p>` +
+    `<p style="margin:0 0 12px;">${lead}</p>` +
+    `<p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;">${escapeHtml(i.excerpt)}</p>`;
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading, introHtml,
+    ctaLabel: 'Voir la discussion', ctaUrl: i.matchUrl,
+  });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`, '',
+    i.isFirst
+      ? `${i.authorName} a contesté le résultat (${i.scoreLine}) et a laissé un message :`
+      : `${i.authorName} a écrit dans la discussion du litige (${i.scoreLine}) :`,
+    `« ${i.excerpt} »`, '',
+    `Voir la discussion : ${i.matchUrl}`,
+  ].join('\n');
+  return { subject, html, text };
+}
