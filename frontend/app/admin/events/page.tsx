@@ -14,6 +14,7 @@ const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE
 const emptyForm = (): CreateEventBody => ({
   name: '', kind: 'MELEE', description: '', startTime: '', endTime: null,
   registrationDeadline: '', capacity: null, price: null, memberOnly: true,
+  clubSportId: null,
 });
 
 export default function AdminEventsPage() {
@@ -65,6 +66,7 @@ export default function AdminEventsPage() {
       startTime: isoToLocalInput(e.startTime), endTime: e.endTime ? isoToLocalInput(e.endTime) : null,
       registrationDeadline: isoToLocalInput(e.registrationDeadline),
       capacity: e.capacity, price: e.price != null ? Number(e.price) : null, memberOnly: e.memberOnly,
+      clubSportId: e.clubSportId ?? null,
     });
   };
 
@@ -110,9 +112,25 @@ export default function AdminEventsPage() {
               </select>
             </div>
             <div style={{ flex: 1 }}>
+              <div style={label}>Sport (optionnel)</div>
+              <select
+                style={input}
+                value={form.clubSportId ?? ''}
+                onChange={(e) => setForm({ ...form, clubSportId: e.target.value || null })}
+              >
+                <option value="">Tous sports</option>
+                {(club.clubSports ?? []).map((cs) => (
+                  <option key={cs.id} value={cs.id}>{cs.sport.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
               <div style={label}>Nb de places (vide = illimité)</div>
               <input type="number" min={1} style={input} value={form.capacity ?? ''} onChange={(e) => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : null })} />
             </div>
+            <div style={{ flex: 1 }} />
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>

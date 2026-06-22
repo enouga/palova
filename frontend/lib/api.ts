@@ -1467,6 +1467,7 @@ export interface ClubEvent {
   status: ClubEventStatus;
   confirmedCount: number;
   waitlistCount: number;
+  clubSportId?: string | null;
 }
 
 export interface ClubEventDetail extends ClubEvent {
@@ -1515,6 +1516,7 @@ export type CreateEventBody = {
   capacity?: number | null;
   price?: number | null;
   memberOnly?: boolean;
+  clubSportId?: string | null;
 };
 export type UpdateEventBody = Partial<CreateEventBody & { status: ClubEventStatus }>;
 
