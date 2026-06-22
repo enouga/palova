@@ -1238,7 +1238,13 @@ export class ReservationService {
       where: { userId },
       orderBy: { startTime: 'desc' },
       include: {
-        resource: { select: { id: true, name: true, attributes: true, club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } } } },
+        resource: {
+          select: {
+            id: true, name: true, attributes: true,
+            clubSport: { select: { sport: { select: { key: true } } } },
+            club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } },
+          },
+        },
         participants: {
           orderBy: { joinedAt: 'asc' },
           select: { id: true, userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
@@ -1246,14 +1252,13 @@ export class ReservationService {
       },
     });
 
-    // Collecte les userIds uniques des participants pour enrichir d'un seul appel.
-    const allParticipantUserIds = [...new Set(rows.flatMap((r) => r.participants.map((p) => p.userId)))];
-    const levels = allParticipantUserIds.length > 0
-      ? await this.ratingService.getLevelsForUsers(allParticipantUserIds, 'padel')
-      : {};
+    // Collecte les paires (participant, sport du terrain) pour un seul appel multi-sport.
+    const pairs = rows.flatMap((r) => r.participants.map((p) => ({ userId: p.userId, sportKey: r.resource.clubSport.sport.key })));
+    const levels = await this.ratingService.getLevelsBySport(pairs);
 
     return rows.map(({ participants, resource, ...rest }) => {
-      const { attributes, ...resourcePublic } = resource;
+      const { attributes, clubSport, ...resourcePublic } = resource;
+      const sportKey = clubSport.sport.key;
       return {
         ...rest,
         resource: resourcePublic,
@@ -1261,7 +1266,7 @@ export class ReservationService {
         participants: participants.map((p) => ({
           id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
           firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
-          level: levels[p.userId] ?? null,
+          level: levels[`${p.userId}:${sportKey}`] ?? null,
         })),
       };
     });

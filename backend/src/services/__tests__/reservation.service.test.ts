@@ -1457,6 +1457,7 @@ describe('ReservationService', () => {
       status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-1', type: 'COURT',
       resource: {
         id: 'court-1', name: 'Terrain 2', attributes: { format: 'double' },
+        clubSport: { sport: { key: 'padel' } },
         club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
       },
       participants: [
@@ -1467,7 +1468,7 @@ describe('ReservationService', () => {
 
     it('mappe participants (avec avatarUrl) + capacity et n expose pas attributes', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
-      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([] as any);
 
       const out = await service.listUserReservations('user-1');
@@ -1480,13 +1481,14 @@ describe('ReservationService', () => {
       ]);
       expect(out[0].resource.name).toBe('Terrain 2');
       expect((out[0].resource as any).attributes).toBeUndefined();
+      expect((out[0].resource as any).clubSport).toBeUndefined();
     });
 
     it('ajoute level sur les participants qui ont un rating', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
-      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'user-1', displayLevel: 4, isProvisional: false },
+        { userId: 'user-1', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
       ] as any);
 
       const out = await service.listUserReservations('user-1');
@@ -1497,12 +1499,78 @@ describe('ReservationService', () => {
 
     it('retourne level null pour tous les participants quand aucun rating', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
-      prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([] as any);
 
       const out = await service.listUserReservations('user-1');
 
       expect(out[0].participants.every((p: any) => p.level === null)).toBe(true);
+    });
+
+    it('attribue le niveau au sport de CHAQUE réservation (multi-sport)', async () => {
+      const resaPadel = {
+        id: 'res-padel', startTime: new Date('2026-06-16T15:00:00Z'), endTime: new Date('2026-06-16T16:30:00Z'),
+        status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-padel', type: 'COURT',
+        resource: {
+          id: 'court-padel', name: 'Court Padel', attributes: { format: 'double' },
+          clubSport: { sport: { key: 'padel' } },
+          club: { name: 'Club A', slug: 'club-a', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+        },
+        participants: [
+          { id: 'pp1', userId: 'user-1', isOrganizer: true, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+        ],
+      };
+      const resaTennis = {
+        id: 'res-tennis', startTime: new Date('2026-06-17T10:00:00Z'), endTime: new Date('2026-06-17T11:00:00Z'),
+        status: 'CONFIRMED', totalPrice: 20, userId: 'user-1', resourceId: 'court-tennis', type: 'COURT',
+        resource: {
+          id: 'court-tennis', name: 'Court Tennis', attributes: { format: 'single' },
+          clubSport: { sport: { key: 'tennis' } },
+          club: { name: 'Club B', slug: 'club-b', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+        },
+        participants: [
+          { id: 'pt1', userId: 'user-1', isOrganizer: true, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+        ],
+      };
+
+      prismaMock.reservation.findMany.mockResolvedValue([resaPadel, resaTennis] as any);
+      prismaMock.sport.findMany.mockResolvedValue([
+        { id: 'sport-padel',  key: 'padel' },
+        { id: 'sport-tennis', key: 'tennis' },
+      ] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([
+        { userId: 'user-1', sportId: 'sport-padel',  displayLevel: 5, isProvisional: false },
+        { userId: 'user-1', sportId: 'sport-tennis', displayLevel: 3, isProvisional: true  },
+      ] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect(out).toHaveLength(2);
+      // Résa padel → niveau padel (5 = Confirmé)
+      expect(out[0].participants[0].level).toEqual({ level: 5, tier: 'Confirmé', isProvisional: false });
+      // Résa tennis → niveau tennis (3 = Élémentaire)
+      expect(out[1].participants[0].level).toEqual({ level: 3, tier: 'Élémentaire', isProvisional: true });
+    });
+
+    it('ne plante pas quand une réservation n a pas de participants', async () => {
+      const resaVide = {
+        id: 'res-vide', startTime: new Date('2026-06-18T09:00:00Z'), endTime: new Date('2026-06-18T10:00:00Z'),
+        status: 'CONFIRMED', totalPrice: 15, userId: 'user-1', resourceId: 'court-1', type: 'COURT',
+        resource: {
+          id: 'court-1', name: 'Court Solo', attributes: null,
+          clubSport: { sport: { key: 'padel' } },
+          club: { name: 'Club A', slug: 'club-a', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+        },
+        participants: [],
+      };
+      prismaMock.reservation.findMany.mockResolvedValue([resaVide] as any);
+      prismaMock.sport.findMany.mockResolvedValue([] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect(out).toHaveLength(1);
+      expect(out[0].participants).toEqual([]);
     });
   });
 
