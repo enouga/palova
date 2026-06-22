@@ -8,6 +8,10 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/login/whatever')).toBe(true);
   });
 
+  it('autorise la réinitialisation de mot de passe (utilisateur déconnecté)', () => {
+    expect(isPublicPath('/forgot-password')).toBe(true);
+  });
+
   it('verrouille le reste du site', () => {
     expect(isPublicPath('/')).toBe(false);
     expect(isPublicPath('/reserver')).toBe(false);
