@@ -31,7 +31,6 @@ class ROStub {
   unobserve() {}
   disconnect() {}
 }
-// @ts-expect-error - stub jsdom
+// @ts-expect-error - stub jsdom (IOStub n'expose pas root/rootMargin/thresholds)
 global.IntersectionObserver = IOStub;
-// @ts-expect-error - stub jsdom
 global.ResizeObserver = ROStub;
