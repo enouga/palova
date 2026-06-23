@@ -23,10 +23,14 @@ jest.mock('../sse.service', () => ({
 const mockNotifyPartners = jest.fn();
 const mockNotifyAssigned = jest.fn();
 const mockNotifyRefunded = jest.fn();
+const mockNotifyCancelled = jest.fn();
+const mockNotifyActivityCancelled = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyMatchPartnersInvited: (...a: unknown[]) => mockNotifyPartners(...a),
   notifyReservationMemberAssigned: (...a: unknown[]) => mockNotifyAssigned(...a),
   notifyReservationRefunded: (...a: unknown[]) => mockNotifyRefunded(...a),
+  notifyReservationCancelled: (...a: unknown[]) => mockNotifyCancelled(...a),
+  notifyActivityCancelledByClub: (...a: unknown[]) => mockNotifyActivityCancelled(...a),
 }));
 
 const sseBroadcast = () => mockBroadcast;
@@ -40,6 +44,8 @@ describe('ReservationService', () => {
     mockNotifyPartners.mockReset().mockResolvedValue(undefined);
     mockNotifyAssigned.mockReset().mockResolvedValue(undefined);
     mockNotifyRefunded.mockReset().mockResolvedValue(undefined);
+    mockNotifyCancelled.mockReset().mockResolvedValue(undefined);
+    mockNotifyActivityCancelled.mockReset().mockResolvedValue(undefined);
   });
 
   const baseParams = {
@@ -391,6 +397,56 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue(null);
 
       await expect(service.adminCancelReservation('res-x', 'club-demo')).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+  });
+
+  describe('adminCancelReservation — lesson notification', () => {
+    it('appelle notifyActivityCancelledByClub lesson si la résa porte un cours', async () => {
+      redisMock.del.mockResolvedValue(1);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-lesson',
+        userId: 'user-1',
+        status: 'CONFIRMED',
+        resourceId: 'court-1',
+        startTime: new Date('2025-07-01T10:00:00Z'),
+        endTime:   new Date('2025-07-01T11:00:00Z'),
+        totalPrice: new Prisma.Decimal(0),
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
+        lesson: { id: 'lesson-42' },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-lesson', status: 'CANCELLED', resourceId: 'court-1',
+        startTime: new Date('2025-07-01T10:00:00Z'), endTime: new Date('2025-07-01T11:00:00Z'),
+        cancelledAt: new Date(),
+      } as any);
+
+      await service.adminCancelReservation('res-lesson', 'club-demo');
+
+      expect(mockNotifyActivityCancelled).toHaveBeenCalledWith('lesson', 'lesson-42');
+    });
+
+    it('n appelle PAS notifyActivityCancelledByClub si la résa n a pas de cours', async () => {
+      redisMock.del.mockResolvedValue(1);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-no-lesson',
+        userId: 'user-1',
+        status: 'CONFIRMED',
+        resourceId: 'court-1',
+        startTime: new Date('2025-07-01T10:00:00Z'),
+        endTime:   new Date('2025-07-01T11:00:00Z'),
+        totalPrice: new Prisma.Decimal(0),
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
+        lesson: null,
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-no-lesson', status: 'CANCELLED', resourceId: 'court-1',
+        startTime: new Date('2025-07-01T10:00:00Z'), endTime: new Date('2025-07-01T11:00:00Z'),
+        cancelledAt: new Date(),
+      } as any);
+
+      await service.adminCancelReservation('res-no-lesson', 'club-demo');
+
+      expect(mockNotifyActivityCancelled).not.toHaveBeenCalled();
     });
   });
 

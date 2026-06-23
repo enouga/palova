@@ -10,7 +10,7 @@ import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
@@ -582,7 +582,10 @@ export class ReservationService {
   async cancelReservation(reservationId: string, userId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
+      include: {
+        resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } },
+        lesson: { select: { id: true } },
+      },
     });
 
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
@@ -596,6 +599,9 @@ export class ReservationService {
     );
     if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
     await this.safeNotify(() => notifyReservationCancelled(reservationId, userId));
+    if (reservation.lesson?.id) {
+      await this.safeNotify(() => notifyActivityCancelledByClub('lesson', reservation.lesson!.id));
+    }
     return { ...cancelled, refunded };
   }
 
@@ -603,7 +609,10 @@ export class ReservationService {
   async adminCancelReservation(reservationId: string, adminClubId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } } },
+      include: {
+        resource: { select: { clubId: true, club: { select: { cancellationCutoffHours: true, refundOnCancelWithinCutoff: true } } } },
+        lesson: { select: { id: true } },
+      },
     });
 
     if (!reservation)                                throw new Error('RESERVATION_NOT_FOUND');
@@ -616,6 +625,9 @@ export class ReservationService {
     );
     if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
     await this.safeNotify(() => notifyReservationCancelled(reservationId));
+    if (reservation.lesson?.id) {
+      await this.safeNotify(() => notifyActivityCancelledByClub('lesson', reservation.lesson!.id));
+    }
     return { ...cancelled, refunded };
   }
 

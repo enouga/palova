@@ -901,7 +901,7 @@ export async function notifyActivityCancelledByClub(
     if (!tournament) return;
     const club = tournament.club;
     const brand = brandOf(club);
-    const dateLabel = tournament.startTime ? formatDateRangeFr(tournament.startTime, tournament.endTime ?? tournament.startTime, club.timezone) : '';
+    const dateLabel = tournament.startTime ? formatDateRangeFr(tournament.startTime, tournament.endTime, club.timezone) : '';
     const url = clubAppUrl(club.slug, `/tournois/${tournament.id}`);
     const seen = new Set<string>();
     for (const reg of tournament.registrations) {
