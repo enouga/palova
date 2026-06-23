@@ -622,7 +622,7 @@ export class ReservationService {
 
     const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
     const payments = await prisma.payment.findMany({
-      where: { reservationId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] }, method: { not: 'MEMBER' } },
+      where: { reservationId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] }, method: { notIn: ['MEMBER', 'SUBSCRIPTION'] } },
       select: { id: true, amount: true, refundedAmount: true, method: true },
     });
     const refunded: Array<{ paymentId: string; amount: string; method: string }> = [];
