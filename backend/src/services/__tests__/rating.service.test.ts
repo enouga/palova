@@ -1,6 +1,7 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { RatingService } from '../rating.service';
+import { levelToRating } from '../rating/level';
 
 const service = new RatingService();
 
@@ -144,6 +145,28 @@ describe('adminSetLevel', () => {
     expect(d.level).toBe(7);
   });
 
+  it('UPDATE ne réinitialise pas l historique de matchs (pas de matchesPlayed/volatility/lastMatchAt)', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValueOnce({ displayLevel: 1, matchesPlayed: 12 } as any)
+      .mockResolvedValue({ displayLevel: 5, rd: 110, isProvisional: false, matchesPlayed: 12, initialSelfLevel: null } as any);
+    const tx = txWith({ matchesPlayed: 12 });
+    await service.adminSetLevel('u1', 'padel', 5, 'staff1', {});
+    const upsertArg = tx.playerRating.upsert.mock.calls[0][0];
+    expect(upsertArg.update).not.toHaveProperty('matchesPlayed');
+    expect(upsertArg.update).not.toHaveProperty('volatility');
+    expect(upsertArg.update).not.toHaveProperty('lastMatchAt');
+  });
+
+  it('accepte un niveau fractionnaire (4.5 → displayLevel 4.5, rating = levelToRating(4.5))', async () => {
+    prismaMock.playerRating.findUnique.mockResolvedValueOnce(null as any)
+      .mockResolvedValue({ displayLevel: 4.5, rd: 110, isProvisional: false, matchesPlayed: 0, initialSelfLevel: null } as any);
+    const tx = txWith(null);
+    await service.adminSetLevel('u1', 'padel', 4.5, 'staff1', {});
+    const upsertArg = tx.playerRating.upsert.mock.calls[0][0];
+    expect(upsertArg.create.displayLevel).toBe(4.5);
+    expect(upsertArg.create.rating).toBe(levelToRating(4.5));
+    expect(upsertArg.update.displayLevel).toBe(4.5);
+  });
+
   it('niveau < 0 → VALIDATION_ERROR (sans toucher la base)', async () => {
     await expect(service.adminSetLevel('u1', 'padel', -1, 'staff1', {})).rejects.toThrow('VALIDATION_ERROR');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
@@ -188,10 +211,19 @@ describe('getMemberLevelAdmin', () => {
       id: 'adj1', previousLevel: 2, newLevel: 6, reason: 'erreur',
       staffFirstName: 'Eve', staffLastName: 'Admin', sportKey: 'padel', sportName: 'Padel',
     });
-    // historique trié récent d'abord
+    // historique trié récent d'abord, scopé aux sports demandés
     const findArg = (prismaMock.playerRatingAdjustment.findMany as jest.Mock).mock.calls[0][0];
     expect(findArg.where.userId).toBe('u1');
+    expect(findArg.where.sportId.in).toEqual(['sport-padel']);
     expect(findArg.orderBy.createdAt).toBe('desc');
+  });
+
+  it('liste de sports vide → pas de niveaux, historique vide (sans requête historique)', async () => {
+    prismaMock.sport.findMany.mockResolvedValue([] as any);
+    const res = await service.getMemberLevelAdmin('u1', []);
+    expect(res.levels).toEqual({});
+    expect(res.history).toEqual([]);
+    expect(prismaMock.playerRatingAdjustment.findMany).not.toHaveBeenCalled();
   });
 });
 

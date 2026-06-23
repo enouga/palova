@@ -19,6 +19,8 @@ beforeEach(() => {
   asMember('ADMIN');
   // Système de niveau activé par défaut (assertLevelSystem).
   prismaMock.club.findUnique.mockResolvedValue({ levelSystemEnabled: true } as any);
+  // Par défaut, la cible :userId est bien membre du club (garde d'appartenance).
+  prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb1', userId: 'u9', clubId: 'club-demo' } as any);
 });
 
 describe('POST /api/clubs/:clubId/admin/members/:userId/level', () => {
@@ -73,6 +75,15 @@ describe('POST /api/clubs/:clubId/admin/members/:userId/level', () => {
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('SPORT_NOT_FOUND');
   });
+
+  it('404 si la cible n est pas membre du club (niveau global non touché)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    const res = await setLevel({ sportKey: 'padel', level: 5 });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('MEMBER_NOT_FOUND');
+    // on ne doit pas avoir tenté d'écrire le niveau
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/clubs/:clubId/admin/members/:userId/level', () => {
@@ -109,5 +120,12 @@ describe('GET /api/clubs/:clubId/admin/members/:userId/level', () => {
     expect(res.body.levels.padel.level).toBe(6);
     expect(res.body.history).toHaveLength(1);
     expect(res.body.history[0].staffFirstName).toBe('Eve');
+  });
+
+  it('404 si la cible n est pas membre du club', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    const res = await request(app).get(`${base}/members/u9/level`).set(auth);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('MEMBER_NOT_FOUND');
   });
 });

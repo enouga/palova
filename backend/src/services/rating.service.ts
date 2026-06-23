@@ -140,9 +140,12 @@ export class RatingService {
       throw new Error('VALIDATION_ERROR');
     }
     const sportId = await this.sportId(sportKey);
+    // Lecture hors transaction : TOCTOU acceptable pour une action admin rare et idempotente
+    // (le previousLevel tracé peut au pire refléter un état T-ε ; l'upsert reste cohérent).
     const existing = await prisma.playerRating.findUnique({ where: { userId_sportId: { userId, sportId } } });
     const previousLevel = (existing as Row | null)?.displayLevel ?? null;
 
+    // On ne touche QUE la note et son statut : ni matchesPlayed/volatility/lastMatchAt (préserve l'historique de matchs).
     const data = {
       rating: levelToRating(level), rd: RD_RELIABLE,
       displayLevel: level, isProvisional: false,
@@ -150,6 +153,7 @@ export class RatingService {
     await prisma.$transaction(async (tx) => {
       await tx.playerRating.upsert({
         where: { userId_sportId: { userId, sportId } },
+        // CREATE : 0 match joué mais note fiable assumée (volatility = défaut schéma).
         create: { userId, sportId, ...data },
         update: data,
       });
@@ -168,14 +172,20 @@ export class RatingService {
    * (clé = sportKey) et historique des corrections manuelles (récent d'abord).
    */
   async getMemberLevelAdmin(userId: string, sportKeys: string[]): Promise<MemberLevelAdmin> {
+    if (sportKeys.length === 0) return { levels: {}, history: [] };
+    // Résout les sportIds une fois : sert au filtre d'historique (cohérent avec les niveaux affichés).
+    const sports = await prisma.sport.findMany({ where: { key: { in: sportKeys } }, select: { id: true } });
+    const sportIds = sports.map((s) => s.id);
+
     const bySport = await this.getLevelsBySport(sportKeys.map((sportKey) => ({ userId, sportKey })));
     const levels: Record<string, UserLevel> = {};
     for (const sportKey of sportKeys) {
       const v = bySport[`${userId}:${sportKey}`];
       if (v) levels[sportKey] = v;
     }
+    // Historique scopé aux sports du club : pas de correction d'un sport que le club ne propose pas.
     const rows = await prisma.playerRatingAdjustment.findMany({
-      where: { userId },
+      where: { userId, sportId: { in: sportIds } },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true, previousLevel: true, newLevel: true, reason: true, createdAt: true,
