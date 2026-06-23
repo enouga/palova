@@ -152,7 +152,7 @@ export default function AdminMemberLevelPage() {
                 {(data?.history ?? []).map((h) => (
                   <li key={h.id} style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-                      <span style={{ fontWeight: 700 }}>{h.previousLevel ?? '—'} → {h.newLevel}</span>
+                      <span style={{ fontWeight: 700 }}>{h.previousLevel != null ? h.previousLevel.toFixed(1) : '—'} → {h.newLevel.toFixed(1)}</span>
                       {formSports.length > 1 && <span style={{ color: th.textMute }}>· {h.sportName}</span>}
                       <span style={{ color: th.textMute }}>· par {h.staffFirstName} {h.staffLastName}</span>
                       <span style={{ color: th.textFaint, fontSize: 12.5 }}>· {formatDate(h.createdAt)}</span>

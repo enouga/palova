@@ -131,7 +131,7 @@ it('niveaux vides : affiche le message « aucun niveau » mais rend quand même 
   // le formulaire rend quand même (via le fallback clubSports/formSports)
   expect(screen.getByLabelText(/Niveau \(0–8\)/i)).toBeInTheDocument();
   // l'historique reste affiché
-  expect(screen.getByText('— → 4')).toBeInTheDocument();
+  expect(screen.getByText('— → 4.0')).toBeInTheDocument();
 });
 
 it('membre introuvable : l en-tête retombe sur « Membre » sans planter', async () => {
