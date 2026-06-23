@@ -221,6 +221,29 @@ describe('PackageService — caisse du jour & vouchers', () => {
     expect(out.refunded).toBe('5.00');
   });
 
+  it('dailySummary exclut les méthodes sans argent (MEMBER, SUBSCRIPTION) du total encaissé mais les garde dans totalsByMethod', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.payment.findMany.mockResolvedValue([
+      { method: 'CASH', amount: new Prisma.Decimal(40) },
+      { method: 'MEMBER', amount: new Prisma.Decimal(25) },
+      { method: 'SUBSCRIPTION', amount: new Prisma.Decimal(15) },
+    ] as any);
+    prismaMock.refund.findMany.mockResolvedValue([
+      { method: 'MEMBER', amount: new Prisma.Decimal(10) },
+    ] as any);
+
+    const out = await service.dailySummary('club-1', '2026-06-10');
+
+    // totalsByMethod doit lister toutes les méthodes, y compris les non-argent
+    expect(out.totalsByMethod.CASH).toBe('40.00');
+    expect(out.totalsByMethod.MEMBER).toBe('15.00'); // 25 - 10
+    expect(out.totalsByMethod.SUBSCRIPTION).toBe('15.00');
+    // collected ne doit compter que les méthodes argent (CASH uniquement ici)
+    expect(out.collected).toBe('40.00');
+    // refunded ne doit compter que les remboursements argent (MEMBER n'est pas argent)
+    expect(out.refunded).toBe('0.00');
+  });
+
   it('dailySummary refuse une date invalide', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
     await expect(service.dailySummary('club-1', 'pas-une-date')).rejects.toThrow('VALIDATION_ERROR');

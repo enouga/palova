@@ -5,6 +5,10 @@ import { prisma } from '../db/prisma';
 /** Méthodes acceptées pour encaisser la VENTE d'une offre (pas de prépayé sur prépayé). */
 const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
 
+/** Méthodes qui représentent un vrai flux d'argent (miroir de accounting.service.ts). */
+const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const isMoney = (m: string) => MONEY_METHODS.includes(m);
+
 export class PackageService {
   // --- Offres (templates) ---
 
@@ -235,14 +239,16 @@ export class PackageService {
     let collected = new Prisma.Decimal(0);
     for (const p of payments) {
       totals[p.method] = (totals[p.method] ?? new Prisma.Decimal(0)).plus(p.amount);
-      collected = collected.plus(p.amount);
+      if (isMoney(p.method)) collected = collected.plus(p.amount);
     }
 
     let refundedTotal = new Prisma.Decimal(0);
     for (const r of refunds) {
       totals[r.method] = (totals[r.method] ?? new Prisma.Decimal(0)).minus(r.amount);
-      collected = collected.minus(r.amount);
-      refundedTotal = refundedTotal.plus(r.amount);
+      if (isMoney(r.method)) {
+        collected = collected.minus(r.amount);
+        refundedTotal = refundedTotal.plus(r.amount);
+      }
     }
 
     const totalsByMethod: Record<string, string> = {};
