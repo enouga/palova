@@ -153,3 +153,28 @@ describe('SubscriptionService — listes & cancel', () => {
     await expect(service.cancelSubscription('sub-1', 'club-1')).rejects.toThrow('SUBSCRIPTION_NOT_FOUND');
   });
 });
+
+describe('SubscriptionService.coverageFor', () => {
+  const incl = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED' as const, discountPercent: null };
+  const disc = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'DISCOUNT' as const, discountPercent: 50 };
+
+  it('INCLUDED creux → couvert, coverCents = dû', () => {
+    expect(SubscriptionService.coverageFor(incl, { sportKey: 'padel', isOffPeak: true, dueCents: 1300 }))
+      .toEqual({ covered: true, coverCents: 1300 });
+  });
+
+  it('offPeakOnly + créneau plein → non couvert', () => {
+    expect(SubscriptionService.coverageFor(incl, { sportKey: 'padel', isOffPeak: false, dueCents: 1300 }))
+      .toEqual({ covered: false, coverCents: 0 });
+  });
+
+  it('sport hors liste → non couvert', () => {
+    expect(SubscriptionService.coverageFor(incl, { sportKey: 'squash', isOffPeak: true, dueCents: 1300 }))
+      .toEqual({ covered: false, coverCents: 0 });
+  });
+
+  it('DISCOUNT 50 % → coverCents = moitié (arrondi)', () => {
+    expect(SubscriptionService.coverageFor(disc, { sportKey: 'padel', isOffPeak: true, dueCents: 1300 }))
+      .toEqual({ covered: true, coverCents: 650 });
+  });
+});
