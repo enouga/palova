@@ -29,6 +29,7 @@ export function NotificationBell() {
         if (data?.type === 'notification') setUnread((n) => n + 1);
       } catch { /* ping / connected */ }
     };
+    es.onerror = () => es.close();
     return () => { alive = false; es.close(); };
   }, [token]);
 
@@ -46,8 +47,7 @@ export function NotificationBell() {
 
   const toggle = () => {
     if (!open && token) {
-      setLoaded(true);
-      api.getNotifications(token).then((p) => setItems(p.items)).catch(() => {});
+      api.getNotifications(token).then((p) => { setItems(p.items); setLoaded(true); }).catch(() => {});
     }
     setOpen(!open);
   };
@@ -70,7 +70,7 @@ export function NotificationBell() {
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={toggle} aria-label="Notifications" aria-haspopup="menu" aria-expanded={open}
+      <button onClick={toggle} aria-label="Notifications" aria-haspopup="true" aria-expanded={open}
         style={{
           width: 38, height: 38, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer',
           position: 'relative', background: open ? th.surfaceHi : th.surface2,
@@ -87,7 +87,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div role="menu" aria-label="Notifications" style={{
+        <div role="region" aria-label="Notifications" style={{
           position: 'absolute', right: 0, top: 46, width: 340, maxWidth: '90vw', zIndex: 60,
           background: th.surface, border: `1px solid ${th.line}`, borderRadius: 16,
           boxShadow: th.shadowSoft, overflow: 'hidden',
@@ -105,7 +105,7 @@ export function NotificationBell() {
               <div style={{ padding: 24, textAlign: 'center', color: th.textFaint, fontFamily: th.fontUI, fontSize: 13.5 }}>Aucune notification</div>
             )}
             {items.map((n) => (
-              <button key={n.id} role="menuitem" onClick={() => openItem(n)}
+              <button key={n.id} onClick={() => openItem(n)}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
                   background: n.readAt ? 'transparent' : th.surface2, padding: '12px 16px',
