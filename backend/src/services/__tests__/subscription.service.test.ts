@@ -47,3 +47,28 @@ describe('SubscriptionService — createPlan', () => {
     await expect(service.createPlan('club-1', { ...base, dailyCap: 0 })).rejects.toThrow('VALIDATION_ERROR');
   });
 });
+
+describe('SubscriptionService — updatePlan', () => {
+  let service: SubscriptionService;
+  beforeEach(() => {
+    service = new SubscriptionService();
+    prismaMock.sport.findMany.mockResolvedValue(SPORTS as any);
+  });
+
+  it('refuse un plan d\'un autre club', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-1', clubId: 'autre' } as any);
+    await expect(service.updatePlan('plan-1', 'club-1', { isActive: false })).rejects.toThrow('PLAN_NOT_FOUND');
+  });
+
+  it('met à jour les champs fournis (avec revalidation)', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-1', clubId: 'club-1', name: 'Abo', sportKeys: ['padel'], monthlyPrice: 69,
+      commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+    } as any);
+    prismaMock.subscriptionPlan.update.mockResolvedValue({ id: 'plan-1' } as any);
+    await service.updatePlan('plan-1', 'club-1', { monthlyPrice: 75, isActive: false });
+    const data = prismaMock.subscriptionPlan.update.mock.calls[0][0].data as any;
+    expect(Number(data.monthlyPrice)).toBe(75);
+    expect(data.isActive).toBe(false);
+  });
+});
