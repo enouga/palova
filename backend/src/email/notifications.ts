@@ -734,7 +734,7 @@ export async function notifyNewMatchComment(
   const excerpt = last.body.length > 280 ? last.body.slice(0, 277) + '…' : last.body;
   const scoreLine = setsToScoreLine(match.sets);
   const brand = brandOf(match.club);
-  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+  const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
 
   const staff = await prisma.clubMember.findMany({
     where: { clubId: match.club.id, role: { in: [ClubRole.OWNER, ClubRole.ADMIN, ClubRole.STAFF] } },
@@ -798,7 +798,7 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
 
   const scoreLine = setsToScoreLine(match.sets);
   const brand = brandOf(match.club);
-  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+  const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
   const authorName = fullName(match.creator);
 
   for (const mp of match.players) {
