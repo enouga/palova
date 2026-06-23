@@ -15,6 +15,7 @@ import { BackButton, PillTabs, Segmented, ThemeToggle } from '@/components/ui/at
 import { DateField } from '@/components/ui/DateField';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
+import { ProfileSectionNav, ProfileNavItem } from '@/components/profile/ProfileSectionNav';
 
 const LOCALE_OPTIONS = [
   { value: 'fr', label: 'Français' },
@@ -32,6 +33,10 @@ export default function MyProfilePage() {
   const { th, mode, setMode } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
+
+  // Hauteur du ClubNav collant : sert d'offset au menu de navigation (0 sur l'hôte plateforme).
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
 
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [membership, setMembership] = useState<MyClubMembership | null>(null);
@@ -78,6 +83,16 @@ export default function MyProfilePage() {
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
   useEffect(() => { api.getSports().then(setSports).catch(() => {}); }, []);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) { setHeaderH(0); return; }
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [slug, club]);
 
   useEffect(() => {
     if (!token) return;
@@ -230,6 +245,17 @@ export default function MyProfilePage() {
   const showLevelSportPicker = false;
   const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel'; // repli : le padel est toujours disponible
 
+  // Items du menu = sections réellement rendues (pas d'ancre morte).
+  const navItems: ProfileNavItem[] = [
+    { id: 'identite', icon: 'user', label: 'Identité' },
+    ...(sports.length > 0 ? [{ id: 'sport', icon: 'ball', label: 'Sport' } as ProfileNavItem] : []),
+    ...(club?.levelSystemEnabled !== false ? [{ id: 'niveau', icon: 'chart', label: 'Niveau' } as ProfileNavItem] : []),
+    { id: 'infos', icon: 'info', label: 'Infos' },
+    { id: 'preferences', icon: 'settings', label: 'Préf.' },
+    { id: 'securite', icon: 'lock', label: 'Sécu.' },
+    ...(slug && club && membership ? [{ id: 'licence', icon: 'ticket', label: 'Licence' } as ProfileNavItem] : []),
+  ];
+
   const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
   const initials = profile ? `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase() : '…';
 
@@ -237,7 +263,7 @@ export default function MyProfilePage() {
     <Screen>
       <div style={{ paddingBottom: 48 }}>
         {slug && club ? (
-          <ClubNav club={club} />
+          <div ref={headerRef}><ClubNav club={club} /></div>
         ) : (
           <div style={{ padding: '28px 20px 6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -263,10 +289,12 @@ export default function MyProfilePage() {
         {loading || !profile ? (
           <div style={{ padding: '24px 20px', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : (
-          <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <>
+            <ProfileSectionNav items={navItems} topOffset={headerH} />
+            <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Identité + avatar */}
-            <section style={card} aria-label="Identité">
+            <section id="identite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Identité">
               <div style={cardTitle}>Identité</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 {avatarSrc ? (
@@ -347,7 +375,7 @@ export default function MyProfilePage() {
             )}
 
             {/* Informations modifiables */}
-            <section style={card} aria-label="Informations">
+            <section id="infos" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Informations">
               <div style={cardTitle}>Informations</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={label}>Téléphone</span>
@@ -375,7 +403,7 @@ export default function MyProfilePage() {
             </section>
 
             {/* Préférences */}
-            <section style={card} aria-label="Préférences">
+            <section id="preferences" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Préférences">
               <div style={cardTitle}>Préférences</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={label}>Langue</span>
@@ -400,7 +428,7 @@ export default function MyProfilePage() {
             </section>
 
             {/* Mot de passe */}
-            <section style={card} aria-label="Mot de passe">
+            <section id="securite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mot de passe">
               <div style={cardTitle}>Mot de passe</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={label}>Mot de passe actuel</span>
@@ -433,7 +461,7 @@ export default function MyProfilePage() {
 
             {/* Licence du club courant (uniquement membre, sur un sous-domaine club) */}
             {slug && club && membership && (
-              <section style={card} aria-label="Licence">
+              <section id="licence" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Licence">
                 <div style={cardTitle}>Licence · {club.name}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={label}>N° de licence / adhérent</span>
@@ -445,7 +473,8 @@ export default function MyProfilePage() {
                 </div>
               </section>
             )}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </Screen>

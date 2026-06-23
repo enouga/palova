@@ -225,4 +225,27 @@ describe('Page Mon profil', () => {
     fireEvent.click(skipBtn);
     await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'padel'));
   });
+
+  it('affiche le menu de navigation listant les régions rendues', async () => {
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+    ]);
+    wrap();
+    const nav = await screen.findByRole('navigation', { name: /sections du profil/i });
+    expect(within(nav).getByText('Identité')).toBeInTheDocument();
+    expect(within(nav).getByText('Sport')).toBeInTheDocument();
+    expect(within(nav).getByText('Infos')).toBeInTheDocument();
+    expect(within(nav).getByText('Préf.')).toBeInTheDocument();
+    expect(within(nav).getByText('Sécu.')).toBeInTheDocument();
+  });
+
+  it('le menu omet « Niveau » quand le club a désactivé les niveaux', async () => {
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+    ]);
+    wrap();
+    const nav = await screen.findByRole('navigation', { name: /sections du profil/i });
+    expect(within(nav).queryByText('Niveau')).not.toBeInTheDocument();
+  });
 });
