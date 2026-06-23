@@ -613,9 +613,25 @@ export const api = {
     request<{ ok: boolean }>('/api/me/push-subscriptions', { method: 'POST', body: JSON.stringify(sub) }, token),
   deletePushSubscription: (endpoint: string, token: string) =>
     request<{ ok: boolean }>('/api/me/push-subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }, token),
+
+  // --- Broadcasts (admin) ---
+  getClubBroadcasts: (clubId: string, token: string) =>
+    request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
+  sendClubBroadcast: (clubId: string, body: { title: string; body: string; url?: string }, token: string) =>
+    request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
 };
 
 // --- Types ---
+
+// --- Broadcasts ---
+export interface ClubBroadcastItem {
+  id: string;
+  title: string;
+  body: string;
+  url: string | null;
+  recipientCount: number;
+  createdAt: string;
+}
 
 // --- Notifications ---
 export interface AppNotification {
