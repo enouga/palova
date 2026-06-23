@@ -823,3 +823,194 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
     });
   }
 }
+
+export async function notifyReservationCancelled(reservationId: string, actorUserId?: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+      },
+      participants: { include: { user: { select: { id: true, firstName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    if (p.userId === actorUserId) continue;
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'MY_GAMES',
+      type: 'reservation.cancelled',
+      title: "Réservation annulée",
+      body: `Ta réservation du ${dateLabel} a été annulée.`,
+      url,
+    });
+  }
+}
+
+export async function notifyReservationRescheduled(reservationId: string, actorUserId?: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+      },
+      participants: { include: { user: { select: { id: true, firstName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const club = resa.resource.club;
+  const newDateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    if (p.userId === actorUserId) continue;
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'MY_GAMES',
+      type: 'reservation.rescheduled',
+      title: "Réservation déplacée",
+      body: `Ta réservation a été déplacée au ${newDateLabel}.`,
+      url,
+    });
+  }
+}
+
+export async function notifyActivityCancelledByClub(
+  kind: 'tournament' | 'event' | 'lesson',
+  activityId: string,
+): Promise<void> {
+  if (kind === 'tournament') {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        registrations: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: {
+            captain: { select: { id: true, email: true, firstName: true } },
+            partner: { select: { id: true, email: true, firstName: true } },
+          },
+        },
+      },
+    });
+    if (!tournament) return;
+    const club = tournament.club;
+    const brand = brandOf(club);
+    const dateLabel = tournament.startTime ? formatDateRangeFr(tournament.startTime, tournament.endTime ?? tournament.startTime, club.timezone) : '';
+    const url = clubAppUrl(club.slug, `/tournois/${tournament.id}`);
+    const seen = new Set<string>();
+    for (const reg of tournament.registrations) {
+      for (const user of [reg.captain, reg.partner]) {
+        if (seen.has(user.id)) continue;
+        seen.add(user.id);
+        const mail = buildPlayerEmail({
+          firstName: user.firstName,
+          action: 'cancelled',
+          activityType: 'tournament',
+          activityName: tournament.name,
+          clubName: club.name,
+          dateLabel,
+          url,
+          brand,
+        });
+        await dispatch({
+          userId: user.id,
+          clubId: club.id,
+          category: 'MY_REGISTRATIONS',
+          type: 'activity.cancelled_by_club',
+          title: "Annulé par le club",
+          body: `« ${tournament.name} » a été annulé par le club.`,
+          url,
+          email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+        });
+      }
+    }
+  } else if (kind === 'event') {
+    const event = await prisma.clubEvent.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        registrations: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: { user: { select: { id: true, email: true, firstName: true } } },
+        },
+      },
+    });
+    if (!event) return;
+    const club = event.club;
+    const brand = brandOf(club);
+    const dateLabel = formatDateRangeFr(event.startTime, event.endTime ?? event.startTime, club.timezone);
+    const url = clubAppUrl(club.slug, `/events/${event.id}`);
+    for (const reg of event.registrations) {
+      const user = reg.user;
+      const mail = buildPlayerEmail({
+        firstName: user.firstName,
+        action: 'cancelled',
+        activityType: 'event',
+        activityName: event.name,
+        clubName: club.name,
+        dateLabel,
+        url,
+        brand,
+      });
+      await dispatch({
+        userId: user.id,
+        clubId: club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'activity.cancelled_by_club',
+        title: "Annulé par le club",
+        body: `« ${event.name} » a été annulé par le club.`,
+        url,
+        email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+      });
+    }
+  } else {
+    // kind === 'lesson'
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        coach: { select: { name: true } },
+        reservation: { select: { startTime: true, endTime: true } },
+        enrollments: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: { user: { select: { id: true, email: true, firstName: true } } },
+        },
+      },
+    });
+    if (!lesson) return;
+    const club = lesson.club;
+    const brand = brandOf(club);
+    const activityName = lesson.coach?.name ? `Cours — ${lesson.coach.name}` : 'Cours';
+    const dateLabel = formatDateRangeFr(lesson.reservation.startTime, lesson.reservation.endTime, club.timezone);
+    const url = clubAppUrl(club.slug, `/cours/${lesson.id}`);
+    for (const enr of lesson.enrollments) {
+      const user = enr.user;
+      const mail = buildPlayerEmail({
+        firstName: user.firstName,
+        action: 'cancelled',
+        activityType: 'lesson',
+        activityName,
+        clubName: club.name,
+        dateLabel,
+        url,
+        brand,
+      });
+      await dispatch({
+        userId: user.id,
+        clubId: club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'activity.cancelled_by_club',
+        title: "Annulé par le club",
+        body: `« ${activityName} » a été annulé par le club.`,
+        url,
+        email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+      });
+    }
+  }
+}

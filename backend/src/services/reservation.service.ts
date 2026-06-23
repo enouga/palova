@@ -10,7 +10,7 @@ import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
@@ -595,6 +595,7 @@ export class ReservationService {
       reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
     );
     if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    await this.safeNotify(() => notifyReservationCancelled(reservationId, userId));
     return { ...cancelled, refunded };
   }
 
@@ -614,6 +615,7 @@ export class ReservationService {
       reservationId, reservation.resource.clubId, reservation.startTime, reservation.resource.club,
     );
     if (refunded.length) await this.safeNotify(() => notifyReservationRefunded(reservationId, refunded));
+    await this.safeNotify(() => notifyReservationCancelled(reservationId));
     return { ...cancelled, refunded };
   }
 

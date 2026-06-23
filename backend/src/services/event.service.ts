@@ -245,7 +245,11 @@ export class EventService {
       }
       (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
     }
-    return prisma.clubEvent.update({ where: { id: eventId }, data });
+    const updated = await prisma.clubEvent.update({ where: { id: eventId }, data });
+    if (input.status === 'CANCELLED') {
+      await this.safeNotify(() => notify.notifyActivityCancelledByClub('event', eventId));
+    }
+    return updated;
   }
 
   async deleteEvent(eventId: string, clubId: string) {

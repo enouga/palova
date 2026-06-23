@@ -291,7 +291,11 @@ export class TournamentService {
       if (!['DRAFT', 'PUBLISHED', 'CANCELLED'].includes(input.status as string)) throw new Error('VALIDATION_ERROR');
       (data as Record<string, unknown>).status = input.status;
     }
-    return prisma.tournament.update({ where: { id: tournamentId }, data });
+    const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
+    if (input.status === 'CANCELLED') {
+      await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
+    }
+    return updated;
   }
 
   async deleteTournament(tournamentId: string, clubId: string) {
