@@ -53,6 +53,7 @@ const clubPadelTennis = {
 describe('ClubReserve — durée par sport', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
+    localStorage.clear();
     mocked.getClubAvailability.mockResolvedValue([] as never);
     window.history.pushState({}, '', '/reserver');
   });
@@ -67,22 +68,32 @@ describe('ClubReserve — durée par sport', () => {
     expect(calls).toContainEqual([45, 'cs2']); // Squash : défaut = 1re durée (45)
   });
 
-  it('affiche les onglets sport et bascule la section au clic', async () => {
+  it('le sélecteur multi ajoute la section d\'un sport coché', async () => {
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
-    expect(await screen.findByRole('button', { name: 'Padel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Squash' })).toBeInTheDocument();
-    // Par défaut Padel (durée unique) → aucune pastille de durée propre à Squash.
+    // Défaut = Padel (preferredSport absent du mock → clubSports[0]). Durée unique [90] → pas de pastille Squash.
+    expect(await screen.findByRole('button', { name: /Padel · changer/ })).toBeInTheDocument();
     expect(screen.queryByText('45 min')).not.toBeInTheDocument();
-    // Bascule sur Squash → ses durées (45/60) apparaissent.
-    fireEvent.click(screen.getByRole('button', { name: 'Squash' }));
+    // Ouvrir le sélecteur et cocher Squash → sa section s'ajoute (durées 45/60 apparaissent).
+    fireEvent.click(screen.getByRole('button', { name: /· changer/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Squash' }));
     expect(await screen.findByText('45 min')).toBeInTheDocument();
-    expect(screen.getByText('1 h')).toBeInTheDocument();
+    // Padel reste affiché (multi) → libellé « Padel, Squash · changer ».
+    expect(screen.getByRole('button', { name: /Padel, Squash · changer/ })).toBeInTheDocument();
+  });
+
+  it('mémorise la sélection par club (localStorage)', async () => {
+    localStorage.setItem('palova:reserve-sports:c1', JSON.stringify(['cs2'])); // Squash mémorisé
+    render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
+    // Au montage, on restaure Squash (durées 45/60) sans repasser par Padel.
+    expect(await screen.findByText('45 min')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Squash · changer/ })).toBeInTheDocument();
   });
 });
 
 describe('ClubReserve — sport préféré par défaut', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
+    localStorage.clear();
     mocked.getClubAvailability.mockResolvedValue([] as never);
     window.history.pushState({}, '', '/reserver');
   });
@@ -123,5 +134,29 @@ describe('ClubReserve — sport préféré par défaut', () => {
     await new Promise((r) => setTimeout(r, 50));
     // Tennis n'est pas le sport par défaut → ses pastilles de durée ne sont pas affichées.
     expect(screen.queryByText('1 h')).not.toBeInTheDocument();
+  });
+});
+
+describe('ClubReserve — club mono-sport', () => {
+  beforeEach(() => {
+    document.cookie = 'token=abc; path=/';
+    localStorage.clear();
+    mocked.getClubAvailability.mockResolvedValue([] as never);
+    window.history.pushState({}, '', '/reserver');
+  });
+  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; jest.clearAllMocks(); });
+
+  const soloClub = {
+    id: 'c3', slug: 'solo', name: 'Club Solo', timezone: 'Europe/Paris', description: null,
+    memberBookingDays: 7, publicBookingDays: 7,
+    clubSports: [
+      { id: 'only', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] },
+    ],
+  } as never;
+
+  it('n\'affiche pas de sélecteur « changer » quand le club n\'a qu\'un sport', async () => {
+    render(<ThemeProvider><ClubReserve club={soloClub} /></ThemeProvider>);
+    await waitFor(() => expect(mocked.getClubAvailability).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /· changer/ })).not.toBeInTheDocument();
   });
 });

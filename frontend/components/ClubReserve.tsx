@@ -16,6 +16,7 @@ import DateSelector from '@/components/DateSelector';
 import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
+import { SportPicker } from '@/components/reserve/SportPicker';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -29,9 +30,17 @@ function formatHour(iso: string, tz: string): string {
 export function ClubReserve({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, ready: authReady } = useAuth();
   const [tab, setTab]           = useState<'book' | 'courts'>('book');
-  const [selectedSportId, setSelectedSportId] = useState<string>(club.clubSports[0]?.id ?? '');
+  // Sélection multi-sports (ids de clubSport, ordre du club). null = pas encore résolue
+  // (on évite d'afficher le mauvais sport le temps de lire le profil). Jamais vide une fois résolue.
+  const SPORTS_KEY = `palova:reserve-sports:${club.id}`;
+  const [selectedSportIds, setSelectedSportIds] = useState<string[] | null>(null);
+  // Persiste un changement manuel (l'utilisateur a coché/décoché) et le mémorise par club.
+  const changeSports = (ids: string[]) => {
+    setSelectedSportIds(ids);
+    try { localStorage.setItem(SPORTS_KEY, JSON.stringify(ids)); } catch { /* localStorage indispo */ }
+  };
   const [date, setDate]         = useState(todayISO());
   // Durée choisie PAR sport (clé = clubSport.id) : chaque sport propose ses propres durées.
   const [durationBySport, setDurationBySport] = useState<Record<string, number>>(
@@ -86,17 +95,27 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { refreshQuota(); }, [refreshQuota]);
 
-  // Sport par défaut = sport préféré du joueur si le club le propose, sinon clubSports[0].
-  // On ne réécrase pas un changement manuel : on bascule uniquement si la valeur courante
-  // est encore le défaut initial (clubSports[0]).
+  // Résolution de la sélection initiale, sans saut (client only → pas de mismatch d'hydratation) :
+  // 1) localStorage (ids encore proposés) → 2) sport préféré si connecté → 3) clubSports[0].
+  // On attend que authReady soit true pour connaître le token définitif avant de résoudre.
   useEffect(() => {
-    if (!token) return;
-    const defaultId = club.clubSports[0]?.id ?? '';
-    api.getMyProfile(token).then((p) => {
-      const match = club.clubSports.find((cs) => cs.sport.key === p.preferredSport?.key);
-      if (match) setSelectedSportId((cur) => (cur === defaultId ? match.id : cur));
-    }).catch(() => {});
-  }, [token, club.clubSports]);
+    if (selectedSportIds !== null) return; // déjà résolu
+    if (!authReady) return; // attendre que le cookie ait été lu
+    const valid = (ids: string[]) => ids.filter((id) => club.clubSports.some((cs) => cs.id === id));
+    try {
+      const raw = localStorage.getItem(SPORTS_KEY);
+      if (raw) { const ids = valid(JSON.parse(raw)); if (ids.length) { setSelectedSportIds(ids); return; } }
+    } catch { /* localStorage indispo */ }
+    const fallback = club.clubSports[0]?.id ? [club.clubSports[0].id] : [];
+    if (token) {
+      api.getMyProfile(token).then((p) => {
+        const match = club.clubSports.find((cs) => cs.sport.key === p.preferredSport?.key);
+        setSelectedSportIds(match ? [match.id] : fallback);
+      }).catch(() => setSelectedSportIds(fallback));
+    } else {
+      setSelectedSportIds(fallback);
+    }
+  }, [token, authReady, club.clubSports, SPORTS_KEY, selectedSportIds]);
 
   const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
     setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
@@ -124,7 +143,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       const res = (availBySport[cs.id] ?? []).find((a) => a.resource.id === deepSlot.resourceId);
       const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
       if (res && slot) {
-        setSelectedSportId(cs.id);
+        setSelectedSportIds((cur) => (cur && cur.includes(cs.id)) ? cur : [...(cur ?? []), cs.id]);
         setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined, sportKey: cs.sport.key, resourceName: res.resource.name });
         setDeepSlot(null);
         return;
@@ -173,26 +192,29 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
-            {/* filtre par sport — affiché seulement si le club propose plusieurs sports */}
-            {club.clubSports.length > 1 && (
+            {/* sélecteur de sport discret — affiché seulement si le club propose plusieurs sports */}
+            {club.clubSports.length > 1 && selectedSportIds !== null && (
               <div style={{ padding: '12px 20px 0' }}>
-                <PillTabs<string>
-                  options={club.clubSports.map((cs) => ({ value: cs.id, label: cs.sport.name }))}
-                  value={selectedSportId}
-                  onChange={setSelectedSportId}
+                <SportPicker
+                  sports={club.clubSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
+                  selectedIds={selectedSportIds}
+                  onChange={changeSports}
                 />
               </div>
             )}
-            {/* grille : section du sport sélectionné — durée propre + terrains + créneaux libres */}
+            {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
-              {club.clubSports.filter((cs) => cs.id === selectedSportId).map((cs) => {
+              {selectedSportIds === null && (
+                <div style={{ padding: '20px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+              )}
+              {selectedSportIds !== null && club.clubSports.filter((cs) => selectedSportIds.includes(cs.id)).map((cs) => {
                 const durations = effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin);
                 const selDur = durationBySport[cs.id];
                 const items = availBySport[cs.id];
                 const loading = loadingBySport[cs.id];
                 return (
                   <div key={cs.id} style={{ marginTop: 14 }}>
-                    {club.clubSports.length === 1 && (
+                    {(selectedSportIds.length > 1 || club.clubSports.length === 1) && (
                       <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
                     )}
                     {durations.length > 1 && (
