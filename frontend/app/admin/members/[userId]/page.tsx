@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, AdminMemberLevel, UserLevel } from '@/lib/api';
@@ -28,9 +28,13 @@ export default function AdminMemberLevelPage() {
   const [data, setData] = useState<AdminMemberLevel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Garde anti-race : un reload (onSaved) peut chevaucher un chargement en cours ;
+  // on ignore le résultat d'une requête périmée en comparant son id au dernier émis.
+  const reqIdRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!token || !clubId || !userId) return;
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
       setError(null);
@@ -38,13 +42,15 @@ export default function AdminMemberLevelPage() {
         api.adminGetMembers(clubId, token),
         api.adminGetMemberLevel(clubId, userId, token),
       ]);
+      if (reqId !== reqIdRef.current) return; // réponse périmée : un reload plus récent a pris la main
       const member = members.find((m) => m.userId === userId);
       setName(member ? `${member.firstName} ${member.lastName}` : null);
       setData(level);
     } catch (e) {
+      if (reqId !== reqIdRef.current) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) setLoading(false);
     }
   }, [token, clubId, userId]);
 
@@ -70,12 +76,17 @@ export default function AdminMemberLevelPage() {
 
   // Sports proposés par le club (pour le sélecteur du formulaire).
   const clubSports = (club?.clubSports ?? []).map((cs) => ({ key: cs.sport.key, name: cs.sport.name }));
+  // Carte clé→nom unique, alimentée par les sports du club ET les noms portés par l'historique :
+  // évite d'afficher une clé brute (ex. « padel ») si club.clubSports est vide.
+  const nameByKey = new Map<string, string>();
+  for (const s of clubSports) nameByKey.set(s.key, s.name);
+  for (const h of data?.history ?? []) if (!nameByKey.has(h.sportKey)) nameByKey.set(h.sportKey, h.sportName);
+  // Nom lisible d'un sport (section Niveau + historique), avec repli sur la clé en dernier recours.
+  const sportName = (key: string) => nameByKey.get(key) ?? key;
   // Si le club n'a pas de sports configurés, on retombe sur les sports présents dans les niveaux.
   const formSports = clubSports.length > 0
     ? clubSports
-    : Object.keys(data?.levels ?? {}).map((key) => ({ key, name: key }));
-  // Nom lisible d'un sport (pour la section Niveau et l'historique).
-  const sportName = (key: string) => clubSports.find((s) => s.key === key)?.name ?? key;
+    : Object.keys(data?.levels ?? {}).map((key) => ({ key, name: sportName(key) }));
 
   const levelEntries: [string, UserLevel][] = Object.entries(data?.levels ?? {});
 

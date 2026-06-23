@@ -31,23 +31,33 @@ export function LevelOverrideForm({
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
 
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 13.5 };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
+
+  // Toute édition efface la confirmation précédente (convention admin : setSaved(false) à la saisie).
+  const editLevel = (v: string) => { setOk(false); setLevel(v); };
+  const editReason = (v: string) => { setOk(false); setReason(v); };
+  const editSport = (v: string) => { setOk(false); setSportKey(v); };
 
   const submit = async () => {
     if (!sportKey) return;
     const num = Number(level);
     if (level.trim() === '' || !Number.isFinite(num) || num < 0 || num > 8) {
+      setOk(false);
       setError('Niveau invalide (doit être entre 0 et 8).');
       return;
     }
+    // Échelle au dixième : on arrondit avant l'envoi (l'affichage est en .toFixed(1)).
+    const rounded = Math.round(num * 10) / 10;
     setSaving(true);
     try {
       setError(null);
-      await api.adminSetMemberLevel(clubId, userId, { sportKey, level: num, reason: reason.trim() || undefined }, token);
+      await api.adminSetMemberLevel(clubId, userId, { sportKey, level: rounded, reason: reason.trim() || undefined }, token);
       setLevel('');
       setReason('');
+      setOk(true);
       await onSaved();
     } catch (e) {
       const code = (e as Error).message;
@@ -67,11 +77,14 @@ export function LevelOverrideForm({
       {error && (
         <div style={{ marginBottom: 14, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
       )}
+      {ok && !error && (
+        <div style={{ marginBottom: 14, background: `${th.accent}22`, color: th.text, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>Niveau corrigé.</div>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
         {sports.length > 1 && (
           <label style={label}>Sport
-            <select value={sportKey} onChange={(e) => setSportKey(e.target.value)} style={{ ...input, height: 40, width: 150 }}>
+            <select value={sportKey} onChange={(e) => editSport(e.target.value)} style={{ ...input, height: 40, width: 150 }}>
               {sports.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
             </select>
           </label>
@@ -80,14 +93,14 @@ export function LevelOverrideForm({
           <input
             type="number" min={0} max={8} step={0.1}
             value={level}
-            onChange={(e) => setLevel(e.target.value)}
+            onChange={(e) => editLevel(e.target.value)}
             style={{ ...input, height: 40, width: 100 }}
           />
         </label>
         <label style={{ ...label, flex: 1, minWidth: 200 }}>Motif (facultatif)
           <input
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            onChange={(e) => editReason(e.target.value)}
             placeholder="Ex. décision du comité, niveau manifestement faux…"
             style={{ ...input, height: 40 }}
           />
