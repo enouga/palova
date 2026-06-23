@@ -13,6 +13,7 @@ import tournamentsRouter from './routes/tournaments';
 import eventsRouter from './routes/events';
 import lessonsRouter from './routes/lessons';
 import platformRouter from './routes/platform';
+import notificationsRouter from './routes/notifications';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
@@ -55,6 +56,7 @@ app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '365d', immutable: tru
 
 app.use('/api/auth',          authRouter);
 app.use('/api/me',            meRouter);
+app.use('/api/me',            notificationsRouter);
 app.use('/api/sports',        sportsRouter);
 app.use('/api/resources',     resourcesRouter);
 app.use('/api/reservations',  reservationsRouter);
