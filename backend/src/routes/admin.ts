@@ -26,6 +26,7 @@ import { CoachService } from '../services/coach.service';
 import { lessonService } from '../services/lesson.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { RatingService } from '../services/rating.service';
+import { SubscriptionService } from '../services/subscription.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -45,6 +46,7 @@ const clubPageService = new ClubPageService();
 const coachService = new CoachService();
 const broadcastService = new BroadcastService();
 const ratingService = new RatingService();
+const subscriptionService = new SubscriptionService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -96,6 +98,8 @@ const ERROR_STATUS: Record<string, number> = {
   ENROLLMENT_NOT_FOUND:   404,
   ALREADY_ENROLLED:       409,
   MEMBERSHIP_BLOCKED:     403,
+  PLAN_NOT_FOUND:         404,
+  SUBSCRIPTION_NOT_FOUND: 404,
 };
 
 function asString(v: unknown): string {
@@ -691,6 +695,25 @@ router.post('/packages/templates', async (req: ClubScopedRequest, res: Response,
 });
 router.patch('/packages/templates/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.updateTemplate(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Abonnements (plans configurables) ---
+router.get('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.listPlans(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await subscriptionService.createPlan(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/subscription-plans/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.updatePlan(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+
+// Vente / liste des abonnements d'un membre
+router.get('/members/:userId/subscriptions', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.listMemberSubscriptions(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
+});
+router.post('/members/:userId/subscriptions', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await subscriptionService.sellSubscription(req.membership!.clubId, asString(req.params.userId), { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
 });
 
 // Soldes d'un membre + vente d'une offre en caisse.

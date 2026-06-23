@@ -11,6 +11,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { PackageService } from '../services/package.service';
+import { SubscriptionService } from '../services/subscription.service';
 import { OpenMatchService } from '../services/openMatch.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
@@ -31,6 +32,7 @@ const eventService = new EventService();
 const packageService = new PackageService();
 const openMatchService = new OpenMatchService();
 const reservationService = new ReservationService();
+const subscriptionService = new SubscriptionService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -52,6 +54,7 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_ORGANIZER:          403,
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTICIPANT_NOT_FOUND: 404,
+  SUBSCRIPTION_NOT_FOUND: 404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -228,6 +231,12 @@ router.patch('/:slug/me/membership', authMiddleware, async (req: AuthRequest, re
 router.get('/:slug/me/packages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.listMyPackagesBySlug(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Abonnements actifs du joueur connecté sur ce club.
+router.get('/:slug/me/subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.listMySubscriptionsBySlug(asString(req.params.slug), req.user!.id)); }
+  catch (e) { handleError(e, res, next); }
 });
 
 // État des quotas de réservation du joueur connecté sur ce club (compteur « 3/5 »).
