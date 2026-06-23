@@ -13,6 +13,7 @@ jest.mock('@/lib/api', () => ({
     updateNotificationPreferences: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
+jest.mock('@/lib/usePush', () => ({ usePush: () => ({ status: 'unsupported', subscribe: jest.fn(), unsubscribe: jest.fn() }) }));
 
 describe('NotificationSettings', () => {
   it('affiche la grille et verrouille CLUB_MESSAGES+Cloche', async () => {

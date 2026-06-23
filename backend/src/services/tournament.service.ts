@@ -284,14 +284,18 @@ export class TournamentService {
   }
 
   async updateTournament(tournamentId: string, clubId: string, input: UpdateTournamentInput) {
-    const found = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId }, select: { id: true } });
+    const found = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId }, select: { id: true, status: true } });
     if (!found) throw new Error('TOURNAMENT_NOT_FOUND');
     const data = this.validateTournamentInput(input, false);
     if (input.status !== undefined) {
       if (!['DRAFT', 'PUBLISHED', 'CANCELLED'].includes(input.status as string)) throw new Error('VALIDATION_ERROR');
       (data as Record<string, unknown>).status = input.status;
     }
-    return prisma.tournament.update({ where: { id: tournamentId }, data });
+    const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
+    if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
+      await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
+    }
+    return updated;
   }
 
   async deleteTournament(tournamentId: string, clubId: string) {

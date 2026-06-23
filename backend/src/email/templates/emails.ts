@@ -363,6 +363,30 @@ function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '');
 }
 
+export interface BroadcastEmailInput {
+  title: string;
+  body: string;
+  /** URL explicite (deep link) ; si absent, on utilise l'app du club. */
+  url?: string | null;
+  brand: Brand;
+}
+
+/** Email de diffusion envoyé par un club à tous ses membres actifs. */
+export function buildBroadcastEmail(i: BroadcastEmailInput): BuiltEmail {
+  const subject = `${i.title} — ${i.brand.name}`;
+  const introHtml = `<p style="margin:0;">${escapeHtml(i.body)}</p>`;
+  const html = renderLayout({
+    brand: i.brand,
+    preheader: i.title,
+    heading: i.title,
+    introHtml,
+    ctaLabel: 'Voir',
+    ctaUrl: i.url ?? undefined,
+  });
+  const text = [i.title, '', i.body, '', i.url ? `Lien : ${i.url}` : ''].filter(Boolean).join('\n');
+  return { subject, html, text };
+}
+
 /** Email de validation d'inscription : code à 6 chiffres mis en avant, au gabarit Palova. */
 export function buildVerificationEmail(code: string, brand: Brand): BuiltEmail {
   const subject = 'Votre code de validation Palova';

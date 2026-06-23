@@ -1,6 +1,5 @@
 import { ClubRole } from '@prisma/client';
 import { prisma } from '../db/prisma';
-import { sendMail } from './mailer';
 import { dispatch } from '../services/notification/dispatcher';
 import { absoluteAsset, clubAppUrl, formatDateRangeFr } from './links';
 import { Brand, PALOVA_BRAND } from './templates/layout';
@@ -41,12 +40,14 @@ function brandOf(club: ClubBrandFields): Brand {
 }
 
 /** Staff destinataire des notifications « organisateur » : propriétaires + admins du club. */
-async function organizers(clubId: string): Promise<Array<{ email: string; firstName: string }>> {
+async function organizers(clubId: string): Promise<Array<{ id: string; email: string; firstName: string }>> {
   const members = await prisma.clubMember.findMany({
     where: { clubId, role: { in: [ClubRole.OWNER, ClubRole.ADMIN] } },
-    select: { user: { select: { email: true, firstName: true } } },
+    select: { user: { select: { id: true, email: true, firstName: true } } },
   });
-  return members.map((m) => m.user).filter((u): u is { email: string; firstName: string } => !!u?.email);
+  return members
+    .map((m) => m.user)
+    .filter((u): u is { id: string; email: string; firstName: string } => !!u?.email);
 }
 
 async function notifyOrganizers(opts: {
@@ -82,20 +83,58 @@ async function notifyOrganizers(opts: {
       url: adminUrl,
       brand: opts.brand,
     });
-    await sendMail({ to: s.email, subject: mail.subject, html: mail.html, text: mail.text });
+    const notifType = opts.kind === 'registration' ? 'organizer.registration' : 'organizer.cancellation';
+    const notifTitle = opts.kind === 'registration' ? 'Nouvelle inscription' : 'Désinscription';
+    const notifBody =
+      opts.kind === 'registration'
+        ? `${opts.playerNames} — ${opts.activityName} (${opts.statusLabel}).`
+        : `${opts.playerNames} s'est désinscrit de « ${opts.activityName} ».`;
+    await dispatch({
+      userId: s.id,
+      clubId: opts.clubId,
+      category: 'ORGANIZER',
+      type: notifType,
+      title: notifTitle,
+      body: notifBody,
+      url: adminUrl,
+      email: { to: s.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
 const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`.trim();
 
+/** Retourne le titre et le corps de notif joueur selon l'action et le nom de l'activité. */
+function playerNotifContent(
+  action: PlayerAction,
+  activityName: string,
+): { title: string; body: string } {
+  switch (action) {
+    case 'confirmed':
+      return { title: 'Inscription confirmée', body: `Ton inscription à « ${activityName} » est confirmée.` };
+    case 'waitlisted':
+      return {
+        title: "Inscription en liste d'attente",
+        body: `Tu es en liste d'attente pour « ${activityName} ».`,
+      };
+    case 'promoted':
+      return {
+        title: "Une place s'est libérée",
+        body: `Tu passes de la liste d'attente à confirmé pour « ${activityName} ».`,
+      };
+    case 'cancelled':
+      return { title: 'Inscription annulée', body: `Ton inscription à « ${activityName} » a été annulée.` };
+  }
+}
+
 // ----------------------------------------------------------------- Tournois
 
 const tournamentInclude = {
   tournament: {
-    include: { club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
   },
-  captain: { select: { email: true, firstName: true, lastName: true } },
-  partner: { select: { email: true, firstName: true, lastName: true } },
+  captain: { select: { id: true, email: true, firstName: true, lastName: true } },
+  partner: { select: { id: true, email: true, firstName: true, lastName: true } },
 } as const;
 
 async function loadTournamentRegistration(registrationId: string) {
@@ -127,7 +166,25 @@ async function sendTournamentPlayerEmails(
       brand,
       partnerName: fullName(partner),
     });
-    await sendMail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
+    const notifType =
+      action === 'confirmed'
+        ? 'registration.confirmed'
+        : action === 'waitlisted'
+          ? 'registration.waitlisted'
+          : action === 'promoted'
+            ? 'registration.promoted'
+            : 'registration.cancelled';
+    const { title, body } = playerNotifContent(action, t.name);
+    await dispatch({
+      userId: user.id,
+      clubId: t.club.id,
+      category: 'MY_REGISTRATIONS',
+      type: notifType,
+      title,
+      body,
+      url,
+      email: { to: user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
@@ -179,9 +236,9 @@ export async function notifyTournamentPromotion(registrationId: string): Promise
 
 const eventInclude = {
   event: {
-    include: { club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
   },
-  user: { select: { email: true, firstName: true, lastName: true } },
+  user: { select: { id: true, email: true, firstName: true, lastName: true } },
 } as const;
 
 async function loadEventRegistration(registrationId: string) {
@@ -194,6 +251,7 @@ async function sendEventPlayerEmail(
 ): Promise<void> {
   const e = reg.event;
   if (!reg.user.email) return;
+  const url = clubAppUrl(e.club.slug, `/events/${e.id}`);
   const mail = buildPlayerEmail({
     firstName: reg.user.firstName,
     action,
@@ -201,10 +259,28 @@ async function sendEventPlayerEmail(
     activityName: e.name,
     clubName: e.club.name,
     dateLabel: formatDateRangeFr(e.startTime, e.endTime, e.club.timezone),
-    url: clubAppUrl(e.club.slug, `/events/${e.id}`),
+    url,
     brand: brandOf(e.club),
   });
-  await sendMail({ to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  const notifType =
+    action === 'confirmed'
+      ? 'registration.confirmed'
+      : action === 'waitlisted'
+        ? 'registration.waitlisted'
+        : action === 'promoted'
+          ? 'registration.promoted'
+          : 'registration.cancelled';
+  const { title, body } = playerNotifContent(action, e.name);
+  await dispatch({
+    userId: reg.user.id,
+    clubId: e.club.id,
+    category: 'MY_REGISTRATIONS',
+    type: notifType,
+    title,
+    body,
+    url,
+    email: { to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 export async function notifyEventRegistration(registrationId: string): Promise<void> {
@@ -416,20 +492,30 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
 export async function notifyReservationMemberAssigned(reservationId: string, memberUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+    include: { resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
   });
   if (!resa) return;
   const member = await prisma.user.findUnique({ where: { id: memberUserId }, select: { firstName: true, email: true } });
   if (!member?.email) return;
 
   const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/me/reservations');
   const mail = buildMatchInviteEmail({
     recipientFirstName: member.firstName, byName: null,
     resourceName: resa.resource.name,
     dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name, url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+    clubName: club.name, url, brand: brandOf(club),
   });
-  await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: memberUserId,
+    clubId: club.id,
+    category: 'MY_GAMES',
+    type: 'reservation.member_assigned',
+    title: "Ajout à une réservation",
+    body: "Tu as été ajouté à une réservation par le club.",
+    url,
+    email: { to: member.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient le joueur (propriétaire de la résa) du remboursement automatique à l'annulation. */
@@ -441,8 +527,8 @@ export async function notifyReservationRefunded(
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      user: { select: { firstName: true, email: true } },
-      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      user: { select: { id: true, firstName: true, email: true } },
+      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
     },
   });
   if (!resa?.user?.email) return;
@@ -450,14 +536,24 @@ export async function notifyReservationRefunded(
   const amountLabel = (totalCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
   const prepaid = refunds.some((r) => r.method === 'PACK_CREDIT' || r.method === 'WALLET');
   const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/me/reservations');
   const mail = buildRefundEmail({
     recipientFirstName: resa.user.firstName,
     resourceName: resa.resource.name,
     dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
     clubName: club.name, amountLabel, prepaid,
-    url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+    url, brand: brandOf(club),
   });
-  await sendMail({ to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: resa.user.id,
+    clubId: club.id,
+    category: 'PAYMENTS',
+    type: 'payment.refunded',
+    title: "Remboursement",
+    body: `Tu as été remboursé de ${amountLabel} pour ta réservation.`,
+    url,
+    email: { to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 // ------------------------------------------------------------------- Cours (Lesson)
@@ -484,7 +580,7 @@ async function loadLessonEnrollment(enrollmentId: string) {
           club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
         },
       },
-      user: { select: { email: true, firstName: true, lastName: true } },
+      user: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
 }
@@ -534,7 +630,25 @@ async function sendLessonPlayerEmail(enr: LessonEnrollmentLoaded, action: Player
     url: ctx.url,
     brand: ctx.brand,
   });
-  await sendMail({ to: enr.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  const notifType =
+    action === 'confirmed'
+      ? 'registration.confirmed'
+      : action === 'waitlisted'
+        ? 'registration.waitlisted'
+        : action === 'promoted'
+          ? 'registration.promoted'
+          : 'registration.cancelled';
+  const { title, body } = playerNotifContent(action, ctx.activityName);
+  await dispatch({
+    userId: enr.user.id,
+    clubId: ctx.club.id,
+    category: 'MY_REGISTRATIONS',
+    type: notifType,
+    title,
+    body,
+    url: ctx.url,
+    email: { to: enr.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 export async function notifyLessonEnrollment(enrollmentId: string): Promise<void> {
@@ -628,14 +742,14 @@ export async function notifyNewMatchComment(
   });
 
   // Destinataires dédupliqués par email, l'auteur exclu.
-  const recipients = new Map<string, { email: string; firstName: string }>();
+  const recipients = new Map<string, { userId: string; email: string; firstName: string }>();
   for (const mp of match.players) {
     const u = mp.user;
-    if (u.id !== authorUserId && u.email) recipients.set(u.email, { email: u.email, firstName: u.firstName });
+    if (u.id !== authorUserId && u.email) recipients.set(u.email, { userId: u.id, email: u.email, firstName: u.firstName });
   }
   for (const s of staff) {
     if (s.userId !== authorUserId && s.user?.email) {
-      recipients.set(s.user.email, { email: s.user.email, firstName: s.user.firstName });
+      recipients.set(s.user.email, { userId: s.userId, email: s.user.email, firstName: s.user.firstName });
     }
   }
 
@@ -644,7 +758,16 @@ export async function notifyNewMatchComment(
       recipientFirstName: r.firstName, authorName, isFirst: opts.isFirst,
       scoreLine, excerpt, matchUrl, brand,
     });
-    await sendMail({ to: r.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await dispatch({
+      userId: r.userId,
+      clubId: match.club.id,
+      category: 'MY_MATCHES',
+      type: 'match.comment',
+      title: "Nouveau message sur un litige",
+      body: `${authorName} a écrit sur le litige (${scoreLine}).`,
+      url: matchUrl,
+      email: { to: r.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
@@ -666,9 +789,9 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
       creator: { select: { firstName: true, lastName: true } },
-      players: { include: { user: { select: { email: true, firstName: true } } } },
+      players: { select: { userId: true, user: { select: { email: true, firstName: true } } } },
     },
   });
   if (!match) return;
@@ -688,6 +811,235 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
       matchUrl,
       authorName,
     });
-    await sendMail({ to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await dispatch({
+      userId: mp.userId,
+      clubId: match.club.id,
+      category: 'MY_MATCHES',
+      type: 'match.pending_confirmation',
+      title: "Confirme le résultat",
+      body: `${authorName} a saisi un score (${scoreLine}) — confirme ou conteste.`,
+      url: matchUrl,
+      email: { to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
+  }
+}
+
+export async function notifyReservationCancelled(reservationId: string, actorUserId?: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+      },
+      participants: { include: { user: { select: { id: true, firstName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    if (p.userId === actorUserId) continue;
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'MY_GAMES',
+      type: 'reservation.cancelled',
+      title: "Réservation annulée",
+      body: `Ta réservation du ${dateLabel} a été annulée.`,
+      url,
+    });
+  }
+}
+
+export async function notifyReservationRescheduled(reservationId: string, actorUserId?: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+      },
+      participants: { include: { user: { select: { id: true, firstName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const club = resa.resource.club;
+  const newDateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    if (p.userId === actorUserId) continue;
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'MY_GAMES',
+      type: 'reservation.rescheduled',
+      title: "Réservation déplacée",
+      body: `Ta réservation a été déplacée au ${newDateLabel}.`,
+      url,
+    });
+  }
+}
+
+export async function notifyActivityCancelledByClub(
+  kind: 'tournament' | 'event' | 'lesson',
+  activityId: string,
+): Promise<void> {
+  if (kind === 'tournament') {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        registrations: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: {
+            captain: { select: { id: true, email: true, firstName: true } },
+            partner: { select: { id: true, email: true, firstName: true } },
+          },
+        },
+      },
+    });
+    if (!tournament) return;
+    const club = tournament.club;
+    const brand = brandOf(club);
+    const dateLabel = tournament.startTime ? formatDateRangeFr(tournament.startTime, tournament.endTime, club.timezone) : '';
+    const url = clubAppUrl(club.slug, `/tournois/${tournament.id}`);
+    const seen = new Set<string>();
+    for (const reg of tournament.registrations) {
+      for (const user of [reg.captain, reg.partner]) {
+        if (!user || seen.has(user.id)) continue;
+        seen.add(user.id);
+        const mail = buildPlayerEmail({
+          firstName: user.firstName,
+          action: 'cancelled',
+          activityType: 'tournament',
+          activityName: tournament.name,
+          clubName: club.name,
+          dateLabel,
+          url,
+          brand,
+        });
+        await dispatch({
+          userId: user.id,
+          clubId: club.id,
+          category: 'MY_REGISTRATIONS',
+          type: 'activity.cancelled_by_club',
+          title: "Annulé par le club",
+          body: `« ${tournament.name} » a été annulé par le club.`,
+          url,
+          email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+        });
+      }
+    }
+  } else if (kind === 'event') {
+    const event = await prisma.clubEvent.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        registrations: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: { user: { select: { id: true, email: true, firstName: true } } },
+        },
+      },
+    });
+    if (!event) return;
+    const club = event.club;
+    const brand = brandOf(club);
+    const dateLabel = formatDateRangeFr(event.startTime, event.endTime ?? event.startTime, club.timezone);
+    const url = clubAppUrl(club.slug, `/events/${event.id}`);
+    for (const reg of event.registrations) {
+      const user = reg.user;
+      const mail = buildPlayerEmail({
+        firstName: user.firstName,
+        action: 'cancelled',
+        activityType: 'event',
+        activityName: event.name,
+        clubName: club.name,
+        dateLabel,
+        url,
+        brand,
+      });
+      await dispatch({
+        userId: user.id,
+        clubId: club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'activity.cancelled_by_club',
+        title: "Annulé par le club",
+        body: `« ${event.name} » a été annulé par le club.`,
+        url,
+        email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+      });
+    }
+  } else {
+    // kind === 'lesson'
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: activityId },
+      include: {
+        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        coach: { select: { name: true } },
+        reservation: { select: { startTime: true, endTime: true } },
+        enrollments: {
+          where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
+          include: { user: { select: { id: true, email: true, firstName: true } } },
+        },
+      },
+    });
+    if (!lesson) return;
+    const club = lesson.club;
+    const brand = brandOf(club);
+    const activityName = lesson.coach?.name ? `Cours — ${lesson.coach.name}` : 'Cours';
+    const dateLabel = formatDateRangeFr(lesson.reservation.startTime, lesson.reservation.endTime, club.timezone);
+    const url = clubAppUrl(club.slug, `/cours/${lesson.id}`);
+    for (const enr of lesson.enrollments) {
+      const user = enr.user;
+      const mail = buildPlayerEmail({
+        firstName: user.firstName,
+        action: 'cancelled',
+        activityType: 'lesson',
+        activityName,
+        clubName: club.name,
+        dateLabel,
+        url,
+        brand,
+      });
+      await dispatch({
+        userId: user.id,
+        clubId: club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'activity.cancelled_by_club',
+        title: "Annulé par le club",
+        body: `« ${activityName} » a été annulé par le club.`,
+        url,
+        email: user.email ? { to: user.email, subject: mail.subject, html: mail.html, text: mail.text } : undefined,
+      });
+    }
+  }
+}
+
+export async function notifyReservationReminder(reservationId: string, window: 'J-1' | 'H-2'): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, timezone: true } } },
+      },
+      participants: { select: { userId: true } },
+    },
+  });
+  if (!resa) return;
+  if (resa.status !== 'CONFIRMED') return;
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'REMINDERS',
+      type: 'reminder.upcoming_game',
+      title: window === 'H-2' ? "Ta partie est dans 2 h" : "Rappel : partie demain",
+      body: `Ta réservation ${resa.resource.name} — ${dateLabel}.`,
+      url,
+      data: { reservationId, window },
+    });
   }
 }

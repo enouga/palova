@@ -269,6 +269,7 @@ model Club {
   coaches          Coach[]
   reservationSeries ReservationSeries[]
   lessons          Lesson[]
+  clubBroadcasts   ClubBroadcast[]
 
   @@map("clubs")
 }
@@ -411,6 +412,7 @@ model User {
   lessonEnrollments LessonEnrollment[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
 
   @@map("users")
 }
@@ -1062,4 +1064,41 @@ model NotificationPreference {
 
   @@unique([userId, category, channel])
   @@map("notification_preferences")
+}
+
+/// Abonnement push web (un par navigateur/appareil). endpoint = identifiant unique du
+/// navigateur ; p256dh/auth = clés de chiffrement Web Push. Supprimé si le service de push
+/// renvoie 404/410 (abonnement périmé).
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// Message diffusé par le staff à tous les membres actifs d'un club (audit/historique).
+/// Le fan-out crée N Notification (catégorie CLUB_MESSAGES) via le dispatcher.
+model ClubBroadcast {
+  id             String   @id @default(cuid())
+  clubId         String   @map("club_id")
+  sentByUserId   String   @map("sent_by_user_id")
+  title          String
+  body           String
+  url            String?
+  recipientCount Int      @map("recipient_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+  @@map("club_broadcasts")
 }

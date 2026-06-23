@@ -354,7 +354,7 @@ describe('EventService admin', () => {
   });
 
   it('updateEvent : accepte clubSportId valide appartenant au club', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
     prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
     prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
     await service.updateEvent('e1', 'club-demo', { clubSportId: 'cs1' });
@@ -367,14 +367,14 @@ describe('EventService admin', () => {
   });
 
   it('updateEvent : refuse un clubSportId qui n appartient pas au club', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
     prismaMock.clubSport.findFirst.mockResolvedValue(null as any);
     await expect(service.updateEvent('e1', 'club-demo', { clubSportId: 'cs-autre' }))
       .rejects.toThrow('VALIDATION_ERROR');
   });
 
   it('updateEvent : accepte clubSportId null pour retirer le sport', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
     prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
     await service.updateEvent('e1', 'club-demo', { clubSportId: null });
     expect(prismaMock.clubSport.findFirst).not.toHaveBeenCalled();

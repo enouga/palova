@@ -14,9 +14,11 @@ import eventsRouter from './routes/events';
 import lessonsRouter from './routes/lessons';
 import platformRouter from './routes/platform';
 import notificationsRouter from './routes/notifications';
+import pushRouter from './routes/push';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
+import { startReminderJob } from './jobs/reminders.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
@@ -58,6 +60,7 @@ app.use('/api/auth',          authRouter);
 app.use('/api/me',            meRouter);
 app.use('/api/me',            notificationsRouter);
 app.use('/api/sports',        sportsRouter);
+app.use('/api/push',          pushRouter);
 app.use('/api/resources',     resourcesRouter);
 app.use('/api/reservations',  reservationsRouter);
 app.use('/api/matches',       matchesRouter);
@@ -99,6 +102,7 @@ if (require.main === module) {
       app.listen(PORT, () => {
         console.log(`Backend démarré sur http://localhost:${PORT}`);
         startCleanupJob();
+        startReminderJob();
       });
     })
     .catch(console.error);

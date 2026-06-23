@@ -22,6 +22,7 @@ import { ClubPageService } from '../services/clubPage.service';
 import { matchService } from '../services/match.service';
 import { CoachService } from '../services/coach.service';
 import { lessonService } from '../services/lesson.service';
+import { BroadcastService } from '../services/broadcast.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -37,6 +38,7 @@ const refundService = new RefundService();
 const accountingService = new AccountingService();
 const clubPageService = new ClubPageService();
 const coachService = new CoachService();
+const broadcastService = new BroadcastService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -864,6 +866,30 @@ router.post('/matches/:matchId/void', async (req: ClubScopedRequest, res: Respon
     if (err instanceof Error && err.message === 'ALREADY_CANCELLED') { res.status(409).json({ error: 'ALREADY_CANCELLED' }); return; }
     next(err as Error);
   }
+});
+
+// --- Broadcast (message à tous les membres actifs) ---
+// Réservé OWNER/ADMIN : action à fort impact (notifie tous les membres).
+router.post('/broadcast', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { title, body, url } = req.body;
+    const result = await broadcastService.send(
+      req.membership!.clubId,
+      req.user!.id,
+      { title, body, url: typeof url === 'string' ? url : null },
+    );
+    res.json(result);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/broadcasts', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const [recipientCount, items] = await Promise.all([
+      broadcastService.countActiveMembers(req.membership!.clubId),
+      broadcastService.history(req.membership!.clubId),
+    ]);
+    res.json({ recipientCount, items });
+  } catch (err) { handleError(err, res, next); }
 });
 
 export default router;

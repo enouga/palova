@@ -94,6 +94,38 @@ router.put('/notification-preferences', authMiddleware, async (req: AuthRequest,
   } catch (err) { next(err); }
 });
 
+// Abonnements Web Push
+router.post('/push-subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown }; p256dh?: unknown; auth?: unknown };
+    const endpoint = typeof body.endpoint === 'string' ? body.endpoint : '';
+    const p256dh = typeof (body.keys?.p256dh ?? body.p256dh) === 'string' ? String(body.keys?.p256dh ?? body.p256dh) : '';
+    const auth = typeof (body.keys?.auth ?? body.auth) === 'string' ? String(body.keys?.auth ?? body.auth) : '';
+    if (!endpoint || !p256dh || !auth) {
+      return void res.status(400).json({ error: 'INVALID_SUBSCRIPTION' });
+    }
+    const userId = req.user!.id;
+    const userAgent = typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined;
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      create: { userId, endpoint, p256dh, auth, userAgent },
+      update: { userId, p256dh, auth, userAgent, lastSeenAt: new Date() },
+    });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/push-subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const endpoint = req.body != null ? (req.body as { endpoint?: unknown }).endpoint : undefined;
+    if (typeof endpoint !== 'string' || !endpoint) return void res.status(400).json({ error: 'INVALID_SUBSCRIPTION' });
+    await prisma.pushSubscription.deleteMany({
+      where: { endpoint, userId: req.user!.id },
+    });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // SSE : EventSource ne peut pas poser d'en-tête Authorization → token en query.
 router.get('/notifications/stream', (req: AuthRequest, res: Response) => {
   const token = typeof req.query.token === 'string' ? req.query.token : '';

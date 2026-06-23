@@ -5,9 +5,11 @@ jest.mock('../../../email/mailer', () => ({ sendMail: jest.fn() }));
 jest.mock('../../sse.service', () => ({
   SSEService: { getInstance: () => ({ notifyUser: jest.fn() }) },
 }));
+jest.mock('../push', () => ({ deliverPush: jest.fn() }));
 
 import { dispatch } from '../dispatcher';
 import { sendMail } from '../../../email/mailer';
+import { deliverPush } from '../push';
 
 const base = {
   userId: 'user-1', clubId: 'club-demo', category: 'MY_GAMES' as const,
@@ -17,9 +19,12 @@ const base = {
 describe('dispatch', () => {
   beforeEach(() => {
     (sendMail as jest.Mock).mockClear();
+    (deliverPush as jest.Mock).mockClear();
     prismaMock.notificationPreference.findMany.mockResolvedValue([] as any);
     prismaMock.notification.create.mockResolvedValue({ id: 'n1' } as any);
+    prismaMock.pushSubscription.findMany.mockResolvedValue([] as any);
     (sendMail as jest.Mock).mockResolvedValue(undefined);
+    (deliverPush as jest.Mock).mockResolvedValue(undefined);
   });
 
   it('crée la Notification in-app (défaut ON)', async () => {
@@ -53,5 +58,25 @@ describe('dispatch', () => {
     (sendMail as jest.Mock).mockRejectedValue(new Error('SMTP down'));
     await expect(dispatch({ ...base, email: { to: 'u@x.fr', subject: 'S', html: '', text: 'S' } }))
       .resolves.toBeUndefined();
+  });
+
+  it('appelle deliverPush quand l utilisateur a un abonnement et PUSH est actif (défaut)', async () => {
+    const sub = { endpoint: 'https://push.example.com/s1', p256dh: 'key1', auth: 'auth1' };
+    prismaMock.pushSubscription.findMany.mockResolvedValue([sub] as any);
+
+    await dispatch(base);
+
+    expect(deliverPush).toHaveBeenCalledWith(
+      [sub],
+      { title: base.title, body: base.body, url: base.url ?? null },
+    );
+  });
+
+  it('ne appelle PAS deliverPush quand l utilisateur n a pas d abonnement', async () => {
+    prismaMock.pushSubscription.findMany.mockResolvedValue([] as any);
+
+    await dispatch(base);
+
+    expect(deliverPush).not.toHaveBeenCalled();
   });
 });

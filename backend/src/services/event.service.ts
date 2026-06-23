@@ -231,7 +231,7 @@ export class EventService {
   }
 
   async updateEvent(eventId: string, clubId: string, input: UpdateEventInput) {
-    const found = await prisma.clubEvent.findFirst({ where: { id: eventId, clubId }, select: { id: true } });
+    const found = await prisma.clubEvent.findFirst({ where: { id: eventId, clubId }, select: { id: true, status: true } });
     if (!found) throw new Error('EVENT_NOT_FOUND');
     const data = this.validateEventInput(input, false);
     if (input.status !== undefined) {
@@ -245,7 +245,11 @@ export class EventService {
       }
       (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
     }
-    return prisma.clubEvent.update({ where: { id: eventId }, data });
+    const updated = await prisma.clubEvent.update({ where: { id: eventId }, data });
+    if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
+      await this.safeNotify(() => notify.notifyActivityCancelledByClub('event', eventId));
+    }
+    return updated;
   }
 
   async deleteEvent(eventId: string, clubId: string) {
