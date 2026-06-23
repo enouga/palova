@@ -57,3 +57,65 @@ describe('Notifications API', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Push Subscriptions API', () => {
+  it('POST /api/me/push-subscriptions avec keys imbriquées → 200 { ok: true } + upsert appelé', async () => {
+    prismaMock.pushSubscription.upsert.mockResolvedValue({} as any);
+    const body = { endpoint: 'https://push.example/sub1', keys: { p256dh: 'key1', auth: 'auth1' } };
+    const res = await request(app)
+      .post('/api/me/push-subscriptions')
+      .set('Authorization', auth)
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(prismaMock.pushSubscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { endpoint: 'https://push.example/sub1' },
+        create: expect.objectContaining({ endpoint: 'https://push.example/sub1', p256dh: 'key1', auth: 'auth1', userId: 'user-1' }),
+        update: expect.objectContaining({ p256dh: 'key1', auth: 'auth1', userId: 'user-1' }),
+      }),
+    );
+  });
+
+  it('POST /api/me/push-subscriptions avec champs plats → 200 { ok: true }', async () => {
+    prismaMock.pushSubscription.upsert.mockResolvedValue({} as any);
+    const body = { endpoint: 'https://push.example/sub2', p256dh: 'key2', auth: 'auth2' };
+    const res = await request(app)
+      .post('/api/me/push-subscriptions')
+      .set('Authorization', auth)
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('POST /api/me/push-subscriptions sans clés → 400 INVALID_SUBSCRIPTION', async () => {
+    const res = await request(app)
+      .post('/api/me/push-subscriptions')
+      .set('Authorization', auth)
+      .send({ endpoint: 'https://push.example/sub3' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_SUBSCRIPTION');
+  });
+
+  it('DELETE /api/me/push-subscriptions → 200 { ok: true } + deleteMany scopé userId', async () => {
+    prismaMock.pushSubscription.deleteMany.mockResolvedValue({ count: 1 } as any);
+    const body = { endpoint: 'https://push.example/sub1' };
+    const res = await request(app)
+      .delete('/api/me/push-subscriptions')
+      .set('Authorization', auth)
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(prismaMock.pushSubscription.deleteMany).toHaveBeenCalledWith({
+      where: { endpoint: 'https://push.example/sub1', userId: 'user-1' },
+    });
+  });
+});
+
+describe('VAPID Public Key API', () => {
+  it('GET /api/push/vapid-public-key → 200 avec propriété publicKey (sans auth)', async () => {
+    const res = await request(app).get('/api/push/vapid-public-key');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('publicKey');
+  });
+});
