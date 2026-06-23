@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { seedDefaultOffers } from './seed-offers';
+import { seedDefaultOffers, seedDefaultSubscriptionPlans } from './seed-offers';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -94,6 +94,7 @@ async function main() {
 
   // 4c. Offres prépayées par défaut (cartes Padel/Squash) — idempotent.
   await seedDefaultOffers(prisma, club.id);
+  await seedDefaultSubscriptionPlans(prisma, club.id);
 
   // 5. Comptes de démo — un par rôle (mot de passe commun : password123)
   const hashedPassword = await bcrypt.hash('password123', 10);

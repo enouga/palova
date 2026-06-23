@@ -47,3 +47,30 @@ export async function seedDefaultOffers(prisma: PrismaClient, clubId: string): P
   }
   return DEFAULT_PACKAGE_OFFERS.length;
 }
+
+/** Plans d'abonnement « heures creuses incluses » créés par défaut sur chaque club de test. */
+export const DEFAULT_SUBSCRIPTION_PLANS: Array<{
+  name: string; sportKeys: string[]; monthlyPrice: number; commitmentMonths: number;
+  offPeakOnly: boolean; benefit: 'INCLUDED' | 'DISCOUNT';
+}> = [
+  { name: 'Abonnement Padel — heures creuses',  sportKeys: ['padel'],  monthlyPrice: 69, commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED' },
+  { name: 'Abonnement Squash — heures creuses', sportKeys: ['squash'], monthlyPrice: 59, commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED' },
+];
+
+/** Crée (ou met à jour) les plans d'abonnement par défaut d'un club. Idempotent, sans suppression. */
+export async function seedDefaultSubscriptionPlans(prisma: PrismaClient, clubId: string): Promise<number> {
+  for (const p of DEFAULT_SUBSCRIPTION_PLANS) {
+    const existing = await prisma.subscriptionPlan.findFirst({ where: { clubId, name: p.name } });
+    if (existing) {
+      await prisma.subscriptionPlan.update({
+        where: { id: existing.id },
+        data: { sportKeys: p.sportKeys, monthlyPrice: p.monthlyPrice, commitmentMonths: p.commitmentMonths, offPeakOnly: p.offPeakOnly, benefit: p.benefit, isActive: true },
+      });
+    } else {
+      await prisma.subscriptionPlan.create({
+        data: { clubId, name: p.name, sportKeys: p.sportKeys, monthlyPrice: p.monthlyPrice, commitmentMonths: p.commitmentMonths, offPeakOnly: p.offPeakOnly, benefit: p.benefit },
+      });
+    }
+  }
+  return DEFAULT_SUBSCRIPTION_PLANS.length;
+}
