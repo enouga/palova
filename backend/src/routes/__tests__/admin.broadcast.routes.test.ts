@@ -3,11 +3,18 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
+// These variables are captured by the mock factory closure.
+// Jest hoists jest.mock() calls but the factory body runs lazily on first require,
+// so by then these let-bindings are already initialised.
+let sendImpl = jest.fn().mockResolvedValue({ recipientCount: 5, broadcastId: 'bc-1' });
+let countActiveMembersImpl = jest.fn().mockResolvedValue(5);
+let historyImpl = jest.fn().mockResolvedValue([]);
+
 jest.mock('../../services/broadcast.service', () => ({
   BroadcastService: jest.fn().mockImplementation(() => ({
-    send: jest.fn().mockResolvedValue({ recipientCount: 5, broadcastId: 'bc-1' }),
-    countActiveMembers: jest.fn().mockResolvedValue(5),
-    history: jest.fn().mockResolvedValue([]),
+    send: (...args: any[]) => sendImpl(...args),
+    countActiveMembers: (...args: any[]) => countActiveMembersImpl(...args),
+    history: (...args: any[]) => historyImpl(...args),
   })),
 }));
 
@@ -21,6 +28,13 @@ const base = '/api/clubs/club-demo/admin';
 
 beforeEach(() => {
   prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'OWNER' } as any);
+  // Reset mock implementations to happy-path defaults before each test
+  sendImpl.mockReset();
+  sendImpl.mockResolvedValue({ recipientCount: 5, broadcastId: 'bc-1' });
+  countActiveMembersImpl.mockReset();
+  countActiveMembersImpl.mockResolvedValue(5);
+  historyImpl.mockReset();
+  historyImpl.mockResolvedValue([]);
 });
 
 describe('POST /api/clubs/:clubId/admin/broadcast', () => {
@@ -39,6 +53,13 @@ describe('POST /api/clubs/:clubId/admin/broadcast', () => {
     const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: 'Hi', body: 'Msg' });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ recipientCount: 5, broadcastId: 'bc-1' });
+  });
+
+  it('returns 400 with VALIDATION_ERROR on empty title', async () => {
+    sendImpl.mockRejectedValue(new Error('VALIDATION_ERROR'));
+    const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: '', body: 'Msg' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 });
 

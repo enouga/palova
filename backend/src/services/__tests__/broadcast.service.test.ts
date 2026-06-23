@@ -29,6 +29,18 @@ describe('BroadcastService', () => {
     });
   });
 
+  describe('history', () => {
+    it('calls findMany with clubId, desc order and take 50', async () => {
+      prismaMock.clubBroadcast.findMany.mockResolvedValue([]);
+      await service.history('club-1');
+      expect(prismaMock.clubBroadcast.findMany).toHaveBeenCalledWith({
+        where: { clubId: 'club-1' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+    });
+  });
+
   describe('send', () => {
     it('throws VALIDATION_ERROR on empty title', async () => {
       await expect(service.send('c1', 'u1', { title: '  ', body: 'Hello' }))
