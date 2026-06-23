@@ -16,6 +16,7 @@ const base = {
 
 describe('dispatch', () => {
   beforeEach(() => {
+    (sendMail as jest.Mock).mockClear();
     prismaMock.notificationPreference.findMany.mockResolvedValue([] as any);
     prismaMock.notification.create.mockResolvedValue({ id: 'n1' } as any);
     (sendMail as jest.Mock).mockResolvedValue(undefined);
