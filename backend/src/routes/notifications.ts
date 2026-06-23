@@ -117,9 +117,10 @@ router.post('/push-subscriptions', authMiddleware, async (req: AuthRequest, res:
 
 router.delete('/push-subscriptions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const body = req.body as { endpoint?: unknown };
+    const endpoint = (req.body as { endpoint?: unknown }).endpoint;
+    if (typeof endpoint !== 'string' || !endpoint) return void res.status(400).json({ error: 'INVALID_SUBSCRIPTION' });
     await prisma.pushSubscription.deleteMany({
-      where: { endpoint: String(body.endpoint), userId: req.user!.id },
+      where: { endpoint, userId: req.user!.id },
     });
     res.json({ ok: true });
   } catch (err) { next(err); }

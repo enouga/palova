@@ -57,29 +57,27 @@ export function usePush(): { status: PushStatus; subscribe: () => Promise<void>;
 
   const subscribe = async (): Promise<void> => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      setStatus(perm === 'denied' ? 'denied' : 'default');
-      return;
-    }
-    const { publicKey } = await api.getVapidPublicKey();
-    if (!publicKey) return;
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
-    const json = sub.toJSON();
-    await api.savePushSubscription({ endpoint: json.endpoint, keys: json.keys }, token ?? '');
-    setStatus('granted');
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.ready;
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { setStatus(perm === 'denied' ? 'denied' : 'default'); return; }
+      const { publicKey } = await api.getVapidPublicKey();
+      if (!publicKey) return;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+      const json = sub.toJSON();
+      await api.savePushSubscription({ endpoint: json.endpoint, keys: json.keys }, token ?? '');
+      setStatus('granted');
+    } catch (e) { /* swallow */ }
   };
 
   const unsubscribe = async (): Promise<void> => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      await sub.unsubscribe();
-      await api.deletePushSubscription(sub.endpoint, token ?? '');
-    }
-    setStatus('default');
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await sub.unsubscribe(); await api.deletePushSubscription(sub.endpoint, token ?? '').catch(() => {}); }
+    } catch { /* ignore */ }
+    finally { setStatus('default'); }
   };
 
   return { status, subscribe, unsubscribe };

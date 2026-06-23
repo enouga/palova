@@ -9,8 +9,8 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-    for (const w of wins) { if ('focus' in w) { w.focus(); if ('navigate' in w) w.navigate(url); return; } }
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (wins) => {
+    for (const w of wins) { if ('focus' in w) { await w.focus(); if ('navigate' in w) { try { await w.navigate(url); } catch (e) {} } return; } }
     return clients.openWindow(url);
   }));
 });

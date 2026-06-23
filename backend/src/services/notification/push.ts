@@ -10,10 +10,11 @@ const _privateKey = process.env.VAPID_PRIVATE_KEY;
 if (_subject && _publicKey && _privateKey) {
   webpush.setVapidDetails(_subject, _publicKey, _privateKey);
 }
+const isPushConfigured = !!(_subject && _publicKey && _privateKey);
 
 /** Returns the VAPID public key, or null if not configured. */
 export function vapidPublicKey(): string | null {
-  return process.env.VAPID_PUBLIC_KEY ?? null;
+  return isPushConfigured ? _publicKey : null;
 }
 
 export interface PushSub {
@@ -33,7 +34,7 @@ export interface PushPayload {
  * Best-effort: never throws. Expired subscriptions (HTTP 404/410) are deleted.
  */
 export async function deliverPush(subs: PushSub[], payload: PushPayload): Promise<void> {
-  if (!vapidPublicKey()) {
+  if (!isPushConfigured) {
     // VAPID not configured — push is a no-op
     return;
   }

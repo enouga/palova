@@ -110,6 +110,15 @@ describe('Push Subscriptions API', () => {
       where: { endpoint: 'https://push.example/sub1', userId: 'user-1' },
     });
   });
+
+  it('DELETE /api/me/push-subscriptions sans endpoint → 400 INVALID_SUBSCRIPTION', async () => {
+    const res = await request(app)
+      .delete('/api/me/push-subscriptions')
+      .set('Authorization', auth)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_SUBSCRIPTION');
+  });
 });
 
 describe('VAPID Public Key API', () => {
