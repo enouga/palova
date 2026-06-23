@@ -21,6 +21,11 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = jest.fn();
 });
 
+afterEach(() => {
+  // @ts-expect-error - retire le mock global
+  delete Element.prototype.scrollIntoView;
+});
+
 function renderNav() {
   return render(
     <ThemeProvider>
@@ -44,14 +49,14 @@ describe('ProfileSectionNav', () => {
 
   it('le premier item est actif par défaut', () => {
     renderNav();
-    expect(screen.getByText('Identité').closest('button')).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByText('Identité').closest('button')).toHaveAttribute('aria-current', 'location');
   });
 
   it('cliquer un item défile vers sa section et l\'active', () => {
     renderNav();
     fireEvent.click(screen.getByText('Niveau'));
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
-    expect(screen.getByText('Niveau').closest('button')).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByText('Niveau').closest('button')).toHaveAttribute('aria-current', 'location');
   });
 
   it('scroll-spy : la section visible devient active', () => {
@@ -59,6 +64,6 @@ describe('ProfileSectionNav', () => {
     act(() => {
       ioCb?.([{ isIntersecting: true, target: { id: 'sport' }, boundingClientRect: { top: 10 } }]);
     });
-    expect(screen.getByText('Sport').closest('button')).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByText('Sport').closest('button')).toHaveAttribute('aria-current', 'location');
   });
 });

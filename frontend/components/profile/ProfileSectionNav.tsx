@@ -16,12 +16,15 @@ export function ProfileSectionNav({ items, topOffset = 0 }: { items: ProfileNavI
   const { th } = useTheme();
   const navRef = useRef<HTMLElement>(null);
   const [active, setActive] = useState<string | null>(items[0]?.id ?? null);
+  const ids = items.map((it) => it.id).join(',');
 
   // Variable CSS pour le scroll-margin-top des sections (= header + barre + marge).
+  // La hauteur du menu est constante après montage ; on resynchronise --profile-anchor
+  // seulement quand topOffset ou le set d'items change.
   useEffect(() => {
     const h = navRef.current?.offsetHeight ?? 0;
     document.documentElement.style.setProperty('--profile-anchor', `${topOffset + h + GAP}px`);
-  }, [topOffset, items.length]);
+  }, [topOffset, ids]);
 
   // Scroll-spy : la section la plus haute sous la ligne des barres collantes gagne.
   useEffect(() => {
@@ -35,9 +38,9 @@ export function ProfileSectionNav({ items, topOffset = 0 }: { items: ProfileNavI
       },
       { rootMargin: `-${offset}px 0px -55% 0px`, threshold: 0 },
     );
-    items.forEach((it) => { const el = document.getElementById(it.id); if (el) obs.observe(el); });
+    ids.split(',').forEach((id) => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
-  }, [items, topOffset]);
+  }, [ids, topOffset]);
 
   const go = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -63,7 +66,7 @@ export function ProfileSectionNav({ items, topOffset = 0 }: { items: ProfileNavI
             key={it.id}
             type="button"
             onClick={() => go(it.id)}
-            aria-current={on ? 'true' : undefined}
+            aria-current={on ? 'location' : undefined}
             style={{
               flex: '1 1 0', minWidth: 0, cursor: 'pointer', border: 'none',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
@@ -73,7 +76,12 @@ export function ProfileSectionNav({ items, topOffset = 0 }: { items: ProfileNavI
             }}
           >
             <Icon name={it.icon} size={16} color={on ? th.onAccent : th.textMute} />
-            <span className="psn-lbl" style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.1, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
+            <span
+              className="psn-lbl"
+              style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.1, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {it.label}
+            </span>
           </button>
         );
       })}
