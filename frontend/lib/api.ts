@@ -84,6 +84,20 @@ export const api = {
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
 
+  // --- Notifications (Lot 1) ---
+  getNotifications: (token: string, cursor?: string) =>
+    request<NotificationPage>(`/api/me/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, {}, token),
+  getUnreadCount: (token: string) =>
+    request<{ count: number }>('/api/me/notifications/unread-count', {}, token),
+  markNotificationRead: (id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/me/notifications/${id}/read`, { method: 'POST' }, token),
+  markAllNotificationsRead: (token: string) =>
+    request<{ ok: boolean }>('/api/me/notifications/read-all', { method: 'POST' }, token),
+  getNotificationPreferences: (token: string) =>
+    request<{ preferences: NotifPrefRow[] }>('/api/me/notification-preferences', {}, token),
+  updateNotificationPreferences: (preferences: NotifPrefRow[], token: string) =>
+    request<{ ok: boolean }>('/api/me/notification-preferences', { method: 'PUT', body: JSON.stringify({ preferences }) }, token),
+
   // --- Résultats de matchs (Lot 2) ---
   recordMatchResult: (reservationId: string, body: { teams: Record<1 | 2, string[]>; sets: [number, number][] }, token: string) =>
     request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
@@ -596,6 +610,15 @@ export const api = {
 };
 
 // --- Types ---
+
+// --- Notifications ---
+export interface AppNotification {
+  id: string; clubId: string | null; category: string; type: string;
+  title: string; body: string; url: string | null; data: unknown;
+  readAt: string | null; createdAt: string;
+}
+export interface NotificationPage { items: AppNotification[]; nextCursor: string | null; }
+export interface NotifPrefRow { category: string; channel: string; enabled: boolean }
 
 export interface Sport {
   id: string;
@@ -1640,4 +1663,9 @@ export interface MyLessonEnrollment {
   enrollmentId: string;
   status: string;
   lesson: MyLessonSummary;
+}
+
+// Construit l'URL du flux SSE de notifications (utilisé par la cloche).
+export function notificationsStreamUrl(token: string): string {
+  return `${BASE_URL}/api/me/notifications/stream?token=${encodeURIComponent(token)}`;
 }
