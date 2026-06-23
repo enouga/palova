@@ -295,6 +295,22 @@ export default function MyProfilePage() {
               </div>
             </section>
 
+            {/* Sport préféré — région dédiée, distincte du niveau par sport */}
+            {sports.length > 0 && (
+              <section id="sport" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Sport préféré">
+                <div style={cardTitle}>Sport préféré</div>
+                <div role="group" aria-label="Sport préféré">
+                  <PillTabs
+                    options={[{ value: '', label: 'Aucun' }, ...sports.map((s) => ({ value: s.id, label: s.name }))]}
+                    value={profile.preferredSport?.id ?? ''}
+                    onChange={handlePreferredSport}
+                    size="sm"
+                  />
+                </div>
+                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Met en avant ce sport dans l'app.</span>
+              </section>
+            )}
+
             {/* Niveau — masqué si le club a désactivé le système de niveau */}
             {club?.levelSystemEnabled !== false && (
               <section id="niveau" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mon niveau">
@@ -381,19 +397,6 @@ export default function MyProfilePage() {
                   options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
                 />
               </div>
-              {sports.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={label}>Sport préféré</span>
-                  <div role="group" aria-label="Sport préféré">
-                    <PillTabs
-                      options={[{ value: '', label: 'Aucun' }, ...sports.map((s) => ({ value: s.id, label: s.name }))]}
-                      value={profile.preferredSport?.id ?? ''}
-                      onChange={handlePreferredSport}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              )}
             </section>
 
             {/* Mot de passe */}

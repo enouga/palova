@@ -183,6 +183,20 @@ describe('Page Mon profil', () => {
     ));
   });
 
+  it('« Sport préféré » est une région dédiée, hors de Préférences', async () => {
+    api.getSports.mockResolvedValue([
+      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
+    ]);
+    wrap();
+    const sportRegion = await screen.findByRole('region', { name: 'Sport préféré' });
+    expect(sportRegion).toBeInTheDocument();
+    // Le pill 'Aucun' du sport préféré est bien DANS la région dédiée…
+    expect(within(sportRegion).getByText('Aucun')).toBeInTheDocument();
+    // …et PAS dans la région Préférences.
+    const prefRegion = screen.getByRole('region', { name: 'Préférences' });
+    expect(within(prefRegion).queryByText('Sport préféré')).not.toBeInTheDocument();
+  });
+
   it('niveau : padel uniquement, sans sélecteur de sport, découplé du sport préféré', async () => {
     api.getSports.mockResolvedValue([
       { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
