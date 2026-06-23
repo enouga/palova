@@ -89,7 +89,7 @@ describe('notifyOpenMatchProposed → dispatch aux membres opt-in in-range', () 
     expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'fresh' }));
   });
 
-  it('niveau inconnu (null) → considéré in-range (notifié)', async () => {
+  it('membre non calibré (niveau null) → exclu (non notifié, parité reco front)', async () => {
     prismaMock.reservation.findUnique.mockResolvedValue(publicRangedReservation() as any);
     prismaMock.clubMembership.findMany.mockResolvedValue([
       { userId: 'newbie', user: { firstName: 'New', lastName: 'Bie', email: 'newbie@x.fr' } },
@@ -98,8 +98,7 @@ describe('notifyOpenMatchProposed → dispatch aux membres opt-in in-range', () 
 
     await notifyOpenMatchProposed('res-1');
 
-    expect(dispatchMock).toHaveBeenCalledTimes(1);
-    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'newbie' }));
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 
   it('ne notifie pas si la partie est complète (0 place)', async () => {

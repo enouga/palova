@@ -429,7 +429,8 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
   const candidates = optedIn.filter((m) => !present.has(m.userId));
   if (candidates.length === 0) return;
 
-  // Niveaux par sport (batch) ; on garde ceux dans la fourchette (niveau inconnu = in-range).
+  // Niveaux par sport (batch) ; on ne garde que les niveaux CONNUS et dans la fourchette
+  // (un membre non calibré n'est pas démarché — parité avec frontend/lib/recommend.ts).
   const levels = await ratingService.getLevelsBySport(candidates.map((c) => ({ userId: c.userId, sportKey })));
 
   const brand = brandOf(club);
@@ -440,7 +441,9 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
   for (const c of candidates) {
     if (!c.user.email) continue;
     const level = levels[`${c.userId}:${sportKey}`]?.level ?? null;
-    if (!inRange(level, row.targetLevelMin, row.targetLevelMax)) continue;
+    // Parité avec frontend/lib/recommend.ts : un membre non calibré (niveau inconnu)
+    // n'est pas démarché — on ne propose qu'à un niveau connu et dans la fourchette.
+    if (level == null || !inRange(level, row.targetLevelMin, row.targetLevelMax)) continue;
 
     const mail = buildOpenMatchProposedEmail({
       recipientFirstName: c.user.firstName,
