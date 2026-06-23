@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
+import { ReliabilityMeter } from '@/components/player/ReliabilityMeter';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
 import { LevelSourceNote } from '@/components/player/LevelSourceNote';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
@@ -147,6 +148,14 @@ export default function MyProfilePage() {
     setError(null);
     setProfile({ ...profile, showInLeaderboard: next }); // optimiste
     try { setProfile(await api.updateMyProfile({ showInLeaderboard: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
+  const changeAutoMatchProposals = async (next: boolean) => {
+    if (!token || !profile) return;
+    setError(null);
+    setProfile({ ...profile, autoMatchProposals: next }); // optimiste
+    try { setProfile(await api.updateMyProfile({ autoMatchProposals: next }, token)); }
     catch (e) { setError((e as Error).message); }
   };
 
@@ -356,7 +365,9 @@ export default function MyProfilePage() {
                       </div>
                     </div>
                   )}
-                  {rating && !calibrating ? (
+                  {calibrating ? (
+                    <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
+                  ) : rating && rating.level != null ? (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                         <LevelBadge rating={rating} />
@@ -369,7 +380,17 @@ export default function MyProfilePage() {
                       <LevelSourceNote style={{ marginTop: 10 }} />
                     </>
                   ) : (
-                    <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
+                    // Onboarding neutre (façon Pista) : pas d'auto-évaluation forcée, les matchs calibrent.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.text, margin: 0 }}>
+                        Niveau en cours de calibrage — joue tes premiers matchs et ton niveau s’affinera tout seul.
+                      </p>
+                      {rating && <ReliabilityMeter pct={rating.reliability} />}
+                      <button type="button" onClick={() => setCalibrating(true)}
+                        style={{ alignSelf: 'flex-start', fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                        Affiner mon niveau (optionnel)
+                      </button>
+                    </div>
                   )}
                 </section>
               )}
@@ -419,11 +440,26 @@ export default function MyProfilePage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={label}>Apparaître dans les classements</span>
-                  <Segmented<'oui' | 'non'>
-                    value={profile.showInLeaderboard ? 'oui' : 'non'}
-                    onChange={(v) => changeLeaderboard(v === 'oui')}
-                    options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                  />
+                  <div role="group" aria-label="Apparaître dans les classements">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.showInLeaderboard ? 'oui' : 'non'}
+                      onChange={(v) => changeLeaderboard(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Propose-moi les parties à mon niveau</span>
+                  <div role="group" aria-label="Propose-moi les parties à mon niveau">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.autoMatchProposals ? 'oui' : 'non'}
+                      onChange={(v) => changeAutoMatchProposals(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
+                    Reçois une notification quand une partie ouverte à ton niveau est créée dans ton club. Tu rejoins en un tap — jamais d’inscription automatique.
+                  </span>
                 </div>
               </section>
 

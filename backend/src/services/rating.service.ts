@@ -3,19 +3,46 @@ import {
   DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
   isProvisional, levelToRating, namedTier, ratingToLevel,
 } from './rating/level';
+import { reliability, RD_RELIABLE } from './rating/reliability';
 
-export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
+export interface UserLevel { level: number; tier: string; isProvisional: boolean; reliability: number; }
+
+/** Une correction manuelle de niveau (historique d'audit), mise à plat pour la fiche admin. */
+export interface LevelAdjustment {
+  id: string;
+  previousLevel: number | null;
+  newLevel: number;
+  reason: string | null;
+  createdAt: Date;
+  staffFirstName: string;
+  staffLastName: string;
+  sportKey: string;
+  sportName: string;
+}
+
+/** Payload de la fiche niveau admin : niveaux courants par sport + historique des corrections. */
+export interface MemberLevelAdmin {
+  levels: Record<string, UserLevel>;
+  history: LevelAdjustment[];
+}
 
 export interface RatingDisplay {
   calibrated: boolean;     // a fait l'auto-éval OU a déjà joué
-  level: number;           // 0–8
-  tier: string;            // palier nommé
+  level: number | null;    // 0–8, ou null si pas encore de niveau (onboarding neutre)
+  tier: string;            // palier nommé ('' tant que non calibré)
   isProvisional: boolean;  // « en calibrage »
+  reliability: number;     // % de fiabilité (dérivé du RD, façon Pista)
   matchesPlayed: number;
 }
 
+// État neutre d'un joueur sans PlayerRating : pas d'auto-éval forcée, les matchs calibreront.
+const NEUTRAL_RATING: RatingDisplay = {
+  calibrated: false, level: null, tier: '', isProvisional: true,
+  reliability: reliability(DEFAULT_RD), matchesPlayed: 0,
+};
+
 type Row = {
-  displayLevel: number; isProvisional: boolean; matchesPlayed: number; initialSelfLevel: number | null;
+  displayLevel: number; rd: number; isProvisional: boolean; matchesPlayed: number; initialSelfLevel: number | null;
 };
 
 export class RatingService {
@@ -31,15 +58,16 @@ export class RatingService {
       level: row.displayLevel,
       tier: namedTier(row.displayLevel),
       isProvisional: row.isProvisional,
+      reliability: reliability(row.rd),
       matchesPlayed: row.matchesPlayed,
     };
   }
 
-  /** Lecture pour affichage. null = joueur sans niveau (à calibrer). */
-  async getForDisplay(userId: string, sportKey: string): Promise<RatingDisplay | null> {
+  /** Lecture pour affichage. Sans PlayerRating → état neutre (level null, non calibré). */
+  async getForDisplay(userId: string, sportKey: string): Promise<RatingDisplay> {
     const sportId = await this.sportId(sportKey);
     const row = await prisma.playerRating.findUnique({ where: { userId_sportId: { userId, sportId } } });
-    return row ? this.toDisplay(row as Row) : null;
+    return row ? this.toDisplay(row as Row) : NEUTRAL_RATING;
   }
 
   /** Auto-évaluation. selfLevel 1–8 ou null (« passer » → départ neutre). N'écrase jamais un niveau déjà rodé. */
@@ -72,10 +100,10 @@ export class RatingService {
     const sportId = await this.sportId(sportKey);
     const rows = await prisma.playerRating.findMany({
       where: { sportId, userId: { in: userIds } },
-      select: { userId: true, displayLevel: true, isProvisional: true },
+      select: { userId: true, displayLevel: true, rd: true, isProvisional: true },
     });
     const map: Record<string, UserLevel> = {};
-    for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+    for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional, reliability: reliability(r.rd) };
     return map;
   }
 
@@ -88,13 +116,88 @@ export class RatingService {
     const userIds = [...new Set(pairs.map((p) => p.userId))];
     const rows = await prisma.playerRating.findMany({
       where: { sportId: { in: sports.map((s) => s.id) }, userId: { in: userIds } },
-      select: { userId: true, sportId: true, displayLevel: true, isProvisional: true },
+      select: { userId: true, sportId: true, displayLevel: true, rd: true, isProvisional: true },
     });
     const map: Record<string, UserLevel> = {};
     for (const r of rows) {
       const key = keyById.get(r.sportId);
-      if (key) map[`${r.userId}:${key}`] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+      if (key) map[`${r.userId}:${key}`] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional, reliability: reliability(r.rd) };
     }
     return map;
+  }
+
+  /**
+   * Correction manuelle du niveau par un admin de club. Le niveau (PlayerRating) est GLOBAL :
+   * la correction s'applique partout, le club n'est qu'un contexte d'audit (clubId).
+   * Écrit une ligne fiabilisée (rd = RD_RELIABLE, isProvisional = false) et trace l'audit.
+   * Le moteur Glicko n'est pas touché — on pose juste une note fiable.
+   */
+  async adminSetLevel(
+    userId: string, sportKey: string, level: number, staffUserId: string,
+    opts: { reason?: string; clubId?: string } = {},
+  ): Promise<RatingDisplay> {
+    if (typeof level !== 'number' || !Number.isFinite(level) || level < 0 || level > 8) {
+      throw new Error('VALIDATION_ERROR');
+    }
+    const sportId = await this.sportId(sportKey);
+    // Lecture hors transaction : TOCTOU acceptable pour une action admin rare et idempotente
+    // (le previousLevel tracé peut au pire refléter un état T-ε ; l'upsert reste cohérent).
+    const existing = await prisma.playerRating.findUnique({ where: { userId_sportId: { userId, sportId } } });
+    const previousLevel = (existing as Row | null)?.displayLevel ?? null;
+
+    // On ne touche QUE la note et son statut : ni matchesPlayed/volatility/lastMatchAt (préserve l'historique de matchs).
+    const data = {
+      rating: levelToRating(level), rd: RD_RELIABLE,
+      displayLevel: level, isProvisional: false,
+    };
+    await prisma.$transaction(async (tx) => {
+      await tx.playerRating.upsert({
+        where: { userId_sportId: { userId, sportId } },
+        // CREATE : 0 match joué mais note fiable assumée (volatility = défaut schéma).
+        create: { userId, sportId, ...data },
+        update: data,
+      });
+      await tx.playerRatingAdjustment.create({
+        data: {
+          userId, sportId, clubId: opts.clubId ?? null, staffUserId,
+          previousLevel, newLevel: level, reason: opts.reason ?? null,
+        },
+      });
+    });
+    return this.getForDisplay(userId, sportKey);
+  }
+
+  /**
+   * Données de la fiche niveau admin d'un membre : niveau courant + fiabilité par sport
+   * (clé = sportKey) et historique des corrections manuelles (récent d'abord).
+   */
+  async getMemberLevelAdmin(userId: string, sportKeys: string[]): Promise<MemberLevelAdmin> {
+    if (sportKeys.length === 0) return { levels: {}, history: [] };
+    // Résout les sportIds une fois : sert au filtre d'historique (cohérent avec les niveaux affichés).
+    const sports = await prisma.sport.findMany({ where: { key: { in: sportKeys } }, select: { id: true } });
+    const sportIds = sports.map((s) => s.id);
+
+    const bySport = await this.getLevelsBySport(sportKeys.map((sportKey) => ({ userId, sportKey })));
+    const levels: Record<string, UserLevel> = {};
+    for (const sportKey of sportKeys) {
+      const v = bySport[`${userId}:${sportKey}`];
+      if (v) levels[sportKey] = v;
+    }
+    // Historique scopé aux sports du club : pas de correction d'un sport que le club ne propose pas.
+    const rows = await prisma.playerRatingAdjustment.findMany({
+      where: { userId, sportId: { in: sportIds } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, previousLevel: true, newLevel: true, reason: true, createdAt: true,
+        staffUser: { select: { firstName: true, lastName: true } },
+        sport: { select: { key: true, name: true } },
+      },
+    });
+    const history: LevelAdjustment[] = rows.map((r) => ({
+      id: r.id, previousLevel: r.previousLevel, newLevel: r.newLevel, reason: r.reason, createdAt: r.createdAt,
+      staffFirstName: r.staffUser.firstName, staffLastName: r.staffUser.lastName,
+      sportKey: r.sport.key, sportName: r.sport.name,
+    }));
+    return { levels, history };
   }
 }

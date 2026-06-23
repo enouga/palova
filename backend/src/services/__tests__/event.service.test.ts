@@ -232,12 +232,12 @@ describe('EventService lectures', () => {
     ] as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
     prismaMock.playerRating.findMany.mockResolvedValue([
-      { userId: 'user-a', displayLevel: 5, isProvisional: true },
+      { userId: 'user-a', displayLevel: 5, rd: 350, isProvisional: true },
     ] as any);
 
     const out = await service.listParticipants('e1');
 
-    expect(out[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: true });
+    expect(out[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: true, reliability: 50 });
     expect(out[1].level).toBeNull();
     // userId ne doit pas fuiter dans la réponse
     expect((out[0] as any).userId).toBeUndefined();
@@ -250,12 +250,12 @@ describe('EventService lectures', () => {
     ] as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
     prismaMock.playerRating.findMany.mockResolvedValue([
-      { userId: 'user-a', displayLevel: 3, isProvisional: false },
+      { userId: 'user-a', displayLevel: 3, rd: 80, isProvisional: false },
     ] as any);
 
     const out = await service.listParticipants('e1');
 
-    expect(out[0].level).toEqual({ level: 3, tier: expect.any(String), isProvisional: false });
+    expect(out[0].level).toEqual({ level: 3, tier: expect.any(String), isProvisional: false, reliability: 93 });
     // doit avoir appelé getLevelsForUsers avec le sport de l event (tennis)
     expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ key: 'tennis' }),

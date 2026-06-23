@@ -17,6 +17,8 @@ jest.mock('../lib/api', () => ({
     adminAddMemberNote: jest.fn(),
     adminDeleteMemberNote: jest.fn(),
     adminSetMemberWatch: jest.fn(),
+    // Onglet Niveau fusionné (lots C+D) : la fiche charge aussi le niveau (override admin).
+    adminGetMemberLevel: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -51,6 +53,7 @@ beforeEach(() => {
   (api.adminGetMemberNotes as jest.Mock).mockResolvedValue([]);
   (api.adminAddMemberNote as jest.Mock).mockResolvedValue({ id: 'n1', body: 'Joueur sympa', createdAt: '2026-06-23T14:00:00.000Z', author: { firstName: 'Sarah', lastName: 'P' } });
   (api.adminSetMemberWatch as jest.Mock).mockResolvedValue({ userId: 'u1', watch: true });
+  (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({ levels: {}, history: [] });
 });
 
 it('affiche identité, badge « à risque » et chip « Carnet actif »', async () => {

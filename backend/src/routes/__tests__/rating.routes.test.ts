@@ -13,11 +13,11 @@ beforeEach(() => {
 });
 
 describe('GET /api/me/rating', () => {
-  it('200 + null si pas de niveau', async () => {
+  it('200 + état neutre si pas de niveau', async () => {
     prismaMock.playerRating.findUnique.mockResolvedValue(null as any);
     const res = await request(app).get('/api/me/rating?sport=padel').set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(200);
-    expect(res.body).toBeNull();
+    expect(res.body).toEqual({ calibrated: false, level: null, tier: '', isProvisional: true, reliability: 50, matchesPlayed: 0 });
   });
 
   it('401 sans token', async () => {

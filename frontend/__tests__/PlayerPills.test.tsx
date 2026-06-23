@@ -45,7 +45,7 @@ describe('PlayerPills', () => {
 
   it('affiche la pastille de niveau quand level est présent', () => {
     render(<ThemeProvider><PlayerPills players={[
-      { userId: 'u1', firstName: 'A', lastName: 'A', level: { level: 4.2, tier: 'Intermédiaire', isProvisional: false } },
+      { userId: 'u1', firstName: 'A', lastName: 'A', level: { level: 4.2, tier: 'Intermédiaire', isProvisional: false, reliability: 92 } },
     ]} /></ThemeProvider>);
     expect(screen.getByText('4.2')).toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildPasswordResetEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail, buildRefundEmail } from '../templates/emails';
+import { buildOrganizerEmail, buildPlayerEmail, buildVerificationEmail, buildPasswordResetEmail, buildMatchJoinEmail, buildMatchInviteEmail, buildMatchRemovedEmail, buildMatchLeftEmail, buildRefundEmail, buildOpenMatchProposedEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -310,6 +310,30 @@ describe('buildMatchLeftEmail', () => {
     const m = buildMatchLeftEmail({ organizerFirstName: 'Tom', leaverName: 'Léa Martin', resourceName: 'Court 1', dateLabel: 'lun. 16 juin', clubName: 'Padel Arena Paris', spotsLeft: 1, url: 'https://x/parties', brand: { name: 'Padel Arena Paris', accentColor: '#5e93da', logoUrl: null } });
     expect(m.subject).toContain('Léa Martin');
     expect(m.text).toContain('1 place');
+  });
+});
+
+describe('buildOpenMatchProposedEmail', () => {
+  const brand: Brand = { name: 'Padel Arena', logoUrl: null, accentColor: '#d6ff3f' };
+  it('email au membre in-range avec niveau, date et places restantes', () => {
+    const m = buildOpenMatchProposedEmail({
+      recipientFirstName: 'Léa', resourceName: 'Court 1', dateLabel: 'lun. 1 juil., 12:00–13:30',
+      clubName: 'Padel Arena', levelLabel: 'Niveau 2 à 5', spotsLeft: 3,
+      url: 'https://x/parties', brand,
+    });
+    expect(m.subject).toContain('ton niveau');
+    expect(m.text).toContain('Niveau 2 à 5');
+    expect(m.text).toContain('3 places');
+    expect(m.html).toContain('Voir la partie');
+  });
+  it('singularise « 1 place »', () => {
+    const m = buildOpenMatchProposedEmail({
+      recipientFirstName: 'Léa', resourceName: 'Court 1', dateLabel: 'lun. 1 juil.',
+      clubName: 'Padel Arena', levelLabel: 'Tous niveaux', spotsLeft: 1,
+      url: 'https://x/parties', brand,
+    });
+    expect(m.text).toContain('1 place.');
+    expect(m.text).not.toContain('1 places');
   });
 });
 

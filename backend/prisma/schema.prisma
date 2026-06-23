@@ -189,6 +189,7 @@ model Sport {
   playerRatings    PlayerRating[]
   matches          Match[]
   preferredByUsers User[] @relation("UserPreferredSport")
+  ratingAdjustments PlayerRatingAdjustment[]
 
   @@map("sports")
 }
@@ -271,6 +272,7 @@ model Club {
   lessons          Lesson[]
   clubBroadcasts   ClubBroadcast[]
   memberNotes      MemberNote[]
+  ratingAdjustments PlayerRatingAdjustment[]
 
   @@map("clubs")
 }
@@ -386,6 +388,8 @@ model User {
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
   locale    String?   @default("fr")
   showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
+  /// Opt-in : « Propose-moi les parties à mon niveau » — notification (jamais d'inscription auto).
+  autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
   preferredSportId String? @map("preferred_sport_id")
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
@@ -396,6 +400,8 @@ model User {
   reservations    Reservation[]
   reservationParticipations ReservationParticipant[]
   playerRatings   PlayerRating[]
+  ratingAdjustments      PlayerRatingAdjustment[] @relation("RatingAdjustmentMember")
+  ratingAdjustmentsMade  PlayerRatingAdjustment[] @relation("RatingAdjustmentStaff")
   matchPlayers    MatchPlayer[]
   matchComments   MatchComment[]
   createdMatches  Match[]       @relation("MatchCreator")
@@ -443,6 +449,28 @@ model PlayerRating {
   @@unique([userId, sportId])
   @@index([sportId, displayLevel])
   @@map("player_ratings")
+}
+
+/// Trace d'audit d'une correction manuelle de niveau par un admin de club.
+/// Le niveau (PlayerRating) est GLOBAL : la correction s'applique partout, le club n'est qu'un contexte d'audit.
+model PlayerRatingAdjustment {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  sportId       String   @map("sport_id")
+  clubId        String?  @map("club_id")
+  staffUserId   String   @map("staff_user_id")
+  previousLevel Float?   @map("previous_level")
+  newLevel      Float    @map("new_level")
+  reason        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user      User   @relation("RatingAdjustmentMember", fields: [userId], references: [id], onDelete: Cascade)
+  staffUser User   @relation("RatingAdjustmentStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+  sport     Sport  @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  club      Club?  @relation(fields: [clubId], references: [id], onDelete: SetNull)
+
+  @@index([userId, sportId])
+  @@map("player_rating_adjustments")
 }
 
 /// Résultat d'un match 2v2 enregistré (depuis une réservation COURT à 4 joueurs).

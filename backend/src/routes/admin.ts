@@ -25,6 +25,7 @@ import { matchService } from '../services/match.service';
 import { CoachService } from '../services/coach.service';
 import { lessonService } from '../services/lesson.service';
 import { BroadcastService } from '../services/broadcast.service';
+import { RatingService } from '../services/rating.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -43,6 +44,7 @@ const memberNotesService = new MemberNotesService();
 const clubPageService = new ClubPageService();
 const coachService = new CoachService();
 const broadcastService = new BroadcastService();
+const ratingService = new RatingService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -105,6 +107,13 @@ function asString(v: unknown): string {
 async function assertLevelSystem(clubId: string): Promise<void> {
   const c = await prisma.club.findUnique({ where: { id: clubId }, select: { levelSystemEnabled: true } });
   if (!c || !c.levelSystemEnabled) throw new Error('LEVEL_SYSTEM_DISABLED');
+}
+
+// Le niveau étant GLOBAL, on borne les actions admin aux membres DU club appelant
+// (sinon un ADMIN pourrait corriger le niveau global d'un non-membre).
+async function assertClubMember(userId: string, clubId: string): Promise<void> {
+  const m = await prisma.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } }, select: { id: true } });
+  if (!m) throw new Error('MEMBER_NOT_FOUND');
 }
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -893,6 +902,49 @@ router.post('/matches/:matchId/void', async (req: ClubScopedRequest, res: Respon
     if (err instanceof Error && err.message === 'VALIDATION_ERROR') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
     if (err instanceof Error && err.message === 'MATCH_NOT_FOUND') { res.status(404).json({ error: 'MATCH_NOT_FOUND' }); return; }
     if (err instanceof Error && err.message === 'ALREADY_CANCELLED') { res.status(409).json({ error: 'ALREADY_CANCELLED' }); return; }
+    next(err as Error);
+  }
+});
+
+// --- Override admin du niveau d'un membre ---
+// Réservé OWNER/ADMIN : corrige un niveau (PlayerRating) GLOBAL ; le club n'est qu'un contexte d'audit.
+
+router.post('/members/:userId/level', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const clubId = asString(req.params.clubId);
+    const userId = asString(req.params.userId);
+    await assertLevelSystem(clubId);
+    await assertClubMember(userId, clubId);
+    const sportKey = asString(req.body?.sportKey);
+    const level = req.body?.level;
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+    const display = await ratingService.adminSetLevel(userId, sportKey, level, req.user!.id, { reason, clubId });
+    res.json(display);
+  } catch (err) {
+    if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
+    if (err instanceof Error && err.message === 'MEMBER_NOT_FOUND') { res.status(404).json({ error: 'MEMBER_NOT_FOUND' }); return; }
+    if (err instanceof Error && err.message === 'VALIDATION_ERROR') { res.status(400).json({ error: 'VALIDATION_ERROR' }); return; }
+    if (err instanceof Error && err.message === 'SPORT_NOT_FOUND') { res.status(404).json({ error: 'SPORT_NOT_FOUND' }); return; }
+    next(err as Error);
+  }
+});
+
+router.get('/members/:userId/level', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const clubId = asString(req.params.clubId);
+    const userId = asString(req.params.userId);
+    await assertLevelSystem(clubId);
+    await assertClubMember(userId, clubId);
+    // Liste des sports : ceux proposés par le club (fiche admin contextualisée au club).
+    const clubSports = await prisma.clubSport.findMany({
+      where: { clubId }, select: { sport: { select: { key: true } } },
+    });
+    const sportKeys = clubSports.map((cs) => cs.sport.key);
+    const payload = await ratingService.getMemberLevelAdmin(userId, sportKeys);
+    res.json(payload);
+  } catch (err) {
+    if (err instanceof Error && err.message === 'LEVEL_SYSTEM_DISABLED') { res.status(403).json({ error: 'LEVEL_SYSTEM_DISABLED' }); return; }
+    if (err instanceof Error && err.message === 'MEMBER_NOT_FOUND') { res.status(404).json({ error: 'MEMBER_NOT_FOUND' }); return; }
     next(err as Error);
   }
 });

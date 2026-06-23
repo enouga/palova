@@ -285,6 +285,48 @@ export function buildMatchLeftEmail(i: MatchLeftEmailInput): BuiltEmail {
   return { subject, html, text };
 }
 
+export interface OpenMatchProposedEmailInput {
+  recipientFirstName: string;
+  resourceName: string;
+  dateLabel: string;
+  clubName: string;
+  levelLabel: string;    // ex. "Niveau 2 à 5", "Tous niveaux"
+  spotsLeft: number;
+  url: string;
+  brand: Brand;
+}
+
+/** Email à un membre opt-in « à mon niveau » : une partie ouverte correspond à son niveau. */
+export function buildOpenMatchProposedEmail(i: OpenMatchProposedEmailInput): BuiltEmail {
+  const subject = `Une partie à ton niveau — ${i.clubName}`;
+  const heading = 'Une partie pour toi ! 🎾';
+  const spots = i.spotsLeft <= 1
+    ? 'Il reste 1 place.'
+    : `Il reste ${i.spotsLeft} places.`;
+  const intro = `Une partie ouverte correspond à ton niveau et cherche des joueurs. ${spots}`;
+  const infoRows: InfoRow[] = [
+    { label: 'Terrain', value: i.resourceName },
+    { label: 'Date', value: i.dateLabel },
+    { label: 'Niveau', value: i.levelLabel },
+    { label: 'Club', value: i.clubName },
+  ];
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p><p style="margin:0;">${escapeHtml(intro)}</p>`;
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading, introHtml, infoRows,
+    ctaLabel: 'Voir la partie', ctaUrl: i.url,
+  });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`, '',
+    intro, '',
+    `Terrain : ${i.resourceName}`,
+    `Date : ${i.dateLabel}`,
+    `Niveau : ${i.levelLabel}`,
+    `Club : ${i.clubName}`, '',
+    `Voir la partie : ${i.url}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 export interface RefundEmailInput {
   recipientFirstName: string;
   resourceName: string;

@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState, useCallback, CSSProperties, ReactNode } from 'react';
+import { useEffect, useState, useCallback, useRef, CSSProperties, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import { api, MemberHistory, MemberNote } from '@/lib/api';
+import { api, MemberHistory, MemberNote, AdminMemberLevel, UserLevel } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -11,6 +11,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { fmtEuros, toCents } from '@/lib/caisse';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
+import { ReliabilityMeter } from '@/components/player/ReliabilityMeter';
+import { LevelOverrideForm } from '@/components/admin/LevelOverrideForm';
 import { MonthlyRevenueChart } from '@/components/admin/stats/MonthlyRevenueChart';
 import { DayHourHeatmap } from '@/components/admin/stats/DayHourHeatmap';
 import { PaymentMethodChart } from '@/components/admin/stats/PaymentMethodChart';
@@ -25,6 +27,12 @@ const fmtDate = (iso: string) =>
   new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
 const fmtDateTime = (iso: string) =>
   new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+// Date d'une correction de niveau (jour + heure courts, locale FR) — robuste aux dates invalides.
+const fmtAdjustDate = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
 
 const STATUS_FR: Record<string, string> = { CONFIRMED: 'Confirmée', CANCELLED: 'Annulée', PENDING: 'En attente' };
 const TYPE_FR: Record<string, string> = { COURT: 'Terrain', COACHING: 'Cours', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
@@ -60,9 +68,13 @@ export default function MemberHistoryPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  // Le système de niveau peut être désactivé pour le club : on masque alors la partie
+  // correction/fiabilité/historique de l'onglet Niveau (le reste de la fiche reste actif).
+  const levelEnabled = club?.levelSystemEnabled !== false;
 
   const [data, setData] = useState<MemberHistory | null>(null);
   const [notes, setNotes] = useState<MemberNote[]>([]);
+  const [levelData, setLevelData] = useState<AdminMemberLevel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('activite');
@@ -71,21 +83,33 @@ export default function MemberHistoryPage() {
   const [noteBody, setNoteBody] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Garde anti-race : un reload (onSaved après correction de niveau) peut chevaucher
+  // un chargement en cours ; on ignore le résultat d'une requête périmée.
+  const reqIdRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!token || !clubId || !userId) return;
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
       setError(null);
-      const [h, n] = await Promise.all([
+      const [h, n, lvl] = await Promise.all([
         api.adminGetMemberHistory(clubId, userId, token),
         api.adminGetMemberNotes(clubId, userId, token).catch(() => [] as MemberNote[]),
+        // Niveau (override admin) — uniquement si le système de niveau est actif ; tolérant à l'échec.
+        levelEnabled
+          ? api.adminGetMemberLevel(clubId, userId, token).catch(() => null)
+          : Promise.resolve(null),
       ]);
-      setData(h); setNotes(n); setWatch(h.member.watch);
+      if (reqId !== reqIdRef.current) return; // réponse périmée : un reload plus récent a pris la main
+      setData(h); setNotes(n); setLevelData(lvl); setWatch(h.member.watch);
     } catch (e) {
+      if (reqId !== reqIdRef.current) return;
       setError((e as Error).message === 'MEMBER_NOT_FOUND' ? 'Membre introuvable dans ce club.' : (e as Error).message);
-    } finally { setLoading(false); }
-  }, [token, clubId, userId]);
+    } finally {
+      if (reqId === reqIdRef.current) setLoading(false);
+    }
+  }, [token, clubId, userId, levelEnabled]);
 
   useEffect(() => { if (ready && token && clubId && userId) load(); }, [ready, token, clubId, userId, load]);
 
@@ -132,6 +156,21 @@ export default function MemberHistoryPage() {
   const m = data.member;
   const { counts, finance, game, loyalty, favorites } = data;
   const reservations = onlyLate ? data.reservations.filter((r) => r.lateCancel) : data.reservations;
+
+  // --- Données pour la partie « correction de niveau » (C2), à l'intérieur de l'onglet Niveau ---
+  // Sports proposés par le club (pour le sélecteur du formulaire de correction).
+  const clubSports = (club?.clubSports ?? []).map((cs) => ({ key: cs.sport.key, name: cs.sport.name }));
+  // Carte clé→nom unique, alimentée par les sports du club ET les noms portés par l'historique.
+  const nameByKey = new Map<string, string>();
+  for (const s of clubSports) nameByKey.set(s.key, s.name);
+  for (const h of levelData?.history ?? []) if (!nameByKey.has(h.sportKey)) nameByKey.set(h.sportKey, h.sportName);
+  const sportName = (key: string) => nameByKey.get(key) ?? key;
+  // Si le club n'a pas de sports configurés, on retombe sur les sports présents dans les niveaux.
+  const formSports = clubSports.length > 0
+    ? clubSports
+    : Object.keys(levelData?.levels ?? {}).map((key) => ({ key, name: sportName(key) }));
+  const levelEntries: [string, UserLevel][] = Object.entries(levelData?.levels ?? {});
+  const adjustments = levelData?.history ?? [];
 
   return (
     <div>
@@ -292,7 +331,67 @@ export default function MemberHistoryPage() {
         {/* ───────── Niveau & jeu ───────── */}
         {tab === 'niveau' && (
           <>
-            <div style={row}>
+            {/* (C2) Niveau courant par sport + fiabilité — affiché seulement si le système de niveau est actif. */}
+            {levelEnabled && (
+              <Section title="Niveau par sport">
+                {levelEntries.length === 0 ? (
+                  <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, margin: 0 }}>Aucun niveau enregistré pour ce membre.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {levelEntries.map(([key, lvl]) => (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.textMute, minWidth: 90 }}>{sportName(key)}</span>
+                        <span style={{ fontFamily: th.fontDisplay, fontSize: 22, fontWeight: 700, color: th.text }}>{lvl.level.toFixed(1)}</span>
+                        <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>{lvl.tier}</span>
+                        {lvl.isProvisional && (
+                          <span style={{ borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: '#ffb020', color: '#1a1a1a' }}>en calibrage</span>
+                        )}
+                        <ReliabilityMeter pct={lvl.reliability} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+            )}
+
+            {/* (C2) Correction manuelle du niveau (override ADMIN 0–8) → recharge la fiche après succès. */}
+            {levelEnabled && clubId && token && (
+              <div style={{ marginTop: 14 }}>
+                <LevelOverrideForm
+                  clubId={clubId}
+                  userId={userId}
+                  token={token}
+                  sports={formSports}
+                  onSaved={load}
+                />
+              </div>
+            )}
+
+            {/* (C2) Historique des corrections (récent d'abord). */}
+            {levelEnabled && (
+              <Section title="Historique des corrections">
+                {adjustments.length === 0 ? (
+                  <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, margin: 0 }}>Aucune correction manuelle pour l&apos;instant.</p>
+                ) : (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {adjustments.map((h) => (
+                      <li key={h.id} style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
+                          <span style={{ fontWeight: 700 }}>{h.previousLevel != null ? h.previousLevel.toFixed(1) : '—'} → {h.newLevel.toFixed(1)}</span>
+                          {formSports.length > 1 && <span style={{ color: th.textMute }}>· {h.sportName}</span>}
+                          <span style={{ color: th.textMute }}>· par {h.staffFirstName} {h.staffLastName}</span>
+                          <span style={{ color: th.textFaint, fontSize: 12.5 }}>· {fmtAdjustDate(h.createdAt)}</span>
+                        </div>
+                        {h.reason && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>{h.reason}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+            )}
+
+            {/* (WIP) Statistiques de jeu — complémentaires : matchs, victoires, courbe, partenaires. */}
+            <div style={{ ...row, marginTop: 14 }}>
               <StatCard label="Niveau" value={game.level != null ? game.level.toFixed(1) : '—'} accent hint={game.tier ? (game.isProvisional ? `${game.tier} · en calibrage` : game.tier) : 'à calibrer'} />
               <StatCard label="Matchs" value={game.matchesPlayed} />
               <StatCard label="Victoires" value={game.wins} hint={`${game.losses} défaite${game.losses > 1 ? 's' : ''}`} />

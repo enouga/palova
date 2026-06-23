@@ -141,6 +141,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           {/* Liens */}
           <div style={{ paddingTop: 6 }}>
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
+            {club?.levelSystemEnabled !== false && <MenuItem th={th} icon="trophy" label="Mes matchs" onClick={() => go('/me/matches')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
             {/* « Espace club » pour chaque club géré : lien direct /admin si on est déjà sur son

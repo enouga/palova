@@ -16,8 +16,22 @@ import {
   buildRefundEmail,
   buildMatchConfirmEmail,
   buildMatchCommentEmail,
+  buildOpenMatchProposedEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
+import { RatingService } from '../services/rating.service';
+import { inRange } from '../services/rating/range';
+
+const ratingService = new RatingService();
+
+/** Libellé français d'une fourchette de niveau (0–8) pour l'email « partie à ton niveau ». */
+function levelRangeLabel(min: number | null, max: number | null): string {
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
+  if (min != null && max != null) return `Niveau ${fmt(min)} à ${fmt(max)}`;
+  if (min != null) return `Niveau ${fmt(min)} et +`;
+  if (max != null) return `Niveau ${fmt(max)} et -`;
+  return 'Tous niveaux';
+}
 
 // Couche d'orchestration : charge les données (hors transaction), construit les emails
 // et les envoie aux bons destinataires. Ces fonctions PEUVENT lever (DB/SMTP) ; les
@@ -369,6 +383,86 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
     title: 'Nouveau joueur dans ta partie', body: `${fullName(joiner)} a rejoint ta partie du ${dateLabel}.`,
     url, email: { to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
+}
+
+/**
+ * Propose une partie ouverte (PUBLIC, fourchette de niveau) aux membres ACTIVE du club
+ * qui ont opté pour « les parties à mon niveau » et dont le niveau est dans la fourchette.
+ * NOTIFICATION SEULEMENT — on n'inscrit JAMAIS personne (le join 1-tap existe déjà côté front).
+ * Auto-gardée : si la résa n'est pas une partie ouverte rejoignable, on ne fait rien.
+ * Peut lever (DB/SMTP) ; l'appelant (reservation.service) l'enveloppe en best-effort (safeNotify).
+ */
+export async function notifyOpenMatchProposed(reservationId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: {
+          name: true, attributes: true,
+          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          clubSport: { select: { sport: { select: { key: true } } } },
+        },
+      },
+      participants: { select: { userId: true } },
+    },
+  });
+  if (!resa) return;
+
+  // Self-guard : on ne notifie QUE pour une vraie partie ouverte avec fourchette de niveau.
+  const row = resa as typeof resa & { visibility: string; targetLevelMin: number | null; targetLevelMax: number | null };
+  if (row.visibility !== 'PUBLIC' || row.targetLevelMin == null || row.targetLevelMax == null) return;
+
+  const club = resa.resource.club;
+  const sportKey = resa.resource.clubSport.sport.key;
+  const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
+  const spotsLeft = maxPlayers - resa.participants.length;
+  if (spotsLeft <= 0) return; // déjà complète → personne ne peut rejoindre, on ne notifie pas.
+
+  // Membres ACTIVE du club ayant opté pour les propositions « à mon niveau ».
+  const optedIn = await prisma.clubMembership.findMany({
+    where: { clubId: club.id, status: 'ACTIVE', user: { autoMatchProposals: true } },
+    select: { userId: true, user: { select: { firstName: true, lastName: true, email: true } } },
+  });
+
+  // Exclut l'organisateur et les participants déjà présents.
+  const present = new Set(resa.participants.map((p) => p.userId));
+  const candidates = optedIn.filter((m) => !present.has(m.userId));
+  if (candidates.length === 0) return;
+
+  // Niveaux par sport (batch) ; on ne garde que les niveaux CONNUS et dans la fourchette
+  // (un membre non calibré n'est pas démarché — parité avec frontend/lib/recommend.ts).
+  const levels = await ratingService.getLevelsBySport(candidates.map((c) => ({ userId: c.userId, sportKey })));
+
+  const brand = brandOf(club);
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const levelLabel = levelRangeLabel(row.targetLevelMin, row.targetLevelMax);
+  const url = clubAppUrl(club.slug, '/parties');
+
+  for (const c of candidates) {
+    if (!c.user.email) continue;
+    const level = levels[`${c.userId}:${sportKey}`]?.level ?? null;
+    // Parité avec frontend/lib/recommend.ts : un membre non calibré (niveau inconnu)
+    // n'est pas démarché — on ne propose qu'à un niveau connu et dans la fourchette.
+    if (level == null || !inRange(level, row.targetLevelMin, row.targetLevelMax)) continue;
+
+    const mail = buildOpenMatchProposedEmail({
+      recipientFirstName: c.user.firstName,
+      resourceName: resa.resource.name,
+      dateLabel, clubName: club.name, levelLabel, spotsLeft,
+      url, brand,
+    });
+    // Chaque destinataire est indépendant : un échec (SMTP/notif) ne doit pas couper les autres.
+    try {
+      await dispatch({
+        userId: c.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.proposed',
+        title: 'Une partie à ton niveau',
+        body: `Une partie ouverte du ${dateLabel} correspond à ton niveau.`,
+        url, email: { to: c.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+      });
+    } catch (err) {
+      console.error('[notifyOpenMatchProposed] envoi destinataire échoué', { userId: c.userId, err });
+    }
+  }
 }
 
 /** Prévient chaque partenaire (non-organisateur) qu'il a été ajouté à une partie. */
@@ -734,7 +828,7 @@ export async function notifyNewMatchComment(
   const excerpt = last.body.length > 280 ? last.body.slice(0, 277) + '…' : last.body;
   const scoreLine = setsToScoreLine(match.sets);
   const brand = brandOf(match.club);
-  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+  const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
 
   const staff = await prisma.clubMember.findMany({
     where: { clubId: match.club.id, role: { in: [ClubRole.OWNER, ClubRole.ADMIN, ClubRole.STAFF] } },
@@ -798,7 +892,7 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
 
   const scoreLine = setsToScoreLine(match.sets);
   const brand = brandOf(match.club);
-  const matchUrl = clubAppUrl(match.club.slug, '/me/reservations');
+  const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
   const authorName = fullName(match.creator);
 
   for (const mp of match.players) {

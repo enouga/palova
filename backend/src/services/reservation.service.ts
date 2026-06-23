@@ -10,7 +10,7 @@ import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
@@ -504,6 +504,12 @@ export class ReservationService {
 
     // Best-effort : prévenir les partenaires qu'ils ont été ajoutés à la partie.
     await this.safeNotify(() => notifyMatchPartnersInvited(reservationId));
+
+    // Best-effort : à la CONFIRMATION (1er moment où d'autres membres peuvent rejoindre via
+    // joinOpenMatch, qui exige status CONFIRMED), proposer la partie ouverte aux membres opt-in
+    // « à mon niveau » dont le niveau est dans la fourchette. La fonction s'auto-garde : elle ne
+    // fait rien si la résa n'est pas PUBLIC avec fourchette. Jamais d'inscription auto — notif seule.
+    await this.safeNotify(() => notifyOpenMatchProposed(reservationId));
 
     return confirmed;
   }
