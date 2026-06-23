@@ -228,7 +228,7 @@ export default function MyProfilePage() {
   // quand l'utilisateur aura un niveau sur 2+ sports (à brancher sur un futur signal
   // multi-sport ; tant qu'il n'existe pas, le drapeau reste false).
   const showLevelSportPicker = false;
-  const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel';
+  const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel'; // repli : le padel est toujours disponible
 
   const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
   const initials = profile ? `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase() : '…';

@@ -197,6 +197,7 @@ describe('Page Mon profil', () => {
     // Le rating chargé est celui du padel, jamais du sport préféré (tennis).
     await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'padel'));
     expect(api.getMyRating).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
+    expect(api.getRatingHistory).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
   });
 
   it('niveau : le calibrage utilise le padel', async () => {
