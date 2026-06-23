@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, CSSProperties } from 'react';
+import Link from 'next/link';
 import { api, Member } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -15,6 +16,8 @@ export default function AdminMembersPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  // Lien vers la fiche niveau du membre, masqué quand le système de niveau est désactivé.
+  const levelEnabled = club?.levelSystemEnabled !== false;
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -167,7 +170,11 @@ export default function AdminMembersPage() {
               )}
               {filtered.map((m) => (
                 <tr key={m.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: m.status === 'BLOCKED' ? 0.55 : 1 }}>
-                  <td style={{ ...cell, fontWeight: 600, whiteSpace: 'nowrap' }}>{m.firstName} {m.lastName}</td>
+                  <td style={{ ...cell, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {levelEnabled
+                      ? <Link href={`/admin/members/${m.userId}`} style={{ color: th.accent, textDecoration: 'none' }} title="Voir le niveau et corriger">{m.firstName} {m.lastName}</Link>
+                      : <>{m.firstName} {m.lastName}</>}
+                  </td>
                   <td style={{ ...cell, color: th.textMute }}>{m.email}</td>
                   <td style={cell}><input value={m.phone ?? ''} onChange={(e) => editField(m.id, 'phone', e.target.value)} placeholder="—" style={{ ...input, width: 110 }} /></td>
                   <td style={cell}><input value={m.membershipNo ?? ''} onChange={(e) => editField(m.id, 'membershipNo', e.target.value)} placeholder="—" style={{ ...input, width: 100 }} /></td>

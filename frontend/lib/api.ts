@@ -317,6 +317,15 @@ export const api = {
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  // --- Override admin du niveau (réservé ADMIN/OWNER) ---
+  // Fiche niveau d'un membre : niveaux courants par sport + historique des corrections.
+  adminGetMemberLevel: (clubId: string, userId: string, token: string) =>
+    request<AdminMemberLevel>(`/api/clubs/${clubId}/admin/members/${userId}/level`, {}, token),
+
+  // Corrige le niveau (0–8) d'un membre pour un sport ; renvoie l'affichage du niveau mis à jour.
+  adminSetMemberLevel: (clubId: string, userId: string, body: { sportKey: string; level: number; reason?: string }, token: string) =>
+    request<MyRating>(`/api/clubs/${clubId}/admin/members/${userId}/level`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   adminGetCaisse: (clubId: string, date: string, token: string) =>
     request<CaisseSummary>(`/api/clubs/${clubId}/admin/caisse?date=${date}`, {}, token),
 
@@ -1422,6 +1431,26 @@ export interface MyRating {
 
 export interface UserLevel { level: number; tier: string; isProvisional: boolean; reliability: number; }
 export interface RatingPoint { playedAt: string; level: number; }
+
+// --- Override admin du niveau (fiche membre) ---
+// Une correction manuelle de niveau, mise à plat pour la fiche admin (récent d'abord).
+export interface LevelAdjustment {
+  id: string;
+  previousLevel: number | null;
+  newLevel: number;
+  reason: string | null;
+  createdAt: string;
+  staffFirstName: string;
+  staffLastName: string;
+  sportKey: string;
+  sportName: string;
+}
+
+// Payload de la fiche niveau admin : niveaux courants par sport (clé = sportKey) + historique.
+export interface AdminMemberLevel {
+  levels: Record<string, UserLevel>;
+  history: LevelAdjustment[];
+}
 
 export interface LeaderboardEntry {
   rank: number;
