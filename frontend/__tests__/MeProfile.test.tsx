@@ -237,6 +237,7 @@ describe('Page Mon profil', () => {
     expect(within(nav).getByText('Infos')).toBeInTheDocument();
     expect(within(nav).getByText('Préf.')).toBeInTheDocument();
     expect(within(nav).getByText('Sécu.')).toBeInTheDocument();
+    expect(within(nav).getByText('Niveau')).toBeInTheDocument();
   });
 
   it('le menu omet « Niveau » quand le club a désactivé les niveaux', async () => {
