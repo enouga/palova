@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import MyProfilePage from '../app/me/profile/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -176,8 +176,8 @@ describe('Page Mon profil', () => {
     api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: null });
     api.updateMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-tennis', key: 'tennis', name: 'Tennis' } });
     wrap();
-    const select = await screen.findByLabelText(/sport préféré/i);
-    fireEvent.change(select, { target: { value: 'sport-tennis' } });
+    const group = await screen.findByRole('group', { name: /sport préféré/i });
+    fireEvent.click(within(group).getByText('Tennis'));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
       expect.objectContaining({ preferredSportId: 'sport-tennis' }), expect.any(String),
     ));
@@ -192,13 +192,12 @@ describe('Page Mon profil', () => {
     api.getMyRating.mockResolvedValue({ level: 3.5, calibrated: false, gamesPlayed: 0, tier: 'INTERMEDIATE', sport: 'padel' });
     api.getRatingHistory.mockResolvedValue([]);
     wrap();
-    // Le sélecteur de la section niveau doit apparaître
-    const sel = await screen.findByLabelText(/sport du niveau/i);
-    expect(sel).toBeInTheDocument();
-    // Initialement il est sur 'padel' (sport préféré)
-    expect(sel).toHaveValue('padel');
-    // Changer vers tennis
-    fireEvent.change(sel, { target: { value: 'tennis' } });
+    // Le groupe de pastilles de la section niveau doit apparaître
+    const group = await screen.findByRole('group', { name: /sport du niveau/i });
+    // Initialement, la pastille 'Padel' (sport préféré) est active
+    expect(within(group).getByText('Padel')).toHaveAttribute('aria-pressed', 'true');
+    // Cliquer la pastille Tennis
+    fireEvent.click(within(group).getByText('Tennis'));
     await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'tennis'));
     await waitFor(() => expect(api.getRatingHistory).toHaveBeenCalledWith(expect.any(String), 'tennis'));
   });
@@ -213,9 +212,9 @@ describe('Page Mon profil', () => {
     api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } });
     api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, gamesPlayed: 0, tier: 'UPPER_INTERMEDIATE', sport: 'tennis' });
     wrap();
-    // Changer le sport du niveau vers tennis
-    const sel = await screen.findByLabelText(/sport du niveau/i);
-    fireEvent.change(sel, { target: { value: 'tennis' } });
+    // Changer le sport du niveau vers tennis (pastille)
+    const group = await screen.findByRole('group', { name: /sport du niveau/i });
+    fireEvent.click(within(group).getByText('Tennis'));
     // Attendre que le LevelCalibration soit visible (rating null → calibration)
     // Cliquer sur Passer (onSkip) pour déclencher calibrateRating(null, token, 'tennis')
     const skipBtn = await screen.findByRole('button', { name: /passer|skip/i });
