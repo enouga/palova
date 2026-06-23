@@ -534,11 +534,45 @@ export default function AdminPlanningPage() {
               {labelOf(selected)}
               {selected.user && <div style={{ fontSize: 12.5, color: th.textFaint }}>{selected.user.email}</div>}
             </div>
-            <div style={{ marginTop: 10, display: 'flex', gap: 18, fontFamily: th.fontUI, fontSize: 13 }}>
-              <span style={{ color: th.textMute }}>Total : <b style={{ color: th.text }}>{fmtEuros(dueOf(selected))}</b>{toCents(selected.totalPrice) <= 0 && dueOf(selected) > 0 ? <span style={{ color: th.textFaint }}> (tarif)</span> : null}</span>
-              <span style={{ color: th.textMute }}>Payé : <b style={{ color: th.text }}>{fmtEuros(toCents(selected.paidAmount))}</b></span>
-              <span style={{ color: th.textMute }}>Reste : <b style={{ color: '#ff7a4d' }}>{fmtEuros(Math.max(0, dueOf(selected) - toCents(selected.paidAmount)))}</b></span>
-            </div>
+            {/* Bandeau d'état — reste à encaisser / soldé (cohérent avec la page Paiements) */}
+            {(() => {
+              const dueC = dueOf(selected);
+              const paidC = toCents(selected.paidAmount);
+              const restC = Math.max(0, dueC - paidC);
+              const pct = dueC > 0 ? Math.min(100, Math.round((paidC / dueC) * 100)) : 0;
+              const done = dueC > 0 && restC <= 0;
+              const tariff = toCents(selected.totalPrice) <= 0 && dueC > 0;
+              return (
+                <div style={{ marginTop: 12, borderRadius: 16, padding: '15px 17px',
+                  background: done ? 'rgba(52,184,136,0.10)' : th.surface2,
+                  boxShadow: `inset 0 0 0 1px ${done ? 'rgba(52,184,136,0.30)' : th.line}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute }}>
+                        {dueC <= 0 ? 'Encaissé' : done ? 'Statut' : 'Reste à encaisser'}
+                      </div>
+                      {dueC <= 0 ? (
+                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 28, letterSpacing: -0.5, lineHeight: 1, marginTop: 6, color: th.text }}>{fmtEuros(paidC)}</div>
+                      ) : done ? (
+                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, lineHeight: 1, marginTop: 6, color: SETTLED_COLOR }}>✓ Soldé</div>
+                      ) : (
+                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -1, lineHeight: 1, marginTop: 6, color: '#ff7a4d' }}>{fmtEuros(restC)}</div>
+                      )}
+                    </div>
+                    {dueC > 0 && (
+                      <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, lineHeight: 1.5 }}>
+                        Payé <b style={{ color: th.text }}>{fmtEuros(paidC)}</b><br />sur {fmtEuros(dueC)}{tariff ? <span style={{ color: th.textFaint }}> (tarif)</span> : null}
+                      </div>
+                    )}
+                  </div>
+                  {dueC > 0 && (
+                    <div style={{ marginTop: 13, height: 8, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: SETTLED_COLOR, transition: 'width .35s ease' }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* choix du type */}
             <div style={{ marginTop: 16 }}>
