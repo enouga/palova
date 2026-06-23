@@ -89,8 +89,6 @@ export default function MyProfilePage() {
         setPhone(p.phone ?? '');
         setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
         setSex(p.sex);
-        // Initialiser le sport du niveau sur le sport préféré
-        if (p.preferredSport?.key) setRatingSport(p.preferredSport.key);
         if (slug) {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
@@ -226,6 +224,12 @@ export default function MyProfilePage() {
     </div>
   );
 
+  // Niveau : on ne gère que le padel aujourd'hui. Le sélecteur de sport réapparaîtra
+  // quand l'utilisateur aura un niveau sur 2+ sports (à brancher sur un futur signal
+  // multi-sport ; tant qu'il n'existe pas, le drapeau reste false).
+  const showLevelSportPicker = false;
+  const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel';
+
   const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
   const initials = profile ? `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase() : '…';
 
@@ -293,9 +297,9 @@ export default function MyProfilePage() {
 
             {/* Niveau — masqué si le club a désactivé le système de niveau */}
             {club?.levelSystemEnabled !== false && (
-              <section style={card} aria-label="Mon niveau padel">
-                <div style={cardTitle}>Mon niveau</div>
-                {sports.length > 0 && (
+              <section id="niveau" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mon niveau">
+                <div style={cardTitle}>Mon niveau · {levelSportName}</div>
+                {showLevelSportPicker && sports.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <span style={label}>Sport du niveau</span>
                     <div role="group" aria-label="Sport du niveau">

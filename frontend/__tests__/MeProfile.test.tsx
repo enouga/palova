@@ -135,7 +135,7 @@ describe('Page Mon profil', () => {
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
     wrap();
     await screen.findByText('Eric');
-    expect(screen.queryByText('Mon niveau padel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /mon niveau/i })).not.toBeInTheDocument();
   });
 
   it('changer le mot de passe appelle api.changePassword puis affiche le succès', async () => {
@@ -183,42 +183,31 @@ describe('Page Mon profil', () => {
     ));
   });
 
-  it('niveau par sport : changer de sport recharge le rating', async () => {
+  it('niveau : padel uniquement, sans sélecteur de sport, découplé du sport préféré', async () => {
     api.getSports.mockResolvedValue([
       { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
       { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
     ]);
-    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } });
-    api.getMyRating.mockResolvedValue({ level: 3.5, calibrated: false, gamesPlayed: 0, tier: 'INTERMEDIATE', sport: 'padel' });
-    api.getRatingHistory.mockResolvedValue([]);
+    api.getMyRating.mockResolvedValue({ level: 5.2, calibrated: true, gamesPlayed: 10, tier: 'CONFIRMED', sport: 'padel' });
+    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-tennis', key: 'tennis', name: 'Tennis' } });
     wrap();
-    // Le groupe de pastilles de la section niveau doit apparaître
-    const group = await screen.findByRole('group', { name: /sport du niveau/i });
-    // Initialement, la pastille 'Padel' (sport préféré) est active
-    expect(within(group).getByText('Padel')).toHaveAttribute('aria-pressed', 'true');
-    // Cliquer la pastille Tennis
-    fireEvent.click(within(group).getByText('Tennis'));
-    await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'tennis'));
-    await waitFor(() => expect(api.getRatingHistory).toHaveBeenCalledWith(expect.any(String), 'tennis'));
+    const region = await screen.findByRole('region', { name: /mon niveau/i });
+    expect(region).toHaveTextContent(/Padel/);
+    expect(screen.queryByRole('group', { name: /sport du niveau/i })).not.toBeInTheDocument();
+    // Le rating chargé est celui du padel, jamais du sport préféré (tennis).
+    await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'padel'));
+    expect(api.getMyRating).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
   });
 
-  it('niveau par sport : le calibrage utilise le sport sélectionné', async () => {
+  it('niveau : le calibrage utilise le padel', async () => {
     api.getSports.mockResolvedValue([
       { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
     ]);
-    // getMyRating retourne null → LevelCalibration s'affiche
-    api.getMyRating.mockResolvedValue(null);
-    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' } });
-    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, gamesPlayed: 0, tier: 'UPPER_INTERMEDIATE', sport: 'tennis' });
+    api.getMyRating.mockResolvedValue(null); // → LevelCalibration s'affiche
+    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, gamesPlayed: 0, tier: 'UPPER_INTERMEDIATE', sport: 'padel' });
     wrap();
-    // Changer le sport du niveau vers tennis (pastille)
-    const group = await screen.findByRole('group', { name: /sport du niveau/i });
-    fireEvent.click(within(group).getByText('Tennis'));
-    // Attendre que le LevelCalibration soit visible (rating null → calibration)
-    // Cliquer sur Passer (onSkip) pour déclencher calibrateRating(null, token, 'tennis')
     const skipBtn = await screen.findByRole('button', { name: /passer|skip/i });
     fireEvent.click(skipBtn);
-    await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'tennis'));
+    await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'padel'));
   });
 });
