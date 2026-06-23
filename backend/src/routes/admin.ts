@@ -869,7 +869,8 @@ router.post('/matches/:matchId/void', async (req: ClubScopedRequest, res: Respon
 });
 
 // --- Broadcast (message à tous les membres actifs) ---
-router.post('/broadcast', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Réservé OWNER/ADMIN : action à fort impact (notifie tous les membres).
+router.post('/broadcast', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { title, body, url } = req.body;
     const result = await broadcastService.send(
@@ -881,7 +882,7 @@ router.post('/broadcast', async (req: ClubScopedRequest, res: Response, next: Ne
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/broadcasts', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/broadcasts', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const [recipientCount, items] = await Promise.all([
       broadcastService.countActiveMembers(req.membership!.clubId),

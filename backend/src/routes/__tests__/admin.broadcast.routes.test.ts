@@ -55,6 +55,19 @@ describe('POST /api/clubs/:clubId/admin/broadcast', () => {
     expect(res.body).toEqual({ recipientCount: 5, broadcastId: 'bc-1' });
   });
 
+  it('returns 200 with recipientCount and broadcastId for ADMIN', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'ADMIN' } as any);
+    const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: 'Hi', body: 'Msg' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ recipientCount: 5, broadcastId: 'bc-1' });
+  });
+
+  it('returns 403 for STAFF member (broadcast réservé OWNER/ADMIN)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
+    const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: 'Hi', body: 'Msg' });
+    expect(res.status).toBe(403);
+  });
+
   it('returns 400 with VALIDATION_ERROR on empty title', async () => {
     sendImpl.mockRejectedValue(new Error('VALIDATION_ERROR'));
     const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: '', body: 'Msg' });
@@ -79,5 +92,18 @@ describe('GET /api/clubs/:clubId/admin/broadcasts', () => {
     const res = await request(app).get(`${base}/broadcasts`).set(auth);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ recipientCount: 5, items: [] });
+  });
+
+  it('returns 200 with recipientCount and items for ADMIN', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'ADMIN' } as any);
+    const res = await request(app).get(`${base}/broadcasts`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ recipientCount: 5, items: [] });
+  });
+
+  it('returns 403 for STAFF member (broadcasts réservé OWNER/ADMIN)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
+    const res = await request(app).get(`${base}/broadcasts`).set(auth);
+    expect(res.status).toBe(403);
   });
 });
