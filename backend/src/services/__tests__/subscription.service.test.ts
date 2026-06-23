@@ -72,3 +72,50 @@ describe('SubscriptionService — updatePlan', () => {
     expect(data.isActive).toBe(false);
   });
 });
+
+describe('SubscriptionService — sellSubscription', () => {
+  let service: SubscriptionService;
+  const plan = {
+    id: 'plan-1', clubId: 'club-1', name: 'Abo Padel', sportKeys: ['padel'], monthlyPrice: 69,
+    commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null,
+    dailyCap: null, weeklyCap: null, isActive: true,
+  };
+  beforeEach(() => {
+    service = new SubscriptionService();
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+  });
+
+  it('crée la Subscription (snapshot figé) + le Payment de vente = 1re mensualité', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue(plan as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb-1' } as any);
+    prismaMock.subscription.create.mockResolvedValue({ id: 'sub-1' } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+    const out = await service.sellSubscription('club-1', 'user-1', { planId: 'plan-1', method: 'CARD', createdByUserId: 'admin-1' });
+
+    const subData = prismaMock.subscription.create.mock.calls[0][0].data as any;
+    expect(subData).toEqual(expect.objectContaining({
+      clubId: 'club-1', userId: 'user-1', planId: 'plan-1', status: 'ACTIVE',
+      sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null,
+    }));
+    expect(subData.expiresAt).toBeInstanceOf(Date);
+    expect(Number(subData.monthlyPriceSnapshot)).toBe(69);
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ clubId: 'club-1', subscriptionId: 'sub-1', method: 'CARD', receiptNo: 1 }),
+    }));
+    expect(out.subscription.id).toBe('sub-1');
+  });
+
+  it('refuse un plan inactif / autre club', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ ...plan, isActive: false } as any);
+    await expect(service.sellSubscription('club-1', 'user-1', { planId: 'plan-1' })).rejects.toThrow('PLAN_NOT_FOUND');
+  });
+
+  it('refuse un non-membre', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue(plan as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null);
+    await expect(service.sellSubscription('club-1', 'user-1', { planId: 'plan-1' })).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+});
