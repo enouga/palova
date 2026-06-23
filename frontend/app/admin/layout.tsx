@@ -8,7 +8,7 @@ import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type IconName } from '@/components/ui/Icon';
 
 // Permet à une page (ex. Planning) de replier la barre latérale et d'élargir le contenu.
 export const AdminChromeContext = createContext<{ collapsed: boolean; setCollapsed: (v: boolean) => void }>({
@@ -19,6 +19,16 @@ export function useAdminChrome() { return useContext(AdminChromeContext); }
 
 // Préférence persistante de repli de la sidebar (survit à la navigation et au rechargement).
 const SIDEBAR_KEY = 'palova:admin-sidebar';
+// Sections du menu repliées (liste de titres), persistée comme le repli global.
+const SECTIONS_KEY = 'palova:admin-sidebar-sections';
+
+// Assombrit (factor<1) ou éclaircit (>1) une couleur hex #rrggbb. Sert à rendre les
+// titres de section colorés lisibles sur fond clair sans perdre la teinte.
+function shade(hex: string, factor: number): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const ch = (shift: number) => Math.max(0, Math.min(255, Math.round(((n >> shift) & 255) * factor)));
+  return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -42,6 +52,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     try { window.localStorage.setItem(SIDEBAR_KEY, v ? 'collapsed' : 'open'); } catch { /* stockage indisponible : préférence non persistée */ }
   }, []);
 
+  // Sections repliées (par titre). Tout déplié par défaut ; choix mémorisé en localStorage.
+  const [collapsedSections, setCollapsedSectionsState] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(SECTIONS_KEY);
+      if (raw) return JSON.parse(raw) as string[];
+    } catch { /* stockage indisponible : pas de préférence */ }
+    return [];
+  });
+  const setCollapsedSections = useCallback((next: string[]) => {
+    setCollapsedSectionsState(next);
+    try { window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(next)); } catch { /* non persisté */ }
+  }, []);
+
   useEffect(() => {
     if (!ready) return;
     if (!token) { router.replace('/login'); return; }
@@ -61,29 +85,61 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  const links = [
-    { href: '/admin',              label: 'Tableau de bord', icon: 'grid' as const },
-    { href: '/admin/planning',     label: 'Planning',        icon: 'calendar' as const },
-    { href: '/admin/courts',       label: 'Ressources',      icon: 'indoor' as const },
-    { href: '/admin/sports',       label: 'Sports',          icon: 'bolt' as const },
-    { href: '/admin/reservations', label: 'Réservations',    icon: 'ticket' as const },
-    { href: '/admin/caisse',       label: 'Caisse',          icon: 'ticket' as const },
-    { href: '/admin/comptabilite', label: 'Comptabilité',    icon: 'chart' as const },
-    { href: '/admin/packages',     label: 'Offres prépayées', icon: 'bolt' as const },
-    { href: '/admin/tournaments', label: 'Tournois',         icon: 'trophy' as const },
-    { href: '/admin/events',       label: 'Events',          icon: 'bolt' as const },
-    { href: '/admin/coaches',      label: 'Coachs',          icon: 'users' as const },
-    // Lien « Matchs » masqué quand le système de niveau est désactivé pour le club.
-    ...(club.levelSystemEnabled === false
-      ? []
-      : [{ href: '/admin/matches', label: 'Matchs', icon: 'trophy' as const }]),
-    { href: '/admin/members',      label: 'Membres',         icon: 'users' as const },
-    { href: '/admin/announcements', label: 'Annonces',       icon: 'bolt' as const },
-    { href: '/admin/broadcast',    label: 'Messages',        icon: 'bell' as const },
-    { href: '/admin/sponsors',     label: 'Partenaires',     icon: 'users' as const },
-    { href: '/admin/pages',        label: 'Contenu & mentions', icon: 'info' as const },
-    { href: '/admin/settings',     label: 'Réglages',        icon: 'settings' as const },
+  // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
+  // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).
+  type NavItem = { href: string; label: string; icon: IconName };
+  // Une couleur par famille (palette du thème) — appliquée à la pastille + au titre de section.
+  const sections: { title?: string; color?: string; items: NavItem[] }[] = [
+    { items: [
+      { href: '/admin', label: 'Tableau de bord', icon: 'grid' },
+    ] },
+    { title: 'Au quotidien', color: '#5e93da', items: [
+      { href: '/admin/planning',     label: 'Planning',     icon: 'calendar' },
+      { href: '/admin/reservations', label: 'Réservations', icon: 'ticket' },
+      { href: '/admin/caisse',       label: 'Caisse',       icon: 'euro' },
+    ] },
+    { title: 'Animations & jeu', color: '#e6a93c', items: [
+      { href: '/admin/tournaments', label: 'Tournois', icon: 'trophy' },
+      { href: '/admin/events',      label: 'Events',   icon: 'bolt' },
+      // Lien « Matchs » masqué quand le système de niveau est désactivé pour le club.
+      ...(club.levelSystemEnabled === false
+        ? []
+        : [{ href: '/admin/matches', label: 'Matchs', icon: 'trophy' } as NavItem]),
+      { href: '/admin/coaches',     label: 'Coachs',   icon: 'user' },
+    ] },
+    { title: 'Communauté', color: '#2bb6a3', items: [
+      { href: '/admin/members',       label: 'Membres',     icon: 'users' },
+      { href: '/admin/announcements', label: 'Annonces',    icon: 'bell' },
+      { href: '/admin/broadcast',     label: 'Messages',    icon: 'mail' },
+      { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
+    ] },
+    { title: 'Finances', color: '#5bbd6e', items: [
+      { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
+      { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
+    ] },
+    { title: 'Configuration', color: '#9b8cf0', items: [
+      { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
+      { href: '/admin/sports',   label: 'Sports',             icon: 'ball' },
+      { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' },
+      { href: '/admin/settings', label: 'Réglages',           icon: 'settings' },
+    ] },
   ];
+
+  // Repli des sections : liste des titres repliables, état « tout replié », bascules.
+  const titledSections = sections.map((s) => s.title).filter((t): t is string => !!t);
+  const allCollapsed = titledSections.length > 0 && titledSections.every((t) => collapsedSections.includes(t));
+  const toggleSection = (title: string) =>
+    setCollapsedSections(
+      collapsedSections.includes(title)
+        ? collapsedSections.filter((t) => t !== title)
+        : [...collapsedSections, title],
+    );
+  const toggleAll = () => setCollapsedSections(allCollapsed ? [] : titledSections);
+
+  const sectionHeaderStyle = {
+    fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
+    textTransform: 'uppercase' as const, color: th.textFaint, padding: '6px 10px 6px',
+  };
 
   return (
     <AdminChromeContext.Provider value={{ collapsed, setCollapsed }}>
@@ -107,20 +163,43 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>⟨</button>
         </div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textFaint, padding: '6px 10px 14px' }}>Espace club</div>
-
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
-          {links.map((l) => {
-            const active = pathname === l.href;
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto', marginTop: 10 }}>
+          <button type="button" onClick={toggleAll} title={allCollapsed ? 'Tout déplier' : 'Tout replier'} style={{
+            alignSelf: 'flex-end', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: th.textFaint, fontFamily: th.fontUI, fontSize: 11, padding: '0 8px 4px',
+          }}>{allCollapsed ? 'Tout déplier' : 'Tout replier'}</button>
+          {sections.map((sec, i) => {
+            const isCollapsed = sec.title ? collapsedSections.includes(sec.title) : false;
             return (
-              <Link key={l.href} href={l.href} style={{
-                display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', borderRadius: 11, textDecoration: 'none',
-                fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
-                background: active ? th.surface2 : 'transparent',
-                color: active ? th.text : th.textMute,
-              }}>
-                <Icon name={l.icon} size={18} color={active ? th.accent : th.textMute} />{l.label}
-              </Link>
+              <div key={sec.title ?? 'top'} role="group" aria-label={sec.title} style={{ display: 'contents' }}>
+                {sec.title && (
+                  <button type="button" onClick={() => toggleSection(sec.title!)} aria-expanded={!isCollapsed}
+                    title={isCollapsed ? `Déplier ${sec.title}` : `Replier ${sec.title}`}
+                    style={{
+                      ...sectionHeaderStyle, marginTop: i === 0 ? 0 : 12,
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                      background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 999, background: sec.color, flexShrink: 0 }} />
+                    {/* Titre teinté : assombri en mode clair (lisible), couleur d'origine en sombre. */}
+                    <span style={{ color: th.mode === 'daylight' ? shade(sec.color!, 0.6) : sec.color, fontWeight: 700, flex: 1 }}>{sec.title}</span>
+                    <Icon name="chevR" size={13} color={th.textFaint} style={{ transform: isCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform .15s' }} />
+                  </button>
+                )}
+                {!isCollapsed && sec.items.map((l) => {
+                  const active = pathname === l.href;
+                  return (
+                    <Link key={l.href} href={l.href} style={{
+                      display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', borderRadius: 11, textDecoration: 'none',
+                      fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
+                      background: active ? th.surface2 : 'transparent',
+                      color: active ? th.text : th.textMute,
+                    }}>
+                      <Icon name={l.icon} size={18} color={active ? th.accent : th.textMute} />{l.label}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>

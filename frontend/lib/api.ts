@@ -314,6 +314,21 @@ export const api = {
   adminGetMemberPackages: (clubId: string, userId: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, {}, token),
 
+  adminGetMemberHistory: (clubId: string, userId: string, token: string) =>
+    request<MemberHistory>(`/api/clubs/${clubId}/admin/members/${userId}/history`, {}, token),
+
+  adminGetMemberNotes: (clubId: string, userId: string, token: string) =>
+    request<MemberNote[]>(`/api/clubs/${clubId}/admin/members/${userId}/notes`, {}, token),
+
+  adminAddMemberNote: (clubId: string, userId: string, body: string, token: string) =>
+    request<MemberNote>(`/api/clubs/${clubId}/admin/members/${userId}/notes`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+
+  adminDeleteMemberNote: (clubId: string, userId: string, noteId: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/notes/${noteId}`, { method: 'DELETE' }, token),
+
+  adminSetMemberWatch: (clubId: string, userId: string, watch: boolean, token: string) =>
+    request<{ userId: string; watch: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/watch`, { method: 'PATCH', body: JSON.stringify({ watch }) }, token),
+
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -821,7 +836,67 @@ export interface Member {
   membershipNo: string | null;
   status: 'ACTIVE' | 'BLOCKED';
   note: string | null;
+  watch?: boolean;     // drapeau « à surveiller »
   since?: string;
+}
+
+export interface MemberNote {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: { firstName: string; lastName: string } | null;
+}
+
+// Passif d'un joueur dans un club (admin) — montants en strings décimales ("36.00").
+export interface MemberHistoryReservation {
+  id: string;
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+  type: 'COURT' | 'COACHING' | 'TOURNAMENT' | 'EVENT';
+  startTime: string;
+  endTime: string;
+  cancelledAt: string | null;
+  lateCancel: boolean;
+  resourceName: string;
+  sportKey: string | null;
+  isOrganizer: boolean;
+  attributedAmount: string;
+}
+
+export interface MemberHistory {
+  member: {
+    userId: string; firstName: string; lastName: string; email: string;
+    phone: string | null; avatarUrl: string | null;
+    isSubscriber: boolean; membershipNo: string | null;
+    status: 'ACTIVE' | 'BLOCKED'; watch: boolean; hasActivePackage: boolean; since: string;
+  };
+  reservations: MemberHistoryReservation[];
+  counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number };
+  heatmap: number[][];
+  favorites: { resource: { name: string; count: number } | null; sportKey: string | null; weekday: number | null };
+  finance: {
+    totalSpent: string; averageBasket: string; outstanding: string;
+    paymentsByMethod: Record<string, string>;
+    revenueByMonth: Array<{ month: string; net: string }>;
+    prepaid: {
+      balances: Array<{
+        id: string; kind: 'ENTRIES' | 'WALLET'; name: string;
+        creditsRemaining: number | null; amountRemaining: string | null;
+        purchasedAt: string; expiresAt: string | null;
+      }>;
+      consumption: Array<{ at: string; method: string; amount: string; packageName: string }>;
+    };
+  };
+  game: {
+    sportKey: string;
+    level: number | null; tier: string | null; isProvisional: boolean; matchesPlayed: number;
+    levelPoints: RatingPoint[];
+    wins: number; losses: number;
+    frequentPartners: Array<{ userId: string; firstName: string; lastName: string; count: number }>;
+  };
+  loyalty: {
+    firstVisitAt: string | null; lastVisitAt: string | null; daysSinceLastVisit: number | null;
+    tenureDays: number; playsPerMonth: number; cancellationRate: number; atRisk: boolean;
+  };
 }
 
 export interface PlayerMembership {

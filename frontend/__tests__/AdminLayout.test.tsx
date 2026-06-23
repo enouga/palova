@@ -58,7 +58,7 @@ describe('AdminLayout — toggle de la sidebar', () => {
   it('club OFF : pas de lien nav « Matchs »', async () => {
     mockClubCtx.club = clubOff; // objet stable avec levelSystemEnabled: false
     await wrap();
-    expect(screen.getByText('Espace club')).toBeInTheDocument(); // sidebar rendue
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument(); // sidebar rendue
     expect(screen.queryByText('Matchs')).not.toBeInTheDocument();
   });
 
@@ -74,21 +74,21 @@ describe('AdminLayout — toggle de la sidebar', () => {
 
   it('le toggle masque puis ré-affiche la sidebar', async () => {
     await wrap();
-    expect(screen.getByText('Espace club')).toBeInTheDocument();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Masquer le menu'));
-    expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument();
     expect(screen.getByText('Contenu admin')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Afficher le menu'));
-    expect(screen.getByText('Espace club')).toBeInTheDocument();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument();
   });
 
   it('relit la préférence localStorage au montage (sidebar masquée)', async () => {
     localStorage.setItem(KEY, 'collapsed');
     await wrap();
     expect(screen.getByLabelText('Afficher le menu')).toBeInTheDocument();
-    expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument();
   });
 
   it('écrit la préférence dans localStorage à chaque toggle', async () => {
@@ -114,13 +114,60 @@ describe('AdminLayout — toggle de la sidebar', () => {
     it('téléphone sans préférence : sidebar repliée par défaut', async () => {
       await wrap();
       expect(screen.getByLabelText('Afficher le menu')).toBeInTheDocument();
-      expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+      expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument();
     });
 
     it('une préférence « open » explicite prime sur le repli auto', async () => {
       localStorage.setItem(KEY, 'open');
       await wrap();
-      expect(screen.getByText('Espace club')).toBeInTheDocument();
+      expect(screen.getByText('Tableau de bord')).toBeInTheDocument();
     });
+  });
+});
+
+describe('AdminLayout — sections repliables', () => {
+  const SECTIONS = 'palova:admin-sidebar-sections';
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    mockClubCtx.club = clubOn;
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
+  });
+
+  it('tout déplié par défaut : les entrées de section sont visibles', async () => {
+    await wrap();
+    expect(screen.getByText('Planning')).toBeInTheDocument();
+    expect(screen.getByText('Réglages')).toBeInTheDocument();
+  });
+
+  it('replier une section masque ses entrées (le tableau de bord reste)', async () => {
+    await wrap();
+    fireEvent.click(screen.getByTitle('Replier Au quotidien'));
+    expect(screen.queryByText('Planning')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Déplier Au quotidien')).toBeInTheDocument();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument(); // hors section
+  });
+
+  it('« Tout replier » masque les entrées de toutes les sections', async () => {
+    await wrap();
+    fireEvent.click(screen.getByText('Tout replier'));
+    expect(screen.queryByText('Planning')).not.toBeInTheDocument();
+    expect(screen.queryByText('Réglages')).not.toBeInTheDocument();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument();
+    // Le bouton bascule alors vers « Tout déplier ».
+    expect(screen.getByText('Tout déplier')).toBeInTheDocument();
+  });
+
+  it('mémorise les sections repliées dans localStorage', async () => {
+    await wrap();
+    fireEvent.click(screen.getByTitle('Replier Configuration'));
+    expect(JSON.parse(localStorage.getItem(SECTIONS) || '[]')).toContain('Configuration');
+  });
+
+  it('relit les sections repliées au montage', async () => {
+    localStorage.setItem(SECTIONS, JSON.stringify(['Au quotidien']));
+    await wrap();
+    expect(screen.queryByText('Planning')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Déplier Au quotidien')).toBeInTheDocument();
   });
 });

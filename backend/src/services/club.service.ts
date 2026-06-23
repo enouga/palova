@@ -270,15 +270,22 @@ export class ClubService {
       where: { clubId },
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
       select: {
-        id: true, isSubscriber: true, membershipNo: true, status: true, note: true, createdAt: true,
+        id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
         user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       },
     });
     return members.map((m) => ({
       id: m.id, userId: m.user.id,
       firstName: m.user.firstName, lastName: m.user.lastName, email: m.user.email, phone: m.user.phone,
-      isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, status: m.status, note: m.note, since: m.createdAt,
+      isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, status: m.status, note: m.note, watch: m.watch, since: m.createdAt,
     }));
+  }
+
+  /** Drapeau « à surveiller » d'un membre (clé userId+clubId, depuis la fiche). */
+  async setMemberWatch(clubId: string, userId: string, watch: boolean) {
+    const res = await prisma.clubMembership.updateMany({ where: { clubId, userId }, data: { watch } });
+    if (res.count === 0) throw new Error('MEMBER_NOT_FOUND');
+    return { userId, watch };
   }
 
   /** Adhésion idempotente d'un user à un club (ACTIVE si absente ; garde le statut existant, BLOCKED inclus). */

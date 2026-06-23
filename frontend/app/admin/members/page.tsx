@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, Member } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
@@ -12,6 +13,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 export default function AdminMembersPage() {
   const { th } = useTheme();
+  const router = useRouter();
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
@@ -167,7 +169,14 @@ export default function AdminMembersPage() {
               )}
               {filtered.map((m) => (
                 <tr key={m.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: m.status === 'BLOCKED' ? 0.55 : 1 }}>
-                  <td style={{ ...cell, fontWeight: 600, whiteSpace: 'nowrap' }}>{m.firstName} {m.lastName}</td>
+                  <td
+                    style={{ ...cell, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', color: th.accent }}
+                    onClick={() => router.push(`/admin/members/${m.userId}`)}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Voir le passif de ${m.firstName} ${m.lastName}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/admin/members/${m.userId}`); }}
+                  >{m.firstName} {m.lastName}{m.watch ? <span title="À surveiller" style={{ marginLeft: 6 }}>👁</span> : null}</td>
                   <td style={{ ...cell, color: th.textMute }}>{m.email}</td>
                   <td style={cell}><input value={m.phone ?? ''} onChange={(e) => editField(m.id, 'phone', e.target.value)} placeholder="—" style={{ ...input, width: 110 }} /></td>
                   <td style={cell}><input value={m.membershipNo ?? ''} onChange={(e) => editField(m.id, 'membershipNo', e.target.value)} placeholder="—" style={{ ...input, width: 100 }} /></td>

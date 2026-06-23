@@ -17,6 +17,8 @@ import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { RefundService } from '../services/refund.service';
 import { AccountingService } from '../services/accounting.service';
+import { MemberStatsService } from '../services/memberStats.service';
+import { MemberNotesService } from '../services/memberNotes.service';
 import { StripeService } from '../services/stripe.service';
 import { ClubPageService } from '../services/clubPage.service';
 import { matchService } from '../services/match.service';
@@ -36,6 +38,8 @@ const eventService = new EventService();
 const packageService = new PackageService();
 const refundService = new RefundService();
 const accountingService = new AccountingService();
+const memberStatsService = new MemberStatsService();
+const memberNotesService = new MemberNotesService();
 const clubPageService = new ClubPageService();
 const coachService = new CoachService();
 const broadcastService = new BroadcastService();
@@ -56,6 +60,7 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
   MEMBER_NOT_FOUND:      404,
+  NOTE_NOT_FOUND:        404,
   ANNOUNCEMENT_NOT_FOUND: 404,
   SPONSOR_NOT_FOUND:      404,
   TOURNAMENT_NOT_FOUND:   404,
@@ -685,6 +690,30 @@ router.get('/members/:userId/packages', async (req: ClubScopedRequest, res: Resp
 });
 router.post('/members/:userId/packages', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await packageService.sellPackage(req.membership!.clubId, asString(req.params.userId), { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
+});
+
+// Passif d'un joueur : activité, finances, niveau, fidélité (un seul payload).
+router.get('/members/:userId/history', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await memberStatsService.getMemberHistory(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
+});
+
+// Commentaires staff sur un membre (journal client).
+router.get('/members/:userId/notes', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await memberNotesService.list(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
+});
+router.post('/members/:userId/notes', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await memberNotesService.add(req.membership!.clubId, asString(req.params.userId), req.user!.id, asString(req.body.body))); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/members/:userId/notes/:noteId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await memberNotesService.remove(req.membership!.clubId, asString(req.params.userId), asString(req.params.noteId)); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// Drapeau « à surveiller » d'un membre (clé userId, depuis la fiche).
+router.patch('/members/:userId/watch', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (typeof req.body.watch !== 'boolean') return void res.status(400).json({ error: 'watch (boolean) requis' });
+    res.json(await clubService.setMemberWatch(req.membership!.clubId, asString(req.params.userId), req.body.watch));
+  } catch (e) { handleError(e, res, next); }
 });
 
 // --- Caisse du jour & tickets CE ---

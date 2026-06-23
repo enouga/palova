@@ -270,6 +270,7 @@ model Club {
   reservationSeries ReservationSeries[]
   lessons          Lesson[]
   clubBroadcasts   ClubBroadcast[]
+  memberNotes      MemberNote[]
 
   @@map("clubs")
 }
@@ -413,6 +414,8 @@ model User {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   pushSubscriptions       PushSubscription[]
+  memberNotes             MemberNote[] @relation("MemberNoteSubject")
+  authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
 
   @@map("users")
 }
@@ -552,6 +555,7 @@ model ClubMembership {
   membershipNo String?          @map("membership_no")                 // n° adhérent / licence
   status       MembershipStatus @default(ACTIVE)
   note         String?
+  watch        Boolean          @default(false)                       // drapeau « à surveiller » (staff)
   createdAt    DateTime         @default(now()) @map("created_at")    // = date d'adhésion
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -560,6 +564,24 @@ model ClubMembership {
   @@unique([userId, clubId])
   @@index([clubId])
   @@map("club_subscribers")
+}
+
+/// Commentaire libre du staff sur un membre (journal client). Plusieurs par membre,
+/// horodatés, avec auteur. Clé logique (clubId, userId) — survit au churn d'adhésion.
+model MemberNote {
+  id        String   @id @default(cuid())
+  clubId    String   @map("club_id")
+  userId    String   @map("user_id")   // membre concerné
+  authorId  String?  @map("author_id") // staff auteur (null si compte supprimé)
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  club   Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member User  @relation("MemberNoteSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author User? @relation("MemberNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, userId, createdAt])
+  @@map("member_notes")
 }
 
 /// Rattachement d'un utilisateur (staff/admin) à un club, avec un rôle.
