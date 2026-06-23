@@ -36,6 +36,7 @@ const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 const profile = {
   id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
   birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
+  autoMatchProposals: false,
 };
 
 const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
@@ -104,6 +105,16 @@ describe('Page Mon profil', () => {
     const select = await screen.findByLabelText('Langue');
     fireEvent.change(select, { target: { value: 'en' } });
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ locale: 'en' }, 'abc'));
+  });
+
+  it('activer « parties à mon niveau » appelle updateMyProfile({ autoMatchProposals: true })', async () => {
+    api.updateMyProfile.mockResolvedValue({ ...profile, autoMatchProposals: true });
+    wrap();
+    const group = await screen.findByRole('group', { name: /parties à mon niveau/i });
+    fireEvent.click(within(group).getByText('Oui'));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ autoMatchProposals: true }, 'abc'));
+    // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
+    await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
   });
 
   it('le sélecteur de thème bascule en sombre (localStorage)', async () => {

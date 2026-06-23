@@ -151,6 +151,14 @@ export default function MyProfilePage() {
     catch (e) { setError((e as Error).message); }
   };
 
+  const changeAutoMatchProposals = async (next: boolean) => {
+    if (!token || !profile) return;
+    setError(null);
+    setProfile({ ...profile, autoMatchProposals: next }); // optimiste
+    try { setProfile(await api.updateMyProfile({ autoMatchProposals: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const handlePreferredSport = async (id: string) => {
     if (!token) return;
     setError(null);
@@ -432,11 +440,26 @@ export default function MyProfilePage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={label}>Apparaître dans les classements</span>
-                  <Segmented<'oui' | 'non'>
-                    value={profile.showInLeaderboard ? 'oui' : 'non'}
-                    onChange={(v) => changeLeaderboard(v === 'oui')}
-                    options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                  />
+                  <div role="group" aria-label="Apparaître dans les classements">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.showInLeaderboard ? 'oui' : 'non'}
+                      onChange={(v) => changeLeaderboard(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Propose-moi les parties à mon niveau</span>
+                  <div role="group" aria-label="Propose-moi les parties à mon niveau">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.autoMatchProposals ? 'oui' : 'non'}
+                      onChange={(v) => changeAutoMatchProposals(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
+                    Reçois une notification quand une partie ouverte à ton niveau est créée dans ton club. Tu rejoins en un tap — jamais d’inscription automatique.
+                  </span>
                 </div>
               </section>
 
