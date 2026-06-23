@@ -791,7 +791,7 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
     include: {
       club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
       creator: { select: { firstName: true, lastName: true } },
-      players: { include: { user: { select: { email: true, firstName: true } } } },
+      players: { select: { userId: true, user: { select: { email: true, firstName: true } } } },
     },
   });
   if (!match) return;
