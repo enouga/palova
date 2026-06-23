@@ -8,6 +8,7 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     // Chargé au montage par ProfileMenu (info-bulle d'identité dans le header) ; menu jamais ouvert ici.
@@ -20,8 +21,17 @@ jest.mock('../lib/api', () => ({
     searchClubMembers: jest.fn().mockResolvedValue([]),
     addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
     recordMatchResult: jest.fn().mockResolvedValue({ id: 'mr1', status: 'PENDING' }),
+    // consommés par NotificationBell (intégré dans ClubNav)
+    getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
+    getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
+    markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
+// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell).
+beforeAll(() => {
+  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; close() {} };
+});
 import { api } from '../lib/api';
 const mocked = api as jest.Mocked<typeof api>;
 
