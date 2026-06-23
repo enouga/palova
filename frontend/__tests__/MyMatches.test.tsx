@@ -84,4 +84,16 @@ describe('Page Mes matchs à confirmer', () => {
     expect(screen.getByText(/Court 2/)).toBeInTheDocument();
     expect(api.getMyMatches).toHaveBeenCalledWith('abc');
   });
+
+  it('affiche la bannière d’erreur si le chargement échoue', async () => {
+    api.getMyMatches.mockRejectedValue(new Error('boom'));
+    wrap();
+    expect(await screen.findByText('boom')).toBeInTheDocument();
+  });
+
+  it('club sans système de niveau : rebascule vers /me/reservations', async () => {
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
+    wrap();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/me/reservations'));
+  });
 });

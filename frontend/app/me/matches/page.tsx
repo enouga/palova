@@ -20,11 +20,18 @@ export default function MyMatchesPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
+  // Sur un hôte club, le système de niveau peut être désactivé : il n'y a alors pas de matchs.
+  // (club non chargé / hôte plateforme → on n'empêche rien, comme partout ailleurs dans l'app.)
+  const levelEnabled = club?.levelSystemEnabled !== false;
   const [matches, setMatches] = useState<MyMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
+
+  // Club sans niveau (ex. arrivée via un vieux lien de notif) : pas de page orpheline,
+  // on rebascule vers la page réservations comme l'onglet « Matchs » indisponible le fait.
+  useEffect(() => { if (slug && club && !levelEnabled) router.replace('/me/reservations'); }, [slug, club, levelEnabled, router]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
