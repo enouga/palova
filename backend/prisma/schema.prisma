@@ -269,6 +269,7 @@ model Club {
   coaches          Coach[]
   reservationSeries ReservationSeries[]
   lessons          Lesson[]
+  clubBroadcasts   ClubBroadcast[]
 
   @@map("clubs")
 }
@@ -1082,4 +1083,22 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Message diffusé par le staff à tous les membres actifs d'un club (audit/historique).
+/// Le fan-out crée N Notification (catégorie CLUB_MESSAGES) via le dispatcher.
+model ClubBroadcast {
+  id             String   @id @default(cuid())
+  clubId         String   @map("club_id")
+  sentByUserId   String   @map("sent_by_user_id")
+  title          String
+  body           String
+  url            String?
+  recipientCount Int      @map("recipient_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+  @@map("club_broadcasts")
 }
