@@ -56,7 +56,7 @@ export function SportPicker({ sports, selectedIds, onChange }: {
           {sports.map((s) => {
             const on = selectedIds.includes(s.id);
             return (
-              <button key={s.id} type="button" role="checkbox" aria-checked={on} onClick={() => toggle(s.id)}
+              <button key={s.id} type="button" role="checkbox" aria-checked={on} aria-label={s.name} onClick={() => toggle(s.id)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: '9px 10px', borderRadius: 9, fontFamily: th.fontUI, fontSize: 14, color: th.text, textAlign: 'left' }}>
                 <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1.6px solid ${on ? th.accent : th.line}`, background: on ? th.accent : 'transparent', color: th.onAccent, fontSize: 12 }}>{on ? '✓' : ''}</span>
                 {s.icon ? `${s.icon} ` : ''}{s.name}
