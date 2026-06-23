@@ -411,6 +411,7 @@ model User {
   lessonEnrollments LessonEnrollment[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
 
   @@map("users")
 }
@@ -1062,4 +1063,23 @@ model NotificationPreference {
 
   @@unique([userId, category, channel])
   @@map("notification_preferences")
+}
+
+/// Abonnement push web (un par navigateur/appareil). endpoint = identifiant unique du
+/// navigateur ; p256dh/auth = clés de chiffrement Web Push. Supprimé si le service de push
+/// renvoie 404/410 (abonnement périmé).
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
