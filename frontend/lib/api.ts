@@ -607,6 +607,12 @@ export const api = {
     request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/lessons/${id}/enrollment`, { method: 'DELETE' }, token),
 
   getMyLessons: (token: string) => request<MyLessonEnrollment[]>('/api/me/lessons', {}, token),
+
+  getVapidPublicKey: () => request<{ publicKey: string | null }>('/api/push/vapid-public-key'),
+  savePushSubscription: (sub: unknown, token: string) =>
+    request<{ ok: boolean }>('/api/me/push-subscriptions', { method: 'POST', body: JSON.stringify(sub) }, token),
+  deletePushSubscription: (endpoint: string, token: string) =>
+    request<{ ok: boolean }>('/api/me/push-subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }, token),
 };
 
 // --- Types ---

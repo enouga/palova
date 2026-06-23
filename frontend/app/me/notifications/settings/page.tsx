@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, NotifPrefRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { usePush } from '@/lib/usePush';
 import {
   CATEGORY_META, CHANNELS, CHANNEL_LABEL, NotifCategory, NotifChannel, effective, isLocked,
 } from '@/lib/notifications';
@@ -10,6 +11,7 @@ import {
 export default function NotificationSettingsPage() {
   const { token, ready } = useAuth();
   const { th } = useTheme();
+  const { status: pushStatus, subscribe, unsubscribe } = usePush();
   const [prefs, setPrefs] = useState<NotifPrefRow[]>([]);
   const [isStaff, setIsStaff] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -51,8 +53,36 @@ export default function NotificationSettingsPage() {
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 16 }}>
       <h1 style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 22, color: th.text, marginBottom: 4 }}>Notifications</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 16 }}>
-        Choisis comment tu veux être prévenu. Le push arrive bientôt.
+        Choisis comment tu veux être prévenu. Active le push pour être prévenu même l'app fermée.
       </p>
+
+      {pushStatus === 'default' && (
+        <div style={{ marginBottom: 16 }}>
+          <button onClick={() => subscribe()} style={{
+            padding: '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontWeight: 700, fontSize: 14,
+          }}>Activer les notifications push</button>
+        </div>
+      )}
+      {pushStatus === 'ios-needs-install' && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: th.surface2, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+          Installe Palova sur ton écran d'accueil pour activer le push
+        </div>
+      )}
+      {pushStatus === 'denied' && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: th.surface2, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+          Notifications push bloquées dans les réglages du navigateur
+        </div>
+      )}
+      {pushStatus === 'granted' && (
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Push activé</span>
+          <button onClick={() => unsubscribe()} style={{
+            padding: '6px 14px', borderRadius: 8, border: `1px solid ${th.line}`, cursor: 'pointer',
+            background: 'transparent', color: th.textMute, fontFamily: th.fontUI, fontWeight: 600, fontSize: 13,
+          }}>Désactiver</button>
+        </div>
+      )}
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: th.fontUI }}>
         <thead>
@@ -72,7 +102,7 @@ export default function NotificationSettingsPage() {
               </td>
               {CHANNELS.map((ch) => {
                 const locked = isLocked(cat.key, ch);
-                const pushDisabled = ch === 'PUSH';
+                const pushDisabled = ch === 'PUSH' && pushStatus !== 'granted';
                 return (
                   <td key={ch} style={cell}>
                     <input type="checkbox"
