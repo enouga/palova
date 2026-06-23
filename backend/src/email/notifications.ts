@@ -1,6 +1,7 @@
 import { ClubRole } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { sendMail } from './mailer';
+import { dispatch } from '../services/notification/dispatcher';
 import { absoluteAsset, clubAppUrl, formatDateRangeFr } from './links';
 import { Brand, PALOVA_BRAND } from './templates/layout';
 import {
@@ -260,7 +261,7 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
       resource: {
         select: {
           name: true, attributes: true,
-          club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
         },
       },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
@@ -268,23 +269,30 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
   });
   if (!resa) return;
 
-  const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
+  const organizerP = resa.participants.find((p) => p.isOrganizer);
+  const organizer = organizerP?.user;
   const joiner = resa.participants.find((p) => p.userId === joinerUserId)?.user;
-  if (!organizer?.email || !joiner) return;
+  if (!organizerP || !organizer?.email || !joiner) return;
 
   const club = resa.resource.club;
   const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/parties');
   const mail = buildMatchJoinEmail({
     organizerFirstName: organizer.firstName,
     joinerName: fullName(joiner),
     resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
+    dateLabel,
     clubName: club.name,
     spotsLeft: Math.max(0, maxPlayers - resa.participants.length),
-    url: clubAppUrl(club.slug, '/parties'),
+    url,
     brand: brandOf(club),
   });
-  await sendMail({ to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.joined',
+    title: 'Nouveau joueur dans ta partie', body: `${fullName(joiner)} a rejoint ta partie du ${dateLabel}.`,
+    url, email: { to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient chaque partenaire (non-organisateur) qu'il a été ajouté à une partie. */
@@ -292,12 +300,11 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
   if (!resa) return;
-
   const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
   const byName = organizer ? fullName(organizer) : null;
   const club = resa.resource.club;
@@ -311,7 +318,12 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
       recipientFirstName: p.user.firstName, byName,
       resourceName: resa.resource.name, dateLabel, clubName: club.name, url, brand,
     });
-    await sendMail({ to: p.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await dispatch({
+      userId: p.userId, clubId: club.id, category: 'MY_GAMES', type: 'match.partners_invited',
+      title: 'Tu as été ajouté à une partie',
+      body: `${byName ? byName + " t'a ajouté à" : "Tu as été ajouté à"} une partie le ${dateLabel}.`,
+      url, email: { to: p.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
@@ -319,19 +331,23 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
 export async function notifyOpenMatchRemoved(reservationId: string, removedUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+    include: { resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
   });
   if (!resa) return;
   const member = await prisma.user.findUnique({ where: { id: removedUserId }, select: { firstName: true, email: true } });
   if (!member?.email) return;
   const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/parties');
   const mail = buildMatchRemovedEmail({
-    recipientFirstName: member.firstName,
-    resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name, url: clubAppUrl(club.slug, '/parties'), brand: brandOf(club),
+    recipientFirstName: member.firstName, resourceName: resa.resource.name,
+    dateLabel, clubName: club.name, url, brand: brandOf(club),
   });
-  await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: removedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.removed',
+    title: "Tu as été retiré d'une partie", body: `Tu as été retiré de la partie du ${dateLabel}.`,
+    url, email: { to: member.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient un joueur que l'organisateur l'a ajouté à une partie ouverte. */
@@ -339,7 +355,7 @@ export async function notifyOpenMatchAdded(reservationId: string, addedUserId: s
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
@@ -348,16 +364,19 @@ export async function notifyOpenMatchAdded(reservationId: string, addedUserId: s
   const added = resa.participants.find((p) => p.userId === addedUserId)?.user;
   if (!added?.email) return;
   const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/parties');
   const mail = buildMatchInviteEmail({
     recipientFirstName: added.firstName,
     byName: organizer ? fullName(organizer) : null,
     resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name,
-    url: clubAppUrl(club.slug, '/parties'),
-    brand: brandOf(club),
+    dateLabel, clubName: club.name, url, brand: brandOf(club),
   });
-  await sendMail({ to: added.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: addedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.added',
+    title: 'Tu as été ajouté à une partie', body: `Tu as été ajouté à la partie du ${dateLabel}.`,
+    url, email: { to: added.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient l'organisateur qu'un joueur a quitté sa partie ouverte. */
@@ -365,28 +384,32 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, attributes: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, attributes: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
   if (!resa) return;
-  const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
-  if (!organizer?.email) return;
+  const organizerP = resa.participants.find((p) => p.isOrganizer);
+  if (!organizerP?.user?.email) return;
   const leaver = await prisma.user.findUnique({ where: { id: leaverUserId }, select: { firstName: true, lastName: true } });
   if (!leaver) return;
   const club = resa.resource.club;
   const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/parties');
   const mail = buildMatchLeftEmail({
-    organizerFirstName: organizer.firstName,
+    organizerFirstName: organizerP.user.firstName,
     leaverName: fullName(leaver),
     resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name,
+    dateLabel, clubName: club.name,
     spotsLeft: Math.max(0, maxPlayers - resa.participants.length),
-    url: clubAppUrl(club.slug, '/parties'),
-    brand: brandOf(club),
+    url, brand: brandOf(club),
   });
-  await sendMail({ to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.left',
+    title: 'Un joueur a quitté ta partie', body: `${fullName(leaver)} a quitté ta partie du ${dateLabel}.`,
+    url, email: { to: organizerP.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient un membre qu'un gestionnaire vient de le rattacher à une réservation. */
