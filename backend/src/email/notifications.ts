@@ -1,6 +1,5 @@
 import { ClubRole } from '@prisma/client';
 import { prisma } from '../db/prisma';
-import { sendMail } from './mailer';
 import { dispatch } from '../services/notification/dispatcher';
 import { absoluteAsset, clubAppUrl, formatDateRangeFr } from './links';
 import { Brand, PALOVA_BRAND } from './templates/layout';
@@ -493,20 +492,30 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
 export async function notifyReservationMemberAssigned(reservationId: string, memberUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+    include: { resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
   });
   if (!resa) return;
   const member = await prisma.user.findUnique({ where: { id: memberUserId }, select: { firstName: true, email: true } });
   if (!member?.email) return;
 
   const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/me/reservations');
   const mail = buildMatchInviteEmail({
     recipientFirstName: member.firstName, byName: null,
     resourceName: resa.resource.name,
     dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name, url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+    clubName: club.name, url, brand: brandOf(club),
   });
-  await sendMail({ to: member.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: memberUserId,
+    clubId: club.id,
+    category: 'MY_GAMES',
+    type: 'reservation.member_assigned',
+    title: "Ajout à une réservation",
+    body: "Tu as été ajouté à une réservation par le club.",
+    url,
+    email: { to: member.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 /** Prévient le joueur (propriétaire de la résa) du remboursement automatique à l'annulation. */
@@ -518,8 +527,8 @@ export async function notifyReservationRefunded(
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      user: { select: { firstName: true, email: true } },
-      resource: { select: { name: true, club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      user: { select: { id: true, firstName: true, email: true } },
+      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
     },
   });
   if (!resa?.user?.email) return;
@@ -527,14 +536,24 @@ export async function notifyReservationRefunded(
   const amountLabel = (totalCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
   const prepaid = refunds.some((r) => r.method === 'PACK_CREDIT' || r.method === 'WALLET');
   const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/me/reservations');
   const mail = buildRefundEmail({
     recipientFirstName: resa.user.firstName,
     resourceName: resa.resource.name,
     dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
     clubName: club.name, amountLabel, prepaid,
-    url: clubAppUrl(club.slug, '/me/reservations'), brand: brandOf(club),
+    url, brand: brandOf(club),
   });
-  await sendMail({ to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  await dispatch({
+    userId: resa.user.id,
+    clubId: club.id,
+    category: 'PAYMENTS',
+    type: 'payment.refunded',
+    title: "Remboursement",
+    body: `Tu as été remboursé de ${amountLabel} pour ta réservation.`,
+    url,
+    email: { to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 // ------------------------------------------------------------------- Cours (Lesson)
@@ -723,14 +742,14 @@ export async function notifyNewMatchComment(
   });
 
   // Destinataires dédupliqués par email, l'auteur exclu.
-  const recipients = new Map<string, { email: string; firstName: string }>();
+  const recipients = new Map<string, { userId: string; email: string; firstName: string }>();
   for (const mp of match.players) {
     const u = mp.user;
-    if (u.id !== authorUserId && u.email) recipients.set(u.email, { email: u.email, firstName: u.firstName });
+    if (u.id !== authorUserId && u.email) recipients.set(u.email, { userId: u.id, email: u.email, firstName: u.firstName });
   }
   for (const s of staff) {
     if (s.userId !== authorUserId && s.user?.email) {
-      recipients.set(s.user.email, { email: s.user.email, firstName: s.user.firstName });
+      recipients.set(s.user.email, { userId: s.userId, email: s.user.email, firstName: s.user.firstName });
     }
   }
 
@@ -739,7 +758,16 @@ export async function notifyNewMatchComment(
       recipientFirstName: r.firstName, authorName, isFirst: opts.isFirst,
       scoreLine, excerpt, matchUrl, brand,
     });
-    await sendMail({ to: r.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await dispatch({
+      userId: r.userId,
+      clubId: match.club.id,
+      category: 'MY_MATCHES',
+      type: 'match.comment',
+      title: "Nouveau message sur un litige",
+      body: `${authorName} a écrit sur le litige (${scoreLine}).`,
+      url: matchUrl,
+      email: { to: r.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
@@ -761,7 +789,7 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
       creator: { select: { firstName: true, lastName: true } },
       players: { include: { user: { select: { email: true, firstName: true } } } },
     },
@@ -783,6 +811,15 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
       matchUrl,
       authorName,
     });
-    await sendMail({ to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await dispatch({
+      userId: mp.userId,
+      clubId: match.club.id,
+      category: 'MY_MATCHES',
+      type: 'match.pending_confirmation',
+      title: "Confirme le résultat",
+      body: `${authorName} a saisi un score (${scoreLine}) — confirme ou conteste.`,
+      url: matchUrl,
+      email: { to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
