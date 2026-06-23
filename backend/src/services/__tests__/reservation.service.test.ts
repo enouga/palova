@@ -998,6 +998,23 @@ describe('ReservationService', () => {
         .rejects.toThrow('CARD_FINGERPRINT_REQUIRED');
     });
 
+    it('ne lève PAS CARD_FINGERPRINT_REQUIRED si paiement prépayé par carnet (paymentSource) — consomme le package', async () => {
+      // Paiement intégral d'avance par carnet = pas de risque de no-show → empreinte non requise.
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
+      mockHappyTx();
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'org-p' } as any);
+      prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
+      prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
+
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pkg-1' }),
+      }));
+    });
+
     it('confirme avec PI + cgvAccepted=true et enregistre cgvAcceptedAt', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireOnlinePayment: true, stripeAccountId: 'acct_1' }) as any);
       (stripe.paymentIntents.retrieve as jest.Mock).mockResolvedValue({ status: 'succeeded', payment_method: 'pm_xxx' });
@@ -1865,6 +1882,70 @@ describe('ReservationService', () => {
       expect(out.status).toBe('CANCELLED');
       expect(out.refunded).toHaveLength(0);
       spy.mockRestore();
+    });
+  });
+
+  describe('confirmReservation — couverture abonnement', () => {
+    let service: ReservationService;
+    const baseRes = {
+      id: 'res-1', userId: 'user-1', status: 'PENDING', createdAt: new Date(), totalPrice: '13.00',
+      startTime: new Date('2026-07-01T08:00:00Z'), endTime: new Date('2026-07-01T09:30:00Z'),
+      resource: {
+        clubId: 'club-1',
+        club: { requireOnlinePayment: false, requireCardFingerprint: false, stripeAccountId: null, offPeakHours: null, timezone: 'Europe/Paris' },
+        clubSport: { sport: { key: 'padel' } },
+      },
+    };
+    beforeEach(() => {
+      service = new ReservationService();
+      prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+      prismaMock.$queryRaw.mockResolvedValue([{ id: 'res-1', status: 'PENDING', resource_id: 'court-1', start_time: baseRes.startTime, end_time: baseRes.endTime }] as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.reservationParticipant.findFirst.mockResolvedValue({ id: 'part-1' } as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', status: 'CONFIRMED', resourceId: 'court-1', startTime: baseRes.startTime, endTime: baseRes.endTime } as any);
+      prismaMock.payment.count.mockResolvedValue(0);
+    });
+
+    // off=null → tout en heures pleines : on rend le créneau « creux » en passant offPeakHours
+    // qui couvre 8h-22h pour ce test d'INCLUDED.
+    const offAll = { '3': [{ start: 8, end: 22 }] }; // 2026-07-01 = mercredi (weekday Luxon 3)
+
+    it('créneau creux + abo INCLUDED → Payment SUBSCRIPTION = prix, reste dû 0', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...baseRes, resource: { ...baseRes.resource, club: { ...baseRes.resource.club, offPeakHours: offAll } } } as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
+        sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+      } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { subscriptionId: 'sub-1' } });
+
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'SUBSCRIPTION', sourceSubscriptionId: 'sub-1', amount: expect.anything() }),
+      }));
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(13);
+    });
+
+    it('créneau plein + abo offPeakOnly → SUBSCRIPTION_NOT_APPLICABLE', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseRes as any); // offPeakHours null → plein
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
+        sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+      } as any);
+      await expect(service.confirmReservation('res-1', 'user-1', { paymentSource: { subscriptionId: 'sub-1' } }))
+        .rejects.toThrow('SUBSCRIPTION_NOT_APPLICABLE');
+    });
+
+    it('plafond jour atteint → SUBSCRIPTION_CAP_REACHED', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...baseRes, resource: { ...baseRes.resource, club: { ...baseRes.resource.club, offPeakHours: offAll } } } as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
+        sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: 1, weeklyCap: null,
+      } as any);
+      prismaMock.payment.count.mockResolvedValue(1); // déjà 1 couverte ce jour
+      await expect(service.confirmReservation('res-1', 'user-1', { paymentSource: { subscriptionId: 'sub-1' } }))
+        .rejects.toThrow('SUBSCRIPTION_CAP_REACHED');
     });
   });
 });

@@ -8,6 +8,7 @@ import { SSEService } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
+import { SubscriptionService } from './subscription.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed } from '../email/notifications';
@@ -318,7 +319,7 @@ export class ReservationService {
     reservationId: string,
     userId: string,
     options?: {
-      paymentSource?: { packageId: string };
+      paymentSource?: { packageId: string } | { subscriptionId: string };
       stripePaymentIntentId?: string;
       stripeSetupIntentId?: string;
       cgvAccepted?: boolean;
@@ -335,8 +336,11 @@ export class ReservationService {
                 requireOnlinePayment: true,
                 requireCardFingerprint: true,
                 stripeAccountId: true,
+                offPeakHours: true,
+                timezone: true,
               },
             },
+            clubSport: { select: { sport: { select: { key: true } } } },
           },
         },
       },
@@ -360,7 +364,9 @@ export class ReservationService {
       throw new Error('ONLINE_PAYMENT_REQUIRED');
     }
     // fingerprint seulement si paiement en ligne non requis (sinon le PI couvre les deux)
-    if (club?.requireCardFingerprint && !club.requireOnlinePayment && !options?.stripeSetupIntentId) {
+    // et hors paiement prépayé : régler d'avance par carnet/porte-monnaie = pas de risque
+    // de no-show → l'empreinte n'est pas exigée (un solde insuffisant échouera plus bas).
+    if (club?.requireCardFingerprint && !club.requireOnlinePayment && !options?.stripeSetupIntentId && !options?.paymentSource) {
       throw new Error('CARD_FINGERPRINT_REQUIRED');
     }
     // CGV obligatoires dès qu'une carte est en jeu (PI = paiement, ou SI = empreinte/enregistrement).
@@ -435,7 +441,7 @@ export class ReservationService {
       // Paiement par carnet / porte-monnaie : consommation dans la MÊME
       // transaction Serializable — solde insuffisant → tout rollback, la
       // résa reste PENDING et payable autrement.
-      if (options?.paymentSource) {
+      if (options?.paymentSource && 'packageId' in options.paymentSource) {
         const pkg = await tx.memberPackage.findUnique({ where: { id: options.paymentSource.packageId } });
         if (!pkg || pkg.userId !== userId || pkg.clubId !== reservation.resource.clubId) {
           throw new Error('PACKAGE_NOT_FOUND');
@@ -455,6 +461,60 @@ export class ReservationService {
             amount,
             method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
             sourcePackageId: pkg.id,
+            receiptNo,
+          },
+        });
+      }
+
+      // Couverture par un abonnement actif : pas de décrément, on enregistre un
+      // paiement « sans argent » (method SUBSCRIPTION) qui éteint (INCLUDED) ou
+      // réduit (DISCOUNT) le dû. Snapshot lu sur la Subscription (jamais le plan).
+      if (options?.paymentSource && 'subscriptionId' in options.paymentSource) {
+        const sub = await tx.subscription.findUnique({ where: { id: options.paymentSource.subscriptionId } });
+        if (!sub || sub.userId !== userId || sub.clubId !== reservation.resource.clubId
+            || sub.status !== 'ACTIVE' || sub.expiresAt <= new Date()) {
+          throw new Error('SUBSCRIPTION_NOT_FOUND');
+        }
+        const off = (reservation as any).resource.club.offPeakHours as OffPeakHours | null;
+        const tz  = (reservation as any).resource.club.timezone as string;
+        const sportKey = (reservation as any).resource.clubSport?.sport?.key as string | undefined;
+        const isOffPeak = classifySlot(off, reservation.startTime, reservation.endTime, tz) === 'OFF_PEAK';
+        const dueCents = Math.round(Number(reservation.totalPrice) * 100);
+
+        const { covered, coverCents } = SubscriptionService.coverageFor(
+          { sportKeys: sub.sportKeys, offPeakOnly: sub.offPeakOnly, benefit: sub.benefit, discountPercent: sub.discountPercent },
+          { sportKey: sportKey ?? '', isOffPeak, dueCents },
+        );
+        if (!covered) throw new Error('SUBSCRIPTION_NOT_APPLICABLE');
+
+        // Plafond : compte les résas déjà couvertes par cet abo dans le jour / la semaine (fuseau club).
+        const day = DateTime.fromJSDate(reservation.startTime, { zone: tz });
+        for (const [cap, start, end] of [
+          [sub.dailyCap, day.startOf('day'), day.startOf('day').plus({ days: 1 })] as const,
+          [sub.weeklyCap, day.startOf('week'), day.startOf('week').plus({ weeks: 1 })] as const,
+        ]) {
+          if (cap == null) continue;
+          const used = await tx.payment.count({
+            where: {
+              method: 'SUBSCRIPTION', sourceSubscriptionId: sub.id,
+              reservation: { id: { not: reservationId }, startTime: { gte: start.toJSDate(), lt: end.toJSDate() } },
+            },
+          });
+          if (used >= cap) throw new Error('SUBSCRIPTION_CAP_REACHED');
+        }
+
+        const organizer = await tx.reservationParticipant.findFirst({
+          where: { reservationId, isOrganizer: true }, select: { id: true },
+        });
+        const receiptNo = await PackageService.nextReceiptNo(tx, reservation.resource.clubId);
+        await tx.payment.create({
+          data: {
+            reservationId,
+            participantId: organizer?.id ?? null,
+            clubId: reservation.resource.clubId,
+            amount: new Prisma.Decimal(coverCents / 100),
+            method: 'SUBSCRIPTION',
+            sourceSubscriptionId: sub.id,
             receiptNo,
           },
         });
