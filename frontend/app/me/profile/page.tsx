@@ -11,7 +11,7 @@ import { ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { BackButton, Segmented, ThemeToggle } from '@/components/ui/atoms';
+import { BackButton, PillTabs, Segmented, ThemeToggle } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
@@ -296,17 +296,16 @@ export default function MyProfilePage() {
               <section style={card} aria-label="Mon niveau padel">
                 <div style={cardTitle}>Mon niveau</div>
                 {sports.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label htmlFor="rating-sport" style={label}>Sport du niveau</label>
-                    <select
-                      id="rating-sport"
-                      value={ratingSport}
-                      onChange={(e) => setRatingSport(e.target.value)}
-                      style={{ ...input, cursor: 'pointer' }}
-                      aria-label="Sport du niveau"
-                    >
-                      {sports.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
-                    </select>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={label}>Sport du niveau</span>
+                    <div role="group" aria-label="Sport du niveau">
+                      <PillTabs
+                        options={sports.map((s) => ({ value: s.key, label: s.name }))}
+                        value={ratingSport}
+                        onChange={setRatingSport}
+                        size="sm"
+                      />
+                    </div>
                   </div>
                 )}
                 {rating && !calibrating ? (
@@ -379,18 +378,16 @@ export default function MyProfilePage() {
                 />
               </div>
               {sports.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label htmlFor="pref-sport" style={label}>Sport préféré</label>
-                  <select
-                    id="pref-sport"
-                    value={profile.preferredSport?.id ?? ''}
-                    onChange={(e) => handlePreferredSport(e.target.value)}
-                    style={{ ...input, cursor: 'pointer' }}
-                    aria-label="Sport préféré"
-                  >
-                    <option value="">Aucun</option>
-                    {sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={label}>Sport préféré</span>
+                  <div role="group" aria-label="Sport préféré">
+                    <PillTabs
+                      options={[{ value: '', label: 'Aucun' }, ...sports.map((s) => ({ value: s.id, label: s.name }))]}
+                      value={profile.preferredSport?.id ?? ''}
+                      onChange={handlePreferredSport}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               )}
             </section>
