@@ -15,6 +15,7 @@ import { BackButton, PillTabs, Segmented, ThemeToggle } from '@/components/ui/at
 import { DateField } from '@/components/ui/DateField';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
+import { ProfileSectionNav, ProfileNavItem } from '@/components/profile/ProfileSectionNav';
 
 const LOCALE_OPTIONS = [
   { value: 'fr', label: 'Français' },
@@ -32,6 +33,10 @@ export default function MyProfilePage() {
   const { th, mode, setMode } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
+
+  // Hauteur du ClubNav collant : sert d'offset au menu de navigation (0 sur l'hôte plateforme).
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
 
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [membership, setMembership] = useState<MyClubMembership | null>(null);
@@ -80,6 +85,16 @@ export default function MyProfilePage() {
   useEffect(() => { api.getSports().then(setSports).catch(() => {}); }, []);
 
   useEffect(() => {
+    const el = headerRef.current;
+    if (!el) { setHeaderH(0); return; }
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [slug, club]);
+
+  useEffect(() => {
     if (!token) return;
     (async () => {
       try {
@@ -89,8 +104,6 @@ export default function MyProfilePage() {
         setPhone(p.phone ?? '');
         setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
         setSex(p.sex);
-        // Initialiser le sport du niveau sur le sport préféré
-        if (p.preferredSport?.key) setRatingSport(p.preferredSport.key);
         if (slug) {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
@@ -226,6 +239,23 @@ export default function MyProfilePage() {
     </div>
   );
 
+  // Niveau : on ne gère que le padel aujourd'hui. Le sélecteur de sport réapparaîtra
+  // quand l'utilisateur aura un niveau sur 2+ sports (à brancher sur un futur signal
+  // multi-sport ; tant qu'il n'existe pas, le drapeau reste false).
+  const showLevelSportPicker = false;
+  const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel'; // repli : le padel est toujours disponible
+
+  // Items du menu = sections réellement rendues (pas d'ancre morte).
+  const navItems: ProfileNavItem[] = [
+    { id: 'identite', icon: 'user', label: 'Identité' },
+    ...(sports.length > 0 ? ([{ id: 'sport', icon: 'ball', label: 'Sport' }] satisfies ProfileNavItem[]) : []),
+    ...(club?.levelSystemEnabled !== false ? ([{ id: 'niveau', icon: 'chart', label: 'Niveau' }] satisfies ProfileNavItem[]) : []),
+    { id: 'infos', icon: 'info', label: 'Infos' },
+    { id: 'preferences', icon: 'settings', label: 'Préf.' },
+    { id: 'securite', icon: 'lock', label: 'Sécu.' },
+    ...(slug && club && membership ? ([{ id: 'licence', icon: 'ticket', label: 'Licence' }] satisfies ProfileNavItem[]) : []),
+  ];
+
   const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
   const initials = profile ? `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase() : '…';
 
@@ -233,7 +263,7 @@ export default function MyProfilePage() {
     <Screen>
       <div style={{ paddingBottom: 48 }}>
         {slug && club ? (
-          <ClubNav club={club} />
+          <div ref={headerRef}><ClubNav club={club} /></div>
         ) : (
           <div style={{ padding: '28px 20px 6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -259,127 +289,44 @@ export default function MyProfilePage() {
         {loading || !profile ? (
           <div style={{ padding: '24px 20px', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : (
-          <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <>
+            <ProfileSectionNav items={navItems} topOffset={headerH} />
+            <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-            {/* Identité + avatar */}
-            <section style={card} aria-label="Identité">
-              <div style={cardTitle}>Identité</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                {avatarSrc ? (
-                  <img src={avatarSrc} alt="Photo de profil" style={{ width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: uploading ? 0.5 : 1 }} />
-                ) : (
-                  <span aria-hidden="true" style={{
-                    width: 84, height: 84, borderRadius: '50%', flexShrink: 0, background: th.accent, color: th.onAccent,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontWeight: 700, fontSize: 28,
-                  }}>{initials}</span>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                    aria-label="Choisir une photo de profil"
-                    onChange={(e) => { pickAvatar(e.target.files?.[0]); e.target.value = ''; }} />
-                  <button onClick={() => fileRef.current?.click()} disabled={uploading} style={primaryBtn(uploading)}>
-                    {uploading ? 'Envoi…' : 'Changer la photo'}
-                  </button>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-                {readonlyRow('Prénom', profile.firstName)}
-                {readonlyRow('Nom', profile.lastName)}
-                {readonlyRow('Email', profile.email)}
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’email ne peut pas être modifié.</span>
-              </div>
-            </section>
-
-            {/* Niveau — masqué si le club a désactivé le système de niveau */}
-            {club?.levelSystemEnabled !== false && (
-              <section style={card} aria-label="Mon niveau padel">
-                <div style={cardTitle}>Mon niveau</div>
-                {sports.length > 0 && (
+              {/* Identité + avatar */}
+              <section id="identite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Identité">
+                <div style={cardTitle}>Identité</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  {avatarSrc ? (
+                    <img src={avatarSrc} alt="Photo de profil" style={{ width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: uploading ? 0.5 : 1 }} />
+                  ) : (
+                    <span aria-hidden="true" style={{
+                      width: 84, height: 84, borderRadius: '50%', flexShrink: 0, background: th.accent, color: th.onAccent,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontWeight: 700, fontSize: 28,
+                    }}>{initials}</span>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span style={label}>Sport du niveau</span>
-                    <div role="group" aria-label="Sport du niveau">
-                      <PillTabs
-                        options={sports.map((s) => ({ value: s.key, label: s.name }))}
-                        value={ratingSport}
-                        onChange={setRatingSport}
-                        size="sm"
-                      />
-                    </div>
-                  </div>
-                )}
-                {rating && !calibrating ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                      <LevelBadge rating={rating} />
-                      <button type="button" onClick={() => setCalibrating(true)}
-                        style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
-                        Réévaluer
-                      </button>
-                    </div>
-                    {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
-                    <LevelSourceNote style={{ marginTop: 10 }} />
-                  </>
-                ) : (
-                  <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
-                )}
-              </section>
-            )}
-
-            {/* Informations modifiables */}
-            <section style={card} aria-label="Informations">
-              <div style={cardTitle}>Informations</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Téléphone</span>
-                <input value={phone} onChange={(e) => { setPhone(e.target.value); setSavedInfo(false); }} placeholder="06 09 03 26 35" aria-label="Téléphone" style={input} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Date de naissance</span>
-                <DateField value={birthDate} onChange={(d) => { setBirthDate(d); setSavedInfo(false); }} width="100%" ariaLabel="Date de naissance" />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Sexe</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(['MALE', 'FEMALE'] as const).map((s) => (
-                    <button key={s} onClick={() => { setSex(s); setSavedInfo(false); }}
-                      style={{ flex: 1, cursor: 'pointer', borderRadius: 11, padding: '10px', fontFamily: th.fontUI, fontSize: 13.5, border: `1px solid ${sex === s ? th.accent : th.line}`, background: sex === s ? th.surface2 : 'transparent', color: th.text }}>
-                      {s === 'MALE' ? 'Homme' : 'Femme'}
+                    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                      aria-label="Choisir une photo de profil"
+                      onChange={(e) => { pickAvatar(e.target.files?.[0]); e.target.value = ''; }} />
+                    <button onClick={() => fileRef.current?.click()} disabled={uploading} style={primaryBtn(uploading)}>
+                      {uploading ? 'Envoi…' : 'Changer la photo'}
                     </button>
-                  ))}
+                    <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button onClick={saveInfo} disabled={savingInfo} style={primaryBtn(savingInfo)}>Enregistrer</button>
-                {savedInfo && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
-              </div>
-            </section>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+                  {readonlyRow('Prénom', profile.firstName)}
+                  {readonlyRow('Nom', profile.lastName)}
+                  {readonlyRow('Email', profile.email)}
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’email ne peut pas être modifié.</span>
+                </div>
+              </section>
 
-            {/* Préférences */}
-            <section style={card} aria-label="Préférences">
-              <div style={cardTitle}>Préférences</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Langue</span>
-                <select value={profile.locale ?? 'fr'} onChange={(e) => changeLocale(e.target.value)} disabled={savingLocale} aria-label="Langue" style={{ ...input, cursor: 'pointer' }}>
-                  {LOCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’interface reste en français pour l’instant.</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Thème</span>
-                <Segmented<ThemeMode> value={mode} onChange={setMode}
-                  options={[{ value: 'daylight', label: 'Clair' }, { value: 'floodlit', label: 'Sombre' }]} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Apparaître dans les classements</span>
-                <Segmented<'oui' | 'non'>
-                  value={profile.showInLeaderboard ? 'oui' : 'non'}
-                  onChange={(v) => changeLeaderboard(v === 'oui')}
-                  options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                />
-              </div>
+              {/* Sport préféré — région dédiée, distincte du niveau par sport */}
               {sports.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={label}>Sport préféré</span>
+                <section id="sport" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Sport préféré">
+                  <div style={cardTitle}>Sport préféré</div>
                   <div role="group" aria-label="Sport préféré">
                     <PillTabs
                       options={[{ value: '', label: 'Aucun' }, ...sports.map((s) => ({ value: s.id, label: s.name }))]}
@@ -388,57 +335,146 @@ export default function MyProfilePage() {
                       size="sm"
                     />
                   </div>
-                </div>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Met en avant ce sport dans l'app.</span>
+                </section>
               )}
-            </section>
 
-            {/* Mot de passe */}
-            <section style={card} aria-label="Mot de passe">
-              <div style={cardTitle}>Mot de passe</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Mot de passe actuel</span>
-                <input type="password" value={currentPassword} autoComplete="current-password"
-                  onChange={(e) => { setCurrentPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                  aria-label="Mot de passe actuel" style={input} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Nouveau mot de passe</span>
-                <input type="password" value={newPassword} autoComplete="new-password"
-                  onChange={(e) => { setNewPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                  aria-label="Nouveau mot de passe" placeholder="8 caractères minimum" style={input} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={label}>Confirmer le nouveau mot de passe</span>
-                <input type="password" value={confirmPassword} autoComplete="new-password"
-                  onChange={(e) => { setConfirmPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                  aria-label="Confirmer le nouveau mot de passe" style={input} />
-              </div>
-              {passwordError && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 11, padding: '9px 12px' }}>
-                  {passwordError}
-                </div>
+              {/* Niveau — masqué si le club a désactivé le système de niveau */}
+              {club?.levelSystemEnabled !== false && (
+                <section id="niveau" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mon niveau">
+                  <div style={cardTitle}>Mon niveau · {levelSportName}</div>
+                  {showLevelSportPicker && sports.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span style={label}>Sport du niveau</span>
+                      <div role="group" aria-label="Sport du niveau">
+                        <PillTabs
+                          options={sports.map((s) => ({ value: s.key, label: s.name }))}
+                          value={ratingSport}
+                          onChange={setRatingSport}
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {rating && !calibrating ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <LevelBadge rating={rating} />
+                        <button type="button" onClick={() => setCalibrating(true)}
+                          style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
+                          Réévaluer
+                        </button>
+                      </div>
+                      {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
+                      <LevelSourceNote style={{ marginTop: 10 }} />
+                    </>
+                  ) : (
+                    <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
+                  )}
+                </section>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button onClick={changePassword} disabled={savingPassword} style={primaryBtn(savingPassword)}>Modifier le mot de passe</button>
-                {savedPassword && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Modifié ✓</span>}
-              </div>
-            </section>
 
-            {/* Licence du club courant (uniquement membre, sur un sous-domaine club) */}
-            {slug && club && membership && (
-              <section style={card} aria-label="Licence">
-                <div style={cardTitle}>Licence · {club.name}</div>
+              {/* Informations modifiables */}
+              <section id="infos" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Informations">
+                <div style={cardTitle}>Informations</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>N° de licence / adhérent</span>
-                  <input value={license} onChange={(e) => { setLicense(e.target.value); setSavedLicense(false); }} placeholder="N° de licence / adhérent" aria-label="N° de licence / adhérent" style={input} />
+                  <span style={label}>Téléphone</span>
+                  <input value={phone} onChange={(e) => { setPhone(e.target.value); setSavedInfo(false); }} placeholder="06 09 03 26 35" aria-label="Téléphone" style={input} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Date de naissance</span>
+                  <DateField value={birthDate} onChange={(d) => { setBirthDate(d); setSavedInfo(false); }} width="100%" ariaLabel="Date de naissance" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Sexe</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {(['MALE', 'FEMALE'] as const).map((s) => (
+                      <button key={s} onClick={() => { setSex(s); setSavedInfo(false); }}
+                        style={{ flex: 1, cursor: 'pointer', borderRadius: 11, padding: '10px', fontFamily: th.fontUI, fontSize: 13.5, border: `1px solid ${sex === s ? th.accent : th.line}`, background: sex === s ? th.surface2 : 'transparent', color: th.text }}>
+                        {s === 'MALE' ? 'Homme' : 'Femme'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={saveLicense} disabled={savingLicense} style={primaryBtn(savingLicense)}>Enregistrer</button>
-                  {savedLicense && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
+                  <button onClick={saveInfo} disabled={savingInfo} style={primaryBtn(savingInfo)}>Enregistrer</button>
+                  {savedInfo && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
                 </div>
               </section>
-            )}
-          </div>
+
+              {/* Préférences */}
+              <section id="preferences" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Préférences">
+                <div style={cardTitle}>Préférences</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Langue</span>
+                  <select value={profile.locale ?? 'fr'} onChange={(e) => changeLocale(e.target.value)} disabled={savingLocale} aria-label="Langue" style={{ ...input, cursor: 'pointer' }}>
+                    {LOCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’interface reste en français pour l’instant.</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Thème</span>
+                  <Segmented<ThemeMode> value={mode} onChange={setMode}
+                    options={[{ value: 'daylight', label: 'Clair' }, { value: 'floodlit', label: 'Sombre' }]} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Apparaître dans les classements</span>
+                  <Segmented<'oui' | 'non'>
+                    value={profile.showInLeaderboard ? 'oui' : 'non'}
+                    onChange={(v) => changeLeaderboard(v === 'oui')}
+                    options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                  />
+                </div>
+              </section>
+
+              {/* Mot de passe */}
+              <section id="securite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mot de passe">
+                <div style={cardTitle}>Mot de passe</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Mot de passe actuel</span>
+                  <input type="password" value={currentPassword} autoComplete="current-password"
+                    onChange={(e) => { setCurrentPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                    aria-label="Mot de passe actuel" style={input} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Nouveau mot de passe</span>
+                  <input type="password" value={newPassword} autoComplete="new-password"
+                    onChange={(e) => { setNewPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                    aria-label="Nouveau mot de passe" placeholder="8 caractères minimum" style={input} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Confirmer le nouveau mot de passe</span>
+                  <input type="password" value={confirmPassword} autoComplete="new-password"
+                    onChange={(e) => { setConfirmPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
+                    aria-label="Confirmer le nouveau mot de passe" style={input} />
+                </div>
+                {passwordError && (
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 11, padding: '9px 12px' }}>
+                    {passwordError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={changePassword} disabled={savingPassword} style={primaryBtn(savingPassword)}>Modifier le mot de passe</button>
+                  {savedPassword && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Modifié ✓</span>}
+                </div>
+              </section>
+
+              {/* Licence du club courant (uniquement membre, sur un sous-domaine club) */}
+              {slug && club && membership && (
+                <section id="licence" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Licence">
+                  <div style={cardTitle}>Licence · {club.name}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={label}>N° de licence / adhérent</span>
+                    <input value={license} onChange={(e) => { setLicense(e.target.value); setSavedLicense(false); }} placeholder="N° de licence / adhérent" aria-label="N° de licence / adhérent" style={input} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button onClick={saveLicense} disabled={savingLicense} style={primaryBtn(savingLicense)}>Enregistrer</button>
+                    {savedLicense && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
+                  </div>
+                </section>
+              )}
+            </div>
+          </>
         )}
       </div>
     </Screen>
