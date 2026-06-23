@@ -906,7 +906,7 @@ export async function notifyActivityCancelledByClub(
     const seen = new Set<string>();
     for (const reg of tournament.registrations) {
       for (const user of [reg.captain, reg.partner]) {
-        if (seen.has(user.id)) continue;
+        if (!user || seen.has(user.id)) continue;
         seen.add(user.id);
         const mail = buildPlayerEmail({
           firstName: user.firstName,

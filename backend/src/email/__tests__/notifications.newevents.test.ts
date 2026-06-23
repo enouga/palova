@@ -4,7 +4,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 const dispatchMock = jest.fn();
 jest.mock('../../services/notification/dispatcher', () => ({ dispatch: (...a: unknown[]) => dispatchMock(...a) }));
 
-import { notifyReservationCancelled, notifyActivityCancelledByClub } from '../notifications';
+import { notifyReservationCancelled, notifyActivityCancelledByClub, notifyReservationRescheduled } from '../notifications';
 
 const club = { id: 'club-1', name: 'Padel Club', slug: 'padel-club', logoUrl: null, accentColor: '#00ff00', timezone: 'Europe/Paris' };
 
@@ -88,5 +88,121 @@ describe('notifyActivityCancelledByClub(event) → dispatch', () => {
     prismaMock.clubEvent.findUnique.mockResolvedValue(null);
     await notifyActivityCancelledByClub('event', 'unknown');
     expect(dispatchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyActivityCancelledByClub(tournament) → dispatch', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  it('dispatch MY_REGISTRATIONS/activity.cancelled_by_club au capitaine et partenaire (dédupliqués)', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 'tourn-1',
+      name: 'Open Été',
+      startTime: new Date('2026-09-01T09:00:00Z'),
+      endTime: new Date('2026-09-01T18:00:00Z'),
+      club,
+      registrations: [
+        {
+          status: 'CONFIRMED',
+          captain: { id: 'cap-1', email: 'captain@x.fr', firstName: 'Luc' },
+          partner: { id: 'par-1', email: 'partner@x.fr', firstName: 'Marc' },
+        },
+        {
+          status: 'WAITLISTED',
+          captain: { id: 'cap-2', email: 'captain2@x.fr', firstName: 'Anne' },
+          partner: { id: 'par-1', email: 'partner@x.fr', firstName: 'Marc' }, // Marc already seen above
+        },
+      ],
+    } as any);
+
+    await notifyActivityCancelledByClub('tournament', 'tourn-1');
+
+    // cap-1, par-1, cap-2 → 3 dispatches (par-1 deduplicated)
+    expect(dispatchMock).toHaveBeenCalledTimes(3);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'cap-1',
+      category: 'MY_REGISTRATIONS',
+      type: 'activity.cancelled_by_club',
+      clubId: 'club-1',
+      email: expect.objectContaining({ to: 'captain@x.fr' }),
+    }));
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'par-1',
+      category: 'MY_REGISTRATIONS',
+      type: 'activity.cancelled_by_club',
+      clubId: 'club-1',
+    }));
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'cap-2',
+      category: 'MY_REGISTRATIONS',
+      type: 'activity.cancelled_by_club',
+      clubId: 'club-1',
+    }));
+  });
+});
+
+describe('notifyActivityCancelledByClub(lesson) → dispatch', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  it('dispatch MY_REGISTRATIONS/activity.cancelled_by_club à chaque inscrit du cours', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'lesson-1',
+      club,
+      coach: { name: 'Jean Dupont' },
+      reservation: {
+        startTime: new Date('2026-07-15T10:00:00Z'),
+        endTime: new Date('2026-07-15T11:00:00Z'),
+      },
+      enrollments: [
+        { status: 'CONFIRMED', user: { id: 'student-1', email: 'student1@x.fr', firstName: 'Sophie' } },
+        { status: 'WAITLISTED', user: { id: 'student-2', email: 'student2@x.fr', firstName: 'Emma' } },
+      ],
+    } as any);
+
+    await notifyActivityCancelledByClub('lesson', 'lesson-1');
+
+    expect(dispatchMock).toHaveBeenCalledTimes(2);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'student-1',
+      category: 'MY_REGISTRATIONS',
+      type: 'activity.cancelled_by_club',
+      clubId: 'club-1',
+      email: expect.objectContaining({ to: 'student1@x.fr' }),
+    }));
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'student-2',
+      category: 'MY_REGISTRATIONS',
+      type: 'activity.cancelled_by_club',
+      clubId: 'club-1',
+      email: expect.objectContaining({ to: 'student2@x.fr' }),
+    }));
+  });
+});
+
+describe('notifyReservationRescheduled → dispatch', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  it('dispatch MY_GAMES/reservation.rescheduled à chaque participant sauf l acteur', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'resa-2',
+      startTime: new Date('2026-07-20T14:00:00Z'),
+      endTime: new Date('2026-07-20T15:30:00Z'),
+      resource: { name: 'Court 2', club },
+      participants: [
+        { userId: 'mover-uid', user: { id: 'mover-uid', firstName: 'Théo' } },
+        { userId: 'other-uid', user: { id: 'other-uid', firstName: 'Chloe' } },
+      ],
+    } as any);
+
+    await notifyReservationRescheduled('resa-2', 'mover-uid');
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'other-uid',
+      category: 'MY_GAMES',
+      type: 'reservation.rescheduled',
+      clubId: 'club-1',
+    }));
+    expect(dispatchMock).not.toHaveBeenCalledWith(expect.objectContaining({ userId: 'mover-uid' }));
   });
 });
