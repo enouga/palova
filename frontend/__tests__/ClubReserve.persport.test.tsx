@@ -9,14 +9,24 @@ jest.mock('next/navigation', () => ({
 jest.mock('../components/BookingModal', () => ({ __esModule: true, default: () => null }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     getMyClubPackages: jest.fn().mockResolvedValue([]),
     getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'T', lastName: 'U', email: 't@p.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
+    // consommés par NotificationBell (intégré dans ClubNav)
+    getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
+    getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
+    markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
+// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell).
+beforeAll(() => {
+  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; close() {} };
+});
 import { api } from '../lib/api';
 const mocked = api as jest.Mocked<typeof api>;
 

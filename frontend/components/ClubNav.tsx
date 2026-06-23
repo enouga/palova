@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
@@ -91,7 +92,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           )}
           <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <ThemeToggle /><ProfileMenu />
+            <ThemeToggle /><NotificationBell /><ProfileMenu />
           </div>
         </div>
 

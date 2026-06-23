@@ -2,6 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ClubNav } from '../components/ClubNav';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
+// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell).
+beforeAll(() => {
+  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; close() {} };
+});
+
 let pathname = '/tournois';
 jest.mock('next/navigation', () => ({
   usePathname: () => pathname,
@@ -9,6 +14,7 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     // consommés par ProfileMenu (rangée 1) à l'ouverture du menu
@@ -16,6 +22,11 @@ jest.mock('../lib/api', () => ({
     getMyClubs: jest.fn().mockResolvedValue([]),
     getMyClubMembership: jest.fn().mockResolvedValue(null),
     getMyClubPackages: jest.fn().mockResolvedValue([]),
+    // consommés par NotificationBell
+    getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
+    getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
+    markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
 

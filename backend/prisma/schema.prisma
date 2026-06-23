@@ -409,6 +409,8 @@ model User {
   paymentsCreated Payment[] @relation("PaymentsCreated")
   stripeCustomers  ClubStripeCustomer[]
   lessonEnrollments LessonEnrollment[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@map("users")
 }
@@ -1007,4 +1009,57 @@ model LessonEnrollment {
   @@index([seriesId, status, createdAt])
   @@index([userId])
   @@map("lesson_enrollments")
+}
+
+enum NotificationCategory {
+  MY_GAMES
+  MY_REGISTRATIONS
+  MY_MATCHES
+  PAYMENTS
+  CLUB_MESSAGES
+  ORGANIZER
+  REMINDERS
+}
+
+enum NotificationChannel {
+  INAPP
+  PUSH
+  EMAIL
+}
+
+/// Notification in-app (source de vérité de la cloche). Créée par le dispatcher pour
+/// chaque destinataire dont le canal INAPP est actif. clubId = contexte (sans FK, léger).
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  clubId    String?  @map("club_id")
+  category  NotificationCategory
+  type      String
+  title     String
+  body      String
+  url       String?
+  data      Json?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Écart au défaut (opt-out) : une ligne = ce canal explicitement (dés)activé pour cette
+/// catégorie. Pas de ligne = canal activé. CLUB_MESSAGES+INAPP n'est jamais stocké (forcé ON).
+model NotificationPreference {
+  id       String  @id @default(cuid())
+  userId   String  @map("user_id")
+  category NotificationCategory
+  channel  NotificationChannel
+  enabled  Boolean
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, channel])
+  @@map("notification_preferences")
 }

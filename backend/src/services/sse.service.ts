@@ -12,6 +12,7 @@ export interface SSEEvent {
 export class SSEService {
   private static instance: SSEService;
   private clients: Map<string, Set<Response>> = new Map();
+  private userClients: Map<string, Set<Response>> = new Map();
 
   private constructor() {}
 
@@ -61,5 +62,41 @@ export class SSEService {
 
   getClientCount(resourceId: string): number {
     return this.clients.get(resourceId)?.size ?? 0;
+  }
+
+  /** Abonne un client au flux de SES propres notifications (cloche en live). */
+  addUserClient(userId: string, res: Response): void {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30_000);
+
+    if (!this.userClients.has(userId)) this.userClients.set(userId, new Set());
+    this.userClients.get(userId)!.add(res);
+
+    res.on('close', () => {
+      clearInterval(keepAlive);
+      this.userClients.get(userId)?.delete(res);
+      if (this.userClients.get(userId)?.size === 0) this.userClients.delete(userId);
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+  }
+
+  /** Pousse un évènement aux flux ouverts d'un utilisateur (best-effort). */
+  notifyUser(userId: string, data: unknown): void {
+    const clients = this.userClients.get(userId);
+    if (!clients?.size) return;
+    const payload = `data: ${JSON.stringify(data)}\n\n`;
+    const dead: Response[] = [];
+    clients.forEach((res) => { try { res.write(payload); } catch { dead.push(res); } });
+    dead.forEach((res) => clients.delete(res));
+  }
+
+  getUserClientCount(userId: string): number {
+    return this.userClients.get(userId)?.size ?? 0;
   }
 }
