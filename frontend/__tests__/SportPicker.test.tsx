@@ -50,4 +50,12 @@ describe('SportPicker', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Padel' }));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('ferme le panneau au clic extérieur', () => {
+    setup(['p']);
+    fireEvent.click(screen.getByRole('button', { name: /· changer/ }));
+    expect(screen.getByRole('group')).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  });
 });

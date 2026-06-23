@@ -25,8 +25,10 @@ export function SportPicker({ sports, selectedIds, onChange }: {
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
   const toggle = (id: string) => {
@@ -42,6 +44,8 @@ export function SportPicker({ sports, selectedIds, onChange }: {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button type="button" onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="true"
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
         <span style={{ color: th.text, fontWeight: 600 }}>{summarize(sports, selectedIds)}</span>
         <span>· changer</span>
