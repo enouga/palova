@@ -119,3 +119,37 @@ describe('SubscriptionService — sellSubscription', () => {
     await expect(service.sellSubscription('club-1', 'user-1', { planId: 'plan-1' })).rejects.toThrow('MEMBER_NOT_FOUND');
   });
 });
+
+describe('SubscriptionService — listes & cancel', () => {
+  let service: SubscriptionService;
+  beforeEach(() => { service = new SubscriptionService(); });
+
+  it('listMySubscriptionsBySlug : club ACTIVE, abos ACTIVE non expirés', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.subscription.findMany.mockResolvedValue([{ id: 'sub-1' }] as any);
+    const out = await service.listMySubscriptionsBySlug('mon-club', 'user-1');
+    expect(out).toHaveLength(1);
+    const where = prismaMock.subscription.findMany.mock.calls[0]![0]!.where as any;
+    expect(where.clubId).toBe('club-1');
+    expect(where.userId).toBe('user-1');
+    expect(where.status).toBe('ACTIVE');
+    expect(where.expiresAt).toHaveProperty('gt');
+  });
+
+  it('listMySubscriptionsBySlug : club inconnu/suspendu → CLUB_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'SUSPENDED' } as any);
+    await expect(service.listMySubscriptionsBySlug('x', 'user-1')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('cancelSubscription : passe en CANCELLED', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 'sub-1', clubId: 'club-1' } as any);
+    prismaMock.subscription.update.mockResolvedValue({ id: 'sub-1', status: 'CANCELLED' } as any);
+    await service.cancelSubscription('sub-1', 'club-1');
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({ where: { id: 'sub-1' }, data: { status: 'CANCELLED' } });
+  });
+
+  it('cancelSubscription : autre club → SUBSCRIPTION_NOT_FOUND', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 'sub-1', clubId: 'autre' } as any);
+    await expect(service.cancelSubscription('sub-1', 'club-1')).rejects.toThrow('SUBSCRIPTION_NOT_FOUND');
+  });
+});
