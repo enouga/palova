@@ -31,6 +31,7 @@ const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, process.env.JWT_S
 const PROFILE = {
   id: 'u1', email: 'test@x.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: null, sex: null,
   birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
+  autoMatchProposals: false,
 };
 
 // PNG 1x1 minimal (entête valide suffisante : le backend ne décode pas l'image).
@@ -84,6 +85,20 @@ describe('PATCH /api/me', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { showInLeaderboard: true } }));
     expect(res.body.showInLeaderboard).toBe(true);
+  });
+
+  it('rejette autoMatchProposals non booléen (400)', async () => {
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ autoMatchProposals: 'oui' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('autoMatchProposals invalide');
+  });
+
+  it('met à jour autoMatchProposals', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, autoMatchProposals: true } as any);
+    const res = await request(app).patch('/api/me').set('Authorization', `Bearer ${token()}`).send({ autoMatchProposals: true });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { autoMatchProposals: true } }));
+    expect(res.body.autoMatchProposals).toBe(true);
   });
 });
 

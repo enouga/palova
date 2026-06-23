@@ -387,6 +387,8 @@ model User {
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
   locale    String?   @default("fr")
   showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
+  /// Opt-in : « Propose-moi les parties à mon niveau » — notification (jamais d'inscription auto).
+  autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
   preferredSportId String? @map("preferred_sport_id")
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
