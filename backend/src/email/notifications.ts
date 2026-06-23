@@ -41,12 +41,14 @@ function brandOf(club: ClubBrandFields): Brand {
 }
 
 /** Staff destinataire des notifications « organisateur » : propriétaires + admins du club. */
-async function organizers(clubId: string): Promise<Array<{ email: string; firstName: string }>> {
+async function organizers(clubId: string): Promise<Array<{ id: string; email: string; firstName: string }>> {
   const members = await prisma.clubMember.findMany({
     where: { clubId, role: { in: [ClubRole.OWNER, ClubRole.ADMIN] } },
-    select: { user: { select: { email: true, firstName: true } } },
+    select: { user: { select: { id: true, email: true, firstName: true } } },
   });
-  return members.map((m) => m.user).filter((u): u is { email: string; firstName: string } => !!u?.email);
+  return members
+    .map((m) => m.user)
+    .filter((u): u is { id: string; email: string; firstName: string } => !!u?.email);
 }
 
 async function notifyOrganizers(opts: {
@@ -82,20 +84,58 @@ async function notifyOrganizers(opts: {
       url: adminUrl,
       brand: opts.brand,
     });
-    await sendMail({ to: s.email, subject: mail.subject, html: mail.html, text: mail.text });
+    const notifType = opts.kind === 'registration' ? 'organizer.registration' : 'organizer.cancellation';
+    const notifTitle = opts.kind === 'registration' ? 'Nouvelle inscription' : 'Désinscription';
+    const notifBody =
+      opts.kind === 'registration'
+        ? `${opts.playerNames} — ${opts.activityName} (${opts.statusLabel}).`
+        : `${opts.playerNames} s'est désinscrit de « ${opts.activityName} ».`;
+    await dispatch({
+      userId: s.id,
+      clubId: opts.clubId,
+      category: 'ORGANIZER',
+      type: notifType,
+      title: notifTitle,
+      body: notifBody,
+      url: adminUrl,
+      email: { to: s.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
 const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`.trim();
 
+/** Retourne le titre et le corps de notif joueur selon l'action et le nom de l'activité. */
+function playerNotifContent(
+  action: PlayerAction,
+  activityName: string,
+): { title: string; body: string } {
+  switch (action) {
+    case 'confirmed':
+      return { title: 'Inscription confirmée', body: `Ton inscription à « ${activityName} » est confirmée.` };
+    case 'waitlisted':
+      return {
+        title: "Inscription en liste d'attente",
+        body: `Tu es en liste d'attente pour « ${activityName} ».`,
+      };
+    case 'promoted':
+      return {
+        title: "Une place s'est libérée",
+        body: `Tu passes de la liste d'attente à confirmé pour « ${activityName} ».`,
+      };
+    case 'cancelled':
+      return { title: 'Inscription annulée', body: `Ton inscription à « ${activityName} » a été annulée.` };
+  }
+}
+
 // ----------------------------------------------------------------- Tournois
 
 const tournamentInclude = {
   tournament: {
-    include: { club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
   },
-  captain: { select: { email: true, firstName: true, lastName: true } },
-  partner: { select: { email: true, firstName: true, lastName: true } },
+  captain: { select: { id: true, email: true, firstName: true, lastName: true } },
+  partner: { select: { id: true, email: true, firstName: true, lastName: true } },
 } as const;
 
 async function loadTournamentRegistration(registrationId: string) {
@@ -127,7 +167,25 @@ async function sendTournamentPlayerEmails(
       brand,
       partnerName: fullName(partner),
     });
-    await sendMail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
+    const notifType =
+      action === 'confirmed'
+        ? 'registration.confirmed'
+        : action === 'waitlisted'
+          ? 'registration.waitlisted'
+          : action === 'promoted'
+            ? 'registration.promoted'
+            : 'registration.cancelled';
+    const { title, body } = playerNotifContent(action, t.name);
+    await dispatch({
+      userId: user.id,
+      clubId: t.club.id,
+      category: 'MY_REGISTRATIONS',
+      type: notifType,
+      title,
+      body,
+      url,
+      email: { to: user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
   }
 }
 
@@ -179,9 +237,9 @@ export async function notifyTournamentPromotion(registrationId: string): Promise
 
 const eventInclude = {
   event: {
-    include: { club: { select: { name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
   },
-  user: { select: { email: true, firstName: true, lastName: true } },
+  user: { select: { id: true, email: true, firstName: true, lastName: true } },
 } as const;
 
 async function loadEventRegistration(registrationId: string) {
@@ -194,6 +252,7 @@ async function sendEventPlayerEmail(
 ): Promise<void> {
   const e = reg.event;
   if (!reg.user.email) return;
+  const url = clubAppUrl(e.club.slug, `/events/${e.id}`);
   const mail = buildPlayerEmail({
     firstName: reg.user.firstName,
     action,
@@ -201,10 +260,28 @@ async function sendEventPlayerEmail(
     activityName: e.name,
     clubName: e.club.name,
     dateLabel: formatDateRangeFr(e.startTime, e.endTime, e.club.timezone),
-    url: clubAppUrl(e.club.slug, `/events/${e.id}`),
+    url,
     brand: brandOf(e.club),
   });
-  await sendMail({ to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  const notifType =
+    action === 'confirmed'
+      ? 'registration.confirmed'
+      : action === 'waitlisted'
+        ? 'registration.waitlisted'
+        : action === 'promoted'
+          ? 'registration.promoted'
+          : 'registration.cancelled';
+  const { title, body } = playerNotifContent(action, e.name);
+  await dispatch({
+    userId: reg.user.id,
+    clubId: e.club.id,
+    category: 'MY_REGISTRATIONS',
+    type: notifType,
+    title,
+    body,
+    url,
+    email: { to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 export async function notifyEventRegistration(registrationId: string): Promise<void> {
@@ -484,7 +561,7 @@ async function loadLessonEnrollment(enrollmentId: string) {
           club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
         },
       },
-      user: { select: { email: true, firstName: true, lastName: true } },
+      user: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
 }
@@ -534,7 +611,25 @@ async function sendLessonPlayerEmail(enr: LessonEnrollmentLoaded, action: Player
     url: ctx.url,
     brand: ctx.brand,
   });
-  await sendMail({ to: enr.user.email, subject: mail.subject, html: mail.html, text: mail.text });
+  const notifType =
+    action === 'confirmed'
+      ? 'registration.confirmed'
+      : action === 'waitlisted'
+        ? 'registration.waitlisted'
+        : action === 'promoted'
+          ? 'registration.promoted'
+          : 'registration.cancelled';
+  const { title, body } = playerNotifContent(action, ctx.activityName);
+  await dispatch({
+    userId: enr.user.id,
+    clubId: ctx.club.id,
+    category: 'MY_REGISTRATIONS',
+    type: notifType,
+    title,
+    body,
+    url: ctx.url,
+    email: { to: enr.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
 }
 
 export async function notifyLessonEnrollment(enrollmentId: string): Promise<void> {
