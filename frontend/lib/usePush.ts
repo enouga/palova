@@ -68,7 +68,7 @@ export function usePush(): { status: PushStatus; subscribe: () => Promise<void>;
       const json = sub.toJSON();
       await api.savePushSubscription({ endpoint: json.endpoint, keys: json.keys }, token ?? '');
       setStatus('granted');
-    } catch (e) { /* swallow */ }
+    } catch (e) { setStatus('default'); }
   };
 
   const unsubscribe = async (): Promise<void> => {

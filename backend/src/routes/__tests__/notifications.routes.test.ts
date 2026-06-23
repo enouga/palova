@@ -119,6 +119,14 @@ describe('Push Subscriptions API', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('INVALID_SUBSCRIPTION');
   });
+
+  it('DELETE /api/me/push-subscriptions sans body → 400 INVALID_SUBSCRIPTION', async () => {
+    const res = await request(app)
+      .delete('/api/me/push-subscriptions')
+      .set('Authorization', auth);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_SUBSCRIPTION');
+  });
 });
 
 describe('VAPID Public Key API', () => {
