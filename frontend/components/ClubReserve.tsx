@@ -35,7 +35,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   // Sélection multi-sports (ids de clubSport, ordre du club). null = pas encore résolue
   // (on évite d'afficher le mauvais sport le temps de lire le profil). Jamais vide une fois résolue.
   const SPORTS_KEY = `palova:reserve-sports:${club.id}`;
-  const [selectedSportIds, setSelectedSportIds] = useState<string[] | null>(null);
+  // Club mono-sport : on résout tout de suite (pas de localStorage/profil à attendre,
+  // pure dérivation des props → sûr pour l'hydratation). Multi-sport : null → résolu par l'effet.
+  const [selectedSportIds, setSelectedSportIds] = useState<string[] | null>(
+    () => (club.clubSports.length === 1 && club.clubSports[0]?.id ? [club.clubSports[0].id] : null),
+  );
   // Persiste un changement manuel (l'utilisateur a coché/décoché) et le mémorise par club.
   const changeSports = (ids: string[]) => {
     setSelectedSportIds(ids);
@@ -143,6 +147,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       const res = (availBySport[cs.id] ?? []).find((a) => a.resource.id === deepSlot.resourceId);
       const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
       if (res && slot) {
+        // ajoute le sport du créneau ciblé à la sélection courante (sans l'écraser) pour le rendre visible
         setSelectedSportIds((cur) => (cur && cur.includes(cs.id)) ? cur : [...(cur ?? []), cs.id]);
         setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined, sportKey: cs.sport.key, resourceName: res.resource.name });
         setDeepSlot(null);
@@ -214,6 +219,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                 const loading = loadingBySport[cs.id];
                 return (
                   <div key={cs.id} style={{ marginTop: 14 }}>
+                    {/* titre de section : si plusieurs sports affichés (pour les distinguer) ou club mono-sport (cosmétique) */}
                     {(selectedSportIds.length > 1 || club.clubSports.length === 1) && (
                       <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
                     )}
