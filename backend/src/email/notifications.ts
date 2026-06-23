@@ -1014,3 +1014,32 @@ export async function notifyActivityCancelledByClub(
     }
   }
 }
+
+export async function notifyReservationReminder(reservationId: string, window: 'J-1' | 'H-2'): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, name: true, slug: true, timezone: true } } },
+      },
+      participants: { select: { userId: true } },
+    },
+  });
+  if (!resa) return;
+  if (resa.status !== 'CONFIRMED') return;
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  for (const p of resa.participants) {
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'REMINDERS',
+      type: 'reminder.upcoming_game',
+      title: window === 'H-2' ? "Ta partie est dans 2 h" : "Rappel : partie demain",
+      body: `Ta réservation ${resa.resource.name} — ${dateLabel}.`,
+      url,
+      data: { reservationId, window },
+    });
+  }
+}

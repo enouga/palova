@@ -18,6 +18,7 @@ import pushRouter from './routes/push';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
+import { startReminderJob } from './jobs/reminders.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
@@ -101,6 +102,7 @@ if (require.main === module) {
       app.listen(PORT, () => {
         console.log(`Backend démarré sur http://localhost:${PORT}`);
         startCleanupJob();
+        startReminderJob();
       });
     })
     .catch(console.error);
