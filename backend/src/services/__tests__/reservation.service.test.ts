@@ -1544,12 +1544,12 @@ describe('ReservationService', () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
       prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'user-1', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
+        { userId: 'user-1', sportId: 'sport-padel', displayLevel: 4, rd: 80, isProvisional: false },
       ] as any);
 
       const out = await service.listUserReservations('user-1');
 
-      expect(out[0].participants[0].level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+      expect(out[0].participants[0].level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false, reliability: 93 });
       expect(out[0].participants[1].level).toBeNull();
     });
 
@@ -1595,17 +1595,17 @@ describe('ReservationService', () => {
         { id: 'sport-tennis', key: 'tennis' },
       ] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'user-1', sportId: 'sport-padel',  displayLevel: 5, isProvisional: false },
-        { userId: 'user-1', sportId: 'sport-tennis', displayLevel: 3, isProvisional: true  },
+        { userId: 'user-1', sportId: 'sport-padel',  displayLevel: 5, rd: 80,  isProvisional: false },
+        { userId: 'user-1', sportId: 'sport-tennis', displayLevel: 3, rd: 350, isProvisional: true  },
       ] as any);
 
       const out = await service.listUserReservations('user-1');
 
       expect(out).toHaveLength(2);
       // Résa padel → niveau padel (5 = Confirmé)
-      expect(out[0].participants[0].level).toEqual({ level: 5, tier: 'Confirmé', isProvisional: false });
+      expect(out[0].participants[0].level).toEqual({ level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 });
       // Résa tennis → niveau tennis (3 = Élémentaire)
-      expect(out[1].participants[0].level).toEqual({ level: 3, tier: 'Élémentaire', isProvisional: true });
+      expect(out[1].participants[0].level).toEqual({ level: 3, tier: 'Élémentaire', isProvisional: true, reliability: 50 });
     });
 
     it('ne plante pas quand une réservation n a pas de participants', async () => {

@@ -59,13 +59,13 @@ describe('ClubService — recherche de membres', () => {
     ] as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
     prismaMock.playerRating.findMany.mockResolvedValue([
-      { userId: 'u1', displayLevel: 5, isProvisional: false },
+      { userId: 'u1', displayLevel: 5, rd: 80, isProvisional: false },
     ] as any);
 
     const result = await service.searchMembers('demo', 'caller', '');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false } },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 } },
     ]);
   });
 

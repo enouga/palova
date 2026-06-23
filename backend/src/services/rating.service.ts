@@ -3,19 +3,27 @@ import {
   DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
   isProvisional, levelToRating, namedTier, ratingToLevel,
 } from './rating/level';
+import { reliability } from './rating/reliability';
 
-export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
+export interface UserLevel { level: number; tier: string; isProvisional: boolean; reliability: number; }
 
 export interface RatingDisplay {
   calibrated: boolean;     // a fait l'auto-éval OU a déjà joué
-  level: number;           // 0–8
-  tier: string;            // palier nommé
+  level: number | null;    // 0–8, ou null si pas encore de niveau (onboarding neutre)
+  tier: string;            // palier nommé ('' tant que non calibré)
   isProvisional: boolean;  // « en calibrage »
+  reliability: number;     // % de fiabilité (dérivé du RD, façon Pista)
   matchesPlayed: number;
 }
 
+// État neutre d'un joueur sans PlayerRating : pas d'auto-éval forcée, les matchs calibreront.
+const NEUTRAL_RATING: RatingDisplay = {
+  calibrated: false, level: null, tier: '', isProvisional: true,
+  reliability: reliability(DEFAULT_RD), matchesPlayed: 0,
+};
+
 type Row = {
-  displayLevel: number; isProvisional: boolean; matchesPlayed: number; initialSelfLevel: number | null;
+  displayLevel: number; rd: number; isProvisional: boolean; matchesPlayed: number; initialSelfLevel: number | null;
 };
 
 export class RatingService {
@@ -31,15 +39,16 @@ export class RatingService {
       level: row.displayLevel,
       tier: namedTier(row.displayLevel),
       isProvisional: row.isProvisional,
+      reliability: reliability(row.rd),
       matchesPlayed: row.matchesPlayed,
     };
   }
 
-  /** Lecture pour affichage. null = joueur sans niveau (à calibrer). */
-  async getForDisplay(userId: string, sportKey: string): Promise<RatingDisplay | null> {
+  /** Lecture pour affichage. Sans PlayerRating → état neutre (level null, non calibré). */
+  async getForDisplay(userId: string, sportKey: string): Promise<RatingDisplay> {
     const sportId = await this.sportId(sportKey);
     const row = await prisma.playerRating.findUnique({ where: { userId_sportId: { userId, sportId } } });
-    return row ? this.toDisplay(row as Row) : null;
+    return row ? this.toDisplay(row as Row) : NEUTRAL_RATING;
   }
 
   /** Auto-évaluation. selfLevel 1–8 ou null (« passer » → départ neutre). N'écrase jamais un niveau déjà rodé. */
@@ -72,10 +81,10 @@ export class RatingService {
     const sportId = await this.sportId(sportKey);
     const rows = await prisma.playerRating.findMany({
       where: { sportId, userId: { in: userIds } },
-      select: { userId: true, displayLevel: true, isProvisional: true },
+      select: { userId: true, displayLevel: true, rd: true, isProvisional: true },
     });
     const map: Record<string, UserLevel> = {};
-    for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+    for (const r of rows) map[r.userId] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional, reliability: reliability(r.rd) };
     return map;
   }
 
@@ -88,12 +97,12 @@ export class RatingService {
     const userIds = [...new Set(pairs.map((p) => p.userId))];
     const rows = await prisma.playerRating.findMany({
       where: { sportId: { in: sports.map((s) => s.id) }, userId: { in: userIds } },
-      select: { userId: true, sportId: true, displayLevel: true, isProvisional: true },
+      select: { userId: true, sportId: true, displayLevel: true, rd: true, isProvisional: true },
     });
     const map: Record<string, UserLevel> = {};
     for (const r of rows) {
       const key = keyById.get(r.sportId);
-      if (key) map[`${r.userId}:${key}`] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional };
+      if (key) map[`${r.userId}:${key}`] = { level: r.displayLevel, tier: namedTier(r.displayLevel), isProvisional: r.isProvisional, reliability: reliability(r.rd) };
     }
     return map;
   }

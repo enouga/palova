@@ -83,7 +83,7 @@ describe('OpenMatchService', () => {
 
       prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'player-rated', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
+        { userId: 'player-rated', sportId: 'sport-padel', displayLevel: 4, rd: 80, isProvisional: false },
       ] as any);
 
       const out = await service.listOpenMatches('club-demo', 'viewer');
@@ -92,7 +92,7 @@ describe('OpenMatchService', () => {
       expect(out[0].targetLevelMax).toBe(5);
 
       const ratedPlayer = out[0].players.find((p: any) => p.userId === 'player-rated');
-      expect(ratedPlayer?.level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+      expect(ratedPlayer?.level).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false, reliability: 93 });
 
       const unratedPlayer = out[0].players.find((p: any) => p.userId === 'player-no-rating');
       expect(unratedPlayer?.level).toBeNull();
@@ -122,19 +122,19 @@ describe('OpenMatchService', () => {
         { id: 'sport-tennis', key: 'tennis' },
       ] as any);
       prismaMock.playerRating.findMany.mockResolvedValue([
-        { userId: 'player-a', sportId: 'sport-padel', displayLevel: 5, isProvisional: false },
-        { userId: 'player-a', sportId: 'sport-tennis', displayLevel: 7, isProvisional: true },
+        { userId: 'player-a', sportId: 'sport-padel', displayLevel: 5, rd: 80, isProvisional: false },
+        { userId: 'player-a', sportId: 'sport-tennis', displayLevel: 7, rd: 350, isProvisional: true },
       ] as any);
 
       const out = await service.listOpenMatches('club-demo', 'viewer');
 
       // Partie padel : player-a doit avoir niveau padel (5)
       const padelMatch = out.find((m: any) => m.id === 'match-padel');
-      expect(padelMatch?.players[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: false });
+      expect(padelMatch?.players[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: false, reliability: 93 });
 
       // Partie tennis : player-a doit avoir niveau tennis (7)
       const tennisMatch = out.find((m: any) => m.id === 'match-tennis');
-      expect(tennisMatch?.players[0].level).toEqual({ level: 7, tier: expect.any(String), isProvisional: true });
+      expect(tennisMatch?.players[0].level).toEqual({ level: 7, tier: expect.any(String), isProvisional: true, reliability: 50 });
     });
   });
 

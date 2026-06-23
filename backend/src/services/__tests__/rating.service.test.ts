@@ -10,17 +10,18 @@ beforeEach(() => {
 });
 
 describe('getForDisplay', () => {
-  it('renvoie null si le joueur n a pas de niveau', async () => {
+  it('joueur sans niveau → état neutre (pas calibré, level null, fiabilité basse)', async () => {
     prismaMock.playerRating.findUnique.mockResolvedValue(null as any);
-    expect(await service.getForDisplay('u1', 'padel')).toBeNull();
+    const d = await service.getForDisplay('u1', 'padel');
+    expect(d).toEqual({ calibrated: false, level: null, tier: '', isProvisional: true, reliability: 50, matchesPlayed: 0 });
   });
 
   it('mappe la ligne en affichage (niveau, palier, provisoire)', async () => {
     prismaMock.playerRating.findUnique.mockResolvedValue({
-      displayLevel: 4, isProvisional: true, matchesPlayed: 0, initialSelfLevel: 4,
+      displayLevel: 4, rd: 350, isProvisional: true, matchesPlayed: 0, initialSelfLevel: 4,
     } as any);
     const d = await service.getForDisplay('u1', 'padel');
-    expect(d).toEqual({ calibrated: true, level: 4, tier: 'Intermédiaire', isProvisional: true, matchesPlayed: 0 });
+    expect(d).toEqual({ calibrated: true, level: 4, tier: 'Intermédiaire', isProvisional: true, reliability: 50, matchesPlayed: 0 });
   });
 });
 
@@ -68,12 +69,13 @@ describe('getLevelsForUsers', () => {
   it('renvoie une map userId → niveau pour les joueurs ayant un rating', async () => {
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
     prismaMock.playerRating.findMany.mockResolvedValue([
-      { userId: 'u1', displayLevel: 4, isProvisional: false },
-      { userId: 'u2', displayLevel: 2.4, isProvisional: true },
+      { userId: 'u1', displayLevel: 4, rd: 80, isProvisional: false },
+      { userId: 'u2', displayLevel: 2.4, rd: 350, isProvisional: true },
     ] as any);
     const map = await service.getLevelsForUsers(['u1', 'u2', 'u3'], 'padel');
-    expect(map.u1).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false });
+    expect(map.u1).toEqual({ level: 4, tier: 'Intermédiaire', isProvisional: false, reliability: 93 });
     expect(map.u2.level).toBeCloseTo(2.4);
+    expect(map.u2.reliability).toBe(50);
     expect(map.u3).toBeUndefined();
   });
 
@@ -88,13 +90,14 @@ describe('getLevelsBySport', () => {
   it('getLevelsBySport mappe les niveaux par (userId, sportKey)', async () => {
     prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }, { id: 'sport-tennis', key: 'tennis' }] as any);
     prismaMock.playerRating.findMany.mockResolvedValue([
-      { userId: 'u1', sportId: 'sport-padel', displayLevel: 4, isProvisional: false },
-      { userId: 'u1', sportId: 'sport-tennis', displayLevel: 6, isProvisional: true },
+      { userId: 'u1', sportId: 'sport-padel', displayLevel: 4, rd: 80, isProvisional: false },
+      { userId: 'u1', sportId: 'sport-tennis', displayLevel: 6, rd: 350, isProvisional: true },
     ] as any);
     const map = await service.getLevelsBySport([
       { userId: 'u1', sportKey: 'padel' }, { userId: 'u1', sportKey: 'tennis' },
     ]);
     expect(map['u1:padel'].level).toBe(4);
+    expect(map['u1:padel'].reliability).toBe(93);
     expect(map['u1:tennis'].level).toBe(6);
     expect(map['u1:tennis'].isProvisional).toBe(true);
   });

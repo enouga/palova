@@ -214,15 +214,20 @@ describe('Page Mon profil', () => {
     expect(api.getRatingHistory).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
   });
 
-  it('niveau : le calibrage utilise le padel', async () => {
+  it('niveau : sans niveau → état neutre, pas d\'auto-éval forcée ; « Affiner » révèle le calibrage (padel)', async () => {
     api.getSports.mockResolvedValue([
       { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
     ]);
-    api.getMyRating.mockResolvedValue(null); // → LevelCalibration s'affiche
-    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, gamesPlayed: 0, tier: 'UPPER_INTERMEDIATE', sport: 'padel' });
+    // backend renvoie un état neutre (plus jamais null) quand le joueur n'a pas de niveau
+    api.getMyRating.mockResolvedValue({ calibrated: false, level: null, tier: '', isProvisional: true, reliability: 50, matchesPlayed: 0 });
+    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, tier: 'Intermédiaire', isProvisional: true, reliability: 50, matchesPlayed: 0 });
     wrap();
-    const skipBtn = await screen.findByRole('button', { name: /passer|skip/i });
-    fireEvent.click(skipBtn);
+    const region = await screen.findByRole('region', { name: /mon niveau/i });
+    // pas d'auto-évaluation mise en avant : aucun bouton « Passer » d'emblée
+    expect(within(region).queryByRole('button', { name: /passer|skip/i })).not.toBeInTheDocument();
+    // l'affinage est optionnel : on l'ouvre explicitement
+    fireEvent.click(within(region).getByRole('button', { name: /affiner/i }));
+    fireEvent.click(await within(region).findByRole('button', { name: /passer|skip/i }));
     await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'padel'));
   });
 

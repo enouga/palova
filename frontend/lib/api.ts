@@ -1413,13 +1413,14 @@ export interface MyProfile {
 
 export interface MyRating {
   calibrated: boolean;
-  level: number;
+  level: number | null; // null tant que le joueur n'a pas de niveau (onboarding neutre)
   tier: string;
   isProvisional: boolean;
+  reliability: number; // % de fiabilité (dérivé du RD, façon Pista)
   matchesPlayed: number;
 }
 
-export interface UserLevel { level: number; tier: string; isProvisional: boolean; }
+export interface UserLevel { level: number; tier: string; isProvisional: boolean; reliability: number; }
 export interface RatingPoint { playedAt: string; level: number; }
 
 export interface LeaderboardEntry {
