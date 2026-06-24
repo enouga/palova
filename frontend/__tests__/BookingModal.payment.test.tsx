@@ -104,6 +104,13 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     // L'avenue affiche le message "part trop faible" et le bouton principal indique le total
     expect(screen.getByText(/trop faible/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Valider le paiement.*0,40/ })).toBeInTheDocument();
+
+    // Et le tunnel Stripe charge bien le TOTAL (payShare=false), pas la part.
+    fireEvent.click(screen.getByRole('checkbox', { name: /conditions générales/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Valider le paiement/ }));
+    const step = await screen.findByTestId('stripe-step');
+    expect(step).toHaveAttribute('data-payshare', 'false');
+    expect(step).toHaveAttribute('data-amount', '0,40€');
   });
 
   it('en ligne → étape Stripe avec payShare=true et le montant par personne', async () => {
