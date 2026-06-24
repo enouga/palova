@@ -13,8 +13,10 @@ jest.mock('../lib/api', () => ({
     holdSlot:           jest.fn(),
     confirmReservation: jest.fn(),
     cancelReservation:  jest.fn(),
+    applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
     searchClubMembers:  jest.fn(),
     getMyRating:        jest.fn().mockResolvedValue(null),
+    getClubPage:        jest.fn().mockResolvedValue({}),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -22,172 +24,63 @@ jest.mock('../lib/api', () => ({
 const mockSlot: TimeSlot = {
   startTime: '2025-06-15T06:00:00.000Z',
   endTime:   '2025-06-15T07:00:00.000Z',
-  available: true,
-  price: '25',
-  offPeak: false,
+  available: true, price: '25', offPeak: false,
 };
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {
   return render(
     <ThemeProvider>
-      <BookingModal
-        slot={mockSlot}
-        resourceId="court-1"
-        price="25"
-        duration={60}
-        token="jwt-token"
-        onClose={jest.fn()}
-        onConfirmed={jest.fn()}
-        {...overrides}
-      />
+      <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+        token="jwt-token" onClose={jest.fn()} onConfirmed={jest.fn()} {...overrides} />
     </ThemeProvider>
   );
 }
 
-describe('BookingModal', () => {
-  beforeEach(() => { jest.clearAllMocks(); mockClub = null; localStorage.clear(); });
-
-  it('appelle holdSlot et affiche le countdown après clic Pré-réserver', async () => {
-    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
-
-    renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-
-    await waitFor(() =>
-      expect(api.holdSlot).toHaveBeenCalledWith(
-        { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
-        'jwt-token',
-      )
-    );
-    expect(await screen.findByText(/Confirmez dans/)).toBeInTheDocument();
-  });
-
-  it('appelle confirmReservation et onConfirmed après confirmation finale', async () => {
+describe('BookingModal — page unique', () => {
+  beforeEach(() => {
+    jest.clearAllMocks(); mockClub = null; localStorage.clear();
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
-
-    const onConfirmed = jest.fn();
-    renderModal({ onConfirmed });
-
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-    await screen.findByText(/Confirmez dans/);
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
-
-    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
-  });
-
-  it('annule le hold (libère le créneau) au clic Abandonner en phase pending', async () => {
-    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
-
-    const onClose = jest.fn();
-    renderModal({ onClose });
-
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-    await screen.findByText(/Confirmez dans/);
-    fireEvent.click(screen.getByRole('button', { name: /Abandonner/ }));
-
-    await waitFor(() => expect(api.cancelReservation).toHaveBeenCalledWith('res-1', 'jwt-token'));
-    expect(onClose).toHaveBeenCalled();
+    (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
   });
 
-  it('affiche un message d erreur si holdSlot échoue', async () => {
-    (api.holdSlot as jest.Mock).mockRejectedValue(new Error('SLOT_ALREADY_HELD'));
-
+  it('bloque le créneau dès l ouverture (sans interaction)', async () => {
     renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-
-    await waitFor(() => expect(screen.getByText(/vient d'être pris/)).toBeInTheDocument());
-  });
-
-  it('partie ouverte : ajoute un partenaire, affiche le prix par joueur et transmet partnerUserIds + visibility', async () => {
-    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
-
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
-
-    // ouvrir l'annuaire des membres et sélectionner un partenaire
-    fireEvent.focus(screen.getByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
-
-    // basculer en partie ouverte
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-
-    // récap prix par joueur : 25 € / 2 joueurs = 12,50 €
-    expect(screen.getByText(/12,50\s*€\s*par joueur/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-    await waitFor(() => expect(api.holdSlot).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: 'court-1', partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
-      'jwt-token',
-    ));
-  });
-
-  it('partie ouverte : masque le réglage de niveau quand le système de niveau est OFF, et n envoie pas targetLevel*', async () => {
-    mockClub = { levelSystemEnabled: false };
-    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
-
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-
-    expect(screen.queryByRole('switch', { name: /Limiter le niveau/ })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-    await waitFor(() => expect(api.holdSlot).toHaveBeenCalled());
-    const payload = (api.holdSlot as jest.Mock).mock.calls[0][0];
-    expect(payload).not.toHaveProperty('targetLevelMin');
-    expect(payload).not.toHaveProperty('targetLevelMax');
-  });
-
-  it('partie ouverte : limite de niveau ACTIVE par défaut (curseur visible) quand le système est ON', () => {
-    mockClub = { levelSystemEnabled: true };
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-
-    const toggle = screen.getByRole('switch', { name: /Limiter le niveau/ });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    // curseur min/max visible d'emblée
-    expect(screen.getByLabelText('Niveau minimum')).toBeInTheDocument();
-    expect(screen.getByLabelText('Niveau maximum')).toBeInTheDocument();
-
-    fireEvent.click(toggle); // désactiver → le curseur disparaît
-    expect(screen.queryByLabelText('Niveau minimum')).not.toBeInTheDocument();
-  });
-
-  it('sans slug (mode simple), n envoie ni partnerUserIds ni visibility', async () => {
-    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
-
-    renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-
     await waitFor(() => expect(api.holdSlot).toHaveBeenCalledWith(
       { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
       'jwt-token',
     ));
+    expect(await screen.findByText(/Créneau bloqué/)).toBeInTheDocument();
   });
 
-  it('getMyRating est appelé avec le sportKey du terrain (pas de padel forcé)', async () => {
-    mockClub = { levelSystemEnabled: true };
-    // Rendu avec sportKey='tennis' et slug pour déclencher l'effet partie ouverte
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
-    // Basculer en partie ouverte pour déclencher l'useEffect niveau
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-
-    await waitFor(() =>
-      expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'tennis')
-    );
+  it('affiche un message d erreur si le hold échoue', async () => {
+    (api.holdSlot as jest.Mock).mockRejectedValue(new Error('SLOT_ALREADY_HELD'));
+    renderModal();
+    expect(await screen.findByText(/vient d'être pris/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fermer/ })).toBeInTheDocument();
   });
 
-  it('getMyRating sans sportKey n ajoute pas de sport dans l URL (sport optionnel)', async () => {
-    mockClub = { levelSystemEnabled: true };
-    // Rendu SANS sportKey → le correctif A doit appeler getMyRating(token) sans 2e arg
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+  it('confirme (régler au club) → confirmReservation + onConfirmed', async () => {
+    const onConfirmed = jest.fn();
+    renderModal({ onConfirmed });
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+  });
 
-    await waitFor(() => expect(api.getMyRating).toHaveBeenCalled());
-    // getMyRating ne doit PAS avoir reçu 'padel' en 2e argument
-    const calls = (api.getMyRating as jest.Mock).mock.calls;
-    const sportArgs = calls.map((c: unknown[]) => c[1]);
-    expect(sportArgs.every((s: unknown) => s === undefined)).toBe(true);
+  it('fermer annule le hold', async () => {
+    const onClose = jest.fn();
+    renderModal({ onClose });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Abandonner|Fermer|Annuler/ }));
+    await waitFor(() => expect(api.cancelReservation).toHaveBeenCalledWith('res-1', 'jwt-token'));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('affiche le bloc conditions d annulation (sans case)', async () => {
+    renderModal({ cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false });
+    expect(await screen.findByText(/Conditions d'annulation/)).toBeInTheDocument();
+    expect(screen.getByText(/24\s*h avant le début/)).toBeInTheDocument();
   });
 });

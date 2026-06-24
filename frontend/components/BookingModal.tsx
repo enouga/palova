@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS, Theme } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn, Segmented } from '@/components/ui/atoms';
 import { Avatar } from '@/components/ui/Avatar';
@@ -14,7 +15,6 @@ import { LevelChip } from '@/components/player/LevelChip';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
-import { Icon } from '@/components/ui/Icon';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel } from '@/lib/reservations';
@@ -67,19 +67,6 @@ function formatHour(iso: string, tz = 'Europe/Paris'): string {
     .format(new Date(iso)).replace(':', 'h');
 }
 
-function ProgressRing({ frac, size = 132 }: { frac: number; size?: number }) {
-  const { th } = useTheme();
-  const r = (size - 12) / 2;
-  const C = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={th.surface2} strokeWidth="6" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={th.accent} strokeWidth="6" strokeLinecap="round"
-        strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: 'stroke-dashoffset 1s linear' }} />
-    </svg>
-  );
-}
-
 const BOOKING_ERRORS: Record<string, string> = {
   SLOT_NOT_AVAILABLE:     "Ce créneau vient d'être pris. Choisissez-en un autre.",
   SLOT_ALREADY_HELD:      "Ce créneau vient d'être pris. Choisissez-en un autre.",
@@ -88,6 +75,7 @@ const BOOKING_ERRORS: Record<string, string> = {
   TOO_MANY_PLAYERS:       'Trop de joueurs pour ce terrain.',
   PARTNER_NOT_MEMBER:     "Un partenaire n'est pas membre du club.",
   PARTNER_DUPLICATE:      'Un partenaire figure en double.',
+  RESERVATION_NOT_PENDING: 'La pré-réservation a expiré. Veuillez recommencer.',
   // Pré-conditions de paiement (gardes serveur) — jamais affichées en code brut.
   ONLINE_PAYMENT_REQUIRED: 'Ce club exige le paiement en ligne pour réserver.',
   CARD_FINGERPRINT_REQUIRED: "Ce club demande d'enregistrer une carte bancaire (protection no-show). Acceptez les conditions, puis enregistrez votre carte.",
@@ -96,16 +84,60 @@ const BOOKING_ERRORS: Record<string, string> = {
   SETUP_NOT_SUCCEEDED:     "L'enregistrement de la carte n'a pas abouti. Veuillez réessayer.",
 };
 
+/** Carte d'en-tête compacte : court + format + date + horaire + prix (total/part). */
+function BookingHeaderCard({ slot, timezone, resourceName, format, totalPrice, perPerson, capacity, durLabel, th }: {
+  slot: TimeSlot; timezone?: string; resourceName?: string; format?: string;
+  totalPrice: string; perPerson: string; capacity: number; durLabel: string; th: Theme;
+}) {
+  const dateLabel = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone }).format(new Date(slot.startTime));
+  return (
+    <div style={{ marginTop: 14, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 18, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
+      <div>
+        <div style={{ fontFamily: th.fontDisplay, fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: th.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {resourceName ?? 'Court'}
+          <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: th.textMute, border: `1px solid ${th.lineStrong}`, background: th.bgElev, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
+        </div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, marginTop: 8, textTransform: 'capitalize' }}>{dateLabel}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {durLabel}
+          {slot.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 5, padding: '2px 7px' }}>heures creuses</span>}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+        <div style={{ fontFamily: th.fontDisplay, fontSize: 34, fontWeight: 800, letterSpacing: -1.3, color: th.text, lineHeight: 0.95 }}>{totalPrice}€</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 5 }}>≈ {perPerson} € / pers · {capacity} j.</div>
+      </div>
+    </div>
+  );
+}
+
+/** Bloc d'info « Conditions d'annulation » (toujours affiché, lecture seule). */
+function CancellationNotice({ text, th }: { text: string; th: Theme }) {
+  return (
+    <div style={{ marginTop: 18, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 14, padding: '13px 15px', display: 'flex', gap: 11 }}>
+      <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 9, background: '#fff1e9', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>↺</span>
+      <div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 3 }}>Conditions d&apos;annulation</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.5 }}>{text}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function BookingModal({
   slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], subscriptions = [], quotaStatus, onClose, onConfirmed,
   clubId, requireOnlinePayment, requireCardFingerprint, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
-  const [phase, setPhase]             = useState<'confirm' | 'pending' | 'error'>('confirm');
+
+  const [phase, setPhase]             = useState<'holding' | 'held' | 'error'>('holding');
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
+  const [busy, setBusy]               = useState(false); // confirm/applyHoldSetup en vol
+  const didHold                       = useRef(false);   // garde anti double-hold (StrictMode)
+
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
   const [stripeStep, setStripeStep]   = useState(false);
@@ -115,12 +147,9 @@ export default function BookingModal({
   const [cgvStatus, setCgvStatus]     = useState<'published' | 'fallback' | null>(null);
   // Empreinte forcée : le backend a renvoyé CARD_FINGERPRINT_REQUIRED alors que la prop
   // requireCardFingerprint était périmée (toggle activé après le chargement de la page).
-  // On bascule alors le tunnel sur l'enregistrement de carte plutôt qu'un cul-de-sac.
   const [fingerprintForced, setFingerprintForced] = useState(false);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
-  // En ligne : régler sa part (par personne) ou le total.
-  const [payAmount, setPayAmount]     = useState<'share' | 'full'>('full');
   const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
   const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
   // Fourchette de niveau d'une partie ouverte : interrupteur + curseur double, mémorisés.
@@ -147,8 +176,6 @@ export default function BookingModal({
 
   // Couverture par abonnement : le créneau est creux ssi slot.offPeak (calculé par le backend,
   // = entièrement en heures creuses). On cherche le 1er abo qui couvre ce sport/ce créneau.
-  // Décision booléenne miroir du backend — passer { subscriptionId } pour un créneau non couvert
-  // ferait rejeter le backend (SUBSCRIPTION_NOT_APPLICABLE).
   const isOffPeak = slot.offPeak ?? false;
   const cover = coveringSubscription(subscriptions, { sportKey: sportKey ?? '', isOffPeak });
 
@@ -157,20 +184,39 @@ export default function BookingModal({
   const shareCents = Math.round(totalCents / capacity);
   const perPerson = euros(shareCents);
   const shareTooSmall = shareCents < 50; // minimum Stripe (0,50 €) → le backend refuse (AMOUNT_TOO_SMALL)
-  const cancellationProvided = cancellationCutoffHours !== undefined || refundOnCancelWithinCutoff !== undefined;
 
   // Le paiement en ligne est-il disponible ? (compte Stripe actif, ou imposé par le club)
   const onlineAvailable = !!stripeActive || !!requireOnlinePayment;
   // Cas défensif : le club EXIGE le paiement en ligne mais son compte Stripe n'est pas actif.
   const onlineRequiredButUnavailable = !!requireOnlinePayment && !stripeActive;
-  // Montant effectif réglé en ligne (part repli sur total si la part est trop faible).
-  const onlineShare = payAmount === 'share' && !shareTooSmall;
+  // En ligne : toujours la part par personne (sauf si trop faible → total).
+  const onlineShare = !shareTooSmall;
   const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
 
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
   // on exige l'acceptation des CGV (le backend l'impose aussi côté serveur).
   const cardIntentPath = !useSub && !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint || fingerprintForced);
+
+  // Hold au montage : pose le blocage Redis (organisateur seul, sans partenaires/visibilité).
+  // Les joueurs/visibilité choisis ensuite sont appliqués via applyHoldSetup avant la confirmation.
+  useEffect(() => {
+    if (didHold.current) return;
+    didHold.current = true;
+    (async () => {
+      try {
+        const res = await api.holdSlot(
+          { resourceId, startTime: slot.startTime, endTime: slot.endTime }, token,
+        );
+        setReservation(res);
+        setSecondsLeft(HOLD_SECONDS);
+        setPhase('held');
+      } catch (err) {
+        setErrorMsg(BOOKING_ERRORS[(err as Error).message] ?? (err as Error).message);
+        setPhase('error');
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
@@ -185,7 +231,7 @@ export default function BookingModal({
       const lvl = r?.level ?? null;
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
-  }, [showPartners, token, levelEnabled]);
+  }, [showPartners, token, levelEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
@@ -195,8 +241,7 @@ export default function BookingModal({
 
   // Au moment où le chemin CB Stripe devient actif, on vérifie (une seule fois) si le
   // club a publié ses CGV. Publié → lien vers /cgv ; sinon (PAGE_NOT_FOUND ou erreur) →
-  // repli sur les conditions générales de la plateforme. La case reste requise dans tous
-  // les cas (le serveur l'exige aussi).
+  // repli sur les conditions générales de la plateforme.
   useEffect(() => {
     if (!cardIntentPath || cgvStatus !== null) return;
     if (!slug) { setCgvStatus('fallback'); return; }
@@ -207,8 +252,9 @@ export default function BookingModal({
     return () => { cancelled = true; };
   }, [cardIntentPath, slug, cgvStatus]);
 
+  // Timer : tourne en phase held ; à 0 → écran d'erreur.
   useEffect(() => {
-    if (phase !== 'pending') return;
+    if (phase !== 'held') return;
     if (secondsLeft <= 0) {
       setPhase('error');
       setErrorMsg('La pré-réservation a expiré. Veuillez recommencer.');
@@ -217,80 +263,50 @@ export default function BookingModal({
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [phase, secondsLeft]);
-
-  const handleHold = async () => {
-    // Fourchette envoyée seulement si le système de niveau du club est actif, partie
-    // ouverte ET interrupteur activé ; sinon null (tous niveaux) ou rien (club OFF).
-    const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
-    try {
-      const res = await api.holdSlot({
-        resourceId, startTime: slot.startTime, endTime: slot.endTime,
-        ...(showPartners ? {
-          partnerUserIds: partners.map((p) => p.id),
-          visibility,
-          ...(visibility === 'PUBLIC' && levelEnabled ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null } : {}),
-        } : {}),
-      }, token);
-      if (showPartners) saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
-      setReservation(res);
-      setSecondsLeft(HOLD_SECONDS);
-      setPhase('pending');
-    } catch (err) {
-      setPhase('error');
-      setErrorMsg(BOOKING_ERRORS[(err as Error).message] ?? (err as Error).message);
-    }
-  };
+  const urgent = secondsLeft <= 60;
 
   const handleConfirm = async () => {
-    if (!reservation) return;
-    // Sans carnet : si une avenue en ligne est requise (paiement) ou une empreinte
-    // bancaire (setup intent), bascule vers l'étape Stripe. Sinon on enchaîne sur le
-    // confirmReservation ci-dessous (carnet → avec source ; régler au club → sans source).
-    if (cardIntentPath) {
-      setStripeStep(true);
-      return;
-    }
+    if (!reservation || busy) return;
+    setBusy(true);
+    setErrorMsg('');
     try {
+      // Terrain multi-joueurs : persiste partenaires/visibilité/niveau sur la PENDING
+      // avant tout paiement (client OU webhook Stripe) → pas de course.
+      if (showPartners) {
+        const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
+        await api.applyHoldSetup(reservation.id, token, {
+          partnerUserIds: partners.map((p) => p.id),
+          visibility,
+          ...(visibility === 'PUBLIC' && levelEnabled
+            ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
+            : {}),
+        });
+        saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
+      }
+      // Sans carnet : si une avenue en ligne est requise (paiement) ou une empreinte
+      // bancaire (setup intent), bascule vers l'étape Stripe.
+      if (cardIntentPath) { setStripeStep(true); return; }
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
-      const paymentSource = useSub && cover
-        ? { subscriptionId: cover.id }
-        : paySource
-        ? { packageId: paySource }
-        : undefined;
+      const paymentSource = useSub && cover ? { subscriptionId: cover.id }
+        : paySource ? { packageId: paySource } : undefined;
       const confirmed = await api.confirmReservation(
-        reservation.id, token,
-        paymentSource ? { paymentSource } : undefined,
+        reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
       onConfirmed(confirmed);
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'INSUFFICIENT_BALANCE') {
-        // La résa reste PENDING : on retire l'option et on laisse confirmer autrement.
-        setPaySource(null);
-        setErrorMsg('Solde insuffisant — réglez au club.');
-        return;
-      }
-      if (msg === 'CARD_FINGERPRINT_REQUIRED') {
-        // Donnée club périmée : on force le tunnel empreinte (CGV + étape setup) au lieu
-        // d'un cul-de-sac. On reste en phase 'confirm' ; le message guide l'utilisateur.
-        setFingerprintForced(true);
-        setPaySource(null);
-        setErrorMsg(BOOKING_ERRORS.CARD_FINGERPRINT_REQUIRED);
-        return;
-      }
+      if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
+      if (msg === 'CARD_FINGERPRINT_REQUIRED') { setFingerprintForced(true); setPaySource(null); setErrorMsg(BOOKING_ERRORS.CARD_FINGERPRINT_REQUIRED); return; }
+      if (BOOKING_ERRORS[msg] && msg !== 'SLOT_NO_LONGER_AVAILABLE') { setErrorMsg(BOOKING_ERRORS[msg]); return; }
       setPhase('error');
-      setErrorMsg(
-        msg === 'SLOT_NO_LONGER_AVAILABLE'
-          ? 'Ce créneau a été pris entre-temps. Veuillez recommencer.'
-          : (BOOKING_ERRORS[msg] ?? msg),
-      );
+      setErrorMsg(msg === 'SLOT_NO_LONGER_AVAILABLE' ? 'Ce créneau a été pris entre-temps. Veuillez recommencer.' : (BOOKING_ERRORS[msg] ?? msg));
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleClose = async () => {
-    if (phase === 'pending' && reservation) {
-      try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ }
-    }
+    if (reservation) { try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ } }
     onClose();
   };
 
@@ -300,284 +316,231 @@ export default function BookingModal({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
       <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', padding: '12px 20px 36px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
-        {phase === 'confirm' && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 52, lineHeight: 1, color: th.text, letterSpacing: -1 }}>{totalPrice}€</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>total</span>
-            </div>
-            <div style={{ background: th.surface2, borderRadius: 16, padding: '4px 16px', marginTop: 18 }}>
-              {/* Type de court : nom + badge Single/Double */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Type de court</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {resourceName && <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{resourceName}</span>}
-                  <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, color: th.textMute, background: th.bgElev, border: `1px solid ${th.lineStrong}`, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
+        {/* Barre de timer fine (cachée en phase error) */}
+        {phase !== 'error' && (
+          <div style={{ height: 4, background: th.surface2 }}>
+            <div style={{ height: '100%', width: `${(secondsLeft / HOLD_SECONDS) * 100}%`, background: urgent ? ACCENTS.coral : th.accent, transition: 'width 1s linear' }} />
+          </div>
+        )}
+        <div style={{ padding: '14px 20px 32px' }}>
+
+          {phase === 'error' ? (
+            <>
+              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.onAccent, background: th.accent, padding: '12px 14px', borderRadius: 12, fontWeight: 600 }}>{errorMsg}</div>
+              <div style={{ marginTop: 14 }}><Btn full variant="surface" onClick={onClose}>Fermer</Btn></div>
+            </>
+          ) : (
+            <>
+              {/* En-tête : badge créneau bloqué + timer chip */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: phase === 'held' ? '#15803d' : th.textMute }}>
+                  {phase === 'held'
+                    ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px #22c55e22' }} />Créneau bloqué pour vous</>
+                    : 'Blocage du créneau…'}
                 </span>
+                <span style={{ fontFamily: th.fontMono, fontWeight: 700, fontSize: 13.5, color: urgent ? ACCENTS.coral : th.textMute }}>⏱ {mm}:{ss}</span>
               </div>
-              {/* Date */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Date</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, textTransform: 'capitalize' }}>
-                  {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone }).format(new Date(slot.startTime))}
-                </span>
-              </div>
-              {/* Horaire */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Horaire</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)}</span>
-              </div>
-              {/* Durée */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: `1px solid ${th.line}` }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Durée</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{durLabel}{slot.offPeak ? ' · heures creuses' : ''}</span>
-              </div>
-              {/* Prix par personne — toujours affiché (le total reste l'en-tête hero) */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', ...(cancellationProvided ? { borderBottom: `1px solid ${th.line}` } : {}) }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Prix par personne</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>≈ {perPerson} € / personne · {capacity} joueurs</span>
-              </div>
-              {/* Annulation (lecture seule) */}
-              {cancellationProvided && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '13px 0' }}>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Annulation</span>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, lineHeight: 1.4 }}>{cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)}</span>
-                </div>
-              )}
-            </div>
 
-            {showPartners && (
-              <div style={{ marginTop: 18 }}>
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>
-                  Partenaires <span style={{ color: th.textFaint, fontWeight: 500 }}>· membres du club</span>
-                </div>
-                {partners.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                    {partners.map((p) => {
-                      const c = colorForSeed(p.id);
-                      return (
-                      <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: `${c}22`, border: `1px solid ${c}`, borderRadius: 999, padding: '4px 10px 4px 4px' }}>
-                        <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={24} color={c} />
-                        <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>{p.firstName} {p.lastName}</span>
-                        <LevelChip level={p.level} size="xs" />
-                        <button type="button" onClick={() => setPartners((xs) => xs.filter((x) => x.id !== p.id))} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
-                      </span>
-                      );
-                    })}
+              {/* Header carte */}
+              <BookingHeaderCard slot={slot} timezone={timezone} resourceName={resourceName}
+                format={format} totalPrice={totalPrice} perPerson={perPerson} capacity={capacity} durLabel={durLabel} th={th} />
+
+              {/* Contenu interactif : visible une fois le créneau sécurisé (phase held). */}
+              {phase === 'held' && (
+              <>
+              {/* Joueurs / visibilité / niveau — terrain multi-joueurs */}
+              {showPartners && (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>
+                    Partenaires <span style={{ color: th.textFaint, fontWeight: 500 }}>· membres du club</span>
                   </div>
-                )}
-                {atCap ? (
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({cap} joueurs).</div>
-                ) : (
-                  <PartnerSearch slug={slug!} token={token} selected={null}
-                    excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
-                    onSelect={(m) => setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]))}
-                    onClear={() => {}} />
-                )}
-
-                <div style={{ marginTop: 14 }}>
-                  <Segmented<'PRIVATE' | 'PUBLIC'> value={visibility} onChange={setVisibility}
-                    options={[{ value: 'PRIVATE', label: 'Partie privée' }, { value: 'PUBLIC', label: 'Partie ouverte' }]} />
-                  <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-                    {visibility === 'PUBLIC'
-                      ? `Visible par les membres du club, qui peuvent rejoindre (${spotsLeft} place${spotsLeft > 1 ? 's' : ''} restante${spotsLeft > 1 ? 's' : ''}).`
-                      : 'Visible uniquement par vous et vos partenaires.'}
-                  </div>
-
-                  {visibility === 'PUBLIC' && levelEnabled && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
-                        <button type="button" role="switch" aria-checked={levelLimited} aria-label="Limiter le niveau"
-                          onClick={() => setLevelLimited((v) => !v)}
-                          style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: levelLimited ? th.accent : th.lineStrong, transition: 'background .15s' }}>
-                          <span style={{ position: 'absolute', top: 3, left: levelLimited ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
-                        </button>
-                      </div>
-                      {levelLimited && (
-                        <div style={{ marginTop: 14 }}>
-                          <LevelRangeSlider min={levelMin} max={levelMax}
-                            onChange={(lo, hi) => { setLevelMin(lo); setLevelMax(hi); }} />
-                        </div>
-                      )}
+                  {partners.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {partners.map((p) => {
+                        const c = colorForSeed(p.id);
+                        return (
+                        <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: `${c}22`, border: `1px solid ${c}`, borderRadius: 999, padding: '4px 10px 4px 4px' }}>
+                          <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={24} color={c} />
+                          <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>{p.firstName} {p.lastName}</span>
+                          <LevelChip level={p.level} size="xs" />
+                          <button type="button" onClick={() => setPartners((xs) => xs.filter((x) => x.id !== p.id))} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
+                        </span>
+                        );
+                      })}
                     </div>
                   )}
-                </div>
+                  {atCap ? (
+                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({cap} joueurs).</div>
+                  ) : (
+                    <PartnerSearch slug={slug!} token={token} selected={null}
+                      excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
+                      onSelect={(m) => setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]))}
+                      onClear={() => {}} />
+                  )}
 
-                {nbPlayers > 1 && (
-                  <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                    ≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
-                  </div>
-                )}
-              </div>
-            )}
+                  <div style={{ marginTop: 14 }}>
+                    <Segmented<'PRIVATE' | 'PUBLIC'> value={visibility} onChange={setVisibility}
+                      options={[{ value: 'PRIVATE', label: 'Partie privée' }, { value: 'PUBLIC', label: 'Partie ouverte' }]} />
+                    <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                      {visibility === 'PUBLIC'
+                        ? `Visible par les membres du club, qui peuvent rejoindre (${spotsLeft} place${spotsLeft > 1 ? 's' : ''} restante${spotsLeft > 1 ? 's' : ''}).`
+                        : 'Visible uniquement par vous et vos partenaires.'}
+                    </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 2px', color: th.textMute }}>
-              <Icon name="clock" size={15} color={th.textMute} />
-              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4 }}>
-                Le créneau sera bloqué <b style={{ color: th.text }}>5 minutes</b> le temps de confirmer.
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 11 }}>
-              <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Annuler</Btn>
-              <Btn icon="lock" onClick={handleHold} style={{ flex: 1 }}>Pré-réserver</Btn>
-            </div>
-          </>
-        )}
-
-        {phase === 'pending' && (
-          <>
-            <div style={{ position: 'relative', width: 132, height: 132, margin: '6px auto 4px' }}>
-              <ProgressRing frac={secondsLeft / HOLD_SECONDS} />
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontFamily: th.fontMono, fontWeight: 700, fontSize: 30, color: th.text, letterSpacing: -1 }}>{mm}:{ss}</span>
-                <span style={{ fontFamily: th.fontUI, fontSize: 10.5, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, marginTop: 2 }}>Confirmez dans</span>
-              </div>
-            </div>
-            <div style={{ textAlign: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.3 }}>Créneau bloqué pour vous</div>
-            <div style={{ textAlign: 'center', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 6 }}>{formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {totalPrice}€</div>
-            {quotaStatus && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-                <QuotaStatus status={quotaStatus} />
-              </div>
-            )}
-            <div style={{ marginTop: 16 }}>
-              {errorMsg && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginBottom: 10 }}>{errorMsg}</div>
-              )}
-
-              {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>Mode de paiement</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-                {/* Avenue 0 — couverture par abonnement (sélectionnée par défaut si le créneau est couvert). */}
-                {cover && (
-                  <button type="button" onClick={() => { setUseSub(true); setPaySource(null); setPayMode('club'); }}
-                    style={{ textAlign: 'left', border: `1.5px solid ${useSub ? th.accent : th.lineStrong}`, background: useSub ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                    Couvert par votre abonnement — {coverageLabel(cover)}
-                  </button>
-                )}
-
-                {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
-                {!requireOnlinePayment && (
-                  <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
-                    style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                    Régler au club
-                  </button>
-                )}
-
-                {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
-                {onlineAvailable && (
-                  <div style={{ border: `1.5px solid ${(!useSub && payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
-                    <button type="button" disabled={onlineRequiredButUnavailable}
-                      onClick={() => { setUseSub(false); setPayMode('online'); setPaySource(null); }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, padding: 0 }}>
-                      Payer en ligne
-                    </button>
-                    {onlineRequiredButUnavailable ? (
-                      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-                        Paiement en ligne momentanément indisponible — contactez le club.
-                      </div>
-                    ) : (!useSub && payMode === 'online' && !paySource) && (
-                      <div style={{ marginTop: 10 }}>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button type="button" disabled={shareTooSmall} onClick={() => setPayAmount('share')}
-                            style={{ flex: 1, border: `1.5px solid ${onlineShare ? th.accent : th.lineStrong}`, background: onlineShare ? th.surface : 'transparent', borderRadius: 10, padding: '8px 6px', cursor: shareTooSmall ? 'default' : 'pointer', opacity: shareTooSmall ? 0.5 : 1, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            Ma part ({perPerson}€)
-                          </button>
-                          <button type="button" onClick={() => setPayAmount('full')}
-                            style={{ flex: 1, border: `1.5px solid ${!onlineShare ? th.accent : th.lineStrong}`, background: !onlineShare ? th.surface : 'transparent', borderRadius: 10, padding: '8px 6px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            Total ({totalPrice}€)
+                    {visibility === 'PUBLIC' && levelEnabled && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
+                          <button type="button" role="switch" aria-checked={levelLimited} aria-label="Limiter le niveau"
+                            onClick={() => setLevelLimited((v) => !v)}
+                            style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: levelLimited ? th.accent : th.lineStrong, transition: 'background .15s' }}>
+                            <span style={{ position: 'absolute', top: 3, left: levelLimited ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
                           </button>
                         </div>
-                        {shareTooSmall && (
-                          <div style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, marginTop: 6 }}>Ma part trop faible (minimum 0,50 €) — réglez le total.</div>
+                        {levelLimited && (
+                          <div style={{ marginTop: 14 }}>
+                            <LevelRangeSlider min={levelMin} max={levelMax}
+                              onChange={(lo, hi) => { setLevelMin(lo); setLevelMax(hi); }} />
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
-                )}
 
-                {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
-                {packages.length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {packages.map((p) => {
-                      const ok = canCover(p, totalEuros);
-                      return (
-                        <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
-                          style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                          {packageLabel(p)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
-            {cardIntentPath && (
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 16, cursor: 'pointer' }}>
-                <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
-                  aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
-                  style={{ width: 16, height: 16, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
-                <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.45 }}>
-                  J'accepte les{' '}
-                  <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>conditions générales de vente</a>
-                  {' '}et la{' '}
-                  <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>politique de confidentialité</a>.
-                  {cgvStatus === 'fallback' && (
-                    <span style={{ display: 'block', color: th.textFaint, fontSize: 11.5, marginTop: 3 }}>
-                      Les conditions générales de la plateforme s'appliquent.
-                    </span>
+                  {nbPlayers > 1 && (
+                    <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+                      ≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
+                    </div>
                   )}
-                </span>
-              </label>
-            )}
+                </div>
+              )}
 
-            <div style={{ display: 'flex', gap: 11, marginTop: 22 }}>
-              <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
-              <Btn icon="arrowR" onClick={handleConfirm} disabled={(!paySource && payMode === 'online' && onlineRequiredButUnavailable) || (cardIntentPath && !cgvAccepted)} style={{ flex: 1 }}>
-                {useSub ? 'Confirmer avec mon abonnement'
-                  : paySource ? 'Confirmer avec mon solde'
-                  : (payMode === 'online' && onlineAvailable) ? `Payer ${onlineAmountLabel}`
-                  : 'Confirmer et payer'}
-              </Btn>
-            </div>
-            {stripeStep && reservation && (
-              <div style={{ marginTop: 20, padding: '16px 0 0', borderTop: `1px solid ${th.lineStrong}` }}>
-                <StripePaymentStep
-                  reservationId={reservation.id}
-                  slug={slug ?? ''}
-                  clubId={clubId ?? ''}
-                  type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
-                  payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
-                  amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
-                  cgvAccepted={cgvAccepted}
-                  token={token}
-                  onSuccess={() => {
-                    setStripeStep(false);
-                    onClose();
-                  }}
-                  onCancel={() => setStripeStep(false)}
-                />
+              {/* Quota (compteur du joueur) */}
+              {quotaStatus && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                  <QuotaStatus status={quotaStatus} />
+                </div>
+              )}
+
+              {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>Mode de paiement</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                  {/* Avenue 0 — couverture par abonnement (sélectionnée par défaut si le créneau est couvert). */}
+                  {cover && (
+                    <button type="button" onClick={() => { setUseSub(true); setPaySource(null); setPayMode('club'); }}
+                      style={{ textAlign: 'left', border: `1.5px solid ${useSub ? th.accent : th.lineStrong}`, background: useSub ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                      Couvert par votre abonnement — {coverageLabel(cover)}
+                    </button>
+                  )}
+
+                  {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
+                  {!requireOnlinePayment && (
+                    <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
+                      style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                      Régler au club
+                    </button>
+                  )}
+
+                  {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
+                  {onlineAvailable && (
+                    <div style={{ border: `1.5px solid ${(!useSub && payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
+                      <button type="button" disabled={onlineRequiredButUnavailable}
+                        onClick={() => { setUseSub(false); setPayMode('online'); setPaySource(null); }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, padding: 0 }}>
+                        Payer en ligne
+                      </button>
+                      {onlineRequiredButUnavailable ? (
+                        <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                          Paiement en ligne momentanément indisponible — contactez le club.
+                        </div>
+                      ) : (!useSub && payMode === 'online' && !paySource) && (
+                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 8, lineHeight: 1.4 }}>
+                          {onlineShare
+                            ? <>Votre part : <b style={{ color: th.text }}>{perPerson}€</b> <span style={{ color: th.textFaint }}>· {totalPrice}€ ÷ {capacity} joueurs</span></>
+                            : <>Montant : <b style={{ color: th.text }}>{totalPrice}€</b> <span style={{ color: th.textFaint }}>· part trop faible (minimum 0,50 €)</span></>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
+                  {packages.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {packages.map((p) => {
+                        const ok = canCover(p, totalEuros);
+                        return (
+                          <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
+                            style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                            {packageLabel(p)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </>
-        )}
 
-        {phase === 'error' && (
-          <>
-            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.onAccent, background: th.accent, padding: '12px 14px', borderRadius: 12, fontWeight: 600 }}>{errorMsg}</div>
-            <div style={{ marginTop: 14 }}>
-              <Btn full variant="surface" onClick={onClose}>Fermer</Btn>
-            </div>
-          </>
-        )}
+              {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
+              {cardIntentPath && (
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 16, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
+                    aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
+                    style={{ width: 16, height: 16, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.45 }}>
+                    J&apos;accepte les{' '}
+                    <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>conditions générales de vente</a>
+                    {' '}et la{' '}
+                    <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>politique de confidentialité</a>.
+                    {cgvStatus === 'fallback' && (
+                      <span style={{ display: 'block', color: th.textFaint, fontSize: 11.5, marginTop: 3 }}>
+                        Les conditions générales de la plateforme s&apos;appliquent.
+                      </span>
+                    )}
+                  </span>
+                </label>
+              )}
 
-        <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '18px auto 0' }} />
+              {/* Conditions d'annulation — toujours affiché */}
+              <CancellationNotice text={cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)} th={th} />
+
+              {errorMsg && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginTop: 14 }}>{errorMsg}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: 11, marginTop: 18 }}>
+                <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
+                <Btn icon="arrowR" onClick={handleConfirm}
+                  disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource) || (cardIntentPath && !cgvAccepted)}
+                  style={{ flex: 1 }}>
+                  {useSub ? 'Confirmer avec mon abonnement'
+                    : paySource ? 'Confirmer avec mon solde'
+                    : (payMode === 'online' && onlineAvailable) ? `Valider le paiement · ${onlineAmountLabel}`
+                    : 'Confirmer la réservation'}
+                </Btn>
+              </div>
+
+              {stripeStep && reservation && (
+                <div style={{ marginTop: 20, padding: '16px 0 0', borderTop: `1px solid ${th.lineStrong}` }}>
+                  <StripePaymentStep reservationId={reservation.id} slug={slug ?? ''} clubId={clubId ?? ''}
+                    type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
+                    payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
+                    amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
+                    cgvAccepted={cgvAccepted} token={token}
+                    onSuccess={() => { setStripeStep(false); onClose(); }}
+                    onCancel={() => setStripeStep(false)} />
+                </div>
+              )}
+              </>
+              )}
+            </>
+          )}
+
+          <div style={{ width: 38, height: 5, borderRadius: 3, background: th.lineStrong, margin: '18px auto 0' }} />
+        </div>
       </div>
     </div>
   );
