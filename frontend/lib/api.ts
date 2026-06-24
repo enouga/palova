@@ -146,6 +146,21 @@ export const api = {
       body: JSON.stringify(options ?? {}),
     }, token),
 
+  applyHoldSetup: (
+    reservationId: string,
+    token: string,
+    setup: {
+      partnerUserIds?: string[];
+      visibility?: 'PRIVATE' | 'PUBLIC';
+      targetLevelMin?: number | null;
+      targetLevelMax?: number | null;
+    },
+  ) =>
+    request<Reservation>(`/api/reservations/${reservationId}/setup`, {
+      method: 'POST',
+      body: JSON.stringify(setup),
+    }, token),
+
   // --- Stripe Connect (admin) ---
   initiateStripeConnect: (clubId: string, body: { refreshUrl: string; returnUrl: string }, token: string) =>
     request<{ url: string }>(`/api/clubs/${clubId}/admin/stripe/connect`, {
