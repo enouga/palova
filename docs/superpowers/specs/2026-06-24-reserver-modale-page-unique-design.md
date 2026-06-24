@@ -25,8 +25,9 @@ Une **page unique** : à l'ouverture, le créneau est **immédiatement bloqué**
 ### 3.1 Blocage à l'ouverture (hold on mount)
 
 - Au montage du composant, on appelle **immédiatement `api.holdSlot(...)`**. Comme l'utilisateur n'a encore rien choisi, ce hold initial est posé **sans partenaires, en `PRIVATE`, sans fourchette de niveau** (juste l'organisateur). Il pose le **verrou Redis** + crée la réservation `PENDING` qui réserve le créneau pendant 5 min.
-- **Application des partenaires/visibilité/niveau à la confirmation (backend, additif) :** `confirmReservation` ne les accepte pas aujourd'hui (ils ne sont posés qu'au `holdSlot`). On l'**étend** pour accepter `partnerUserIds` / `visibility` / `targetLevelMin` / `targetLevelMax` optionnels et les **appliquer dans sa transaction Serializable existante** : revalider les partenaires (`validatePartners`, déjà présent), **remplacer les lignes `ReservationParticipant`** (`participantRows`, déjà présent) et mettre à jour `visibility`/`targetLevel*` sur la réservation. **Aucun re-hold, donc aucune fenêtre de course** : le même verrou Redis tient de l'ouverture à la confirmation.
-  - Quota inchangé : `assertQuota` compte les réservations de **l'organisateur**, pas des partenaires ; ajouter des partenaires ne le rouvre pas. La capacité (`TOO_MANY_PLAYERS`) est revalidée par `validatePartners` à la confirmation.
+- **Application des partenaires/visibilité/niveau via un endpoint dédié `applyHoldSetup` (backend, additif) :** à la validation, **avant** la confirmation/paiement, le front appelle un nouvel endpoint qui applique les choix sur la résa **PENDING** : revalider les partenaires (`validatePartners`, déjà présent), **remplacer les lignes `ReservationParticipant`** (`participantRows`, déjà présent) et mettre à jour `visibility`/`targetLevel*`. **Aucun re-hold, donc aucune fenêtre de course** : le même verrou Redis tient de l'ouverture à la confirmation.
+  - **Pourquoi un endpoint séparé plutôt qu'étendre `confirmReservation` :** sur le chemin paiement en ligne, la confirmation est déclenchée par `StripePaymentStep` **et** par le webhook Stripe (`payment_intent.succeeded`) — le premier qui gagne finalise. Appliquer les joueurs **avant** le paiement les persiste quel que soit le confirmeur, sans course. `confirmReservation` et le webhook restent **inchangés**.
+  - Quota inchangé : `assertQuota` compte les réservations de **l'organisateur**, pas des partenaires. La capacité (`TOO_MANY_PLAYERS`) est revalidée par `validatePartners`. Appelé **seulement** sur terrain multi-joueurs (`showPartners`) ; sinon ignoré.
 - **Pendant le hold initial** (round-trip réseau) : la modale s'affiche déjà (toutes les infos du créneau viennent des props), avec un indicateur discret **« Blocage du créneau… »** à la place du badge timer, et le bouton final **désactivé**.
 - **Succès** → le badge **« Créneau bloqué pour vous »** + le timer apparaissent, le bouton s'active.
 - **Échec** (`SLOT_NOT_AVAILABLE`, `SLOT_ALREADY_HELD`, `QUOTA_*`, …) → bascule sur l'**écran d'erreur** : message clair (mapping `BOOKING_ERRORS` existant) + bouton **« Fermer »**. _(Décision : message clair + fermer, pas de blocage côté grille.)_
@@ -132,7 +133,7 @@ Rester dans `BookingModal.tsx`. Extraire si utile (lisibilité, le fichier gross
 - `BookingTimer` — barre fine + chip, état coral.
 - `CancellationNotice` — le bloc d'info annulation.
 
-Les helpers purs restent : `capacityFor`/`courtFormat` (`lib/courtType`), `cancellationPolicyLabel` (`lib/reservations`), `coveringSubscription`/`coverageLabel`, `packageLabel`/`canCover`. Côté backend, réutilisation de `validatePartners`/`participantRows` (aucun nouvel helper) — voir §7 pour l'extension de `confirmReservation`.
+Les helpers purs restent : `capacityFor`/`courtFormat` (`lib/courtType`), `cancellationPolicyLabel` (`lib/reservations`), `coveringSubscription`/`coverageLabel`, `packageLabel`/`canCover`. Côté backend, réutilisation de `validatePartners`/`participantRows` (aucun nouvel helper) — voir §7 pour l'ajout de `applyHoldSetup`.
 
 ## 6. Tests
 
@@ -148,18 +149,18 @@ Cas à couvrir :
 6. **Conditions d'annulation** : bloc affiché avec le texte `cancellationPolicyLabel`, sans case obligatoire.
 7. **CGV** : case présente seulement sur le chemin CB en ligne, et bloque la validation tant que non cochée.
 8. **Timer** : expiration → écran d'erreur « expiré ».
-9. **Partenaires/visibilité transmis** : `confirmReservation` est appelé avec `partnerUserIds`/`visibility`/niveau choisis après l'ouverture.
+9. **Partenaires/visibilité transmis** : sur terrain multi-joueurs, `applyHoldSetup` est appelé (avant `confirmReservation`/Stripe) avec `partnerUserIds`/`visibility`/niveau ; sur terrain simple, il **n'est pas** appelé.
 
-⚠️ jsdom : timers (`jest.useFakeTimers`) pour le compte à rebours ; mocks `lib/api` doivent exposer `holdSlot`, `confirmReservation`, `cancelReservation`, `getMyRating`, `getClubPage`, `assetUrl`.
+⚠️ jsdom : timers (`jest.useFakeTimers`) pour le compte à rebours ; mocks `lib/api` doivent exposer `holdSlot`, `confirmReservation`, `cancelReservation`, `applyHoldSetup`, `getMyRating`, `getClubPage`, `assetUrl`.
 
-**Backend** (`reservation.service.test.ts`) : `confirmReservation` avec `partnerUserIds`/`visibility`/`targetLevel*` → participants remplacés, visibilité/niveau mis à jour, `TOO_MANY_PLAYERS` si dépassement de capacité ; confirmation sans ces champs → comportement inchangé.
+**Backend** (`reservation.service.test.ts`) : `applyHoldSetup` → participants remplacés (organisateur + partenaires), visibilité/niveau mis à jour ; `TOO_MANY_PLAYERS` si dépassement de capacité ; refus si la résa n'est pas PENDING ou pas possédée par l'utilisateur.
 
-## 7. Backend (changement additif, ciblé)
+## 7. Backend (ajout additif, ciblé)
 
-- **`confirmReservation`** (`reservation.service.ts`) : nouveaux paramètres optionnels `partnerUserIds` / `visibility` / `targetLevelMin` / `targetLevelMax`, appliqués dans la transaction existante (revalidation `validatePartners`, remplacement des `ReservationParticipant` via `participantRows`, mise à jour `visibility`/`targetLevel*`). Forme de réponse inchangée ; tout reste optionnel (les confirmations existantes sans ces champs ne changent pas).
-- **Route** `POST /api/reservations/:id/confirm` (ou équivalent) : relayer ces champs depuis le body.
-- **Front** `api.confirmReservation` : envoyer ces champs.
-- Réutilise les helpers existants `validatePartners` / `participantRows` — **aucun nouvel helper**.
+- **Nouvelle méthode `applyHoldSetup(reservationId, userId, { partnerUserIds?, visibility?, targetLevelMin?, targetLevelMax? })`** (`reservation.service.ts`) : exige la résa **PENDING**, possédée par `userId`, non expirée ; revalide les partenaires (`validatePartners`) ; dans une transaction, **remplace** les `ReservationParticipant` (`deleteMany` + `createMany` via `participantRows`, split sur `totalPrice`) et met à jour `visibility`/`targetLevelMin`/`targetLevelMax`. Réutilise `validatePartners`/`participantRows` — **aucun nouvel helper**.
+- **Nouvelle route `POST /api/reservations/:id/setup`** (auth) : relaie le body vers `applyHoldSetup`, mappe les erreurs (`PARTNER_DUPLICATE`/`PARTNER_NOT_MEMBER`/`TOO_MANY_PLAYERS` → 409/400, `RESERVATION_NOT_PENDING` → 409, `UNAUTHORIZED` → 403).
+- **Front** `api.applyHoldSetup(reservationId, token, params)` : appelée par la modale **avant** `confirmReservation`/Stripe, uniquement si terrain multi-joueurs.
+- **`confirmReservation`, la route `/confirm` et le webhook Stripe : inchangés.**
 
 ## 8. Hors périmètre
 
