@@ -11,6 +11,8 @@ jest.mock('../lib/api', () => ({
     adminAssignReservationMember: jest.fn(),
     adminAddReservationParticipant: jest.fn(),
     adminRemoveReservationParticipant: jest.fn(),
+    adminChangeReservationParticipant: jest.fn(),
+    refundPayment: jest.fn(),
     adminCreateMember: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
@@ -86,6 +88,29 @@ describe('CollectPanel', () => {
     await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
       'club-1', 'rv-1', expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pk-1', amount: 52 }), 'tok',
     ));
+  });
+
+  it('« Changer » remplace un joueur via le sélecteur (adminChangeReservationParticipant)', async () => {
+    (api.adminChangeReservationParticipant as jest.Mock).mockResolvedValue({ id: 'rv-1' });
+    const orga = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Adam', lastName: 'Bernard', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    const ines = { id: 'pt-2', userId: 'u2', isOrganizer: false, firstName: 'Ines', lastName: 'Andre', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    const members = [{ userId: 'u9', firstName: 'Marie', lastName: 'Curie', email: 'marie@x.fr' }];
+    renderPanel({ participants: [orga, ines] }, { members });
+    // seule la ligne non-organisateur (Ines) propose « Changer »
+    fireEvent.click(screen.getByRole('button', { name: 'Changer' }));
+    const input = screen.getByPlaceholderText('Rechercher un membre…');
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByText(/Marie Curie/));
+    await waitFor(() => expect(api.adminChangeReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'pt-2', 'u9', 'tok'));
+  });
+
+  it('affiche le moyen de règlement à côté de « réglé »', () => {
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '13.00', outstanding: '0.00' };
+    const payment = { id: 'pay-1', amount: '13.00', method: 'CARD' as const, participantId: 'pt-1', payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2026-06-22T13:46:00.000Z', refundedAmount: '0.00', receiptNo: null };
+    // due = paid → réservation soldée : le bloc d'encaissement est masqué, « Carte » ne vient donc QUE du badge.
+    renderPanel({ participants: [part], payments: [payment], paidAmount: '13.00' }, { due: 1300 });
+    expect(screen.getByText(/réglé/)).toBeInTheDocument();
+    expect(screen.getByText(/Carte/)).toBeInTheDocument();
   });
 
   it('le montant se recalcule quand le payé change (panneau resté ouvert)', () => {

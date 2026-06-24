@@ -86,3 +86,13 @@ export function matchesQuery(
   const hay = norm([rv.title ?? '', rv.user ? `${rv.user.firstName} ${rv.user.lastName} ${rv.user.email}` : '', parts].join(' '));
   return hay.includes(needle);
 }
+
+/**
+ * Le créneau est-il « à venir » ? = sa fin n'est pas encore passée (l'en-cours
+ * reste visible — on peut encore encaisser). `nowMs = null` (heure courante pas
+ * encore connue côté client) → tout passe (pas de masquage avant hydratation).
+ */
+export function isUpcoming(rv: { endTime: string }, nowMs: number | null): boolean {
+  if (nowMs === null) return true;
+  return new Date(rv.endTime).getTime() >= nowMs;
+}

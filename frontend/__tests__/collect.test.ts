@@ -1,4 +1,4 @@
-import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod } from '@/lib/collect';
+import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod, isUpcoming } from '@/lib/collect';
 
 const TZ = 'Europe/Paris';
 // jeudi 22/06/2026 18h-19h Paris (UTC+2) = 16:00Z-17:00Z
@@ -93,5 +93,21 @@ describe('matchesQuery', () => {
     expect(matchesQuery(withParts, 'durand')).toBe(true);
     expect(matchesQuery(withParts, 'karim')).toBe(true);
     expect(matchesQuery(withParts, 'inconnu')).toBe(false);
+  });
+});
+
+describe('isUpcoming', () => {
+  const NOW = Date.parse('2026-06-24T16:00:00.000Z');
+  it('garde un créneau dont la fin est dans le futur', () => {
+    expect(isUpcoming({ endTime: '2026-06-24T17:00:00.000Z' }, NOW)).toBe(true);
+  });
+  it('garde un créneau EN COURS (commencé mais pas fini)', () => {
+    expect(isUpcoming({ endTime: '2026-06-24T16:30:00.000Z' }, NOW)).toBe(true);
+  });
+  it('masque un créneau déjà terminé', () => {
+    expect(isUpcoming({ endTime: '2026-06-24T15:00:00.000Z' }, NOW)).toBe(false);
+  });
+  it("garde tout quand l'heure courante est inconnue (null)", () => {
+    expect(isUpcoming({ endTime: '2020-01-01T00:00:00.000Z' }, null)).toBe(true);
   });
 });

@@ -302,6 +302,9 @@ export const api = {
   adminReorderResources: (clubId: string, orderedIds: string[], token: string) =>
     request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
 
+  adminDeleteResource: (clubId: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/resources/${id}`, { method: 'DELETE' }, token),
+
   adminGetReservations: (clubId: string, filters: AdminReservationFilters, token: string) => {
     const qs = new URLSearchParams();
     if (filters.date)       qs.set('date', filters.date);
@@ -331,6 +334,10 @@ export const api = {
 
   adminRemoveReservationParticipant: (clubId: string, reservationId: string, participantId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'DELETE' }, token),
+
+  // Remplace un participant par un autre membre, en une fois (recalcule les parts).
+  adminChangeReservationParticipant: (clubId: string, reservationId: string, participantId: string, memberUserId: string, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
 
   // --- Abonnements (admin) ---
   adminGetSubscriptionPlans: (clubId: string, token: string) =>

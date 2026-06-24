@@ -11,7 +11,7 @@ jest.mock('../lib/api', () => ({
     adminGetResources: jest.fn().mockResolvedValue([{ id: 'court-1', name: 'C1', attributes: {}, isActive: true, price: '52.00', offPeakPrice: null, openHour: 8, closeHour: 22, slotStepMin: null, clubSport: { id: 'cs', slotStepMin: null, durationsMin: [60], sport: { key: 'padel', name: 'Padel', resourceNoun: 'Terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60], surfaces: [], hasLighting: false } } }]),
     adminGetMembers: jest.fn().mockResolvedValue([]),
     adminGetReservations: jest.fn().mockResolvedValue({ reservations: [
-      { id: 'rv-1', resourceId: 'court-1', startTime: '2026-06-22T16:00:00.000Z', endTime: '2026-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '52.00', paidAmount: '0.00', dueAmount: '52.00', resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' }, payments: [], participants: [] },
+      { id: 'rv-1', resourceId: 'court-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '52.00', paidAmount: '0.00', dueAmount: '52.00', resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' }, payments: [], participants: [] },
     ], summary: { total: '52', paid: '0', paidTotal: '0', outstanding: '52' } }),
     adminAddPayment: jest.fn().mockResolvedValue({ id: 'p1' }),
     adminCancelReservation: jest.fn().mockResolvedValue({ id: 'rv-1', status: 'CANCELLED' }),
@@ -30,12 +30,12 @@ const renderPage = () => render(<ThemeProvider><AdminReservationsPage /></ThemeP
 Element.prototype.scrollIntoView = jest.fn();
 
 const mkCourt = (id: string, name: string) => ({ id, name, attributes: {}, isActive: true, price: '52.00', offPeakPrice: null, openHour: 8, closeHour: 22, slotStepMin: null, clubSport: { id: 'cs', slotStepMin: null, durationsMin: [60], sport: { key: 'padel', name: 'Padel', resourceNoun: 'Terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60], surfaces: [], hasLighting: false } } });
-const mkResa = (id: string, resourceId: string, name: string, over: Record<string, unknown> = {}) => ({ id, resourceId, startTime: '2026-06-22T16:00:00.000Z', endTime: '2026-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '52.00', paidAmount: '0.00', dueAmount: '52.00', resource: { id: resourceId, name }, user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@x.fr' }, payments: [], participants: [], ...over });
+const mkResa = (id: string, resourceId: string, name: string, over: Record<string, unknown> = {}) => ({ id, resourceId, startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '52.00', paidAmount: '0.00', dueAmount: '52.00', resource: { id: resourceId, name }, user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@x.fr' }, payments: [], participants: [], ...over });
 const resp = (reservations: unknown[]) => ({ reservations, summary: { total: '0', paid: '0', paidTotal: '0', outstanding: '0' } });
 
 // Réinitialise les compteurs d'appels entre les tests (les implémentations posées par
 // jest.mock / mockResolvedValue sont conservées) pour des assertions de nombre fiables.
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); });
 
 it('renomme la page en « Encaissement »', async () => {
   renderPage();
@@ -48,17 +48,6 @@ it('déplie une ligne par place : titulaire + 3 places « Associer un membre » 
   expect(screen.getAllByRole('button', { name: /Associer un membre/ })).toHaveLength(3);
 });
 
-it('filtre « Non payé » et solde le reste en 1 clic (« Tout solder », CB)', async () => {
-  renderPage();
-  await screen.findByText('C1');
-  fireEvent.click(screen.getByRole('radio', { name: /Non payé/ }));
-  const cb = screen.getAllByRole('button', { name: 'CB' });
-  fireEvent.click(cb[cb.length - 1]);                             // dernier = « Tout solder »
-  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
-    'club-1', 'rv-1', expect.objectContaining({ amount: 52, method: 'CARD' }), 'tok',
-  ));
-});
-
 it('recherche par nom masque les non-correspondants', async () => {
   renderPage();
   await screen.findByText('C1');
@@ -66,18 +55,11 @@ it('recherche par nom masque les non-correspondants', async () => {
   expect(screen.queryByText('C1')).not.toBeInTheDocument();
 });
 
-it('filtre « Soldé » masque les réservations encore à encaisser', async () => {
-  renderPage();
-  await screen.findByText('C1');
-  fireEvent.click(screen.getByRole('radio', { name: /Soldé/ }));   // rv-1 (non payée) doit disparaître
-  expect(screen.queryByText('C1')).not.toBeInTheDocument();        // un seul terrain → pas de facette terrain dans le rail
-});
-
 it("encaisse la part d'un seul joueur (CB → participantId)", async () => {
   // Terrain single (capacité 2) → part = 26 / 2 = 13 par joueur.
   (api.adminGetResources as jest.Mock).mockResolvedValue([{ id: 'court-1', name: 'C1', attributes: { format: 'single' }, isActive: true, price: '26.00', offPeakPrice: null, openHour: 8, closeHour: 22, slotStepMin: null, clubSport: { id: 'cs', slotStepMin: null, durationsMin: [60], sport: { key: 'padel', name: 'Padel', resourceNoun: 'Terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60], surfaces: [], hasLighting: false } } }]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue({ reservations: [
-    { id: 'rv-2', resourceId: 'court-1', startTime: '2026-06-22T16:00:00.000Z', endTime: '2026-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '26.00', paidAmount: '0.00', dueAmount: '26.00', resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' }, payments: [], participants: [
+    { id: 'rv-2', resourceId: 'court-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '26.00', paidAmount: '0.00', dueAmount: '26.00', resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' }, payments: [], participants: [
       { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' },
       { id: 'pt-2', userId: 'u2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', share: '13.00', paid: '0.00', outstanding: '13.00' },
     ] },
@@ -108,20 +90,6 @@ it('club sans moyen rapide configuré → repli sur le défaut (boutons 1 clic p
   renderPage();
   await screen.findByText('C1');
   expect(screen.getAllByRole('button', { name: 'CB' }).length).toBeGreaterThan(0);   // défaut CB/Ticket CE/Espèces
-});
-
-it('filtre par terrain : cocher un terrain masque les réservations des autres', async () => {
-  (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1'), mkCourt('court-2', 'C2')]);
-  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
-    mkResa('rv-a', 'court-1', 'C1', { title: 'Match AAA' }),
-    mkResa('rv-b', 'court-2', 'C2', { title: 'Match BBB' }),
-  ]));
-  renderPage();
-  await screen.findByText('Match AAA');
-  expect(screen.getByText('Match BBB')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('checkbox', { name: /C2/ }));   // ne garder que le Terrain C2
-  await waitFor(() => expect(screen.queryByText('Match AAA')).not.toBeInTheDocument());
-  expect(screen.getByText('Match BBB')).toBeInTheDocument();
 });
 
 // ── Robustesse : « la dernière réponse gagne » (corrige le bug aléatoire) ─────
@@ -208,39 +176,57 @@ it('double-clic sur la confirmation n’annule qu’une seule fois', async () =>
   await act(async () => { release({}); });
 });
 
-// ── Filtres ───────────────────────────────────────────────────────────────────
-it('filtre par plage horaire (De/à) masque les créneaux hors plage', async () => {
-  (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1')]);
-  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([mkResa('rv-1', 'court-1', 'C1')])); // 18h (Europe/Paris)
+// ── Filtres : sport · à venir · à encaisser ─────────────────────────────────────
+// Deux terrains de sports différents (Padel C1, Tennis C2) pour le filtre par sport.
+const tennisCourt = (id: string, name: string) => ({ ...mkCourt(id, name),
+  clubSport: { id: 'cs-tennis', slotStepMin: null, durationsMin: [60], sport: { key: 'tennis', name: 'Tennis', resourceNoun: 'Court', defaultSlotStepMin: 30, defaultDurationsMin: [60], surfaces: [], hasLighting: false } } });
+
+it('filtre par sport : décocher un sport masque ses terrains', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1'), tennisCourt('court-2', 'C2')]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+    mkResa('rv-a', 'court-1', 'C1', { title: 'Match PADEL' }),
+    mkResa('rv-b', 'court-2', 'C2', { title: 'Match TENNIS' }),
+  ]));
   renderPage();
-  await screen.findByText('C1');
-  fireEvent.click(screen.getByRole('button', { name: 'Tout afficher' }));   // date='' → options 8h..22h
-  fireEvent.click(screen.getByRole('button', { name: 'Plage…' }));          // déplie les sélecteurs De/à
-  const selects = screen.getAllByRole('combobox');                           // [De, à]
-  fireEvent.change(selects[0], { target: { value: '20' } });                 // De 20h → le créneau de 18h sort
-  await waitFor(() => expect(screen.queryByText('C1')).not.toBeInTheDocument());
-  fireEvent.change(selects[0], { target: { value: '18' } });                 // De 18h → réapparaît
-  expect(screen.getByText('C1')).toBeInTheDocument();
+  await screen.findByText('Match PADEL');
+  expect(screen.getByText('Match TENNIS')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /changer/ }));    // ouvre le sélecteur de sport
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Tennis' }));   // décoche Tennis
+  await waitFor(() => expect(screen.queryByText('Match TENNIS')).not.toBeInTheDocument());
+  expect(screen.getByText('Match PADEL')).toBeInTheDocument();
 });
 
-it('« Réinitialiser » remet les filtres à zéro', async () => {
+it('club mono-sport : pas de sélecteur de sport', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1')]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([mkResa('rv-1', 'court-1', 'C1')]));
   renderPage();
   await screen.findByText('C1');
-  fireEvent.click(screen.getByRole('radio', { name: /Soldé/ }));      // masque rv-1 (non payée)
-  expect(screen.queryByText('C1')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Réinitialiser/ }));
-  expect(screen.getByText('C1')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /changer/ })).toBeNull();
 });
 
-it('« Maintenant » active un filtre de créneau', async () => {
+it('« À encaisser » masque les réservations soldées', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1')]);
-  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([mkResa('rv-1', 'court-1', 'C1')]));
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+    mkResa('rv-paid', 'court-1', 'C1', { title: 'Soldee', paidAmount: '52.00' }),
+    mkResa('rv-due',  'court-1', 'C1', { title: 'A regler' }),
+  ]));
   renderPage();
-  await screen.findByText('C1');
-  fireEvent.click(screen.getByRole('button', { name: 'Maintenant' }));
-  expect(screen.getByRole('button', { name: /Réinitialiser/ })).toBeInTheDocument();
+  await screen.findByText('A regler');
+  expect(screen.getByText('Soldee')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: /À encaisser/ }));
+  await waitFor(() => expect(screen.queryByText('Soldee')).not.toBeInTheDocument());
+  expect(screen.getByText('A regler')).toBeInTheDocument();
+});
+
+it('« À venir » masque un créneau terminé ; « Tout le jour » le réaffiche', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1')]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+    mkResa('rv-past', 'court-1', 'C1', { title: 'Passee', startTime: '2020-01-01T08:00:00.000Z', endTime: '2020-01-01T09:00:00.000Z' }),
+  ]));
+  renderPage();
+  await waitFor(() => expect(screen.queryByText('Passee')).toBeNull());   // « À venir » (défaut) masque le passé
+  fireEvent.click(screen.getByRole('radio', { name: 'Tout le jour' }));
+  expect(await screen.findByText('Passee')).toBeInTheDocument();
 });
 
 // ── Encaissement optimiste (« très rapide ») ─────────────────────────────────
@@ -311,4 +297,22 @@ it('« annuler » un règlement le remet à encaisser AU CLIC (optimiste)', asyn
   await waitFor(() => expect(api.refundPayment).toHaveBeenCalledWith(
     'club-1', 'pay-1', expect.objectContaining({ amount: 13 }), 'tok',
   ));
+});
+
+it('la modale Détails montre QUI a payé dans les encaissements (joueur · moyen)', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  const resa = twoPlayerResa({ paidAmount: '13.00',
+    participants: [
+      { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '13.00', outstanding: '0.00' },
+      { id: 'pt-2', userId: 'u2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', share: '13.00', paid: '0.00', outstanding: '13.00' },
+    ],
+    payments: [{ id: 'pay-1', amount: '13.00', method: 'CARD', participantId: 'pt-1', refundedAmount: '0.00', payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2026-06-22T16:05:00.000Z' }],
+  });
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([resa]));
+  renderPage();
+  await screen.findByText('C1');
+  fireEvent.click(screen.getByRole('button', { name: /Détails \/ options/ }));
+  expect(await screen.findByText('Encaissements')).toBeInTheDocument();
+  // le règlement attribué à pt-1 affiche le nom du joueur + le moyen, dans une même ligne
+  expect(screen.getByText((_, el) => el?.textContent === 'Jean Test · Carte')).toBeInTheDocument();
 });

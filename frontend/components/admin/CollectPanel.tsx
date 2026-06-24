@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, CSSProperties } from 'react';
-import { api, ClubReservation, Member, MemberPackage, CreateMemberBody, PaymentMethod } from '@/lib/api';
+import { api, ClubReservation, Member, MemberPackage, CreateMemberBody, PaymentMethod, Payment } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { toCents, centsToInput, quickAmounts, fmtEuros, validatePaymentAmount, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -11,6 +11,8 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { Btn } from '@/components/ui/atoms';
 
 const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
+// Libellé court de TOUS les moyens, pour le badge « réglé · {moyen} » (carnet/porte-monnaie/abo inclus).
+const METHOD_SHORT: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo', OTHER: 'Autre', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', SUBSCRIPTION: 'Abonnement' };
 // Tous les moyens de paiement manuels du comptoir (carnets/porte-monnaie = boutons package à part).
 const ALL_METHODS: PaymentMethod[] = ['CARD', 'CASH', 'TRANSFER', 'VOUCHER', 'MEMBER', 'OTHER'];
 const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CASH: 'euro', TRANSFER: 'arrowR', OTHER: 'euro' };
@@ -48,6 +50,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const [selPackages, setSelPackages] = useState<MemberPackage[]>([]);
   const [pkgLoading, setPkgLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [changingId, setChangingId] = useState<string | null>(null);   // participant en cours de remplacement (sélecteur inline)
 
   const fail = (msg: string) => onError?.(msg);
   const remaining = Math.max(0, due - toCents(reservation.paidAmount));
@@ -148,6 +151,30 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     } catch (e) { fail(participantErr((e as Error).message)); }
     finally { setBusy(false); }
   };
+  // Remplace un joueur par un autre (membre du club) en une fois — recalcule les parts côté serveur.
+  const changeParticipant = async (participantId: string, m: Member) => {
+    setBusy(true);
+    try {
+      const updated = await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, m.userId, token);
+      setChangingId(null);
+      if (payParticipantId === participantId) setPayParticipantId(null);
+      onChanged(updated);
+    } catch (e) { fail(participantErr((e as Error).message)); }
+    finally { setBusy(false); }
+  };
+
+  // Annule (rembourse intégralement) les règlements déjà attribués à un joueur, puis recharge.
+  const rem = (pp: Payment) => toCents(pp.amount) - toCents(pp.refundedAmount ?? '0');
+  const refundParticipant = async (pays: Payment[]) => {
+    const targets = pays.filter((pp) => rem(pp) > 0);
+    if (targets.length === 0) return;
+    setBusy(true);
+    try {
+      for (const pp of targets) await api.refundPayment(clubId, pp.id, { amount: rem(pp) / 100, reason: 'Annulation au comptoir' }, token);
+      onChanged();
+    } catch (e) { fail((e as Error).message); }
+    finally { setBusy(false); }
+  };
 
   // Création à la volée : crée le membre, le retrouve, applique l'action (assign/ajout).
   const createThen = async (body: CreateMemberBody, then: (m: Member) => Promise<void>) => {
@@ -204,10 +231,29 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
               const paid = rest <= 0;
               const on = payParticipantId === p.id;
               const canRemove = !(p.isOrganizer && bills.length > 1);
+              const canChange = !p.isOrganizer;   // le titulaire/organisateur se change via « Réservation au nom de »
+              // Règlements attribués à CE joueur → moyen affiché + annulation ciblée.
+              const ownPays = (reservation.payments ?? []).filter((pp) => pp.participantId === p.id);
+              const method = ownPays.length ? ownPays[ownPays.length - 1].method : undefined;
+              const refundable = ownPays.some((pp) => rem(pp) > 0);
+
+              // En cours de remplacement : le sélecteur de membre occupe toute la ligne.
+              if (changingId === p.id) {
+                return (
+                  <div key={p.id} style={{ padding: '2px 0' }}>
+                    <div style={{ ...caption, marginBottom: 4 }}>Remplacer {p.firstName} {p.lastName} par…</div>
+                    <PlayerPicker members={members} value={null}
+                      onSelect={(m) => changeParticipant(p.id, m)} onClear={() => setChangingId(null)}
+                      onCreate={(body) => createThen(body, (m) => changeParticipant(p.id, m))}
+                      placeholder="Rechercher un membre…" />
+                  </div>
+                );
+              }
+
               return (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 11px', borderRadius: 12, background: on ? `${th.accent}14` : th.surface2, boxShadow: on ? `inset 0 0 0 1.5px ${th.accent}` : 'inset 0 0 0 1px transparent' }}>
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 11px', borderRadius: 12, background: on ? `${th.accent}14` : th.surface2, boxShadow: on ? `inset 0 0 0 1.5px ${th.accent}` : 'inset 0 0 0 1px transparent' }}>
                   {avatar(p.id, p.firstName, p.lastName)}
-                  <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ flex: 1, minWidth: 90, fontFamily: th.fontUI, fontSize: 14, color: th.text, display: 'flex', alignItems: 'center', gap: 7 }}>
                     {p.firstName} {p.lastName}
                     {p.isOrganizer && <span style={{ fontSize: 11, fontWeight: 600, color: th.textFaint, background: th.surfaceHi, borderRadius: 6, padding: '2px 7px' }}>orga</span>}
                   </span>
@@ -215,12 +261,23 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                     {fmtEuros(toCents(p.paid))} / {fmtEuros(toCents(p.share))}
                   </span>
                   {paid ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>
-                      <Icon name="check" size={13} color={th.accent} />réglé
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>
+                        <Icon name="check" size={13} color={th.accent} />réglé
+                        {method && <span style={{ fontWeight: 600, color: th.textMute }}>· {METHOD_SHORT[method] ?? method}</span>}
+                      </span>
+                      {refundable && (
+                        <button type="button" disabled={busy} onClick={() => refundParticipant(ownPays)}
+                          style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', padding: 0 }}>annuler</button>
+                      )}
                     </span>
                   ) : (
                     <button type="button" disabled={busy} onClick={() => targetTo(p.id, rest)}
                       style={{ border: 'none', background: on ? th.accent : th.surface, color: on ? th.onAccent : th.text, boxShadow: on ? 'none' : `inset 0 0 0 1px ${th.line}`, borderRadius: 9, padding: '6px 12px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Régler</button>
+                  )}
+                  {canChange && (
+                    <button type="button" disabled={busy} title="Remplacer ce joueur" onClick={() => setChangingId(p.id)}
+                      style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>Changer</button>
                   )}
                   {canRemove && (
                     <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur"
