@@ -464,10 +464,17 @@ export default function BookingModal({
 
                   {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
                   {!requireOnlinePayment && (
-                    <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
-                      style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                      Régler au club
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
+                        style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                        Régler au club
+                      </button>
+                      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, paddingLeft: 2, lineHeight: 1.4 }}>
+                        {requireCardFingerprint
+                          ? <>Le club enregistre une <b style={{ color: th.textMute }}>empreinte de votre carte</b> (protection no-show) ; le règlement se fait sur place.</>
+                          : <>Vous réglez directement au club — <b style={{ color: th.textMute }}>aucune carte enregistrée</b>.</>}
+                      </div>
+                    </div>
                   )}
 
                   {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
