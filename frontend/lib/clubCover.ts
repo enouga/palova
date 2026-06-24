@@ -29,13 +29,21 @@ function mix(a: [number, number, number], b: [number, number, number], t: number
 }
 
 const DARK: [number, number, number] = [16, 19, 26]; // #10131a
+const WHITE: [number, number, number] = [255, 255, 255];
 
-export function coverGradient(seed: string, accentColor: string): { angle: number; from: string; to: string } {
+// Dégradé doux d'un club : `from` (accent) → `to` (accent assombri), plus un `tint`
+// (accent éclairci) servant de halo lumineux. Angle/profondeur variés par slug.
+export function coverGradient(seed: string, accentColor: string): { angle: number; from: string; to: string; tint: string } {
   const h = coverHash(seed);
   const angle = (h % 8) * 45;                     // 0,45,…,315 — direction variée par club
-  const factor = 0.45 + ((h >>> 3) % 21) / 100;   // 0.45..0.65 — profondeur du fondu vers le sombre
+  const factor = 0.5 + ((h >>> 3) % 21) / 100;    // 0.50..0.70 — profondeur du fondu vers le sombre
   const accent = parseHex(accentColor);
-  return { angle, from: toHex(accent[0], accent[1], accent[2]), to: mix(accent, DARK, factor) };
+  return {
+    angle,
+    from: toHex(accent[0], accent[1], accent[2]),
+    to: mix(accent, DARK, factor),
+    tint: mix(accent, WHITE, 0.42),
+  };
 }
 
 export function coverInitials(name: string): string {

@@ -13,7 +13,7 @@ export function ClubCard({ club }: { club: ClubSummary }) {
     <a href={clubUrl(club.slug)} style={{ textDecoration: 'none', display: 'block' }}>
       <div style={{ background: th.surface, borderRadius: 22, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
         <div style={{ position: 'relative' }}>
-          <ClubCover variant="card" club={{
+          <ClubCover club={{
             name: club.name, slug: club.slug, accentColor: club.accentColor,
             coverImageUrl: club.coverImageUrl, sportIcons: club.sports.map((s) => s.icon),
           }} />
