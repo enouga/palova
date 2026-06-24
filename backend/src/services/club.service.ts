@@ -126,7 +126,7 @@ export class ClubService {
       where,
       orderBy: { name: 'asc' },
       select: {
-        id: true, slug: true, name: true, city: true, description: true, accentColor: true, logoUrl: true,
+        id: true, slug: true, name: true, city: true, description: true, accentColor: true, logoUrl: true, coverImageUrl: true,
         clubSports: { select: { sport: { select: { key: true, name: true, icon: true } } } },
         _count: { select: { resources: true } },
       },
@@ -134,7 +134,7 @@ export class ClubService {
 
     return clubs.map((c) => ({
       id: c.id, slug: c.slug, name: c.name, city: c.city, description: c.description,
-      accentColor: c.accentColor, logoUrl: c.logoUrl,
+      accentColor: c.accentColor, logoUrl: c.logoUrl, coverImageUrl: c.coverImageUrl,
       sports: c.clubSports.map((cs) => cs.sport),
       resourceCount: c._count.resources,
     }));
@@ -158,7 +158,7 @@ export class ClubService {
       where: { slug },
       select: {
         id: true, slug: true, name: true, address: true, city: true, country: true,
-        description: true, timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        description: true, timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         publicBookingDays: true, memberBookingDays: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         showOtherClubsReservations: true,
@@ -192,7 +192,7 @@ export class ClubService {
       where: { id: clubId },
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
-        timezone: true, logoUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
@@ -214,7 +214,7 @@ export class ClubService {
   /** Met à jour profil/branding/fenêtres d'un club (déjà scopé par requireClubMember). */
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
-    timezone?: string; logoUrl?: string; accentColor?: string; defaultThemeMode?: string;
+    timezone?: string; logoUrl?: string; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
     listedInDirectory?: boolean; publicBookingDays?: number; memberBookingDays?: number;
     bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
     publicReleaseHour?: number;
@@ -253,6 +253,7 @@ export class ClubService {
         ...(params.city !== undefined ? { city: params.city } : {}),
         ...(params.timezone !== undefined ? { timezone: params.timezone } : {}),
         ...(params.logoUrl !== undefined ? { logoUrl: params.logoUrl } : {}),
+        ...(params.coverImageUrl !== undefined ? { coverImageUrl: params.coverImageUrl || null } : {}),
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
         ...(typeof params.listedInDirectory === 'boolean' ? { listedInDirectory: params.listedInDirectory } : {}),
