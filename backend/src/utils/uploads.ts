@@ -8,12 +8,14 @@ export const AVATARS_DIR = path.join(UPLOADS_DIR, 'avatars');
 export const ICONS_DIR = path.join(UPLOADS_DIR, 'icons'); // cache des icônes PWA de clubs
 export const SPONSORS_DIR = path.join(UPLOADS_DIR, 'sponsors'); // logos de partenaires uploadés
 export const LOGOS_DIR = path.join(UPLOADS_DIR, 'logos'); // logos de clubs uploadés
+export const COVERS_DIR = path.join(UPLOADS_DIR, 'covers'); // couvertures de clubs uploadées
 
 export function ensureUploadDirs(): void {
   fs.mkdirSync(AVATARS_DIR, { recursive: true });
   fs.mkdirSync(ICONS_DIR, { recursive: true });
   fs.mkdirSync(SPONSORS_DIR, { recursive: true });
   fs.mkdirSync(LOGOS_DIR, { recursive: true });
+  fs.mkdirSync(COVERS_DIR, { recursive: true });
 }
 
 // Types d'image acceptés pour les avatars → extension de fichier.
