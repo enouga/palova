@@ -137,7 +137,9 @@ export default function BookingModal({
   const [errorMsg, setErrorMsg]       = useState('');
   const [busy, setBusy]               = useState(false); // confirm/applyHoldSetup en vol
   const didHold                       = useRef(false);   // garde anti double-hold (StrictMode)
-  const settled                       = useRef(false);   // résa réglée (confirmée OU annulée par l'utilisateur) → le cleanup ne doit pas (ré)annuler
+  const settled                       = useRef(false);   // résa réglée (confirmée OU annulée par l'utilisateur) → ne pas (ré)annuler
+  const reservationRef                = useRef<Reservation | null>(null); // dernière résa connue (même avant le setState)
+  const closedRef                     = useRef(false);   // l'utilisateur a fermé (handleClose) — distinct du faux démontage StrictMode
 
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
@@ -201,30 +203,35 @@ export default function BookingModal({
 
   // Hold au montage : pose le blocage Redis (organisateur seul, sans partenaires/visibilité).
   // Les joueurs/visibilité choisis ensuite sont appliqués via applyHoldSetup avant la confirmation.
+  // Le hold est posé UNE seule fois (garde didHold). Pas de cleanup ici : en dev,
+  // React StrictMode monte le composant 2× et un cleanup poserait alive=false sur le
+  // hold en vol → à sa résolution il s'annulerait au lieu de passer en 'held' (créneau
+  // bloqué « pour toujours »). La libération en cas de fermeture passe par closedRef
+  // (posé par handleClose), jamais par le faux démontage de StrictMode.
   useEffect(() => {
     if (didHold.current) return;
     didHold.current = true;
-    let alive = true;
-    let held: Reservation | null = null;
     (async () => {
       try {
         const res = await api.holdSlot(
           { resourceId, startTime: slot.startTime, endTime: slot.endTime }, token,
         );
-        held = res;
-        // Démontage pendant le hold en vol : le blocage a réussi côté serveur mais
-        // plus personne ne le confirmera → on l'annule (sinon lock Redis orphelin 5 min).
-        if (!alive) { if (!settled.current) api.cancelReservation(res.id, token).catch(() => {}); return; }
+        reservationRef.current = res;
+        // Fermé avant l'arrivée du blocage : le serveur a réservé mais plus personne ne
+        // confirmera → on libère (sinon lock Redis orphelin 5 min).
+        if (closedRef.current) {
+          if (!settled.current) { settled.current = true; api.cancelReservation(res.id, token).catch(() => {}); }
+          return;
+        }
         setReservation(res);
         setSecondsLeft(HOLD_SECONDS);
         setPhase('held');
       } catch (err) {
-        if (!alive) return;
+        if (closedRef.current) return;
         setErrorMsg(BOOKING_ERRORS[(err as Error).message] ?? (err as Error).message);
         setPhase('error');
       }
     })();
-    return () => { alive = false; if (held && !settled.current) api.cancelReservation(held.id, token).catch(() => {}); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
@@ -316,10 +323,15 @@ export default function BookingModal({
   };
 
   const handleClose = async () => {
-    // settled marqué AVANT l'await : un démontage concurrent ne doit pas ré-annuler.
-    // (Ne pas marquer quand reservation est null : la fermeture pendant le hold en vol
-    //  doit encore annuler le blocage tardif via le cleanup de l'effet de montage.)
-    if (reservation) { settled.current = true; try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ } }
+    // closedRef signale aux effets que l'utilisateur a fermé (≠ faux démontage StrictMode).
+    // Si le hold est déjà posé, on l'annule ici ; s'il arrive APRÈS (fermeture pendant le
+    // blocage), l'effet de montage le libère via closedRef.
+    closedRef.current = true;
+    const r = reservation ?? reservationRef.current;
+    if (r && !settled.current) {
+      settled.current = true;
+      try { await api.cancelReservation(r.id, token); } catch { /* cleanup job récupèrera */ }
+    }
     onClose();
   };
 

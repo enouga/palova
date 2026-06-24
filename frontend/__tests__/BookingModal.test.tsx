@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { StrictMode } from 'react';
 import BookingModal from '../components/BookingModal';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot } from '../lib/api';
@@ -43,6 +44,20 @@ describe('BookingModal — page unique', () => {
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
+  });
+
+  it('en dev (StrictMode, double montage) : atteint « held » avec un seul hold, sans auto-annulation', async () => {
+    render(
+      <StrictMode>
+        <ThemeProvider>
+          <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+            token="jwt-token" onClose={jest.fn()} onConfirmed={jest.fn()} />
+        </ThemeProvider>
+      </StrictMode>
+    );
+    expect(await screen.findByText(/Créneau bloqué/)).toBeInTheDocument();
+    expect(api.holdSlot).toHaveBeenCalledTimes(1);          // un seul hold malgré le double montage
+    expect(api.cancelReservation).not.toHaveBeenCalled();    // pas d'auto-annulation
   });
 
   it('bloque le créneau dès l ouverture (sans interaction)', async () => {
