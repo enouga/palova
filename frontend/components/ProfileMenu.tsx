@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, ManagedClub, MemberPackage, MyClubMembership, MyProfile } from '@/lib/api';
+import { api, assetUrl, ManagedClub, MemberPackage, MyClubMembership, MyProfile, Subscription } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Theme } from '@/lib/theme';
 import { useAuth, logout } from '@/lib/useAuth';
@@ -33,6 +33,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   // undefined = en cours de chargement ; null = pas membre du club courant (ou hôte plateforme).
   const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [packages, setPackages] = useState<MemberPackage[]>([]);
+  const [subs, setSubs] = useState<Subscription[]>([]);
   const { state: installState, promptInstall } = useInstallPrompt();
   const [iosHelp, setIosHelp] = useState(false);
 
@@ -53,6 +54,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
       if (slug) {
         api.getMyClubMembership(slug, token).then(setMembership).catch(() => setMembership(null));
         api.getMyClubPackages(slug, token).then(setPackages).catch(() => {});
+        api.getMyClubSubscriptions(slug, token).then(setSubs).catch(() => {});
       } else {
         setMembership(null);
       }
@@ -134,6 +136,16 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
               <div style={sectionTitle}>Mes soldes</div>
               <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
                 {soldes.map((p) => <span key={p.id}>{packageLabel(p)}</span>)}
+              </div>
+            </div>
+          )}
+
+          {/* Abonnements actifs du club courant */}
+          {subs.length > 0 && (
+            <div style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 10 }}>
+              <div style={sectionTitle}>Mes abonnements</div>
+              <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+                {subs.map((s) => <span key={s.id}>{s.plan.name}</span>)}
               </div>
             </div>
           )}

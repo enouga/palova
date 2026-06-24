@@ -18,6 +18,7 @@ jest.mock('../lib/api', () => ({
     getMyClubs: jest.fn(),
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
+    getMyClubSubscriptions: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -53,6 +54,7 @@ describe('ProfileMenu', () => {
     api.getMyClubs.mockResolvedValue([]);
     api.getMyClubMembership.mockResolvedValue(null);
     api.getMyClubPackages.mockResolvedValue([]);
+    api.getMyClubSubscriptions.mockResolvedValue([]);
     installCtx.state = 'hidden';
     installCtx.promptInstall = jest.fn();
   });
