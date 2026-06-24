@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus } from '@/lib/api';
+import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
+import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
 import { durationLabel } from '@/lib/duration';
 import { Btn, Segmented } from '@/components/ui/atoms';
@@ -39,6 +40,8 @@ interface BookingModalProps {
   resourceName?: string;
   /** Soldes prépayés utilisables du joueur sur ce club (option « payer avec mon carnet »). */
   packages?: MemberPackage[];
+  /** Abonnements actifs du joueur sur ce club (couverture du créneau au booking). */
+  subscriptions?: Subscription[];
   /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
   quotaStatus?: MyQuotaStatus | null;
   onClose: () => void;
@@ -94,7 +97,7 @@ const BOOKING_ERRORS: Record<string, string> = {
 };
 
 export default function BookingModal({
-  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], quotaStatus, onClose, onConfirmed,
+  slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], subscriptions = [], quotaStatus, onClose, onConfirmed,
   clubId, requireOnlinePayment, requireCardFingerprint, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
@@ -104,6 +107,7 @@ export default function BookingModal({
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
+  const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
   const [stripeStep, setStripeStep]   = useState(false);
   // Acceptation CGV — requise dès qu'on passe par une empreinte/paiement CB Stripe.
   const [cgvAccepted, setCgvAccepted] = useState(false);
@@ -141,6 +145,13 @@ export default function BookingModal({
   const perPlayer = euros(Math.floor(totalCents / nbPlayers));
   const durLabel = durationLabel(duration);
 
+  // Couverture par abonnement : le créneau est creux ssi slot.offPeak (calculé par le backend,
+  // = entièrement en heures creuses). On cherche le 1er abo qui couvre ce sport/ce créneau.
+  // Décision booléenne miroir du backend — passer { subscriptionId } pour un créneau non couvert
+  // ferait rejeter le backend (SUBSCRIPTION_NOT_APPLICABLE).
+  const isOffPeak = slot.offPeak ?? false;
+  const cover = coveringSubscription(subscriptions, { sportKey: sportKey ?? '', isOffPeak });
+
   // Récap : capacité nominale du terrain (sport + format) → prix par personne (toujours affiché).
   const capacity = capacityFor(sportKey, format);
   const shareCents = Math.round(totalCents / capacity);
@@ -159,7 +170,7 @@ export default function BookingModal({
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
   // on exige l'acceptation des CGV (le backend l'impose aussi côté serveur).
-  const cardIntentPath = !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint || fingerprintForced);
+  const cardIntentPath = !useSub && !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint || fingerprintForced);
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
@@ -175,6 +186,12 @@ export default function BookingModal({
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
   }, [showPartners, token, levelEnabled]);
+
+  // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
+  // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
+  useEffect(() => {
+    setUseSub(!!cover);
+  }, [cover?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Au moment où le chemin CB Stripe devient actif, on vérifie (une seule fois) si le
   // club a publié ses CGV. Publié → lien vers /cgv ; sinon (PAGE_NOT_FOUND ou erreur) →
@@ -234,9 +251,15 @@ export default function BookingModal({
       return;
     }
     try {
+      // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
+      const paymentSource = useSub && cover
+        ? { subscriptionId: cover.id }
+        : paySource
+        ? { packageId: paySource }
+        : undefined;
       const confirmed = await api.confirmReservation(
         reservation.id, token,
-        paySource ? { paymentSource: { packageId: paySource } } : undefined,
+        paymentSource ? { paymentSource } : undefined,
       );
       onConfirmed(confirmed);
     } catch (err) {
@@ -429,19 +452,27 @@ export default function BookingModal({
               <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>Mode de paiement</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
+                {/* Avenue 0 — couverture par abonnement (sélectionnée par défaut si le créneau est couvert). */}
+                {cover && (
+                  <button type="button" onClick={() => { setUseSub(true); setPaySource(null); setPayMode('club'); }}
+                    style={{ textAlign: 'left', border: `1.5px solid ${useSub ? th.accent : th.lineStrong}`, background: useSub ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                    Couvert par votre abonnement — {coverageLabel(cover)}
+                  </button>
+                )}
+
                 {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
                 {!requireOnlinePayment && (
-                  <button type="button" onClick={() => { setPayMode('club'); setPaySource(null); }}
-                    style={{ textAlign: 'left', border: `1.5px solid ${(payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                  <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
+                    style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
                     Régler au club
                   </button>
                 )}
 
                 {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
                 {onlineAvailable && (
-                  <div style={{ border: `1.5px solid ${(payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
+                  <div style={{ border: `1.5px solid ${(!useSub && payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
                     <button type="button" disabled={onlineRequiredButUnavailable}
-                      onClick={() => { setPayMode('online'); setPaySource(null); }}
+                      onClick={() => { setUseSub(false); setPayMode('online'); setPaySource(null); }}
                       style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, padding: 0 }}>
                       Payer en ligne
                     </button>
@@ -449,7 +480,7 @@ export default function BookingModal({
                       <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
                         Paiement en ligne momentanément indisponible — contactez le club.
                       </div>
-                    ) : (payMode === 'online' && !paySource) && (
+                    ) : (!useSub && payMode === 'online' && !paySource) && (
                       <div style={{ marginTop: 10 }}>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button type="button" disabled={shareTooSmall} onClick={() => setPayAmount('share')}
@@ -475,7 +506,7 @@ export default function BookingModal({
                     {packages.map((p) => {
                       const ok = canCover(p, totalEuros);
                       return (
-                        <button key={p.id} type="button" disabled={!ok} onClick={() => { setPaySource(p.id); setPayMode('club'); }}
+                        <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
                           style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
                           {packageLabel(p)}
                         </button>
@@ -509,7 +540,8 @@ export default function BookingModal({
             <div style={{ display: 'flex', gap: 11, marginTop: 22 }}>
               <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
               <Btn icon="arrowR" onClick={handleConfirm} disabled={(!paySource && payMode === 'online' && onlineRequiredButUnavailable) || (cardIntentPath && !cgvAccepted)} style={{ flex: 1 }}>
-                {paySource ? 'Confirmer avec mon solde'
+                {useSub ? 'Confirmer avec mon abonnement'
+                  : paySource ? 'Confirmer avec mon solde'
                   : (payMode === 'online' && onlineAvailable) ? `Payer ${onlineAmountLabel}`
                   : 'Confirmer et payer'}
               </Btn>
