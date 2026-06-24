@@ -455,6 +455,27 @@ describe('ClubService — updateClub identité légale', () => {
   });
 });
 
+describe('ClubService — annuaire (listClubs)', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('demande et expose coverImageUrl pour chaque club', async () => {
+    prismaMock.club.findMany.mockResolvedValue([
+      {
+        id: 'c1', slug: 'demo', name: 'Padel Arena', city: 'Paris', description: null,
+        accentColor: '#d6ff3f', logoUrl: null, coverImageUrl: '/uploads/covers/c1-1.jpg',
+        clubSports: [{ sport: { key: 'padel', name: 'Padel', icon: '🎾' } }],
+        _count: { resources: 3 },
+      },
+    ] as any);
+
+    const [club] = await svc.listClubs({});
+    expect(club.coverImageUrl).toBe('/uploads/covers/c1-1.jpg');
+    const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.select.coverImageUrl).toBe(true);
+  });
+});
+
 describe('normalizeQuickPaymentMethods', () => {
   const { normalizeQuickPaymentMethods } = require('../club.service');
 

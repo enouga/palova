@@ -5,7 +5,7 @@ export type IconName =
   | 'chevL' | 'chevR' | 'arrowR' | 'plus' | 'card' | 'x' | 'search' | 'bell'
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
   | 'moon' | 'logout' | 'grip' | 'trophy' | 'eye' | 'eyeOff' | 'info' | 'home'
-  | 'share' | 'download' | 'ball';
+  | 'share' | 'download' | 'ball' | 'trash';
 
 interface IconProps {
   name: IconName;
@@ -58,6 +58,7 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     case 'share': glyph = <><circle cx="6" cy="12" r="2.8" {...p} /><circle cx="17.5" cy="5.5" r="2.8" {...p} /><circle cx="17.5" cy="18.5" r="2.8" {...p} /><path d="M8.5 10.6l6.5-3.7M8.5 13.4l6.5 3.7" {...p} /></>; break;
     case 'download': glyph = <><path d="M12 3.5V15m0 0l-4.5-4.5M12 15l4.5-4.5" {...p} /><path d="M4 16.5v2A2.5 2.5 0 006.5 21h11a2.5 2.5 0 002.5-2.5v-2" {...p} /></>; break;
     case 'ball': glyph = <><circle cx="12" cy="12" r="9" {...p} /><path d="M5 7c5 1.5 9 5.5 11 12M19 7c-5 1.5-9 5.5-11 12" {...p} /></>; break;
+    case 'trash': glyph = <><path d="M4 7h16M9 7V5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5v2M6 7l1 13a1.5 1.5 0 001.5 1.4h7a1.5 1.5 0 001.5-1.4l1-13M10 11v6M14 11v6" {...p} /></>; break;
   }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0, ...style }}>

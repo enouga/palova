@@ -262,6 +262,22 @@ export const api = {
     return res.json();
   },
 
+  // Upload de la couverture du club en FormData — fetch dédié. Persiste côté serveur.
+  uploadClubCover: async (clubId: string, file: File, token: string): Promise<{ coverImageUrl: string }> => {
+    const form = new FormData();
+    form.append('cover', file);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/club-cover`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   adminGetSports: (clubId: string, token: string) =>
     request<AdminClubSport[]>(`/api/clubs/${clubId}/admin/sports`, {}, token),
 
@@ -285,6 +301,9 @@ export const api = {
 
   adminReorderResources: (clubId: string, orderedIds: string[], token: string) =>
     request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
+
+  adminDeleteResource: (clubId: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/resources/${id}`, { method: 'DELETE' }, token),
 
   adminGetReservations: (clubId: string, filters: AdminReservationFilters, token: string) => {
     const qs = new URLSearchParams();
@@ -315,6 +334,10 @@ export const api = {
 
   adminRemoveReservationParticipant: (clubId: string, reservationId: string, participantId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'DELETE' }, token),
+
+  // Remplace un participant par un autre membre, en une fois (recalcule les parts).
+  adminChangeReservationParticipant: (clubId: string, reservationId: string, participantId: string, memberUserId: string, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
 
   // --- Abonnements (admin) ---
   adminGetSubscriptionPlans: (clubId: string, token: string) =>
@@ -833,6 +856,7 @@ export interface ClubSummary {
   description: string | null;
   accentColor: string;
   logoUrl: string | null;
+  coverImageUrl: string | null;
   sports: { key: string; name: string; icon: string | null }[];
   resourceCount: number;
 }
@@ -849,6 +873,7 @@ export interface ClubDetail {
   description: string | null;
   timezone: string;
   logoUrl: string | null;
+  coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
   status: string;
@@ -1090,6 +1115,7 @@ export interface ClubAdminDetail {
   country: string | null;
   timezone: string;
   logoUrl: string | null;
+  coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
   status: string;
@@ -1182,6 +1208,7 @@ export type UpdateClubBody = Partial<{
   city: string;
   timezone: string;
   logoUrl: string;
+  coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
   listedInDirectory: boolean;

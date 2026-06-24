@@ -6,7 +6,7 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -56,6 +56,7 @@ const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize:
 const ERROR_STATUS: Record<string, number> = {
   FORBIDDEN:             403,
   RESOURCE_NOT_FOUND:    404,
+  RESOURCE_HAS_RESERVATIONS: 409,
   CLUB_SPORT_NOT_FOUND:  404,
   SPORT_NOT_FOUND:       404,
   VALIDATION_ERROR:      400,
@@ -292,6 +293,13 @@ router.patch('/resources/:id/active', async (req: ClubScopedRequest, res: Respon
   } catch (err) { handleError(err, res, next); }
 });
 
+router.delete('/resources/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await resourceService.deleteResource(asString(req.params.id), req.membership!.clubId);
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
 // --- Membres (fichier-membres du club) ---
 
 router.get('/members', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
@@ -451,6 +459,18 @@ router.delete('/reservations/:id/participants/:participantId', async (req: ClubS
   } catch (err) { handleError(err, res, next); }
 });
 
+// Remplace un participant par un autre membre, en une fois (recalcule les parts).
+router.patch('/reservations/:id/participants/:participantId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const memberUserId = asString(req.body.memberUserId);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
+    const updated = await reservationService.changeReservationParticipant(
+      asString(req.params.id), req.membership!.clubId, asString(req.params.participantId), memberUserId,
+    );
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Encaissement manuel sur une réservation (espèces/carte/ticket CE/carnet/porte-monnaie).
 router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
@@ -550,6 +570,36 @@ router.post('/club-logo', (req: ClubScopedRequest, res: Response, next: NextFunc
         fs.promises.unlink(path.join(LOGOS_DIR, path.basename(prev.logoUrl))).catch(() => {});
       }
       res.json({ logoUrl });
+    } catch (e) { handleError(e, res, next); }
+  });
+});
+// Upload de la couverture du club (JPEG/PNG/WebP, 2 Mo max) : persiste club.coverImageUrl immédiatement.
+router.post('/club-cover', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  logoUpload.single('cover')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (2 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) {
+        return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      }
+      const clubId = req.membership!.clubId;
+      const prev = await prisma.club.findUnique({ where: { id: clubId }, select: { coverImageUrl: true } });
+      const filename = `${clubId}-${Date.now()}.${ext}`;
+      ensureUploadDirs();
+      await fs.promises.writeFile(path.join(COVERS_DIR, filename), file.buffer);
+      const coverImageUrl = `/uploads/covers/${filename}`;
+      await clubService.updateClub(clubId, { coverImageUrl });
+      // Nettoyage best-effort de l'ancienne couverture uploadée (jamais bloquant).
+      if (prev?.coverImageUrl?.startsWith('/uploads/covers/')) {
+        fs.promises.unlink(path.join(COVERS_DIR, path.basename(prev.coverImageUrl))).catch(() => {});
+      }
+      res.json({ coverImageUrl });
     } catch (e) { handleError(e, res, next); }
   });
 });

@@ -68,6 +68,45 @@ describe('ResourceService', () => {
     });
   });
 
+  describe('deleteResource', () => {
+    it('supprime une ressource du club sans réservation ni série', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo' } as any);
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.reservationSeries.count.mockResolvedValue(0);
+      prismaMock.resource.delete.mockResolvedValue({ id: 'r1' } as any);
+
+      await service.deleteResource('r1', 'club-demo');
+
+      expect(prismaMock.resource.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
+    });
+
+    it('rejette RESOURCE_HAS_RESERVATIONS si des réservations existent', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo' } as any);
+      prismaMock.reservation.count.mockResolvedValue(3);
+      prismaMock.reservationSeries.count.mockResolvedValue(0);
+
+      await expect(service.deleteResource('r1', 'club-demo')).rejects.toThrow('RESOURCE_HAS_RESERVATIONS');
+      expect(prismaMock.resource.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejette RESOURCE_HAS_RESERVATIONS si une série récurrente existe', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo' } as any);
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.reservationSeries.count.mockResolvedValue(1);
+
+      await expect(service.deleteResource('r1', 'club-demo')).rejects.toThrow('RESOURCE_HAS_RESERVATIONS');
+      expect(prismaMock.resource.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejette RESOURCE_NOT_FOUND pour une ressource d un autre club (isolation)', async () => {
+      prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'autre' } as any);
+
+      await expect(service.deleteResource('r1', 'club-demo')).rejects.toThrow('RESOURCE_NOT_FOUND');
+      expect(prismaMock.reservation.count).not.toHaveBeenCalled();
+      expect(prismaMock.resource.delete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setResourceActive', () => {
     it('désactive une ressource du club', async () => {
       prismaMock.resource.findUnique.mockResolvedValue({ id: 'r1', clubId: 'club-demo' } as any);

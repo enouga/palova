@@ -12,8 +12,8 @@ import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
-import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod, StatusMode, TimePreset } from '@/lib/collect';
-import { ReservationFilters } from '@/components/admin/ReservationFilters';
+import { matchesQuery, isUpcoming } from '@/lib/collect';
+import { ReservationFilters, SportFacet } from '@/components/admin/ReservationFilters';
 
 const CORAL = '#ff7a4d';
 
@@ -69,14 +69,10 @@ export default function AdminReservationsPage() {
   const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
 
   const [query, setQuery]   = useState('');
-  const [status, setStatus] = useState<StatusMode>('all');
-  const [courtSel, setCourtSel] = useState<Set<string>>(new Set());   // terrains cochés (vide = tous)
-  const [preset, setPreset] = useState<TimePreset | null>(null);      // raccourci créneau actif (pour surligner)
-  const [showCustom, setShowCustom] = useState(false);                // plage horaire personnalisée dépliée
-  const [fromHour, setFrom] = useState<number | null>(null);
-  const [toHour, setTo]     = useState<number | null>(null);
-  const [methodSel, setMethodSel] = useState<Set<PaymentMethod>>(new Set());   // moyens de paiement cochés (vide = tous)
-  const [nowH, setNowH]     = useState<number | null>(null);   // heure courante (posée en effet, jamais au rendu)
+  const [sportSel, setSportSel] = useState<Set<string> | null>(null);   // sports cochés (null = pas encore résolu)
+  const [upcoming, setUpcoming] = useState(true);                       // « À venir » par défaut
+  const [dueOnly, setDueOnly]   = useState(false);                      // « À encaisser » par défaut off
+  const [nowMs, setNowMs]       = useState<number | null>(null);        // heure courante (posée côté client)
 
   const statusStyle = (s: string): CSSProperties => ({
     borderRadius: 999, padding: '4px 11px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600,
@@ -152,10 +148,8 @@ export default function AdminReservationsPage() {
   }, []);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
-  // Heure courante (fuseau du club) — posée côté client uniquement pour ne lister que les créneaux à venir.
-  useEffect(() => {
-    setNowH(Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }).format(new Date())));
-  }, [tz]);
+  // Heure courante (timestamp absolu) — posée côté client uniquement (pas au rendu : hydratation).
+  useEffect(() => { setNowMs(Date.now()); }, []);
 
   const cancel = async (r: ClubReservation) => {
     if (!token || !clubId || cancellingRef.current) return;   // garde synchrone : un seul appel même en double-clic rapide
@@ -179,58 +173,64 @@ export default function AdminReservationsPage() {
     setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
   }, [reloadReservations, patchReservation]);
 
-  const openH  = resources.length ? Math.min(...resources.map((r) => r.openHour)) : 8;
-  const closeH = resources.length ? Math.max(...resources.map((r) => r.closeHour)) : 22;
-  const nowHour = () => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }).format(new Date()));
-  // Première heure proposée dans les sélecteurs : le créneau courant si on regarde aujourd'hui, sinon l'ouverture.
-  const slotStart = date === todayISO() && nowH != null ? Math.min(Math.max(nowH, openH), closeH - 1) : openH;
+  // Sports distincts présents parmi les terrains (ordre des terrains), pour le sélecteur.
+  const sportsPresent: SportFacet[] = (() => {
+    const seen = new Map<string, string>();
+    for (const r of resources) if (!seen.has(r.clubSport.sport.key)) seen.set(r.clubSport.sport.key, r.clubSport.sport.name);
+    return [...seen].map(([key, name]) => ({ key, name }));
+  })();
+  const sportByResource = new Map(resources.map((r) => [r.id, r.clubSport.sport.key]));
+  const sportStorageKey = clubId ? `palova:encaissement-sports:${clubId}` : null;
 
-  // ── Prédicats de filtrage (indépendants → on peut compter chaque facette à part) ──
+  // Résout la sélection de sports une fois les terrains chargés : localStorage (ids périmés
+  // filtrés) → sinon TOUS les sports présents.
+  useEffect(() => {
+    if (sportSel !== null || sportsPresent.length === 0) return;
+    const present = new Set(sportsPresent.map((s) => s.key));
+    let initial: string[] = sportsPresent.map((s) => s.key);
+    if (sportStorageKey) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(sportStorageKey) ?? 'null');
+        if (Array.isArray(saved)) {
+          const kept = saved.filter((k: unknown): k is string => typeof k === 'string' && present.has(k));
+          if (kept.length > 0) initial = kept;
+        }
+      } catch { /* ignore */ }
+    }
+    setSportSel(new Set(initial));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sportsPresent.length, sportStorageKey]);
+
+  const changeSports = (keys: string[]) => {
+    setSportSel(new Set(keys));
+    if (sportStorageKey) { try { localStorage.setItem(sportStorageKey, JSON.stringify(keys)); } catch { /* ignore */ } }
+  };
+
+  // ── Prédicats de filtrage ───────────────────────────────────────────────
   const dayResas = data?.reservations ?? [];
+  const multiSport = sportsPresent.length > 1;
+  const sel = sportSel ?? new Set(sportsPresent.map((s) => s.key));
+
   const passSearch = (r: ClubReservation) => matchesQuery(r, query);
-  const passCourt  = (r: ClubReservation) => courtSel.size === 0 || courtSel.has(r.resourceId);
-  const passTime   = (r: ClubReservation) => (fromHour == null && toHour == null) || overlapsHourWindow(r, fromHour ?? openH, toHour ?? closeH, tz);
-  const passMethod = (r: ClubReservation) => hasAnyMethod(r.payments, methodSel);
-  const passStatus = (r: ClubReservation) => statusFilter(status, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED');
+  const passSport  = (r: ClubReservation) => !multiSport || sel.has(sportByResource.get(r.resourceId) ?? '');
+  const passWindow = (r: ClubReservation) => !upcoming || isUpcoming(r, nowMs);
+  const passDue    = (r: ClubReservation) => !dueOnly || isCollectable(r);
+  const passActive = (r: ClubReservation) => r.status !== 'CANCELLED';   // annulées masquées
 
-  const visible = dayResas.filter((r) => passSearch(r) && passCourt(r) && passTime(r) && passMethod(r) && passStatus(r));
+  const visible = dayResas.filter((r) => passActive(r) && passSearch(r) && passSport(r) && passWindow(r) && passDue(r));
 
-  // Compteurs de facettes : chaque facette compte SANS se contraindre elle-même
-  // (le nombre affiché correspond à ce qu'on verrait en la sélectionnant).
-  const STATUS_MODES: StatusMode[] = ['all', 'unpaid', 'partial', 'paid', 'cancelled'];
-  const statusBase = dayResas.filter((r) => passSearch(r) && passCourt(r) && passTime(r) && passMethod(r));
-  const statusCounts = Object.fromEntries(
-    STATUS_MODES.map((m) => [m, statusBase.filter((r) => statusFilter(m, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED')).length]),
-  ) as Record<StatusMode, number>;
+  const activeCount =
+    (dueOnly ? 1 : 0) +
+    (!upcoming ? 1 : 0) +
+    (query.trim() ? 1 : 0) +
+    (multiSport && sel.size !== sportsPresent.length ? 1 : 0);
 
-  // Terrains présents ce jour-là (ordre de la page Terrains), chacun avec son nombre
-  // à encaisser parmi ce que laissent recherche + créneau (ignore le filtre terrain lui-même).
-  const courtBase = dayResas.filter((r) => passSearch(r) && passTime(r));
-  const courtFacets = resources
-    .filter((rc) => dayResas.some((r) => r.resourceId === rc.id))
-    .map((rc) => ({ id: rc.id, name: rc.name, dueCount: courtBase.filter((r) => r.resourceId === rc.id && isCollectable(r)).length }));
-
-  // Moyens de paiement réellement utilisés ce jour-là (sinon la facette n'a pas lieu d'être).
-  const METHOD_ORDER: PaymentMethod[] = ['CARD', 'CASH', 'VOUCHER', 'TRANSFER', 'MEMBER', 'WALLET', 'PACK_CREDIT', 'ONLINE', 'SUBSCRIPTION', 'OTHER'];
-  const methodsUsed = METHOD_ORDER.filter((m) => dayResas.some((r) => r.payments.some((p) => p.method === m)));
-
-  const activeCount = (status !== 'all' ? 1 : 0) + (courtSel.size > 0 ? 1 : 0)
-    + (fromHour != null || toHour != null ? 1 : 0) + (methodSel.size > 0 ? 1 : 0) + (query.trim() ? 1 : 0);
-
-  // ── Actions de filtrage ────────────────────────────────────────────────────
-  const toggleCourt = (id: string) => setCourtSel((cur) => { const n = new Set(cur); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleMethod = (m: PaymentMethod) => setMethodSel((cur) => { const n = new Set(cur); n.has(m) ? n.delete(m) : n.add(m); return n; });
-  const applyPreset = (p: TimePreset) => {
-    if (preset === p) { setPreset(null); setFrom(null); setTo(null); return; }   // re-clic = désactive
-    const [f, t] = presetWindow(p, openH, closeH, nowHour());
-    if (p === 'now') setDate(todayISO());
-    setPreset(p); setShowCustom(false); setFrom(f); setTo(t);
+  const resetFilters = () => {
+    setDueOnly(false);
+    setUpcoming(true);
+    setQuery('');
+    changeSports(sportsPresent.map((s) => s.key));   // tous cochés + persiste
   };
-  const setCustomHour = (which: 'from' | 'to', h: number | null) => {
-    setPreset(null);
-    which === 'from' ? setFrom(h) : setTo(h);
-  };
-  const resetFilters = () => { setStatus('all'); setCourtSel(new Set()); setPreset(null); setShowCustom(false); setFrom(null); setTo(null); setMethodSel(new Set()); setQuery(''); };
 
   // Tri + groupe par terrain (ordre de la page Terrains = ordre du tableau `resources`).
   const rankOf = new Map(resources.map((r, i) => [r.id, i]));
@@ -315,13 +315,10 @@ export default function AdminReservationsPage() {
     <ReservationFilters
       query={query} onQuery={setQuery}
       date={date} onDate={setDate} onClearDate={() => setDate('')}
-      status={status} statusCounts={statusCounts} onStatus={setStatus}
-      courts={courtFacets} courtSel={courtSel} onToggleCourt={toggleCourt} onAllCourts={() => setCourtSel(new Set())}
-      preset={preset} onPreset={applyPreset}
-      showCustom={showCustom} onToggleCustom={() => { setShowCustom((v) => !v); setPreset(null); }}
-      fromHour={fromHour} toHour={toHour} onCustomHour={setCustomHour}
-      slotStart={slotStart} closeH={closeH}
-      methodsUsed={methodsUsed} methodSel={methodSel} onToggleMethod={toggleMethod}
+      sports={sportsPresent}
+      selectedSports={sel} onSports={changeSports}
+      upcoming={upcoming} onUpcoming={setUpcoming}
+      dueOnly={dueOnly} onDueOnly={setDueOnly}
       activeCount={activeCount} onReset={resetFilters}
     />
   );
@@ -444,17 +441,26 @@ export default function AdminReservationsPage() {
                   <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
                 </div>
                 <div>
-                  {selected.payments.map((p, i) => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
-                      <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
-                      </span>
-                      <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
-                      <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>{METHOD_LABEL[p.method]}</span>
-                      <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtTime(p.createdAt)}</span>
-                      <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
-                    </div>
-                  ))}
+                  {selected.payments.map((p, i) => {
+                    // Qui a payé : joueur attribué (participantId) ou « Réservation entière » (paiement anonyme).
+                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
+                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
+                        </span>
+                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {who
+                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {METHOD_LABEL[p.method]}</>
+                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {METHOD_LABEL[p.method]}</>}
+                        </span>
+                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtTime(p.createdAt)}</span>
+                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

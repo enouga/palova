@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { COURT_FORMATS, COVERAGE_OPTIONS, Coverage } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ACCENTS } from '@/lib/theme';
 import { validateResourceFields, ResourceFieldErrors, ResourceFieldKey } from '@/lib/resourceValidation';
 
@@ -29,6 +30,8 @@ export default function AdminResourcesPage() {
   const [dragId, setDragId]     = useState<string | null>(null);
   const [dirty, setDirty]       = useState<Set<string>>(new Set());
   const [saving, setSaving]     = useState(false);
+  const [toDelete, setToDelete] = useState<AdminResource | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const cell: CSSProperties = { padding: '14px 18px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
@@ -159,6 +162,28 @@ export default function AdminResourcesPage() {
     }
   };
 
+  // Suppression définitive (refusée par le backend si la ressource a des réservations/séries).
+  const confirmDelete = async () => {
+    if (!token || !clubId || !toDelete) return;
+    const target = toDelete;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.adminDeleteResource(clubId, target.id, token);
+      setResources((prev) => prev.filter((r) => r.id !== target.id));
+      setDirty((prev) => { if (!prev.has(target.id)) return prev; const n = new Set(prev); n.delete(target.id); return n; });
+      setToDelete(null);
+    } catch (e) {
+      const msg = (e as Error).message === 'RESOURCE_HAS_RESERVATIONS'
+        ? 'Cette ressource a des réservations — désactivez-la (Statut → Inactif) plutôt que de la supprimer.'
+        : (e as Error).message;
+      setError(msg);
+      setToDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const clearCreateErr = (k: ResourceFieldKey) =>
     setCreateErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
 
@@ -207,6 +232,7 @@ export default function AdminResourcesPage() {
                 {['', 'Ressource', 'Sport', 'Surface', 'Couverture', 'Éclairage', 'Format', '€ créneau plein', '€ créneau creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
                   <th key={i} style={{ padding: '14px 18px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap', textAlign: (h === 'Couverture' || h === 'Éclairage') ? 'center' : 'left' }}>{h}</th>
                 ))}
+                <th aria-hidden style={{ padding: '14px 18px', width: 40 }} />
               </tr>
             </thead>
             <tbody>
@@ -282,6 +308,12 @@ export default function AdminResourcesPage() {
                       background: r.isActive ? `${th.accent}22` : th.surface2, color: r.isActive ? (th.mode === 'floodlit' ? th.accent : th.ink) : th.textMute,
                     }}>{r.isActive ? 'Actif' : 'Inactif'}</button>
                   </td>
+                  <td style={{ ...cell, textAlign: 'center', paddingLeft: 0 }}>
+                    <button onClick={() => setToDelete(r)} aria-label={`Supprimer ${r.name}`} title="Supprimer la ressource"
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, borderRadius: 8, display: 'inline-flex', lineHeight: 0 }}>
+                      <Icon name="trash" size={18} color={th.textFaint} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -350,6 +382,19 @@ export default function AdminResourcesPage() {
           <Btn onClick={create} disabled={creating || !nr.name.trim() || !nr.clubSportId} icon="plus">{creating ? 'Création…' : 'Créer'}</Btn>
         </div>
       </div>
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Supprimer la ressource"
+          detail={toDelete.name}
+          message="Cette action est définitive. Une ressource ayant déjà des réservations ne peut pas être supprimée — désactivez-la à la place."
+          confirmLabel="Supprimer"
+          cancelLabel="Annuler"
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setToDelete(null)}
+        />
+      )}
     </div>
   );
 }
