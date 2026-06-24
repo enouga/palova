@@ -229,6 +229,35 @@ it('« À venir » masque un créneau terminé ; « Tout le jour » le réaffich
   expect(await screen.findByText('Passee')).toBeInTheDocument();
 });
 
+it('« Prochain créneau » : prochain départ + retardataire ≤ 20 min, masque le reste', async () => {
+  const FIXED = Date.parse('2026-06-24T16:10:00.000Z');   // 16:10 → fenêtre [15:50, 16:30]
+  const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED);
+  try {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([mkCourt('court-1', 'C1')]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+      mkResa('rv-late',  'court-1', 'C1', { title: 'RetardEnCours',  startTime: '2026-06-24T16:00:00.000Z', endTime: '2026-06-24T17:00:00.000Z' }),   // commencé il y a 10 min
+      mkResa('rv-next',  'court-1', 'C1', { title: 'ProchainDepart', startTime: '2026-06-24T16:30:00.000Z', endTime: '2026-06-24T17:30:00.000Z' }),   // prochain départ (= borne haute)
+      mkResa('rv-later', 'court-1', 'C1', { title: 'PlusTard',       startTime: '2026-06-24T17:30:00.000Z', endTime: '2026-06-24T18:30:00.000Z' }),   // après le prochain départ
+      mkResa('rv-old',   'court-1', 'C1', { title: 'TropEnRetard',   startTime: '2026-06-24T15:40:00.000Z', endTime: '2026-06-24T16:40:00.000Z' }),   // commencé il y a 30 min
+    ]));
+    renderPage();
+    // Défaut « À venir » : les 4 réservations (toutes en cours ou à venir) sont visibles.
+    await screen.findByText('RetardEnCours');
+    expect(screen.getByText('PlusTard')).toBeInTheDocument();
+    expect(screen.getByText('TropEnRetard')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Prochain créneau' }));
+
+    // Ne restent que le prochain départ et le retardataire ≤ 20 min.
+    await waitFor(() => expect(screen.queryByText('PlusTard')).toBeNull());
+    expect(screen.queryByText('TropEnRetard')).toBeNull();
+    expect(screen.getByText('RetardEnCours')).toBeInTheDocument();
+    expect(screen.getByText('ProchainDepart')).toBeInTheDocument();
+  } finally {
+    nowSpy.mockRestore();
+  }
+});
+
 // ── Encaissement optimiste (« très rapide ») ─────────────────────────────────
 // Terrain single (capacité 2, 26 € → part 13 €) avec 2 joueurs nommés.
 const singleCourt = () => ({ ...mkCourt('court-1', 'C1'), attributes: { format: 'single' }, price: '26.00' });

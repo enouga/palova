@@ -12,7 +12,7 @@ import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
-import { matchesQuery, isUpcoming } from '@/lib/collect';
+import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode } from '@/lib/collect';
 import { ReservationFilters, SportFacet } from '@/components/admin/ReservationFilters';
 
 const CORAL = '#ff7a4d';
@@ -70,7 +70,7 @@ export default function AdminReservationsPage() {
 
   const [query, setQuery]   = useState('');
   const [sportSel, setSportSel] = useState<Set<string> | null>(null);   // sports cochés (null = pas encore résolu)
-  const [upcoming, setUpcoming] = useState(true);                       // « À venir » par défaut
+  const [period, setPeriod]     = useState<PeriodMode>('upcoming');     // « À venir » par défaut
   const [dueOnly, setDueOnly]   = useState(false);                      // « À encaisser » par défaut off
   const [nowMs, setNowMs]       = useState<number | null>(null);        // heure courante (posée côté client)
 
@@ -213,7 +213,14 @@ export default function AdminReservationsPage() {
 
   const passSearch = (r: ClubReservation) => matchesQuery(r, query);
   const passSport  = (r: ClubReservation) => !multiSport || sel.has(sportByResource.get(r.resourceId) ?? '');
-  const passWindow = (r: ClubReservation) => !upcoming || isUpcoming(r, nowMs);
+  // Fenêtre « prochain créneau » : prochain départ réel du jour + marge retard de 20 min.
+  const nextWindow = nowMs === null
+    ? null
+    : nextSlotWindow(dayResas.filter((r) => r.status !== 'CANCELLED').map((r) => new Date(r.startTime).getTime()), nowMs);
+  const passWindow = (r: ClubReservation) =>
+    period === 'all'  ? true
+    : period === 'next' ? isNextSlot(r, nextWindow)
+    : isUpcoming(r, nowMs);   // 'upcoming'
   const passDue    = (r: ClubReservation) => !dueOnly || isCollectable(r);
   const passActive = (r: ClubReservation) => r.status !== 'CANCELLED';   // annulées masquées
 
@@ -221,13 +228,13 @@ export default function AdminReservationsPage() {
 
   const activeCount =
     (dueOnly ? 1 : 0) +
-    (!upcoming ? 1 : 0) +
+    (period !== 'upcoming' ? 1 : 0) +
     (query.trim() ? 1 : 0) +
     (multiSport && sel.size !== sportsPresent.length ? 1 : 0);
 
   const resetFilters = () => {
     setDueOnly(false);
-    setUpcoming(true);
+    setPeriod('upcoming');
     setQuery('');
     changeSports(sportsPresent.map((s) => s.key));   // tous cochés + persiste
   };
@@ -317,7 +324,7 @@ export default function AdminReservationsPage() {
       date={date} onDate={setDate} onClearDate={() => setDate('')}
       sports={sportsPresent}
       selectedSports={sel} onSports={changeSports}
-      upcoming={upcoming} onUpcoming={setUpcoming}
+      period={period} onPeriod={setPeriod}
       dueOnly={dueOnly} onDueOnly={setDueOnly}
       activeCount={activeCount} onReset={resetFilters}
     />
