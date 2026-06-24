@@ -116,17 +116,34 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
 
 router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const b = req.body ?? {};
-    const partnerUserIds = Array.isArray(b.partnerUserIds)
-      ? b.partnerUserIds.filter((x: unknown): x is string => typeof x === 'string')
-      : undefined;
-    const visibility = b.visibility === 'PUBLIC' ? 'PUBLIC' : b.visibility === 'PRIVATE' ? 'PRIVATE' : undefined;
-    const num = (v: unknown) => (typeof v === 'number' && v >= 0 && v <= 8 ? v : null);
+    const { partnerUserIds, visibility, targetLevelMin, targetLevelMax } = req.body ?? {};
+    // Validation alignée sur /hold : on rejette (400) au lieu de coercer silencieusement.
+    if (visibility !== undefined && visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (partnerUserIds !== undefined && (!Array.isArray(partnerUserIds) || partnerUserIds.some((id: unknown) => typeof id !== 'string'))) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (targetLevelMin !== undefined && targetLevelMin !== null) {
+      if (typeof targetLevelMin !== 'number' || targetLevelMin < 0 || targetLevelMin > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMax !== undefined && targetLevelMax !== null) {
+      if (typeof targetLevelMax !== 'number' || targetLevelMax < 0 || targetLevelMax > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMin !== undefined && targetLevelMin !== null && targetLevelMax !== undefined && targetLevelMax !== null) {
+      if (targetLevelMin > targetLevelMax) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
     const updated = await reservationService.applyHoldSetup(asString(req.params.id), req.user!.id, {
       partnerUserIds,
       visibility,
-      targetLevelMin: b.targetLevelMin === undefined ? undefined : num(b.targetLevelMin),
-      targetLevelMax: b.targetLevelMax === undefined ? undefined : num(b.targetLevelMax),
+      targetLevelMin: targetLevelMin === undefined ? undefined : (targetLevelMin === null ? null : Number(targetLevelMin)),
+      targetLevelMax: targetLevelMax === undefined ? undefined : (targetLevelMax === null ? null : Number(targetLevelMax)),
     });
     res.json(updated);
   } catch (err) { handleError(err, res, next); }

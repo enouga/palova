@@ -239,4 +239,37 @@ describe('POST /api/reservations/:id/setup', () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('TOO_MANY_PLAYERS');
   });
+
+  it('200 avec corps minimal {} : visibility PRIVATE, niveaux null', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(pendingReservation() as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', status: 'PENDING' } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/setup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null }),
+    }));
+  });
+
+  it('400 VALIDATION_ERROR si targetLevelMin hors [0,8]', async () => {
+    const res = await request(app).post('/api/reservations/res-1/setup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetLevelMin: 9 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('400 VALIDATION_ERROR si targetLevelMin > targetLevelMax', async () => {
+    const res = await request(app).post('/api/reservations/res-1/setup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetLevelMin: 6, targetLevelMax: 2 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
 });
