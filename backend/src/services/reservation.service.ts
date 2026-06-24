@@ -1289,6 +1289,60 @@ export class ReservationService {
     return this.loadClubReservation(reservationId, clubId);
   }
 
+  /**
+   * Remplace un participant (non-organisateur) par un autre membre, en UNE seule
+   * transaction Serializable : supprime l'ancienne ligne (ses paiements deviennent
+   * anonymes via onDelete: SetNull — l'argent reste compté sur la résa), crée le
+   * nouveau joueur et recalcule les parts. Membre ACTIF requis. On ne change pas
+   * l'organisateur par cette voie (réassigner le titulaire via `assignReservationMember`).
+   */
+  async changeReservationParticipant(reservationId: string, clubId: string, participantId: string, newMemberUserId: string) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: {
+          select: { clubId: true, attributes: true, price: true, offPeakPrice: true, club: { select: { offPeakHours: true, timezone: true } } },
+        },
+      },
+    });
+    if (!reservation)                           throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: newMemberUserId, clubId } },
+    });
+    if (!membership || membership.status === 'BLOCKED') throw new Error('MEMBER_NOT_FOUND');
+
+    const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.reservationParticipant.findMany({
+        where: { reservationId }, orderBy: { joinedAt: 'asc' },
+        select: { id: true, userId: true, isOrganizer: true },
+      });
+      const target = existing.find((p) => p.id === participantId);
+      if (!target)                                  throw new Error('PARTICIPANT_NOT_FOUND');
+      if (target.isOrganizer)                       throw new Error('CANNOT_REMOVE_ORGANIZER');
+      if (target.userId === newMemberUserId)        return;                       // déjà ce joueur → no-op
+      if (existing.some((p) => p.userId === newMemberUserId)) throw new Error('PARTNER_DUPLICATE');
+
+      await tx.reservationParticipant.delete({ where: { id: participantId } });
+      const survivors  = existing.filter((p) => p.id !== participantId);
+      const organizer  = survivors.find((p) => p.isOrganizer) ?? survivors[0];
+      const partnerIds = [...survivors.filter((p) => p.id !== organizer.id).map((p) => p.userId), newMemberUserId];
+      const shares     = this.splitShares(organizer.userId, partnerIds, dueCents);
+      const byUser     = new Map(shares.map((s) => [s.userId, s]));
+      for (const p of survivors) {
+        const s = byUser.get(p.userId)!;
+        await tx.reservationParticipant.update({ where: { id: p.id }, data: { share: s.share, isOrganizer: s.isOrganizer } });
+      }
+      const ns = byUser.get(newMemberUserId)!;
+      await tx.reservationParticipant.create({ data: { reservationId, userId: newMemberUserId, isOrganizer: ns.isOrganizer, share: ns.share } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    await this.safeNotify(() => notifyReservationMemberAssigned(reservationId, newMemberUserId));
+    return this.loadClubReservation(reservationId, clubId);
+  }
+
   /** Forme JSON du modal « Gérer les joueurs » : capacité + joueurs (id/nom/part/organisateur). */
   private mapOwnPlayers(r: {
     id: string;
