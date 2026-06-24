@@ -3,12 +3,22 @@ import BookingModal from '../components/BookingModal';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot, Subscription } from '../lib/api';
 
+let mockClub: { levelSystemEnabled?: boolean } | null = null;
+jest.mock('../lib/ClubProvider', () => ({
+  useClub: () => ({ slug: 'club-demo', club: mockClub, loading: false }),
+}));
+
 jest.mock('../lib/api', () => ({
   api: {
     holdSlot:           jest.fn(),
     confirmReservation: jest.fn(),
     cancelReservation:  jest.fn(),
+    applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
+    searchClubMembers:  jest.fn(),
+    getMyRating:        jest.fn().mockResolvedValue(null),
+    getClubPage:        jest.fn().mockResolvedValue({}),
   },
+  assetUrl: (u: string | null) => u,
 }));
 
 const offPeakSlot: TimeSlot = {
@@ -27,8 +37,7 @@ const sub: Subscription = {
   discountPercent: null, dailyCap: null, weeklyCap: null, plan: { name: 'Abo Padel' },
 };
 
-async function openPending(slot: TimeSlot, subscriptions: Subscription[]) {
-  (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '13' });
+function renderWithSubscriptions(slot: TimeSlot, subscriptions: Subscription[]) {
   render(
     <ThemeProvider>
       <BookingModal
@@ -45,19 +54,25 @@ async function openPending(slot: TimeSlot, subscriptions: Subscription[]) {
       />
     </ThemeProvider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: /Pré-réserver/ }));
-  await screen.findByText(/Confirmez dans/);
 }
 
 describe('BookingModal — couverture par abonnement', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockClub = null;
+    localStorage.clear();
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '13' });
+    (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
+    (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
+    (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
+  });
 
   it('créneau creux couvert : confirme avec paymentSource subscriptionId', async () => {
-    (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
-    await openPending(offPeakSlot, [sub]);
+    renderWithSubscriptions(offPeakSlot, [sub]);
 
+    // Le hold est automatique — attendre que le contenu interactif apparaisse
     // Le bloc « couvert par votre abonnement » est visible et sélectionné par défaut.
-    expect(screen.getByText(/Couvert par votre abonnement/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Couvert par votre abonnement/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon abonnement/ }));
 
@@ -67,11 +82,12 @@ describe('BookingModal — couverture par abonnement', () => {
   });
 
   it('créneau plein avec abo heures creuses : pas de couverture, confirme sans paymentSource', async () => {
-    (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
-    await openPending(peakSlot, [sub]);
+    renderWithSubscriptions(peakSlot, [sub]);
 
+    // Attendre la phase held
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.queryByText(/Couvert par votre abonnement/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
 
     await waitFor(() => {
       expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt', undefined);
