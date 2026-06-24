@@ -340,6 +340,9 @@ export class ReservationService {
     if (reservation.userId !== userId)    throw new Error('UNAUTHORIZED');
     if (reservation.status !== 'PENDING') throw new Error('RESERVATION_NOT_PENDING');
 
+    const age = Date.now() - reservation.createdAt.getTime();
+    if (age > HOLD_EXPIRY_MS)             throw new Error('RESERVATION_NOT_PENDING');
+
     const format = (reservation.resource.attributes as { format?: string } | null)?.format;
     const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
     const priceCents = Math.round(Number(reservation.totalPrice) * 100);
@@ -357,7 +360,7 @@ export class ReservationService {
           targetLevelMax: setup.targetLevelMax ?? null,
         },
       });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async confirmReservation(

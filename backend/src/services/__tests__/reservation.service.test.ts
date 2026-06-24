@@ -1973,6 +1973,7 @@ describe('ReservationService', () => {
       expect(tx.reservationParticipant.deleteMany).toHaveBeenCalledWith({ where: { reservationId: 'res-1' } });
       expect(tx.reservationParticipant.createMany).toHaveBeenCalled();
       expect(tx.reservationParticipant.createMany.mock.calls[0][0].data).toHaveLength(2);
+      expect(tx.reservationParticipant.createMany.mock.calls[0][0].data[0]).toMatchObject({ isOrganizer: true });
       expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'res-1' },
         data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 }),
@@ -1999,6 +2000,12 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue({ ...baseReservation, userId: 'other' } as any);
       await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }))
         .rejects.toThrow('UNAUTHORIZED');
+    });
+
+    it('refuse si la résa est introuvable', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(null as any);
+      await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }))
+        .rejects.toThrow('RESERVATION_NOT_FOUND');
     });
   });
 });
