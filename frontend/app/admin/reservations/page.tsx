@@ -37,10 +37,12 @@ const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED:
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
   VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  SUBSCRIPTION: 'Abonnement',
 };
 const METHOD_ICON: Record<PaymentMethod, IconName> = {
   CASH: 'euro', CARD: 'card', TRANSFER: 'arrowR', ONLINE: 'card', OTHER: 'euro',
   VOUCHER: 'ticket', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user',
+  SUBSCRIPTION: 'user',
 };
 
 export default function AdminReservationsPage() {

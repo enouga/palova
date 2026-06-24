@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail } from '@/lib/api';
+import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail, SubscriptionPlan } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
 import { toCents, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
 import { useAuth } from '@/lib/useAuth';
@@ -14,6 +14,7 @@ import { Receipt } from '@/components/admin/Receipt';
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
   VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  SUBSCRIPTION: 'Abonnement',
 };
 // Méthodes qui font entrer de l'argent (les prépayés sont des consommations).
 const MONEY_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
@@ -56,6 +57,10 @@ export default function AdminCaissePage() {
   const [sellRef, setSellRef]     = useState('');
   const [sellIssuer, setSellIssuer] = useState('');
 
+  // vente d'abonnement
+  const [plans, setPlans]       = useState<SubscriptionPlan[]>([]);
+  const [sellPlanId, setSellPlanId] = useState('');
+
   // remboursement d'un encaissement
   const [refundTarget, setRefundTarget] = useState<CaissePayment | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
@@ -65,13 +70,14 @@ export default function AdminCaissePage() {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const [c, resv, v, mem, tpl, detail] = await Promise.all([
+      const [c, resv, v, mem, tpl, detail, pls] = await Promise.all([
         api.adminGetCaisse(clubId, date, token),
         api.adminGetReservations(clubId, { date }, token),
         api.adminGetVouchers(clubId, 'PENDING_REIMBURSEMENT', token),
         api.adminGetMembers(clubId, token),
         api.adminGetPackageTemplates(clubId, token),
         api.adminGetClub(clubId, token),
+        api.adminGetSubscriptionPlans(clubId, token),
       ]);
       setCaisse(c);
       setOut(resv.summary.outstanding);
@@ -79,6 +85,7 @@ export default function AdminCaissePage() {
       setMembers(mem);
       setTemplates(tpl.filter((t) => t.isActive));
       setClubDetail(detail);
+      setPlans(pls.filter((p) => p.isActive));
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId, date]);
 
@@ -116,6 +123,23 @@ export default function AdminCaissePage() {
         voucherIssuer: sellMethod === 'VOUCHER' ? sellIssuer.trim() || undefined : undefined,
       }, token);
       setSellRef(''); setSellIssuer('');
+      await Promise.all([load(), pickBuyer(buyer)]);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const sellSub = async () => {
+    if (!token || !clubId || !buyer || !sellPlanId) return;
+    if (sellMethod === 'VOUCHER' && !sellRef.trim()) { setError('Référence du ticket CE requise.'); return; }
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminSellSubscription(clubId, buyer.userId, {
+        planId: sellPlanId, method: sellMethod,
+        payerName: `${buyer.firstName} ${buyer.lastName}`,
+        voucherRef: sellMethod === 'VOUCHER' ? sellRef.trim() : undefined,
+        voucherIssuer: sellMethod === 'VOUCHER' ? sellIssuer.trim() || undefined : undefined,
+      }, token);
       await Promise.all([load(), pickBuyer(buyer)]);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -269,6 +293,48 @@ export default function AdminCaissePage() {
                 <Btn type="button" icon="check" onClick={sell} disabled={busy || !sellTplId}>{busy ? '…' : 'Vendre'}</Btn>
               </div>
             </>
+          )}
+        </div>
+
+        {/* vente d'abonnement */}
+        <div style={card}>
+          <div style={sectionTitle}>Vendre un abonnement</div>
+          <div style={{ marginBottom: 12 }}>
+            <PlayerPicker
+              members={members}
+              value={buyer ? { firstName: buyer.firstName, lastName: buyer.lastName } : null}
+              onSelect={pickBuyer}
+              onClear={() => { setBuyer(null); setBuyerPackages([]); }}
+              onCreate={createBuyer}
+              placeholder="Cliquez pour voir les membres, ou tapez un nom…"
+            />
+          </div>
+
+          {buyer && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>Abonnement
+                <select value={sellPlanId} onChange={(e) => setSellPlanId(e.target.value)} style={input}>
+                  <option value="">Choisir…</option>
+                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {euro(p.monthlyPrice)}/mois</option>)}
+                </select>
+              </label>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
+                <select value={sellMethod} onChange={(e) => setSellMethod(e.target.value as PaymentMethod)} style={input}>
+                  {SALE_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
+                </select>
+              </label>
+              {sellMethod === 'VOUCHER' && (
+                <>
+                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
+                    <input type="text" value={sellRef} onChange={(e) => setSellRef(e.target.value)} placeholder="N° du ticket" style={{ ...input, width: 120 }} />
+                  </label>
+                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
+                    <input type="text" value={sellIssuer} onChange={(e) => setSellIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 100 }} />
+                  </label>
+                </>
+              )}
+              <Btn type="button" icon="check" onClick={sellSub} disabled={busy || !sellPlanId}>{busy ? '…' : 'Vendre l’abonnement'}</Btn>
+            </div>
           )}
         </div>
 

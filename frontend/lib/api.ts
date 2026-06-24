@@ -1242,7 +1242,7 @@ export interface CreateReservationBody {
   lessonParams?: { coachId: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; allowSelfEnroll: boolean };
 }
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER' | 'SUBSCRIPTION';
 export type PackageKind = 'ENTRIES' | 'WALLET';
 export type VoucherStatus = 'PENDING_REIMBURSEMENT' | 'REIMBURSED';
 
