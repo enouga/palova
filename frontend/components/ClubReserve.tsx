@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus } from '@/lib/api';
+import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
 import { packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
@@ -59,6 +59,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
   // Soldes prépayés du joueur sur ce club (chips + option de paiement à la confirmation).
   const [myPackages, setMyPackages] = useState<MemberPackage[]>([]);
+  // Abonnements actifs du joueur sur ce club (chip « Abonné » + couverture à la confirmation).
+  const [mySubs, setMySubs] = useState<Subscription[]>([]);
   // État des quotas de réservation du joueur (compteur « 3/5 ») — null si pas de quota.
   const [quotaStatus, setQuotaStatus] = useState<MyQuotaStatus | null>(null);
   const refreshQuota = useCallback(() => {
@@ -95,6 +97,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   useEffect(() => {
     if (!token) { setMyPackages([]); return; }
     api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => setMyPackages([]));
+  }, [token, club.slug]);
+
+  useEffect(() => {
+    if (!token) { setMySubs([]); return; }
+    api.getMyClubSubscriptions(club.slug, token).then(setMySubs).catch(() => setMySubs([]));
   }, [token, club.slug]);
 
   useEffect(() => { refreshQuota(); }, [refreshQuota]);
@@ -169,10 +176,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.5, margin: '16px 20px 0' }}>{club.description}</p>
         )}
 
-        {myPackages.length > 0 && (
+        {(myPackages.length > 0 || mySubs.length > 0) && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 20px 0' }}>
             {myPackages.map((p) => (
               <Chip key={p.id}>{packageLabel(p)}</Chip>
+            ))}
+            {mySubs.map((s) => (
+              <Chip key={s.id} tone="accent" icon="check">Abonné {s.sportKeys.join('/')}{s.offPeakOnly ? ' · heures creuses' : ''}</Chip>
             ))}
           </div>
         )}
@@ -333,6 +343,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           format={booking.format}
           resourceName={booking.resourceName}
           packages={myPackages}
+          subscriptions={mySubs}
           quotaStatus={quotaStatus}
           clubId={club.id}
           requireOnlinePayment={club.requireOnlinePayment}
