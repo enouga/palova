@@ -1,7 +1,9 @@
 // Illustration de couverture déterministe d'un club (le « par IA », 100 % local) :
-// dégradé dérivé de la couleur d'accent + slug, jamais stocké. Même (slug, accent) → même rendu.
+// « mesh gradient » multicolore (plusieurs taches de teintes analogues à la couleur
+// d'accent qui se fondent) dérivé de l'accent + slug, jamais stocké.
+// Même (slug, accent) → même rendu.
 
-// Hash FNV-1a 32 bits (même algo que lib/playerColors), local pour rester pur et sans dépendance.
+// Hash FNV-1a 32 bits (même algo que lib/playerColors), local, pur, sans dépendance.
 export function coverHash(seed: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {
@@ -11,8 +13,6 @@ export function coverHash(seed: string): number {
   return h >>> 0;
 }
 
-function clampByte(n: number): number { return Math.max(0, Math.min(255, Math.round(n))); }
-
 function parseHex(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return [128, 128, 128]; // repli gris si couleur invalide
@@ -20,30 +20,54 @@ function parseHex(hex: string): [number, number, number] {
   return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
 }
 
-function toHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b].map((x) => clampByte(x).toString(16).padStart(2, '0')).join('');
+// RGB (0-255) → HSL : h en degrés, s/l en 0..1.
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
 }
 
-function mix(a: [number, number, number], b: [number, number, number], t: number): string {
-  return toHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
+function hsla(h: number, s: number, l: number, a: number): string {
+  const H = ((h % 360) + 360) % 360;
+  return `hsla(${Math.round(H)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%, ${a})`;
 }
 
-const DARK: [number, number, number] = [16, 19, 26]; // #10131a
-const WHITE: [number, number, number] = [255, 255, 255];
+// Ancrages possibles pour les taches de couleur du mesh (varient par club).
+const MESH_POS: [string, string][] = [
+  ['16%', '14%'], ['84%', '18%'], ['26%', '86%'], ['88%', '80%'],
+  ['8%', '62%'], ['66%', '6%'], ['50%', '46%'], ['98%', '40%'],
+];
 
-// Dégradé doux d'un club : `from` (accent) → `to` (accent assombri), plus un `tint`
-// (accent éclairci) servant de halo lumineux. Angle/profondeur variés par slug.
-export function coverGradient(seed: string, accentColor: string): { angle: number; from: string; to: string; tint: string } {
+// Teintes analogues à l'accent (rotation de teinte) pour un fondu harmonieux.
+const MESH_STOPS = [
+  { dh: 0, sMul: 1, l: 0.58 },
+  { dh: 36, sMul: 0.92, l: 0.54 },
+  { dh: -44, sMul: 0.95, l: 0.62 },
+  { dh: 16, sMul: 1, l: 0.5 },
+];
+
+// Fond « mesh gradient » CSS : plusieurs radial-gradient de teintes analogues à
+// l'accent posés sur une base sombre, déterministe par (slug, accent).
+export function coverBackground(seed: string, accentColor: string): string {
   const h = coverHash(seed);
-  const angle = (h % 8) * 45;                     // 0,45,…,315 — direction variée par club
-  const factor = 0.5 + ((h >>> 3) % 21) / 100;    // 0.50..0.70 — profondeur du fondu vers le sombre
-  const accent = parseHex(accentColor);
-  return {
-    angle,
-    from: toHex(accent[0], accent[1], accent[2]),
-    to: mix(accent, DARK, factor),
-    tint: mix(accent, WHITE, 0.42),
-  };
+  const [hue, sat0] = rgbToHsl(...parseHex(accentColor));
+  const sat = Math.min(0.9, Math.max(0.55, sat0 || 0.7)); // vif même pour un accent désaturé
+  const blobs = MESH_STOPS.map((st, i) => {
+    const [x, y] = MESH_POS[(h >>> (i * 3)) % MESH_POS.length];
+    const c = (a: number) => hsla(hue + st.dh, sat * st.sMul, st.l, a);
+    return `radial-gradient(58% 72% at ${x} ${y}, ${c(0.95)} 0%, ${c(0)} 60%)`;
+  });
+  const base = `linear-gradient(135deg, ${hsla(hue, sat * 0.6, 0.26, 1)} 0%, ${hsla(hue + 20, sat * 0.65, 0.15, 1)} 100%)`;
+  return [...blobs, base].join(', ');
 }
 
 export function coverInitials(name: string): string {

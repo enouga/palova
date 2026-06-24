@@ -238,7 +238,7 @@ export default function AdminSettingsPage() {
             <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: uploading ? 0.5 : 1 }}>
               <ClubCover club={{
                 name: club.name, slug: club.slug, accentColor: club.accentColor,
-                coverImageUrl: club.coverImageUrl, sportIcons: [],
+                coverImageUrl: club.coverImageUrl,
               }} />
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
