@@ -22,11 +22,13 @@ interface Props {
   payShare?: boolean;
   /** Acceptation des CGV (paiement/empreinte) — transmise au backend, qui l'exige. */
   cgvAccepted?: boolean;
+  /** Étape à exécuter juste avant la confirmation Stripe (ex. persister les joueurs/visibilité). */
+  beforeSubmit?: () => Promise<void>;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, onSuccess, onCancel }: Props) {
+function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, beforeSubmit, onSuccess, onCancel }: Props) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,10 @@ function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, onSu
     setError(null);
 
     try {
+      // Persiste joueurs/visibilité/niveau sur la PENDING AVANT la confirmation Stripe
+      // (donc avant le webhook), quel que soit le confirmeur.
+      if (beforeSubmit) await beforeSubmit();
+
       let result: { error?: { message?: string } | null; paymentIntent?: { id?: string }; setupIntent?: { id?: string } };
       if (type === 'payment') {
         result = await stripe.confirmPayment({ elements, redirect: 'if_required' } as any);

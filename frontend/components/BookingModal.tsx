@@ -164,7 +164,6 @@ export default function BookingModal({
 
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
-  const [stripeStep, setStripeStep]   = useState(false);
   // Acceptation CGV — requise dès qu'on passe par une empreinte/paiement CB Stripe.
   const [cgvAccepted, setCgvAccepted] = useState(false);
   // Le club a-t-il publié ses CGV ? ('published' → lien /cgv ; 'fallback' → CGV plateforme).
@@ -223,6 +222,10 @@ export default function BookingModal({
   // L'empreinte n'est exigée que si le club n'a pas déjà la carte du joueur.
   const needsFingerprint = (!!requireCardFingerprint || fingerprintForced) && !hasCardOnFile;
   const cardIntentPath = !useSub && !paySource && ((payMode === 'online' && onlineAvailable) || needsFingerprint);
+  // Chemin Stripe réellement jouable (paiement en ligne ou empreinte) : le formulaire Stripe
+  // s'affiche en place des boutons « Abandonner / Valider ». Exclut le cas défensif « en ligne
+  // imposé mais Stripe inactif » (qui garde une rangée d'action avec bouton désactivé).
+  const cardPath = cardIntentPath && !onlineRequiredButUnavailable;
 
   // Hold au montage : pose le blocage Redis (organisateur seul, sans partenaires/visibilité).
   // Les joueurs/visibilité choisis ensuite sont appliqués via applyHoldSetup avant la confirmation.
@@ -304,27 +307,28 @@ export default function BookingModal({
   }, [phase, secondsLeft]);
   const urgent = secondsLeft <= 60;
 
+  // Persiste partenaires / visibilité / niveau sur la réservation PENDING (terrain multi-joueurs),
+  // avant la confirmation — directe (club/abo/carnet) OU Stripe (via beforeSubmit) — pour que les
+  // joueurs soient enregistrés quel que soit le confirmeur (client OU webhook), sans course.
+  const persistHoldSetup = async () => {
+    if (!showPartners || !reservation) return;
+    const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
+    await api.applyHoldSetup(reservation.id, token, {
+      partnerUserIds: partners.map((p) => p.id),
+      visibility,
+      ...(visibility === 'PUBLIC' && levelEnabled
+        ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
+        : {}),
+    });
+    saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
+  };
+
   const handleConfirm = async () => {
     if (!reservation || busy) return;
     setBusy(true);
     setErrorMsg('');
     try {
-      // Terrain multi-joueurs : persiste partenaires/visibilité/niveau sur la PENDING
-      // avant tout paiement (client OU webhook Stripe) → pas de course.
-      if (showPartners) {
-        const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
-        await api.applyHoldSetup(reservation.id, token, {
-          partnerUserIds: partners.map((p) => p.id),
-          visibility,
-          ...(visibility === 'PUBLIC' && levelEnabled
-            ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
-            : {}),
-        });
-        saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
-      }
-      // Sans carnet : si une avenue en ligne est requise (paiement) ou une empreinte
-      // bancaire (setup intent), bascule vers l'étape Stripe.
-      if (cardIntentPath) { setStripeStep(true); return; }
+      await persistHoldSetup();
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
@@ -596,26 +600,6 @@ export default function BookingModal({
                 </div>
               </div>
 
-              {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
-              {cardIntentPath && (
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
-                    aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
-                    style={{ width: 15, height: 15, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
-                  <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
-                    J&apos;accepte les{' '}
-                    <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>conditions générales de vente</a>
-                    {' '}et la{' '}
-                    <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>politique de confidentialité</a>.
-                    {cgvStatus === 'fallback' && (
-                      <span style={{ display: 'block', color: th.textFaint, fontSize: 10, marginTop: 2 }}>
-                        Les conditions générales de la plateforme s&apos;appliquent.
-                      </span>
-                    )}
-                  </span>
-                </label>
-              )}
-
               {/* Conditions d'annulation — toujours affiché */}
               <CancellationNotice text={cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)} th={th} />
 
@@ -623,28 +607,56 @@ export default function BookingModal({
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginTop: 14 }}>{errorMsg}</div>
               )}
 
-              {/* Pied d'action */}
-              <div style={{ display: 'flex', gap: 11, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
-                <Btn variant="surface" onClick={handleClose} disabled={busy} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
-                <Btn icon="arrowR" onClick={handleConfirm}
-                  disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource) || (cardIntentPath && !cgvAccepted)}
-                  style={{ flex: 1 }}>
-                  {useSub ? 'Confirmer avec mon abonnement'
-                    : paySource ? 'Confirmer avec mon solde'
-                    : (payMode === 'online' && onlineAvailable) ? `Valider le paiement · ${onlineAmountLabel}`
-                    : 'Confirmer la réservation'}
-                </Btn>
-              </div>
+              {/* Pied d'action : chemin Stripe → CGV puis formulaire Stripe DIRECT (ses propres
+                  boutons « Annuler / Payer ») ; sinon rangée « Abandonner / Confirmer ». */}
+              {cardPath ? (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
+                  {/* CGV — requise avant tout intent CB ; cocher révèle le formulaire Stripe. */}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
+                      aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
+                      style={{ width: 15, height: 15, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+                    <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
+                      J&apos;accepte les{' '}
+                      <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>conditions générales de vente</a>
+                      {' '}et la{' '}
+                      <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>politique de confidentialité</a>.
+                      {cgvStatus === 'fallback' && (
+                        <span style={{ display: 'block', color: th.textFaint, fontSize: 10, marginTop: 2 }}>
+                          Les conditions générales de la plateforme s&apos;appliquent.
+                        </span>
+                      )}
+                    </span>
+                  </label>
 
-              {stripeStep && reservation && (
-                <div style={{ marginTop: 20, padding: '16px 0 0', borderTop: `1px solid ${th.lineStrong}` }}>
-                  <StripePaymentStep reservationId={reservation.id} slug={slug ?? ''} clubId={clubId ?? ''}
-                    type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
-                    payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
-                    amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
-                    cgvAccepted={cgvAccepted} token={token}
-                    onSuccess={() => { settled.current = true; setStripeStep(false); onConfirmed(reservation); }}
-                    onCancel={() => setStripeStep(false)} />
+                  {cgvAccepted && reservation ? (
+                    <div style={{ marginTop: 16 }}>
+                      <StripePaymentStep reservationId={reservation.id} slug={slug ?? ''} clubId={clubId ?? ''}
+                        type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
+                        payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
+                        amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
+                        cgvAccepted={cgvAccepted} token={token} beforeSubmit={persistHoldSetup}
+                        onSuccess={() => { settled.current = true; onConfirmed(reservation); }}
+                        onCancel={handleClose} />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
+                      <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Acceptez les conditions pour continuer.</span>
+                      <Btn variant="surface" onClick={handleClose} disabled={busy}>Abandonner</Btn>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 11, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
+                  <Btn variant="surface" onClick={handleClose} disabled={busy} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
+                  <Btn icon="arrowR" onClick={handleConfirm}
+                    disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource)}
+                    style={{ flex: 1 }}>
+                    {useSub ? 'Confirmer avec mon abonnement'
+                      : paySource ? 'Confirmer avec mon solde'
+                      : (payMode === 'online' && onlineAvailable) ? `Valider le paiement · ${onlineAmountLabel}`
+                      : 'Confirmer la réservation'}
+                  </Btn>
                 </div>
               )}
               </>

@@ -128,13 +128,15 @@ describe('BookingModal — page unique', () => {
     jest.useRealTimers();
   });
 
-  it('payer en ligne affiche la part par personne et le bouton « Valider le paiement »', async () => {
-    // capacityFor('padel', 'double') === 4  →  30 € ÷ 4 = 7,50 €
+  it('payer en ligne affiche la part par personne (7,50€ = 30€ / 4)', async () => {
+    // capacityFor('padel', 'double') === 4  →  30 € ÷ 4 = 7,50 €. Le nouveau flux n'a plus de
+    // bouton « Valider le paiement » : la part s'affiche dans l'avenue (et sur le bouton Stripe « Payer »).
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '30' });
     renderModal({ slot: { ...mockSlot, price: '30' }, slug: 'club-demo', maxPlayers: 4,
       format: 'double', sportKey: 'padel', price: '30', stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
-    expect(screen.getByRole('button', { name: /Valider le paiement.*7,50/ })).toBeInTheDocument();
+    expect(screen.getByText(/Votre part/)).toBeInTheDocument();
+    expect(screen.getAllByText(/7,50/).length).toBeGreaterThan(0);
   });
 
   it('ne ré-annule pas la résa après une confirmation réussie au démontage', async () => {
