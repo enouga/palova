@@ -121,4 +121,41 @@ describe('BookingModal — page unique', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     expect(screen.getByRole('button', { name: /Valider le paiement.*7,50/ })).toBeInTheDocument();
   });
+
+  it('ne ré-annule pas la résa après une confirmation réussie au démontage', async () => {
+    const onConfirmed = jest.fn();
+    const { unmount } = renderModal({ onConfirmed });
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+    unmount();
+    expect(api.cancelReservation).not.toHaveBeenCalled();
+  });
+
+  it('partie ouverte, niveau OFF : applyHoldSetup sans targetLevelMin/Max', async () => {
+    mockClub = { levelSystemEnabled: false };
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalled());
+    const setup = (api.applyHoldSetup as jest.Mock).mock.calls[0][2];
+    expect(setup).not.toHaveProperty('targetLevelMin');
+    expect(setup).not.toHaveProperty('targetLevelMax');
+  });
+
+  it('partie ouverte, niveau ON et limite active : applyHoldSetup avec targetLevelMin/Max', async () => {
+    mockClub = { levelSystemEnabled: true };
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
+      'res-1', 'jwt-token',
+      expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: expect.any(Number), targetLevelMax: expect.any(Number) }),
+    ));
+  });
 });

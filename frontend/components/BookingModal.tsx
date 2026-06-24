@@ -137,6 +137,7 @@ export default function BookingModal({
   const [errorMsg, setErrorMsg]       = useState('');
   const [busy, setBusy]               = useState(false); // confirm/applyHoldSetup en vol
   const didHold                       = useRef(false);   // garde anti double-hold (StrictMode)
+  const settled                       = useRef(false);   // résa réglée (confirmée OU annulée par l'utilisateur) → le cleanup ne doit pas (ré)annuler
 
   const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
@@ -213,7 +214,7 @@ export default function BookingModal({
         held = res;
         // Démontage pendant le hold en vol : le blocage a réussi côté serveur mais
         // plus personne ne le confirmera → on l'annule (sinon lock Redis orphelin 5 min).
-        if (!alive) { api.cancelReservation(res.id, token).catch(() => {}); return; }
+        if (!alive) { if (!settled.current) api.cancelReservation(res.id, token).catch(() => {}); return; }
         setReservation(res);
         setSecondsLeft(HOLD_SECONDS);
         setPhase('held');
@@ -223,7 +224,7 @@ export default function BookingModal({
         setPhase('error');
       }
     })();
-    return () => { alive = false; if (held) api.cancelReservation(held.id, token).catch(() => {}); };
+    return () => { alive = false; if (held && !settled.current) api.cancelReservation(held.id, token).catch(() => {}); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
@@ -300,6 +301,7 @@ export default function BookingModal({
       const confirmed = await api.confirmReservation(
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
+      settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
       onConfirmed(confirmed);
     } catch (err) {
       const msg = (err as Error).message;
@@ -314,7 +316,10 @@ export default function BookingModal({
   };
 
   const handleClose = async () => {
-    if (reservation) { try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ } }
+    // settled marqué AVANT l'await : un démontage concurrent ne doit pas ré-annuler.
+    // (Ne pas marquer quand reservation est null : la fermeture pendant le hold en vol
+    //  doit encore annuler le blocage tardif via le cleanup de l'effet de montage.)
+    if (reservation) { settled.current = true; try { await api.cancelReservation(reservation.id, token); } catch { /* cleanup job récupèrera */ } }
     onClose();
   };
 
@@ -538,7 +543,7 @@ export default function BookingModal({
                     payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
                     amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
                     cgvAccepted={cgvAccepted} token={token}
-                    onSuccess={() => { setStripeStep(false); onClose(); }}
+                    onSuccess={() => { settled.current = true; setStripeStep(false); onClose(); }}
                     onCancel={() => setStripeStep(false)} />
                 </div>
               )}
