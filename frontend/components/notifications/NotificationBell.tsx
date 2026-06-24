@@ -4,12 +4,14 @@ import { useRouter } from 'next/navigation';
 import { api, notificationsStreamUrl, AppNotification } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Icon } from '@/components/ui/Icon';
 
 // Cloche du header : badge de non-lus, panneau déroulant, live via SSE.
 export function NotificationBell() {
   const { token, ready } = useAuth();
   const { th } = useTheme();
+  const isDesktop = useIsDesktop();
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -68,6 +70,40 @@ export function NotificationBell() {
     setItems((list) => list.map((n) => ({ ...n, readAt: new Date().toISOString() })));
   };
 
+  // Contenu du panneau, partagé par les deux variantes (dropdown desktop / feuille mobile).
+  const panelInner = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${th.line}` }}>
+        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>Notifications</span>
+        {unread > 0 && (
+          <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 12.5 }}>
+            Tout marquer comme lu
+          </button>
+        )}
+      </div>
+      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+        {loaded && items.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: th.textFaint, fontFamily: th.fontUI, fontSize: 13.5 }}>Aucune notification</div>
+        )}
+        {items.map((n) => (
+          <button key={n.id} onClick={() => openItem(n)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+              background: n.readAt ? 'transparent' : th.surface2, padding: '12px 16px',
+              borderBottom: `1px solid ${th.line}`, fontFamily: th.fontUI,
+            }}>
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: th.text }}>{n.title}</div>
+            <div style={{ fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{n.body}</div>
+          </button>
+        ))}
+      </div>
+      <button onClick={() => { setOpen(false); router.push('/me/notifications'); }}
+        style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '12px 16px', color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>
+        Voir toutes les notifications
+      </button>
+    </>
+  );
+
   return (
     <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
       <button onClick={toggle} aria-label="Notifications" aria-haspopup="true" aria-expanded={open}
@@ -86,42 +122,28 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && (isDesktop ? (
+        // Desktop : dropdown ancré sous la cloche (inchangé).
         <div role="region" aria-label="Notifications" style={{
           position: 'absolute', right: 0, top: 46, width: 340, maxWidth: '90vw', zIndex: 60,
           background: th.surface, border: `1px solid ${th.line}`, borderRadius: 16,
           boxShadow: th.shadowSoft, overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${th.line}` }}>
-            <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>Notifications</span>
-            {unread > 0 && (
-              <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 12.5 }}>
-                Tout marquer comme lu
-              </button>
-            )}
-          </div>
-          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {loaded && items.length === 0 && (
-              <div style={{ padding: 24, textAlign: 'center', color: th.textFaint, fontFamily: th.fontUI, fontSize: 13.5 }}>Aucune notification</div>
-            )}
-            {items.map((n) => (
-              <button key={n.id} onClick={() => openItem(n)}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-                  background: n.readAt ? 'transparent' : th.surface2, padding: '12px 16px',
-                  borderBottom: `1px solid ${th.line}`, fontFamily: th.fontUI,
-                }}>
-                <div style={{ fontWeight: 700, fontSize: 13.5, color: th.text }}>{n.title}</div>
-                <div style={{ fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{n.body}</div>
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { setOpen(false); router.push('/me/notifications'); }}
-            style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '12px 16px', color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>
-            Voir toutes les notifications
-          </button>
+          {panelInner}
         </div>
-      )}
+      ) : (
+        // Mobile : feuille centrée plein largeur (langage visuel des modales, cf. ConfirmDialog).
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', zIndex: 80, animation: 'sp-fade .25s ease' }} />
+          <div role="region" aria-label="Notifications" style={{
+            position: 'fixed', top: 0, left: 0, right: 0, width: '100%', maxWidth: 480, margin: '0 auto', zIndex: 81,
+            background: th.surface, border: `1px solid ${th.line}`, borderTop: 'none', borderRadius: '0 0 24px 24px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.3)', overflow: 'hidden', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)',
+          }}>
+            {panelInner}
+          </div>
+        </>
+      ))}
     </div>
   );
 }

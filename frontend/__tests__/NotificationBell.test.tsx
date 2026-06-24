@@ -38,4 +38,31 @@ describe('NotificationBell', () => {
     fireEvent.click(screen.getByLabelText('Notifications'));
     await waitFor(() => expect(screen.getByText('Nouveau joueur')).toBeInTheDocument());
   });
+
+  it('sur mobile, ouvre le panneau en feuille centrée (fixed, plein largeur)', async () => {
+    // matchMedia stub (jest.setup) → useIsDesktop = false → variante mobile.
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    const panel = await screen.findByRole('region', { name: 'Notifications' });
+    expect(panel).toHaveStyle({ position: 'fixed' });
+    expect(panel).toHaveStyle({ maxWidth: '480px' });
+    expect(panel).toHaveStyle({ margin: '0px auto' });
+  });
+
+  it('sur desktop, garde le panneau ancré sous la cloche (absolute)', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((q: string) => ({
+      matches: true, media: q, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(<NotificationBell />);
+      fireEvent.click(screen.getByLabelText('Notifications'));
+      const panel = await screen.findByRole('region', { name: 'Notifications' });
+      await waitFor(() => expect(panel).toHaveStyle({ position: 'absolute' }));
+    } finally {
+      window.matchMedia = original;
+    }
+  });
 });
