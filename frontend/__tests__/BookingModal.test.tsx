@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import BookingModal from '../components/BookingModal';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot } from '../lib/api';
@@ -96,5 +96,29 @@ describe('BookingModal — page unique', () => {
       'res-1', 'jwt-token',
       expect.objectContaining({ partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
     ));
+  });
+
+  it('le timer expiré bascule en erreur', async () => {
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
+    jest.useFakeTimers();
+    renderModal();
+    // Attendre que le hold résout et que le composant passe en phase 'held'
+    await waitFor(() => expect(screen.getByText(/Créneau bloqué/)).toBeInTheDocument());
+    // Épuiser les 300 ticks du compte à rebours : chaque setTimeout de 1 s est chaîné,
+    // on avance par petits blocs enveloppés dans act() pour que React traite les updates.
+    for (let i = 0; i < 301; i++) {
+      await act(async () => { jest.advanceTimersByTime(1000); });
+    }
+    expect(screen.getByText(/expiré/)).toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
+  it('payer en ligne affiche la part par personne et le bouton « Valider le paiement »', async () => {
+    // capacityFor('padel', 'double') === 4  →  30 € ÷ 4 = 7,50 €
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '30' });
+    renderModal({ slot: { ...mockSlot, price: '30' }, slug: 'club-demo', maxPlayers: 4,
+      format: 'double', sportKey: 'padel', price: '30', stripeActive: true });
+    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    expect(screen.getByRole('button', { name: /Valider le paiement.*7,50/ })).toBeInTheDocument();
   });
 });
