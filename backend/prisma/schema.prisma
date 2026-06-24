@@ -217,6 +217,7 @@ model Club {
   description      String?
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
+  coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
   accentColor      String     @default("#d6ff3f") @map("accent_color")
   defaultThemeMode String     @default("floodlit") @map("default_theme_mode")
   status           ClubStatus @default(ACTIVE)
