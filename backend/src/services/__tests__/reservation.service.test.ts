@@ -998,6 +998,25 @@ describe('ReservationService', () => {
         .rejects.toThrow('CARD_FINGERPRINT_REQUIRED');
     });
 
+    it('leve CARD_FINGERPRINT_REQUIRED si une carte est sur fichier mais defaultPaymentMethodId=null', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
+      prismaMock.clubStripeCustomer.findUnique.mockResolvedValue({ defaultPaymentMethodId: null } as any);
+
+      await expect(service.confirmReservation('res-1', 'user-1', {}))
+        .rejects.toThrow('CARD_FINGERPRINT_REQUIRED');
+    });
+
+    it('ne lève PAS CARD_FINGERPRINT_REQUIRED si le club a déjà la carte du joueur (defaultPaymentMethodId)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);
+      prismaMock.clubStripeCustomer.findUnique.mockResolvedValue({ defaultPaymentMethodId: 'pm_saved' } as any);
+      mockHappyTx();
+
+      await service.confirmReservation('res-1', 'user-1', {});
+
+      const arg = (prismaMock.reservation.update as jest.Mock).mock.calls[0][0];
+      expect(arg.data.status).toBe('CONFIRMED');
+    });
+
     it('ne lève PAS CARD_FINGERPRINT_REQUIRED si paiement prépayé par carnet (paymentSource) — consomme le package', async () => {
       // Paiement intégral d'avance par carnet = pas de risque de no-show → empreinte non requise.
       prismaMock.reservation.findUnique.mockResolvedValue(pendingResaWithStripe({ requireCardFingerprint: true, stripeAccountId: 'acct_1' }) as any);

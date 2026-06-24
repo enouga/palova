@@ -478,6 +478,17 @@ export class ClubService {
     return m;
   }
 
+  /** Le club a-t-il déjà une carte enregistrée (empreinte no-show) pour ce joueur ? */
+  async getMyCardStatus(slug: string, userId: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const sc = await prisma.clubStripeCustomer.findUnique({
+      where: { clubId_userId: { clubId: club.id, userId } },
+      select: { defaultPaymentMethodId: true },
+    });
+    return { hasCardOnFile: !!sc?.defaultPaymentMethodId };
+  }
+
   /** Le joueur renseigne / corrige sa propre licence (n° adhérent) pour ce club. */
   async setMyMembership(slug: string, userId: string, membershipNo: string) {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });

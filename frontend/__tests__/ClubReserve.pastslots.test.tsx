@@ -25,6 +25,7 @@ jest.mock('../lib/api', () => ({
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     getMyClubPackages: jest.fn().mockResolvedValue([]),
+    getMyCardStatus: jest.fn().mockResolvedValue({ hasCardOnFile: false }),
     getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
     getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),

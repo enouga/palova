@@ -245,6 +245,12 @@ router.get('/:slug/me/quota-status', authMiddleware, async (req: AuthRequest, re
   catch (err) { handleError(err, res, next); }
 });
 
+// Le club a-t-il déjà une carte enregistrée pour le joueur (empreinte no-show) ?
+router.get('/:slug/me/card-status', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubService.getMyCardStatus(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
 // Icône PWA du club (référencée par le manifest) — public, PNG, repli Palova.
 router.get('/:slug/icon/:file', async (req: Request, res: Response, next: NextFunction) => {
   try {

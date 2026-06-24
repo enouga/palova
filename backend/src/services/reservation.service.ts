@@ -415,7 +415,11 @@ export class ReservationService {
     // et hors paiement prépayé : régler d'avance par carnet/porte-monnaie = pas de risque
     // de no-show → l'empreinte n'est pas exigée (un solde insuffisant échouera plus bas).
     if (club?.requireCardFingerprint && !club.requireOnlinePayment && !options?.stripeSetupIntentId && !options?.paymentSource) {
-      throw new Error('CARD_FINGERPRINT_REQUIRED');
+      const hasCardOnFile = !!(await prisma.clubStripeCustomer.findUnique({
+        where: { clubId_userId: { clubId: reservation.resource.clubId, userId } },
+        select: { defaultPaymentMethodId: true },
+      }))?.defaultPaymentMethodId;
+      if (!hasCardOnFile) throw new Error('CARD_FINGERPRINT_REQUIRED');
     }
     // CGV obligatoires dès qu'une carte est en jeu (PI = paiement, ou SI = empreinte/enregistrement).
     // Pas d'intent = réglé au club (ou solde/carnet) : aucun contrat Stripe, CGV non requises.

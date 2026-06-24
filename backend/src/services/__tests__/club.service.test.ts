@@ -139,6 +139,36 @@ describe('ClubService — mon adhésion (licence)', () => {
   });
 });
 
+describe('ClubService — empreinte carte (getMyCardStatus)', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('renvoie hasCardOnFile=true quand une carte est enregistrée (defaultPaymentMethodId)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubStripeCustomer.findUnique.mockResolvedValue({ defaultPaymentMethodId: 'pm_saved' } as any);
+    expect(await service.getMyCardStatus('demo', 'caller')).toEqual({ hasCardOnFile: true });
+  });
+
+  it('renvoie hasCardOnFile=false quand defaultPaymentMethodId est null', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubStripeCustomer.findUnique.mockResolvedValue({ defaultPaymentMethodId: null } as any);
+    expect(await service.getMyCardStatus('demo', 'caller')).toEqual({ hasCardOnFile: false });
+  });
+
+  it('renvoie hasCardOnFile=false quand aucun client Stripe (absent)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubStripeCustomer.findUnique.mockResolvedValue(null as any);
+    expect(await service.getMyCardStatus('demo', 'caller')).toEqual({ hasCardOnFile: false });
+  });
+
+  it('lève CLUB_NOT_FOUND pour un club inconnu / suspendu', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+    await expect(service.getMyCardStatus('demo', 'caller')).rejects.toThrow('CLUB_NOT_FOUND');
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'SUSPENDED' } as any);
+    await expect(service.getMyCardStatus('demo', 'caller')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+});
+
 describe('clubLeaderboard', () => {
   const service = new ClubService();
   const activeClub = { id: 'club-1', status: 'ACTIVE', levelSystemEnabled: true };

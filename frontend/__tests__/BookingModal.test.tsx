@@ -173,4 +173,16 @@ describe('BookingModal — page unique', () => {
       expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: expect.any(Number), targetLevelMax: expect.any(Number) }),
     ));
   });
+
+  it('empreinte requise MAIS carte déjà sur fichier : confirme direct (pas de CGV, pas d étape Stripe)', async () => {
+    const onConfirmed = jest.fn();
+    renderModal({ requireCardFingerprint: true, hasCardOnFile: true, onConfirmed });
+    const confirmBtn = await screen.findByRole('button', { name: /Confirmer la réservation/ });
+    // Pas de réenregistrement de carte → pas de case CGV.
+    expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).toBeNull();
+    fireEvent.click(confirmBtn);
+    // Confirme directement, sans paymentSource (pas d'étape Stripe).
+    await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+  });
 });

@@ -52,6 +52,8 @@ interface BookingModalProps {
   requireOnlinePayment?: boolean;
   /** Exige une empreinte bancaire (anti-no-show). */
   requireCardFingerprint?: boolean;
+  /** Le club a déjà une carte enregistrée pour le joueur → pas de réenregistrement d'empreinte. */
+  hasCardOnFile?: boolean;
   /** Le compte Stripe Connect du club est ACTIF — le paiement en ligne facultatif est proposable. */
   stripeActive?: boolean;
   /** Délai d'annulation gratuite du club (heures avant le début) — affichage récap. */
@@ -126,7 +128,7 @@ function CancellationNotice({ text, th }: { text: string; th: Theme }) {
 
 export default function BookingModal({
   slot, resourceId, price, duration, token, timezone, slug, maxPlayers, sportKey, format, resourceName, packages = [], subscriptions = [], quotaStatus, onClose, onConfirmed,
-  clubId, requireOnlinePayment, requireCardFingerprint, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
+  clubId, requireOnlinePayment, requireCardFingerprint, hasCardOnFile, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
@@ -199,7 +201,9 @@ export default function BookingModal({
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
   // on exige l'acceptation des CGV (le backend l'impose aussi côté serveur).
-  const cardIntentPath = !useSub && !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint || fingerprintForced);
+  // L'empreinte n'est exigée que si le club n'a pas déjà la carte du joueur.
+  const needsFingerprint = (!!requireCardFingerprint || fingerprintForced) && !hasCardOnFile;
+  const cardIntentPath = !useSub && !paySource && ((payMode === 'online' && onlineAvailable) || needsFingerprint);
 
   // Hold au montage : pose le blocage Redis (organisateur seul, sans partenaires/visibilité).
   // Les joueurs/visibilité choisis ensuite sont appliqués via applyHoldSetup avant la confirmation.

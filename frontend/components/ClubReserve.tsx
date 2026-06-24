@@ -59,6 +59,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
   // Soldes prépayés du joueur sur ce club (chips + option de paiement à la confirmation).
   const [myPackages, setMyPackages] = useState<MemberPackage[]>([]);
+  // Le club a-t-il déjà la carte du joueur (empreinte no-show) → pas de réenregistrement.
+  const [hasCardOnFile, setHasCardOnFile] = useState(false);
   // Abonnements actifs du joueur sur ce club (chip « Abonné » + couverture à la confirmation).
   const [mySubs, setMySubs] = useState<Subscription[]>([]);
   // État des quotas de réservation du joueur (compteur « 3/5 ») — null si pas de quota.
@@ -95,8 +97,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   }, [token, club.id]);
 
   useEffect(() => {
-    if (!token) { setMyPackages([]); return; }
+    if (!token) { setMyPackages([]); setHasCardOnFile(false); return; }
     api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => setMyPackages([]));
+    api.getMyCardStatus(club.slug, token).then((s) => setHasCardOnFile(s.hasCardOnFile)).catch(() => {});
   }, [token, club.slug]);
 
   useEffect(() => {
@@ -348,6 +351,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           clubId={club.id}
           requireOnlinePayment={club.requireOnlinePayment}
           requireCardFingerprint={club.requireCardFingerprint}
+          hasCardOnFile={hasCardOnFile}
           stripeActive={club.stripeAccountStatus === 'ACTIVE'}
           cancellationCutoffHours={club.cancellationCutoffHours}
           refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}

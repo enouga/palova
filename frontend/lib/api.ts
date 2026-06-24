@@ -506,6 +506,10 @@ export const api = {
   getMyClubPackages: (slug: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${slug}/me/packages`, {}, token),
 
+  // Le club a-t-il déjà une carte enregistrée pour le joueur (empreinte no-show) ?
+  getMyCardStatus: (slug: string, token: string) =>
+    request<{ hasCardOnFile: boolean }>(`/api/clubs/${slug}/me/card-status`, {}, token),
+
   // Abonnements actifs du joueur sur ce club.
   getMyClubSubscriptions: (slug: string, token: string) =>
     request<Subscription[]>(`/api/clubs/${slug}/me/subscriptions`, {}, token),
