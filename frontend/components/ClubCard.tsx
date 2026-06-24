@@ -2,8 +2,9 @@
 import { ClubSummary } from '@/lib/api';
 import { clubUrl } from '@/lib/clubUrl';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Chip, Placeholder } from '@/components/ui/atoms';
+import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
+import { ClubCover } from '@/components/ClubCover';
 
 // Carte de club (annuaire public + « mes clubs » de l'accueil). Lien vers le sous-domaine du club.
 export function ClubCard({ club }: { club: ClubSummary }) {
@@ -12,7 +13,10 @@ export function ClubCard({ club }: { club: ClubSummary }) {
     <a href={clubUrl(club.slug)} style={{ textDecoration: 'none', display: 'block' }}>
       <div style={{ background: th.surface, borderRadius: 22, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
         <div style={{ position: 'relative' }}>
-          <Placeholder label={club.name} height={104} radius={0} />
+          <ClubCover variant="card" club={{
+            name: club.name, slug: club.slug, accentColor: club.accentColor,
+            coverImageUrl: club.coverImageUrl, sportIcons: club.sports.map((s) => s.icon),
+          }} />
           {/* pastille couleur du club */}
           <span style={{ position: 'absolute', top: 12, right: 12, width: 14, height: 14, borderRadius: '50%', background: club.accentColor, boxShadow: `0 0 0 2px ${th.surface}` }} />
         </div>
