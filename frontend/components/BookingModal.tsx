@@ -203,19 +203,27 @@ export default function BookingModal({
   useEffect(() => {
     if (didHold.current) return;
     didHold.current = true;
+    let alive = true;
+    let held: Reservation | null = null;
     (async () => {
       try {
         const res = await api.holdSlot(
           { resourceId, startTime: slot.startTime, endTime: slot.endTime }, token,
         );
+        held = res;
+        // Démontage pendant le hold en vol : le blocage a réussi côté serveur mais
+        // plus personne ne le confirmera → on l'annule (sinon lock Redis orphelin 5 min).
+        if (!alive) { api.cancelReservation(res.id, token).catch(() => {}); return; }
         setReservation(res);
         setSecondsLeft(HOLD_SECONDS);
         setPhase('held');
       } catch (err) {
+        if (!alive) return;
         setErrorMsg(BOOKING_ERRORS[(err as Error).message] ?? (err as Error).message);
         setPhase('error');
       }
     })();
+    return () => { alive = false; if (held) api.cancelReservation(held.id, token).catch(() => {}); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
@@ -512,7 +520,7 @@ export default function BookingModal({
               )}
 
               <div style={{ display: 'flex', gap: 11, marginTop: 18 }}>
-                <Btn variant="surface" onClick={handleClose} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
+                <Btn variant="surface" onClick={handleClose} disabled={busy} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
                 <Btn icon="arrowR" onClick={handleConfirm}
                   disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource) || (cardIntentPath && !cgvAccepted)}
                   style={{ flex: 1 }}>

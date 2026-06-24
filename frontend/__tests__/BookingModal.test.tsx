@@ -83,4 +83,18 @@ describe('BookingModal — page unique', () => {
     expect(await screen.findByText(/Conditions d'annulation/)).toBeInTheDocument();
     expect(screen.getByText(/24\s*h avant le début/)).toBeInTheDocument();
   });
+
+  it('partie ouverte : applyHoldSetup reçoit partnerUserIds + visibility', async () => {
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    // attendre le hold (contenu interactif gated sur 'held')
+    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
+      'res-1', 'jwt-token',
+      expect.objectContaining({ partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
+    ));
+  });
 });
