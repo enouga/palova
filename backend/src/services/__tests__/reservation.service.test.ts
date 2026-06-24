@@ -1948,4 +1948,57 @@ describe('ReservationService', () => {
         .rejects.toThrow('SUBSCRIPTION_CAP_REACHED');
     });
   });
+
+  describe('applyHoldSetup', () => {
+    const baseReservation = {
+      id: 'res-1', userId: 'user-1', status: 'PENDING',
+      createdAt: new Date(), totalPrice: 20,
+      resource: { clubId: 'club-1', attributes: { format: 'double' } },
+    };
+
+    it('remplace les participants et met à jour visibilité/niveau', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ userId: 'user-2' }] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['user-2'], visibility: 'PUBLIC',
+        targetLevelMin: 3, targetLevelMax: 5,
+      });
+
+      expect(tx.reservationParticipant.deleteMany).toHaveBeenCalledWith({ where: { reservationId: 'res-1' } });
+      expect(tx.reservationParticipant.createMany).toHaveBeenCalled();
+      expect(tx.reservationParticipant.createMany.mock.calls[0][0].data).toHaveLength(2);
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'res-1' },
+        data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 }),
+      }));
+    });
+
+    it('rejette TOO_MANY_PLAYERS au-delà de la capacité du terrain', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue(
+        [{ userId: 'u2' }, { userId: 'u3' }, { userId: 'u4' }, { userId: 'u5' }] as any,
+      );
+      await expect(service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['u2', 'u3', 'u4', 'u5'],
+      })).rejects.toThrow('TOO_MANY_PLAYERS');
+    });
+
+    it('refuse si la résa n est pas PENDING', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...baseReservation, status: 'CONFIRMED' } as any);
+      await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }))
+        .rejects.toThrow('RESERVATION_NOT_PENDING');
+    });
+
+    it('refuse si la résa appartient à un autre joueur', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...baseReservation, userId: 'other' } as any);
+      await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }))
+        .rejects.toThrow('UNAUTHORIZED');
+    });
+  });
 });

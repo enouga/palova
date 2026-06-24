@@ -315,6 +315,51 @@ export class ReservationService {
     }
   }
 
+  /**
+   * Applique les joueurs/visibilité/niveau choisis APRÈS le blocage (modale page unique)
+   * sur une réservation encore PENDING. Appelé avant la confirmation/paiement → les
+   * participants sont persistés quel que soit le confirmeur (client OU webhook Stripe),
+   * sans re-poser le hold (pas de fenêtre de course). Réutilise validatePartners /
+   * participantRows. Aucun paiement n'existe encore sur une PENDING → suppression sûre.
+   */
+  async applyHoldSetup(
+    reservationId: string,
+    userId: string,
+    setup: {
+      partnerUserIds?: string[];
+      visibility?: 'PRIVATE' | 'PUBLIC';
+      targetLevelMin?: number | null;
+      targetLevelMax?: number | null;
+    },
+  ) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: { resource: { select: { clubId: true, attributes: true } } },
+    });
+    if (!reservation)                     throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.userId !== userId)    throw new Error('UNAUTHORIZED');
+    if (reservation.status !== 'PENDING') throw new Error('RESERVATION_NOT_PENDING');
+
+    const format = (reservation.resource.attributes as { format?: string } | null)?.format;
+    const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
+    const priceCents = Math.round(Number(reservation.totalPrice) * 100);
+
+    return prisma.$transaction(async (tx) => {
+      await tx.reservationParticipant.deleteMany({ where: { reservationId } });
+      await tx.reservationParticipant.createMany({
+        data: this.participantRows(reservationId, userId, partners, priceCents),
+      });
+      return tx.reservation.update({
+        where: { id: reservationId },
+        data: {
+          visibility: setup.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
+          targetLevelMin: setup.targetLevelMin ?? null,
+          targetLevelMax: setup.targetLevelMax ?? null,
+        },
+      });
+    });
+  }
+
   async confirmReservation(
     reservationId: string,
     userId: string,
