@@ -566,7 +566,7 @@ export default function BookingModal({
                     payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
                     amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
                     cgvAccepted={cgvAccepted} token={token}
-                    onSuccess={() => { settled.current = true; setStripeStep(false); onClose(); }}
+                    onSuccess={() => { settled.current = true; setStripeStep(false); onConfirmed(reservation); }}
                     onCancel={() => setStripeStep(false)} />
                 </div>
               )}
