@@ -511,17 +511,17 @@ export default function BookingModal({
 
               {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
               {cardIntentPath && (
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 16, cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 12, cursor: 'pointer' }}>
                   <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
                     aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
-                    style={{ width: 16, height: 16, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.45 }}>
+                    style={{ width: 14, height: 14, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+                  <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
                     J&apos;accepte les{' '}
-                    <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>conditions générales de vente</a>
+                    <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>conditions générales de vente</a>
                     {' '}et la{' '}
-                    <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.accent, textDecoration: 'underline' }}>politique de confidentialité</a>.
+                    <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>politique de confidentialité</a>.
                     {cgvStatus === 'fallback' && (
-                      <span style={{ display: 'block', color: th.textFaint, fontSize: 11.5, marginTop: 3 }}>
+                      <span style={{ display: 'block', color: th.textFaint, fontSize: 10, marginTop: 2 }}>
                         Les conditions générales de la plateforme s&apos;appliquent.
                       </span>
                     )}
