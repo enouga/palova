@@ -193,3 +193,50 @@ describe('POST /api/reservations/hold — fourchette de niveau (targetLevelMin/M
     }));
   });
 });
+
+describe('POST /api/reservations/:id/setup', () => {
+  const pendingReservation = () => ({
+    id: 'res-1',
+    userId: 'user-1',
+    status: 'PENDING',
+    totalPrice: 25,
+    createdAt: new Date(), // fresh hold
+    resource: { clubId: 'club-demo', attributes: { format: 'double' } },
+  });
+
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.reservationParticipant.deleteMany.mockResolvedValue({ count: 0 } as any);
+    prismaMock.reservationParticipant.createMany.mockResolvedValue({ count: 1 } as any);
+  });
+
+  it('relaie les joueurs/visibilité au service et renvoie 200', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(pendingReservation() as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ userId: 'u2' }] as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', status: 'PENDING' } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/setup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ partnerUserIds: ['u2'], visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 }),
+    }));
+  });
+
+  it('mappe TOO_MANY_PLAYERS en 409', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(pendingReservation() as any);
+    // 4 partners + organizer = 5 players, more than double (4-player) capacity
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { userId: 'a' }, { userId: 'b' }, { userId: 'c' }, { userId: 'd' },
+    ] as any);
+
+    const res = await request(app).post('/api/reservations/res-1/setup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ partnerUserIds: ['a', 'b', 'c', 'd'] });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('TOO_MANY_PLAYERS');
+  });
+});

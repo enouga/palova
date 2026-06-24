@@ -114,6 +114,24 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
   } catch (err) { handleError(err, res, next); }
 });
 
+router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const b = req.body ?? {};
+    const partnerUserIds = Array.isArray(b.partnerUserIds)
+      ? b.partnerUserIds.filter((x: unknown): x is string => typeof x === 'string')
+      : undefined;
+    const visibility = b.visibility === 'PUBLIC' ? 'PUBLIC' : b.visibility === 'PRIVATE' ? 'PRIVATE' : undefined;
+    const num = (v: unknown) => (typeof v === 'number' && v >= 0 && v <= 8 ? v : null);
+    const updated = await reservationService.applyHoldSetup(asString(req.params.id), req.user!.id, {
+      partnerUserIds,
+      visibility,
+      targetLevelMin: b.targetLevelMin === undefined ? undefined : num(b.targetLevelMin),
+      targetLevelMax: b.targetLevelMax === undefined ? undefined : num(b.targetLevelMax),
+    });
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const cancelled = await reservationService.cancelReservation(asString(req.params.id), req.user!.id);
