@@ -158,6 +158,26 @@ export class ResourceService {
     });
   }
 
+  /**
+   * Supprime définitivement une ressource. Refuse (RESOURCE_HAS_RESERVATIONS) si elle est
+   * référencée par une réservation ou une série récurrente (FK onDelete: Restrict côté base) :
+   * dans ce cas, le club doit la désactiver (isActive=false) plutôt que la supprimer.
+   */
+  async deleteResource(resourceId: string, clubId: string) {
+    const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+    // 404 plutôt que 403 si autre club : ne pas divulguer l'existence.
+    if (!resource || resource.clubId !== clubId) throw new Error('RESOURCE_NOT_FOUND');
+
+    // Toute référence (quel que soit le statut) bloque la suppression au niveau base.
+    const [reservations, series] = await Promise.all([
+      prisma.reservation.count({ where: { resourceId } }),
+      prisma.reservationSeries.count({ where: { resourceId } }),
+    ]);
+    if (reservations > 0 || series > 0) throw new Error('RESOURCE_HAS_RESERVATIONS');
+
+    await prisma.resource.delete({ where: { id: resourceId } });
+  }
+
   async setResourceActive(resourceId: string, clubId: string, isActive: boolean) {
     const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
     if (!resource || resource.clubId !== clubId) throw new Error('RESOURCE_NOT_FOUND');
