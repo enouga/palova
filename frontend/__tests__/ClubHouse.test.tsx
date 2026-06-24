@@ -19,6 +19,7 @@ const mocked = api as jest.Mocked<typeof api>;
 
 const club = {
   id: 'c1', slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris',
+  accentColor: '#d6ff3f', logoUrl: null, coverImageUrl: null,
   clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90] }, resources: [] }],
 } as never;
 const wrap = () => render(<ThemeProvider><ClubHouse club={club} /></ThemeProvider>);
