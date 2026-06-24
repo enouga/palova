@@ -210,3 +210,38 @@ describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', ()
     expect(privacyLink).toHaveAttribute('target', '_blank');
   });
 });
+
+describe('BookingModal — gardes paiement renvoyées par le backend (jamais de code brut)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
+  });
+
+  it('donnée club périmée : confirmReservation renvoie CARD_FINGERPRINT_REQUIRED → bascule sur l\'empreinte (CGV + étape setup), jamais le code brut', async () => {
+    // requireCardFingerprint=false (prop périmée), mais le backend (à jour) l'exige.
+    await openPending({ stripeActive: true, requireCardFingerprint: false });
+    (api.confirmReservation as jest.Mock).mockRejectedValueOnce(new Error('CARD_FINGERPRINT_REQUIRED'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
+
+    // Le code brut ne doit JAMAIS s'afficher.
+    await waitFor(() => expect(screen.queryByText('CARD_FINGERPRINT_REQUIRED')).not.toBeInTheDocument());
+    // La case CGV apparaît (le tunnel est passé en mode empreinte).
+    const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
+    fireEvent.click(checkbox);
+    // Re-confirmer → étape Stripe d'enregistrement de carte.
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
+    const step = await screen.findByTestId('stripe-step');
+    expect(step).toHaveAttribute('data-type', 'setup');
+  });
+
+  it('autre garde paiement (CGV_NOT_ACCEPTED) → message FR lisible, jamais le code brut', async () => {
+    await openPending({ stripeActive: true });
+    (api.confirmReservation as jest.Mock).mockRejectedValueOnce(new Error('CGV_NOT_ACCEPTED'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer et payer/ }));
+
+    expect(await screen.findByText(/Veuillez accepter les conditions générales/i)).toBeInTheDocument();
+    expect(screen.queryByText('CGV_NOT_ACCEPTED')).not.toBeInTheDocument();
+  });
+});

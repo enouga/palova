@@ -85,6 +85,12 @@ const BOOKING_ERRORS: Record<string, string> = {
   TOO_MANY_PLAYERS:       'Trop de joueurs pour ce terrain.',
   PARTNER_NOT_MEMBER:     "Un partenaire n'est pas membre du club.",
   PARTNER_DUPLICATE:      'Un partenaire figure en double.',
+  // Pré-conditions de paiement (gardes serveur) — jamais affichées en code brut.
+  ONLINE_PAYMENT_REQUIRED: 'Ce club exige le paiement en ligne pour réserver.',
+  CARD_FINGERPRINT_REQUIRED: "Ce club demande d'enregistrer une carte bancaire (protection no-show). Acceptez les conditions, puis enregistrez votre carte.",
+  CGV_NOT_ACCEPTED:        'Veuillez accepter les conditions générales de vente.',
+  PAYMENT_NOT_SUCCEEDED:   "Le paiement n'a pas abouti. Veuillez réessayer.",
+  SETUP_NOT_SUCCEEDED:     "L'enregistrement de la carte n'a pas abouti. Veuillez réessayer.",
 };
 
 export default function BookingModal({
@@ -103,6 +109,10 @@ export default function BookingModal({
   const [cgvAccepted, setCgvAccepted] = useState(false);
   // Le club a-t-il publié ses CGV ? ('published' → lien /cgv ; 'fallback' → CGV plateforme).
   const [cgvStatus, setCgvStatus]     = useState<'published' | 'fallback' | null>(null);
+  // Empreinte forcée : le backend a renvoyé CARD_FINGERPRINT_REQUIRED alors que la prop
+  // requireCardFingerprint était périmée (toggle activé après le chargement de la page).
+  // On bascule alors le tunnel sur l'enregistrement de carte plutôt qu'un cul-de-sac.
+  const [fingerprintForced, setFingerprintForced] = useState(false);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
   // En ligne : régler sa part (par personne) ou le total.
@@ -149,7 +159,7 @@ export default function BookingModal({
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
   // on exige l'acceptation des CGV (le backend l'impose aussi côté serveur).
-  const cardIntentPath = !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint);
+  const cardIntentPath = !paySource && ((payMode === 'online' && onlineAvailable) || !!requireCardFingerprint || fingerprintForced);
 
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
@@ -237,8 +247,20 @@ export default function BookingModal({
         setErrorMsg('Solde insuffisant — réglez au club.');
         return;
       }
+      if (msg === 'CARD_FINGERPRINT_REQUIRED') {
+        // Donnée club périmée : on force le tunnel empreinte (CGV + étape setup) au lieu
+        // d'un cul-de-sac. On reste en phase 'confirm' ; le message guide l'utilisateur.
+        setFingerprintForced(true);
+        setPaySource(null);
+        setErrorMsg(BOOKING_ERRORS.CARD_FINGERPRINT_REQUIRED);
+        return;
+      }
       setPhase('error');
-      setErrorMsg(msg === 'SLOT_NO_LONGER_AVAILABLE' ? 'Ce créneau a été pris entre-temps. Veuillez recommencer.' : msg);
+      setErrorMsg(
+        msg === 'SLOT_NO_LONGER_AVAILABLE'
+          ? 'Ce créneau a été pris entre-temps. Veuillez recommencer.'
+          : (BOOKING_ERRORS[msg] ?? msg),
+      );
     }
   };
 
