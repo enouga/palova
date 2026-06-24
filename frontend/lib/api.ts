@@ -135,7 +135,7 @@ export const api = {
     reservationId: string,
     token: string,
     options?: {
-      paymentSource?: { packageId: string };
+      paymentSource?: { packageId: string } | { subscriptionId: string };
       stripePaymentIntentId?: string;
       stripeSetupIntentId?: string;
       cgvAccepted?: boolean;
@@ -300,6 +300,18 @@ export const api = {
 
   adminRemoveReservationParticipant: (clubId: string, reservationId: string, participantId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'DELETE' }, token),
+
+  // --- Abonnements (admin) ---
+  adminGetSubscriptionPlans: (clubId: string, token: string) =>
+    request<SubscriptionPlan[]>(`/api/clubs/${clubId}/admin/subscription-plans`, {}, token),
+  adminCreateSubscriptionPlan: (clubId: string, body: CreateSubscriptionPlanBody, token: string) =>
+    request<SubscriptionPlan>(`/api/clubs/${clubId}/admin/subscription-plans`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminUpdateSubscriptionPlan: (clubId: string, id: string, body: UpdateSubscriptionPlanBody, token: string) =>
+    request<SubscriptionPlan>(`/api/clubs/${clubId}/admin/subscription-plans/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  adminGetMemberSubscriptions: (clubId: string, userId: string, token: string) =>
+    request<Subscription[]>(`/api/clubs/${clubId}/admin/members/${userId}/subscriptions`, {}, token),
+  adminSellSubscription: (clubId: string, userId: string, body: SellSubscriptionBody, token: string) =>
+    request<{ subscription: Subscription; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/subscriptions`, { method: 'POST', body: JSON.stringify(body) }, token),
 
   // --- Offres prépayées & caisse ---
   adminGetPackageTemplates: (clubId: string, token: string) =>
@@ -478,6 +490,10 @@ export const api = {
   // Soldes prépayés du joueur sur ce club.
   getMyClubPackages: (slug: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${slug}/me/packages`, {}, token),
+
+  // Abonnements actifs du joueur sur ce club.
+  getMyClubSubscriptions: (slug: string, token: string) =>
+    request<Subscription[]>(`/api/clubs/${slug}/me/subscriptions`, {}, token),
 
   getMyQuotaStatus: (slug: string, token: string) =>
     request<MyQuotaStatus | null>(`/api/clubs/${slug}/me/quota-status`, {}, token),
@@ -1270,6 +1286,50 @@ export interface AddPaymentBody {
   voucherRef?: string;
   voucherIssuer?: string;
   participantId?: string; // attribue l'encaissement à un joueur précis de la résa
+}
+
+export type SubscriptionBenefit = 'INCLUDED' | 'DISCOUNT';
+export type SubscriptionStatus = 'ACTIVE' | 'CANCELLED';
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  sportKeys: string[];
+  monthlyPrice: string;        // Decimal sérialisé
+  commitmentMonths: number;
+  offPeakOnly: boolean;
+  benefit: SubscriptionBenefit;
+  discountPercent: number | null;
+  dailyCap: number | null;
+  weeklyCap: number | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Subscription {
+  id: string;
+  planId: string;
+  status: SubscriptionStatus;
+  startedAt: string;
+  expiresAt: string;
+  monthlyPriceSnapshot: string;
+  sportKeys: string[];
+  offPeakOnly: boolean;
+  benefit: SubscriptionBenefit;
+  discountPercent: number | null;
+  dailyCap: number | null;
+  weeklyCap: number | null;
+  plan: { name: string };
+}
+
+export type CreateSubscriptionPlanBody = {
+  name: string; sportKeys: string[]; monthlyPrice: number; commitmentMonths: number;
+  offPeakOnly?: boolean; benefit: SubscriptionBenefit; discountPercent?: number | null;
+  dailyCap?: number | null; weeklyCap?: number | null;
+};
+export type UpdateSubscriptionPlanBody = Partial<CreateSubscriptionPlanBody & { isActive: boolean }>;
+export interface SellSubscriptionBody {
+  planId: string; method?: PaymentMethod; payerName?: string; voucherRef?: string; voucherIssuer?: string;
 }
 
 export interface PackageTemplate {
