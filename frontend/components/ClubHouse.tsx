@@ -15,6 +15,7 @@ import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
 import { PartnerOffers } from '@/components/clubhouse/PartnerOffers';
 import { MatchesForYou } from '@/components/clubhouse/MatchesForYou';
+import { ClubCover } from '@/components/ClubCover';
 
 function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -106,6 +107,13 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
   return (
     <>
+      <ClubCover variant="banner" club={{
+        name: club.name, slug: club.slug, accentColor: club.accentColor,
+        coverImageUrl: club.coverImageUrl,
+        sportIcons: club.clubSports.map((cs) => cs.sport.icon),
+        logoUrl: club.logoUrl,
+      }} />
+
       {hero && <HeroAnnouncement announcement={hero} />}
 
       {/* Grille action : créneaux + events (tournois + animations), côte à côte ≥ 600px */}
