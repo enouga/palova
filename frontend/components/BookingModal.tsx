@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
 import { packageLabel, canCover } from '@/lib/packages';
@@ -18,6 +18,7 @@ import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel } from '@/lib/reservations';
+import { Icon, IconName } from '@/components/ui/Icon';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -86,41 +87,59 @@ const BOOKING_ERRORS: Record<string, string> = {
   SETUP_NOT_SUCCEEDED:     "L'enregistrement de la carte n'a pas abouti. Veuillez réessayer.",
 };
 
-/** Carte d'en-tête compacte : court + format + date + horaire + prix (total/part). */
+/** Carte d'en-tête « hero » : glyphe sport + court + format + date + horaire + prix focal. */
 function BookingHeaderCard({ slot, timezone, resourceName, format, totalPrice, perPerson, capacity, durLabel, th }: {
   slot: TimeSlot; timezone?: string; resourceName?: string; format?: string;
   totalPrice: string; perPerson: string; capacity: number; durLabel: string; th: Theme;
 }) {
   const dateLabel = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone }).format(new Date(slot.startTime));
   return (
-    <div style={{ marginTop: 14, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 18, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
-      <div>
-        <div style={{ fontFamily: th.fontDisplay, fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: th.text, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {resourceName ?? 'Court'}
-          <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: th.textMute, border: `1px solid ${th.lineStrong}`, background: th.bgElev, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
+    <div style={{ position: 'relative', overflow: 'hidden', marginTop: 14, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 20, padding: '16px 18px' }}>
+      {/* Lavis diagonal à l'accent du club (purement décoratif). */}
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${th.accent}24 0%, transparent 58%)`, pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ display: 'flex', gap: 12, minWidth: 0 }}>
+          <span style={{ width: 44, height: 44, flex: '0 0 auto', borderRadius: 13, background: `${th.accent}1f`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="ball" size={24} color={th.accent} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: th.fontDisplay, fontSize: 21, fontWeight: 700, letterSpacing: -0.4, color: th.text }}>{resourceName ?? 'Court'}</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: th.textMute, border: `1px solid ${th.lineStrong}`, background: th.bgElev, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
+            </div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, marginTop: 8, textTransform: 'capitalize' }}>{dateLabel}</div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 4, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+              <Icon name="clock" size={13} color={th.textFaint} />
+              {formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {durLabel}
+              {slot.offPeak && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 6, padding: '2px 7px' }}>
+                  <Icon name="moon" size={10} color="#b45309" />heures creuses
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, marginTop: 8, textTransform: 'capitalize' }}>{dateLabel}</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {durLabel}
-          {slot.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 5, padding: '2px 7px' }}>heures creuses</span>}
+        <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+          <div style={{ fontFamily: th.fontDisplay, fontSize: 34, fontWeight: 800, letterSpacing: -1.3, color: th.text, lineHeight: 0.95 }}>{totalPrice}€</div>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 5 }}>≈ {perPerson} € / pers · {capacity} j.</div>
         </div>
-      </div>
-      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        <div style={{ fontFamily: th.fontDisplay, fontSize: 34, fontWeight: 800, letterSpacing: -1.3, color: th.text, lineHeight: 0.95 }}>{totalPrice}€</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 5 }}>≈ {perPerson} € / pers · {capacity} j.</div>
       </div>
     </div>
   );
 }
 
-/** Bloc d'info « Conditions d'annulation » (toujours affiché, lecture seule). */
+/**
+ * Bloc d'info « Conditions d'annulation » — PURE information (lecture seule),
+ * volontairement distinct des cartes de choix au-dessus : pas de bordure « carte »,
+ * fond plat discret et titre en petit capitale → ne se lit pas comme une option à cocher.
+ */
 function CancellationNotice({ text, th }: { text: string; th: Theme }) {
   return (
-    <div style={{ marginTop: 18, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 14, padding: '13px 15px', display: 'flex', gap: 11 }}>
-      <span style={{ width: 30, height: 30, flex: '0 0 auto', borderRadius: 9, background: '#fff1e9', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>↺</span>
+    <div style={{ marginTop: 16, background: th.surface2, borderRadius: 12, padding: '11px 13px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <span style={{ width: 26, height: 26, flex: '0 0 auto', borderRadius: 8, background: '#fff1e9', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>↺</span>
       <div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 3 }}>Conditions d&apos;annulation</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.5 }}>{text}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, marginBottom: 2 }}>Conditions d&apos;annulation</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.45 }}>{text}</div>
       </div>
     </div>
   );
@@ -342,17 +361,56 @@ export default function BookingModal({
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
+  // ── Briques de présentation (closure sur le thème) ──────────────────────────
+  // Intitulé de section : micro-icône + label majuscule discret, rythme constant.
+  const sectionLabel = (icon: IconName, label: ReactNode) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+      <Icon name={icon} size={13} color={th.textMute} />
+      <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>{label}</span>
+    </div>
+  );
+  // Carte d'avenue de paiement (sélectionnable) : anneau + lavis accent quand choisie.
+  const payCard = (selected: boolean): React.CSSProperties => ({
+    border: `1.5px solid ${selected ? th.accent : th.lineStrong}`,
+    background: selected ? `${th.accent}14` : th.surface,
+    borderRadius: 14,
+    transition: 'border-color .15s, background .15s',
+  });
+  // Tuile-icône de l'avenue (pleine quand choisie).
+  const payTile = (selected: boolean): React.CSSProperties => ({
+    width: 36, height: 36, flex: '0 0 auto', borderRadius: 10,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: selected ? th.accent : `${th.accent}14`,
+  });
+  const payTitle: React.CSSProperties = { flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text };
+  const payDesc: React.CSSProperties = { fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, lineHeight: 1.4, marginTop: 8, paddingLeft: 48 };
+  // Pastille de validation (✓) sur la carte choisie.
+  const checkBadge = (
+    <span style={{ width: 22, height: 22, flex: '0 0 auto', borderRadius: '50%', background: th.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name="check" size={13} color={th.onAccent} />
+    </span>
+  );
+  // Bouton radio des avenues de paiement : cercle vide quand non choisi, rempli (✓) quand choisi.
+  // Le cercle TOUJOURS visible (même vide) signale clairement « choix unique entre ces options ».
+  const radioDot = (selected: boolean) => (
+    <span style={{ width: 22, height: 22, flex: '0 0 auto', borderRadius: '50%',
+      border: `2px solid ${selected ? th.accent : th.lineStrong}`, background: selected ? th.accent : 'transparent',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color .15s, background .15s' }}>
+      {selected && <Icon name="check" size={12} color={th.onAccent} />}
+    </span>
+  );
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
       <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', boxShadow: '0 14px 50px rgba(0,0,0,0.34)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
         {/* Barre de timer fine (cachée en phase error) */}
         {phase !== 'error' && (
           <div style={{ height: 4, background: th.surface2 }}>
             <div style={{ height: '100%', width: `${(secondsLeft / HOLD_SECONDS) * 100}%`, background: urgent ? ACCENTS.coral : th.accent, transition: 'width 1s linear' }} />
           </div>
         )}
-        <div style={{ padding: '14px 20px 32px' }}>
+        <div style={{ padding: '16px 20px 30px' }}>
 
           {phase === 'error' ? (
             <>
@@ -361,17 +419,21 @@ export default function BookingModal({
             </>
           ) : (
             <>
-              {/* En-tête : badge créneau bloqué + timer chip */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: phase === 'held' ? '#15803d' : th.textMute }}>
+              {/* En-tête : pill « créneau bloqué » + chip timer */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700,
+                  color: phase === 'held' ? '#15803d' : th.textMute, background: phase === 'held' ? 'rgba(34,197,94,0.13)' : th.surface2, borderRadius: 999, padding: '5px 12px 5px 10px' }}>
                   {phase === 'held'
-                    ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px #22c55e22' }} />Créneau bloqué pour vous</>
-                    : 'Blocage du créneau…'}
+                    ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px #22c55e2e' }} />Créneau bloqué pour vous</>
+                    : <><span style={{ width: 7, height: 7, borderRadius: '50%', background: th.textFaint }} />Blocage du créneau…</>}
                 </span>
-                <span style={{ fontFamily: th.fontMono, fontWeight: 700, fontSize: 13.5, color: urgent ? ACCENTS.coral : th.textMute }}>⏱ {mm}:{ss}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontMono, fontWeight: 700, fontSize: 13,
+                  color: urgent ? ACCENTS.coral : th.textMute, background: urgent ? `${ACCENTS.coral}1f` : th.surface2, borderRadius: 999, padding: '4px 11px' }}>
+                  <Icon name="clock" size={12} color={urgent ? ACCENTS.coral : th.textMute} />{mm}:{ss}
+                </span>
               </div>
 
-              {/* Header carte */}
+              {/* Header carte hero */}
               <BookingHeaderCard slot={slot} timezone={timezone} resourceName={resourceName}
                 format={format} totalPrice={totalPrice} perPerson={perPerson} capacity={capacity} durLabel={durLabel} th={th} />
 
@@ -380,10 +442,8 @@ export default function BookingModal({
               <>
               {/* Joueurs / visibilité / niveau — terrain multi-joueurs */}
               {showPartners && (
-                <div style={{ marginTop: 18 }}>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>
-                    Partenaires <span style={{ color: th.textFaint, fontWeight: 500 }}>· membres du club</span>
-                  </div>
+                <div style={{ marginTop: 20 }}>
+                  {sectionLabel('users', <>Partenaires <span style={{ color: th.textFaint, fontWeight: 600 }}>· membres du club</span></>)}
                   {partners.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                       {partners.map((p) => {
@@ -439,8 +499,8 @@ export default function BookingModal({
                   </div>
 
                   {nbPlayers > 1 && (
-                    <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                      ≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
+                    <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 10, padding: '7px 11px' }}>
+                      <Icon name="users" size={14} color={th.textMute} />≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
                     </div>
                   )}
                 </div>
@@ -454,64 +514,80 @@ export default function BookingModal({
               )}
 
               {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
-              <div style={{ marginTop: 18 }}>
-                <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.textMute, marginBottom: 8 }}>Mode de paiement</div>
+              <div style={{ marginTop: 20 }}>
+                {sectionLabel('card', 'Mode de paiement')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                   {/* Avenue 0 — couverture par abonnement (sélectionnée par défaut si le créneau est couvert). */}
                   {cover && (
                     <button type="button" onClick={() => { setUseSub(true); setPaySource(null); setPayMode('club'); }}
-                      style={{ textAlign: 'left', border: `1.5px solid ${useSub ? th.accent : th.lineStrong}`, background: useSub ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                      Couvert par votre abonnement — {coverageLabel(cover)}
+                      style={{ ...payCard(useSub), display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', padding: '11px 13px' }}>
+                      <span style={payTile(useSub)}><Icon name="bolt" size={18} color={useSub ? th.onAccent : th.accent} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text }}>Couvert par votre abonnement</span>
+                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 2 }}>{coverageLabel(cover)}</span>
+                      </span>
+                      {useSub && checkBadge}
                     </button>
                   )}
 
                   {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
-                  {!requireOnlinePayment && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {!requireOnlinePayment && (() => {
+                    const sel = !useSub && payMode === 'club' && !paySource;
+                    return (
+                    <div style={{ ...payCard(sel), padding: '11px 13px' }}>
                       <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
-                        style={{ textAlign: 'left', border: `1.5px solid ${(!useSub && payMode === 'club' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'club' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                        Régler au club
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+                        <span style={payTile(sel)}><Icon name="home" size={18} color={sel ? th.onAccent : th.accent} /></span>
+                        <span style={payTitle}>Régler au club</span>
+                        {sel && checkBadge}
                       </button>
-                      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, paddingLeft: 2, lineHeight: 1.4 }}>
+                      <div style={payDesc}>
                         {requireCardFingerprint
                           ? <>Le club enregistre une <b style={{ color: th.textMute }}>empreinte de votre carte</b> (protection no-show) ; le règlement se fait sur place.</>
                           : <>Vous réglez directement au club — <b style={{ color: th.textMute }}>aucune carte enregistrée</b>.</>}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Avenue 2 — payer en ligne (visible si Stripe actif ou imposé). */}
-                  {onlineAvailable && (
-                    <div style={{ border: `1.5px solid ${(!useSub && payMode === 'online' && !paySource) ? th.accent : th.lineStrong}`, background: (!useSub && payMode === 'online' && !paySource) ? th.surface2 : 'transparent', borderRadius: 12, padding: '11px 14px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
+                  {onlineAvailable && (() => {
+                    const sel = !useSub && payMode === 'online' && !paySource;
+                    return (
+                    <div style={{ ...payCard(sel), padding: '11px 13px', opacity: onlineRequiredButUnavailable ? 0.55 : 1 }}>
                       <button type="button" disabled={onlineRequiredButUnavailable}
                         onClick={() => { setUseSub(false); setPayMode('online'); setPaySource(null); }}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, padding: 0 }}>
-                        Payer en ligne
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: onlineRequiredButUnavailable ? 'default' : 'pointer', padding: 0 }}>
+                        <span style={payTile(sel)}><Icon name="card" size={18} color={sel ? th.onAccent : th.accent} /></span>
+                        <span style={payTitle}>Payer en ligne</span>
+                        {sel && checkBadge}
                       </button>
                       {onlineRequiredButUnavailable ? (
-                        <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-                          Paiement en ligne momentanément indisponible — contactez le club.
-                        </div>
-                      ) : (!useSub && payMode === 'online' && !paySource) && (
-                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 8, lineHeight: 1.4 }}>
+                        <div style={payDesc}>Paiement en ligne momentanément indisponible — contactez le club.</div>
+                      ) : sel && (
+                        <div style={{ ...payDesc, color: th.textMute, fontSize: 12 }}>
                           {onlineShare
                             ? <>Votre part : <b style={{ color: th.text }}>{perPerson}€</b> <span style={{ color: th.textFaint }}>· {totalPrice}€ ÷ {capacity} joueurs</span></>
                             : <>Montant : <b style={{ color: th.text }}>{totalPrice}€</b> <span style={{ color: th.textFaint }}>· part trop faible (minimum 0,50 €)</span></>}
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
                   {packages.length > 0 && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {packages.map((p) => {
                         const ok = canCover(p, totalEuros);
+                        const sel = paySource === p.id;
                         return (
                           <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
-                            style={{ border: `1.5px solid ${paySource === p.id ? th.accent : th.lineStrong}`, background: paySource === p.id ? th.surface2 : 'transparent', borderRadius: 10, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px solid ${sel ? th.accent : th.lineStrong}`, background: sel ? `${th.accent}14` : th.surface, borderRadius: 12, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                            <Icon name="ticket" size={15} color={sel ? th.accent : th.textMute} />
                             {packageLabel(p)}
+                            {sel && <Icon name="check" size={13} color={th.accent} />}
                           </button>
                         );
                       })}
@@ -522,10 +598,10 @@ export default function BookingModal({
 
               {/* Bloc légal — case d'acceptation requise dès qu'on passe par un intent CB Stripe. */}
               {cardIntentPath && (
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 12, cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, cursor: 'pointer' }}>
                   <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
                     aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
-                    style={{ width: 14, height: 14, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+                    style={{ width: 15, height: 15, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
                   <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
                     J&apos;accepte les{' '}
                     <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>conditions générales de vente</a>
@@ -547,7 +623,8 @@ export default function BookingModal({
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginTop: 14 }}>{errorMsg}</div>
               )}
 
-              <div style={{ display: 'flex', gap: 11, marginTop: 18 }}>
+              {/* Pied d'action */}
+              <div style={{ display: 'flex', gap: 11, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
                 <Btn variant="surface" onClick={handleClose} disabled={busy} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
                 <Btn icon="arrowR" onClick={handleConfirm}
                   disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource) || (cardIntentPath && !cgvAccepted)}
