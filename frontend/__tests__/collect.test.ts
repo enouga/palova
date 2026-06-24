@@ -1,4 +1,4 @@
-import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod, isUpcoming } from '@/lib/collect';
+import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod, isUpcoming, nextSlotWindow, isNextSlot } from '@/lib/collect';
 
 const TZ = 'Europe/Paris';
 // jeudi 22/06/2026 18h-19h Paris (UTC+2) = 16:00Z-17:00Z
@@ -109,5 +109,40 @@ describe('isUpcoming', () => {
   });
   it("garde tout quand l'heure courante est inconnue (null)", () => {
     expect(isUpcoming({ endTime: '2020-01-01T00:00:00.000Z' }, null)).toBe(true);
+  });
+});
+
+describe('nextSlotWindow', () => {
+  const NOW = Date.parse('2026-06-24T16:10:00.000Z');   // 16:10 UTC
+  const at = (iso: string) => Date.parse(iso);
+  it('borne haute = prochain départ ≥ now ; borne basse = now − 20 min', () => {
+    const starts = [at('2026-06-24T16:00:00.000Z'), at('2026-06-24T16:30:00.000Z'), at('2026-06-24T17:30:00.000Z')];
+    expect(nextSlotWindow(starts, NOW)).toEqual([NOW - 20 * 60_000, at('2026-06-24T16:30:00.000Z')]);
+  });
+  it('aucun départ futur → borne haute = now', () => {
+    expect(nextSlotWindow([at('2026-06-24T15:00:00.000Z')], NOW)).toEqual([NOW - 20 * 60_000, NOW]);
+  });
+  it('liste vide → [now − 20 min, now]', () => {
+    expect(nextSlotWindow([], NOW)).toEqual([NOW - 20 * 60_000, NOW]);
+  });
+  it('marge paramétrable', () => {
+    expect(nextSlotWindow([], NOW, 5)).toEqual([NOW - 5 * 60_000, NOW]);
+  });
+});
+
+describe('isNextSlot', () => {
+  const NOW = Date.parse('2026-06-24T16:10:00.000Z');
+  const win: [number, number] = [NOW - 20 * 60_000, Date.parse('2026-06-24T16:30:00.000Z')];
+  it('start dans la fenêtre → true (bornes incluses)', () => {
+    expect(isNextSlot({ startTime: '2026-06-24T16:00:00.000Z' }, win)).toBe(true);   // retardataire ≤ 20 min
+    expect(isNextSlot({ startTime: '2026-06-24T16:30:00.000Z' }, win)).toBe(true);   // prochain départ (borne haute)
+    expect(isNextSlot({ startTime: '2026-06-24T15:50:00.000Z' }, win)).toBe(true);   // borne basse exacte
+  });
+  it('start hors fenêtre → false', () => {
+    expect(isNextSlot({ startTime: '2026-06-24T15:40:00.000Z' }, win)).toBe(false);  // > 20 min de retard
+    expect(isNextSlot({ startTime: '2026-06-24T17:30:00.000Z' }, win)).toBe(false);  // après le prochain départ
+  });
+  it('window null → true (pré-hydratation)', () => {
+    expect(isNextSlot({ startTime: '2000-01-01T00:00:00.000Z' }, null)).toBe(true);
   });
 });
