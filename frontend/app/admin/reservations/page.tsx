@@ -1,20 +1,19 @@
 'use client';
-import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
 import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminResource, OffPeakHours, Member, ClubAdminDetail, Payment, CaissePayment } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { useIsDesktop } from '@/lib/useIsDesktop';
-import { DateField } from '@/components/ui/DateField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CollectPanel } from '@/components/admin/CollectPanel';
-import { PaymentPanel } from '@/components/admin/PaymentPanel';
+import { ReservationCollect } from '@/components/admin/ReservationCollect';
 import { Receipt } from '@/components/admin/Receipt';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
-import { dueCents, toCents, fmtEuros, paymentDots } from '@/lib/caisse';
+import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
-import { overlapsHourWindow, outstandingFilter, matchesQuery, OutstandingMode } from '@/lib/collect';
+import { overlapsHourWindow, statusFilter, matchesQuery, presetWindow, hasAnyMethod, StatusMode, TimePreset } from '@/lib/collect';
+import { ReservationFilters } from '@/components/admin/ReservationFilters';
 
 const CORAL = '#ff7a4d';
 
@@ -50,13 +49,16 @@ export default function AdminReservationsPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
-  const wide = useIsDesktop(900);
   const [data, setData]   = useState<ClubReservationsResponse | null>(null);
   const [date, setDate]   = useState(todayISO());
   const [loading, setLoading] = useState(true);
+  const loadedOnce = useRef(false);   // le loader plein écran ne s'affiche qu'au 1er chargement
+  const loadSeq = useRef(0);          // « la dernière réponse gagne » : ignore les rechargements périmés (anti-clignotement / résa fantôme)
+  const optSeq  = useRef(0);          // ids uniques des paiements optimistes (avant persistance)
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<ClubReservation | null>(null);
   const [cancelling, setCancelling]       = useState(false);
+  const cancellingRef = useRef(false);    // garde synchrone anti double-annulation (avant que `disabled` ne s'applique)
 
   const [resources, setResources]     = useState<AdminResource[]>([]);
   const [peak, setPeak]               = useState<OffPeakHours | null>(null);
@@ -64,13 +66,17 @@ export default function AdminReservationsPage() {
   const [members, setMembers]         = useState<Member[]>([]);
   const [clubDetail, setClubDetail]   = useState<ClubAdminDetail | null>(null);
   const [selected, setSelected]       = useState<ClubReservation | null>(null);   // modale « Détails »
-  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);        // ligne ciblée par le panneau d'encaissement
   const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
 
   const [query, setQuery]   = useState('');
-  const [outMode, setOut]   = useState<OutstandingMode>('all');
+  const [status, setStatus] = useState<StatusMode>('all');
+  const [courtSel, setCourtSel] = useState<Set<string>>(new Set());   // terrains cochés (vide = tous)
+  const [preset, setPreset] = useState<TimePreset | null>(null);      // raccourci créneau actif (pour surligner)
+  const [showCustom, setShowCustom] = useState(false);                // plage horaire personnalisée dépliée
   const [fromHour, setFrom] = useState<number | null>(null);
   const [toHour, setTo]     = useState<number | null>(null);
+  const [methodSel, setMethodSel] = useState<Set<PaymentMethod>>(new Set());   // moyens de paiement cochés (vide = tous)
+  const [nowH, setNowH]     = useState<number | null>(null);   // heure courante (posée en effet, jamais au rendu)
 
   const statusStyle = (s: string): CSSProperties => ({
     borderRadius: 999, padding: '4px 11px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600,
@@ -78,9 +84,13 @@ export default function AdminReservationsPage() {
     color: s === 'CONFIRMED' ? (th.mode === 'floodlit' ? th.accent : th.ink) : s === 'CANCELLED' ? th.textFaint : th.textMute,
   });
 
+  // Chargement COMPLET (1er affichage + changement de jour) : config club, terrains,
+  // membres et réservations. Protégé par `loadSeq` : si un rechargement plus récent
+  // est parti entre-temps, on n'écrase PAS l'état avec une réponse périmée.
   const load = useCallback(async (): Promise<ClubReservation[]> => {
     if (!token || !clubId) return [];
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
+    const seq = ++loadSeq.current;
     try {
       setError(null);
       const [detail, res, resv, mem] = await Promise.all([
@@ -89,25 +99,71 @@ export default function AdminReservationsPage() {
         api.adminGetReservations(clubId, date ? { date } : {}, token),
         api.adminGetMembers(clubId, token),
       ]);
+      if (seq !== loadSeq.current) return resv.reservations;   // supplanté → ne pas écraser
       setClubDetail(detail);
       setTz(detail.timezone);
       setPeak(detail.offPeakHours ?? null);
       setResources(res.filter((r) => r.isActive));
       setMembers(mem);
       setData(resv);
+      loadedOnce.current = true;
       return resv.reservations;
-    } catch (e) { setError((e as Error).message); return []; }
-    finally { setLoading(false); }
+    } catch (e) { if (seq === loadSeq.current) setError((e as Error).message); return []; }
+    finally { if (seq === loadSeq.current) setLoading(false); }
   }, [token, clubId, date]);
 
+  // Rechargement LÉGER après une mutation (encaissement / annulation / remboursement) :
+  // une seule requête (les réservations) au lieu de quatre — la config club, les terrains
+  // et les membres ne changent pas en cours de session. Même garde « dernière réponse gagne ».
+  const reloadReservations = useCallback(async (): Promise<ClubReservation[]> => {
+    if (!token || !clubId) return [];
+    const seq = ++loadSeq.current;
+    try {
+      const resv = await api.adminGetReservations(clubId, date ? { date } : {}, token);
+      if (seq !== loadSeq.current) return resv.reservations;   // supplanté → ne pas écraser
+      setData(resv);
+      return resv.reservations;
+    } catch (e) { if (seq === loadSeq.current) setError((e as Error).message); return []; }
+  }, [token, clubId, date]);
+
+  // Remplace UNE réservation dans la liste sans aucune requête (mutation qui renvoie la
+  // résa à jour : association de joueur, ajout/retrait). Instantané et insensible aux courses.
+  const patchReservation = useCallback((updated: ClubReservation) => {
+    setData((cur) => (cur ? { ...cur, reservations: cur.reservations.map((r) => (r.id === updated.id ? updated : r)) } : cur));
+  }, []);
+
+  // Mutation réussie depuis une ligne : patch local si la résa à jour est fournie, sinon
+  // rechargement léger des réservations (cas d'un encaissement, qui ne renvoie que le paiement).
+  const onMutated = useCallback(async (updated?: ClubReservation) => {
+    if (updated) patchReservation(updated);
+    else await reloadReservations();
+  }, [patchReservation, reloadReservations]);
+
+  // Encaissement OPTIMISTE : reflète le paiement dans la liste DÈS le clic (mise à jour
+  // fonctionnelle → les clics rapides s'accumulent sans s'écraser). L'appel réseau et la
+  // réconciliation sont gérés par la ligne (ReservationCollect) ; ici, juste l'affichage.
+  const applyPaymentLocally = useCallback((reservationId: string, intent: PaymentIntent) => {
+    const id = `opt:${(optSeq.current += 1)}`;
+    const iso = new Date().toISOString();
+    setData((cur) => (cur ? { ...cur, reservations: cur.reservations.map((r) => (r.id === reservationId ? applyOptimisticPayment(r, intent, id, iso) : r)) } : cur));
+  }, []);
+  const applyRefundLocally = useCallback((reservationId: string, paymentIds: string[]) => {
+    setData((cur) => (cur ? { ...cur, reservations: cur.reservations.map((r) => (r.id === reservationId ? applyOptimisticRefund(r, paymentIds) : r)) } : cur));
+  }, []);
+
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  // Heure courante (fuseau du club) — posée côté client uniquement pour ne lister que les créneaux à venir.
+  useEffect(() => {
+    setNowH(Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }).format(new Date())));
+  }, [tz]);
 
   const cancel = async (r: ClubReservation) => {
-    if (!token || !clubId) return;
+    if (!token || !clubId || cancellingRef.current) return;   // garde synchrone : un seul appel même en double-clic rapide
+    cancellingRef.current = true;
     setCancelling(true);
-    try { setError(null); await api.adminCancelReservation(clubId, r.id, token); setConfirmCancel(null); await load(); }
+    try { setError(null); await api.adminCancelReservation(clubId, r.id, token); setConfirmCancel(null); await reloadReservations(); }
     catch (e) { setError((e as Error).message); }
-    finally { setCancelling(false); }
+    finally { setCancelling(false); cancellingRef.current = false; }
   };
 
   // Derived helpers
@@ -118,19 +174,63 @@ export default function AdminReservationsPage() {
   const isCollectable = (r: ClubReservation) => r.status !== 'CANCELLED' && remainingOf(r) > 0;
 
   const refreshSelected = useCallback(async (updated?: ClubReservation) => {
-    const list = await load();
-    setSelected((cur) => (updated ?? (cur ? list.find((r) => r.id === cur.id) ?? cur : cur)));
-  }, [load]);
+    if (updated) { patchReservation(updated); setSelected(updated); return; }
+    const list = await reloadReservations();
+    setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
+  }, [reloadReservations, patchReservation]);
 
   const openH  = resources.length ? Math.min(...resources.map((r) => r.openHour)) : 8;
   const closeH = resources.length ? Math.max(...resources.map((r) => r.closeHour)) : 22;
   const nowHour = () => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }).format(new Date()));
+  // Première heure proposée dans les sélecteurs : le créneau courant si on regarde aujourd'hui, sinon l'ouverture.
+  const slotStart = date === todayISO() && nowH != null ? Math.min(Math.max(nowH, openH), closeH - 1) : openH;
 
-  const visible = (data?.reservations ?? []).filter((r) =>
-    matchesQuery(r, query) &&
-    outstandingFilter(outMode, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED') &&
-    ((fromHour == null && toHour == null) || overlapsHourWindow(r, fromHour ?? openH, toHour ?? closeH, tz)),
-  );
+  // ── Prédicats de filtrage (indépendants → on peut compter chaque facette à part) ──
+  const dayResas = data?.reservations ?? [];
+  const passSearch = (r: ClubReservation) => matchesQuery(r, query);
+  const passCourt  = (r: ClubReservation) => courtSel.size === 0 || courtSel.has(r.resourceId);
+  const passTime   = (r: ClubReservation) => (fromHour == null && toHour == null) || overlapsHourWindow(r, fromHour ?? openH, toHour ?? closeH, tz);
+  const passMethod = (r: ClubReservation) => hasAnyMethod(r.payments, methodSel);
+  const passStatus = (r: ClubReservation) => statusFilter(status, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED');
+
+  const visible = dayResas.filter((r) => passSearch(r) && passCourt(r) && passTime(r) && passMethod(r) && passStatus(r));
+
+  // Compteurs de facettes : chaque facette compte SANS se contraindre elle-même
+  // (le nombre affiché correspond à ce qu'on verrait en la sélectionnant).
+  const STATUS_MODES: StatusMode[] = ['all', 'unpaid', 'partial', 'paid', 'cancelled'];
+  const statusBase = dayResas.filter((r) => passSearch(r) && passCourt(r) && passTime(r) && passMethod(r));
+  const statusCounts = Object.fromEntries(
+    STATUS_MODES.map((m) => [m, statusBase.filter((r) => statusFilter(m, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED')).length]),
+  ) as Record<StatusMode, number>;
+
+  // Terrains présents ce jour-là (ordre de la page Terrains), chacun avec son nombre
+  // à encaisser parmi ce que laissent recherche + créneau (ignore le filtre terrain lui-même).
+  const courtBase = dayResas.filter((r) => passSearch(r) && passTime(r));
+  const courtFacets = resources
+    .filter((rc) => dayResas.some((r) => r.resourceId === rc.id))
+    .map((rc) => ({ id: rc.id, name: rc.name, dueCount: courtBase.filter((r) => r.resourceId === rc.id && isCollectable(r)).length }));
+
+  // Moyens de paiement réellement utilisés ce jour-là (sinon la facette n'a pas lieu d'être).
+  const METHOD_ORDER: PaymentMethod[] = ['CARD', 'CASH', 'VOUCHER', 'TRANSFER', 'MEMBER', 'WALLET', 'PACK_CREDIT', 'ONLINE', 'SUBSCRIPTION', 'OTHER'];
+  const methodsUsed = METHOD_ORDER.filter((m) => dayResas.some((r) => r.payments.some((p) => p.method === m)));
+
+  const activeCount = (status !== 'all' ? 1 : 0) + (courtSel.size > 0 ? 1 : 0)
+    + (fromHour != null || toHour != null ? 1 : 0) + (methodSel.size > 0 ? 1 : 0) + (query.trim() ? 1 : 0);
+
+  // ── Actions de filtrage ────────────────────────────────────────────────────
+  const toggleCourt = (id: string) => setCourtSel((cur) => { const n = new Set(cur); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleMethod = (m: PaymentMethod) => setMethodSel((cur) => { const n = new Set(cur); n.has(m) ? n.delete(m) : n.add(m); return n; });
+  const applyPreset = (p: TimePreset) => {
+    if (preset === p) { setPreset(null); setFrom(null); setTo(null); return; }   // re-clic = désactive
+    const [f, t] = presetWindow(p, openH, closeH, nowHour());
+    if (p === 'now') setDate(todayISO());
+    setPreset(p); setShowCustom(false); setFrom(f); setTo(t);
+  };
+  const setCustomHour = (which: 'from' | 'to', h: number | null) => {
+    setPreset(null);
+    which === 'from' ? setFrom(h) : setTo(h);
+  };
+  const resetFilters = () => { setStatus('all'); setCourtSel(new Set()); setPreset(null); setShowCustom(false); setFrom(null); setTo(null); setMethodSel(new Set()); setQuery(''); };
 
   // Tri + groupe par terrain (ordre de la page Terrains = ordre du tableau `resources`).
   const rankOf = new Map(resources.map((r, i) => [r.id, i]));
@@ -151,28 +251,24 @@ export default function AdminReservationsPage() {
   const totalDay = kpiRows.reduce((s, r) => s + dueOf(r), 0);
   const paidDay  = kpiRows.reduce((s, r) => s + toCents(r.paidAmount), 0);
   const restDay  = Math.max(0, totalDay - paidDay);
-  const pctDay   = totalDay > 0 ? Math.round((paidDay / totalDay) * 100) : 0;
+  const pctDay   = totalDay > 0 ? Math.max(0, Math.min(100, Math.round((paidDay / totalDay) * 100))) : 0;
   const dueCount = kpiRows.filter(isCollectable).length;
   const encCount = kpiRows.reduce((s, r) => s + r.payments.length, 0);
 
-  // Réservation affichée dans le panneau latéral (desktop) — id stable, re-dérivée depuis les données.
-  const allResas = data?.reservations ?? [];
-  const selectedRow: ClubReservation | null = (() => {
-    if (selectedRowId) { const r = allResas.find((x) => x.id === selectedRowId); if (r) return r; }
-    if (wide) return sortedVisible.find(isCollectable) ?? sortedVisible[0] ?? null;
-    return null;
-  })();
+  // Moyens d'encaissement rapides configurés par le club. Liste vide (le club a tout décoché)
+  // OU pas encore chargée → repli sur le défaut, pour que la page reste utilisable en 1 clic.
+  const quickMethods = (clubDetail?.quickPaymentMethods?.length ? clubDetail.quickPaymentMethods : DEFAULT_QUICK_METHODS) as PaymentMethod[];
 
-  const onPanelPaid = useCallback(async () => { await load(); }, [load]);
-
-  const kpiTile = (label: string, value: string, color: string, sub: string, bar?: number) => (
-    <div style={{ flex: '1 1 200px', background: th.surface, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '16px 18px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: -0.5, marginTop: 6, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: 12.5, color: th.textMute, marginTop: 4 }}>{sub}</div>
-      {bar != null && <div style={{ marginTop: 12, height: 7, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}><div style={{ height: '100%', width: `${bar}%`, background: SETTLED_COLOR, transition: 'width .4s ease' }} /></div>}
+  // Stat KPI compacte (bandeau à droite du titre) — bien plus discrète que les anciennes grosses tuiles.
+  const kpiStat = (label: string, value: string, color: string, sub: string, bar?: number) => (
+    <div style={{ padding: '2px 14px', minWidth: 88 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>{label}</div>
+      <div style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.1, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 11, color: th.textFaint, marginTop: 1 }}>{sub}</div>
+      {bar != null && <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}><div style={{ height: '100%', width: `${bar}%`, background: SETTLED_COLOR, transition: 'width .4s ease' }} /></div>}
     </div>
   );
+  const kpiSep = <div style={{ width: 1, alignSelf: 'stretch', background: th.line, margin: '4px 0' }} />;
 
   const renderRow = (r: ClubReservation) => {
     const cancelled = r.status === 'CANCELLED';
@@ -181,15 +277,14 @@ export default function AdminReservationsPage() {
     const sttld = due > 0 && rem <= 0 && !cancelled;
     const partial = due > 0 && toCents(r.paidAmount) > 0 && rem > 0;
     const rail = cancelled ? th.textFaint : sttld ? SETTLED_COLOR : partial ? th.accentWarm : due > 0 ? CORAL : th.textFaint;
-    const isSel = (wide ? selectedRow?.id : selectedRowId) === r.id && !cancelled;
     const dots = paymentDots(r, playersOf(r), due);
     const who = r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement';
     return (
       <div key={r.id}>
-        <button type="button" onClick={() => { if (cancelled) return; setSelectedRowId((prev) => (!wide && prev === r.id) ? null : r.id); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', marginBottom: 8,
-            padding: '11px 13px', borderRadius: 13, background: isSel ? `${th.accent}0d` : th.surface,
-            boxShadow: `inset 0 0 0 ${isSel ? 2 : 1}px ${isSel ? th.accent : th.line}`,
+        {/* En-tête de la réservation : un clic ouvre la modale « Détails ». */}
+        <button type="button" onClick={() => { if (!cancelled) setSelected(r); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', marginBottom: cancelled ? 8 : 6,
+            padding: '11px 13px', borderRadius: 13, background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}`,
             cursor: cancelled ? 'default' : 'pointer', opacity: cancelled ? 0.55 : 1, fontFamily: th.fontUI }}>
           <span style={{ width: 4, height: 34, borderRadius: 999, background: rail, flexShrink: 0 }} />
           <span style={{ fontFamily: th.fontMono, fontSize: 13, fontWeight: 600, color: th.text, width: 46, flexShrink: 0 }}>{fmtTime(r.startTime)}</span>
@@ -203,105 +298,83 @@ export default function AdminReservationsPage() {
               : '—'}
           </span>
         </button>
-        {!wide && isSel && (
-          <PaymentPanel reservation={r} due={due} clubId={clubId!} token={token!} variant="inline"
-            onPaid={onPanelPaid} onError={(m) => setError(m)} onOpenDetails={() => setSelected(r)} onCancel={() => setConfirmCancel(r)} />
+        {!cancelled && (
+          <ReservationCollect reservation={r} players={playersOf(r)} due={due} members={members} quickMethods={quickMethods}
+            clubId={clubId!} token={token!} onChanged={onMutated}
+            onOptimisticPay={(intent) => applyPaymentLocally(r.id, intent)}
+            onOptimisticRefund={(ids) => applyRefundLocally(r.id, ids)}
+            onOpenDetails={() => setSelected(r)}
+            onCancel={() => setConfirmCancel(r)} onError={(m) => setError(m)} />
         )}
       </div>
     );
   };
 
+  // Panneau de filtres partagé (rail desktop + tiroir mobile) — état dans la page.
+  const filtersEl = (
+    <ReservationFilters
+      query={query} onQuery={setQuery}
+      date={date} onDate={setDate} onClearDate={() => setDate('')}
+      status={status} statusCounts={statusCounts} onStatus={setStatus}
+      courts={courtFacets} courtSel={courtSel} onToggleCourt={toggleCourt} onAllCourts={() => setCourtSel(new Set())}
+      preset={preset} onPreset={applyPreset}
+      showCustom={showCustom} onToggleCustom={() => { setShowCustom((v) => !v); setPreset(null); }}
+      fromHour={fromHour} toHour={toHour} onCustomHour={setCustomHour}
+      slotStart={slotStart} closeH={closeH}
+      methodsUsed={methodsUsed} methodSel={methodSel} onToggleMethod={toggleMethod}
+      activeCount={activeCount} onReset={resetFilters}
+    />
+  );
+
   return (
     <div>
-      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 20px', color: th.text }}>Paiements</h1>
-
-      {/* KPI du jour */}
-      {data && (
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
-          {kpiTile("Encaissé aujourd'hui", fmtEuros(paidDay), th.mode === 'floodlit' ? th.accent : SETTLED_COLOR, `${encCount} encaissement${encCount > 1 ? 's' : ''}`)}
-          {kpiTile('Reste à encaisser', fmtEuros(restDay), CORAL, `${dueCount} réservation${dueCount > 1 ? 's' : ''}`, pctDay)}
-          {kpiTile('Total du jour', fmtEuros(totalDay), th.text, `${kpiRows.length} réservation${kpiRows.length > 1 ? 's' : ''} · ${groups.length} terrain${groups.length > 1 ? 's' : ''}`)}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-        <label style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, display: 'flex', alignItems: 'center', gap: 8 }}>
-          Jour
-          <DateField value={date} onChange={setDate} size="sm" />
-        </label>
-        {date && <button onClick={() => setDate('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.accent }}>Tout afficher</button>}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Rechercher un client…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 14, minWidth: 220 }} />
-        {(['all', 'due', 'paid'] as OutstandingMode[]).map((m) => (
-          <button key={m} type="button" onClick={() => setOut(m)} style={{ border: `1px solid ${outMode === m ? th.accent : th.line}`, background: outMode === m ? `${th.accent}22` : 'transparent', color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-            {m === 'all' ? 'Tout' : m === 'due' ? 'À encaisser' : 'Payées'}
-          </button>
-        ))}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
-          De
-          <select value={fromHour ?? ''} onChange={(e) => setFrom(e.target.value === '' ? null : Number(e.target.value))} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px' }}>
-            <option value="">—</option>
-            {Array.from({ length: closeH - openH }, (_, i) => openH + i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>)}
-          </select>
-          à
-          <select value={toHour ?? ''} onChange={(e) => setTo(e.target.value === '' ? null : Number(e.target.value))} style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px' }}>
-            <option value="">—</option>
-            {Array.from({ length: closeH - openH + 1 }, (_, i) => openH + i).map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>)}
-          </select>
-        </span>
-        <button type="button" onClick={() => { setDate(todayISO()); setFrom(Math.min(Math.max(nowHour(), openH), closeH - 1)); setTo(closeH); }} style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>En ce moment</button>
-        {(fromHour != null || toHour != null || outMode !== 'all' || query) && (
-          <button type="button" onClick={() => { setFrom(null); setTo(null); setOut('all'); setQuery(''); }} style={{ border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Effacer</button>
+      {/* Titre + bandeau KPI compact aligné à droite (gain de hauteur ; passe sous le titre si étroit). */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', margin: '0 0 18px' }}>
+        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Encaissement</h1>
+        {data && (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', background: th.surface, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '6px 2px' }}>
+            {kpiStat("Encaissé", fmtEuros(paidDay), th.mode === 'floodlit' ? th.accent : SETTLED_COLOR, `${encCount} enc.`)}
+            {kpiSep}
+            {kpiStat('Reste', fmtEuros(restDay), CORAL, `${dueCount} résa`, pctDay)}
+            {kpiSep}
+            {kpiStat('Total', fmtEuros(totalDay), th.text, `${kpiRows.length} résa · ${groups.length} terr.`)}
+          </div>
         )}
       </div>
+
+      {/* Barre de filtres sur deux niveaux (tout reste visible). */}
+      {filtersEl}
 
       {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
       ) : (
-        <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-          {/* liste groupée par terrain */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {groups.length === 0 ? (
-              <div style={{ padding: '40px 16px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint, background: th.surface, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${th.line}` }}>Aucune réservation</div>
-            ) : groups.map((g) => {
-              const gRows = g.rows.filter((r) => r.status !== 'CANCELLED');
-              const gDue = gRows.reduce((s, r) => s + dueOf(r), 0);
-              const gPaid = gRows.reduce((s, r) => s + toCents(r.paidAmount), 0);
-              const gRem = Math.max(0, gDue - gPaid);
-              const gPct = gDue > 0 ? Math.round((gPaid / gDue) * 100) : 100;
-              const gDueN = gRows.filter(isCollectable).length;
-              return (
-                <section key={g.resource.id} style={{ marginBottom: 22 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: th.text }}>{g.resource.name}</span>
-                    <span style={{ flex: 1, maxWidth: 200, height: 6, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${gPct}%`, background: SETTLED_COLOR }} /></span>
-                    <span style={{ fontSize: 12.5, color: th.textMute, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-                      {gDueN === 0 ? <span style={{ color: SETTLED_COLOR }}>✓ tout soldé</span> : <>{gDueN} à encaisser · <b style={{ color: CORAL }}>{fmtEuros(gRem)}</b></>}
-                    </span>
-                  </div>
-                  {g.rows.map(renderRow)}
-                </section>
-              );
-            })}
-          </div>
-
-          {/* panneau d'encaissement (desktop) */}
-          {wide && (
-            <aside style={{ width: 344, flexShrink: 0, position: 'sticky', top: 18, alignSelf: 'flex-start' }}>
-              {selectedRow ? (
-                <PaymentPanel reservation={selectedRow} due={dueOf(selectedRow)} clubId={clubId!} token={token!} variant="side"
-                  onPaid={onPanelPaid} onError={(m) => setError(m)} onOpenDetails={() => setSelected(selectedRow)} onCancel={() => setConfirmCancel(selectedRow)} />
-              ) : (
-                <div style={{ background: th.surface, borderRadius: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: 24, textAlign: 'center', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint }}>
-                  Sélectionne une réservation pour encaisser.
+        // Liste groupée par terrain, triée par heure ; chaque réservation déplie ses lignes joueur.
+        <div data-testid="resa-list" style={{ maxWidth: 720 }}>
+          {groups.length === 0 ? (
+            <div style={{ padding: '40px 16px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint, background: th.surface, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${th.line}` }}>Aucune réservation</div>
+          ) : groups.map((g) => {
+            const gRows = g.rows.filter((r) => r.status !== 'CANCELLED');
+            const gDue = gRows.reduce((s, r) => s + dueOf(r), 0);
+            const gPaid = gRows.reduce((s, r) => s + toCents(r.paidAmount), 0);
+            const gRem = Math.max(0, gDue - gPaid);
+            const gDueN = gRows.filter(isCollectable).length;
+            // Plein quand tout est soldé ; sinon proportion payée, bornée à [0, 100].
+            const gPct = gDueN === 0 ? 100 : gDue > 0 ? Math.max(0, Math.min(100, Math.round((gPaid / gDue) * 100))) : 100;
+            return (
+              <section key={g.resource.id} style={{ marginBottom: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: th.text }}>{g.resource.name}</span>
+                  <div style={{ flex: 1, maxWidth: 200, height: 6, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}><div style={{ height: '100%', width: `${gPct}%`, background: SETTLED_COLOR }} /></div>
+                  <span style={{ fontSize: 12.5, color: th.textMute, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                    {gDueN === 0 ? <span style={{ color: SETTLED_COLOR }}>✓ tout soldé</span> : <>{gDueN} à encaisser · <b style={{ color: CORAL }}>{fmtEuros(gRem)}</b></>}
+                  </span>
                 </div>
-              )}
-            </aside>
-          )}
+                {g.rows.map(renderRow)}
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -361,7 +434,7 @@ export default function AdminReservationsPage() {
             })()}
 
             <div style={{ marginTop: 20 }}>
-              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
+              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
             </div>
 
             {selected.payments.length > 0 && (

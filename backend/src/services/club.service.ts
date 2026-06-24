@@ -37,6 +37,20 @@ function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.I
   return out as unknown as Prisma.InputJsonValue;
 }
 
+/** Moyens d'encaissement rapides autorisés comme boutons 1 clic (sous-ensemble de PaymentMethod). */
+const QUICK_PAYMENT_METHODS = ['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER'] as const;
+
+/** Valide/normalise la liste des moyens rapides : sous-ensemble autorisé, dédoublonné, ordre conservé. */
+export function normalizeQuickPaymentMethods(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const allowed = new Set<string>(QUICK_PAYMENT_METHODS);
+  const out: string[] = [];
+  for (const v of input) {
+    if (typeof v === 'string' && allowed.has(v) && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
 /** Transforme un nom en slug URL (minuscules, tirets, sans accents). Miroir : frontend/lib/slug.ts — garder les deux synchronisés. */
 export function slugify(input: string): string {
   return input
@@ -190,6 +204,7 @@ export class ClubService {
         stripeAccountStatus: true,
         requireOnlinePayment: true,
         requireCardFingerprint: true,
+        quickPaymentMethods: true,
         legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
         legalRepresentative: true, legalEmail: true, legalPhone: true,
       },
@@ -213,6 +228,7 @@ export class ClubService {
     levelSystemEnabled?: boolean;
     requireOnlinePayment?: boolean;
     requireCardFingerprint?: boolean;
+    quickPaymentMethods?: string[];
     legalEntityName?: string;
     legalForm?: string;
     siret?: string;
@@ -252,6 +268,7 @@ export class ClubService {
         ...(typeof params.levelSystemEnabled === 'boolean' ? { levelSystemEnabled: params.levelSystemEnabled } : {}),
         ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
+        ...(Array.isArray(params.quickPaymentMethods) ? { quickPaymentMethods: normalizeQuickPaymentMethods(params.quickPaymentMethods) } : {}),
         ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),
         ...(params.legalForm !== undefined ? { legalForm: legal(params.legalForm) } : {}),
         ...(params.siret !== undefined ? { siret: legal(params.siret) } : {}),

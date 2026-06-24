@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod } from '@/lib/api';
 import { capacityLabel } from '@/lib/lessons';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, dueCents, fmtEuros, paymentDots } from '@/lib/caisse';
+import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
@@ -92,6 +92,7 @@ export default function AdminPlanningPage() {
 
   const [tz, setTz]               = useState('Europe/Paris');
   const [peak, setPeak]           = useState<OffPeakHours | null>(null);
+  const [quickMethods, setQuickMethods] = useState<PaymentMethod[]>(DEFAULT_QUICK_METHODS);   // moyens rapides configurés par le club
   const [resources, setResources] = useState<AdminResource[]>([]);
   const [reservations, setRes]    = useState<ClubReservation[]>([]);
   const [date, setDate]           = useState(todayISO());
@@ -137,6 +138,7 @@ export default function AdminPlanningPage() {
       ]);
       setTz(c.timezone);
       setPeak(c.offPeakHours ?? null);
+      setQuickMethods(c.quickPaymentMethods?.length ? c.quickPaymentMethods : DEFAULT_QUICK_METHODS);
       setResources(res.filter((r) => r.isActive));
       setRes(resv.reservations);
       setMembers(mem);
@@ -598,6 +600,7 @@ export default function AdminPlanningPage() {
                   due={dueOf(selected)}
                   players={playersOf(selected)}
                   members={members}
+                  quickMethods={quickMethods}
                   clubId={clubId!}
                   token={token!}
                   onChanged={refreshSelected}

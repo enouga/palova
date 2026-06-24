@@ -1,4 +1,4 @@
-import type { OffPeakHours, OffPeakRange, ReservationType } from '@/lib/api';
+import type { OffPeakHours, OffPeakRange, ReservationType, PaymentMethod, ClubReservation, Payment } from '@/lib/api';
 
 // Helpers purs de la caisse du planning. Tous les calculs se font en centimes
 // (entiers) : les montants API sont des strings décimales ("52.00") et la
@@ -18,6 +18,11 @@ export function remainingCents(totalPrice: string, paidAmount: string): number {
 /** Centimes → valeur pour un <input type=number> : "13", "13.5", "4.25" ; 0 → "". */
 export function centsToInput(cents: number): string {
   return cents > 0 ? String(cents / 100) : '';
+}
+
+/** Centimes → string décimale API ("625" → "6.25"). */
+export function centsToStr(cents: number): string {
+  return (cents / 100).toFixed(2);
 }
 
 /** Centimes → affichage "13 €" / "13,50 €". */
@@ -178,4 +183,128 @@ export function validatePaymentAmount(cents: number, remainingCents: number): bo
   if (!Number.isFinite(cents) || cents <= 0) return false;
   if (remainingCents > 0 && cents > remainingCents) return false;
   return true;
+}
+
+// ── Encaissement par joueur ───────────────────────────────────────────────
+
+/** Moyens d'encaissement rapides éligibles aux boutons 1 clic (miroir backend QUICK_PAYMENT_METHODS). */
+export const QUICK_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER'];
+
+/** Repli si le club n'a configuré AUCUN moyen rapide (miroir du défaut de la migration `add_quick_payment_methods`). */
+export const DEFAULT_QUICK_METHODS: PaymentMethod[] = ['CARD', 'VOUCHER', 'CASH'];
+
+/** Libellé court des moyens rapides (sans icône — l'UI ajoute l'icône). */
+export const QUICK_METHOD_LABEL: Record<string, string> = {
+  CASH: 'Espèces', CARD: 'CB', VOUCHER: 'Ticket CE', TRANSFER: 'Virement', MEMBER: 'Abo / Membre',
+};
+
+/** Une place de la réservation : un joueur (participant), le titulaire seul, ou une place libre. */
+export type SlotEntry =
+  | { kind: 'participant'; participantId: string; seed: string; firstName: string; lastName: string; isOrganizer: boolean; paidCents: number; shareCents: number; outstandingCents: number }
+  | { kind: 'holder'; seed: string; firstName: string; lastName: string }
+  | { kind: 'empty'; index: number };
+
+/**
+ * Places d'une réservation (capacité = nb de joueurs du terrain). Les places
+ * remplies viennent des participants ; à défaut, le titulaire occupe 1 place
+ * (« holder »). Les places restantes sont vides (associables), indexées.
+ */
+export function deriveSlots(
+  r: {
+    id: string;
+    user: { firstName: string; lastName: string } | null;
+    participants: { id: string; isOrganizer: boolean; firstName: string; lastName: string; paid: string; share: string; outstanding: string }[];
+  },
+  capacity: number,
+): SlotEntry[] {
+  const slots: SlotEntry[] = [];
+  const parts = r.participants ?? [];
+  if (parts.length > 0) {
+    for (const p of parts) {
+      slots.push({
+        kind: 'participant', participantId: p.id, seed: p.id, firstName: p.firstName, lastName: p.lastName,
+        isOrganizer: p.isOrganizer, paidCents: toCents(p.paid), shareCents: toCents(p.share), outstandingCents: toCents(p.outstanding),
+      });
+    }
+  } else if (r.user) {
+    slots.push({ kind: 'holder', seed: `holder:${r.id}`, firstName: r.user.firstName, lastName: r.user.lastName });
+  }
+  let emptyIdx = 0;
+  while (slots.length < capacity) slots.push({ kind: 'empty', index: emptyIdx++ });
+  return slots;
+}
+
+// ── Encaissement optimiste ─────────────────────────────────────────────────
+// Le comptoir doit réagir AU CLIC, sans attendre l'aller-retour réseau. On
+// applique le paiement (ou le remboursement) localement tout de suite, puis on
+// réconcilie avec le serveur via un rechargement. Helpers PURS, testés.
+
+/** Préfixe des paiements créés localement (optimistes) — pas encore persistés. */
+export const OPTIMISTIC_PREFIX = 'opt:';
+export function isOptimisticId(id: string): boolean { return id.startsWith(OPTIMISTIC_PREFIX); }
+
+/** Intention d'encaissement : montant (centimes), moyen, et joueur ciblé éventuel. */
+export interface PaymentIntent {
+  amountCents: number;
+  method: PaymentMethod;
+  participantId?: string | null;
+}
+
+/**
+ * Applique un encaissement à une réservation SANS appel réseau (mise à jour
+ * optimiste) : ajoute un paiement synthétique, augmente `paidAmount`, et — si
+ * ciblé sur un joueur — son `paid`/`outstanding`. À réconcilier ensuite avec le
+ * serveur (qui remplacera ce paiement synthétique par le vrai).
+ */
+export function applyOptimisticPayment(
+  rv: ClubReservation,
+  intent: PaymentIntent,
+  syntheticId: string,
+  createdAtIso: string,
+): ClubReservation {
+  const { amountCents, method, participantId } = intent;
+  const synthetic: Payment = {
+    id: syntheticId,
+    amount: centsToStr(amountCents),
+    method,
+    participantId: participantId ?? null,
+    payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null,
+    createdAt: createdAtIso, refundedAmount: '0.00', receiptNo: null,
+  };
+  const participants = rv.participants.map((p) =>
+    participantId && p.id === participantId
+      ? { ...p, paid: centsToStr(toCents(p.paid) + amountCents), outstanding: centsToStr(Math.max(0, toCents(p.outstanding) - amountCents)) }
+      : p);
+  return {
+    ...rv,
+    paidAmount: centsToStr(toCents(rv.paidAmount) + amountCents),
+    participants,
+    payments: [...rv.payments, synthetic],
+  };
+}
+
+/**
+ * Annule (rembourse intégralement) des paiements d'une réservation SANS appel
+ * réseau : marque `refundedAmount = amount` pour les ids fournis, réduit
+ * `paidAmount` et recrédite le reste dû des joueurs concernés. À réconcilier.
+ */
+export function applyOptimisticRefund(rv: ClubReservation, paymentIds: string[]): ClubReservation {
+  const ids = new Set(paymentIds);
+  let refundedTotal = 0;
+  const backByParticipant: Record<string, number> = {};
+  const payments = rv.payments.map((p) => {
+    if (!ids.has(p.id)) return p;
+    const rem = toCents(p.amount) - toCents(p.refundedAmount ?? '0');
+    if (rem <= 0) return p;
+    refundedTotal += rem;
+    if (p.participantId) backByParticipant[p.participantId] = (backByParticipant[p.participantId] ?? 0) + rem;
+    return { ...p, refundedAmount: centsToStr(toCents(p.refundedAmount ?? '0') + rem) };
+  });
+  const participants = rv.participants.map((p) => {
+    const back = backByParticipant[p.id] ?? 0;
+    return back
+      ? { ...p, paid: centsToStr(Math.max(0, toCents(p.paid) - back)), outstanding: centsToStr(toCents(p.outstanding) + back) }
+      : p;
+  });
+  return { ...rv, paidAmount: centsToStr(Math.max(0, toCents(rv.paidAmount) - refundedTotal)), payments, participants };
 }

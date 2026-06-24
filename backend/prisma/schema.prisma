@@ -252,6 +252,9 @@ model Club {
   stripeAccountStatus    StripeAccountStatus @default(NONE) @map("stripe_account_status")
   requireOnlinePayment   Boolean             @default(false) @map("require_online_payment")
   requireCardFingerprint Boolean             @default(false) @map("require_card_fingerprint")
+  // Moyens d'encaissement rapides (boutons 1 clic au comptoir), choisis par le club.
+  // Sous-ensemble ordonné de PaymentMethod parmi CASH/CARD/VOUCHER/TRANSFER/MEMBER.
+  quickPaymentMethods String[] @default(["CARD", "VOUCHER", "CASH"]) @map("quick_payment_methods")
   // Identité légale du club (marchand Stripe Connect distinct) : alimente les mentions
   // légales auto-générées et les modèles de CGV/confidentialité. Tous optionnels.
   legalEntityName     String? @map("legal_entity_name")     // raison sociale

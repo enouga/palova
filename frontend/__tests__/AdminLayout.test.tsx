@@ -137,6 +137,7 @@ describe('AdminLayout — sections repliables', () => {
   it('tout déplié par défaut : les entrées de section sont visibles', async () => {
     await wrap();
     expect(screen.getByText('Planning')).toBeInTheDocument();
+    expect(screen.getByText('Encaissement')).toBeInTheDocument(); // ex-« Réservations »
     expect(screen.getByText('Réglages')).toBeInTheDocument();
   });
 

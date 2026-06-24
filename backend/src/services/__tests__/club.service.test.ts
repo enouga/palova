@@ -454,3 +454,49 @@ describe('ClubService — updateClub identité légale', () => {
     expect(arg.select.legalPhone).toBe(true);
   });
 });
+
+describe('normalizeQuickPaymentMethods', () => {
+  const { normalizeQuickPaymentMethods } = require('../club.service');
+
+  it('garde les moyens autorisés, dans l\'ordre fourni', () => {
+    expect(normalizeQuickPaymentMethods(['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER']))
+      .toEqual(['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER']);
+  });
+
+  it('filtre les valeurs inconnues et dédoublonne en gardant la 1re occurrence', () => {
+    expect(normalizeQuickPaymentMethods(['CARD', 'BITCOIN', 'CASH', 'CARD', 'PACK_CREDIT', 'WALLET', 'ONLINE', 'OTHER']))
+      .toEqual(['CARD', 'CASH']);
+  });
+
+  it('entrée vide ou non-tableau → tableau vide', () => {
+    expect(normalizeQuickPaymentMethods([])).toEqual([]);
+    expect(normalizeQuickPaymentMethods('CARD' as any)).toEqual([]);
+    expect(normalizeQuickPaymentMethods(null as any)).toEqual([]);
+  });
+});
+
+describe('ClubService — moyens d\'encaissement rapides', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('updateClub écrit les moyens normalisés', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { quickPaymentMethods: ['CARD', 'NOPE', 'CASH', 'CARD'] } as any);
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.quickPaymentMethods).toEqual(['CARD', 'CASH']);
+  });
+
+  it('updateClub ignore quickPaymentMethods absent (ou non-tableau)', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { name: 'X' });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.quickPaymentMethods).toBeUndefined();
+  });
+
+  it('getClubForAdmin sélectionne quickPaymentMethods', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
+    expect(arg.select.quickPaymentMethods).toBe(true);
+  });
+});

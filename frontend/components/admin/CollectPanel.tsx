@@ -2,7 +2,7 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import { api, ClubReservation, Member, MemberPackage, CreateMemberBody, PaymentMethod } from '@/lib/api';
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
-import { toCents, centsToInput, quickAmounts, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
+import { toCents, centsToInput, quickAmounts, fmtEuros, validatePaymentAmount, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { useTheme } from '@/lib/ThemeProvider';
 import { inkOn } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
@@ -11,10 +11,9 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { Btn } from '@/components/ui/atoms';
 
 const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
-// Moyens mis en avant (boutons pleins) vs moyens rares (rangée discrète).
-const PRIMARY_METHODS: PaymentMethod[] = ['CARD', 'MEMBER', 'VOUCHER'];
-const SECONDARY_METHODS: PaymentMethod[] = ['CASH', 'TRANSFER', 'OTHER'];
-const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CASH: 'euro' };
+// Tous les moyens de paiement manuels du comptoir (carnets/porte-monnaie = boutons package à part).
+const ALL_METHODS: PaymentMethod[] = ['CARD', 'CASH', 'TRANSFER', 'VOUCHER', 'MEMBER', 'OTHER'];
+const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CASH: 'euro', TRANSFER: 'arrowR', OTHER: 'euro' };
 
 const CORAL = '#ff7a4d';
 
@@ -25,6 +24,8 @@ export interface CollectPanelProps {
   members: Member[];
   clubId: string;
   token: string;
+  /** moyens rapides configurés par le club → mis en avant (mêmes règles que la page). */
+  quickMethods?: PaymentMethod[];
   /** mutation joueurs/participants réussie → le parent recharge (et met à jour la résa si fournie). */
   onChanged: (updated?: ClubReservation) => void;
   /** un encaissement a été enregistré (le parent peut fermer la modale). */
@@ -32,8 +33,13 @@ export interface CollectPanelProps {
   onError?: (msg: string) => void;
 }
 
-export function CollectPanel({ reservation, due, players, members, clubId, token, onChanged, onPaid, onError }: CollectPanelProps) {
+export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, onChanged, onPaid, onError }: CollectPanelProps) {
   const { th } = useTheme();
+
+  // Moyens mis en avant (boutons pleins) = ceux configurés par le club, dans le même ordre que
+  // la page Encaissement ; les autres moyens manuels restent disponibles en rangée discrète.
+  const primaryMethods = (quickMethods && quickMethods.length ? quickMethods : DEFAULT_QUICK_METHODS).filter((m) => ALL_METHODS.includes(m));
+  const secondaryMethods = ALL_METHODS.filter((m) => !primaryMethods.includes(m));
   const [payAmount, setPayAmount] = useState('');
   const [payParticipantId, setPayParticipantId] = useState<string | null>(null);
   const [voucherOpen, setVoucherOpen] = useState(false);
@@ -175,99 +181,8 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
 
   return (
     <div>
-      {/* ── ENCAISSER (en tête) — masqué quand soldé ─────────────────────── */}
-      {!settled && (
-        <div style={{ borderRadius: 16, background: th.surface2, padding: 18 }}>
-          {/* Cible active : encaissement ciblé sur un joueur (sinon, résa entière) */}
-          {activePart && (
-            <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10, background: `${th.accent}1f`, fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
-              Encaisser pour <b>{activePart.firstName} {activePart.lastName}</b>
-              <button type="button" onClick={() => targetTo(null, remaining)}
-                style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Réservation entière</button>
-            </div>
-          )}
-
-          {/* Montant */}
-          <div style={caption}>Montant à encaisser</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: th.surface, borderRadius: 13, boxShadow: `inset 0 0 0 1.5px ${overCap ? CORAL : th.line}`, padding: '0 16px', height: 54 }}>
-              <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} aria-label="Montant à encaisser"
-                style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: th.fontMono, fontWeight: 600, fontSize: 24, color: th.text, width: 96, textAlign: 'right' }} />
-              <span style={{ fontFamily: th.fontMono, fontSize: 20, color: th.textMute }}>€</span>
-            </div>
-            {!payParticipantId && quickAmounts(due, toCents(reservation.paidAmount), players).map((q) => (
-              <button key={q.key} type="button" onClick={() => setPayAmount(centsToInput(q.cents))}
-                style={{ border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}`, color: th.text, borderRadius: 999, padding: '9px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
-                {q.label}
-              </button>
-            ))}
-          </div>
-          {overCap && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: CORAL }}>Plafond : {fmtEuros(maxPayable)}</div>}
-
-          {/* Moyens — primaires (pleins) puis secondaires (discrets) */}
-          <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {PRIMARY_METHODS.map((m) => (
-              <button key={m} type="button" disabled={cannotPay} title={capTitle}
-                onClick={() => (m === 'VOUCHER' ? setVoucherOpen((v) => !v) : payNow(m))}
-                style={{ flex: '1 1 150px', minWidth: 138, height: 54, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, border: 'none', borderRadius: 14,
-                  cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: th.accent, color: th.onAccent,
-                  fontFamily: th.fontUI, fontSize: 15, fontWeight: 600, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none',
-                  outline: m === 'VOUCHER' && voucherOpen ? `2px solid ${th.text}` : 'none', outlineOffset: 2 }}>
-                {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={18} color={th.onAccent} />}
-                {METHOD_LABEL[m]}
-              </button>
-            ))}
-          </div>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {SECONDARY_METHODS.map((m) => (
-              <button key={m} type="button" disabled={cannotPay} title={capTitle} onClick={() => payNow(m)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 14px',
-                  cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.line}`,
-                  color: th.textMute, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
-                {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={15} color={th.textMute} />}
-                {METHOD_LABEL[m]}
-              </button>
-            ))}
-          </div>
-
-          {/* Ticket CE : référence / émetteur */}
-          {voucherOpen && (
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
-                <input type="text" value={voucherRef} onChange={(e) => setVoucherRef(e.target.value)} placeholder="N° ticket" style={{ ...input, width: 110 }} />
-              </label>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
-                <input type="text" value={voucherIssuer} onChange={(e) => setVoucherIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 96 }} />
-              </label>
-              <Btn onClick={() => payNow('VOUCHER')} icon="check" disabled={cannotPay}>{busy ? '…' : 'Valider Ticket CE'}</Btn>
-              <button type="button" onClick={() => setVoucherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
-            </div>
-          )}
-
-          {/* Carnets / porte-monnaie prépayés */}
-          {selPackages.length > 0 ? (
-            <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {selPackages.map((p) => {
-                const ok = canCover(p, coverAmt);
-                return (
-                  <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
-                    title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${ok ? th.accent : th.line}`, borderRadius: 10, padding: '9px 13px',
-                      cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                    <Icon name="ticket" size={15} color={ok ? th.accent : th.textMute} />{packageLabel(p)}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (!pkgLoading && (() => {
-            const msg = prepaidHint(!!reservation.user, selPackages.length, maxPayable);
-            return msg ? <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div> : null;
-          })())}
-        </div>
-      )}
-
-      {/* ── JOUEURS (fusion « Joueur » + « Par joueur ») ─────────────────── */}
-      <div style={{ marginTop: settled ? 0 : 22 }}>
+      {/* ── JOUEURS (fusion « Joueur » + « Par joueur ») — en tête, juste sous « Reste à encaisser » ── */}
+      <div>
         <div style={{ ...sectionLabel, marginBottom: 10 }}>Joueurs</div>
 
         {/* Titulaire de la réservation */}
@@ -327,6 +242,99 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           )}
         </div>
       </div>
+
+      {/* ── ENCAISSER — masqué quand soldé ─────────────────────── */}
+      {!settled && (
+        <div style={{ marginTop: 22, borderRadius: 16, background: th.surface2, padding: 14 }}>
+          {/* Cible active : encaissement ciblé sur un joueur (sinon, résa entière) */}
+          {activePart && (
+            <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10, background: `${th.accent}1f`, fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
+              Encaisser pour <b>{activePart.firstName} {activePart.lastName}</b>
+              <button type="button" onClick={() => targetTo(null, remaining)}
+                style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Réservation entière</button>
+            </div>
+          )}
+
+          {/* Montant */}
+          <div style={caption}>Montant à encaisser</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: th.surface, borderRadius: 12, boxShadow: `inset 0 0 0 1.5px ${overCap ? CORAL : th.line}`, padding: '0 14px', height: 46 }}>
+              <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} aria-label="Montant à encaisser"
+                style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: th.fontMono, fontWeight: 600, fontSize: 21, color: th.text, width: 84, textAlign: 'right' }} />
+              <span style={{ fontFamily: th.fontMono, fontSize: 18, color: th.textMute }}>€</span>
+            </div>
+            {!payParticipantId && quickAmounts(due, toCents(reservation.paidAmount), players).map((q) => (
+              <button key={q.key} type="button" onClick={() => setPayAmount(centsToInput(q.cents))}
+                style={{ border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}`, color: th.text, borderRadius: 999, padding: '9px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+                {q.label}
+              </button>
+            ))}
+          </div>
+          {overCap && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: CORAL }}>Plafond : {fmtEuros(maxPayable)}</div>}
+
+          {/* Moyens — rapides du club (pleins) puis tous les autres (discrets) */}
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {primaryMethods.map((m) => (
+              <button key={m} type="button" disabled={cannotPay} title={capTitle}
+                onClick={() => (m === 'VOUCHER' ? setVoucherOpen((v) => !v) : payNow(m))}
+                style={{ flex: '1 1 130px', minWidth: 124, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
+                  cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: th.accent, color: th.onAccent,
+                  fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none',
+                  outline: m === 'VOUCHER' && voucherOpen ? `2px solid ${th.text}` : 'none', outlineOffset: 2 }}>
+                {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={16} color={th.onAccent} />}
+                {METHOD_LABEL[m]}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {secondaryMethods.map((m) => (
+              <button key={m} type="button" disabled={cannotPay} title={capTitle}
+                onClick={() => (m === 'VOUCHER' ? setVoucherOpen((v) => !v) : payNow(m))}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 14px',
+                  cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: 'transparent',
+                  boxShadow: `inset 0 0 0 1px ${m === 'VOUCHER' && voucherOpen ? th.text : th.line}`,
+                  color: th.textMute, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
+                {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={15} color={th.textMute} />}
+                {METHOD_LABEL[m]}
+              </button>
+            ))}
+          </div>
+
+          {/* Ticket CE : référence / émetteur */}
+          {voucherOpen && (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
+                <input type="text" value={voucherRef} onChange={(e) => setVoucherRef(e.target.value)} placeholder="N° ticket" style={{ ...input, width: 110 }} />
+              </label>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
+                <input type="text" value={voucherIssuer} onChange={(e) => setVoucherIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 96 }} />
+              </label>
+              <Btn onClick={() => payNow('VOUCHER')} icon="check" disabled={cannotPay}>{busy ? '…' : 'Valider Ticket CE'}</Btn>
+              <button type="button" onClick={() => setVoucherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
+            </div>
+          )}
+
+          {/* Carnets / porte-monnaie prépayés */}
+          {selPackages.length > 0 ? (
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {selPackages.map((p) => {
+                const ok = canCover(p, coverAmt);
+                return (
+                  <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
+                    title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${ok ? th.accent : th.line}`, borderRadius: 10, padding: '9px 13px',
+                      cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+                    <Icon name="ticket" size={15} color={ok ? th.accent : th.textMute} />{packageLabel(p)}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (!pkgLoading && (() => {
+            const msg = prepaidHint(!!reservation.user, selPackages.length, maxPayable);
+            return msg ? <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div> : null;
+          })())}
+        </div>
+      )}
     </div>
   );
 }

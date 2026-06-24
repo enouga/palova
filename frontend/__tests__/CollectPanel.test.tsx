@@ -48,6 +48,17 @@ describe('CollectPanel', () => {
     expect(onPaid).toHaveBeenCalled();
   });
 
+  it('met en avant les moyens rapides du club (comme la page) tout en gardant tous les moyens', () => {
+    renderPanel({}, { quickMethods: ['TRANSFER', 'MEMBER'] });
+    const labels = ['Carte', 'Espèces', 'Virement', 'Ticket CE', 'Abo / Membre', 'Autre'];
+    // tous les moyens manuels restent disponibles
+    labels.forEach((l) => expect(screen.getByRole('button', { name: l })).toBeInTheDocument());
+    // les moyens rapides configurés par le club passent en tête (Virement avant Carte)
+    const order = screen.getAllByRole('button').map((b) => b.textContent?.trim()).filter((t): t is string => !!t && labels.includes(t));
+    expect(order[0]).toBe('Virement');
+    expect(order.indexOf('Virement')).toBeLessThan(order.indexOf('Carte'));
+  });
+
   it('désactive les moyens au-delà du plafond', () => {
     renderPanel();
     fireEvent.change(screen.getByLabelText(/Encaisser/i), { target: { value: '80' } });

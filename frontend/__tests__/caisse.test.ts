@@ -1,6 +1,6 @@
-import { toCents, remainingCents, centsToInput, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
-import type { ReservationType } from '@/lib/api';
+import type { ReservationType, ClubReservation } from '@/lib/api';
 
 const TZ = 'Europe/Paris';
 
@@ -208,5 +208,103 @@ describe('validatePaymentAmount', () => {
   });
   it('autorise tout montant > 0 si le reste dû est inconnu (0 = pas de plafond)', () => {
     expect(validatePaymentAmount(5000, 0)).toBe(true);
+  });
+});
+
+describe('deriveSlots', () => {
+  const part = (id: string, first: string, last: string, over: Partial<{ isOrganizer: boolean; paid: string; share: string; outstanding: string }> = {}) => ({
+    id, userId: 'u-' + id, isOrganizer: over.isOrganizer ?? false, firstName: first, lastName: last,
+    paid: over.paid ?? '0.00', share: over.share ?? '13.00', outstanding: over.outstanding ?? '13.00',
+  });
+
+  it('double (cap 4) avec 2 participants → 2 places joueur + 2 places vides indexées', () => {
+    const slots = deriveSlots({ id: 'r1', user: { firstName: 'Jean', lastName: 'Test' }, participants: [part('p1', 'Jean', 'Test', { isOrganizer: true }), part('p2', 'Léa', 'Roy')] }, 4);
+    expect(slots.map((s) => s.kind)).toEqual(['participant', 'participant', 'empty', 'empty']);
+    expect(slots[0]).toMatchObject({ kind: 'participant', participantId: 'p1', seed: 'p1', firstName: 'Jean', outstandingCents: 1300 });
+    expect(slots.filter((s) => s.kind === 'empty').map((s: any) => s.index)).toEqual([0, 1]);
+  });
+
+  it('single (cap 2) → 2 places au total', () => {
+    const slots = deriveSlots({ id: 'r1', user: { firstName: 'Jean', lastName: 'Test' }, participants: [part('p1', 'Jean', 'Test')] }, 2);
+    expect(slots).toHaveLength(2);
+    expect(slots.map((s) => s.kind)).toEqual(['participant', 'empty']);
+  });
+
+  it('holder sans participants → 1 place holder + (cap-1) vides', () => {
+    const slots = deriveSlots({ id: 'r1', user: { firstName: 'Jean', lastName: 'Test' }, participants: [] }, 4);
+    expect(slots[0]).toMatchObject({ kind: 'holder', seed: 'holder:r1', firstName: 'Jean', lastName: 'Test' });
+    expect(slots.filter((s) => s.kind === 'empty')).toHaveLength(3);
+  });
+
+  it('ni holder ni participant → cap places vides', () => {
+    const slots = deriveSlots({ id: 'r1', user: null, participants: [] }, 4);
+    expect(slots.map((s) => s.kind)).toEqual(['empty', 'empty', 'empty', 'empty']);
+  });
+});
+
+describe('encaissement optimiste', () => {
+  const bill = (id: string, over: Partial<{ paid: string; share: string; outstanding: string; isOrganizer: boolean }> = {}) => ({
+    id, userId: 'u-' + id, isOrganizer: over.isOrganizer ?? false, firstName: 'P', lastName: id,
+    share: over.share ?? '6.25', paid: over.paid ?? '0.00', outstanding: over.outstanding ?? '6.25',
+  });
+  const rv = (over: Partial<ClubReservation> = {}): ClubReservation => ({
+    id: 'r1', resourceId: 'court-1', startTime: '2026-06-24T07:30:00.000Z', endTime: '2026-06-24T09:00:00.000Z',
+    status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '25.00', paidAmount: '0.00', dueAmount: '25.00',
+    resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@x.fr' },
+    payments: [], participants: [bill('p1', { isOrganizer: true }), bill('p2'), bill('p3'), bill('p4')], ...over,
+  });
+
+  it('isOptimisticId reconnaît les ids locaux', () => {
+    expect(isOptimisticId('opt:3')).toBe(true);
+    expect(isOptimisticId('cmqr...real')).toBe(false);
+  });
+
+  it('paiement ciblé sur un joueur : sa part réglée + paidAmount + paiement synthétique', () => {
+    const out = applyOptimisticPayment(rv(), { amountCents: 625, method: 'CARD', participantId: 'p2' }, 'opt:1', '2026-06-24T08:00:00.000Z');
+    expect(out.paidAmount).toBe('6.25');
+    const p2 = out.participants.find((p) => p.id === 'p2')!;
+    expect(p2.paid).toBe('6.25');
+    expect(p2.outstanding).toBe('0.00');
+    expect(out.participants.find((p) => p.id === 'p1')!.outstanding).toBe('6.25'); // inchangé
+    const synth = out.payments.at(-1)!;
+    expect(synth).toMatchObject({ id: 'opt:1', amount: '6.25', method: 'CARD', participantId: 'p2', refundedAmount: '0.00' });
+  });
+
+  it('paiement anonyme (sans participantId) : seulement paidAmount + paiement synthétique', () => {
+    const out = applyOptimisticPayment(rv(), { amountCents: 625, method: 'VOUCHER' }, 'opt:2', '2026-06-24T08:00:00.000Z');
+    expect(out.paidAmount).toBe('6.25');
+    expect(out.participants.every((p) => p.paid === '0.00')).toBe(true);
+    expect(out.payments.at(-1)).toMatchObject({ id: 'opt:2', participantId: null, method: 'VOUCHER' });
+  });
+
+  it('n’est pas mutatif (la réservation source reste intacte)', () => {
+    const src = rv();
+    applyOptimisticPayment(src, { amountCents: 625, method: 'CARD', participantId: 'p2' }, 'opt:1', 'now');
+    expect(src.paidAmount).toBe('0.00');
+    expect(src.payments).toHaveLength(0);
+  });
+
+  it('remboursement optimiste : rembourse le paiement, réduit paidAmount, recrédite le joueur', () => {
+    const base = applyOptimisticPayment(rv(), { amountCents: 625, method: 'CARD', participantId: 'p2' }, 'real-1', 'now');
+    const out = applyOptimisticRefund(base, ['real-1']);
+    expect(out.paidAmount).toBe('0.00');
+    const p2 = out.participants.find((p) => p.id === 'p2')!;
+    expect(p2.paid).toBe('0.00');
+    expect(p2.outstanding).toBe('6.25');
+    expect(out.payments.find((p) => p.id === 'real-1')!.refundedAmount).toBe('6.25');
+  });
+
+  it('remboursement : un paiement déjà remboursé n’est pas re-décompté', () => {
+    const base = applyOptimisticPayment(rv(), { amountCents: 625, method: 'CARD', participantId: 'p2' }, 'real-1', 'now');
+    const once = applyOptimisticRefund(base, ['real-1']);
+    const twice = applyOptimisticRefund(once, ['real-1']);
+    expect(twice.paidAmount).toBe('0.00');                 // pas négatif
+    expect(twice.participants.find((p) => p.id === 'p2')!.outstanding).toBe('6.25');
+  });
+
+  it('centsToStr formate en string décimale API', () => {
+    expect(centsToStr(625)).toBe('6.25');
+    expect(centsToStr(0)).toBe('0.00');
+    expect(centsToStr(2500)).toBe('25.00');
   });
 });

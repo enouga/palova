@@ -1109,6 +1109,7 @@ export interface ClubAdminDetail {
   stripeAccountStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  quickPaymentMethods: PaymentMethod[];
   levelSystemEnabled: boolean;
   legalEntityName: string | null;
   legalForm: string | null;
@@ -1197,6 +1198,7 @@ export type UpdateClubBody = Partial<{
   refundOnCancelWithinCutoff: boolean;
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
+  quickPaymentMethods: PaymentMethod[];
   levelSystemEnabled: boolean;
   legalEntityName: string;
   legalForm: string;
@@ -1271,6 +1273,8 @@ export interface Payment {
   id: string;
   amount: string;
   method: PaymentMethod;
+  /** Joueur (participant) auquel le paiement est attribué ; null = réservation entière / place anonyme. */
+  participantId?: string | null;
   payerName: string | null;
   note: string | null;
   voucherRef: string | null;
