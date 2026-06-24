@@ -13,14 +13,16 @@ export type CoverClub = {
 
 // Couverture d'un club pour les cartes d'annuaire. Ordre de préférence :
 //  1. photo importée par le club (coverImageUrl) ;
-//  2. à défaut, une belle photo de court de la banque par défaut (déterministe par slug) ;
+//  2. à défaut, une belle photo de court de la banque par défaut. `defaultPhoto` permet à
+//     l'appelant d'imposer la photo (l'annuaire fait tourner la banque pour éviter les
+//     répétitions) ; sinon elle est choisie de façon déterministe par slug ;
 //  3. repli si l'image ne charge pas : « mesh gradient » dérivé de la couleur d'accent + initiales.
-export function ClubCover({ club, height = 104 }: { club: CoverClub; height?: number }) {
+export function ClubCover({ club, height = 104, defaultPhoto }: { club: CoverClub; height?: number; defaultPhoto?: string }) {
   const { th } = useTheme();
   const [photoFailed, setPhotoFailed] = useState(false);
 
   const uploaded = assetUrl(club.coverImageUrl);
-  const src = uploaded ?? (photoFailed ? null : coverPhoto(club.slug));
+  const src = uploaded ?? (photoFailed ? null : (defaultPhoto ?? coverPhoto(club.slug)));
 
   if (src) {
     return (

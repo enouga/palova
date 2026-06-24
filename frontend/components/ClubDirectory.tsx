@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { api, ClubSummary, Sport } from '@/lib/api';
+import { COVER_PHOTOS } from '@/lib/clubCover';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
@@ -90,7 +91,7 @@ export function ClubDirectory() {
         ) : clubs.length === 0 ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
-          clubs.map((c) => <ClubCard key={c.id} club={c} />)
+          clubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)
         )}
       </div>
     </>

@@ -7,13 +7,15 @@ import { Icon } from '@/components/ui/Icon';
 import { ClubCover } from '@/components/ClubCover';
 
 // Carte de club (annuaire public + « mes clubs » de l'accueil). Lien vers le sous-domaine du club.
-export function ClubCard({ club }: { club: ClubSummary }) {
+// `defaultCover` permet à l'annuaire d'imposer la photo de couverture par défaut (rotation
+// de la banque pour éviter les répétitions entre cartes voisines).
+export function ClubCard({ club, defaultCover }: { club: ClubSummary; defaultCover?: string }) {
   const { th } = useTheme();
   return (
     <a href={clubUrl(club.slug)} style={{ textDecoration: 'none', display: 'block' }}>
       <div style={{ background: th.surface, borderRadius: 22, overflow: 'hidden', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
         <div style={{ position: 'relative' }}>
-          <ClubCover club={{
+          <ClubCover defaultPhoto={defaultCover} club={{
             name: club.name, slug: club.slug, accentColor: club.accentColor,
             coverImageUrl: club.coverImageUrl,
           }} />

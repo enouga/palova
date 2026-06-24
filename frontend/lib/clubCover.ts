@@ -81,6 +81,10 @@ export const COVER_PHOTOS = [
   '/covers/court-6.jpg',
   '/covers/court-7.jpg',
   '/covers/court-8.jpg',
+  '/covers/court-9.jpg',
+  '/covers/court-10.jpg',
+  '/covers/court-11.jpg',
+  '/covers/court-12.jpg',
 ] as const;
 
 // Photo de couverture par défaut d'un club (déterministe par slug). Le mesh gradient
