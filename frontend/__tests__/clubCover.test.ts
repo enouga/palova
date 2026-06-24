@@ -1,4 +1,4 @@
-import { coverHash, coverBackground, coverInitials } from '../lib/clubCover';
+import { coverHash, coverBackground, coverInitials, coverPhoto, COVER_PHOTOS } from '../lib/clubCover';
 
 describe('coverHash', () => {
   it('est déterministe', () => {
@@ -25,6 +25,18 @@ describe('coverBackground', () => {
 
   it('accent invalide → ne jette pas (repli gris)', () => {
     expect(() => coverBackground('demo', 'pas-une-couleur')).not.toThrow();
+  });
+});
+
+describe('coverPhoto', () => {
+  it('est déterministe et renvoie un chemin de la banque', () => {
+    expect(coverPhoto('demo')).toBe(coverPhoto('demo'));
+    expect(COVER_PHOTOS).toContain(coverPhoto('demo'));
+  });
+
+  it('distribue : ≥2 photos distinctes sur 8 slugs variés', () => {
+    const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    expect(new Set(seeds.map(coverPhoto)).size).toBeGreaterThanOrEqual(2);
   });
 });
 

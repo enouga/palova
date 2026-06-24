@@ -70,6 +70,25 @@ export function coverBackground(seed: string, accentColor: string): string {
   return [...blobs, base].join(', ');
 }
 
+// Banque de photos de courts par défaut (Pexels, licence libre sans attribution),
+// servies depuis /public/covers. Voir public/covers/CREDITS.md.
+export const COVER_PHOTOS = [
+  '/covers/court-1.jpg',
+  '/covers/court-2.jpg',
+  '/covers/court-3.jpg',
+  '/covers/court-4.jpg',
+  '/covers/court-5.jpg',
+  '/covers/court-6.jpg',
+  '/covers/court-7.jpg',
+  '/covers/court-8.jpg',
+] as const;
+
+// Photo de couverture par défaut d'un club (déterministe par slug). Le mesh gradient
+// reste le repli si l'image ne charge pas.
+export function coverPhoto(seed: string): string {
+  return COVER_PHOTOS[coverHash(seed) % COVER_PHOTOS.length];
+}
+
 export function coverInitials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '?';
