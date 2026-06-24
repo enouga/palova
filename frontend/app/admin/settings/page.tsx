@@ -7,6 +7,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
+import { ClubCover } from '@/components/ClubCover';
 
 export default function AdminSettingsPage() {
   const { th } = useTheme();
@@ -21,6 +22,7 @@ export default function AdminSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
@@ -86,6 +88,20 @@ export default function AdminSettingsPage() {
     finally { setUploading(false); }
   };
 
+  // Upload de la couverture du club : persiste côté serveur puis met à jour l'aperçu.
+  const pickCover = async (file: File | undefined) => {
+    if (!file || !token || !clubId) return;
+    if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
+    if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
+    setError(null);
+    setUploading(true);
+    try {
+      const res = await api.uploadClubCover(clubId, file, token);
+      set('coverImageUrl', res.coverImageUrl);
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(false); }
+  };
+
   // Plages d'heures creuses par jour (weekday Luxon 1=lundi..7=dimanche), plusieurs
   // possibles par jour. Jour sans plage = tout en heures pleines.
   const DAYS: [number, string][] = [[1, 'Lundi'], [2, 'Mardi'], [3, 'Mercredi'], [4, 'Jeudi'], [5, 'Vendredi'], [6, 'Samedi'], [7, 'Dimanche']];
@@ -140,6 +156,7 @@ export default function AdminSettingsPage() {
       const body: UpdateClubBody = {
         name: club.name, description: club.description ?? '', address: club.address,
         city: club.city ?? '', timezone: club.timezone, logoUrl: club.logoUrl ?? '',
+        coverImageUrl: club.coverImageUrl,
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
         levelSystemEnabled: club.levelSystemEnabled,
@@ -212,6 +229,32 @@ export default function AdminSettingsPage() {
                 <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
               </div>
             </div>
+          </div>
+          <div>
+            <span style={label}>Image de couverture</span>
+            <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '0 0 10px' }}>
+              Illustre votre club dans l'annuaire et en tête de votre page. Sans photo, une illustration est générée automatiquement à partir de votre couleur et de vos sports.
+            </p>
+            <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: uploading ? 0.5 : 1 }}>
+              <ClubCover variant="card" club={{
+                name: club.name, slug: club.slug, accentColor: club.accentColor,
+                coverImageUrl: club.coverImageUrl, logoUrl: club.logoUrl, sportIcons: [],
+              }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                aria-label="Choisir une image de couverture"
+                onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ''; }} />
+              <Btn type="button" variant="surface" disabled={uploading} onClick={() => coverInputRef.current?.click()}>
+                {uploading ? 'Envoi…' : 'Importer une photo'}
+              </Btn>
+              {club.coverImageUrl && (
+                <Btn type="button" variant="ghost" disabled={uploading} onClick={() => set('coverImageUrl', null)}>
+                  Utiliser l'illustration automatique
+                </Btn>
+              )}
+            </div>
+            <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, display: 'block', marginTop: 6 }}>JPEG, PNG ou WebP · 2 Mo max</span>
           </div>
           <div>
             <span style={label}>Couleur d'accent</span>
