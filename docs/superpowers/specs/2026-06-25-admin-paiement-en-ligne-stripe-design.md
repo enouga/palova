@@ -76,12 +76,18 @@ statut clair : pastille colorée + libellé) :
     paiements CB déjà encaissés sur l'ancien compte ne seront plus possibles**.
   - `confirmLabel` « Changer de compte ».
 - À la confirmation → `api.disconnectStripe(clubId, token)` :
-  - **succès** → `useClub().refresh()` **puis** `load()` (la fiche club racine est mise en cache
-    une seule fois par `ClubProvider` ; sans `refresh()` la modale de réservation resterait sur
-    l'ancien statut), la page rebascule sur l'état **NONE**.
+  - **succès** → `load()` (recharge `api.adminGetClub`), la page rebascule sur l'état **NONE**.
+    La page lit son statut depuis son **état local** (`adminGetClub`), pas depuis `useClub()`, donc
+    elle est toujours à jour. `ClubProvider` n'expose **pas** de `refresh` (`{ slug, club, loading }`
+    uniquement, fetch unique au montage) : une éventuelle péremption de la fiche publique (modale de
+    réservation) se résout au prochain chargement — comportement **déjà existant** pour tout réglage
+    club (hors périmètre, ne pas inventer de `refresh`).
   - **409 `STRIPE_HAS_PENDING_ONLINE_PAYMENTS`** → message inline dans le dialog :
     « X paiement(s) CB sur des réservations à venir — remboursez-les ou attendez qu'elles soient
-    passées avant de changer de compte. » (le `count` vient du corps de la réponse).
+    passées avant de changer de compte. » Le `count` vient du corps de la réponse : le helper
+    `request` (`frontend/lib/api.ts`) est **étendu pour recopier `count`** depuis le corps d'erreur,
+    comme il copie déjà `subject` ; le `catch` du dialog lit `(err as { count?: number }).count`
+    (repli sur un message sans nombre s'il est absent).
 - Garde `busy` anti double-clic sur le dialog pendant la requête.
 
 ### 4. Backend (additif)
@@ -111,7 +117,8 @@ statut clair : pastille colorée + libellé) :
      inutilisables sur le nouveau).
 
 **Route** `POST /api/clubs/:clubId/admin/stripe/disconnect` (`backend/src/routes/admin.ts`,
-après les routes `/stripe/*` existantes) → appelle `disconnectAccount`, `204` au succès.
+après les routes `/stripe/*` existantes) → appelle `disconnectAccount`, **`200 { ok: true }`** au
+succès (le helper `request` du front fait `res.json()` ; un `204` vide le ferait throw).
 
 > ⚠️ `handleError` ne renvoie que `{ error: message }` (mappé via `ERROR_STATUS`), sans champ
 > supplémentaire. Pour transmettre le `count`, la route **traite ce code explicitement** dans son
@@ -149,7 +156,8 @@ renvoie 409 `{ error, count }` quand garde-fou actif.
 
 **Frontend** — `frontend/__tests__/AdminPayments.test.tsx` (nouveau) :
 - rend chaque état (`NONE/PENDING/ACTIVE/RESTRICTED`) ;
-- le dialog « Changer de compte » appelle `disconnectStripe` puis repasse en NONE (mock `refresh`/`load`) ;
+- le dialog « Changer de compte » appelle `disconnectStripe` puis repasse en NONE (le 2ᵉ
+  `adminGetClub` renvoie `stripeAccountStatus: 'NONE'`) ;
 - 409 → message d'erreur affiché, pas de bascule.
 - Mise à jour de la suite settings : bloc Stripe **retiré**, lien « Gérer le paiement en ligne → » présent.
 
