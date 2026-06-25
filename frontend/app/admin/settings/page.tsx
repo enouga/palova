@@ -12,7 +12,7 @@ import { ClubCover } from '@/components/ClubCover';
 export default function AdminSettingsPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
-  const { club: hostClub } = useClub();
+  const { club: hostClub, refresh: refreshClub } = useClub();
   const clubId = hostClub?.id;
   const [club, setClub]       = useState<ClubAdminDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,6 +142,10 @@ export default function AdminSettingsPage() {
       };
       await api.adminUpdateClub(clubId, body, token);
       setSaved(true);
+      // Recharge le club partagé (ClubProvider monté à la racine, fetché une seule fois) pour
+      // que les réglages (paiement en ligne, tarifs, fenêtres…) se reflètent dans la réservation
+      // sans rechargement de page — sinon la modale garderait l'ancienne config (« Régler au club »).
+      refreshClub();
     } catch (e) { setError((e as Error).message); }
     finally { setSaving(false); }
   };
