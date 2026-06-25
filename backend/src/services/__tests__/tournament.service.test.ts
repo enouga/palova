@@ -13,7 +13,7 @@ jest.mock('../../email/notifications');
 const FUTURE = new Date(Date.now() + 86_400_000); // +24h
 
 function tournament(overrides: Record<string, unknown> = {}) {
-  return { id: 't1', clubId: 'club-demo', gender: 'MEN', openToWomen: true, status: 'PUBLISHED', registrationDeadline: FUTURE, maxTeams: 8, ...overrides };
+  return { id: 't1', clubId: 'club-demo', gender: 'MEN', openToWomen: true, status: 'PUBLISHED', registrationDeadline: FUTURE, maxTeams: 8, requirePrepayment: false, entryFee: null, ...overrides };
 }
 
 /** Mocke l'éligibilité (membre ACTIVE + tél + licence + sexe) d'un binôme aux sexes choisis. */
@@ -44,7 +44,7 @@ function mockEligibleHappyPath() {
 
 describe('TournamentService.register', () => {
   let service: TournamentService;
-  beforeEach(() => { service = new TournamentService(); });
+  beforeEach(() => { jest.clearAllMocks(); service = new TournamentService(); });
 
   it('crée une inscription CONFIRMED quand il reste des places', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue(tournament({ maxTeams: 8 }) as any);
@@ -57,7 +57,7 @@ describe('TournamentService.register', () => {
     expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ tournamentId: 't1', captainUserId: 'captain', partnerUserId: 'partner', status: 'CONFIRMED' }) }),
     );
-    expect(result.status).toBe('CONFIRMED');
+    expect(result.registration.status).toBe('CONFIRMED');
   });
 
   it('place en WAITLISTED quand le tournoi est complet', async () => {
@@ -151,7 +151,7 @@ describe('TournamentService.register', () => {
     prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
     prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
 
-    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ status: 'CONFIRMED' });
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ registration: { status: 'CONFIRMED' } });
   });
 
   it('Messieurs ouvert aux femmes : accepte un binôme de 2 femmes', async () => {
@@ -160,7 +160,7 @@ describe('TournamentService.register', () => {
     prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
     prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
 
-    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ status: 'CONFIRMED' });
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ registration: { status: 'CONFIRMED' } });
   });
 
   it('Messieurs NON ouvert aux femmes : refuse un binôme mixte (GENDER_MISMATCH)', async () => {
@@ -174,6 +174,47 @@ describe('TournamentService.register', () => {
     mockEligibleHappyPath();
     prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r-existing' } as any);
     await expect(service.register('t1', 'captain', 'partner')).rejects.toThrow('ALREADY_REGISTERED');
+  });
+
+  it('épreuve payante + place dispo → CONFIRMED + DUE + paymentDeadline, mode payment, pas de notif', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ maxTeams: 8, requirePrepayment: true, entryFee: 12 }) as any);
+    mockEligibleHappyPath();
+    prismaMock.tournamentRegistration.count.mockResolvedValue(3 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE' } as any);
+
+    const res = await service.register('t1', 'captain', 'partner');
+
+    expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIRMED', paymentStatus: 'DUE', paymentDeadline: expect.any(Date) }) }),
+    );
+    expect(res.payment).toEqual({ mode: 'payment' });
+    expect(notifyTournamentRegistration).not.toHaveBeenCalled();
+  });
+
+  it("épreuve payante + complet → WAITLISTED + DUE (deadline null), mode setup, notif liste d'attente", async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ maxTeams: 8, requirePrepayment: true, entryFee: 12 }) as any);
+    mockEligibleHappyPath();
+    prismaMock.tournamentRegistration.count.mockResolvedValue(8 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'WAITLISTED', paymentStatus: 'DUE' } as any);
+
+    const res = await service.register('t1', 'captain', 'partner');
+
+    expect(prismaMock.tournamentRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'WAITLISTED', paymentStatus: 'DUE', paymentDeadline: null }) }),
+    );
+    expect(res.payment).toEqual({ mode: 'setup' });
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('épreuve gratuite → payment null, notif immédiate (comportement actuel)', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournament({ maxTeams: 8 }) as any);
+    mockEligibleHappyPath();
+    prismaMock.tournamentRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.tournamentRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE' } as any);
+
+    const res = await service.register('t1', 'captain', 'partner');
+    expect(res.payment).toBeNull();
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
   });
 });
 
@@ -471,6 +512,29 @@ describe('TournamentService — notifications email', () => {
 
     // notifyTournamentRegistration est best-effort en prod ; ici le mock rejette, mais
     // comme l'inscription est déjà committée, on ne veut pas que l'appelant casse.
-    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ id: 'r-new' });
+    await expect(service.register('t1', 'captain', 'partner')).resolves.toMatchObject({ registration: { id: 'r-new' } });
+  });
+});
+
+describe('TournamentService.updateTournament — garde-fou paiement', () => {
+  it('refuse requirePrepayment=true si Stripe pas ACTIVE', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1', status: 'PUBLISHED', entryFee: 12, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'NONE' } as any);
+    await expect(new TournamentService().updateTournament('t1', 'club-demo', { requirePrepayment: true }))
+      .rejects.toThrow('ONLINE_PAYMENT_NOT_ENABLED');
+  });
+
+  it('refuse requirePrepayment=true si entryFee < 0,50 €', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1', status: 'PUBLISHED', entryFee: 0, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any);
+    await expect(new TournamentService().updateTournament('t1', 'club-demo', { requirePrepayment: true }))
+      .rejects.toThrow('ONLINE_PAYMENT_NOT_ENABLED');
+  });
+
+  it('accepte requirePrepayment=true si Stripe ACTIVE + montant OK', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1', status: 'PUBLISHED', entryFee: 12, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
+    await expect(new TournamentService().updateTournament('t1', 'club-demo', { requirePrepayment: true })).resolves.toBeTruthy();
   });
 });

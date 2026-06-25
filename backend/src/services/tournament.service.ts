@@ -2,6 +2,7 @@ import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as notify from '../email/notifications';
 import { RatingService } from './rating.service';
+import { occupiesSpotWhere, holdDeadline } from './registrationPayment';
 
 type Sex = 'MALE' | 'FEMALE';
 
@@ -18,6 +19,7 @@ export interface CreateTournamentInput {
   registrationDeadline: string | Date;
   maxTeams?: number | null;
   entryFee?: number | null;
+  requirePrepayment?: boolean;
 }
 export type UpdateTournamentInput = Partial<CreateTournamentInput & { status: TournamentStatus }>;
 
@@ -33,7 +35,7 @@ export class TournamentService {
   async register(tournamentId: string, captainUserId: string, partnerUserId: string) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      select: { id: true, clubId: true, gender: true, openToWomen: true, status: true, registrationDeadline: true, maxTeams: true },
+      select: { id: true, clubId: true, gender: true, openToWomen: true, status: true, registrationDeadline: true, maxTeams: true, requirePrepayment: true },
     });
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
     if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
@@ -41,19 +43,27 @@ export class TournamentService {
 
     await this.resolveAndAssertEligible(tournament, captainUserId, partnerUserId);
 
+    const paid = tournament.requirePrepayment;
     const registration = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
       await this.assertNoActiveRegistration(tx, tournamentId, [captainUserId, partnerUserId]);
-      const confirmed = await tx.tournamentRegistration.count({ where: { tournamentId, status: 'CONFIRMED' } });
+      const now = new Date();
+      const confirmed = await tx.tournamentRegistration.count({ where: { tournamentId, ...occupiesSpotWhere(now) } });
       const status = tournament.maxTeams == null || confirmed < tournament.maxTeams ? 'CONFIRMED' : 'WAITLISTED';
       return tx.tournamentRegistration.create({
-        data: { tournamentId, captainUserId, partnerUserId, status },
+        data: {
+          tournamentId, captainUserId, partnerUserId, status,
+          ...(paid ? { paymentStatus: 'DUE', paymentDeadline: status === 'CONFIRMED' ? holdDeadline(now) : null } : {}),
+        },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    // Emails hors transaction, best-effort (ne fait jamais échouer l'inscription).
-    await this.safeNotify(() => notify.notifyTournamentRegistration(registration.id));
-    return registration;
+    // Pour une place CONFIRMED payante, la notif d'inscription part au paiement confirmé.
+    if (!paid || registration.status === 'WAITLISTED') {
+      await this.safeNotify(() => notify.notifyTournamentRegistration(registration.id));
+    }
+    const payment = paid ? { mode: (registration.status === 'CONFIRMED' ? 'payment' : 'setup') as 'payment' | 'setup' } : null;
+    return { registration, payment };
   }
 
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
@@ -63,6 +73,13 @@ export class TournamentService {
     } catch (err) {
       console.error('[notifications] envoi email échoué (tournoi) :', err);
     }
+  }
+
+  /** Refuse d'activer le paiement en ligne si le club n'a pas Stripe ACTIVE ou si le montant est < 0,50 €. */
+  private async assertPrepaymentAllowed(clubId: string, entryFeeCentsValue: number): Promise<void> {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { stripeAccountStatus: true } });
+    if (club?.stripeAccountStatus !== 'ACTIVE') throw new Error('ONLINE_PAYMENT_NOT_ENABLED');
+    if (entryFeeCentsValue < 50) throw new Error('ONLINE_PAYMENT_NOT_ENABLED');
   }
 
   /** Change de coéquipier : conserve statut + place en liste d'attente (createdAt inchangé). */
@@ -280,16 +297,26 @@ export class TournamentService {
     const data = this.validateTournamentInput(input, true);
     const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId }, select: { id: true } });
     if (!cs) throw new Error('CLUB_SPORT_NOT_FOUND');
+    if (data.requirePrepayment) await this.assertPrepaymentAllowed(clubId, Math.round(Number((data as any).entryFee ?? 0) * 100));
     return prisma.tournament.create({ data: { clubId, clubSportId: input.clubSportId, ...data } as Prisma.TournamentUncheckedCreateInput });
   }
 
   async updateTournament(tournamentId: string, clubId: string, input: UpdateTournamentInput) {
-    const found = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId }, select: { id: true, status: true } });
+    const found = await prisma.tournament.findFirst({
+      where: { id: tournamentId, clubId },
+      select: { id: true, status: true, entryFee: true, requirePrepayment: true },
+    });
     if (!found) throw new Error('TOURNAMENT_NOT_FOUND');
     const data = this.validateTournamentInput(input, false);
     if (input.status !== undefined) {
       if (!['DRAFT', 'PUBLISHED', 'CANCELLED'].includes(input.status as string)) throw new Error('VALIDATION_ERROR');
       (data as Record<string, unknown>).status = input.status;
+    }
+    // Effective requirePrepayment après cette màj : si on l'active, exiger Stripe ACTIVE + montant valide.
+    const willRequire = input.requirePrepayment !== undefined ? Boolean(input.requirePrepayment) : found.requirePrepayment;
+    if (willRequire) {
+      const fee = input.entryFee !== undefined ? Number(input.entryFee) : Number(found.entryFee);
+      await this.assertPrepaymentAllowed(clubId, Math.round(fee * 100));
     }
     const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
@@ -373,6 +400,7 @@ export class TournamentService {
       if (input.entryFee === null) data.entryFee = null;
       else { const f = Number(input.entryFee); if (isNaN(f) || f < 0) throw new Error('VALIDATION_ERROR'); data.entryFee = new Prisma.Decimal(f); }
     }
+    if (input.requirePrepayment !== undefined) data.requirePrepayment = Boolean(input.requirePrepayment);
     return data;
   }
 
