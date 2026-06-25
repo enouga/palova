@@ -7,6 +7,7 @@ import {
   notifyTournamentPromotion,
 } from '../../email/notifications';
 import { PackageService } from '../package.service';
+import { StripeService } from '../stripe.service';
 
 // Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
 jest.mock('../../email/notifications');
@@ -570,5 +571,47 @@ describe('TournamentService.confirmRegistrationPayment', () => {
     } as any);
     await new TournamentService().confirmRegistrationPayment('r1', { stripePaymentIntentId: 'pi_1' });
     expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('TournamentService.chargePromotedRegistration', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  const reg = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE', captainUserId: 'captain',
+    tournamentId: 't1', tournament: { clubId: 'club-demo', entryFee: 12 }, ...over,
+  });
+
+  it('débit OK → PAID + Payment + notif promotion', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue(reg() as any);
+    jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession').mockResolvedValue('pi_ok');
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new TournamentService().chargePromotedRegistration('r1');
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ tournamentRegistrationId: 'r1', stripePaymentIntentId: 'pi_ok' }) }));
+    expect(notifyTournamentPromotion).toHaveBeenCalledWith('r1');
+  });
+
+  it('carte refusée → annule la place et promeut le suivant', async () => {
+    prismaMock.tournamentRegistration.findUnique
+      .mockResolvedValueOnce(reg() as any)            // 1er appel : reg à débiter
+      .mockResolvedValueOnce(reg({ id: 'r2' }) as any); // récursion sur le suivant promu
+    jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession')
+      .mockRejectedValueOnce(new Error('CARD_DECLINED'))
+      .mockResolvedValueOnce('pi_ok');
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r2' } as any); // suivant WAITLISTED
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new TournamentService().chargePromotedRegistration('r1');
+
+    expect(notifyTournamentCancellation).toHaveBeenCalledWith('r1');
+    expect(notifyTournamentPromotion).toHaveBeenCalledWith('r2');
   });
 });
