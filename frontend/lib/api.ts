@@ -1746,6 +1746,7 @@ export type CreateTournamentBody = {
   registrationDeadline: string;
   maxTeams?: number | null;
   entryFee?: number | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateTournamentBody = Partial<CreateTournamentBody & { status: TournamentStatus }>;
 
@@ -1820,6 +1821,7 @@ export type CreateEventBody = {
   price?: number | null;
   memberOnly?: boolean;
   clubSportId?: string | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateEventBody = Partial<CreateEventBody & { status: ClubEventStatus }>;
 
