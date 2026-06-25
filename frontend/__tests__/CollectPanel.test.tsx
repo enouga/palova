@@ -127,6 +127,26 @@ describe('CollectPanel', () => {
     expect(screen.getByText(/Carte/)).toBeInTheDocument();
   });
 
+  it('affiche les places libres par défaut jusqu\'à la capacité (comme la page)', () => {
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [part] }); // 1 joueur, capacité 4 → places 2, 3, 4 libres
+    expect(screen.getByText('Joueur 2')).toBeInTheDocument();
+    expect(screen.getByText('Joueur 3')).toBeInTheDocument();
+    expect(screen.getByText('Joueur 4')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Associer un membre/ })).toHaveLength(3);
+  });
+
+  it('« associer » une place libre ajoute un participant', async () => {
+    (api.adminAddReservationParticipant as jest.Mock).mockResolvedValue({ id: 'rv-1' });
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    const members = [{ userId: 'u9', firstName: 'Marie', lastName: 'Curie', email: 'marie@x.fr' }];
+    renderPanel({ participants: [part] }, { members });
+    fireEvent.click(screen.getAllByRole('button', { name: /Associer un membre/ })[0]);
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un membre…'));
+    fireEvent.click(screen.getByText(/Marie Curie/));
+    await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
+  });
+
   it('le montant se recalcule quand le payé change (panneau resté ouvert)', () => {
     const onChanged = jest.fn();
     const { rerender } = render(

@@ -51,6 +51,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const [voucherIssuer, setVoucherIssuer] = useState('');
   const [busy, setBusy] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);   // participant en cours de remplacement (sélecteur inline)
+  const [associatingIndex, setAssociatingIndex] = useState<number | null>(null);   // place libre en cours d'association
 
   const fail = (msg: string) => onError?.(msg);
   const remaining = Math.max(0, due - toCents(reservation.paidAmount));
@@ -64,6 +65,12 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   }, [reservation.id, reservation.paidAmount]);
 
   const bills = reservation.participants ?? [];
+  const isCourt = reservation.type === 'COURT';
+  // Places de la réservation = capacité du terrain (comme la page Encaissement) : les places
+  // remplies viennent des participants (à défaut le titulaire occupe 1 place, affichée via
+  // « Réservation au nom de »), le reste est libre/associable et numéroté. Hors COURT : aucune place.
+  const filled = Math.max(bills.length, reservation.user ? 1 : 0);
+  const emptyCount = isCourt ? Math.max(0, players - filled) : 0;
   const activePart = payParticipantId ? bills.find((p) => p.id === payParticipantId) ?? null : null;
   const maxPayable = activePart ? toCents(activePart.outstanding) : remaining;
   const amountC = toCents(payAmount);
@@ -181,6 +188,14 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   };
   const createAndAssign = (body: CreateMemberBody) => createThen(body, assignPlayer);
   const createAndAddParticipant = (body: CreateMemberBody) => createThen(body, addParticipant);
+  // Associe un membre à une place libre : 1re place sans titulaire → titulaire (assign),
+  // sinon → participant supplémentaire (comme la page Encaissement).
+  const associateEmpty = async (m: Member) => {
+    if (!reservation.user && bills.length === 0) await assignPlayer(m);
+    else await addParticipant(m);
+    setAssociatingIndex(null);
+  };
+  const createAndAssociateEmpty = (body: CreateMemberBody) => createThen(body, associateEmpty);
 
   // ── tokens de style partagés ───────────────────────────────────────────
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
@@ -199,6 +214,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     );
   };
 
+  // Avatar neutre numéroté pour une place libre (joueur non renseigné).
+  const genericAvatar = (n: number) => (
+    <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: th.surfaceHi, color: th.textMute, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700 }}>{n}</span>
+  );
+
   return (
     <div>
       {/* ── JOUEURS (fusion « Joueur » + « Par joueur ») — en tête, juste sous « Reste à encaisser » ── */}
@@ -206,7 +226,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
         <div style={{ ...sectionLabel, marginBottom: 10 }}>Joueurs</div>
 
         {/* Titulaire de la réservation */}
-        <div style={{ marginBottom: bills.length > 0 ? 12 : 4 }}>
+        <div style={{ marginBottom: bills.length > 0 || emptyCount > 0 ? 12 : 4 }}>
           <div style={caption}>Réservation au nom de</div>
           <PlayerPicker
             members={members}
@@ -216,8 +236,8 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           />
         </div>
 
-        {/* Répartition par joueur */}
-        {bills.length > 0 && (
+        {/* Répartition par joueur — places remplies + places libres jusqu'à la capacité */}
+        {(bills.length > 0 || emptyCount > 0) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {bills.map((p) => {
               const rest = toCents(p.outstanding);
@@ -280,17 +300,40 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                 </div>
               );
             })}
+
+            {/* Places libres (jusqu'à la capacité) — numérotées + associables, comme la page */}
+            {Array.from({ length: emptyCount }).map((_, j) => {
+              const idx = filled + j;   // index de place (stable parmi les places libres)
+              const n = idx + 1;        // numéro affiché « Joueur N »
+              if (associatingIndex === idx) {
+                return (
+                  <div key={`empty-${idx}`} style={{ padding: '2px 0' }}>
+                    <PlayerPicker members={members} value={null}
+                      onSelect={associateEmpty} onClear={() => setAssociatingIndex(null)}
+                      onCreate={createAndAssociateEmpty} placeholder="Rechercher un membre…" />
+                  </div>
+                );
+              }
+              return (
+                <div key={`empty-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 12, background: th.surface2, boxShadow: 'inset 0 0 0 1px transparent' }}>
+                  {genericAvatar(n)}
+                  <span style={{ flex: 1, minWidth: 90, fontFamily: th.fontUI, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: th.textMute }}>Joueur {n}</span>
+                    <button type="button" aria-label="Associer un membre" disabled={busy} onClick={() => setAssociatingIndex(idx)}
+                      style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>associer</button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Ajouter un joueur */}
-        <div style={{ marginTop: 10 }}>
-          {bills.length >= players ? (
-            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({players} joueurs).</div>
-          ) : (
+        {/* Ajout libre — events / réservations hors capacité COURT (les places numérotées remplacent ce picker pour un terrain) */}
+        {!isCourt && (
+          <div style={{ marginTop: 10 }}>
             <PlayerPicker members={members} value={null} onSelect={addParticipant} onClear={() => {}} onCreate={createAndAddParticipant} placeholder="+ Ajouter un joueur…" />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── ENCAISSER — masqué quand soldé ─────────────────────── */}
