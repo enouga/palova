@@ -878,6 +878,22 @@ router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, n
   } catch (err) { handleError(err, res, next); }
 });
 
+router.post('/stripe/disconnect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await stripeService.disconnectAccount(req.membership!.clubId);
+    res.json({ ok: true });
+  } catch (err) {
+    // handleError ne porte que { error } ; on traite ce code à part pour transmettre le count.
+    if ((err as Error).message === 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS') {
+      return void res.status(409).json({
+        error: 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS',
+        count: (err as { count?: number }).count ?? 0,
+      });
+    }
+    handleError(err, res, next);
+  }
+});
+
 router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const reservationId = asString(req.params.id);
