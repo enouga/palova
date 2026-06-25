@@ -184,7 +184,7 @@ export class StripeService {
   }
 
   async chargeRegistrationOffSession(params: {
-    clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event'; amountCents: number;
+    clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event'; amountCents: number; idempotencyKey?: string;
   }): Promise<string> {
     const [club, sc] = await Promise.all([
       prisma.club.findUnique({ where: { id: params.clubId }, select: { stripeAccountId: true } }),
@@ -199,7 +199,7 @@ export class StripeService {
           payment_method: sc.defaultPaymentMethodId, off_session: true, confirm: true,
           metadata: { [this.regMetaKey(params.kind)]: params.registrationId, clubId: params.clubId },
         },
-        { stripeAccount: club.stripeAccountId },
+        { stripeAccount: club.stripeAccountId, ...(params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}) },
       );
       return pi.id;
     } catch (err: any) {

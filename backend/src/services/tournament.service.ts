@@ -158,9 +158,12 @@ export class TournamentService {
       return this.cancelAndPromoteTx(tx, tournamentId, reg.id, reg.status === 'CONFIRMED', tournament.requirePrepayment);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     if (promotedRegistrationId && tournament.requirePrepayment) {
-      await this.chargePromotedRegistration(promotedRegistrationId);
+      // Payant : la notif de promotion part du débit réussi (chargePromotedRegistration), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyTournamentCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
     return cancelled;
   }
@@ -169,6 +172,15 @@ export class TournamentService {
   private async notifyCancellation(cancelledRegId: string, promotedRegistrationId: string | null): Promise<void> {
     await this.safeNotify(() => notify.notifyTournamentCancellation(cancelledRegId));
     if (promotedRegistrationId) await this.safeNotify(() => notify.notifyTournamentPromotion(promotedRegistrationId));
+  }
+
+  /** Débite la place promue en best-effort : un échec post-commit ne doit jamais casser la réponse de désinscription. */
+  private async safeCharge(regId: string): Promise<void> {
+    try {
+      await this.chargePromotedRegistration(regId);
+    } catch (err) {
+      console.error('[paiement] débit promotion échoué (réconciliation par webhook) :', err);
+    }
   }
 
   /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. Renvoie l'inscription annulée + l'id éventuellement promu. À appeler dans une transaction qui détient déjà le verrou du tournoi. */
@@ -208,6 +220,7 @@ export class TournamentService {
     try {
       piId = await new StripeService().chargeRegistrationOffSession({
         clubId: reg.tournament.clubId, userId: reg.captainUserId, registrationId: regId, kind: 'tournament', amountCents,
+        idempotencyKey: `reg-charge-${regId}`,
       });
     } catch {
       // Carte refusée / absente → on libère cette place et on promeut le suivant.
@@ -216,10 +229,8 @@ export class TournamentService {
         return this.cancelAndPromoteTx(tx, reg.tournamentId, regId, true, true);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
       await this.safeNotify(() => notify.notifyTournamentCancellation(cancelled.id));
-      if (promotedRegistrationId) {
-        await this.safeNotify(() => notify.notifyTournamentPromotion(promotedRegistrationId));
-        await this.chargePromotedRegistration(promotedRegistrationId);
-      }
+      // La récursion notifiera elle-même la promotion du suivant (sur débit réussi) — ne pas pré-notifier ici (doublon).
+      if (promotedRegistrationId) await this.chargePromotedRegistration(promotedRegistrationId);
       return;
     }
 
@@ -417,8 +428,16 @@ export class TournamentService {
     if (reg.status !== 'WAITLISTED') throw new Error('VALIDATION_ERROR');
     const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { requirePrepayment: true } });
     if (t?.requirePrepayment) {
-      await prisma.tournamentRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED', paymentStatus: 'DUE', paymentDeadline: holdDeadline(new Date()) } });
-      await this.chargePromotedRegistration(regId);
+      // Verrou + bascule conditionnelle : deux promotions concurrentes de la même place ne posent DUE qu'une fois → un seul débit.
+      const promoted = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+        return tx.tournamentRegistration.updateMany({
+          where: { id: regId, status: 'WAITLISTED' },
+          data: { status: 'CONFIRMED', paymentStatus: 'DUE', paymentDeadline: holdDeadline(new Date()) },
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+      // Une autre promotion a déjà gagné → ne pas re-débiter.
+      if (promoted.count > 0) await this.chargePromotedRegistration(regId);
       return prisma.tournamentRegistration.findUnique({ where: { id: regId } });
     }
     const promoted = await prisma.tournamentRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
@@ -440,9 +459,12 @@ export class TournamentService {
       return this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     if (promotedRegistrationId && t?.requirePrepayment) {
-      await this.chargePromotedRegistration(promotedRegistrationId);
+      // Payant : la notif de promotion part du débit réussi (chargePromotedRegistration), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyTournamentCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
     return cancelled;
   }

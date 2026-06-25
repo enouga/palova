@@ -380,6 +380,24 @@ describe('chargeRegistrationOffSession', () => {
       kind: 'event', amountCents: 1000,
     })).rejects.toThrow('NO_CARD_ON_FILE');
   });
+
+  it('transmet idempotencyKey dans les options Stripe quand fournie', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ id: 'pi_idem' });
+
+    await svc.chargeRegistrationOffSession({
+      clubId: 'club-1', userId: 'user-1', registrationId: 'reg-1',
+      kind: 'tournament', amountCents: 3000, idempotencyKey: 'reg-charge-reg-1',
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ stripeAccount: 'acct_1', idempotencyKey: 'reg-charge-reg-1' }),
+    );
+  });
 });
 
 describe('refundPaymentIntent', () => {

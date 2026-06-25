@@ -595,7 +595,7 @@ describe('TournamentService.chargePromotedRegistration', () => {
     expect(notifyTournamentPromotion).toHaveBeenCalledWith('r1');
   });
 
-  it('carte refusée → annule la place et promeut le suivant', async () => {
+  it('carte refusée → annule la place (CANCELLED, aucun Payment pour r1) et promeut le suivant', async () => {
     prismaMock.tournamentRegistration.findUnique
       .mockResolvedValueOnce(reg() as any)            // 1er appel : reg à débiter
       .mockResolvedValueOnce(reg({ id: 'r2' }) as any); // récursion sur le suivant promu
@@ -611,7 +611,91 @@ describe('TournamentService.chargePromotedRegistration', () => {
 
     await new TournamentService().chargePromotedRegistration('r1');
 
+    // r1 (carte refusée) est passée CANCELLED…
+    expect(prismaMock.tournamentRegistration.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'r1' }, data: expect.objectContaining({ status: 'CANCELLED' }) }),
+    );
+    // … et aucun Payment n'est persisté pour r1 (seul r2, débité avec succès, en a un).
+    expect(prismaMock.payment.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tournamentRegistrationId: 'r1' }) }),
+    );
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tournamentRegistrationId: 'r2', stripePaymentIntentId: 'pi_ok' }) }),
+    );
     expect(notifyTournamentCancellation).toHaveBeenCalledWith('r1');
-    expect(notifyTournamentPromotion).toHaveBeenCalledWith('r2');
+    // Promotion notifiée exactement une fois (pas de pré-notif avant la récursion).
+    expect((notifyTournamentPromotion as jest.Mock).mock.calls).toEqual([['r2']]);
+  });
+});
+
+describe('TournamentService.adminPromoteRegistration — paiement', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('place déjà promue ailleurs (updateMany count 0) → aucun débit Stripe', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'WAITLISTED' } as any); // findClubRegistration
+    prismaMock.tournament.findUnique.mockResolvedValue({ requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 0 } as any); // une autre promotion a gagné
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE' } as any);
+    const chargeSpy = jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession');
+
+    await new TournamentService().adminPromoteRegistration('t1', 'r1', 'club-demo');
+
+    expect(chargeSpy).not.toHaveBeenCalled();
+  });
+
+  it('promotion payante normale → débit off-session exactement une fois', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'WAITLISTED' } as any);
+    prismaMock.tournament.findUnique.mockResolvedValue({ requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.tournamentRegistration.findUnique
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE', captainUserId: 'captain', tournamentId: 't1', tournament: { clubId: 'club-demo', entryFee: 12 } } as any)
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    const chargeSpy = jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession').mockResolvedValue('pi_ok');
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new TournamentService().adminPromoteRegistration('t1', 'r1', 'club-demo');
+
+    expect(chargeSpy).toHaveBeenCalledTimes(1);
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tournamentRegistrationId: 'r1', stripePaymentIntentId: 'pi_ok' }) }),
+    );
+  });
+});
+
+describe('TournamentService.cancelRegistration — promotion payante', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); }); // ne pas laisser fuiter le spy sur chargePromotedRegistration
+
+  function setupPaidCancel() {
+    prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'reg-confirmed', status: 'CONFIRMED' } as any) // inscription du capitaine
+      .mockResolvedValueOnce({ id: 'reg-waiting' } as any);                        // 1er en attente promu
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'reg-confirmed', status: 'CANCELLED' } as any);
+  }
+
+  it('notifie la désinscription mais PAS la promotion (déléguée au débit, pas de doublon)', async () => {
+    setupPaidCancel();
+    const chargeSpy = jest.spyOn(TournamentService.prototype, 'chargePromotedRegistration').mockResolvedValue(undefined);
+
+    await new TournamentService().cancelRegistration('t1', 'captain');
+
+    expect(notifyTournamentCancellation).toHaveBeenCalledWith('reg-confirmed');
+    expect(notifyTournamentPromotion).not.toHaveBeenCalled(); // la notif promo part du débit réussi
+    expect(chargeSpy).toHaveBeenCalledWith('reg-waiting');
+  });
+
+  it('un débit qui échoue (post-commit) ne fait pas échouer la désinscription', async () => {
+    setupPaidCancel();
+    jest.spyOn(TournamentService.prototype, 'chargePromotedRegistration').mockRejectedValue(new Error('BOOM'));
+
+    await expect(new TournamentService().cancelRegistration('t1', 'captain')).resolves.toMatchObject({ id: 'reg-confirmed' });
+    expect(notifyTournamentCancellation).toHaveBeenCalledWith('reg-confirmed');
   });
 });
