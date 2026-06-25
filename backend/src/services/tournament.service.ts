@@ -2,7 +2,8 @@ import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as notify from '../email/notifications';
 import { RatingService } from './rating.service';
-import { occupiesSpotWhere, holdDeadline } from './registrationPayment';
+import { occupiesSpotWhere, holdDeadline, entryFeeCents } from './registrationPayment';
+import { PackageService } from './package.service';
 
 type Sex = 'MALE' | 'FEMALE';
 
@@ -64,6 +65,37 @@ export class TournamentService {
     }
     const payment = paid ? { mode: (registration.status === 'CONFIRMED' ? 'payment' : 'setup') as 'payment' | 'setup' } : null;
     return { registration, payment };
+  }
+
+  /** Confirme le paiement d'une inscription DUE → PAID + Payment ONLINE. Idempotent (client + webhook). */
+  async confirmRegistrationPayment(regId: string, opts: { stripePaymentIntentId: string }) {
+    const reg = await prisma.tournamentRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, paymentStatus: true, tournament: { select: { clubId: true, entryFee: true } } },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    if (reg.paymentStatus !== 'DUE') return reg; // déjà confirmé / non payant → no-op idempotent
+
+    const amountCents = entryFeeCents(reg.tournament.entryFee);
+    const result = await prisma.$transaction(async (tx) => {
+      const flip = await tx.tournamentRegistration.updateMany({
+        where: { id: regId, paymentStatus: 'DUE' },
+        data: { paymentStatus: 'PAID', paymentDeadline: null },
+      });
+      if (flip.count === 0) return null; // confirmé concurremment
+      const receiptNo = await PackageService.nextReceiptNo(tx, reg.tournament.clubId);
+      await tx.payment.create({
+        data: {
+          clubId: reg.tournament.clubId, tournamentRegistrationId: regId,
+          amount: new Prisma.Decimal(amountCents).div(100),
+          method: 'ONLINE', status: 'CAPTURED', stripePaymentIntentId: opts.stripePaymentIntentId, receiptNo,
+        },
+      });
+      return tx.tournamentRegistration.findUnique({ where: { id: regId } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    if (result) await this.safeNotify(() => notify.notifyTournamentRegistration(regId));
+    return result ?? reg;
   }
 
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */

@@ -6,6 +6,7 @@ import {
   notifyTournamentCancellation,
   notifyTournamentPromotion,
 } from '../../email/notifications';
+import { PackageService } from '../package.service';
 
 // Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
 jest.mock('../../email/notifications');
@@ -536,5 +537,38 @@ describe('TournamentService.updateTournament — garde-fou paiement', () => {
     prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any);
     prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
     await expect(new TournamentService().updateTournament('t1', 'club-demo', { requirePrepayment: true })).resolves.toBeTruthy();
+  });
+});
+
+describe('TournamentService.confirmRegistrationPayment', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+  });
+
+  it('DUE → PAID, crée un Payment ONLINE et notifie', async () => {
+    prismaMock.tournamentRegistration.findUnique
+      .mockResolvedValueOnce({
+        id: 'r1', paymentStatus: 'DUE', captainUserId: 'captain', tournament: { clubId: 'club-demo', entryFee: 12 },
+      } as any)
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay1' } as any);
+
+    await new TournamentService().confirmRegistrationPayment('r1', { stripePaymentIntentId: 'pi_1' });
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tournamentRegistrationId: 'r1', method: 'ONLINE', status: 'CAPTURED', stripePaymentIntentId: 'pi_1' }) }),
+    );
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('idempotent : si déjà PAID, ne recrée pas de Payment', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({
+      id: 'r1', paymentStatus: 'PAID', captainUserId: 'captain', tournament: { clubId: 'club-demo', entryFee: 12 },
+    } as any);
+    await new TournamentService().confirmRegistrationPayment('r1', { stripePaymentIntentId: 'pi_1' });
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
   });
 });
