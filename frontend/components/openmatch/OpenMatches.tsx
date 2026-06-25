@@ -54,7 +54,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   useEffect(() => {
     if (!token) return;
-    api.getMyRating(token).then((r) => setMyLevel(r?.level ?? null)).catch(() => {});
+    api.getMyRating(token, 'padel').then((r) => setMyLevel(r?.level ?? null)).catch(() => {});
   }, [token]);
 
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
