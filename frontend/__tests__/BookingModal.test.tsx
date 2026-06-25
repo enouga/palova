@@ -165,7 +165,7 @@ describe('BookingModal — page unique', () => {
   it('partie ouverte, niveau ON et limite active : applyHoldSetup avec targetLevelMin/Max', async () => {
     mockClub = { levelSystemEnabled: true };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
@@ -186,5 +186,33 @@ describe('BookingModal — page unique', () => {
     // Confirme directement, sans paymentSource (pas d'étape Stripe).
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+  });
+
+  it('partie ouverte sur un terrain padel : le limiteur de niveau s affiche', async () => {
+    mockClub = { levelSystemEnabled: true };
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    fireEvent.click(await screen.findByRole('button', { name: /Partie ouverte/ }));
+    expect(screen.getByText(/Limiter le niveau/)).toBeInTheDocument();
+  });
+
+  it('partie ouverte sur un terrain non-padel : pas de limiteur de niveau', async () => {
+    mockClub = { levelSystemEnabled: true };
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
+    fireEvent.click(await screen.findByRole('button', { name: /Partie ouverte/ }));
+    expect(screen.queryByText(/Limiter le niveau/)).toBeNull();
+  });
+
+  it('partie ouverte non-padel : applyHoldSetup sans targetLevelMin/Max', async () => {
+    mockClub = { levelSystemEnabled: true };
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
+    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalled());
+    const setup = (api.applyHoldSetup as jest.Mock).mock.calls[0][2];
+    expect(setup).not.toHaveProperty('targetLevelMin');
+    expect(setup).not.toHaveProperty('targetLevelMax');
   });
 });
