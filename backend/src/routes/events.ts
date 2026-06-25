@@ -1,19 +1,27 @@
 import { Router, Response, NextFunction } from 'express';
 import { EventService } from '../services/event.service';
+import { StripeService } from '../services/stripe.service';
+import { prisma } from '../db/prisma';
+import { entryFeeCents } from '../services/registrationPayment';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const service = new EventService();
 
 const ERROR_STATUS: Record<string, number> = {
-  EVENT_NOT_FOUND:        404,
-  EVENT_NOT_OPEN:         409,
-  REGISTRATION_CLOSED:    409,
-  REGISTRATION_LOCKED:    409,
-  REGISTRATION_NOT_FOUND: 404,
-  MEMBERSHIP_REQUIRED:    403,
-  MEMBERSHIP_BLOCKED:     403,
-  ALREADY_REGISTERED:     409,
+  EVENT_NOT_FOUND:              404,
+  EVENT_NOT_OPEN:               409,
+  REGISTRATION_CLOSED:          409,
+  REGISTRATION_LOCKED:          409,
+  REGISTRATION_NOT_FOUND:       404,
+  MEMBERSHIP_REQUIRED:          403,
+  MEMBERSHIP_BLOCKED:           403,
+  ALREADY_REGISTERED:           409,
+  ONLINE_PAYMENT_NOT_ENABLED:   409,
+  STRIPE_NOT_CONFIGURED:        409,
+  AMOUNT_TOO_SMALL:             400,
+  NOT_PAYABLE:                  409,
+  VALIDATION_ERROR:             400,
 };
 
 function asString(v: unknown): string {
@@ -49,6 +57,43 @@ router.post('/:id/register', authMiddleware, async (req: AuthRequest, res: Respo
 router.delete('/:id/registration', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await service.cancelRegistration(asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Créer l'intent (paiement ou empreinte) pour une inscription DUE de l'appelant.
+router.post('/:id/registrations/:regId/intent', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const regId = asString(req.params.regId);
+    const reg = await prisma.eventRegistration.findUnique({
+      where: { id: regId },
+      select: {
+        userId: true, status: true, paymentStatus: true, paymentDeadline: true,
+        event: { select: { clubId: true, price: true, club: { select: { stripeAccountId: true } } } },
+      },
+    });
+    if (!reg) return void res.status(404).json({ error: 'REGISTRATION_NOT_FOUND' });
+    if (reg.userId !== req.user!.id) return void res.status(403).json({ error: 'UNAUTHORIZED' });
+    if (reg.paymentStatus !== 'DUE') return void res.status(409).json({ error: 'NOT_PAYABLE' });
+
+    const svc = new StripeService();
+    const clubId = reg.event.clubId;
+    if (reg.status === 'CONFIRMED') {
+      const amountCents = entryFeeCents(reg.event.price);
+      if (amountCents < 50) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
+      const r = await svc.createRegistrationPaymentIntent({ clubId, userId: req.user!.id, registrationId: regId, kind: 'event', amountCents });
+      return void res.json({ ...r, type: 'payment', stripeAccountId: reg.event.club.stripeAccountId });
+    }
+    const r = await svc.createRegistrationSetupIntent({ clubId, userId: req.user!.id, registrationId: regId, kind: 'event' });
+    return void res.json({ ...r, type: 'setup', stripeAccountId: reg.event.club.stripeAccountId });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Confirmer le paiement côté client (le webhook le fait aussi ; idempotent).
+router.post('/:id/registrations/:regId/confirm-payment', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { stripePaymentIntentId } = req.body;
+    if (!stripePaymentIntentId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await service.confirmRegistrationPayment(asString(req.params.regId), { stripePaymentIntentId: asString(stripePaymentIntentId) }));
+  } catch (err) { handleError(err, res, next); }
 });
 
 export default router;
