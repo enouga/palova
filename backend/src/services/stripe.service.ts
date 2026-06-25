@@ -140,6 +140,74 @@ export class StripeService {
     return { clientSecret: si.client_secret };
   }
 
+  private regMetaKey(kind: 'tournament' | 'event'): 'tournamentRegistrationId' | 'eventRegistrationId' {
+    return kind === 'tournament' ? 'tournamentRegistrationId' : 'eventRegistrationId';
+  }
+
+  async createRegistrationPaymentIntent(params: {
+    clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event'; amountCents: number;
+  }): Promise<{ clientSecret: string }> {
+    const club = await prisma.club.findUnique({
+      where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') throw new Error('STRIPE_NOT_CONFIGURED');
+    const customer = await this.createOrGetCustomer(params.clubId, params.userId);
+    const pi = await stripe.paymentIntents.create(
+      {
+        amount: params.amountCents, currency: 'eur', customer: customer.stripeCustomerId,
+        setup_future_usage: 'off_session',
+        metadata: { [this.regMetaKey(params.kind)]: params.registrationId, clubId: params.clubId },
+      },
+      { stripeAccount: club.stripeAccountId },
+    );
+    if (!pi.client_secret) throw new Error('STRIPE_ERROR');
+    return { clientSecret: pi.client_secret };
+  }
+
+  async createRegistrationSetupIntent(params: {
+    clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event';
+  }): Promise<{ clientSecret: string }> {
+    const club = await prisma.club.findUnique({
+      where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') throw new Error('STRIPE_NOT_CONFIGURED');
+    const customer = await this.createOrGetCustomer(params.clubId, params.userId);
+    const si = await stripe.setupIntents.create(
+      {
+        customer: customer.stripeCustomerId, usage: 'off_session', payment_method_types: ['card'],
+        metadata: { [this.regMetaKey(params.kind)]: params.registrationId, clubId: params.clubId },
+      },
+      { stripeAccount: club.stripeAccountId },
+    );
+    if (!si.client_secret) throw new Error('STRIPE_ERROR');
+    return { clientSecret: si.client_secret };
+  }
+
+  async chargeRegistrationOffSession(params: {
+    clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event'; amountCents: number;
+  }): Promise<string> {
+    const [club, sc] = await Promise.all([
+      prisma.club.findUnique({ where: { id: params.clubId }, select: { stripeAccountId: true } }),
+      prisma.clubStripeCustomer.findUnique({ where: { clubId_userId: { clubId: params.clubId, userId: params.userId } } }),
+    ]);
+    if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+    if (!sc?.defaultPaymentMethodId) throw new Error('NO_CARD_ON_FILE');
+    try {
+      const pi = await stripe.paymentIntents.create(
+        {
+          amount: params.amountCents, currency: 'eur', customer: sc.stripeCustomerId,
+          payment_method: sc.defaultPaymentMethodId, off_session: true, confirm: true,
+          metadata: { [this.regMetaKey(params.kind)]: params.registrationId, clubId: params.clubId },
+        },
+        { stripeAccount: club.stripeAccountId },
+      );
+      return pi.id;
+    } catch (err: any) {
+      if (err?.code === 'card_declined' || err?.code === 'authentication_required') throw new Error('CARD_DECLINED');
+      throw err;
+    }
+  }
+
   async chargeNoShow(params: {
     clubId: string;
     userId: string;
