@@ -631,11 +631,20 @@ export default function BookingModal({
 
                   {cgvAccepted && reservation ? (
                     <div style={{ marginTop: 16 }}>
-                      <StripePaymentStep reservationId={reservation.id} slug={slug ?? ''} clubId={clubId ?? ''}
+                      <StripePaymentStep
                         type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
-                        payShare={(payMode === 'online' && onlineAvailable) ? onlineShare : false}
                         amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
-                        cgvAccepted={cgvAccepted} token={token} beforeSubmit={persistHoldSetup}
+                        cgvAccepted={cgvAccepted} beforeSubmit={persistHoldSetup}
+                        createIntent={async () => {
+                          const intentType = (payMode === 'online' && onlineAvailable) ? 'payment' : 'setup';
+                          const r = await api.createStripeIntent(
+                            slug ?? '',
+                            { reservationId: reservation.id, type: intentType, payShare: intentType === 'payment' ? onlineShare : undefined },
+                            token,
+                          );
+                          return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null };
+                        }}
+                        confirm={async (ids) => { await api.confirmReservation(reservation.id, token, { ...ids, cgvAccepted }); }}
                         onSuccess={() => { settled.current = true; onConfirmed(reservation); }}
                         onCancel={handleClose} />
                     </div>

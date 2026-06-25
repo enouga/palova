@@ -186,6 +186,33 @@ export const api = {
       token,
     ),
 
+  /** Crée un PaymentIntent ou SetupIntent pour une inscription payante. */
+  createRegistrationIntent: (
+    kind: 'tournaments' | 'events',
+    eventId: string,
+    regId: string,
+    token: string,
+  ) =>
+    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
+      `/api/${kind}/${eventId}/registrations/${regId}/intent`,
+      { method: 'POST' },
+      token,
+    ),
+
+  /** Confirme côté serveur le paiement d'une inscription (après webhook Stripe). */
+  confirmRegistrationPayment: (
+    kind: 'tournaments' | 'events',
+    eventId: string,
+    regId: string,
+    stripePaymentIntentId: string,
+    token: string,
+  ) =>
+    request(
+      `/api/${kind}/${eventId}/registrations/${regId}/confirm-payment`,
+      { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) },
+      token,
+    ),
+
   // --- No-show (admin) ---
   chargeNoShow: (
     clubId: string,
@@ -462,7 +489,7 @@ export const api = {
   getTournamentParticipants: (id: string) => request<TournamentParticipant[]>(`/api/tournaments/${id}/participants`),
 
   registerTournament: (id: string, partnerUserId: string, token: string) =>
-    request<TournamentRegistrationRecord>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerUserId }) }, token),
+    request<{ registration: TournamentRegistrationRecord; payment: RegistrationPaymentInfo }>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerUserId }) }, token),
 
   changeTournamentPartner: (id: string, partnerUserId: string, token: string) =>
     request<TournamentRegistrationRecord>(`/api/tournaments/${id}/registration`, { method: 'PATCH', body: JSON.stringify({ partnerUserId }) }, token),
@@ -478,7 +505,7 @@ export const api = {
   getEventParticipants: (id: string) => request<EventParticipant[]>(`/api/events/${id}/participants`),
 
   registerEvent: (id: string, token: string) =>
-    request<EventRegistrationRecord>(`/api/events/${id}/register`, { method: 'POST' }, token),
+    request<{ registration: EventRegistrationRecord; payment: RegistrationPaymentInfo }>(`/api/events/${id}/register`, { method: 'POST' }, token),
 
   cancelEventRegistration: (id: string, token: string) =>
     request<EventRegistrationRecord>(`/api/events/${id}/registration`, { method: 'DELETE' }, token),
@@ -1540,6 +1567,13 @@ export type TournamentStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
 export type RegistrationStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED';
 export type Sex = 'MALE' | 'FEMALE';
 
+/**
+ * Présent dans la réponse de `registerTournament`/`registerEvent`.
+ * null = épreuve gratuite → flux habituel.
+ * non-null → parcours Stripe : 'payment' = place confirmée, 'setup' = liste d'attente.
+ */
+export type RegistrationPaymentInfo = { mode: 'payment' | 'setup' } | null;
+
 export interface Tournament {
   id: string;
   clubId: string;
@@ -1555,6 +1589,7 @@ export interface Tournament {
   registrationDeadline: string;
   maxTeams: number | null;
   entryFee: string | null;
+  requirePrepayment?: boolean; // true = inscription à régler en ligne via Stripe
   status: TournamentStatus;
   confirmedCount: number;
   waitlistCount: number;
@@ -1711,6 +1746,7 @@ export type CreateTournamentBody = {
   registrationDeadline: string;
   maxTeams?: number | null;
   entryFee?: number | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateTournamentBody = Partial<CreateTournamentBody & { status: TournamentStatus }>;
 
@@ -1729,7 +1765,8 @@ export interface ClubEvent {
   endTime: string | null;
   registrationDeadline: string;
   capacity: number | null;
-  price: string | null;       // Decimal sérialisé — informatif, règlement au club
+  price: string | null;            // Decimal sérialisé
+  requirePrepayment?: boolean;     // true = inscription à régler en ligne via Stripe
   memberOnly: boolean;
   status: ClubEventStatus;
   confirmedCount: number;
@@ -1784,6 +1821,7 @@ export type CreateEventBody = {
   price?: number | null;
   memberOnly?: boolean;
   clubSportId?: string | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateEventBody = Partial<CreateEventBody & { status: ClubEventStatus }>;
 

@@ -6,6 +6,9 @@ import {
   notifyEventCancellation,
   notifyEventPromotion,
 } from '../../email/notifications';
+import { PackageService } from '../package.service';
+import { StripeService } from '../stripe.service';
+import { RefundService } from '../refund.service';
 
 // Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
 jest.mock('../../email/notifications');
@@ -13,7 +16,7 @@ jest.mock('../../email/notifications');
 const FUTURE = new Date(Date.now() + 86_400_000); // +24h
 
 function event(overrides: Record<string, unknown> = {}) {
-  return { id: 'e1', clubId: 'club-demo', status: 'PUBLISHED', registrationDeadline: FUTURE, capacity: 12, memberOnly: true, ...overrides };
+  return { id: 'e1', clubId: 'club-demo', status: 'PUBLISHED', registrationDeadline: FUTURE, capacity: 12, memberOnly: true, requirePrepayment: false, price: null, ...overrides };
 }
 
 /** Chemin nominal : membre ACTIVE, transaction passthrough, pas d'inscription existante. */
@@ -39,7 +42,7 @@ describe('EventService.register', () => {
     expect(prismaMock.eventRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ eventId: 'e1', userId: 'user-1', status: 'CONFIRMED' }) }),
     );
-    expect(result.status).toBe('CONFIRMED');
+    expect(result.registration.status).toBe('CONFIRMED');
   });
 
   it('place en WAITLISTED quand l événement est complet', async () => {
@@ -121,13 +124,75 @@ describe('EventService.register', () => {
     prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
     prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as any);
 
-    await expect(service.register('e1', 'user-1')).resolves.toMatchObject({ status: 'CONFIRMED' });
+    await expect(service.register('e1', 'user-1')).resolves.toMatchObject({ registration: { status: 'CONFIRMED' } });
   });
 
   it('un membre BLOCKED est refusé même sur un événement ouvert', async () => {
     prismaMock.clubEvent.findUnique.mockResolvedValue(event({ memberOnly: false }) as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);
     await expect(service.register('e1', 'user-1')).rejects.toThrow('MEMBERSHIP_BLOCKED');
+  });
+});
+
+describe('EventService.register — paiement', () => {
+  let service: EventService;
+  beforeEach(() => { jest.clearAllMocks(); service = new EventService(); });
+
+  it('épreuve payante + place dispo → CONFIRMED + DUE + paymentDeadline, mode payment, pas de notif', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event({ capacity: 12, requirePrepayment: true, price: 15 }) as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.count.mockResolvedValue(3 as any);
+    prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE' } as any);
+
+    const res = await service.register('e1', 'user-1');
+
+    expect(prismaMock.eventRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIRMED', paymentStatus: 'DUE', paymentDeadline: expect.any(Date) }) }),
+    );
+    expect(res.payment).toEqual({ mode: 'payment' });
+    expect(notifyEventRegistration).not.toHaveBeenCalled();
+  });
+
+  it("épreuve payante + complet → WAITLISTED + DUE (deadline null), mode setup, notif liste d'attente", async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event({ capacity: 12, requirePrepayment: true, price: 15 }) as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.count.mockResolvedValue(12 as any);
+    prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r1', status: 'WAITLISTED', paymentStatus: 'DUE' } as any);
+
+    const res = await service.register('e1', 'user-1');
+
+    expect(prismaMock.eventRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'WAITLISTED', paymentStatus: 'DUE', paymentDeadline: null }) }),
+    );
+    expect(res.payment).toEqual({ mode: 'setup' });
+    expect(notifyEventRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('épreuve gratuite → payment null, notif immédiate', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event({ capacity: 12 }) as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE' } as any);
+
+    const res = await service.register('e1', 'user-1');
+    expect(res.payment).toBeNull();
+    expect(notifyEventRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('réinscription payante CONFIRMED → paymentStatus DUE + paymentDeadline sur l update', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue(event({ capacity: 12, requirePrepayment: true, price: 10 }) as any);
+    mockHappyPath();
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({ id: 'r-old', status: 'CANCELLED' } as any);
+    prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r-old', status: 'CONFIRMED', paymentStatus: 'DUE' } as any);
+
+    const res = await service.register('e1', 'user-1');
+
+    expect(prismaMock.eventRegistration.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'r-old' },
+      data: expect.objectContaining({ paymentStatus: 'DUE', paymentDeadline: expect.any(Date) }),
+    }));
+    expect(res.payment).toEqual({ mode: 'payment' });
   });
 });
 
@@ -354,7 +419,7 @@ describe('EventService admin', () => {
   });
 
   it('updateEvent : accepte clubSportId valide appartenant au club', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: null, requirePrepayment: false } as any);
     prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
     prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
     await service.updateEvent('e1', 'club-demo', { clubSportId: 'cs1' });
@@ -367,14 +432,14 @@ describe('EventService admin', () => {
   });
 
   it('updateEvent : refuse un clubSportId qui n appartient pas au club', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: null, requirePrepayment: false } as any);
     prismaMock.clubSport.findFirst.mockResolvedValue(null as any);
     await expect(service.updateEvent('e1', 'club-demo', { clubSportId: 'cs-autre' }))
       .rejects.toThrow('VALIDATION_ERROR');
   });
 
   it('updateEvent : accepte clubSportId null pour retirer le sport', async () => {
-    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: null, requirePrepayment: false } as any);
     prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
     await service.updateEvent('e1', 'club-demo', { clubSportId: null });
     expect(prismaMock.clubSport.findFirst).not.toHaveBeenCalled();
@@ -434,6 +499,219 @@ describe('EventService — notifications email', () => {
     prismaMock.eventRegistration.count.mockResolvedValue(0 as any);
     prismaMock.eventRegistration.create.mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' } as any);
 
-    await expect(service.register('e1', 'user-1')).resolves.toMatchObject({ id: 'r-new' });
+    await expect(service.register('e1', 'user-1')).resolves.toMatchObject({ registration: { id: 'r-new' } });
+  });
+});
+
+describe('EventService.updateEvent — garde-fou paiement', () => {
+  it('refuse requirePrepayment=true si Stripe pas ACTIVE', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: 15, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'NONE' } as any);
+    await expect(new EventService().updateEvent('e1', 'club-demo', { requirePrepayment: true }))
+      .rejects.toThrow('ONLINE_PAYMENT_NOT_ENABLED');
+  });
+
+  it('refuse requirePrepayment=true si price < 0,50 €', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: 0, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any);
+    await expect(new EventService().updateEvent('e1', 'club-demo', { requirePrepayment: true }))
+      .rejects.toThrow('ONLINE_PAYMENT_NOT_ENABLED');
+  });
+
+  it('accepte requirePrepayment=true si Stripe ACTIVE + montant OK', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: 15, requirePrepayment: false } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any);
+    prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1' } as any);
+    await expect(new EventService().updateEvent('e1', 'club-demo', { requirePrepayment: true })).resolves.toBeTruthy();
+  });
+});
+
+describe('EventService.confirmRegistrationPayment', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+  });
+
+  it('DUE → PAID, crée un Payment ONLINE et notifie', async () => {
+    prismaMock.eventRegistration.findUnique
+      .mockResolvedValueOnce({
+        id: 'r1', paymentStatus: 'DUE', userId: 'user-1', event: { clubId: 'club-demo', price: 15 },
+      } as any)
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay1' } as any);
+
+    await new EventService().confirmRegistrationPayment('r1', { stripePaymentIntentId: 'pi_1' });
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ eventRegistrationId: 'r1', method: 'ONLINE', status: 'CAPTURED', stripePaymentIntentId: 'pi_1' }) }),
+    );
+    expect(notifyEventRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('idempotent : si déjà PAID, ne recrée pas de Payment', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      id: 'r1', paymentStatus: 'PAID', userId: 'user-1', event: { clubId: 'club-demo', price: 15 },
+    } as any);
+    await new EventService().confirmRegistrationPayment('r1', { stripePaymentIntentId: 'pi_1' });
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventService.chargePromotedRegistration', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  const reg = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE', userId: 'user-1',
+    eventId: 'e1', event: { clubId: 'club-demo', price: 15 }, ...over,
+  });
+
+  it('débit OK → PAID + Payment + notif promotion', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue(reg() as any);
+    jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession').mockResolvedValue('pi_ok');
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new EventService().chargePromotedRegistration('r1');
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ eventRegistrationId: 'r1', stripePaymentIntentId: 'pi_ok' }) }));
+    expect(notifyEventPromotion).toHaveBeenCalledWith('r1');
+  });
+
+  it('carte refusée → annule la place (CANCELLED, aucun Payment pour r1) et promeut le suivant', async () => {
+    prismaMock.eventRegistration.findUnique
+      .mockResolvedValueOnce(reg() as any)            // 1er appel : reg à débiter
+      .mockResolvedValueOnce(reg({ id: 'r2' }) as any); // récursion sur le suivant promu
+    jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession')
+      .mockRejectedValueOnce(new Error('CARD_DECLINED'))
+      .mockResolvedValueOnce('pi_ok');
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    prismaMock.eventRegistration.findFirst.mockResolvedValue({ id: 'r2' } as any); // suivant WAITLISTED
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new EventService().chargePromotedRegistration('r1');
+
+    // r1 (carte refusée) est passée CANCELLED…
+    expect(prismaMock.eventRegistration.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'r1' }, data: expect.objectContaining({ status: 'CANCELLED' }) }),
+    );
+    // … et aucun Payment n'est persisté pour r1 (seul r2, débité avec succès, en a un).
+    expect(prismaMock.payment.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ eventRegistrationId: 'r1' }) }),
+    );
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ eventRegistrationId: 'r2', stripePaymentIntentId: 'pi_ok' }) }),
+    );
+    expect(notifyEventCancellation).toHaveBeenCalledWith('r1');
+    // Promotion notifiée exactement une fois (pas de pré-notif avant la récursion).
+    expect((notifyEventPromotion as jest.Mock).mock.calls).toEqual([['r2']]);
+  });
+});
+
+describe('EventService.adminPromoteRegistration — paiement', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('place déjà promue ailleurs (updateMany count 0) → aucun débit Stripe', async () => {
+    prismaMock.eventRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'WAITLISTED' } as any); // findClubRegistration
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 0 } as any); // une autre promotion a gagné
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE' } as any);
+    const chargeSpy = jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession');
+
+    await new EventService().adminPromoteRegistration('e1', 'r1', 'club-demo');
+
+    expect(chargeSpy).not.toHaveBeenCalled();
+  });
+
+  it('promotion payante normale → débit off-session exactement une fois', async () => {
+    prismaMock.eventRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'WAITLISTED' } as any);
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.eventRegistration.findUnique
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'DUE', userId: 'user-1', eventId: 'e1', event: { clubId: 'club-demo', price: 15 } } as any)
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    const chargeSpy = jest.spyOn(StripeService.prototype, 'chargeRegistrationOffSession').mockResolvedValue('pi_ok');
+    jest.spyOn(PackageService, 'nextReceiptNo').mockResolvedValue(1 as any);
+
+    await new EventService().adminPromoteRegistration('e1', 'r1', 'club-demo');
+
+    expect(chargeSpy).toHaveBeenCalledTimes(1);
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ eventRegistrationId: 'r1', stripePaymentIntentId: 'pi_ok' }) }),
+    );
+  });
+});
+
+describe('EventService.cancelRegistration — promotion payante', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  function setupPaidCancel() {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'reg-confirmed', status: 'CONFIRMED', paymentStatus: 'NONE' } as any) // inscription du joueur
+      .mockResolvedValueOnce({ id: 'reg-waiting' } as any);                                              // 1er en attente promu
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'reg-confirmed', status: 'CANCELLED' } as any);
+  }
+
+  it('notifie la désinscription mais PAS la promotion (déléguée au débit, pas de doublon)', async () => {
+    setupPaidCancel();
+    const chargeSpy = jest.spyOn(EventService.prototype, 'chargePromotedRegistration').mockResolvedValue(undefined);
+
+    await new EventService().cancelRegistration('e1', 'user-1');
+
+    expect(notifyEventCancellation).toHaveBeenCalledWith('reg-confirmed');
+    expect(notifyEventPromotion).not.toHaveBeenCalled(); // la notif promo part du débit réussi
+    expect(chargeSpy).toHaveBeenCalledWith('reg-waiting');
+  });
+
+  it('un débit qui échoue (post-commit) ne fait pas échouer la désinscription', async () => {
+    setupPaidCancel();
+    jest.spyOn(EventService.prototype, 'chargePromotedRegistration').mockRejectedValue(new Error('BOOM'));
+
+    await expect(new EventService().cancelRegistration('e1', 'user-1')).resolves.toMatchObject({ id: 'reg-confirmed' });
+    expect(notifyEventCancellation).toHaveBeenCalledWith('reg-confirmed');
+  });
+});
+
+describe('EventService.cancelRegistration — remboursement', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('inscription PAID annulée avant clôture → RefundService.refund appelé + REFUNDED', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    prismaMock.payment.findFirst.mockResolvedValue({ id: 'pay1', amount: 15 } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'rf1' } as any);
+
+    await new EventService().cancelRegistration('e1', 'user-1');
+
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay1', clubId: 'club-demo', amount: 15 }));
+    expect(prismaMock.eventRegistration.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'r1' }, data: { paymentStatus: 'REFUNDED' } }));
+  });
+
+  it('inscription NONE (gratuite) → pas de remboursement', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: false } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE' } as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund');
+    await new EventService().cancelRegistration('e1', 'user-1');
+    expect(refundSpy).not.toHaveBeenCalled();
   });
 });

@@ -7,28 +7,25 @@ import { useState, useEffect } from 'react';
 // monter dans le groupe d'Elements alors que useElements() renvoie déjà une
 // instance → confirmPayment() échoue avec « no mounted Payment Element ».
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { api } from '@/lib/api';
 import { getStripe } from '@/lib/stripe';
 import { Btn } from '@/components/ui/atoms';
 
 interface Props {
-  reservationId: string;
-  slug: string;
-  clubId: string;
   type: 'payment' | 'setup';
   amountLabel: string;
-  token: string;
-  /** Régler uniquement sa part (par personne) plutôt que le total — paiement seulement. */
-  payShare?: boolean;
-  /** Acceptation des CGV (paiement/empreinte) — transmise au backend, qui l'exige. */
+  /** Acceptation des CGV (paiement/empreinte) — transmise au backend via confirm, qui l'exige. */
   cgvAccepted?: boolean;
   /** Étape à exécuter juste avant la confirmation Stripe (ex. persister les joueurs/visibilité). */
   beforeSubmit?: () => Promise<void>;
+  /** Crée un PaymentIntent ou SetupIntent et renvoie son client_secret + le compte Connect. */
+  createIntent: () => Promise<{ clientSecret: string; stripeAccountId: string | null }>;
+  /** Confirme le paiement/setup côté backend après validation Stripe. */
+  confirm: (ids: { stripePaymentIntentId?: string; stripeSetupIntentId?: string }) => Promise<void>;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, beforeSubmit, onSuccess, onCancel }: Props) {
+function StripeForm({ type, amountLabel, cgvAccepted, beforeSubmit, confirm, onSuccess, onCancel }: Props) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -56,10 +53,9 @@ function StripeForm({ reservationId, type, amountLabel, token, cgvAccepted, befo
         return;
       }
 
-      await api.confirmReservation(reservationId, token, {
+      await confirm({
         stripePaymentIntentId: type === 'payment' ? result.paymentIntent?.id : undefined,
         stripeSetupIntentId: type === 'setup' ? result.setupIntent?.id : undefined,
-        cgvAccepted,
       });
       onSuccess();
     } catch (e: any) {
@@ -92,17 +88,13 @@ export default function StripePaymentStep(props: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.createStripeIntent(
-      props.slug,
-      { reservationId: props.reservationId, type: props.type, payShare: props.type === 'payment' ? props.payShare : undefined },
-      props.token,
-    )
+    props.createIntent()
       .then((r) => {
         setStripeAccountId(r.stripeAccountId ?? null);
         setClientSecret(r.clientSecret);
       })
       .catch(() => setFetchError('Impossible d\'initialiser le paiement.'));
-  }, [props.slug, props.reservationId, props.type, props.token, props.payShare]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (fetchError) {
     return (
