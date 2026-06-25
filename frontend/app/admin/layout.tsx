@@ -114,6 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
+      { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
     ] },
