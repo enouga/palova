@@ -15,6 +15,7 @@ import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyRese
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
+import { sportHasLevels } from './rating/level';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -334,7 +335,15 @@ export class ReservationService {
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true, attributes: true } } },
+      include: {
+        resource: {
+          select: {
+            clubId: true,
+            attributes: true,
+            clubSport: { select: { sport: { select: { key: true } } } },
+          },
+        },
+      },
     });
     if (!reservation)                     throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)    throw new Error('UNAUTHORIZED');
@@ -346,6 +355,9 @@ export class ReservationService {
     const format = (reservation.resource.attributes as { format?: string } | null)?.format;
     const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
     const priceCents = Math.round(Number(reservation.totalPrice) * 100);
+    // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel :
+    // hors padel, on ignore toute fourchette demandée.
+    const levelOk = sportHasLevels(reservation.resource.clubSport?.sport?.key);
 
     return prisma.$transaction(async (tx) => {
       await tx.reservationParticipant.deleteMany({ where: { reservationId } });
@@ -356,8 +368,8 @@ export class ReservationService {
         where: { id: reservationId },
         data: {
           visibility: setup.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
-          targetLevelMin: setup.targetLevelMin ?? null,
-          targetLevelMax: setup.targetLevelMax ?? null,
+          targetLevelMin: levelOk ? (setup.targetLevelMin ?? null) : null,
+          targetLevelMax: levelOk ? (setup.targetLevelMax ?? null) : null,
         },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

@@ -2065,7 +2065,7 @@ describe('ReservationService', () => {
     const baseReservation = {
       id: 'res-1', userId: 'user-1', status: 'PENDING',
       createdAt: new Date(), totalPrice: 20,
-      resource: { clubId: 'club-1', attributes: { format: 'double' } },
+      resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
     };
 
     it('remplace les participants et met à jour visibilité/niveau', async () => {
@@ -2089,6 +2089,29 @@ describe('ReservationService', () => {
       expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'res-1' },
         data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 }),
+      }));
+    });
+
+    it('hors padel : ignore la fourchette de niveau (targetLevel forcé à null)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseReservation,
+        resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
+      } as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ userId: 'user-2' }] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['user-2'], visibility: 'PUBLIC',
+        targetLevelMin: 3, targetLevelMax: 5,
+      });
+
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'res-1' },
+        data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null }),
       }));
     });
 
