@@ -1,7 +1,8 @@
 'use client';
 import { useState, useRef, CSSProperties } from 'react';
-import { api, ClubReservation, Member, CreateMemberBody, PaymentMethod, AddPaymentBody, Payment } from '@/lib/api';
+import { api, ClubReservation, Member, CreateMemberBody, PaymentMethod, AddPaymentBody, Payment, MemberPackage } from '@/lib/api';
 import { toCents, fmtEuros, deriveSlots, QUICK_METHOD_LABEL, SlotEntry, PaymentIntent, isOptimisticId } from '@/lib/caisse';
+import { pickPackageFor, packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { inkOn } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
@@ -34,6 +35,8 @@ export interface ReservationCollectProps {
   due: number;            // centimes — calculé par le parent (dueOf)
   members: Member[];
   quickMethods: PaymentMethod[];
+  /** soldes prépayés utilisables, indexés par userId (boutons porte-monnaie/carnet). */
+  packagesByUser?: Record<string, MemberPackage[]>;
   clubId: string;
   token: string;
   /** mutation (encaissement OU joueur) réussie → le parent recharge. */
@@ -55,7 +58,7 @@ export interface ReservationCollectProps {
  * encaisse une part « anonyme » (sans nommer le joueur) ET propose de l'associer.
  * Boutons de moyens rapides configurés par le club, « Tout solder » et « Détails ».
  */
-export function ReservationCollect({ reservation, players, due, members, quickMethods, clubId, token, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError }: ReservationCollectProps) {
+export function ReservationCollect({ reservation, players, due, members, quickMethods, packagesByUser, clubId, token, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError }: ReservationCollectProps) {
   const { th } = useTheme();
   const [busyKey, setBusyKey] = useState<string | null>(null);   // verrou des actions JOUEUR (association) uniquement
   const [associatingIndex, setAssociatingIndex] = useState<number | null>(null);
@@ -113,13 +116,14 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
 
   // Encaisse une part : reflète le paiement IMMÉDIATEMENT (patch optimiste du parent),
   // puis envoie l'appel réseau en file. Pas de verrou : le comptoir enchaîne les clics.
-  const pay = (amountCents: number, method: PaymentMethod, participantId?: string) => {
+  const pay = (amountCents: number, method: PaymentMethod, participantId?: string, sourcePackageId?: string) => {
     if (amountCents <= 0) return;
     onOptimisticPay?.({ amountCents, method, participantId: participantId ?? null });
     enqueue(async () => {
       try {
         const body: AddPaymentBody = { amount: amountCents / 100, method };
         if (participantId) body.participantId = participantId;
+        if (sourcePackageId) body.sourcePackageId = sourcePackageId;
         await api.adminAddPayment(clubId, reservation.id, body, token);
       } catch (e) { onError(mapPayError(e, !!participantId)); }
     });
@@ -194,22 +198,37 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
 
   // Boutons de moyens rapides : l'encaissement est optimiste (réaction au clic), donc pas
   // d'état « occupé » par bouton ; seules les actions JOUEUR (association) grisent la rangée.
-  const quickRow = (amountCents: number, participantId?: string) => (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-      {methods.map((m) => {
-        const primary = m === methods[0];
-        return (
-          <button key={m} type="button" disabled={anyBusy} onClick={() => pay(amountCents, m, participantId)}
+  const quickRow = (amountCents: number, participantId?: string, userId?: string, allowEntries = true) => {
+    const pkgs = userId ? (packagesByUser?.[userId] ?? []) : [];
+    // Porte-monnaie d'abord (débit € exact) ; carnet seulement si autorisé (1 entrée = 1 part).
+    const pk = pickPackageFor(pkgs, amountCents, 'WALLET') ?? (allowEntries ? pickPackageFor(pkgs, amountCents, 'ENTRIES') : null);
+    return (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {methods.map((m) => {
+          const primary = m === methods[0];
+          return (
+            <button key={m} type="button" disabled={anyBusy} onClick={() => pay(amountCents, m, participantId)}
+              style={{ height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 11px', border: 'none', borderRadius: 9,
+                cursor: anyBusy ? 'default' : 'pointer', opacity: anyBusy ? 0.5 : 1,
+                background: primary ? th.accent : th.surface, color: primary ? th.onAccent : th.text,
+                boxShadow: primary ? 'none' : `inset 0 0 0 1.5px ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <Icon name={METHOD_ICON[m]} size={13} color={primary ? th.onAccent : th.textMute} />{QUICK_METHOD_LABEL[m]}
+            </button>
+          );
+        })}
+        {pk && (
+          <button key="prepaid" type="button" disabled={anyBusy}
+            onClick={() => pay(amountCents, pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', participantId, pk.id)}
+            title={`Régler avec ${packageLabel(pk)}`}
             style={{ height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 11px', border: 'none', borderRadius: 9,
-              cursor: anyBusy ? 'default' : 'pointer', opacity: anyBusy ? 0.5 : 1,
-              background: primary ? th.accent : th.surface, color: primary ? th.onAccent : th.text,
-              boxShadow: primary ? 'none' : `inset 0 0 0 1.5px ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-            <Icon name={METHOD_ICON[m]} size={13} color={primary ? th.onAccent : th.textMute} />{QUICK_METHOD_LABEL[m]}
+              cursor: anyBusy ? 'default' : 'pointer', opacity: anyBusy ? 0.5 : 1, background: th.surface, color: th.text,
+              boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            <Icon name="ticket" size={13} color={th.accent} />{pk.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
           </button>
-        );
-      })}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   // Avatar neutre numéroté pour un joueur générique non renseigné.
   const genericAvatar = (n: number) => (
@@ -251,7 +270,7 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
         <div key="holder" style={row(i)}>
           {avatar(s.seed, s.firstName, s.lastName, placePaid)}
           <span style={nameStyle}>{s.firstName} {s.lastName}</span>
-          {placePaid ? settledBadge(info.pay ? [info.pay] : [], info.pay?.method) : quickRow(shareAmt)}
+          {placePaid ? settledBadge(info.pay ? [info.pay] : [], info.pay?.method) : quickRow(shareAmt, undefined, reservation.user?.id ?? undefined, true)}
         </div>
       );
     }
@@ -269,7 +288,7 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
         </span>
         {placePaid
           ? settledBadge(ownPays, ownMethod)
-          : quickRow(Math.min(playerRemaining, remaining), s.participantId)}
+          : quickRow(Math.min(playerRemaining, remaining), s.participantId, bills.find((b) => b.id === s.participantId)?.userId, true)}
       </div>
     );
   };
@@ -285,7 +304,7 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
       {wholeRow && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '5px 0', borderTop: slots.length ? `1px dashed ${th.line}` : 'none', marginTop: slots.length ? 4 : 0 }}>
           <span style={{ flex: '1 1 90px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>{wholeLabel} · <span style={{ color: CORAL }}>{fmtEuros(remaining)}</span></span>
-          {quickRow(remaining)}
+          {quickRow(remaining, undefined, reservation.user?.id ?? undefined, false)}
         </div>
       )}
 
