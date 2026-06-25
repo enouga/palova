@@ -101,7 +101,7 @@ describe('BookingModal — page unique', () => {
 
   it('partie ouverte : applyHoldSetup reçoit partnerUserIds + visibility', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     // attendre le hold (contenu interactif gated sur 'held')
     fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
@@ -111,6 +111,18 @@ describe('BookingModal — page unique', () => {
       'res-1', 'jwt-token',
       expect.objectContaining({ partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
     ));
+  });
+
+  it('propose « Partie ouverte » sur un terrain padel multi-joueurs', async () => {
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    await screen.findByText(/Créneau bloqué/);
+    expect(await screen.findByRole('button', { name: /Partie ouverte/ })).toBeInTheDocument();
+  });
+
+  it('cache « Partie ouverte » sur un terrain non-padel', async () => {
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
+    await screen.findByText(/Créneau bloqué/);
+    expect(screen.queryByRole('button', { name: /Partie ouverte/ })).not.toBeInTheDocument();
   });
 
   it('le timer expiré bascule en erreur', async () => {
@@ -151,7 +163,7 @@ describe('BookingModal — page unique', () => {
   it('partie ouverte, niveau OFF : applyHoldSetup sans targetLevelMin/Max', async () => {
     mockClub = { levelSystemEnabled: false };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
@@ -165,7 +177,7 @@ describe('BookingModal — page unique', () => {
   it('partie ouverte, niveau ON et limite active : applyHoldSetup avec targetLevelMin/Max', async () => {
     mockClub = { levelSystemEnabled: true };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4 });
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));

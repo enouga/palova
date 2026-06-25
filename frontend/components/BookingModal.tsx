@@ -184,6 +184,8 @@ export default function BookingModal({
   // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
   const showPartners = !!slug && cap > 1;
+  // Parties ouvertes = padel uniquement → l'option « Partie ouverte » n'est offerte que sur un court padel.
+  const isPadel = sportKey === 'padel';
   const nbPlayers = 1 + partners.length;
   const atCap = nbPlayers >= cap;
   const spotsLeft = Math.max(0, cap - nbPlayers);
@@ -473,6 +475,7 @@ export default function BookingModal({
                       onClear={() => {}} />
                   )}
 
+                  {isPadel && (
                   <div style={{ marginTop: 14 }}>
                     <Segmented<'PRIVATE' | 'PUBLIC'> value={visibility} onChange={setVisibility}
                       options={[{ value: 'PRIVATE', label: 'Partie privée' }, { value: 'PUBLIC', label: 'Partie ouverte' }]} />
@@ -501,6 +504,7 @@ export default function BookingModal({
                       </div>
                     )}
                   </div>
+                  )}
 
                   {nbPlayers > 1 && (
                     <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 10, padding: '7px 11px' }}>
