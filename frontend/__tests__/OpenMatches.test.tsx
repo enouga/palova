@@ -60,6 +60,12 @@ describe('OpenMatches', () => {
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc'));
   });
 
+  it('lit le niveau PADEL (pas le sport préféré)', async () => {
+    mocked.getOpenMatches.mockResolvedValue([] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await waitFor(() => expect(mocked.getMyRating).toHaveBeenCalledWith('abc', 'padel'));
+  });
+
   it('affiche « Quitter » pour un participant non-organisateur', async () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
