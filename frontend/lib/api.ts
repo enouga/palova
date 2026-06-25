@@ -364,6 +364,9 @@ export const api = {
   adminGetMemberPackages: (clubId: string, userId: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, {}, token),
 
+  adminGetActivePackages: (clubId: string, token: string) =>
+    request<ActiveMemberPackage[]>(`/api/clubs/${clubId}/admin/packages/active`, {}, token),
+
   adminGetMemberHistory: (clubId: string, userId: string, token: string) =>
     request<MemberHistory>(`/api/clubs/${clubId}/admin/members/${userId}/history`, {}, token),
 
@@ -1405,6 +1408,9 @@ export interface MemberPackage {
   expiresAt: string | null;
   template: { name: string };
 }
+
+/** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
+export type ActiveMemberPackage = MemberPackage & { userId: string };
 
 export interface CaissePayment extends Payment {
   reservation: {

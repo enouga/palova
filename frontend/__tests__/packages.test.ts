@@ -1,5 +1,5 @@
-import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
-import type { MemberPackage } from '@/lib/api';
+import { packageLabel, isUsable, canCover, prepaidHint, pickPackageFor, indexPackagesByUser } from '@/lib/packages';
+import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
 
 const entries = (remaining: number, expiresAt: string | null = null): MemberPackage => ({
   id: 'p1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: remaining,
@@ -69,5 +69,52 @@ describe('prepaidHint', () => {
     expect(prepaidHint(false, 0, 5200)).toBe(
       'Associez un joueur pour régler avec un carnet ou un porte-monnaie.',
     );
+  });
+});
+
+// --- pickPackageFor / indexPackagesByUser ---
+
+const mkWallet = (over: Partial<MemberPackage> = {}): MemberPackage => ({
+  id: 'pk-w', kind: 'WALLET', creditsTotal: null, creditsRemaining: null,
+  amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null,
+  template: { name: 'Porte-monnaie' }, ...over,
+} as MemberPackage);
+const mkCarnet = (over: Partial<MemberPackage> = {}): MemberPackage => ({
+  id: 'pk-c', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5,
+  amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null,
+  template: { name: 'Carnet' }, ...over,
+} as MemberPackage);
+
+describe('pickPackageFor', () => {
+  it('porte-monnaie choisi s\'il couvre le montant', () => {
+    expect(pickPackageFor([mkWallet()], 1300)?.id).toBe('pk-w');
+  });
+  it('porte-monnaie écarté si le solde ne couvre pas', () => {
+    expect(pickPackageFor([mkWallet({ amountRemaining: '5.00' })], 1300)).toBeNull();
+  });
+  it('carnet toujours choisi tant qu\'il a une entrée', () => {
+    expect(pickPackageFor([mkCarnet()], 999999)?.id).toBe('pk-c');
+  });
+  it('filtre par kind', () => {
+    expect(pickPackageFor([mkCarnet(), mkWallet()], 1300, 'WALLET')?.id).toBe('pk-w');
+  });
+  it('liste vide → null', () => {
+    expect(pickPackageFor([], 1300)).toBeNull();
+  });
+  it('ignore un solde expiré', () => {
+    expect(pickPackageFor([mkWallet({ expiresAt: '2000-01-01T00:00:00.000Z' })], 1300)).toBeNull();
+  });
+});
+
+describe('indexPackagesByUser', () => {
+  it('groupe les soldes actifs par userId', () => {
+    const rows = [
+      { ...mkWallet(), id: 'a', userId: 'u1' },
+      { ...mkCarnet(), id: 'b', userId: 'u1' },
+      { ...mkWallet(), id: 'c', userId: 'u2' },
+    ] as ActiveMemberPackage[];
+    const map = indexPackagesByUser(rows);
+    expect(map['u1'].map((p) => p.id)).toEqual(['a', 'b']);
+    expect(map['u2'].map((p) => p.id)).toEqual(['c']);
   });
 });

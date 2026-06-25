@@ -191,6 +191,31 @@ export class PackageService {
     });
   }
 
+  /**
+   * Soldes ACTIFS (utilisables) de tout le club, avec userId — pour les boutons
+   * d'encaissement rapide par joueur. Même filtre que `listMyPackagesBySlug`.
+   */
+  async listActiveByClub(clubId: string) {
+    const now = new Date();
+    return prisma.memberPackage.findMany({
+      where: {
+        clubId,
+        AND: [
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          { OR: [{ creditsRemaining: { gte: 1 } }, { amountRemaining: { gt: 0 } }] },
+        ],
+      },
+      orderBy: { purchasedAt: 'asc' },
+      select: {
+        id: true, userId: true, kind: true,
+        creditsTotal: true, creditsRemaining: true,
+        amountTotal: true, amountRemaining: true,
+        purchasedAt: true, expiresAt: true,
+        template: { select: { name: true } },
+      },
+    });
+  }
+
   // --- Caisse du jour & tickets CE ---
 
   /** Détail joint pour libeller un paiement en caisse (résa ou vente de package). */

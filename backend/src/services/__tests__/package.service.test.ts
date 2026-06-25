@@ -263,3 +263,20 @@ describe('PackageService — caisse du jour & vouchers', () => {
     }));
   });
 });
+
+describe('PackageService — listActiveByClub', () => {
+  it('interroge les soldes utilisables du club et expose userId', async () => {
+    prismaMock.memberPackage.findMany.mockResolvedValue([
+      { id: 'pk-1', userId: 'u1', kind: 'WALLET', amountRemaining: new Prisma.Decimal(130) } as any,
+    ]);
+    const svc = new PackageService();
+    const rows = await svc.listActiveByClub('club-1');
+    const arg = prismaMock.memberPackage.findMany.mock.calls[0][0] as any;
+    expect(arg.where.clubId).toBe('club-1');
+    expect(arg.select.userId).toBe(true);
+    // filtre expirés + soldes à zéro
+    expect(JSON.stringify(arg.where)).toContain('expiresAt');
+    expect(JSON.stringify(arg.where)).toContain('amountRemaining');
+    expect(rows).toHaveLength(1);
+  });
+});

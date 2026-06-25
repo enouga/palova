@@ -747,6 +747,11 @@ router.patch('/packages/templates/:id', async (req: ClubScopedRequest, res: Resp
   try { res.json(await packageService.updateTemplate(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
 
+// Soldes actifs du club (pour les boutons d'encaissement rapide par joueur).
+router.get('/packages/active', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await packageService.listActiveByClub(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
 // --- Abonnements (plans configurables) ---
 router.get('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.listPlans(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }

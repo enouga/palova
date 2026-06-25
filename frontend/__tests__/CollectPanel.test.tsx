@@ -79,14 +79,28 @@ describe('CollectPanel', () => {
   });
 
   it('paiement par carnet → adminAddPayment en PACK_CREDIT avec sourcePackageId', async () => {
-    (api.adminGetMemberPackages as jest.Mock).mockResolvedValueOnce([
-      { id: 'pk-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5, amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null, template: { name: 'Carnet 10' } },
-    ]);
-    renderPanel({ user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } });
+    const carnet = { id: 'pk-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5, amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null };
+    renderPanel(
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } },
+      { packagesByUser: { u1: [carnet] } },
+    );
     const btn = await screen.findByRole('button', { name: /Carnet/ });
     fireEvent.click(btn);
     await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
       'club-1', 'rv-1', expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pk-1', amount: 52 }), 'tok',
+    ));
+  });
+
+  it('porte-monnaie : encaisse le montant affiché (« / joueur »), pas le total', async () => {
+    const wallet = { id: 'pk-w', kind: 'WALLET', creditsTotal: null, creditsRemaining: null, amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null };
+    renderPanel(
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } },
+      { packagesByUser: { u1: [wallet] } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: '/ joueur 13 €' }));
+    fireEvent.click(screen.getByRole('button', { name: /Porte-monnaie/ }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'WALLET', sourcePackageId: 'pk-w', amount: 13 }), 'tok',
     ));
   });
 
@@ -111,6 +125,26 @@ describe('CollectPanel', () => {
     renderPanel({ participants: [part], payments: [payment], paidAmount: '13.00' }, { due: 1300 });
     expect(screen.getByText(/réglé/)).toBeInTheDocument();
     expect(screen.getByText(/Carte/)).toBeInTheDocument();
+  });
+
+  it('affiche les places libres par défaut jusqu\'à la capacité (comme la page)', () => {
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [part] }); // 1 joueur, capacité 4 → places 2, 3, 4 libres
+    expect(screen.getByText('Joueur 2')).toBeInTheDocument();
+    expect(screen.getByText('Joueur 3')).toBeInTheDocument();
+    expect(screen.getByText('Joueur 4')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Associer un membre/ })).toHaveLength(3);
+  });
+
+  it('« associer » une place libre ajoute un participant', async () => {
+    (api.adminAddReservationParticipant as jest.Mock).mockResolvedValue({ id: 'rv-1' });
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    const members = [{ userId: 'u9', firstName: 'Marie', lastName: 'Curie', email: 'marie@x.fr' }];
+    renderPanel({ participants: [part] }, { members });
+    fireEvent.click(screen.getAllByRole('button', { name: /Associer un membre/ })[0]);
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un membre…'));
+    fireEvent.click(screen.getByText(/Marie Curie/));
+    await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
   });
 
   it('le montant se recalcule quand le payé change (panneau resté ouvert)', () => {

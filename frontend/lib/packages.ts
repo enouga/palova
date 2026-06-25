@@ -1,4 +1,4 @@
-import type { MemberPackage } from '@/lib/api';
+import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
 
 /** Libellé court d'un solde : « Carnet — 7 entrées » / « Porte-monnaie — 53,50 € ». */
 export function packageLabel(p: MemberPackage): string {
@@ -28,4 +28,29 @@ export function prepaidHint(hasPlayer: boolean, usableCount: number, remainingCe
   return hasPlayer
     ? 'Aucun solde prépayé actif pour ce joueur — vendez-lui une offre depuis la Caisse.'
     : 'Associez un joueur pour régler avec un carnet ou un porte-monnaie.';
+}
+
+/**
+ * Choisit le 1ᵉʳ solde utilisable d'un joueur capable de couvrir `amountCents`.
+ * `kind` filtre éventuellement (ENTRIES / WALLET). null si aucun ne convient.
+ */
+export function pickPackageFor(
+  packages: MemberPackage[],
+  amountCents: number,
+  kind?: 'ENTRIES' | 'WALLET',
+  now: Date = new Date(),
+): MemberPackage | null {
+  const amount = amountCents / 100;
+  for (const p of packages) {
+    if (kind && p.kind !== kind) continue;
+    if (canCover(p, amount, now)) return p;
+  }
+  return null;
+}
+
+/** Indexe les soldes actifs (avec userId) par joueur, ordre conservé. */
+export function indexPackagesByUser(rows: ActiveMemberPackage[]): Record<string, ActiveMemberPackage[]> {
+  const map: Record<string, ActiveMemberPackage[]> = {};
+  for (const p of rows) (map[p.userId] ??= []).push(p);
+  return map;
 }
