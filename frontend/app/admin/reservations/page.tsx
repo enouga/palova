@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminResource, OffPeakHours, Member, ClubAdminDetail, Payment, CaissePayment } from '@/lib/api';
+import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminResource, OffPeakHours, Member, ClubAdminDetail, Payment, CaissePayment, MemberPackage } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -13,6 +13,7 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode } from '@/lib/collect';
+import { indexPackagesByUser } from '@/lib/packages';
 import { ReservationFilters, SportFacet } from '@/components/admin/ReservationFilters';
 
 const CORAL = '#ff7a4d';
@@ -64,6 +65,7 @@ export default function AdminReservationsPage() {
   const [peak, setPeak]               = useState<OffPeakHours | null>(null);
   const [tz, setTz]                   = useState('Europe/Paris');
   const [members, setMembers]         = useState<Member[]>([]);
+  const [packagesByUser, setPackagesByUser] = useState<Record<string, MemberPackage[]>>({});
   const [clubDetail, setClubDetail]   = useState<ClubAdminDetail | null>(null);
   const [selected, setSelected]       = useState<ClubReservation | null>(null);   // modale « Détails »
   const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
@@ -89,11 +91,12 @@ export default function AdminReservationsPage() {
     const seq = ++loadSeq.current;
     try {
       setError(null);
-      const [detail, res, resv, mem] = await Promise.all([
+      const [detail, res, resv, mem, pkgs] = await Promise.all([
         api.adminGetClub(clubId, token),
         api.adminGetResources(clubId, token),
         api.adminGetReservations(clubId, date ? { date } : {}, token),
         api.adminGetMembers(clubId, token),
+        api.adminGetActivePackages(clubId, token),
       ]);
       if (seq !== loadSeq.current) return resv.reservations;   // supplanté → ne pas écraser
       setClubDetail(detail);
@@ -101,6 +104,7 @@ export default function AdminReservationsPage() {
       setPeak(detail.offPeakHours ?? null);
       setResources(res.filter((r) => r.isActive));
       setMembers(mem);
+      setPackagesByUser(indexPackagesByUser(pkgs));
       setData(resv);
       loadedOnce.current = true;
       return resv.reservations;
@@ -128,12 +132,20 @@ export default function AdminReservationsPage() {
     setData((cur) => (cur ? { ...cur, reservations: cur.reservations.map((r) => (r.id === updated.id ? updated : r)) } : cur));
   }, []);
 
+  // Recharge les soldes prépayés (après un encaissement par carnet/porte-monnaie,
+  // pour que le solde affiché baisse). Best-effort.
+  const reloadPackages = useCallback(async () => {
+    if (!token || !clubId) return;
+    try { setPackagesByUser(indexPackagesByUser(await api.adminGetActivePackages(clubId, token))); }
+    catch { /* ignore */ }
+  }, [token, clubId]);
+
   // Mutation réussie depuis une ligne : patch local si la résa à jour est fournie, sinon
   // rechargement léger des réservations (cas d'un encaissement, qui ne renvoie que le paiement).
   const onMutated = useCallback(async (updated?: ClubReservation) => {
     if (updated) patchReservation(updated);
-    else await reloadReservations();
-  }, [patchReservation, reloadReservations]);
+    else await Promise.all([reloadReservations(), reloadPackages()]);
+  }, [patchReservation, reloadReservations, reloadPackages]);
 
   // Encaissement OPTIMISTE : reflète le paiement dans la liste DÈS le clic (mise à jour
   // fonctionnelle → les clics rapides s'accumulent sans s'écraser). L'appel réseau et la
@@ -169,9 +181,9 @@ export default function AdminReservationsPage() {
 
   const refreshSelected = useCallback(async (updated?: ClubReservation) => {
     if (updated) { patchReservation(updated); setSelected(updated); return; }
-    const list = await reloadReservations();
+    const [list] = await Promise.all([reloadReservations(), reloadPackages()]);
     setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
-  }, [reloadReservations, patchReservation]);
+  }, [reloadReservations, patchReservation, reloadPackages]);
 
   // Sports distincts présents parmi les terrains (ordre des terrains), pour le sélecteur.
   const sportsPresent: SportFacet[] = (() => {
@@ -307,6 +319,7 @@ export default function AdminReservationsPage() {
         </button>
         {!cancelled && (
           <ReservationCollect reservation={r} players={playersOf(r)} due={due} members={members} quickMethods={quickMethods}
+            packagesByUser={packagesByUser}
             clubId={clubId!} token={token!} onChanged={onMutated}
             onOptimisticPay={(intent) => applyPaymentLocally(r.id, intent)}
             onOptimisticRefund={(ids) => applyRefundLocally(r.id, ids)}
@@ -438,7 +451,7 @@ export default function AdminReservationsPage() {
             })()}
 
             <div style={{ marginTop: 20 }}>
-              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
+              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} packagesByUser={packagesByUser} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
             </div>
 
             {selected.payments.length > 0 && (

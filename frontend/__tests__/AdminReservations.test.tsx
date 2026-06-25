@@ -19,6 +19,7 @@ jest.mock('../lib/api', () => ({
     adminAddReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminGetMemberPackages: jest.fn().mockResolvedValue([]),
+    adminGetActivePackages: jest.fn().mockResolvedValue([]),
     refundPayment: jest.fn().mockResolvedValue({ id: 'rf1' }),
   },
   assetUrl: (u: string | null) => u,
