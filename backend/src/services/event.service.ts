@@ -133,6 +133,26 @@ export class EventService {
     if (priceCents < 50) throw new Error('ONLINE_PAYMENT_NOT_ENABLED');
   }
 
+  /** Libère une place dont le paiement initial a expiré (CONFIRMED+DUE échue) et promeut le suivant. */
+  async releaseExpiredRegistration(regId: string): Promise<void> {
+    const reg = await prisma.eventRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, status: true, paymentStatus: true, eventId: true, event: { select: { requirePrepayment: true } } },
+    });
+    if (!reg || reg.status !== 'CONFIRMED' || reg.paymentStatus !== 'DUE') return;
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${reg.eventId} FOR UPDATE`;
+      return this.cancelAndPromoteTx(tx, reg.eventId, regId, true, reg.event.requirePrepayment);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    if (promotedRegistrationId && reg.event.requirePrepayment) {
+      // Payant : la notif de promotion part du débit réussi (safeCharge), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyEventCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
+  }
+
   /** Le joueur se désinscrit avant la deadline ; promotion auto du 1er en attente. */
   async cancelRegistration(eventId: string, userId: string) {
     const event = await prisma.clubEvent.findUnique({

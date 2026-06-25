@@ -140,6 +140,26 @@ export class TournamentService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
   }
 
+  /** Libère une place dont le paiement initial a expiré (CONFIRMED+DUE échue) et promeut le suivant. */
+  async releaseExpiredRegistration(regId: string): Promise<void> {
+    const reg = await prisma.tournamentRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, status: true, paymentStatus: true, tournamentId: true, tournament: { select: { requirePrepayment: true } } },
+    });
+    if (!reg || reg.status !== 'CONFIRMED' || reg.paymentStatus !== 'DUE') return;
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${reg.tournamentId} FOR UPDATE`;
+      return this.cancelAndPromoteTx(tx, reg.tournamentId, regId, true, reg.tournament.requirePrepayment);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    if (promotedRegistrationId && reg.tournament.requirePrepayment) {
+      // Payant : la notif de promotion part du débit réussi (safeCharge), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyTournamentCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
+  }
+
   /** Le capitaine se désinscrit avant la deadline ; promotion auto du 1er en attente. */
   async cancelRegistration(tournamentId: string, captainUserId: string) {
     const tournament = await prisma.tournament.findUnique({
