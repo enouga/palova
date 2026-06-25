@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage } from '@/lib/api';
 import { capacityLabel } from '@/lib/lessons';
+import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
@@ -93,6 +94,7 @@ export default function AdminPlanningPage() {
   const [tz, setTz]               = useState('Europe/Paris');
   const [peak, setPeak]           = useState<OffPeakHours | null>(null);
   const [quickMethods, setQuickMethods] = useState<PaymentMethod[]>(DEFAULT_QUICK_METHODS);   // moyens rapides configurés par le club
+  const [packagesByUser, setPackagesByUser] = useState<Record<string, MemberPackage[]>>({});
   const [resources, setResources] = useState<AdminResource[]>([]);
   const [reservations, setRes]    = useState<ClubReservation[]>([]);
   const [date, setDate]           = useState(todayISO());
@@ -130,11 +132,12 @@ export default function AdminPlanningPage() {
     setLoading(true);
     try {
       setError(null);
-      const [c, res, resv, mem] = await Promise.all([
+      const [c, res, resv, mem, pkgs] = await Promise.all([
         api.adminGetClub(clubId, token),
         api.adminGetResources(clubId, token),
         api.adminGetReservations(clubId, { date }, token),
         api.adminGetMembers(clubId, token),
+        api.adminGetActivePackages(clubId, token),
       ]);
       setTz(c.timezone);
       setPeak(c.offPeakHours ?? null);
@@ -142,6 +145,7 @@ export default function AdminPlanningPage() {
       setResources(res.filter((r) => r.isActive));
       setRes(resv.reservations);
       setMembers(mem);
+      setPackagesByUser(indexPackagesByUser(pkgs));
       api.adminListCoaches(clubId, token).then((cs) => setCoaches(cs.filter((c) => c.isActive))).catch(() => {});
       return resv.reservations;
     } catch (e) { setError((e as Error).message); return [] as ClubReservation[]; }
@@ -601,6 +605,7 @@ export default function AdminPlanningPage() {
                   players={playersOf(selected)}
                   members={members}
                   quickMethods={quickMethods}
+                  packagesByUser={packagesByUser}
                   clubId={clubId!}
                   token={token!}
                   onChanged={refreshSelected}
