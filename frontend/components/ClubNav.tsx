@@ -10,6 +10,7 @@ import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { clubHasPadel } from '@/lib/sport';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
 
@@ -32,7 +33,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
     { label: 'Club-house', short: 'Club', href: '/', icon: 'home', brand: true, match: (p) => p === '/' || p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
     { label: 'Réserver', href: '/reserver', icon: 'calendar', match: (p) => p.startsWith('/reserver') || p.startsWith('/courts'), show: true },
     { label: 'Mes réservations', short: 'Résas', href: '/me/reservations', icon: 'ticket', match: (p) => p.startsWith('/me/'), show: ready && !!token },
-    { label: 'Parties', href: '/parties', icon: 'users', match: (p) => p.startsWith('/parties'), show: ready && !!token },
+    { label: 'Parties', href: '/parties', icon: 'users', match: (p) => p.startsWith('/parties'), show: ready && !!token && clubHasPadel(club) },
     { label: 'Events', href: '/events', icon: 'trophy', match: (p) => p.startsWith('/events') || p.startsWith('/tournois'), show: true },
     { label: 'Connexion', href: '/login', icon: 'user', match: (p) => p.startsWith('/login'), show: ready && !token },
   ];
