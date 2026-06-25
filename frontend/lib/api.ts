@@ -25,6 +25,7 @@ async function request<T>(
     const body = await res.json().catch(() => ({ error: res.statusText }));
     const err = new Error(body.error || `HTTP ${res.status}`);
     if (body && typeof body.subject === 'string') (err as Error & { subject?: string }).subject = body.subject;
+    if (body && typeof body.count === 'number') (err as Error & { count?: number }).count = body.count;
     throw err;
   }
 
@@ -173,6 +174,9 @@ export const api = {
 
   getStripeLoginLink: (clubId: string, token: string) =>
     request<{ url: string }>(`/api/clubs/${clubId}/admin/stripe/login-link`, {}, token),
+
+  disconnectStripe: (clubId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/stripe/disconnect`, { method: 'POST' }, token),
 
   // --- Stripe Intent (joueur) ---
   createStripeIntent: (
