@@ -53,7 +53,7 @@ export class OpenMatchService {
         visibility: 'PUBLIC',
         status: 'CONFIRMED',
         startTime: { gt: new Date() },
-        resource: { clubId: club.id },
+        resource: { clubId: club.id, clubSport: { sport: { key: 'padel' } } },
       },
       orderBy: { startTime: 'asc' },
       include: {

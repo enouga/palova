@@ -48,7 +48,10 @@ describe('OpenMatchService', () => {
       const out = await service.listOpenMatches('club-demo', 'viewer');
 
       const where = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0].where;
-      expect(where).toEqual(expect.objectContaining({ visibility: 'PUBLIC', status: 'CONFIRMED', resource: { clubId: 'club-demo' } }));
+      expect(where).toEqual(expect.objectContaining({
+        visibility: 'PUBLIC', status: 'CONFIRMED',
+        resource: { clubId: 'club-demo', clubSport: { sport: { key: 'padel' } } },
+      }));
       expect(where.startTime.gt).toBeInstanceOf(Date);
       expect(out[0].maxPlayers).toBe(4);
       expect(out[0].spotsLeft).toBe(2);
@@ -56,6 +59,13 @@ describe('OpenMatchService', () => {
       expect(out[0].viewerIsParticipant).toBe(true);
       expect(out[0].viewerIsOrganizer).toBe(false); // viewer est partenaire, pas organisateur
       expect(out[0].players).toHaveLength(2);
+    });
+
+    it('ne remonte que les parties padel (filtre clubSport.sport.key)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([] as any);
+      await service.listOpenMatches('club-demo', 'viewer');
+      const where = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.resource.clubSport.sport.key).toBe('padel');
     });
 
     it('lève MEMBERSHIP_REQUIRED si le viewer n est pas membre actif', async () => {
