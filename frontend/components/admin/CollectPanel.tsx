@@ -28,6 +28,8 @@ export interface CollectPanelProps {
   token: string;
   /** moyens rapides configurés par le club → mis en avant (mêmes règles que la page). */
   quickMethods?: PaymentMethod[];
+  /** soldes prépayés utilisables, indexés par userId (résolus pour la cible courante). */
+  packagesByUser?: Record<string, MemberPackage[]>;
   /** mutation joueurs/participants réussie → le parent recharge (et met à jour la résa si fournie). */
   onChanged: (updated?: ClubReservation) => void;
   /** un encaissement a été enregistré (le parent peut fermer la modale). */
@@ -35,7 +37,7 @@ export interface CollectPanelProps {
   onError?: (msg: string) => void;
 }
 
-export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, onChanged, onPaid, onError }: CollectPanelProps) {
+export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, onError }: CollectPanelProps) {
   const { th } = useTheme();
 
   // Moyens mis en avant (boutons pleins) = ceux configurés par le club, dans le même ordre que
@@ -47,8 +49,6 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherRef, setVoucherRef] = useState('');
   const [voucherIssuer, setVoucherIssuer] = useState('');
-  const [selPackages, setSelPackages] = useState<MemberPackage[]>([]);
-  const [pkgLoading, setPkgLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);   // participant en cours de remplacement (sélecteur inline)
 
@@ -63,17 +63,6 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id, reservation.paidAmount]);
 
-  // Carnets/porte-monnaie utilisables du joueur de la résa.
-  const userId = reservation.user?.id ?? null;
-  useEffect(() => {
-    if (!userId) { setSelPackages([]); return; }
-    setPkgLoading(true);
-    api.adminGetMemberPackages(clubId, userId, token)
-      .then((pkgs) => setSelPackages(pkgs.filter((p) => isUsable(p))))
-      .catch(() => setSelPackages([]))
-      .finally(() => setPkgLoading(false));
-  }, [userId, clubId, token]);
-
   const bills = reservation.participants ?? [];
   const activePart = payParticipantId ? bills.find((p) => p.id === payParticipantId) ?? null : null;
   const maxPayable = activePart ? toCents(activePart.outstanding) : remaining;
@@ -83,6 +72,10 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
   // Soldé = il y a un prix dû et il est entièrement couvert (les events libres, due=0, restent encaissables).
   const settled = due > 0 && remaining <= 0;
+
+  // Soldes prépayés utilisables de la cible courante (joueur sélectionné, sinon titulaire).
+  const targetUserId = activePart?.userId ?? reservation.user?.id ?? null;
+  const selPackages = (targetUserId ? (packagesByUser?.[targetUserId] ?? []) : []).filter((p) => isUsable(p));
 
   const payNow = async (method: PaymentMethod) => {
     const amount = Number(payAmount);
@@ -105,12 +98,12 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   };
 
   const payWithPackage = async (pkg: MemberPackage) => {
-    const rest = activePart ? toCents(activePart.outstanding) / 100 : remaining / 100;
-    if (rest <= 0) { fail('Rien à encaisser.'); return; }
+    const amount = Number(payAmount);
+    if (!amount || amount <= 0) { fail('Montant invalide.'); return; }
     setBusy(true);
     try {
       await api.adminAddPayment(clubId, reservation.id, {
-        amount: rest,
+        amount,
         method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
         sourcePackageId: pkg.id,
         participantId: payParticipantId ?? undefined,
@@ -118,7 +111,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
       setPayParticipantId(null);
       onChanged(); onPaid?.();
     } catch (e) {
-      fail((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.' : (e as Error).message);
+      fail((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.'
+        : (e as Error).message === 'PAYMENT_EXCEEDS_DUE' ? (payParticipantId ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le prix de la réservation.')
+        : (e as Error).message);
     } finally { setBusy(false); }
   };
 
@@ -186,8 +181,6 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   };
   const createAndAssign = (body: CreateMemberBody) => createThen(body, assignPlayer);
   const createAndAddParticipant = (body: CreateMemberBody) => createThen(body, addParticipant);
-
-  const coverAmt = activePart ? toCents(activePart.outstanding) / 100 : remaining / 100;
 
   // ── tokens de style partagés ───────────────────────────────────────────
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
@@ -342,6 +335,18 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                 {METHOD_LABEL[m]}
               </button>
             ))}
+            {selPackages.map((p) => {
+              const ok = !cannotPay && canCover(p, amountC / 100);
+              return (
+                <button key={p.id} type="button" disabled={!ok} title={ok ? `Régler avec ${packageLabel(p)}` : 'Solde insuffisant'}
+                  onClick={() => payWithPackage(p)}
+                  style={{ flex: '1 1 130px', minWidth: 124, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
+                    cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.45, background: th.accent, color: th.onAccent,
+                    fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none' }}>
+                  <Icon name="ticket" size={16} color={th.onAccent} />{packageLabel(p)}
+                </button>
+              );
+            })}
           </div>
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {secondaryMethods.map((m) => (
@@ -371,25 +376,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
             </div>
           )}
 
-          {/* Carnets / porte-monnaie prépayés */}
-          {selPackages.length > 0 ? (
-            <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {selPackages.map((p) => {
-                const ok = canCover(p, coverAmt);
-                return (
-                  <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
-                    title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${ok ? th.accent : th.line}`, borderRadius: 10, padding: '9px 13px',
-                      cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                    <Icon name="ticket" size={15} color={ok ? th.accent : th.textMute} />{packageLabel(p)}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (!pkgLoading && (() => {
-            const msg = prepaidHint(!!reservation.user, selPackages.length, maxPayable);
+          {/* Repli : aucun solde prépayé utilisable pour la cible */}
+          {selPackages.length === 0 && (() => {
+            const msg = prepaidHint(!!targetUserId, 0, maxPayable);
             return msg ? <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div> : null;
-          })())}
+          })()}
         </div>
       )}
     </div>

@@ -79,14 +79,28 @@ describe('CollectPanel', () => {
   });
 
   it('paiement par carnet → adminAddPayment en PACK_CREDIT avec sourcePackageId', async () => {
-    (api.adminGetMemberPackages as jest.Mock).mockResolvedValueOnce([
-      { id: 'pk-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5, amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null, template: { name: 'Carnet 10' } },
-    ]);
-    renderPanel({ user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } });
+    const carnet = { id: 'pk-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5, amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null };
+    renderPanel(
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } },
+      { packagesByUser: { u1: [carnet] } },
+    );
     const btn = await screen.findByRole('button', { name: /Carnet/ });
     fireEvent.click(btn);
     await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
       'club-1', 'rv-1', expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pk-1', amount: 52 }), 'tok',
+    ));
+  });
+
+  it('porte-monnaie : encaisse le montant affiché (« / joueur »), pas le total', async () => {
+    const wallet = { id: 'pk-w', kind: 'WALLET', creditsTotal: null, creditsRemaining: null, amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null };
+    renderPanel(
+      { user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } },
+      { packagesByUser: { u1: [wallet] } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: '/ joueur 13 €' }));
+    fireEvent.click(screen.getByRole('button', { name: /Porte-monnaie/ }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'WALLET', sourcePackageId: 'pk-w', amount: 13 }), 'tok',
     ));
   });
 
