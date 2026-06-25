@@ -1,4 +1,4 @@
-import { packageLabel, isUsable, canCover, prepaidHint, pickPackageFor, indexPackagesByUser, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
+import { packageLabel, packageParts, isUsable, canCover, prepaidHint, pickPackageFor, indexPackagesByUser, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
 import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
 
 const entries = (remaining: number, expiresAt: string | null = null): MemberPackage => ({
@@ -20,6 +20,18 @@ describe('packageLabel', () => {
   });
   it('libelle un porte-monnaie avec son solde €', () => {
     expect(packageLabel(wallet('53.50'))).toBe('Porte-monnaie — 53,50 €');
+  });
+});
+
+describe('packageParts', () => {
+  it('décompose un carnet : icône ticket, label Carnet, valeur en entrées', () => {
+    expect(packageParts(entries(7))).toEqual({ icon: 'ticket', label: 'Carnet', value: '7 entrées' });
+  });
+  it('accorde le singulier d\'une entrée', () => {
+    expect(packageParts(entries(1))).toEqual({ icon: 'ticket', label: 'Carnet', value: '1 entrée' });
+  });
+  it('décompose un porte-monnaie : icône wallet, label Porte-monnaie, solde € à la française', () => {
+    expect(packageParts(wallet('53.50'))).toEqual({ icon: 'wallet', label: 'Porte-monnaie', value: '53,50 €' });
   });
 });
 

@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
-import { packageLabel } from '@/lib/packages';
+import { packageParts } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
@@ -16,6 +17,7 @@ import DateSelector from '@/components/DateSelector';
 import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
+import { StatPill } from '@/components/ui/StatPill';
 import { SportPicker } from '@/components/reserve/SportPicker';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
@@ -184,20 +186,20 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.5, margin: '16px 20px 0' }}>{club.description}</p>
         )}
 
-        {(myPackages.length > 0 || mySubs.length > 0) && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 20px 0' }}>
-            {myPackages.map((p) => (
-              <Chip key={p.id}>{packageLabel(p)}</Chip>
-            ))}
+        {(myPackages.length > 0 || mySubs.length > 0 || quotaStatus) && (
+          // Soldes, abonnements et quotas en colonnes de MÊME largeur : chaque pastille
+          // remplit sa cellule (fill). Grille auto-fill → une seule ligne tant qu'il y a la
+          // place, repli propre en colonnes égales sur écran étroit (jamais de débordement).
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, margin: '14px 20px 0' }}>
+            {myPackages.map((p) => {
+              const parts = packageParts(p);
+              return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} fill />;
+            })}
             {mySubs.map((s) => (
-              <Chip key={s.id} tone="accent" icon="check">Abonné {s.sportKeys.join('/')}{s.offPeakOnly ? ' · heures creuses' : ''}</Chip>
+              <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné" fill
+                value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
             ))}
-          </div>
-        )}
-
-        {quotaStatus && (
-          <div style={{ margin: '14px 20px 0' }}>
-            <QuotaStatus status={quotaStatus} />
+            <QuotaStatus status={quotaStatus} inline fill />
           </div>
         )}
 

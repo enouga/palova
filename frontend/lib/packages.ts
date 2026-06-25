@@ -1,4 +1,5 @@
 import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
+import type { IconName } from '@/components/ui/Icon';
 
 /** Libellé court d'un solde : « Carnet — 7 entrées » / « Porte-monnaie — 53,50 € ». */
 export function packageLabel(p: MemberPackage): string {
@@ -7,6 +8,22 @@ export function packageLabel(p: MemberPackage): string {
     return `Carnet — ${n} entrée${n > 1 ? 's' : ''}`;
   }
   return `Porte-monnaie — ${Number(p.amountRemaining ?? 0).toFixed(2).replace('.', ',')} €`;
+}
+
+/**
+ * Décompose un solde pour un affichage structuré (icône + label + valeur) — alimente `StatPill`.
+ * Même formatage des montants que `packageLabel`, mais label et valeur séparés.
+ */
+export function packageParts(p: MemberPackage): { icon: IconName; label: string; value: string } {
+  if (p.kind === 'ENTRIES') {
+    const n = p.creditsRemaining ?? 0;
+    return { icon: 'ticket', label: 'Carnet', value: `${n} entrée${n > 1 ? 's' : ''}` };
+  }
+  return {
+    icon: 'wallet',
+    label: 'Porte-monnaie',
+    value: `${Number(p.amountRemaining ?? 0).toFixed(2).replace('.', ',')} €`,
+  };
 }
 
 /** Un package est utilisable s'il a du solde et n'est pas expiré. */
