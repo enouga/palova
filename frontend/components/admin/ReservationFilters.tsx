@@ -3,6 +3,7 @@ import { CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { DateField } from '@/components/ui/DateField';
 import { SportPicker } from '@/components/reserve/SportPicker';
+import { PeriodMode } from '@/lib/collect';
 
 export interface SportFacet { key: string; name: string }
 
@@ -12,7 +13,7 @@ export interface ReservationFiltersProps {
   /** Sports présents le jour donné ; le sélecteur n'est rendu que si length > 1. */
   sports: SportFacet[];
   selectedSports: Set<string>; onSports: (keys: string[]) => void;
-  upcoming: boolean; onUpcoming: (v: boolean) => void;
+  period: PeriodMode; onPeriod: (p: PeriodMode) => void;
   dueOnly: boolean; onDueOnly: (v: boolean) => void;
   /** Nombre de filtres non par défaut (pour « Réinitialiser »). */
   activeCount: number; onReset: () => void;
@@ -51,8 +52,12 @@ export function ReservationFilters(p: ReservationFiltersProps) {
       {/* ── Ligne 2 : à venir | tout · à encaisser · jour · réinitialiser ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div role="radiogroup" aria-label="Période" style={{ display: 'inline-flex', border: `1px solid ${th.line}`, borderRadius: 999, overflow: 'hidden', background: th.surface }}>
-          <button type="button" role="radio" aria-checked={p.upcoming} onClick={() => p.onUpcoming(true)} style={segBtn(p.upcoming)}>À venir</button>
-          <button type="button" role="radio" aria-checked={!p.upcoming} onClick={() => p.onUpcoming(false)} style={{ ...segBtn(!p.upcoming), borderLeft: `1px solid ${th.line}` }}>Tout le jour</button>
+          {(([['next', 'Prochain créneau'], ['upcoming', 'À venir'], ['all', 'Tout le jour']]) as [PeriodMode, string][]).map(([mode, label], i) => (
+            <button key={mode} type="button" role="radio" aria-checked={p.period === mode} onClick={() => p.onPeriod(mode)}
+              style={i === 0 ? segBtn(p.period === mode) : { ...segBtn(p.period === mode), borderLeft: `1px solid ${th.line}` }}>
+              {label}
+            </button>
+          ))}
         </div>
 
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, color: th.text }}>

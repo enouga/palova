@@ -96,3 +96,28 @@ export function isUpcoming(rv: { endTime: string }, nowMs: number | null): boole
   if (nowMs === null) return true;
   return new Date(rv.endTime).getTime() >= nowMs;
 }
+
+/** Modes du sélecteur de période de la page Encaissement. */
+export type PeriodMode = 'next' | 'upcoming' | 'all';
+
+/**
+ * Fenêtre « prochain créneau » en ms epoch : [now − graceMin, T].
+ * T = plus petit start ≥ now parmi `starts` (le prochain départ réel), sinon now.
+ * La borne basse couvre les joueurs en retard (créneau commencé il y a ≤ graceMin).
+ */
+export function nextSlotWindow(starts: number[], nowMs: number, graceMin = 20): [number, number] {
+  const low = nowMs - graceMin * 60_000;
+  const future = starts.filter((s) => s >= nowMs);
+  const high = future.length ? Math.min(...future) : nowMs;
+  return [low, high];
+}
+
+/**
+ * La réservation démarre-t-elle dans la fenêtre [low, high] (bornes incluses) ?
+ * `window === null` (heure courante pas encore connue) → true (pas de masquage avant hydratation).
+ */
+export function isNextSlot(rv: { startTime: string }, window: [number, number] | null): boolean {
+  if (!window) return true;
+  const t = new Date(rv.startTime).getTime();
+  return t >= window[0] && t <= window[1];
+}

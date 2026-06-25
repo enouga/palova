@@ -1,4 +1,4 @@
-import { coverHash, coverGradient, coverInitials } from '../lib/clubCover';
+import { coverHash, coverBackground, coverInitials, coverPhoto, COVER_PHOTOS } from '../lib/clubCover';
 
 describe('coverHash', () => {
   it('est déterministe', () => {
@@ -6,29 +6,37 @@ describe('coverHash', () => {
   });
 });
 
-describe('coverGradient', () => {
+describe('coverBackground', () => {
   it('est déterministe pour un même (slug, accent)', () => {
-    expect(coverGradient('demo', '#d6ff3f')).toEqual(coverGradient('demo', '#d6ff3f'));
+    expect(coverBackground('demo', '#d6ff3f')).toBe(coverBackground('demo', '#d6ff3f'));
   });
 
-  it("from = la couleur d'accent normalisée en hex", () => {
-    expect(coverGradient('demo', '#d6ff3f').from.toLowerCase()).toBe('#d6ff3f');
+  it('produit un mesh (plusieurs radial-gradient + base linéaire, en hsla)', () => {
+    const bg = coverBackground('demo', '#d6ff3f');
+    expect((bg.match(/radial-gradient/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(bg).toContain('linear-gradient');
+    expect(bg).toContain('hsla(');
   });
 
-  it('renvoie un angle multiple de 45 dans [0,360)', () => {
-    const { angle } = coverGradient('demo', '#d6ff3f');
-    expect(angle % 45).toBe(0);
-    expect(angle).toBeGreaterThanOrEqual(0);
-    expect(angle).toBeLessThan(360);
-  });
-
-  it('distingue des slugs différents (≥2 dégradés distincts sur 6 slugs)', () => {
-    const css = ['a', 'b', 'c', 'd', 'e', 'f'].map((s) => JSON.stringify(coverGradient(s, '#d6ff3f')));
-    expect(new Set(css).size).toBeGreaterThanOrEqual(2);
+  it('distingue des slugs différents (≥2 fonds distincts sur 6 slugs)', () => {
+    const set = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map((s) => coverBackground(s, '#d6ff3f')));
+    expect(set.size).toBeGreaterThanOrEqual(2);
   });
 
   it('accent invalide → ne jette pas (repli gris)', () => {
-    expect(() => coverGradient('demo', 'pas-une-couleur')).not.toThrow();
+    expect(() => coverBackground('demo', 'pas-une-couleur')).not.toThrow();
+  });
+});
+
+describe('coverPhoto', () => {
+  it('est déterministe et renvoie un chemin de la banque', () => {
+    expect(coverPhoto('demo')).toBe(coverPhoto('demo'));
+    expect(COVER_PHOTOS).toContain(coverPhoto('demo'));
+  });
+
+  it('distribue : ≥2 photos distinctes sur 8 slugs variés', () => {
+    const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    expect(new Set(seeds.map(coverPhoto)).size).toBeGreaterThanOrEqual(2);
   });
 });
 

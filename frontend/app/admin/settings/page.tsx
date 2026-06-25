@@ -233,12 +233,12 @@ export default function AdminSettingsPage() {
           <div>
             <span style={label}>Image de couverture</span>
             <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '0 0 10px' }}>
-              Illustre votre club dans l'annuaire des clubs. Sans photo, une illustration est générée automatiquement à partir de votre couleur d'accent.
+              Illustre votre club dans l'annuaire des clubs. Sans photo importée, une belle photo de court est utilisée automatiquement par défaut.
             </p>
             <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: uploading ? 0.5 : 1 }}>
               <ClubCover club={{
                 name: club.name, slug: club.slug, accentColor: club.accentColor,
-                coverImageUrl: club.coverImageUrl, sportIcons: [],
+                coverImageUrl: club.coverImageUrl,
               }} />
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

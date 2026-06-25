@@ -15,7 +15,7 @@ export function ClubCard({ club }: { club: ClubSummary }) {
         <div style={{ position: 'relative' }}>
           <ClubCover club={{
             name: club.name, slug: club.slug, accentColor: club.accentColor,
-            coverImageUrl: club.coverImageUrl, sportIcons: club.sports.map((s) => s.icon),
+            coverImageUrl: club.coverImageUrl,
           }} />
           {/* pastille couleur du club */}
           <span style={{ position: 'absolute', top: 12, right: 12, width: 14, height: 14, borderRadius: '50%', background: club.accentColor, boxShadow: `0 0 0 2px ${th.surface}` }} />
