@@ -1,11 +1,14 @@
 'use client';
 
+import { Fragment } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { inkOn } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 import { CalendarEntry, monthGrid, monthLabel, agendaKindMeta } from '@/lib/calendar';
 
 const DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
 const GAP = 4;
+const RIBBON_H = 7;
 
 export function MonthCalendar({
   year, month, byDay, selected, todayKey, onSelect, onNavigate,
@@ -45,15 +48,15 @@ export function MonthCalendar({
         {navBtn('Mois suivant', 'chevR', 1)}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10, fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: resaColor }} />Réservation
+      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '6px 16px', marginTop: 10, fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ minWidth: 15, height: 11, borderRadius: 4, background: resaColor }} />Réservation
         </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 14, height: 5, borderRadius: 3, background: tournamentColor }} />Tournoi
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 16, height: RIBBON_H, borderRadius: RIBBON_H / 2, background: tournamentColor }} />Tournoi
         </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 14, height: 5, borderRadius: 3, background: eventColor }} />Event
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 16, height: RIBBON_H, borderRadius: RIBBON_H / 2, background: eventColor }} />Event
         </span>
       </div>
 
@@ -69,32 +72,51 @@ export function MonthCalendar({
           const tournament = entries.find((e) => e.kind === 'tournament');
           const event = entries.find((e) => e.kind === 'event');
           const barCount = (tournament ? 1 : 0) + (event ? 1 : 0);
-          const dotsBottom = barCount >= 2 ? 19 : barCount === 1 ? 13 : 6;
-          // Barre continue multi-jours (tournoi/event) : déborde sur le gap, arrondie aux extrémités.
-          const multiDayBar = (e: Extract<CalendarEntry, { dayKeys: string[] }>, bottom: number, color: string, marker: string) => (
-            <span key={marker} data-marker={marker}
-              style={{
-                position: 'absolute', bottom, height: 5, background: color, opacity: e.past ? 0.4 : 1,
-                left: cell.key === e.startKey ? 6 : -(GAP / 2),
-                right: cell.key === e.endKey ? 6 : -(GAP / 2),
-                borderTopLeftRadius: cell.key === e.startKey ? 3 : 0,
-                borderBottomLeftRadius: cell.key === e.startKey ? 3 : 0,
-                borderTopRightRadius: cell.key === e.endKey ? 3 : 0,
-                borderBottomRightRadius: cell.key === e.endKey ? 3 : 0,
-              }} />
-          );
+          // Le pavé-compteur se pose au-dessus des rubans (0, 1 ou 2 empilés).
+          const chipBottom = barCount >= 2 ? 25 : barCount === 1 ? 16 : 6;
           const isToday = cell.key === todayKey;
           const isSelected = cell.key === selected;
           const dim = !cell.inMonth;
+          // Anneau du « bouton de départ » d'un ruban : couleur du fond de la cellule pour le détacher.
+          const knobRing = isSelected ? th.ink : dim ? 'transparent' : th.surface;
+          // Ruban continu multi-jours (tournoi/event) : déborde sur le gap, arrondi aux extrémités,
+          // + petit bouton à icône posé sur le jour de début pour identifier le type.
+          const multiDayBar = (
+            e: Extract<CalendarEntry, { dayKeys: string[] }>, bottom: number, color: string,
+            marker: string, icon: 'trophy' | 'bolt',
+          ) => (
+            <Fragment key={marker}>
+              <span data-marker={marker}
+                style={{
+                  position: 'absolute', bottom, height: RIBBON_H, background: color, opacity: e.past ? 0.4 : 1,
+                  left: cell.key === e.startKey ? 6 : -(GAP / 2),
+                  right: cell.key === e.endKey ? 6 : -(GAP / 2),
+                  borderTopLeftRadius: cell.key === e.startKey ? RIBBON_H / 2 : 0,
+                  borderBottomLeftRadius: cell.key === e.startKey ? RIBBON_H / 2 : 0,
+                  borderTopRightRadius: cell.key === e.endKey ? RIBBON_H / 2 : 0,
+                  borderBottomRightRadius: cell.key === e.endKey ? RIBBON_H / 2 : 0,
+                }} />
+              {cell.key === e.startKey && (
+                <span aria-hidden
+                  style={{
+                    position: 'absolute', left: 4, bottom: bottom - 4, width: 15, height: 15, borderRadius: '50%',
+                    background: color, opacity: e.past ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 0 0 1.5px ${knobRing}`,
+                  }}>
+                  <Icon name={icon} size={9} color={inkOn(color)} />
+                </span>
+              )}
+            </Fragment>
+          );
           return (
             <button key={cell.key} data-day-key={cell.key} data-today={isToday ? 'true' : undefined}
               aria-pressed={isSelected} aria-label={`Jour ${cell.key}`}
               onClick={() => onSelect(cell.key)}
               style={{
-                position: 'relative', minHeight: 52, borderRadius: 12, border: 'none', cursor: 'pointer',
+                position: 'relative', minHeight: 58, borderRadius: 12, border: 'none', cursor: 'pointer',
                 padding: '7px 6px 12px', textAlign: 'left', verticalAlign: 'top',
                 background: isSelected ? th.ink : dim ? 'transparent' : th.surface,
-                boxShadow: isSelected ? 'none' : isToday ? `inset 0 0 0 1.5px ${th.accent}` : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
+                boxShadow: isSelected ? 'none' : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
                 WebkitTapHighlightColor: 'transparent',
               }}>
               <span style={{
@@ -103,19 +125,24 @@ export function MonthCalendar({
               }}>
                 {cell.day}
               </span>
+              {isToday && !isSelected && (
+                <span aria-hidden style={{ position: 'absolute', top: 8, right: 8, width: 6, height: 6, borderRadius: '50%', background: th.accent }} />
+              )}
               {reservations.length > 0 && (
-                <span style={{ position: 'absolute', left: 6, bottom: dotsBottom, display: 'flex', gap: 3, alignItems: 'center' }}>
-                  {reservations.slice(0, 3).map((e) => (
-                    <span key={e.id} data-marker="reservation"
-                      style={{ width: 5, height: 5, borderRadius: '50%', background: resaColor, opacity: e.past ? 0.4 : 1 }} />
-                  ))}
-                  {reservations.length > 3 && (
-                    <span style={{ fontFamily: th.fontUI, fontSize: 9, color: th.textMute }}>+{reservations.length - 3}</span>
-                  )}
+                <span data-marker="reservation"
+                  style={{
+                    position: 'absolute', right: 6, bottom: chipBottom,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 17, height: 16, padding: '0 5px', borderRadius: 7,
+                    background: resaColor, color: inkOn(resaColor),
+                    fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, lineHeight: 1,
+                    opacity: reservations.every((e) => e.past) ? 0.4 : 1,
+                  }}>
+                  {reservations.length}
                 </span>
               )}
-              {tournament && multiDayBar(tournament, 5, tournamentColor, 'tournament')}
-              {event && multiDayBar(event, tournament ? 11 : 5, eventColor, 'event')}
+              {tournament && multiDayBar(tournament, 6, tournamentColor, 'tournament', 'trophy')}
+              {event && multiDayBar(event, tournament ? 15 : 6, eventColor, 'event', 'bolt')}
             </button>
           );
         })}

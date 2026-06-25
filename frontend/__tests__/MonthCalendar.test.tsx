@@ -72,6 +72,23 @@ describe('MonthCalendar', () => {
     expect(cell.querySelector('[data-marker="reservation"]')).toBeInTheDocument();
   });
 
+  it('résume les réservations d un jour en un seul pavé-compteur portant le total', () => {
+    const mkRes = (id: string, start: string, end: string): MyReservation => ({ ...reservation, id, startTime: start, endTime: end });
+    const multi = entriesByDay(buildCalendarEntries(
+      [
+        mkRes('r-a', '2026-06-15T08:00:00.000Z', '2026-06-15T09:00:00.000Z'),
+        mkRes('r-b', '2026-06-15T09:00:00.000Z', '2026-06-15T10:00:00.000Z'),
+        mkRes('r-c', '2026-06-15T10:00:00.000Z', '2026-06-15T11:00:00.000Z'),
+      ],
+      [], [], [], new Date('2026-06-10T12:00:00.000Z'),
+    ));
+    const { container } = renderCal({ byDay: multi });
+    const cell = container.querySelector('[data-day-key="2026-06-15"]')!;
+    const chips = cell.querySelectorAll('[data-marker="reservation"]');
+    expect(chips).toHaveLength(1);            // un seul pavé, pas N micro-dots
+    expect(chips[0]).toHaveTextContent('3');  // le total des réservations du jour
+  });
+
   it('étire la barre tournoi sur tous les jours du tournoi', () => {
     const { container } = renderCal();
     for (const key of ['2026-06-13', '2026-06-14']) {
