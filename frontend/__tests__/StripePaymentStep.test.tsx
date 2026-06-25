@@ -22,24 +22,20 @@ jest.mock('@/lib/stripe', () => ({
   getStripe: jest.fn().mockResolvedValue(null),
 }));
 
+// StripePaymentStep no longer calls api directly — mocked for safety (assetUrl per repo convention).
 jest.mock('@/lib/api', () => ({
   api: {
-    createStripeIntent: jest.fn().mockResolvedValue({ clientSecret: 'pi_test_secret', type: 'payment' }),
-    confirmReservation: jest.fn().mockResolvedValue({ id: 'r-1', status: 'CONFIRMED' }),
+    assetUrl: (path: string) => path,
   },
 }));
-
-import { api } from '@/lib/api';
 
 beforeEach(() => jest.clearAllMocks());
 
 const defaultProps = {
-  reservationId: 'r-1',
-  slug: 'test-club',
-  clubId: 'club-1',
   type: 'payment' as const,
   amountLabel: '25,00 €',
-  token: 'tok-1',
+  createIntent: jest.fn().mockResolvedValue({ clientSecret: 'pi_test_secret', stripeAccountId: null }),
+  confirm: jest.fn().mockResolvedValue(undefined),
   onSuccess: jest.fn(),
   onCancel: jest.fn(),
 };
@@ -51,15 +47,19 @@ describe('StripePaymentStep', () => {
     expect(screen.getAllByText(/25,00/).length).toBeGreaterThan(0);
   });
 
-  it('appelle onSuccess après un paiement réussi', async () => {
+  it('appelle confirm puis onSuccess après un paiement réussi', async () => {
     mockConfirmPayment.mockResolvedValue({ paymentIntent: { status: 'succeeded', id: 'pi_abc' }, error: null });
-    (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'r-1', status: 'CONFIRMED' });
+    const confirm = jest.fn().mockResolvedValue(undefined);
 
-    render(<StripePaymentStep {...defaultProps} />);
+    render(<StripePaymentStep {...defaultProps} confirm={confirm} />);
     await waitFor(() => screen.getByText(/Payer/));
     fireEvent.click(screen.getByText(/Payer/));
 
     await waitFor(() => expect(defaultProps.onSuccess).toHaveBeenCalled());
+    expect(confirm).toHaveBeenCalledWith({
+      stripePaymentIntentId: 'pi_abc',
+      stripeSetupIntentId: undefined,
+    });
   });
 
   it('affiche une erreur si confirmPayment retourne une erreur', async () => {
@@ -74,7 +74,12 @@ describe('StripePaymentStep', () => {
   });
 
   it('affiche "Enregistrer ma carte" en mode setup', async () => {
-    render(<StripePaymentStep {...defaultProps} type="setup" />);
+    const setupProps = {
+      ...defaultProps,
+      type: 'setup' as const,
+      createIntent: jest.fn().mockResolvedValue({ clientSecret: 'seti_secret', stripeAccountId: null }),
+    };
+    render(<StripePaymentStep {...setupProps} />);
     await waitFor(() => screen.getByText(/Enregistrer/));
     expect(screen.getByText(/Enregistrer ma carte/)).toBeInTheDocument();
   });
