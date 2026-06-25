@@ -1,7 +1,7 @@
 import { StripeService } from '../stripe.service';
 
-jest.mock('../../db/prisma', () => ({
-  prisma: {
+jest.mock('../../db/prisma', () => {
+  const prisma: Record<string, any> = {
     club: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -12,9 +12,14 @@ jest.mock('../../db/prisma', () => ({
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
-  },
-}));
+    payment: { findMany: jest.fn() },
+    // Exécute le callback de transaction avec `prisma` comme `tx`.
+    $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
+  };
+  return { prisma };
+});
 
 jest.mock('../../db/stripe', () => ({
   stripe: {
@@ -278,5 +283,47 @@ describe('refundPaymentIntent', () => {
       { payment_intent: 'pi_1', amount: 500 },
       { stripeAccount: 'acct_1' },
     );
+  });
+});
+
+describe('disconnectAccount', () => {
+  it('délie le compte, reset les flags et purge les ClubStripeCustomer', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue(mockClub({ stripeAccountId: 'acct_1' }));
+    (prisma.payment.findMany as jest.Mock).mockResolvedValue([]); // aucun paiement en attente
+    (prisma.club.update as jest.Mock).mockResolvedValue({});
+    (prisma.clubStripeCustomer.deleteMany as jest.Mock).mockResolvedValue({ count: 3 });
+
+    await svc.disconnectAccount('club-1');
+
+    expect(prisma.club.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'club-1' },
+      data: {
+        stripeAccountId: null,
+        stripeAccountStatus: 'NONE',
+        requireOnlinePayment: false,
+        requireCardFingerprint: false,
+      },
+    }));
+    expect(prisma.clubStripeCustomer.deleteMany).toHaveBeenCalledWith({ where: { clubId: 'club-1' } });
+  });
+
+  it('bloque (STRIPE_HAS_PENDING_ONLINE_PAYMENTS + count) si un paiement ONLINE non remboursé reste sur une réservation à venir', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue(mockClub({ stripeAccountId: 'acct_1' }));
+    (prisma.payment.findMany as jest.Mock).mockResolvedValue([
+      { amount: 25, refundedAmount: 25 },  // entièrement remboursé → ne compte pas
+      { amount: 25, refundedAmount: 0 },   // remboursable → compte
+    ]);
+
+    await expect(svc.disconnectAccount('club-1')).rejects.toMatchObject({
+      message: 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS',
+      count: 1,
+    });
+    expect(prisma.club.update).not.toHaveBeenCalled();
+    expect(prisma.clubStripeCustomer.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('lève STRIPE_NOT_CONFIGURED si aucun compte lié', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue(mockClub()); // stripeAccountId null
+    await expect(svc.disconnectAccount('club-1')).rejects.toThrow('STRIPE_NOT_CONFIGURED');
   });
 });
