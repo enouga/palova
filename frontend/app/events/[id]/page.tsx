@@ -5,6 +5,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEventDetail, EventParticipant, MyEventRegistration } from '@/lib/api';
+import StripePaymentStep from '@/components/StripePaymentStep';
 import { eventPlacesLabel, KIND_LABEL } from '@/lib/events';
 import { fillRatio, formatDateTime, formatDateTimeRange, timelineSteps, waitlistPosition } from '@/lib/tournament';
 import { Screen } from '@/components/ui/Screen';
@@ -19,11 +20,11 @@ import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
 
 const ERROR_LABEL: Record<string, string> = {
   MEMBERSHIP_REQUIRED: 'Cet event est réservé aux membres du club.',
-  MEMBERSHIP_BLOCKED: 'Votre compte est bloqué dans ce club — rapprochez-vous de l’accueil.',
+  MEMBERSHIP_BLOCKED: "Votre compte est bloqué dans ce club — rapprochez-vous de l'accueil.",
   ALREADY_REGISTERED: 'Vous êtes déjà inscrit.',
   REGISTRATION_CLOSED: 'Les inscriptions sont closes.',
-  REGISTRATION_LOCKED: 'La date limite est passée, la désinscription se fait à l’accueil.',
-  EVENT_NOT_OPEN: 'Cet event n’est pas ouvert aux inscriptions.',
+  REGISTRATION_LOCKED: "La date limite est passée, la désinscription se fait à l'accueil.",
+  EVENT_NOT_OPEN: "Cet event n'est pas ouvert aux inscriptions.",
 };
 
 export default function EventDetailPage() {
@@ -40,6 +41,8 @@ export default function EventDetailPage() {
   const [notFound, setNotFound] = useState(false);
   // Horloge unique : null au premier rendu (hydration-safe), pour hero et timeline.
   const [now, setNow] = useState<Date | null>(null);
+  // Étape de paiement Stripe en cours (non-null après inscription payante).
+  const [payStep, setPayStep] = useState<{ regId: string; mode: 'payment' | 'setup' } | null>(null);
 
   const load = useCallback(() => {
     api.getEvent(id).then(setEvent).catch(() => setNotFound(true));
@@ -66,12 +69,31 @@ export default function EventDetailPage() {
     finally { setBusy(false); }
   };
 
+  /** Inscription à un event — gère le cas payant (Stripe) et le cas gratuit (flux actuel). */
+  const doRegister = async () => {
+    if (!token) return;
+    setBusy(true); setError(null);
+    try {
+      const res = await api.registerEvent(event!.id, token);
+      if (res.payment) {
+        setPayStep({ regId: res.registration.id, mode: res.payment.mode });
+      } else {
+        load();
+      }
+    } catch (e) {
+      const code = (e as Error).message;
+      setError(ERROR_LABEL[code] ?? code);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (notFound || !event) {
     return (
       <Screen>
         <div style={{ paddingBottom: 40 }}>
           <ClubNav club={club} />
-          <div style={{ padding: '40px 20px', fontFamily: th.fontUI, color: th.textMute }}>Cet event n’existe pas ou n’est plus visible.</div>
+          <div style={{ padding: '40px 20px', fontFamily: th.fontUI, color: th.textMute }}>Cet event n'existe pas ou n'est plus visible.</div>
         </div>
       </Screen>
     );
@@ -86,7 +108,11 @@ export default function EventDetailPage() {
   const metaCards: MetaCard[] = [
     { icon: 'calendar', label: event.endTime ? 'Horaire' : 'Début', value: formatDateTimeRange(event.startTime, event.endTime, tz) },
     { icon: 'clock', label: 'Clôture des inscriptions', value: formatDateTime(event.registrationDeadline, tz) },
-    ...(event.price != null && Number(event.price) > 0 ? [{ icon: 'euro', label: 'Prix', value: `${Number(event.price)} € — règlement au club` } as MetaCard] : []),
+    ...(event.price != null && Number(event.price) > 0 ? [{
+      icon: 'euro',
+      label: 'Prix',
+      value: `${Number(event.price)} € — ${event.requirePrepayment ? 'à régler en ligne' : 'règlement au club'}`,
+    } as MetaCard] : []),
   ];
 
   return (
@@ -124,14 +150,38 @@ export default function EventDetailPage() {
 
           {!token && ready && (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Btn onClick={() => router.push('/login')} icon="user">Se connecter pour s’inscrire</Btn>
+              <Btn onClick={() => router.push('/login')} icon="user">Se connecter pour s'inscrire</Btn>
             </div>
           )}
-          {token && !myReg && !deadlinePassed && (
+          {/* Étape Stripe — paiement ou enregistrement carte (liste d'attente) */}
+          {payStep && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {payStep.mode === 'setup' && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, lineHeight: 1.5 }}>
+                  Votre carte sera débitée seulement si une place se libère.
+                </div>
+              )}
+              <StripePaymentStep
+                type={payStep.mode}
+                amountLabel={`${Number(event.price ?? 0)} €`}
+                createIntent={async () => {
+                  const r = await api.createRegistrationIntent('events', event.id, payStep.regId, token!);
+                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId };
+                }}
+                confirm={payStep.mode === 'payment'
+                  ? async (ids) => { await api.confirmRegistrationPayment('events', event.id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
+                  : async () => {}}
+                onSuccess={() => { setPayStep(null); load(); }}
+                onCancel={() => setPayStep(null)}
+              />
+            </div>
+          )}
+
+          {token && !myReg && !deadlinePassed && !payStep && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, textAlign: 'center' }}>Event complet : vous serez placé en liste d’attente.</div>}
-              <Btn onClick={() => act(() => api.registerEvent(event.id, token))} disabled={busy} icon="check">
-                {busy ? '…' : full ? 'Rejoindre la liste d’attente' : 'S’inscrire'}
+              {full && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, textAlign: 'center' }}>Event complet : vous serez placé en liste d&apos;attente.</div>}
+              <Btn onClick={doRegister} disabled={busy} icon="check">
+                {busy ? '…' : full ? "Rejoindre la liste d'attente" : "S'inscrire"}
               </Btn>
             </div>
           )}
@@ -144,7 +194,7 @@ export default function EventDetailPage() {
                   <LeaveButton onClick={() => act(() => api.cancelEventRegistration(event.id, token))} disabled={busy} label={busy ? '…' : 'Se désinscrire'} />
                 </>
               ) : (
-                <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Inscriptions closes : la désinscription se fait à l’accueil.</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Inscriptions closes : la désinscription se fait à l'accueil.</span>
               )}
             </div>
           )}
