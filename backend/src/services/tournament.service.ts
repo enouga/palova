@@ -5,6 +5,7 @@ import { RatingService } from './rating.service';
 import { occupiesSpotWhere, holdDeadline, entryFeeCents } from './registrationPayment';
 import { PackageService } from './package.service';
 import { StripeService } from './stripe.service';
+import { RefundService } from './refund.service';
 
 type Sex = 'MALE' | 'FEMALE';
 
@@ -148,14 +149,20 @@ export class TournamentService {
     if (!tournament) throw new Error('TOURNAMENT_NOT_FOUND');
     if (new Date() >= tournament.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+    const { cancelled, promotedRegistrationId, refundInfo } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
       const reg = await tx.tournamentRegistration.findFirst({
         where: { tournamentId, captainUserId, status: { not: 'CANCELLED' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, paymentStatus: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, tournamentId, reg.id, reg.status === 'CONFIRMED', tournament.requirePrepayment);
+      const res = await this.cancelAndPromoteTx(tx, tournamentId, reg.id, reg.status === 'CONFIRMED', tournament.requirePrepayment);
+      let refundInfo: { paymentId: string; amount: number; regId: string } | null = null;
+      if (reg.paymentStatus === 'PAID') {
+        const pay = await tx.payment.findFirst({ where: { tournamentRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+        if (pay) refundInfo = { paymentId: pay.id, amount: Number(pay.amount), regId: reg.id };
+      }
+      return { ...res, refundInfo };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
     if (promotedRegistrationId && tournament.requirePrepayment) {
@@ -165,6 +172,8 @@ export class TournamentService {
     } else {
       await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
+    // Remboursement best-effort post-commit (seulement si paiement ONLINE trouvé).
+    if (refundInfo) await this.safeRefund(refundInfo, tournament.clubId);
     return cancelled;
   }
 
@@ -180,6 +189,16 @@ export class TournamentService {
       await this.chargePromotedRegistration(regId);
     } catch (err) {
       console.error('[paiement] débit promotion échoué (réconciliation par webhook) :', err);
+    }
+  }
+
+  /** Remboursement best-effort (avant clôture) ; ne fait jamais échouer la désinscription. */
+  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string): Promise<void> {
+    try {
+      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason: 'Désinscription avant clôture' });
+      await prisma.tournamentRegistration.update({ where: { id: info.regId }, data: { paymentStatus: 'REFUNDED' } });
+    } catch (err) {
+      console.error('[refund] désinscription tournoi : remboursement échoué', err);
     }
   }
 

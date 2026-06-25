@@ -8,6 +8,7 @@ import {
 } from '../../email/notifications';
 import { PackageService } from '../package.service';
 import { StripeService } from '../stripe.service';
+import { RefundService } from '../refund.service';
 
 // Pas d'envoi d'email réel pendant les tests : la couche notifications est mockée.
 jest.mock('../../email/notifications');
@@ -697,5 +698,36 @@ describe('TournamentService.cancelRegistration — promotion payante', () => {
 
     await expect(new TournamentService().cancelRegistration('t1', 'captain')).resolves.toMatchObject({ id: 'reg-confirmed' });
     expect(notifyTournamentCancellation).toHaveBeenCalledWith('reg-confirmed');
+  });
+});
+
+describe('TournamentService.cancelRegistration — remboursement', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('inscription PAID annulée avant clôture → RefundService.refund appelé + REFUNDED', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    prismaMock.payment.findFirst.mockResolvedValue({ id: 'pay1', amount: 12 } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'rf1' } as any);
+
+    await new TournamentService().cancelRegistration('t1', 'captain');
+
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay1', clubId: 'club-demo', amount: 12 }));
+    expect(prismaMock.tournamentRegistration.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'r1' }, data: { paymentStatus: 'REFUNDED' } }));
+  });
+
+  it('inscription NONE (gratuite) → pas de remboursement', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ registrationDeadline: FUTURE, clubId: 'club-demo', requirePrepayment: false } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE' } as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund');
+    await new TournamentService().cancelRegistration('t1', 'captain');
+    expect(refundSpy).not.toHaveBeenCalled();
   });
 });
