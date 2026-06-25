@@ -2065,7 +2065,7 @@ describe('ReservationService', () => {
     const baseReservation = {
       id: 'res-1', userId: 'user-1', status: 'PENDING',
       createdAt: new Date(), totalPrice: 20,
-      resource: { clubId: 'club-1', attributes: { format: 'double' } },
+      resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
     };
 
     it('remplace les participants et met à jour visibilité/niveau', async () => {
@@ -2118,6 +2118,33 @@ describe('ReservationService', () => {
       prismaMock.reservation.findUnique.mockResolvedValue(null as any);
       await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }))
         .rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+
+    it('refuse une partie ouverte (PUBLIC) sur un court non-padel', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseReservation,
+        resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
+      } as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+      await expect(
+        service.applyHoldSetup('res-1', 'user-1', { visibility: 'PUBLIC' }),
+      ).rejects.toThrow('OPEN_MATCH_PADEL_ONLY');
+    });
+
+    it('autorise une partie privée (PRIVATE) sur un court non-padel', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseReservation,
+        resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
+      } as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+      await expect(
+        service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }),
+      ).resolves.toMatchObject({ id: 'res-1' });
     });
   });
 });

@@ -334,7 +334,7 @@ export class ReservationService {
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true, attributes: true } } },
+      include: { resource: { select: { clubId: true, attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } } },
     });
     if (!reservation)                     throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)    throw new Error('UNAUTHORIZED');
@@ -342,6 +342,11 @@ export class ReservationService {
 
     const age = Date.now() - reservation.createdAt.getTime();
     if (age > HOLD_EXPIRY_MS)             throw new Error('RESERVATION_NOT_PENDING');
+
+    // Parties ouvertes = padel uniquement : pas de visibilité PUBLIC sur un autre sport.
+    if (setup.visibility === 'PUBLIC' && reservation.resource.clubSport.sport.key !== 'padel') {
+      throw new Error('OPEN_MATCH_PADEL_ONLY');
+    }
 
     const format = (reservation.resource.attributes as { format?: string } | null)?.format;
     const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
