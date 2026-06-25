@@ -199,8 +199,8 @@ export default function AdminPaymentsPage() {
               Conséquences :
               <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
                 <li>les empreintes bancaires enregistrées seront supprimées — les clients devront re-saisir leur carte ;</li>
-                <li>le paiement CB sera désactivé jusqu'au nouvel onboarding ;</li>
-                <li>les remboursements des paiements CB déjà encaissés sur l'ancien compte ne seront plus possibles.</li>
+                <li>le paiement CB sera désactivé jusqu’au nouvel onboarding ;</li>
+                <li>les remboursements des paiements CB déjà encaissés sur l’ancien compte ne seront plus possibles.</li>
               </ul>
               {disconnectError && (
                 <span style={{ display: 'block', marginTop: 12, color: '#ef4444', fontWeight: 600 }}>{disconnectError}</span>
