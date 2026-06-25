@@ -20,7 +20,6 @@ export default function AdminSettingsPage() {
   const [error, setError]     = useState<string | null>(null);
   const [saved, setSaved]     = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [stripeConnecting, setStripeConnecting] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -35,39 +34,6 @@ export default function AdminSettingsPage() {
   }, [token, clubId]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
-
-  useEffect(() => {
-    if (!ready || !token || !clubId) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('stripe') === 'return' || params.get('stripe') === 'refresh') {
-      api.getStripeStatus(clubId, token).then(() => {
-        window.history.replaceState({}, '', window.location.pathname);
-        load();
-      }).catch(() => {});
-    }
-  }, [ready, token, clubId, load]);
-
-  const handleStripeConnect = async () => {
-    if (!token || !clubId) return;
-    setStripeConnecting(true);
-    try {
-      const returnUrl = window.location.href.split('?')[0] + '?stripe=return';
-      const refreshUrl = window.location.href.split('?')[0] + '?stripe=refresh';
-      const { url } = await api.initiateStripeConnect(clubId, { refreshUrl, returnUrl }, token);
-      window.location.href = url;
-    } catch {
-      setStripeConnecting(false);
-    }
-  };
-
-  const handleStripeLoginLink = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!token || !clubId) return;
-    try {
-      const { url } = await api.getStripeLoginLink(clubId, token);
-      window.open(url, '_blank');
-    } catch { /* ignore */ }
-  };
 
   const set = <K extends keyof ClubAdminDetail>(k: K, v: ClubAdminDetail[K]) => {
     setSaved(false);
@@ -470,56 +436,15 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* Paiement en ligne — Stripe Connect */}
+      {/* Paiement en ligne — déplacé sur sa page dédiée */}
       <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 16px', color: th.text }}>Paiement en ligne</h2>
-        {club.stripeAccountStatus === 'NONE' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: 0 }}>
-              Connectez votre compte Stripe pour accepter les paiements CB en ligne et enregistrer des empreintes bancaires.
-            </p>
-            <div>
-              <button onClick={handleStripeConnect} disabled={stripeConnecting}
-                style={{ background: '#635bff', color: '#fff', border: 'none', borderRadius: 9, padding: '10px 20px', cursor: stripeConnecting ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, opacity: stripeConnecting ? 0.7 : 1 }}>
-                {stripeConnecting ? 'Redirection…' : 'Connecter mon compte Stripe'}
-              </button>
-            </div>
-          </div>
-        )}
-        {club.stripeAccountStatus === 'PENDING' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, color: '#f59e0b' }}>● Onboarding en cours — terminez votre inscription Stripe.</span>
-            <div>
-              <button onClick={handleStripeConnect} disabled={stripeConnecting}
-                style={{ background: th.surface2, color: th.text, border: `1px solid ${th.line}`, borderRadius: 9, padding: '8px 16px', cursor: stripeConnecting ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 14 }}>
-                {stripeConnecting ? 'Redirection…' : 'Reprendre l\'onboarding'}
-              </button>
-            </div>
-          </div>
-        )}
-        {club.stripeAccountStatus === 'ACTIVE' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, color: '#22c55e' }}>● Compte Stripe actif</span>
-            <a href="#" onClick={handleStripeLoginLink} style={{ fontFamily: th.fontUI, fontSize: 14, color: th.accent }}>Tableau de bord Stripe ↗</a>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: th.fontUI, fontSize: 15, color: th.text, cursor: 'pointer' }}>
-                <input type="checkbox" checked={club.requireOnlinePayment}
-                  onChange={(e) => set('requireOnlinePayment', e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: th.accent }} />
-                Exiger le paiement CB à la réservation
-              </label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: th.fontUI, fontSize: 15, color: th.text, cursor: 'pointer' }}>
-                <input type="checkbox" checked={club.requireCardFingerprint}
-                  onChange={(e) => set('requireCardFingerprint', e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: th.accent }} />
-                Enregistrer une empreinte bancaire (protection no-show)
-              </label>
-            </div>
-          </div>
-        )}
-        {club.stripeAccountStatus === 'RESTRICTED' && (
-          <span style={{ fontFamily: th.fontUI, fontSize: 14, color: '#f59e0b' }}>● Compte Stripe restreint — vérifiez votre tableau de bord Stripe.</span>
-        )}
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 8px', color: th.text }}>Paiement en ligne</h2>
+        <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 14px' }}>
+          La connexion Stripe et les réglages de paiement CB ont leur page dédiée.
+        </p>
+        <a href="/admin/payments" style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.accent }}>
+          Gérer le paiement en ligne →
+        </a>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
