@@ -18,7 +18,7 @@ const base = {
   onClick: jest.fn(),
 };
 
-const wrap = (over: Partial<typeof base> & { now: Date | null }) =>
+const wrap = (over: Partial<typeof base> & { now: Date | null; subtitle?: string | null }) =>
   render(<ThemeProvider><AgendaCard {...base} {...over} /></ThemeProvider>);
 
 describe('AgendaCard', () => {
