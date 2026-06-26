@@ -529,6 +529,26 @@ describe('ClubService — moyens d\'encaissement rapides', () => {
   });
 });
 
+describe('club.service — persistance du département', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('createClub persiste department/departmentCode quand le géocodage réussit', async () => {
+    geocodeMock.mockResolvedValue({
+      latitude: 48.85, longitude: 2.35, region: 'Île-de-France', department: 'Paris', departmentCode: '75', postalCode: '75011', city: 'Paris',
+    });
+    prismaMock.clubSlugAlias.findUnique.mockResolvedValue(null as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
+    prismaMock.clubMember.create.mockResolvedValue({} as any);
+
+    const service = new ClubService();
+    await service.createClub({ name: 'Test', address: '1 rue', city: 'Paris', ownerId: 'u1' } as any);
+
+    const data = prismaMock.club.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ department: 'Paris', departmentCode: '75' });
+  });
+});
+
 describe('ClubService — listClubs (géo)', () => {
   const service = new ClubService();
   const row = (over: Record<string, unknown>) => ({

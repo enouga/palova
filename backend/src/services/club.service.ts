@@ -106,7 +106,7 @@ export class ClubService {
             address: params.address?.trim() || '',
             city: params.city?.trim() || null,
             timezone: params.timezone || 'Europe/Paris',
-            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode } : {}),
+            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: params.ownerId, clubId: club.id, role: 'OWNER' } });
@@ -268,8 +268,8 @@ export class ClubService {
       if (changed) {
         const geo = await geocodeAddress({ address: newAddress, city: newCity });
         geoData = geo
-          ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode }
-          : { latitude: null, longitude: null, region: null, postalCode: null };
+          ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode }
+          : { latitude: null, longitude: null, region: null, department: null, departmentCode: null, postalCode: null };
       }
     }
 
