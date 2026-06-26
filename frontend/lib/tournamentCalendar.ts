@@ -1,4 +1,5 @@
 import { NationalTournament, TournamentGender } from './api';
+import { CATEGORY_ORDER } from './events';
 
 // ── État de filtre ────────────────────────────────────────────────────────────
 export type DatePreset = 'weekend' | 'thisMonth' | 'days30' | 'months3';
@@ -17,8 +18,7 @@ export function emptyCalendarState(): CalendarFilterState {
   return { deptCodes: new Set(), categories: new Set(), genders: new Set(), datePreset: null, from: null, to: null, nearMe: false };
 }
 
-// P25→P2000 (réutilise l'ordre canonique des catégories)
-export const CATEGORY_ORDER = ['P25', 'P50', 'P100', 'P250', 'P500', 'P1000', 'P1500', 'P2000'];
+// P25→P2000 : ordre canonique des catégories, réutilisé depuis lib/events.ts (source unique).
 const GENDER_ORDER: TournamentGender[] = ['MEN', 'WOMEN', 'MIXED'];
 
 // ── Fenêtre de date ─────────────────────────────────────────────────────────

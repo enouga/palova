@@ -31,7 +31,8 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
   const { th } = useTheme();
   const [showAllDepts, setShowAllDepts] = useState(false);
 
-  const hasActive = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to || state.nearMe;
+  // « Autour de moi » est un tri, pas un filtre (et onClear le préserve) → exclu de hasActive.
+  const hasActive = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
   const depts = showAllDepts ? facets.departments : facets.departments.slice(0, DEPT_VISIBLE);
 
   const Group = ({ label, children }: { label: string; children: React.ReactNode }) => (
