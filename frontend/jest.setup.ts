@@ -34,3 +34,10 @@ class ROStub {
 // @ts-expect-error - stub jsdom (IOStub n'expose pas root/rootMargin/thresholds)
 global.IntersectionObserver = IOStub;
 global.ResizeObserver = ROStub;
+
+// jsdom n'implémente pas la géolocalisation : stub par défaut « refuse » (les tests
+// qui veulent un succès surchargent navigator.geolocation.getCurrentPosition localement).
+Object.defineProperty(global.navigator, 'geolocation', {
+  configurable: true,
+  value: { getCurrentPosition: (_ok: PositionCallback, err?: PositionErrorCallback) => err?.({ code: 1 } as GeolocationPositionError) },
+});

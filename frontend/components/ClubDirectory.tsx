@@ -17,6 +17,8 @@ export function ClubDirectory() {
   const [city, setCity]     = useState('');
   const [sport, setSport]   = useState('');
   const [loading, setLoading] = useState(true);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied'>('idle');
 
   useEffect(() => { api.getSports().then(setSports).catch(() => setSports([])); }, []);
 
@@ -30,10 +32,24 @@ export function ClubDirectory() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setClubs(await api.listClubs({ q: q || undefined, city: city || undefined, sport: sport || undefined })); }
-    catch { setClubs([]); }
+    try {
+      setClubs(await api.listClubs({
+        q: q || undefined, city: city || undefined, sport: sport || undefined,
+        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+      }));
+    } catch { setClubs([]); }
     finally { setLoading(false); }
-  }, [q, city, sport]);
+  }, [q, city, sport, coords]);
+
+  const locateMe = () => {
+    if (!navigator.geolocation) { setGeoState('denied'); return; }
+    setGeoState('locating');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }); setGeoState('idle'); },
+      () => setGeoState('denied'),
+      { timeout: 8000 },
+    );
+  };
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
@@ -45,7 +61,7 @@ export function ClubDirectory() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px 0' }}>
         <div style={{ display: 'flex', gap: 10 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
-          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville" style={inputStyle} />
+          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
@@ -54,6 +70,16 @@ export function ClubDirectory() {
               {s.icon ? `${s.icon} ` : ''}{s.name}
             </button>
           ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={locateMe} style={chipBtn(th, !!coords)}>
+            📍 {coords ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
+          </button>
+          {geoState === 'denied' && (
+            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+              Localisation indisponible — cherchez par ville ou région.
+            </span>
+          )}
         </div>
       </div>
 
