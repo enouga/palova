@@ -214,7 +214,7 @@ export class ClubService {
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
         timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
-        listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
+        listedInDirectory: true, listTournamentsNationally: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
@@ -236,7 +236,7 @@ export class ClubService {
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
     timezone?: string; logoUrl?: string; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
-    listedInDirectory?: boolean; publicBookingDays?: number; memberBookingDays?: number;
+    listedInDirectory?: boolean; listTournamentsNationally?: boolean; publicBookingDays?: number; memberBookingDays?: number;
     bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
     publicReleaseHour?: number;
     memberReleaseHour?: number;
@@ -294,6 +294,7 @@ export class ClubService {
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
         ...(typeof params.listedInDirectory === 'boolean' ? { listedInDirectory: params.listedInDirectory } : {}),
+        ...(typeof params.listTournamentsNationally === 'boolean' ? { listTournamentsNationally: params.listTournamentsNationally } : {}),
         ...(typeof params.publicBookingDays === 'number' ? { publicBookingDays: clamp(params.publicBookingDays) } : {}),
         ...(typeof params.memberBookingDays === 'number' ? { memberBookingDays: clamp(params.memberBookingDays) } : {}),
         ...(params.bookingReleaseMode !== undefined && VALID_RELEASE_MODES.has(params.bookingReleaseMode) ? { bookingReleaseMode: params.bookingReleaseMode } : {}),
