@@ -7,6 +7,7 @@ import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
 import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
 import { resolvePreferredSportKey } from './rating/preferredSport';
+import { haversineKm } from './geo.service';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -115,29 +116,45 @@ export class ClubService {
     }
   }
 
-  /** Annuaire public : clubs actifs, filtrable par sport (key), ville, texte. */
-  async listClubs(filters: { sport?: string; city?: string; q?: string }) {
+  /** Annuaire public : clubs actifs. `city` matche ville OU région ; `lat`/`lng` trient par distance. */
+  async listClubs(filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number }) {
     const where: Prisma.ClubWhereInput = { status: 'ACTIVE', listedInDirectory: true };
-    if (filters.city) where.city = { contains: filters.city, mode: 'insensitive' };
     if (filters.q)    where.name = { contains: filters.q, mode: 'insensitive' };
-    if (filters.sport) where.clubSports = { some: { sport: { key: filters.sport } } };
+    if (filters.city) where.OR = [
+      { city:   { contains: filters.city, mode: 'insensitive' } },
+      { region: { contains: filters.city, mode: 'insensitive' } },
+    ];
+    if (filters.region) where.region = { equals: filters.region, mode: 'insensitive' };
+    if (filters.sport)  where.clubSports = { some: { sport: { key: filters.sport } } };
 
     const clubs = await prisma.club.findMany({
       where,
       orderBy: { name: 'asc' },
       select: {
-        id: true, slug: true, name: true, city: true, description: true, accentColor: true, logoUrl: true, coverImageUrl: true,
+        id: true, slug: true, name: true, city: true, region: true, latitude: true, longitude: true,
+        description: true, accentColor: true, logoUrl: true, coverImageUrl: true,
         clubSports: { select: { sport: { select: { key: true, name: true, icon: true } } } },
         _count: { select: { resources: true } },
       },
     });
 
-    return clubs.map((c) => ({
-      id: c.id, slug: c.slug, name: c.name, city: c.city, description: c.description,
-      accentColor: c.accentColor, logoUrl: c.logoUrl, coverImageUrl: c.coverImageUrl,
+    let mapped = clubs.map((c) => ({
+      id: c.id, slug: c.slug, name: c.name, city: c.city, region: c.region,
+      latitude: c.latitude, longitude: c.longitude,
+      description: c.description, accentColor: c.accentColor, logoUrl: c.logoUrl, coverImageUrl: c.coverImageUrl,
       sports: c.clubSports.map((cs) => cs.sport),
       resourceCount: c._count.resources,
     }));
+
+    // Tri par distance (clubs sans coordonnées repoussés en fin de liste).
+    if (typeof filters.lat === 'number' && typeof filters.lng === 'number') {
+      const origin = { lat: filters.lat, lng: filters.lng };
+      mapped = mapped
+        .map((c) => ({ c, d: c.latitude != null && c.longitude != null ? haversineKm(origin, { lat: c.latitude, lng: c.longitude }) : Infinity }))
+        .sort((a, b) => a.d - b.d)
+        .map((x) => x.c);
+    }
+    return mapped;
   }
 
   /** Résout un libellé de sous-domaine : slug actuel → moved:false ; alias historique → slug actuel + moved:true. */

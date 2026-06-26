@@ -521,3 +521,38 @@ describe('ClubService — moyens d\'encaissement rapides', () => {
     expect(arg.select.quickPaymentMethods).toBe(true);
   });
 });
+
+describe('ClubService — listClubs (géo)', () => {
+  const service = new ClubService();
+  const row = (over: Record<string, unknown>) => ({
+    id: 'c', slug: 's', name: 'N', city: 'V', region: 'R', latitude: null, longitude: null,
+    description: null, accentColor: '#000', logoUrl: null, coverImageUrl: null,
+    clubSports: [], _count: { resources: 0 }, ...over,
+  });
+
+  it('filtre « city » matche ville OU région (contains, insensitive)', async () => {
+    prismaMock.club.findMany.mockResolvedValue([] as any);
+    await service.listClubs({ city: 'occ' });
+    const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.OR).toEqual([
+      { city:   { contains: 'occ', mode: 'insensitive' } },
+      { region: { contains: 'occ', mode: 'insensitive' } },
+    ]);
+  });
+
+  it('trie par distance croissante quand lat/lng fournis ; clubs sans coords en dernier', async () => {
+    prismaMock.club.findMany.mockResolvedValue([
+      row({ id: 'lyon',  latitude: 45.764, longitude: 4.8357 }),
+      row({ id: 'paris', latitude: 48.8566, longitude: 2.3522 }),
+      row({ id: 'nocoord', latitude: null, longitude: null }),
+    ] as any);
+    const res = await service.listClubs({ lat: 48.86, lng: 2.35 }); // proche de Paris
+    expect(res.map((c) => c.id)).toEqual(['paris', 'lyon', 'nocoord']);
+  });
+
+  it('expose latitude/longitude/region dans la projection', async () => {
+    prismaMock.club.findMany.mockResolvedValue([row({ latitude: 1, longitude: 2 })] as any);
+    const res = await service.listClubs({});
+    expect(res[0]).toMatchObject({ latitude: 1, longitude: 2, region: 'R' });
+  });
+});
