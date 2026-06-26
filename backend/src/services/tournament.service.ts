@@ -297,6 +297,29 @@ export class TournamentService {
     return this.withCounts(tournaments);
   }
 
+  /**
+   * Agrégat public : tournois PUBLISHED à venir des clubs ACTIVE ayant opté pour le
+   * calendrier national. Tout le filtrage/tri fin se fait côté client (volume modeste).
+   * La projection `club` inclut le département (facette) + la timezone (libellé de date).
+   */
+  async listNationalTournaments(opts?: { monthsAhead?: number }) {
+    const now = new Date();
+    const horizon = new Date(now);
+    horizon.setMonth(horizon.getMonth() + (opts?.monthsAhead ?? 6));
+    const tournaments = await prisma.tournament.findMany({
+      where: {
+        status: 'PUBLISHED',
+        startTime: { gte: now, lte: horizon },
+        club: { status: 'ACTIVE', listTournamentsNationally: true },
+      },
+      include: {
+        club: { select: { slug: true, name: true, city: true, department: true, departmentCode: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+    return this.withCounts(tournaments);
+  }
+
   /** Détail public d'un tournoi (DRAFT masqué) + compteurs. */
   async getById(tournamentId: string) {
     const t = await prisma.tournament.findUnique({
