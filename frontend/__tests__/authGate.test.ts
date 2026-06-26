@@ -47,6 +47,14 @@ describe('isPlatformPublicPath', () => {
     expect(isPlatformPublicPath('/superadmin')).toBe(false);
   });
 
+  it('/tournois est public sur l\'hôte plateforme (calendrier national)', () => {
+    expect(isPlatformPublicPath('/tournois')).toBe(true);
+  });
+
+  it('/tournois/abc (fiche) n\'est PAS forcé public par cette règle (vit sur l\'hôte club)', () => {
+    expect(isPlatformPublicPath('/tournois/abc')).toBe(false);
+  });
+
   it('n\'altère pas isPublicPath : `/` reste privé pour l\'hôte club', () => {
     expect(isPublicPath('/')).toBe(false);
   });
