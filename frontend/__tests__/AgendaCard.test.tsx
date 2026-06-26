@@ -38,6 +38,11 @@ describe('AgendaCard', () => {
     expect(screen.getByTestId('card-fill').style.width).toBe('0px');
   });
 
+  it('affiche le subtitle quand fourni', () => {
+    wrap({ now: NOW, subtitle: 'Padel Paris · Paris · 8 km' });
+    expect(screen.getByText('Padel Paris · Paris · 8 km')).toBeInTheDocument();
+  });
+
   it('sans capacité → pas de jauge ; clic → onClick', () => {
     const onClick = jest.fn();
     wrap({ now: NOW, ratio: null, onClick });

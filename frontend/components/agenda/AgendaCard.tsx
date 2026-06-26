@@ -15,11 +15,12 @@ export interface AgendaCardProps {
   ratio: number | null;        // remplissage 0..1, null = pas de jauge
   places: { text: string; urgent: boolean };
   extra?: string | null;       // « 40 € » / « Membres » — chip discret
+  subtitle?: string | null;    // « Club · Ville · 8 km » — ligne secondaire (calendrier national)
   onClick: () => void;
 }
 
 // Carte de la liste Events : tuile icône teintée, infos, countdown, jauge de remplissage.
-export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now, ratio, places, extra, onClick }: AgendaCardProps) {
+export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now, ratio, places, extra, subtitle, onClick }: AgendaCardProps) {
   const { th } = useTheme();
   const countdown = now ? deadlineCountdown(deadline, now) : null;
 
@@ -53,6 +54,9 @@ export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now,
         </span>
 
         <span style={{ fontFamily: th.fontUI, fontSize: 16.5, fontWeight: 700, color: th.text }}>{title}</span>
+        {subtitle && (
+          <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</span>
+        )}
         <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
           {dateLabel}{extra ? ` · ${extra}` : ''}
         </span>
