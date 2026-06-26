@@ -14,7 +14,19 @@ describe('geo.service — geocodeAddress', () => {
   it('parse une réponse BAN (lat/lon/region/postalCode/city)', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => okBody }) as any;
     const r = await geocodeAddress({ address: '12 rue du Padel', city: 'Paris' });
-    expect(r).toEqual({ latitude: 48.8566, longitude: 2.3522, region: 'Île-de-France', postalCode: '75011', city: 'Paris' });
+    expect(r).toEqual({ latitude: 48.8566, longitude: 2.3522, region: 'Île-de-France', department: 'Paris', departmentCode: '75', postalCode: '75011', city: 'Paris' });
+  });
+
+  it('contexte BAN < 3 segments → department/departmentCode null, region = dernier segment', async () => {
+    const body = {
+      features: [{
+        geometry: { coordinates: [2.3522, 48.8566] },
+        properties: { context: 'Île-de-France', postcode: '75011', city: 'Paris' },
+      }],
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => body }) as any;
+    const r = await geocodeAddress({ address: 'x', city: 'Paris' });
+    expect(r).toMatchObject({ region: 'Île-de-France', department: null, departmentCode: null });
   });
 
   it('renvoie null si aucune adresse (pas d\'appel réseau)', async () => {
