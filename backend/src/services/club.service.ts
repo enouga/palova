@@ -7,7 +7,7 @@ import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
 import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
 import { resolvePreferredSportKey } from './rating/preferredSport';
-import { haversineKm } from './geo.service';
+import { geocodeAddress, haversineKm } from './geo.service';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -86,6 +86,9 @@ export class ClubService {
     if (!slug) throw new Error('VALIDATION_ERROR');
     if (RESERVED_SLUGS.has(slug)) throw new Error('SLUG_RESERVED');
 
+    // Géocodage HORS transaction (réseau) ; null si indisponible.
+    const geo = await geocodeAddress({ address: params.address, city: params.city });
+
     try {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
       // un ReadCommitted laisserait un changeClubSlug concurrent interposer un alias que
@@ -103,6 +106,7 @@ export class ClubService {
             address: params.address?.trim() || '',
             city: params.city?.trim() || null,
             timezone: params.timezone || 'Europe/Paris',
+            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: params.ownerId, clubId: club.id, role: 'OWNER' } });
@@ -254,6 +258,21 @@ export class ClubService {
     legalEmail?: string;
     legalPhone?: string;
   }) {
+    // Re-géocode uniquement si l'adresse ou la ville change (BAN gratuit mais on évite le bruit).
+    let geoData: Record<string, unknown> = {};
+    if (params.address !== undefined || params.city !== undefined) {
+      const current = await prisma.club.findUnique({ where: { id: clubId }, select: { address: true, city: true } });
+      const newAddress = params.address !== undefined ? params.address : current?.address ?? '';
+      const newCity = params.city !== undefined ? params.city : current?.city ?? null;
+      const changed = (newAddress ?? '') !== (current?.address ?? '') || (newCity ?? '') !== (current?.city ?? '');
+      if (changed) {
+        const geo = await geocodeAddress({ address: newAddress, city: newCity });
+        geoData = geo
+          ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode }
+          : { latitude: null, longitude: null, region: null, postalCode: null };
+      }
+    }
+
     const clamp = (n: number) => Math.max(0, Math.min(365, Math.trunc(n)));
     const clampHour = (n: number) => Math.max(0, Math.min(23, Math.trunc(n)));
     const VALID_RELEASE_MODES = new Set(['DAY_AT_HOUR', 'ROLLING_SLOT', 'WINDOW_SHIFT']);
@@ -262,6 +281,7 @@ export class ClubService {
     return prisma.club.update({
       where: { id: clubId },
       data: {
+        ...geoData,
         ...(params.offPeakHours !== undefined ? { offPeakHours: normalizeOffPeakHours(params.offPeakHours) } : {}),
         ...(params.bookingQuotas !== undefined ? { bookingQuotas: normalizeBookingQuotas(params.bookingQuotas) } : {}),
         ...(params.name !== undefined ? { name: params.name.trim() } : {}),

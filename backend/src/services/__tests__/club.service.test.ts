@@ -2,6 +2,13 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { ClubService } from '../club.service';
 
+jest.mock('../geo.service', () => ({
+  ...jest.requireActual('../geo.service'),
+  geocodeAddress: jest.fn(),
+}));
+import { geocodeAddress } from '../geo.service';
+const geocodeMock = geocodeAddress as jest.Mock;
+
 describe('ClubService — recherche de membres', () => {
   let service: ClubService;
   beforeEach(() => { service = new ClubService(); });
@@ -554,5 +561,60 @@ describe('ClubService — listClubs (géo)', () => {
     prismaMock.club.findMany.mockResolvedValue([row({ latitude: 1, longitude: 2 })] as any);
     const res = await service.listClubs({});
     expect(res[0]).toMatchObject({ latitude: 1, longitude: 2, region: 'R' });
+  });
+});
+
+describe('ClubService — géocodage create/update', () => {
+  const service = new ClubService();
+  beforeEach(() => {
+    geocodeMock.mockReset();
+    // $transaction(cb) exécute le callback avec prismaMock comme tx.
+    (prismaMock.$transaction as jest.Mock).mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+
+  it('createClub géocode l\'adresse et persiste lat/long/region/postalCode', async () => {
+    geocodeMock.mockResolvedValue({ latitude: 48.8, longitude: 2.3, region: 'Île-de-France', postalCode: '75011', city: 'Paris' });
+    prismaMock.clubSlugAlias.findUnique.mockResolvedValue(null as any);
+    prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
+    prismaMock.clubMember.create.mockResolvedValue({} as any);
+
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris' });
+
+    expect(geocodeMock).toHaveBeenCalledWith({ address: '12 rue X', city: 'Paris' });
+    const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
+    expect(data).toMatchObject({ latitude: 48.8, longitude: 2.3, region: 'Île-de-France', postalCode: '75011' });
+  });
+
+  it('createClub : géocodage en échec → club créé sans coordonnées', async () => {
+    geocodeMock.mockResolvedValue(null);
+    prismaMock.clubSlugAlias.findUnique.mockResolvedValue(null as any);
+    prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
+    prismaMock.clubMember.create.mockResolvedValue({} as any);
+
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris' });
+
+    const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
+    expect(data.latitude).toBeUndefined();
+  });
+
+  it('updateClub re-géocode quand l\'adresse change', async () => {
+    geocodeMock.mockResolvedValue({ latitude: 1, longitude: 2, region: 'R', postalCode: '12345', city: 'V' });
+    prismaMock.club.findUnique.mockResolvedValue({ address: 'ancienne', city: 'V' } as any);
+    prismaMock.club.update.mockResolvedValue({} as any);
+
+    await service.updateClub('c1', { address: 'nouvelle' });
+
+    expect(geocodeMock).toHaveBeenCalled();
+    const data = (prismaMock.club.update as jest.Mock).mock.calls[0][0].data;
+    expect(data).toMatchObject({ latitude: 1, longitude: 2, region: 'R', postalCode: '12345' });
+  });
+
+  it('updateClub ne géocode pas si l\'adresse est inchangée', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ address: 'pareille', city: 'V' } as any);
+    prismaMock.club.update.mockResolvedValue({} as any);
+
+    await service.updateClub('c1', { address: 'pareille', city: 'V' });
+
+    expect(geocodeMock).not.toHaveBeenCalled();
   });
 });
