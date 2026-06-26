@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isPublicPath } from './lib/authGate';
+import { isPublicPath, isPlatformPublicPath } from './lib/authGate';
 import { clubSlugFromHost } from './lib/host';
 import { ROOT_DOMAINS, rootForHost, CANONICAL_ROOT } from './lib/roots';
 
@@ -47,7 +47,7 @@ export function proxy(request: NextRequest) {
     // HOST PLATEFORME — rétro-compat /c/<slug> → racine du sous-domaine club
     const m = url.pathname.match(/^\/c\/([^/]+)\/?$/);
     if (m) return NextResponse.redirect(`${url.protocol}//${m[1]}.${currentRoot}${portSuffix(host)}/`);
-    if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
+    if (!token && !isPlatformPublicPath(url.pathname)) return redirectToLogin();
     // Hôte plateforme : on retire les en-têtes internes (sinon un client peut les forger
     // et déclencher la redirection d'alias du layout — vecteur d'open redirect / cache poisoning).
     const cleaned = new Headers(request.headers);

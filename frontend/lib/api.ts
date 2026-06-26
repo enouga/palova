@@ -36,11 +36,16 @@ export const api = {
   // --- Public ---
   getSports: () => request<Sport[]>('/api/sports'),
 
-  listClubs: (filters: { sport?: string; city?: string; q?: string } = {}) => {
+  listClubs: (filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number } = {}) => {
     const qs = new URLSearchParams();
-    if (filters.sport) qs.set('sport', filters.sport);
-    if (filters.city)  qs.set('city', filters.city);
-    if (filters.q)     qs.set('q', filters.q);
+    if (filters.sport)  qs.set('sport', filters.sport);
+    if (filters.city)   qs.set('city', filters.city);
+    if (filters.q)      qs.set('q', filters.q);
+    if (filters.region) qs.set('region', filters.region);
+    if (typeof filters.lat === 'number' && typeof filters.lng === 'number') {
+      qs.set('lat', String(filters.lat));
+      qs.set('lng', String(filters.lng));
+    }
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<ClubSummary[]>(`/api/clubs${suffix}`);
   },
@@ -887,6 +892,9 @@ export interface ClubSummary {
   slug: string;
   name: string;
   city: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string | null;
   accentColor: string;
   logoUrl: string | null;
