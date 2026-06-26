@@ -222,6 +222,12 @@ model Club {
   address          String
   city             String?
   country          String?    @default("FR")
+  // Géolocalisation (annuaire « près de moi » / par région). Renseignés par géocodage
+  // de l'adresse (Base Adresse Nationale) à la création/màj ; null si géocodage indisponible.
+  latitude         Float?     @map("latitude")
+  longitude        Float?     @map("longitude")
+  region           String?    @map("region")
+  postalCode       String?    @map("postal_code")
   description      String?
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
