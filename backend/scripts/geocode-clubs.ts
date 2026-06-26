@@ -1,5 +1,5 @@
 import 'dotenv/config';
-// Backfill one-shot : géocode tous les clubs sans latitude. Idempotent (rejouable).
+// Backfill one-shot : géocode les clubs sans coordonnées OU sans département. Idempotent.
 // Usage : npx ts-node backend/scripts/geocode-clubs.ts   (depuis la racine ou backend/)
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -10,7 +10,7 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const clubs = await prisma.club.findMany({
-    where: { latitude: null },
+    where: { OR: [{ latitude: null }, { department: null }] },
     select: { id: true, name: true, address: true, city: true },
   });
   console.log(`${clubs.length} club(s) à géocoder.`);
@@ -19,9 +19,9 @@ async function main() {
     if (!geo) { console.log(`  ✗ ${c.name} — non géocodé`); continue; }
     await prisma.club.update({
       where: { id: c.id },
-      data: { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode },
+      data: { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode },
     });
-    console.log(`  ✓ ${c.name} — ${geo.region ?? '?'} (${geo.latitude.toFixed(3)}, ${geo.longitude.toFixed(3)})`);
+    console.log(`  ✓ ${c.name} — ${geo.department ?? '?'} (${geo.departmentCode ?? '?'})`);
   }
 }
 
