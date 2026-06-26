@@ -228,6 +228,10 @@ model Club {
   longitude        Float?     @map("longitude")
   region           String?    @map("region")
   postalCode       String?    @map("postal_code")
+  // Calendrier national des tournois : opt-in club + département (facette + affichage)
+  department                String?  @map("department")
+  departmentCode            String?  @map("department_code")
+  listTournamentsNationally Boolean  @default(false) @map("list_tournaments_nationally")
   description      String?
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
