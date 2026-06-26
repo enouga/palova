@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { api, ManagedClub, PlayerMembership } from '@/lib/api';
 import { clubUrl } from '@/lib/clubUrl';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import AnonymousView from '@/components/platform/AnonymousView';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Btn, ThemeToggle, MyBookingsButton } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -17,17 +17,16 @@ import { ClubCard } from '@/components/ClubCard';
 //  - gérant connecté : écran de redirection vers l'admin de ses clubs
 export default function PlatformLanding() {
   const { token, ready } = useAuth();
-  const router = useRouter();
   const [managed, setManaged] = useState<ManagedClub[] | null>(null); // null = non résolu
 
   useEffect(() => {
-    if (!ready) return;
-    if (!token) { router.replace('/login'); return; }        // repli : non connecté → connexion
-    api.getMyClubs(token).then(setManaged).catch(() => setManaged([])); // erreur → repli joueur
-  }, [ready, token, router]);
+    if (!ready || !token) return;                 // visiteur → AnonymousView (pas de fetch)
+    api.getMyClubs(token).then(setManaged).catch(() => setManaged([]));
+  }, [ready, token]);
 
-  // Anti-flash : squelette tant que l'auth n'est pas prête ou le rôle non résolu.
-  if (!ready || !token || managed === null) return <PlatformSkeleton />;
+  if (!ready) return <PlatformSkeleton />;
+  if (!token) return <AnonymousView />;
+  if (managed === null) return <PlatformSkeleton />; // rôle en cours de résolution
   if (managed.length > 0) return <ManagerView clubs={managed} />;
   return <PlayerView token={token} />;
 }
