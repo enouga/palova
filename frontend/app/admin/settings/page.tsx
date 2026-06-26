@@ -125,6 +125,7 @@ export default function AdminSettingsPage() {
         coverImageUrl: club.coverImageUrl,
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
+        listTournamentsNationally: club.listTournamentsNationally,
         levelSystemEnabled: club.levelSystemEnabled,
         publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
         bookingReleaseMode: club.bookingReleaseMode,
@@ -248,6 +249,10 @@ export default function AdminSettingsPage() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
           <input type="checkbox" checked={club.listedInDirectory} onChange={(e) => set('listedInDirectory', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
           <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher mon club dans l'annuaire public</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginTop: 12 }}>
+          <input type="checkbox" checked={club.listTournamentsNationally} onChange={(e) => set('listTournamentsNationally', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Publier mes tournois dans le calendrier national Palova</span>
         </label>
       </div>
 
