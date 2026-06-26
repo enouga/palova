@@ -9,3 +9,9 @@ export const PUBLIC_PATHS = [
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
+
+/** true si le chemin est accessible sans login sur l'HÔTE PLATEFORME (la racine `/` = vitrine
+ * marketing, en plus des pages publiques communes). N'affecte PAS les sous-domaines club. */
+export function isPlatformPublicPath(pathname: string): boolean {
+  return pathname === '/' || isPublicPath(pathname);
+}
