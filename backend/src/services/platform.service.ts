@@ -148,7 +148,7 @@ export class PlatformService {
             city: params.club.city?.trim() || null,
             timezone: params.club.timezone || 'Europe/Paris',
             status: 'ACTIVE',
-            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode } : {}),
+            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: owner.id, clubId: club.id, role: 'OWNER' } });
