@@ -14,7 +14,7 @@ const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE
 const emptyForm = (): CreateEventBody => ({
   name: '', kind: 'MELEE', description: '', startTime: '', endTime: null,
   registrationDeadline: '', capacity: null, price: null, memberOnly: true,
-  clubSportId: null,
+  clubSportId: null, requirePrepayment: false,
 });
 
 export default function AdminEventsPage() {
@@ -26,6 +26,7 @@ export default function AdminEventsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminEventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stripeActive, setStripeActive] = useState(false);
 
   const reload = useCallback(() => {
     if (!club || !token) return;
@@ -33,6 +34,10 @@ export default function AdminEventsPage() {
   }, [club?.id, token]);
 
   useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    if (!club || !token) return;
+    api.adminGetClub(club.id, token).then((c) => setStripeActive(c.stripeAccountStatus === 'ACTIVE')).catch(() => {});
+  }, [club?.id, token]);
 
   if (!club || !token) return null;
 
@@ -66,7 +71,7 @@ export default function AdminEventsPage() {
       startTime: isoToLocalInput(e.startTime), endTime: e.endTime ? isoToLocalInput(e.endTime) : null,
       registrationDeadline: isoToLocalInput(e.registrationDeadline),
       capacity: e.capacity, price: e.price != null ? Number(e.price) : null, memberOnly: e.memberOnly,
-      clubSportId: e.clubSportId ?? null,
+      clubSportId: e.clubSportId ?? null, requirePrepayment: e.requirePrepayment ?? false,
     });
   };
 
@@ -151,6 +156,17 @@ export default function AdminEventsPage() {
             <input type="checkbox" checked={form.memberOnly ?? true} onChange={(e) => setForm({ ...form, memberOnly: e.target.checked })} />
             Réservé aux membres
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: stripeActive ? 'pointer' : 'default', fontFamily: th.fontUI, fontSize: 13.5, color: th.text, opacity: stripeActive ? 1 : 0.5 }}>
+            <input type="checkbox" checked={form.requirePrepayment ?? false} disabled={!stripeActive}
+              onChange={(e) => setForm({ ...form, requirePrepayment: e.target.checked })} />
+            Inscription à régler en ligne (CB)
+          </label>
+          {!stripeActive && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 4 }}>
+              Activez d&apos;abord le paiement en ligne dans{' '}
+              <a href="/admin/payments" style={{ color: th.accent }}>Paiement en ligne →</a>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button onClick={save} style={btn}>{editingId ? 'Enregistrer' : 'Créer (brouillon)'}</button>
             <button onClick={() => { setForm(null); setEditingId(null); }} style={ghost}>Annuler</button>

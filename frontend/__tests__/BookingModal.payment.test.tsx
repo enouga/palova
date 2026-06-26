@@ -22,13 +22,13 @@ jest.mock('../lib/api', () => ({
 }));
 
 // L'étape Stripe est montée via dynamic() ; on la remplace par un stub qui expose
-// les props reçues (type / payShare / amountLabel / cgvAccepted) pour pouvoir les asserter.
+// les props reçues (type / amountLabel / cgvAccepted) pour pouvoir les asserter.
+// payShare n'est plus une prop directe : il est capturé dans le callback createIntent.
 jest.mock('../components/StripePaymentStep', () => ({
   __esModule: true,
-  default: (props: { type: string; payShare?: boolean; amountLabel: string; cgvAccepted?: boolean }) => (
+  default: (props: { type: string; amountLabel: string; cgvAccepted?: boolean }) => (
     <div data-testid="stripe-step"
       data-type={props.type}
-      data-payshare={String(!!props.payShare)}
       data-cgv={String(!!props.cgvAccepted)}
       data-amount={props.amountLabel} />
   ),
@@ -108,21 +108,19 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     // L'avenue affiche le message "part trop faible".
     expect(screen.getByText(/trop faible/i)).toBeInTheDocument();
-    // Cocher les CGV révèle l'étape Stripe, qui charge le TOTAL (payShare=false), pas la part.
+    // Cocher les CGV révèle l'étape Stripe, qui charge le TOTAL (pas la part : < 0,50 €).
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
-    expect(step).toHaveAttribute('data-payshare', 'false');
     expect(step).toHaveAttribute('data-amount', '0,40€');
   });
 
-  it('en ligne → étape Stripe directe avec payShare=true et le montant par personne', async () => {
-    // 40 € / 4 joueurs (padel double) = 10 € par personne
+  it('en ligne → étape Stripe directe avec le montant par personne', async () => {
+    // 40 € / 4 joueurs (padel double) = 10 € par personne (payShare capturé dans createIntent)
     renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'payment');
-    expect(step).toHaveAttribute('data-payshare', 'true');
     expect(step).toHaveAttribute('data-amount', '10€');
   });
 
@@ -133,17 +131,16 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     expect(screen.getByText(/Votre part/)).toBeInTheDocument();
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
-    expect(step).toHaveAttribute('data-payshare', 'true');
+    // amountLabel prouve que createIntent utilisera la part, pas le total.
     expect(step).toHaveAttribute('data-amount', '10€');
   });
 
-  it('empreinte requise (sans paiement en ligne) → étape Stripe setup, payShare ignoré', async () => {
+  it('empreinte requise (sans paiement en ligne) → étape Stripe setup', async () => {
     renderModal({ requireCardFingerprint: true, stripeActive: false });
     await screen.findByText(/Créneau bloqué/);
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'setup');
-    expect(step).toHaveAttribute('data-payshare', 'false');
   });
 
   it('défensif : paiement en ligne imposé mais Stripe inactif → avenue désactivée + note, étape Stripe jamais ouverte', async () => {

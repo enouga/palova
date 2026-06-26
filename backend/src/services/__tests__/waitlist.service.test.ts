@@ -76,7 +76,7 @@ describe('liste d attente — placement à l inscription', () => {
         data: expect.objectContaining({ eventId: 'e1', userId: 'user-1', status: 'CONFIRMED' }),
       }),
     );
-    expect(result.status).toBe('CONFIRMED');
+    expect(result.registration.status).toBe('CONFIRMED');
   });
 
   it('CONFIRMED sur la toute dernière place (confirmés = capacité − 1)', async () => {
@@ -103,7 +103,7 @@ describe('liste d attente — placement à l inscription', () => {
     expect(prismaMock.eventRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'WAITLISTED' }) }),
     );
-    expect(result.status).toBe('WAITLISTED');
+    expect(result.registration.status).toBe('WAITLISTED');
   });
 
   it('jamais de liste d attente quand capacity est null (places illimitées)', async () => {
@@ -290,7 +290,7 @@ describe('liste d attente — actions du club (admin)', () => {
       where: { id: 'r-wait' },
       data: { status: 'CONFIRMED' },
     });
-    expect(out.status).toBe('CONFIRMED');
+    expect(out!.status).toBe('CONFIRMED');
     expect(notifyEventPromotion).toHaveBeenCalledWith('r-wait');
   });
 
