@@ -87,13 +87,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: N
   } catch (err) { handleError(err, res, next); }
 });
 
-// Annuaire public — filtres optionnels sport (key), city, q (nom).
+// Annuaire public — filtres optionnels sport (key), city (ville ou région), q (nom),
+// region (exact), lat/lng (tri par distance).
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const latRaw = asString(req.query.lat), lngRaw = asString(req.query.lng);
+    const lat = latRaw ? Number(latRaw) : undefined;
+    const lng = lngRaw ? Number(lngRaw) : undefined;
     const clubs = await clubService.listClubs({
-      sport: asString(req.query.sport) || undefined,
-      city:  asString(req.query.city) || undefined,
-      q:     asString(req.query.q) || undefined,
+      sport:  asString(req.query.sport) || undefined,
+      city:   asString(req.query.city) || undefined,
+      q:      asString(req.query.q) || undefined,
+      region: asString(req.query.region) || undefined,
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
     });
     res.json(clubs);
   } catch (err) { handleError(err, res, next); }
