@@ -4,6 +4,7 @@ import AnonymousView from '@/components/platform/AnonymousView';
 
 // ClubDirectory est mocké : AnonymousView n'a alors besoin que du thème.
 jest.mock('@/components/ClubDirectory', () => ({ ClubDirectory: () => <div data-testid="club-directory" /> }));
+jest.mock('@/components/calendar/UpcomingTournaments', () => ({ UpcomingTournaments: () => <div data-testid="upcoming-tournaments" /> }));
 
 const wrap = () => render(<ThemeProvider><AnonymousView /></ThemeProvider>);
 
@@ -12,6 +13,7 @@ describe('AnonymousView', () => {
     wrap();
     expect(screen.getByText(/Trouvez un terrain/i)).toBeInTheDocument();
     expect(screen.getByTestId('club-directory')).toBeInTheDocument();
+    expect(screen.getByTestId('upcoming-tournaments')).toBeInTheDocument();
     expect(screen.getByText(/Vous gérez un club/i)).toBeInTheDocument();
   });
 

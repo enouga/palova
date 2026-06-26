@@ -52,6 +52,8 @@ export const api = {
 
   getClub: (slug: string) => request<ClubDetail>(`/api/clubs/${slug}`),
 
+  listNationalTournaments: () => request<NationalTournament[]>('/api/tournaments/national'),
+
   /** Résout un libellé de sous-domaine (slug actuel ou alias historique). 404 si inconnu. */
   resolveClubSlug: (slug: string) =>
     request<{ slug: string; moved: boolean }>(`/api/clubs/_resolve/${slug}`),
@@ -1162,6 +1164,7 @@ export interface ClubAdminDetail {
   defaultThemeMode: string;
   status: string;
   listedInDirectory: boolean;
+  listTournamentsNationally: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1254,6 +1257,7 @@ export type UpdateClubBody = Partial<{
   accentColor: string;
   defaultThemeMode: string;
   listedInDirectory: boolean;
+  listTournamentsNationally: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1605,6 +1609,25 @@ export interface Tournament {
   status: TournamentStatus;
   confirmedCount: number;
   waitlistCount: number;
+}
+
+/** Projection club renvoyée par le calendrier national (publique, sans données privées). */
+export interface NationalTournamentClub {
+  slug: string;
+  name: string;
+  city: string | null;
+  department: string | null;
+  departmentCode: string | null;
+  timezone: string;
+  accentColor: string;
+  logoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/** Un tournoi du calendrier national = tournoi public + son club. */
+export interface NationalTournament extends Tournament {
+  club: NationalTournamentClub;
 }
 
 export interface TournamentDetail extends Tournament {

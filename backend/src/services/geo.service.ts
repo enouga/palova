@@ -7,6 +7,8 @@ export interface GeoResult {
   latitude: number;
   longitude: number;
   region: string | null;
+  department: string | null;
+  departmentCode: string | null;
   postalCode: string | null;
   city: string | null;
 }
@@ -36,9 +38,13 @@ export async function geocodeAddress(input: { address?: string | null; city?: st
     if (!f) return null;
     const [lon, lat] = f.geometry.coordinates;
     if (typeof lat !== 'number' || typeof lon !== 'number') return null;
-    // context = "75, Paris, Île-de-France" → région = dernier segment.
-    const region = (f.properties.context ?? '').split(',').map((s) => s.trim()).filter(Boolean).pop() ?? null;
-    return { latitude: lat, longitude: lon, region, postalCode: f.properties.postcode ?? null, city: f.properties.city ?? null };
+    // context = "75, Paris, Île-de-France" = [code, département, région].
+    // région = dernier segment (inchangé) ; département/code = 1er/2e segment si ≥ 3 segments.
+    const parts = (f.properties.context ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const region = parts.length ? parts[parts.length - 1] : null;
+    const departmentCode = parts.length >= 3 ? parts[0] : null;
+    const department = parts.length >= 3 ? parts[1] : null;
+    return { latitude: lat, longitude: lon, region, department, departmentCode, postalCode: f.properties.postcode ?? null, city: f.properties.city ?? null };
   } catch {
     return null;
   }

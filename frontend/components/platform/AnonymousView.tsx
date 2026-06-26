@@ -3,6 +3,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ClubDirectory } from '@/components/ClubDirectory';
+import { UpcomingTournaments } from '@/components/calendar/UpcomingTournaments';
 
 // Vitrine publique de palova.fr (visiteur non connecté). Joueur-d'abord, ambiance éditoriale claire.
 // Les sections « Parties » et « Tournois » sont des emplacements (chantiers 3 et 2).
@@ -40,8 +41,7 @@ export default function AnonymousView() {
         {/* Emplacements chantiers 3 & 2 */}
         <SectionTitle th={th}>Parties ouvertes près de moi</SectionTitle>
         <SoonCard th={th} label="Les parties ouvertes près de chez vous arrivent bientôt." />
-        <SectionTitle th={th}>📅 Le calendrier des tournois</SectionTitle>
-        <SoonCard th={th} label="Le calendrier des tournois de tous les clubs arrive bientôt." />
+        <UpcomingTournaments />
 
         {/* Bandeau B2B */}
         <div style={{ margin: '34px 20px 0', borderRadius: 22, background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', padding: '26px 22px', textAlign: 'center' }}>

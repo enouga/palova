@@ -47,6 +47,13 @@ const handleError = (err: unknown, res: Response, next: NextFunction) => {
   next(err);
 };
 
+// Calendrier national : tournois à venir des clubs opt-in (public, pas d'auth).
+// DOIT rester avant `/:id` pour ne pas être capturée comme un id.
+router.get('/national', async (_req, res, next) => {
+  try { res.json(await service.listNationalTournaments()); }
+  catch (err) { handleError(err, res, next); }
+});
+
 // Détail public d'un tournoi (pas d'auth ; le DRAFT est masqué par le service).
 router.get('/:id', async (req, res, next) => {
   try { res.json(await service.getById(asString(req.params.id))); }

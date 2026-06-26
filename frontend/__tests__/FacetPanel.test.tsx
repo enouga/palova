@@ -1,0 +1,42 @@
+import { render, screen, fireEvent } from '@testing-library/react';
+import { ThemeProvider } from '../lib/ThemeProvider';
+import { FacetPanel } from '../components/calendar/FacetPanel';
+import { emptyCalendarState } from '../lib/tournamentCalendar';
+
+const facets = {
+  departments: [{ code: '75', name: 'Paris', count: 2 }, { code: '69', name: 'Rhône', count: 1 }],
+  categories: [{ value: 'P500', count: 2 }, { value: 'P1000', count: 1 }],
+  genders: [{ value: 'MEN' as const, count: 1 }, { value: 'WOMEN' as const, count: 1 }],
+};
+
+function setup(over: Partial<React.ComponentProps<typeof FacetPanel>> = {}) {
+  const props = {
+    facets, state: emptyCalendarState(),
+    onToggleDept: jest.fn(), onToggleCategory: jest.fn(), onToggleGender: jest.fn(),
+    onSetPreset: jest.fn(), onSetRange: jest.fn(), onToggleNearMe: jest.fn(), onClear: jest.fn(),
+    ...over,
+  };
+  render(<ThemeProvider><FacetPanel {...props} /></ThemeProvider>);
+  return props;
+}
+
+describe('FacetPanel', () => {
+  it('rend les chips de département avec compteur et déclenche le toggle', () => {
+    const p = setup();
+    fireEvent.click(screen.getByText(/Paris/));
+    expect(p.onToggleDept).toHaveBeenCalledWith('75');
+  });
+
+  it('le bouton « Autour de moi » déclenche onToggleNearMe', () => {
+    const p = setup();
+    fireEvent.click(screen.getByRole('button', { name: /Autour de moi/i }));
+    expect(p.onToggleNearMe).toHaveBeenCalled();
+  });
+
+  it('« Effacer » apparaît quand un filtre est actif', () => {
+    const state = { ...emptyCalendarState(), deptCodes: new Set(['75']) };
+    const p = setup({ state });
+    fireEvent.click(screen.getByText('Effacer'));
+    expect(p.onClear).toHaveBeenCalled();
+  });
+});

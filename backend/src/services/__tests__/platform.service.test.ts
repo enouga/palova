@@ -183,6 +183,31 @@ describe('PlatformService.createClubWithOwner', () => {
     const data = (tx.club.create as jest.Mock).mock.calls[0][0].data;
     expect(data).toMatchObject({ latitude: 9, longitude: 8, region: 'Bretagne', postalCode: '35000' });
   });
+
+  it('persiste department et departmentCode lors du géocodage', async () => {
+    geocodeMock.mockResolvedValue({
+      latitude: 45.7, longitude: 4.8, region: 'Auvergne-Rhône-Alpes',
+      department: 'Rhône', departmentCode: '69', postalCode: '69001', city: 'Lyon',
+    });
+    prismaMock.user.findFirst.mockResolvedValue(null as any);
+    const tx = {
+      clubSlugAlias: { findUnique: jest.fn().mockResolvedValue(null) },
+      user: { create: jest.fn().mockResolvedValue({ id: 'u-lyon', email: 'g@lyon.fr', firstName: 'G', lastName: 'D' }) },
+      club: { create: jest.fn().mockResolvedValue({ id: 'c-lyon', slug: 'lyon-padel', name: 'Lyon Padel', status: 'ACTIVE' }) },
+      clubMember: { create: jest.fn().mockResolvedValue({}) },
+      sport: { findUnique: jest.fn() },
+      clubSport: { create: jest.fn() },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    await service.createClubWithOwner({
+      club: { name: 'Lyon Padel', address: '1 place Bellecour', city: 'Lyon' },
+      owner: { firstName: 'G', lastName: 'D', email: 'g@lyon.fr', password: 'password123' },
+    });
+
+    const data = (tx.club.create as jest.Mock).mock.calls[0][0].data;
+    expect(data).toMatchObject({ department: 'Rhône', departmentCode: '69' });
+  });
 });
 
 describe('PlatformService.changeClubSlug', () => {

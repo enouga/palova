@@ -731,3 +731,33 @@ describe('TournamentService.cancelRegistration — remboursement', () => {
     expect(refundSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('TournamentService.listNationalTournaments', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('filtre PUBLISHED + à venir + club ACTIVE & opt-in ; renvoie club + compteurs', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([
+      { id: 't1', name: 'GP Paris', category: 'P500', gender: 'MEN', startTime: FUTURE, maxTeams: 16,
+        club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', department: 'Paris', departmentCode: '75', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35 } },
+    ] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([
+      { tournamentId: 't1', status: 'CONFIRMED', _count: { _all: 3 } },
+    ] as any);
+
+    const res = await svc.listNationalTournaments();
+
+    const where = (prismaMock.tournament.findMany.mock.calls[0][0] as any).where;
+    expect(where.status).toBe('PUBLISHED');
+    expect(where.club).toEqual({ status: 'ACTIVE', listTournamentsNationally: true });
+    expect(where.startTime.gte).toBeInstanceOf(Date);
+    expect(where.startTime.lte).toBeInstanceOf(Date);
+    expect(res[0]).toMatchObject({ id: 't1', confirmedCount: 3, waitlistCount: 0, club: { departmentCode: '75', timezone: 'Europe/Paris' } });
+  });
+
+  it('liste vide si aucun tournoi', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([] as any);
+    const res = await svc.listNationalTournaments();
+    expect(res).toEqual([]);
+  });
+});

@@ -106,7 +106,7 @@ export class ClubService {
             address: params.address?.trim() || '',
             city: params.city?.trim() || null,
             timezone: params.timezone || 'Europe/Paris',
-            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode } : {}),
+            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: params.ownerId, clubId: club.id, role: 'OWNER' } });
@@ -214,7 +214,7 @@ export class ClubService {
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
         timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
-        listedInDirectory: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
+        listedInDirectory: true, listTournamentsNationally: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
         playerChangeCutoffHours: true, cancellationCutoffHours: true,
@@ -236,7 +236,7 @@ export class ClubService {
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
     timezone?: string; logoUrl?: string; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
-    listedInDirectory?: boolean; publicBookingDays?: number; memberBookingDays?: number;
+    listedInDirectory?: boolean; listTournamentsNationally?: boolean; publicBookingDays?: number; memberBookingDays?: number;
     bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
     publicReleaseHour?: number;
     memberReleaseHour?: number;
@@ -268,8 +268,8 @@ export class ClubService {
       if (changed) {
         const geo = await geocodeAddress({ address: newAddress, city: newCity });
         geoData = geo
-          ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, postalCode: geo.postalCode }
-          : { latitude: null, longitude: null, region: null, postalCode: null };
+          ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode }
+          : { latitude: null, longitude: null, region: null, department: null, departmentCode: null, postalCode: null };
       }
     }
 
@@ -294,6 +294,7 @@ export class ClubService {
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
         ...(typeof params.listedInDirectory === 'boolean' ? { listedInDirectory: params.listedInDirectory } : {}),
+        ...(typeof params.listTournamentsNationally === 'boolean' ? { listTournamentsNationally: params.listTournamentsNationally } : {}),
         ...(typeof params.publicBookingDays === 'number' ? { publicBookingDays: clamp(params.publicBookingDays) } : {}),
         ...(typeof params.memberBookingDays === 'number' ? { memberBookingDays: clamp(params.memberBookingDays) } : {}),
         ...(params.bookingReleaseMode !== undefined && VALID_RELEASE_MODES.has(params.bookingReleaseMode) ? { bookingReleaseMode: params.bookingReleaseMode } : {}),

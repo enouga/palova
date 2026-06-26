@@ -18,7 +18,7 @@ const base = {
   onClick: jest.fn(),
 };
 
-const wrap = (over: Partial<typeof base> & { now: Date | null }) =>
+const wrap = (over: Partial<typeof base> & { now: Date | null; subtitle?: string | null }) =>
   render(<ThemeProvider><AgendaCard {...base} {...over} /></ThemeProvider>);
 
 describe('AgendaCard', () => {
@@ -36,6 +36,11 @@ describe('AgendaCard', () => {
     wrap({ now: null });
     expect(screen.queryByText('J-24')).not.toBeInTheDocument();
     expect(screen.getByTestId('card-fill').style.width).toBe('0px');
+  });
+
+  it('affiche le subtitle quand fourni', () => {
+    wrap({ now: NOW, subtitle: 'Padel Paris · Paris · 8 km' });
+    expect(screen.getByText('Padel Paris · Paris · 8 km')).toBeInTheDocument();
   });
 
   it('sans capacité → pas de jauge ; clic → onClick', () => {
