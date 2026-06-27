@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --ext ts --exec ts-node src/app.ts",
+    "dev": "nodemon --ext ts --exec \"node -r ts-node/register src/app.ts\"",
     "build": "tsc",
     "start": "node dist/app.js",
     "test": "jest",

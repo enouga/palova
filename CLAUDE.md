@@ -88,6 +88,7 @@ Incompatible avec Turbopack. Ne pas l'activer dans next.config.ts.
 - **Hydration mismatch** extension ColorZilla → `suppressHydrationWarning` sur `<html>` et `<body>` dans layout.tsx
 - **Page vide au clic** sur un terrain → `loading` initialisé à `true` dans courts/[id]/page.tsx
 - **Slot count** : 8h–22h / 30min step / 60min durée = **27 créneaux** (pas 28)
+- **Backend `npm run dev` → `[nodemon] app crashed` (Windows)** alors que le serveur tourne en réalité (`/health` répond) : nodemon exécutait `ts-node` (shim `ts-node.cmd`) et **perdait la trace du process node** → faux « app crashed » + auto-reload cassé + node orphelin qui garde le port 3001 (EADDRINUSE au reload). Corrigé en lançant node directement : `--exec "node -r ts-node/register src/app.ts"` (mêmes deps, pas de shim).
 
 ## Commandes utiles
 
