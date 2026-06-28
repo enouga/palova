@@ -122,4 +122,65 @@ describe('OpenMatchChatService', () => {
       broadcastSpy.mockRestore();
     });
   });
+
+  // ─────────────────────────────
+  // SUPPRESSION (moderation)
+  // ─────────────────────────────
+
+  describe('OpenMatchChatService - suppression', () => {
+    /** Prépare findUnique + update pour un message signé par authorId. */
+    function msgBy(authorId: string) {
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1',
+        reservationId: 'resa-1',
+        userId: authorId,
+        deletedAt: null,
+      } as any);
+      prismaMock.openMatchMessage.update.mockResolvedValue({
+        id: 'm1',
+        body: 'ancien message',
+        createdAt: new Date('2026-06-28T10:00:00Z'),
+        deletedAt: new Date('2026-06-28T10:05:00Z'),
+        user: { id: authorId, firstName: 'Cu', lastName: 'Rious', avatarUrl: null },
+      } as any);
+    }
+
+    let broadcastSpy: jest.SpyInstance;
+    beforeEach(() => {
+      broadcastSpy = jest.spyOn(SSEService.getInstance(), 'broadcastMatch').mockImplementation(() => {});
+    });
+    afterEach(() => broadcastSpy.mockRestore());
+
+    it("l auteur peut supprimer son message (tombstone)", async () => {
+      // curious has access via interest record (not a participant)
+      primeAccessOk();
+      prismaMock.openMatchInterest.findUnique.mockResolvedValue({ id: 'interest-1' } as any);
+      msgBy('curious');
+
+      const dto = await service.deleteMessage('club-demo', 'resa-1', 'curious', 'm1');
+      expect(dto.deleted).toBe(true);
+      expect(dto.body).toBe('');
+    });
+
+    it("l organisateur peut supprimer le message d un autre", async () => {
+      // org is participant + organizer
+      primeAccessOk(); // participantUserId='org', isOrganizer=true
+      msgBy('curious'); // message authored by curious, not org
+
+      const dto = await service.deleteMessage('club-demo', 'resa-1', 'org', 'm1');
+      expect(dto.deleted).toBe(true);
+    });
+
+    it("un tiers ne peut pas supprimer (NOT_ALLOWED)", async () => {
+      // curious is interested but message was posted by someone else
+      primeAccessOk();
+      prismaMock.openMatchInterest.findUnique.mockResolvedValue({ id: 'interest-1' } as any);
+      msgBy('someoneElse'); // message not by curious
+      prismaMock.clubMember.findFirst.mockResolvedValue(null as any); // curious is not staff
+
+      await expect(
+        service.deleteMessage('club-demo', 'resa-1', 'curious', 'm1'),
+      ).rejects.toThrow('NOT_ALLOWED');
+    });
+  });
 });
