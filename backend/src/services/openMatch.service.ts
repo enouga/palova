@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
-import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
+import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded, notifyOpenMatchInterest } from '../email/notifications';
 import { RatingService } from './rating.service';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
@@ -235,5 +235,44 @@ export class OpenMatchService {
   /** Quitter une partie ouverte (départ volontaire) — délègue au retrait unifié. */
   async leaveOpenMatch(slug: string, reservationId: string, userId: string) {
     return this.removeOpenMatchPlayer(slug, reservationId, userId, userId);
+  }
+
+  /** Marque l'appelant « intéressé » par une partie ouverte (n'occupe pas de place). */
+  async setInterested(slug: string, reservationId: string, userId: string) {
+    const club = await this.resolveActiveMember(slug, userId);
+
+    const resa = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      select: {
+        visibility: true, status: true, startTime: true,
+        resource: { select: { clubId: true } },
+        participants: { select: { userId: true } },
+      },
+    });
+    if (!resa || resa.resource.clubId !== club.id) throw new Error('RESERVATION_NOT_FOUND');
+    if (resa.visibility !== 'PUBLIC' || resa.status !== 'CONFIRMED') throw new Error('MATCH_NOT_JOINABLE');
+    if (resa.startTime.getTime() <= Date.now()) throw new Error('MATCH_IN_PAST');
+    if (resa.participants.some((p) => p.userId === userId)) throw new Error('ALREADY_PARTICIPANT');
+
+    await prisma.openMatchInterest.upsert({
+      where: { reservationId_userId: { reservationId, userId } },
+      create: { reservationId, userId },
+      update: {},
+    });
+
+    await this.safeNotify(() => notifyOpenMatchInterest(reservationId, userId));
+    return { id: reservationId };
+  }
+
+  /** Retire l'intérêt de l'appelant (idempotent). */
+  async removeInterested(slug: string, reservationId: string, userId: string) {
+    const club = await this.resolveActiveMember(slug, userId);
+    const resa = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      select: { resource: { select: { clubId: true } } },
+    });
+    if (!resa || resa.resource.clubId !== club.id) throw new Error('RESERVATION_NOT_FOUND');
+    await prisma.openMatchInterest.deleteMany({ where: { reservationId, userId } });
+    return { id: reservationId };
   }
 }

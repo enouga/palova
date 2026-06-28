@@ -6,11 +6,13 @@ const mockNotifyJoin = jest.fn();
 const mockNotifyLeft = jest.fn();
 const mockNotifyRemoved = jest.fn();
 const mockNotifyAdded = jest.fn();
+const mockNotifyInterest = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyOpenMatchJoin: (...args: unknown[]) => mockNotifyJoin(...args),
   notifyOpenMatchLeft: (...args: unknown[]) => mockNotifyLeft(...args),
   notifyOpenMatchRemoved: (...args: unknown[]) => mockNotifyRemoved(...args),
   notifyOpenMatchAdded: (...args: unknown[]) => mockNotifyAdded(...args),
+  notifyOpenMatchInterest: (...args: unknown[]) => mockNotifyInterest(...args),
 }));
 
 const future = (h = 48) => new Date(Date.now() + h * 3_600_000);
@@ -23,6 +25,7 @@ describe('OpenMatchService', () => {
     mockNotifyLeft.mockReset().mockResolvedValue(undefined);
     mockNotifyRemoved.mockReset().mockResolvedValue(undefined);
     mockNotifyAdded.mockReset().mockResolvedValue(undefined);
+    mockNotifyInterest.mockReset().mockResolvedValue(undefined);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     // Default: sport found (needed by RatingService.getLevelsBySport in listOpenMatches)
@@ -368,6 +371,48 @@ describe('OpenMatchService', () => {
     it('lève VALIDATION_ERROR si targetUserId est vide ou absent', async () => {
       await expect(service.addOpenMatchPlayer('club-demo', 'm1', 'org', '')).rejects.toThrow('VALIDATION_ERROR');
       expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('OpenMatchService — intérêt', () => {
+    it('setInterested refuse un participant déjà inscrit (ALREADY_PARTICIPANT)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        visibility: 'PUBLIC', status: 'CONFIRMED', startTime: future(),
+        resource: { clubId: 'club-demo' },
+        participants: [{ userId: 'user-3' }],
+      } as any);
+
+      await expect(service.setInterested('club-demo', 'm1', 'user-3')).rejects.toThrow('ALREADY_PARTICIPANT');
+    });
+
+    it('setInterested crée la ligne d intérêt (idempotent via upsert)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        visibility: 'PUBLIC', status: 'CONFIRMED', startTime: future(),
+        resource: { clubId: 'club-demo' },
+        participants: [],
+      } as any);
+      prismaMock.openMatchInterest.upsert.mockResolvedValue({} as any);
+
+      await service.setInterested('club-demo', 'm1', 'user-3');
+
+      expect(prismaMock.openMatchInterest.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { reservationId_userId: { reservationId: 'm1', userId: 'user-3' } },
+        }),
+      );
+    });
+
+    it('removeInterested supprime la ligne (idempotent)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        resource: { clubId: 'club-demo' },
+      } as any);
+      prismaMock.openMatchInterest.deleteMany.mockResolvedValue({ count: 0 } as any);
+
+      await service.removeInterested('club-demo', 'm1', 'user-3');
+
+      expect(prismaMock.openMatchInterest.deleteMany).toHaveBeenCalledWith({
+        where: { reservationId: 'm1', userId: 'user-3' },
+      });
     });
   });
 
