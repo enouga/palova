@@ -182,5 +182,48 @@ describe('OpenMatchChatService', () => {
         service.deleteMessage('club-demo', 'resa-1', 'curious', 'm1'),
       ).rejects.toThrow('NOT_ALLOWED');
     });
+
+    it("un OWNER/ADMIN du club (non participant) peut supprimer", async () => {
+      // admin is neither author ('curious') nor organizer ('org') but is OWNER/ADMIN staff
+      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        resource: { clubId: 'club-1' },
+        participants: [{ userId: 'org', isOrganizer: true }],
+      } as any);
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1', reservationId: 'resa-1', userId: 'curious',
+        body: 'test msg', createdAt: new Date('2026-06-28T10:00:00Z'), deletedAt: null,
+        user: { id: 'curious', firstName: 'Cu', lastName: 'Rious', avatarUrl: null },
+      } as any);
+      prismaMock.clubMember.findFirst.mockResolvedValue({ id: 'cm1' } as any);
+      prismaMock.openMatchMessage.update.mockResolvedValue({
+        id: 'm1', body: 'test msg', createdAt: new Date('2026-06-28T10:00:00Z'),
+        deletedAt: new Date('2026-06-28T10:05:00Z'),
+        user: { id: 'curious', firstName: 'Cu', lastName: 'Rious', avatarUrl: null },
+      } as any);
+
+      const dto = await service.deleteMessage('club-demo', 'resa-1', 'admin', 'm1');
+      expect(dto.deleted).toBe(true);
+    });
+
+    it("double suppression est idempotente (pas de re-broadcast)", async () => {
+      // message already deleted; author re-tries → returns tombstone without calling update or broadcast
+      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        resource: { clubId: 'club-1' },
+        participants: [{ userId: 'curious', isOrganizer: false }],
+      } as any);
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1', reservationId: 'resa-1', userId: 'curious',
+        body: 'already deleted msg', createdAt: new Date('2026-06-28T10:00:00Z'),
+        deletedAt: new Date('2026-06-28T10:05:00Z'),
+        user: { id: 'curious', firstName: 'Cu', lastName: 'Rious', avatarUrl: null },
+      } as any);
+
+      const dto = await service.deleteMessage('club-demo', 'resa-1', 'curious', 'm1');
+      expect(dto.deleted).toBe(true);
+      expect(prismaMock.openMatchMessage.update).not.toHaveBeenCalled();
+      expect(broadcastSpy).not.toHaveBeenCalled();
+    });
   });
 });

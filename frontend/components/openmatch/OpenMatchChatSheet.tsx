@@ -13,6 +13,7 @@ export interface OpenMatchChatSheetProps {
   reservationId: string;
   viewerUserId: string;
   viewerIsOrganizer: boolean;
+  canModerate?: boolean;
   title: string;
   timezone: string;
   onClose: () => void;
@@ -22,7 +23,7 @@ function hhmm(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
-export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, viewerIsOrganizer, title, timezone, onClose }: OpenMatchChatSheetProps) {
+export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, viewerIsOrganizer, canModerate, title, timezone, onClose }: OpenMatchChatSheetProps) {
   const { th } = useTheme();
   const [messages, setMessages] = useState<OpenMatchMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -67,7 +68,7 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
     finally { setSending(false); }
   };
 
-  const canDelete = (m: OpenMatchMessage) => !m.deleted && (m.author.userId === viewerUserId || viewerIsOrganizer);
+  const canDelete = (m: OpenMatchMessage) => !m.deleted && (m.author.userId === viewerUserId || viewerIsOrganizer || !!canModerate);
 
   const doDelete = async (m: OpenMatchMessage) => {
     try { upsert(await api.deleteChatMessage(slug, reservationId, m.id, token)); }

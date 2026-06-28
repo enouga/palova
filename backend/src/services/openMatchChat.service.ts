@@ -110,24 +110,43 @@ export class OpenMatchChatService {
     return dto;
   }
 
-  /** Supprime un message (auteur, organisateur de la partie, ou staff OWNER/ADMIN du club). */
+  /** Supprime un message : auteur, organisateur de la partie, ou staff OWNER/ADMIN du club.
+   *  N'exige PAS d'être participant/intéressé (un modérateur du club peut agir). */
   async deleteMessage(slug: string, reservationId: string, userId: string, messageId: string): Promise<ChatMessageDTO> {
-    const ctx = await this.assertChatAccess(slug, reservationId, userId);
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+
+    const resa = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      select: {
+        resource: { select: { clubId: true } },
+        participants: { select: { userId: true, isOrganizer: true } },
+      },
+    });
+    if (!resa || resa.resource.clubId !== club.id) throw new Error('RESERVATION_NOT_FOUND');
+
     const msg = await prisma.openMatchMessage.findUnique({
       where: { id: messageId },
-      select: { id: true, reservationId: true, userId: true, deletedAt: true },
+      select: {
+        id: true, reservationId: true, userId: true, body: true, createdAt: true, deletedAt: true,
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
     });
     if (!msg || msg.reservationId !== reservationId) throw new Error('MESSAGE_NOT_FOUND');
 
-    let allowed = msg.userId === userId || ctx.isOrganizer;
+    const isAuthor = msg.userId === userId;
+    const isOrganizer = resa.participants.some((p) => p.isOrganizer && p.userId === userId);
+    let allowed = isAuthor || isOrganizer;
     if (!allowed) {
       const staff = await prisma.clubMember.findFirst({
-        where: { userId, clubId: ctx.clubId, role: { in: ['OWNER', 'ADMIN'] } },
+        where: { userId, clubId: club.id, role: { in: ['OWNER', 'ADMIN'] } },
         select: { id: true },
       });
       allowed = !!staff;
     }
     if (!allowed) throw new Error('NOT_ALLOWED');
+
+    if (msg.deletedAt) return toDTO(msg); // déjà supprimé : idempotent, pas de re-broadcast
 
     const updated = await prisma.openMatchMessage.update({
       where: { id: messageId },

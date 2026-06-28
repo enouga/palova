@@ -48,6 +48,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [view, setView] = useState<'parties' | 'classement'>('parties');
   const [chatting, setChatting] = useState<OpenMatch | null>(null);
   const [viewerUserId, setViewerUserId] = useState('');
+  const [canModerate, setCanModerate] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -69,6 +71,15 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     api.getMyProfile(token).then((p) => setViewerUserId(p.id)).catch(() => {});
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
+    api.getMyClubs(token)
+      .then((list) => setCanModerate(list.some((c) => c.slug === club.slug && (c.role === 'OWNER' || c.role === 'ADMIN'))))
+      .catch(() => {});
+  }, [token, club.slug]);
+
+  useEffect(() => { setMounted(true); }, []);
+
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
     if (!token) return;
     setBusyId(m.id); setError('');
@@ -79,7 +90,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   const lastReadKey = (id: string) => `palova:match-chat-read:${id}`;
   const hasUnread = (m: OpenMatch) => {
-    if (!m.lastMessageAt || typeof window === 'undefined') return false;
+    if (!mounted || !m.lastMessageAt || typeof window === 'undefined') return false;
     const seen = window.localStorage.getItem(lastReadKey(m.id));
     return !seen || new Date(m.lastMessageAt) > new Date(seen);
   };
@@ -237,6 +248,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         <OpenMatchChatSheet
           slug={club.slug} token={token} reservationId={chatting.id} viewerUserId={viewerUserId}
           viewerIsOrganizer={chatting.viewerIsOrganizer}
+          canModerate={canModerate}
           title={`${chatting.resourceName} · ${new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(chatting.startTime)).replace(':', 'h')}`}
           timezone={club.timezone}
           onClose={() => { setChatting(null); load(); }}
