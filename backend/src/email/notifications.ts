@@ -415,6 +415,11 @@ export async function notifyOpenMatchInterest(reservationId: string, interestedU
   });
 }
 
+/** Notifie les membres du chat ABSENTS qu'un message a été posté (in-app + push). Complété en Task 6. */
+export async function notifyOpenMatchChatMessage(_reservationId: string, _messageId: string, _authorUserId: string): Promise<void> {
+  // implémentation en Task 6
+}
+
 /**
  * Propose une partie ouverte (PUBLIC, fourchette de niveau) aux membres ACTIVE du club
  * qui ont opté pour « les parties à mon niveau » et dont le niveau est dans la fourchette.
