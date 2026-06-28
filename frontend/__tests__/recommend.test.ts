@@ -9,7 +9,8 @@ function m(over: Partial<OpenMatch> & { id: string }): OpenMatch {
   return {
     resourceName: 'Court 1', startTime: future(2), endTime: future(3),
     maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
-    players: [], targetLevelMin: null, targetLevelMax: null, ...over,
+    players: [], targetLevelMin: null, targetLevelMax: null,
+    interestedCount: 0, viewerIsInterested: false, interested: [], lastMessageAt: null, ...over,
   };
 }
 

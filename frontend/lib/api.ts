@@ -258,6 +258,16 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  setInterested: (slug: string, id: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'POST' }, token),
+  removeInterested: (slug: string, id: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'DELETE' }, token),
+  getChatMessages: (slug: string, id: string, token: string) =>
+    request<OpenMatchMessage[]>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, {}, token),
+  postChatMessage: (slug: string, id: string, body: string, token: string) =>
+    request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+  deleteChatMessage: (slug: string, id: string, messageId: string, token: string) =>
+    request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}`, { method: 'DELETE' }, token),
 
   // --- Back-office club (scopé par clubId) ---
   adminGetClub: (clubId: string, token: string) =>
@@ -1118,6 +1128,18 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
+  interestedCount: number;
+  viewerIsInterested: boolean;
+  interested: OpenMatchPlayer[];
+  lastMessageAt: string | null;
+}
+
+export interface OpenMatchMessage {
+  id: string;
+  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null };
+  body: string;
+  createdAt: string;
+  deleted: boolean;
 }
 
 export interface CreateClubBody {
@@ -1985,4 +2007,9 @@ export interface MyLessonEnrollment {
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).
 export function notificationsStreamUrl(token: string): string {
   return `${BASE_URL}/api/me/notifications/stream?token=${encodeURIComponent(token)}`;
+}
+
+/** URL du flux SSE du chat d'une partie (token en query : EventSource ne pose pas d'en-tête). */
+export function chatStreamUrl(slug: string, id: string, token: string): string {
+  return `${BASE_URL}/api/clubs/${slug}/open-matches/${id}/chat/stream?token=${encodeURIComponent(token)}`;
 }
