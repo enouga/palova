@@ -28,6 +28,9 @@ export interface OpenMatchCardProps {
   onCancelAdd: () => void;
   onRecordResult: (m: OpenMatch) => void;
   canRecordResult: boolean;
+  onToggleInterest: (m: OpenMatch) => void;
+  onOpenChat: (m: OpenMatch) => void;
+  hasUnread: boolean;
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
@@ -35,6 +38,7 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
+  onToggleInterest, onOpenChat, hasUnread,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   return (
@@ -45,6 +49,9 @@ export function OpenMatchCard({
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           {(m.targetLevelMin != null || m.targetLevelMax != null) && (
             <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
+          )}
+          {m.interestedCount > 0 && (
+            <Chip tone="line" icon="users">{m.interestedCount} intéressé{m.interestedCount > 1 ? 's' : ''}</Chip>
           )}
           <Chip tone={m.full ? 'mute' : 'accent'}>{m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''}`}</Chip>
         </span>
@@ -73,6 +80,14 @@ export function OpenMatchCard({
             <Btn variant="surface" disabled={busy} onClick={() => onLeave(m)}>Quitter</Btn>
           ) : (
             <Btn icon="plus" disabled={busy || m.full} onClick={() => onJoin(m)}>Rejoindre</Btn>
+          )}
+          <Btn variant="surface" disabled={!(m.viewerIsParticipant || m.viewerIsInterested)} onClick={() => onOpenChat(m)}>
+            Discuter{hasUnread ? ' •' : ''}
+          </Btn>
+          {!m.viewerIsParticipant && (
+            <Btn variant={m.viewerIsInterested ? 'primary' : 'surface'} disabled={busy} onClick={() => onToggleInterest(m)}>
+              {m.viewerIsInterested ? 'Intéressé ✓' : "Ça m'intéresse"}
+            </Btn>
           )}
           {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
             <Btn variant="surface" disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
