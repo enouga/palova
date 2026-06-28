@@ -12,9 +12,12 @@ import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { PackageService } from '../services/package.service';
 import { SubscriptionService } from '../services/subscription.service';
+import jwt from 'jsonwebtoken';
 import { OpenMatchService } from '../services/openMatch.service';
+import { OpenMatchChatService } from '../services/openMatchChat.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
+import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
 import { capacityFor } from '../utils/courtType';
 import { prisma } from '../db/prisma';
@@ -31,6 +34,7 @@ const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
 const openMatchService = new OpenMatchService();
+const openMatchChatService = new OpenMatchChatService();
 const reservationService = new ReservationService();
 const subscriptionService = new SubscriptionService();
 
@@ -55,6 +59,10 @@ const ERROR_STATUS: Record<string, number> = {
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTICIPANT_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_FOUND: 404,
+  ALREADY_PARTICIPANT:   409,
+  CHAT_FORBIDDEN:        403,
+  NOT_ALLOWED:           403,
+  MESSAGE_NOT_FOUND:     404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -218,6 +226,43 @@ router.delete('/:slug/open-matches/:id/participants/:userId', authMiddleware, as
 router.post('/:slug/open-matches/:id/participants', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.addOpenMatchPlayer(asString(req.params.slug), asString(req.params.id), req.user!.id, asString((req.body as { userId?: unknown }).userId))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// « Ça m'intéresse » sur une partie ouverte (n'occupe pas de place, débloque le chat).
+router.post('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.setInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.removeInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Chat de la partie ouverte (inscrits + intéressés).
+router.get('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.listMessages(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.post('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = typeof (req.body as { body?: unknown }).body === 'string' ? (req.body as { body: string }).body : '';
+    res.json(await openMatchChatService.postMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, body));
+  } catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.deleteMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Flux SSE du chat. EventSource ne pose pas d'en-tête Authorization → token en query, puis garde d'accès.
+router.get('/:slug/open-matches/:id/chat/stream', async (req: AuthRequest, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  let userId: string;
+  try { userId = (jwt.verify(token, process.env.JWT_SECRET!) as { id: string }).id; }
+  catch { return void res.status(401).end(); }
+  try { await openMatchChatService.assertChatAccessPublic(asString(req.params.slug), asString(req.params.id), userId); }
+  catch { return void res.status(403).end(); }
+  SSEService.getInstance().addMatchClient(asString(req.params.id), userId, res);
 });
 
 // Adhésion du joueur connecté à ce club (licence / statut).
