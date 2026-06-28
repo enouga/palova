@@ -62,6 +62,16 @@ export class OpenMatchService {
           orderBy: { joinedAt: 'asc' },
           select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
+        openMatchInterests: {
+          orderBy: { createdAt: 'asc' },
+          select: { userId: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+        },
+        openMatchMessages: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
       },
       // targetLevelMin / targetLevelMax are top-level scalar fields returned by include by default
     });
@@ -94,6 +104,12 @@ export class OpenMatchService {
           userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
           level: levels[`${p.userId}:${sportKey}`] ?? null,
         })),
+        interestedCount: m.openMatchInterests.length,
+        viewerIsInterested: m.openMatchInterests.some((i) => i.userId === viewerUserId),
+        interested: m.openMatchInterests.slice(0, 5).map((i) => ({
+          userId: i.userId, firstName: i.user.firstName, lastName: i.user.lastName, avatarUrl: i.user.avatarUrl, isOrganizer: false,
+        })),
+        lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
       };
     });
   }
@@ -125,6 +141,8 @@ export class OpenMatchService {
       const created = await tx.reservationParticipant.create({
         data: { reservationId, userId, isOrganizer: false, share: new Prisma.Decimal(0) },
       });
+      // Devenu participant : son éventuel « intérêt » est redondant.
+      await tx.openMatchInterest.deleteMany({ where: { reservationId, userId } });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
       return { id: reservationId };
@@ -223,6 +241,7 @@ export class OpenMatchService {
       const created = await tx.reservationParticipant.create({
         data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0) },
       });
+      await tx.openMatchInterest.deleteMany({ where: { reservationId, userId: targetUserId } });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
       return { id: reservationId };
