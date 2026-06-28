@@ -460,6 +460,8 @@ model User {
   memberNotes             MemberNote[] @relation("MemberNoteSubject")
   authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
   subscriptions           Subscription[]
+  openMatchInterests      OpenMatchInterest[]
+  openMatchMessages       OpenMatchMessage[]
 
   @@map("users")
 }
@@ -695,6 +697,8 @@ model Reservation {
   matches      Match[]
   series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   lesson       Lesson?
+  openMatchInterests OpenMatchInterest[]
+  openMatchMessages  OpenMatchMessage[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
@@ -1179,6 +1183,7 @@ enum NotificationCategory {
   CLUB_MESSAGES
   ORGANIZER
   REMINDERS
+  OPEN_MATCH_CHAT
 }
 
 enum NotificationChannel {
@@ -1259,4 +1264,38 @@ model ClubBroadcast {
 
   @@index([clubId, createdAt])
   @@map("club_broadcasts")
+}
+
+/// Membre « intéressé » par une partie ouverte (n'occupe pas de place).
+/// Débloque l'accès au chat et alimente le compteur d'intéressés sur la carte.
+model OpenMatchInterest {
+  id            String   @id @default(cuid())
+  reservationId String   @map("reservation_id")
+  userId        String   @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, userId])
+  @@index([reservationId])
+  @@map("open_match_interests")
+}
+
+/// Message du fil de discussion d'une partie ouverte. Soft-delete (deletedAt) :
+/// un message supprimé reste en base et s'affiche en pierre tombale « message supprimé ».
+model OpenMatchMessage {
+  id            String    @id @default(cuid())
+  reservationId String    @map("reservation_id")
+  userId        String    @map("user_id") // auteur
+  body          String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedById   String?   @map("deleted_by_id")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, createdAt])
+  @@map("open_match_messages")
 }
