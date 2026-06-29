@@ -253,8 +253,8 @@ export const api = {
   removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
 
-  // --- Parties ouvertes (membres du club) ---
-  getOpenMatches: (slug: string, token: string) =>
+  // --- Parties ouvertes (visibles de tous ; token facultatif) ---
+  getOpenMatches: (slug: string, token?: string) =>
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
   joinOpenMatch: (slug: string, id: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'POST' }, token),

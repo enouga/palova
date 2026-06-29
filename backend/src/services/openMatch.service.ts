@@ -21,6 +21,26 @@ export class OpenMatchService {
     return { id: club.id };
   }
 
+  /** Résout un club ACTIVE par slug, SANS exiger d'adhésion (lecture publique des parties). */
+  private async resolveActiveClub(slug: string): Promise<{ id: string }> {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    return { id: club.id };
+  }
+
+  /** Résout un club ACTIVE et GARANTIT l'adhésion ACTIVE de l'appelant : créée si absente
+   *  (comme à la 1re réservation), refus si BLOCKED. Utilisé par join / setInterested. */
+  private async ensureActiveMembership(slug: string, userId: string): Promise<{ id: string }> {
+    const club = await this.resolveActiveClub(slug);
+    const member = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId: club.id } },
+      select: { status: true },
+    });
+    if (member?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
+    if (!member) await prisma.clubMembership.create({ data: { userId, clubId: club.id } });
+    return { id: club.id };
+  }
+
   /** Met à jour les parts de tous les participants : organisateur = reste au centime, autres = part égale. */
   private async applyShares(
     tx: Prisma.TransactionClient,
@@ -45,9 +65,9 @@ export class OpenMatchService {
     catch (err) { console.error('[openMatch] notification échouée', err); }
   }
 
-  /** Parties ouvertes à venir d'un club, pour un membre (places restantes incluses). */
-  async listOpenMatches(slug: string, viewerUserId: string) {
-    const club = await this.resolveActiveMember(slug, viewerUserId);
+  /** Parties ouvertes à venir d'un club, visibles de tous (membre, non-membre ou anonyme). */
+  async listOpenMatches(slug: string, viewerUserId: string | null) {
+    const club = await this.resolveActiveClub(slug);
     const matches = await prisma.reservation.findMany({
       where: {
         visibility: 'PUBLIC',
@@ -84,11 +104,13 @@ export class OpenMatchService {
       ? await this.ratingService.getLevelsBySport(pairs)
       : {};
 
-    // Compteur de messages de chat non lus par partie (notifications serveur).
-    const unreadNotifs = await prisma.notification.findMany({
-      where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
-      select: { data: true },
-    });
+    // Compteur de messages de chat non lus par partie (notifications serveur) — vide pour un visiteur anonyme.
+    const unreadNotifs = viewerUserId != null
+      ? await prisma.notification.findMany({
+          where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
+          select: { data: true },
+        })
+      : [];
     const unreadByMatch = new Map<string, number>();
     for (const n of unreadNotifs) {
       const mid = (n.data as { matchId?: string } | null)?.matchId;
@@ -108,8 +130,8 @@ export class OpenMatchService {
         maxPlayers,
         spotsLeft: Math.max(0, maxPlayers - m.participants.length),
         full: m.participants.length >= maxPlayers,
-        viewerIsParticipant: m.participants.some((p) => p.userId === viewerUserId),
-        viewerIsOrganizer: m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
+        viewerIsParticipant: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId),
+        viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
         targetLevelMin: row.targetLevelMin ?? null,
         targetLevelMax: row.targetLevelMax ?? null,
         players: m.participants.map((p) => ({
@@ -117,7 +139,7 @@ export class OpenMatchService {
           level: levels[`${p.userId}:${sportKey}`] ?? null,
         })),
         interestedCount: m.openMatchInterests.length,
-        viewerIsInterested: m.openMatchInterests.some((i) => i.userId === viewerUserId),
+        viewerIsInterested: viewerUserId != null && m.openMatchInterests.some((i) => i.userId === viewerUserId),
         interested: m.openMatchInterests.slice(0, 5).map((i) => ({
           userId: i.userId, firstName: i.user.firstName, lastName: i.user.lastName, avatarUrl: i.user.avatarUrl, isOrganizer: false,
         })),
@@ -129,7 +151,7 @@ export class OpenMatchService {
 
   /** Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation). */
   async joinOpenMatch(slug: string, reservationId: string, userId: string) {
-    const club = await this.resolveActiveMember(slug, userId);
+    const club = await this.ensureActiveMembership(slug, userId);
 
     const result = await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
@@ -271,7 +293,7 @@ export class OpenMatchService {
 
   /** Marque l'appelant « intéressé » par une partie ouverte (n'occupe pas de place). */
   async setInterested(slug: string, reservationId: string, userId: string) {
-    const club = await this.resolveActiveMember(slug, userId);
+    const club = await this.ensureActiveMembership(slug, userId);
 
     const resa = await prisma.reservation.findUnique({
       where: { id: reservationId },

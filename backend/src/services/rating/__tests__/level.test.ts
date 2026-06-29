@@ -1,6 +1,6 @@
 import {
   ratingToLevel, levelToRating, isProvisional, namedTier, TIERS,
-  DEFAULT_RD, SKIP_DEFAULT_LEVEL,
+  DEFAULT_RD, SKIP_DEFAULT_LEVEL, sportHasLevels,
 } from '../level';
 
 describe('mapping interne ↔ 0–8', () => {
@@ -29,4 +29,11 @@ describe('namedTier', () => {
 
 describe('SKIP_DEFAULT_LEVEL', () => {
   it('départ neutre = 3', () => expect(SKIP_DEFAULT_LEVEL).toBe(3));
+});
+
+describe('sportHasLevels', () => {
+  it('padel a des niveaux', () => expect(sportHasLevels('padel')).toBe(true));
+  it('tennis n a pas de niveaux', () => expect(sportHasLevels('tennis')).toBe(false));
+  it('sport indéfini → pas de niveaux', () => expect(sportHasLevels(undefined)).toBe(false));
+  it('null → pas de niveaux', () => expect(sportHasLevels(null)).toBe(false));
 });

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ClubDetail, OpenMatch, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
@@ -9,6 +10,7 @@ import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
+import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { inRange } from '@/lib/levelMatch';
@@ -35,6 +37,7 @@ const JOIN_ERRORS: Record<string, string> = {
 export function OpenMatches({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
+  const router = useRouter();
   const levelEnabled = club.levelSystemEnabled !== false;
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,13 +50,13 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [joinWarning, setJoinWarning] = useState<OpenMatch | null>(null);
   const [view, setView] = useState<'parties' | 'classement'>('parties');
   const [chatting, setChatting] = useState<OpenMatch | null>(null);
+  const [authPrompt, setAuthPrompt] = useState<OpenMatch | null>(null);
   const [viewerUserId, setViewerUserId] = useState('');
   const [canModerate, setCanModerate] = useState(false);
 
   const load = useCallback(async () => {
-    if (!token) { setMatches([]); setLoading(false); return; }
     setLoading(true);
-    try { setMatches(await api.getOpenMatches(club.slug, token)); }
+    try { setMatches(await api.getOpenMatches(club.slug, token ?? undefined)); }
     catch { setMatches([]); }
     finally { setLoading(false); }
   }, [club.slug, token]);
@@ -129,7 +132,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     <Screen>
       <div style={{ paddingBottom: 40 }}>
         <ClubNav club={club} />
-        {levelEnabled && (
+        {levelEnabled && token && (
           <div style={{ padding: '16px 20px 0' }}>
             <Segmented<'parties' | 'classement'>
               value={view}
@@ -145,7 +148,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
             Rejoignez la partie publique d&apos;un autre membre, ou créez la vôtre en choisissant « Partie ouverte » au moment de réserver.
           </p>
-          {levelEnabled && (
+          {levelEnabled && token && (
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, userSelect: 'none' }}>
               <input type="checkbox" checked={filterMyLevel} onChange={(e) => setFilterMyLevel(e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
@@ -176,6 +179,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   canRecordResult={levelEnabled}
                   onToggleInterest={toggleInterest}
                   onOpenChat={openChat}
+                  isAnonymous={false}
+                  onAuthPrompt={setAuthPrompt}
                 />
               ))}
             </div>
@@ -188,8 +193,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           )}
           {!ready || loading ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-          ) : !token ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Connectez-vous pour voir les parties ouvertes.</div>
           ) : otherMatches.length === 0 ? (
             recommended.length > 0 ? (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Pas d&apos;autre partie ouverte.</div>
@@ -204,7 +207,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               match={m}
               timezone={club.timezone}
               slug={club.slug}
-              token={token!}
+              token={token ?? ''}
               busy={busyId === m.id}
               addingOpen={addingId === m.id}
               onJoin={handleJoin}
@@ -217,6 +220,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               canRecordResult={levelEnabled}
               onToggleInterest={toggleInterest}
               onOpenChat={openChat}
+              isAnonymous={!token}
+              onAuthPrompt={setAuthPrompt}
             />
           ))}
         </div>
@@ -254,6 +259,14 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           title={`${chatting.resourceName} · ${new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(chatting.startTime)).replace(':', 'h')}`}
           timezone={club.timezone}
           onClose={() => { setChatting(null); load(); window.dispatchEvent(new Event('palova:openmatch-unread')); }}
+        />
+      )}
+      {authPrompt && (
+        <AuthPromptDialog
+          detail={authPrompt.resourceName}
+          onRegister={() => router.push('/register?next=/parties')}
+          onLogin={() => router.push('/login?next=/parties')}
+          onClose={() => setAuthPrompt(null)}
         />
       )}
     </Screen>

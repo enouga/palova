@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
-import { packageLabel, canCover } from '@/lib/packages';
+import { packageLabel, canCover, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, Theme } from '@/lib/theme';
@@ -16,6 +16,7 @@ import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel } from '@/lib/reservations';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -46,7 +47,8 @@ interface BookingModalProps {
   /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
   quotaStatus?: MyQuotaStatus | null;
   onClose: () => void;
-  onConfirmed: (reservation: Reservation) => void;
+  /** `paid` (optionnel) résume un règlement par solde prépayé (moyen + restant). */
+  onConfirmed: (reservation: Reservation, paid?: { label: string }) => void;
   /** ID du club (pour les appels Stripe). */
   clubId?: string;
   /** Exige un paiement CB en ligne. */
@@ -151,6 +153,8 @@ export default function BookingModal({
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
+  // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel.
+  const levelForSport = levelEnabled && sportHasLevels(sportKey);
 
   const [phase, setPhase]             = useState<'holding' | 'held' | 'error'>('holding');
   const [reservation, setReservation] = useState<Reservation | null>(null);
@@ -265,7 +269,7 @@ export default function BookingModal({
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
   useEffect(() => {
-    if (!showPartners || !levelEnabled) return;
+    if (!showPartners || !levelForSport) return;
     const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
     const pref = loadLevelPref();
     if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
@@ -275,7 +279,7 @@ export default function BookingModal({
       const lvl = r?.level ?? null;
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
-  }, [showPartners, token, levelEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showPartners, token, levelForSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
@@ -314,11 +318,11 @@ export default function BookingModal({
   // joueurs soient enregistrés quel que soit le confirmeur (client OU webhook), sans course.
   const persistHoldSetup = async () => {
     if (!showPartners || !reservation) return;
-    const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
+    const limiting = visibility === 'PUBLIC' && levelForSport && levelLimited;
     await api.applyHoldSetup(reservation.id, token, {
       partnerUserIds: partners.map((p) => p.id),
       visibility,
-      ...(visibility === 'PUBLIC' && levelEnabled
+      ...(visibility === 'PUBLIC' && levelForSport
         ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
         : {}),
     });
@@ -334,11 +338,12 @@ export default function BookingModal({
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
+      const usedPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
       const confirmed = await api.confirmReservation(
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
       settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
-      onConfirmed(confirmed);
+      onConfirmed(confirmed, usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined);
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
@@ -485,7 +490,7 @@ export default function BookingModal({
                         : 'Visible uniquement par vous et vos partenaires.'}
                     </div>
 
-                    {visibility === 'PUBLIC' && levelEnabled && (
+                    {visibility === 'PUBLIC' && levelForSport && (
                       <div style={{ marginTop: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
@@ -585,22 +590,33 @@ export default function BookingModal({
                   })()}
 
                   {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
-                  {packages.length > 0 && (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {packages.map((p) => {
-                        const ok = canCover(p, totalEuros);
-                        const sel = paySource === p.id;
-                        return (
-                          <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px solid ${sel ? th.accent : th.lineStrong}`, background: sel ? `${th.accent}14` : th.surface, borderRadius: 12, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            <Icon name="ticket" size={15} color={sel ? th.accent : th.textMute} />
-                            {packageLabel(p)}
-                            {sel && <Icon name="check" size={13} color={th.accent} />}
-                          </button>
-                        );
-                      })}
+                  {packages.length > 0 && (() => {
+                    const selPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+                    return (
+                    <div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {packages.map((p) => {
+                          const ok = canCover(p, totalEuros);
+                          const sel = paySource === p.id;
+                          return (
+                            <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px solid ${sel ? th.accent : th.lineStrong}`, background: sel ? `${th.accent}14` : th.surface, borderRadius: 12, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                              <Icon name="ticket" size={15} color={sel ? th.accent : th.textMute} />
+                              {packageLabel(p)}
+                              {!ok && <span style={{ color: th.textFaint, fontWeight: 600 }}>· solde insuffisant</span>}
+                              {sel && <Icon name="check" size={13} color={th.accent} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selPkg && (
+                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 8 }}>
+                          Après paiement : {remainingAfterLabel(selPkg, totalEuros)}
+                        </div>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
 

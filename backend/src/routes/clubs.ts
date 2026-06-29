@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { ClubPageKind } from '@prisma/client';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, optionalAuth, AuthRequest } from '../middleware/auth';
 import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { ClubService } from '../services/club.service';
 import { ClubPageService } from '../services/clubPage.service';
@@ -206,9 +206,9 @@ router.get('/:slug/leaderboard', authMiddleware, async (req: AuthRequest, res: R
   } catch (err) { handleError(err, res, next); }
 });
 
-// Parties ouvertes du club (réservé aux membres) : découverte + rejoindre / quitter.
-router.get('/:slug/open-matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user!.id)); }
+// Parties ouvertes du club : lecture PUBLIQUE (membre, non-membre ou anonyme).
+router.get('/:slug/open-matches', optionalAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user?.id ?? null)); }
   catch (err) { handleError(err, res, next); }
 });
 

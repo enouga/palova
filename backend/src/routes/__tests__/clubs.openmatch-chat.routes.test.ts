@@ -5,12 +5,14 @@ import jwt from 'jsonwebtoken';
 // jest.mock est hissé avant les imports — les fonctions partagées vivent dans la closure
 // de la factory et sont donc les mêmes références quel que soit le nombre de `new …()`.
 jest.mock('../../services/openMatch.service', () => {
+  const listOpenMatches  = jest.fn().mockResolvedValue([]);
+  const joinOpenMatch    = jest.fn().mockResolvedValue({});
   const setInterested    = jest.fn().mockResolvedValue({ id: 'match-1' });
   const removeInterested = jest.fn().mockResolvedValue({ id: 'match-1' });
   return {
     OpenMatchService: jest.fn().mockImplementation(() => ({
-      listOpenMatches:     jest.fn().mockResolvedValue([]),
-      joinOpenMatch:       jest.fn().mockResolvedValue({}),
+      listOpenMatches,
+      joinOpenMatch,
       leaveOpenMatch:      jest.fn().mockResolvedValue({}),
       removeOpenMatchPlayer: jest.fn().mockResolvedValue({}),
       addOpenMatchPlayer:  jest.fn().mockResolvedValue({}),
@@ -50,6 +52,8 @@ const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, SECRET);
 
 // Récupère les références partagées en instanciant une fois les services mockés.
 const omInst   = new (OpenMatchService as any)();
+const listOpenMatches = omInst.listOpenMatches as jest.Mock;
+const joinOpenMatch    = omInst.joinOpenMatch    as jest.Mock;
 const setInterested    = omInst.setInterested    as jest.Mock;
 const removeInterested = omInst.removeInterested as jest.Mock;
 
@@ -69,6 +73,8 @@ const stubMsg = { id: 'msg-1', body: 'hi', createdAt: '2026-01-01T10:00:00.000Z'
 beforeEach(() => {
   jest.clearAllMocks();
   // Restaure les valeurs par défaut après clearAllMocks (qui efface les calls mais pas les implémentations).
+  listOpenMatches.mockResolvedValue([]);
+  joinOpenMatch.mockResolvedValue({});
   setInterested.mockResolvedValue({ id: MATCH_ID });
   removeInterested.mockResolvedValue({ id: MATCH_ID });
   listMessages.mockResolvedValue([]);
@@ -243,5 +249,29 @@ describe('GET /api/clubs/:slug/open-matches/:id/chat/stream (SSE)', () => {
   it('401 sans token query param', async () => {
     const res = await request(app).get(`${base}/chat/stream`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('lecture publique de la liste', () => {
+  const list = `/api/clubs/${SLUG}/open-matches`;
+
+  it('GET sans Authorization → 200 + liste, viewer null (anonyme)', async () => {
+    listOpenMatches.mockResolvedValue([{ id: 'm1' }]);
+    const res = await request(app).get(list);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id: 'm1' }]);
+    expect(listOpenMatches).toHaveBeenCalledWith(SLUG, null);
+  });
+
+  it('GET avec Authorization → 200 + userId transmis', async () => {
+    const res = await request(app).get(list).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(listOpenMatches).toHaveBeenCalledWith(SLUG, 'u1');
+  });
+
+  it('POST /join sans Authorization reste protégé → 401', async () => {
+    const res = await request(app).post(`${list}/${MATCH_ID}/join`);
+    expect(res.status).toBe(401);
+    expect(joinOpenMatch).not.toHaveBeenCalled();
   });
 });
