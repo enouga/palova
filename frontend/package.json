@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/clean-next.mjs auto",
     "dev": "next dev",
+    "dev:fresh": "node scripts/clean-next.mjs all && next dev",
+    "clean": "node scripts/clean-next.mjs all",
+    "clean:cache": "node scripts/clean-next.mjs cache",
     "build": "next build",
     "start": "next start",
     "test": "jest",
