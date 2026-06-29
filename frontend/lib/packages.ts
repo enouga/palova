@@ -54,3 +54,23 @@ export function indexPackagesByUser(rows: ActiveMemberPackage[]): Record<string,
   for (const p of rows) (map[p.userId] ??= []).push(p);
   return map;
 }
+
+/** Solde restant projeté après un paiement de `amountEuros` € (jamais négatif). */
+export function remainingAfterLabel(p: MemberPackage, amountEuros: number): string {
+  if (p.kind === 'ENTRIES') {
+    const n = Math.max(0, (p.creditsRemaining ?? 0) - 1);
+    return `il restera ${n} entrée${n > 1 ? 's' : ''}`;
+  }
+  const left = Math.max(0, Number(p.amountRemaining ?? 0) - amountEuros);
+  return `il restera ${left.toFixed(2).replace('.', ',')} €`;
+}
+
+/** Résumé d'un paiement par solde (moyen + restant) — pour la confirmation. */
+export function paidWithLabel(p: MemberPackage, amountEuros: number): string {
+  if (p.kind === 'ENTRIES') {
+    const n = Math.max(0, (p.creditsRemaining ?? 0) - 1);
+    return `Payé avec votre carnet · ${n} entrée${n > 1 ? 's' : ''} restante${n > 1 ? 's' : ''}`;
+  }
+  const left = Math.max(0, Number(p.amountRemaining ?? 0) - amountEuros);
+  return `Payé avec votre porte-monnaie · solde restant ${left.toFixed(2).replace('.', ',')} €`;
+}

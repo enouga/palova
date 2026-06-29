@@ -1,4 +1,4 @@
-import { packageLabel, isUsable, canCover, prepaidHint, pickPackageFor, indexPackagesByUser } from '@/lib/packages';
+import { packageLabel, isUsable, canCover, prepaidHint, pickPackageFor, indexPackagesByUser, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
 import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
 
 const entries = (remaining: number, expiresAt: string | null = null): MemberPackage => ({
@@ -103,6 +103,28 @@ describe('pickPackageFor', () => {
   });
   it('ignore un solde expiré', () => {
     expect(pickPackageFor([mkWallet({ expiresAt: '2000-01-01T00:00:00.000Z' })], 1300)).toBeNull();
+  });
+});
+
+describe('remainingAfterLabel', () => {
+  it('carnet : -1 entrée (pluriel/singulier, jamais négatif)', () => {
+    expect(remainingAfterLabel(entries(7), 25)).toBe('il restera 6 entrées');
+    expect(remainingAfterLabel(entries(2), 25)).toBe('il restera 1 entrée');
+    expect(remainingAfterLabel(entries(1), 25)).toBe('il restera 0 entrée');
+  });
+  it('porte-monnaie : -montant €', () => {
+    expect(remainingAfterLabel(wallet('53.50'), 25)).toBe('il restera 28,50 €');
+    expect(remainingAfterLabel(wallet('25.00'), 25)).toBe('il restera 0,00 €');
+  });
+});
+
+describe('paidWithLabel', () => {
+  it('carnet : moyen + entrées restantes', () => {
+    expect(paidWithLabel(entries(7), 25)).toBe('Payé avec votre carnet · 6 entrées restantes');
+    expect(paidWithLabel(entries(2), 25)).toBe('Payé avec votre carnet · 1 entrée restante');
+  });
+  it('porte-monnaie : moyen + solde restant', () => {
+    expect(paidWithLabel(wallet('53.50'), 25)).toBe('Payé avec votre porte-monnaie · solde restant 28,50 €');
   });
 });
 
