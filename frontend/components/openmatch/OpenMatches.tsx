@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { api, ClubDetail, OpenMatch } from '@/lib/api';
+import { api, ClubDetail, OpenMatch, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
@@ -51,7 +51,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [chatting, setChatting] = useState<OpenMatch | null>(null);
   const [viewerUserId, setViewerUserId] = useState('');
   const [canModerate, setCanModerate] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -80,8 +79,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
       .catch(() => {});
   }, [token, club.slug]);
 
-  useEffect(() => { setMounted(true); }, []);
-
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
     if (!token) return;
     setBusyId(m.id); setError('');
@@ -90,16 +87,23 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     finally { setBusyId(null); }
   };
 
-  const lastReadKey = (id: string) => `palova:match-chat-read:${id}`;
-  const hasUnread = (m: OpenMatch) => {
-    if (!mounted || !m.lastMessageAt || typeof window === 'undefined') return false;
-    const seen = window.localStorage.getItem(lastReadKey(m.id));
-    return !seen || new Date(m.lastMessageAt) > new Date(seen);
-  };
   const openChat = (m: OpenMatch) => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(lastReadKey(m.id), new Date().toISOString());
     setChatting(m);
+    if (token) api.markOpenMatchChatRead(club.slug, m.id, token)
+      .then(() => { load(); window.dispatchEvent(new Event('palova:openmatch-unread')); })
+      .catch(() => {});
   };
+
+  useEffect(() => {
+    if (!token) return;
+    const es = new EventSource(notificationsStreamUrl(token));
+    es.onmessage = (e) => {
+      try { if (JSON.parse(e.data)?.type === 'notification') { load(); window.dispatchEvent(new Event('palova:openmatch-unread')); } }
+      catch { /* ping/connected */ }
+    };
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, [token, load]);
   const toggleInterest = (m: OpenMatch) =>
     act(m, () => (m.viewerIsInterested ? api.removeInterested(club.slug, m.id, token!) : api.setInterested(club.slug, m.id, token!)));
 
@@ -174,7 +178,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   canRecordResult={levelEnabled}
                   onToggleInterest={toggleInterest}
                   onOpenChat={openChat}
-                  hasUnread={hasUnread(m)}
                   showSport={multiSport}
                 />
               ))}
@@ -217,7 +220,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               canRecordResult={levelEnabled}
               onToggleInterest={toggleInterest}
               onOpenChat={openChat}
-              hasUnread={hasUnread(m)}
               showSport={multiSport}
             />
           ))}
@@ -255,7 +257,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           canModerate={canModerate}
           title={`${chatting.resourceName} · ${new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(chatting.startTime)).replace(':', 'h')}`}
           timezone={club.timezone}
-          onClose={() => { setChatting(null); load(); }}
+          onClose={() => { setChatting(null); load(); window.dispatchEvent(new Event('palova:openmatch-unread')); }}
         />
       )}
     </Screen>

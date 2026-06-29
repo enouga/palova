@@ -26,12 +26,16 @@ jest.mock('../../services/openMatchChat.service', () => {
   const postMessage            = jest.fn().mockResolvedValue(stubMsg);
   const deleteMessage          = jest.fn().mockResolvedValue({ ...stubMsg, body: '', deleted: true });
   const assertChatAccessPublic = jest.fn().mockResolvedValue(undefined);
+  const markRead               = jest.fn().mockResolvedValue({ count: 0 });
+  const unreadCount            = jest.fn().mockResolvedValue({ count: 0 });
   return {
     OpenMatchChatService: jest.fn().mockImplementation(() => ({
       assertChatAccessPublic,
       listMessages,
       postMessage,
       deleteMessage,
+      markRead,
+      unreadCount,
     })),
   };
 });
@@ -53,6 +57,8 @@ const chatInst  = new (OpenMatchChatService as any)();
 const listMessages           = chatInst.listMessages           as jest.Mock;
 const postMessage            = chatInst.postMessage            as jest.Mock;
 const deleteMessage          = chatInst.deleteMessage          as jest.Mock;
+const markRead               = chatInst.markRead               as jest.Mock;
+const unreadCount            = chatInst.unreadCount            as jest.Mock;
 
 const SLUG     = 'arena';
 const MATCH_ID = 'match-1';
@@ -68,6 +74,8 @@ beforeEach(() => {
   listMessages.mockResolvedValue([]);
   postMessage.mockResolvedValue(stubMsg);
   deleteMessage.mockResolvedValue({ ...stubMsg, body: '', deleted: true });
+  markRead.mockResolvedValue({ count: 0 });
+  unreadCount.mockResolvedValue({ count: 0 });
 });
 
 // ─── Interest (ça m'intéresse) ────────────────────────────────────────────────
@@ -186,6 +194,46 @@ describe('Error mapping', () => {
       .set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('NOT_ALLOWED');
+  });
+});
+
+// ─── Unread count (badge de l'onglet) ─────────────────────────────────────────
+
+describe('GET /api/clubs/:slug/open-matches/unread-count', () => {
+  it('200 — appelle unreadCount(slug, userId) et renvoie le résultat', async () => {
+    unreadCount.mockResolvedValue({ count: 7 });
+    const res = await request(app)
+      .get(`/api/clubs/${SLUG}/open-matches/unread-count`)
+      .set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ count: 7 });
+    expect(unreadCount).toHaveBeenCalledWith(SLUG, 'u1');
+  });
+
+  it('401 sans token', async () => {
+    const res = await request(app).get(`/api/clubs/${SLUG}/open-matches/unread-count`);
+    expect(res.status).toBe(401);
+    expect(unreadCount).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Mark read ────────────────────────────────────────────────────────────────
+
+describe('POST /api/clubs/:slug/open-matches/:id/chat/read', () => {
+  it('200 — appelle markRead(slug, id, userId) et renvoie le résultat', async () => {
+    markRead.mockResolvedValue({ count: 3 });
+    const res = await request(app)
+      .post(`${base}/chat/read`)
+      .set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ count: 3 });
+    expect(markRead).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1');
+  });
+
+  it('401 sans token', async () => {
+    const res = await request(app).post(`${base}/chat/read`);
+    expect(res.status).toBe(401);
+    expect(markRead).not.toHaveBeenCalled();
   });
 });
 

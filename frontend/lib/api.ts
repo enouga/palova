@@ -262,6 +262,10 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'POST' }, token),
   removeInterested: (slug: string, id: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'DELETE' }, token),
+  markOpenMatchChatRead: (slug: string, id: string, token: string) =>
+    request<{ count: number }>(`/api/clubs/${slug}/open-matches/${id}/chat/read`, { method: 'POST' }, token),
+  getOpenMatchUnread: (slug: string, token: string) =>
+    request<{ count: number }>(`/api/clubs/${slug}/open-matches/unread-count`, {}, token),
   getChatMessages: (slug: string, id: string, token: string) =>
     request<OpenMatchMessage[]>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, {}, token),
   postChatMessage: (slug: string, id: string, body: string, token: string) =>
@@ -1133,6 +1137,7 @@ export interface OpenMatch {
   interested: OpenMatchPlayer[];
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
+  unreadCount: number;
 }
 
 export interface OpenMatchMessage {

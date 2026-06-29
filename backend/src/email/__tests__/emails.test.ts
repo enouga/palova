@@ -361,7 +361,39 @@ describe('buildRefundEmail', () => {
   });
 });
 
-import { buildMatchCommentEmail } from '../templates/emails';
+import { buildMatchCommentEmail, buildOpenMatchChatEmail } from '../templates/emails';
+
+describe('buildOpenMatchChatEmail', () => {
+  const base = {
+    recipientFirstName: 'Léa',
+    authorName: 'Marc Dupont',
+    resourceName: 'Court 1',
+    message: 'On se retrouve à 18h ?',
+    clubName: 'Padel Arena',
+    url: 'https://arena.palova.fr/parties',
+    brand: { name: 'Padel Arena', logoUrl: null, accentColor: '#5e93da' } as Brand,
+  };
+
+  it('sujet contient le nom du terrain (resourceName)', () => {
+    const mail = buildOpenMatchChatEmail(base);
+    expect(mail.subject).toContain('Court 1');
+    expect(mail.subject).toContain('Nouveau message');
+  });
+
+  it('html contient le message échappé et le nom de l auteur', () => {
+    const mail = buildOpenMatchChatEmail({ ...base, message: '<script>alert(1)</script>' });
+    expect(mail.html).not.toContain('<script>alert(1)</script>');
+    expect(mail.html).toContain('&lt;script&gt;');
+    expect(mail.html).toContain('Marc Dupont');
+  });
+
+  it('renvoie un texte de repli lisible contenant le message', () => {
+    const mail = buildOpenMatchChatEmail(base);
+    expect(mail.text).toContain('On se retrouve à 18h ?');
+    expect(mail.text).toContain('Marc Dupont');
+    expect(mail.text).toContain('Voir la discussion');
+  });
+});
 
 describe('buildMatchCommentEmail', () => {
   const base = {

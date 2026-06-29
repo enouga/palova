@@ -226,4 +226,68 @@ describe('OpenMatchChatService', () => {
       expect(broadcastSpy).not.toHaveBeenCalled();
     });
   });
+
+  // ─────────────────────────────
+  // MARK READ
+  // ─────────────────────────────
+
+  describe('markRead', () => {
+    it('appelle notification.updateMany et renvoie {count}', async () => {
+      prismaMock.notification.updateMany.mockResolvedValue({ count: 3 } as any);
+
+      const result = await service.markRead('club-demo', 'resa-1', 'user-1');
+
+      expect(prismaMock.notification.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            type: 'open_match.message',
+            readAt: null,
+          }),
+          data: expect.objectContaining({ readAt: expect.any(Date) }),
+        }),
+      );
+      expect(result).toEqual({ count: 3 });
+    });
+
+    it('renvoie {count: 0} quand aucune notification non lue', async () => {
+      prismaMock.notification.updateMany.mockResolvedValue({ count: 0 } as any);
+      const result = await service.markRead('club-demo', 'resa-1', 'user-1');
+      expect(result).toEqual({ count: 0 });
+    });
+  });
+
+  // ─────────────────────────────
+  // UNREAD COUNT
+  // ─────────────────────────────
+
+  describe('unreadCount', () => {
+    it('renvoie le comptage de prisma quand le club existe', async () => {
+      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1' } as any);
+      prismaMock.notification.count.mockResolvedValue(5 as any);
+
+      const result = await service.unreadCount('club-demo', 'user-1');
+
+      expect(prismaMock.notification.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            type: 'open_match.message',
+            readAt: null,
+            clubId: 'club-1',
+          }),
+        }),
+      );
+      expect(result).toEqual({ count: 5 });
+    });
+
+    it('renvoie {count: 0} si le club n\'existe pas', async () => {
+      prismaMock.club.findUnique.mockResolvedValue(null as any);
+
+      const result = await service.unreadCount('inconnu', 'user-1');
+
+      expect(prismaMock.notification.count).not.toHaveBeenCalled();
+      expect(result).toEqual({ count: 0 });
+    });
+  });
 });
