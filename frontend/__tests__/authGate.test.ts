@@ -30,6 +30,10 @@ describe('isPublicPath', () => {
       expect(isPublicPath(p)).toBe(true);
     }
   });
+
+  it('rend /parties public (parties ouvertes visibles sans login)', () => {
+    expect(isPublicPath('/parties')).toBe(true);
+  });
 });
 
 describe('isPlatformPublicPath', () => {

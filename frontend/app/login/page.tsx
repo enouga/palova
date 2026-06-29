@@ -13,6 +13,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { slug } = useClub();
+  const nextPath = () => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') || undefined : undefined);
   const [email, setEmail] = useState('test@palova.fr');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function LoginPage() {
         setError(data.error || 'Erreur de connexion');
         return;
       }
-      await finishAuth(data, slug, router);
+      await finishAuth(data, slug, router, nextPath());
     } catch {
       setError('Impossible de contacter le serveur');
     } finally {
@@ -59,7 +60,7 @@ export default function LoginPage() {
 
         {verify ? (
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={(a) => finishAuth(a, slug, router)} />
+            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={(a) => finishAuth(a, slug, router, nextPath())} />
             <button type="button" onClick={() => setVerify(null)}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
               Retour à la connexion

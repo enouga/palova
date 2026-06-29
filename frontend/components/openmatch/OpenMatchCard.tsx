@@ -31,6 +31,9 @@ export interface OpenMatchCardProps {
   canRecordResult: boolean;
   onToggleInterest: (m: OpenMatch) => void;
   onOpenChat: (m: OpenMatch) => void;
+  /** Visiteur non connecté : « Rejoindre » invite à s'inscrire ; actions membres masquées. */
+  isAnonymous?: boolean;
+  onAuthPrompt: (m: OpenMatch) => void;
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
@@ -38,7 +41,7 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
-  onToggleInterest, onOpenChat,
+  onToggleInterest, onOpenChat, isAnonymous = false, onAuthPrompt,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   // Taille unique pour tous les boutons d'action → bord net, pas de largeurs en escalier.
@@ -84,19 +87,22 @@ export function OpenMatchCard({
         ) : undefined}
       />
 
-      {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite */}
+      {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite.
+          Visiteur anonyme : actions membres masquées, seul « Rejoindre » (→ invite à s'inscrire) reste. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
-        <span style={{ position: 'relative', display: 'inline-flex' }}>
-          <Btn variant="surface" style={{ ...actionBtn, ...(canChat ? chatTint : {}) }} disabled={!canChat} onClick={() => onOpenChat(m)}>
-            Discuter
-          </Btn>
-          {m.unreadCount > 0 && (
-            <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
-              {m.unreadCount > 99 ? '99+' : m.unreadCount}
-            </span>
-          )}
-        </span>
-        {!m.viewerIsParticipant && (
+        {!isAnonymous && (
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <Btn variant="surface" style={{ ...actionBtn, ...(canChat ? chatTint : {}) }} disabled={!canChat} onClick={() => onOpenChat(m)}>
+              Discuter
+            </Btn>
+            {m.unreadCount > 0 && (
+              <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
+                {m.unreadCount > 99 ? '99+' : m.unreadCount}
+              </span>
+            )}
+          </span>
+        )}
+        {!isAnonymous && !m.viewerIsParticipant && (
           m.viewerIsInterested ? (
             <Btn variant="surface" style={{ ...actionBtn, ...interestTint }} disabled={busy} onClick={() => onToggleInterest(m)}>
               <Icon name="check" size={18} color={interestTint.color} />Intéressé
@@ -116,7 +122,7 @@ export function OpenMatchCard({
           ) : m.viewerIsParticipant ? (
             <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onLeave(m)}>Quitter</Btn>
           ) : (
-            <Btn icon="plus" style={actionBtn} disabled={busy || m.full} onClick={() => onJoin(m)}>Rejoindre</Btn>
+            <Btn icon="plus" style={actionBtn} disabled={busy || m.full} onClick={() => (isAnonymous ? onAuthPrompt(m) : onJoin(m))}>Rejoindre</Btn>
           )}
         </span>
       </div>

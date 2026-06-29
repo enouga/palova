@@ -6,8 +6,8 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { clubHasPadel } from '@/lib/sport';
 import { OpenMatches } from '@/components/openmatch/OpenMatches';
 
-// /parties = découverte des parties ouvertes du club (réservé aux membres).
-// Padel uniquement : un club sans padel n'a pas d'onglet Parties ; un accès direct
+// /parties = découverte des parties ouvertes du club, VISIBLE DE TOUS (membre, non-membre,
+// anonyme). Padel uniquement : un club sans padel n'a pas d'onglet Parties ; un accès direct
 // (bookmark / lien profond) est redirigé vers l'accueil du club.
 export default function PartiesPage() {
   const { club, loading } = useClub();

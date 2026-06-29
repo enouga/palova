@@ -204,4 +204,17 @@ describe('OpenMatches', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Discuter/ }));
     await waitFor(() => expect(mocked.markOpenMatchChatRead).toHaveBeenCalledWith('demo', 'm1', 'abc'));
   });
+
+  it('anonyme : affiche la liste, charge sans token, et « Rejoindre » ouvre le prompt d\'auth', async () => {
+    document.cookie = 'token=; max-age=0; path=/'; // pas de session
+    mocked.getOpenMatches.mockResolvedValue([match()] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
+    await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledWith('demo', undefined));
+
+    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mocked.joinOpenMatch).not.toHaveBeenCalled();
+  });
 });
