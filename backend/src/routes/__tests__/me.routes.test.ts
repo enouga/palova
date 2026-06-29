@@ -22,6 +22,12 @@ jest.mock('../../utils/uploads', () => {
   };
 });
 
+const getDeletionSummary = jest.fn();
+const deleteAccount = jest.fn();
+jest.mock('../../services/account.service', () => ({
+  AccountService: jest.fn().mockImplementation(() => ({ getDeletionSummary, deleteAccount })),
+}));
+
 import { AVATARS_DIR } from '../../utils/uploads';
 import app from '../../app';
 
@@ -288,5 +294,44 @@ describe('POST /api/me/password', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('SAME_PASSWORD');
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('Account deletion routes', () => {
+  beforeEach(() => { getDeletionSummary.mockReset(); deleteAccount.mockReset(); });
+
+  it('GET /api/me/account-deletion-summary → 200', async () => {
+    getDeletionSummary.mockResolvedValue({ blockingClubs: [], futureReservations: 1, activeSubscriptions: 0, balances: [] });
+    const res = await request(app).get('/api/me/account-deletion-summary').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body.futureReservations).toBe(1);
+    expect(getDeletionSummary).toHaveBeenCalledWith('u1');
+  });
+
+  it('DELETE /api/me sans mot de passe → 400', async () => {
+    const res = await request(app).delete('/api/me').set('Authorization', `Bearer ${token()}`).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('DELETE /api/me mauvais mot de passe → 401', async () => {
+    deleteAccount.mockRejectedValue(new Error('INVALID_PASSWORD'));
+    const res = await request(app).delete('/api/me').set('Authorization', `Bearer ${token()}`).send({ password: 'x' });
+    expect(res.status).toBe(401);
+  });
+
+  it('DELETE /api/me unique OWNER → 409 OWNS_CLUB', async () => {
+    deleteAccount.mockRejectedValue(Object.assign(new Error('OWNS_CLUB'), { clubs: ['Club A'] }));
+    const res = await request(app).delete('/api/me').set('Authorization', `Bearer ${token()}`).send({ password: 'password123' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('OWNS_CLUB');
+    expect(res.body.clubs).toEqual(['Club A']);
+  });
+
+  it('DELETE /api/me succès → 200 ok:true', async () => {
+    deleteAccount.mockResolvedValue({ ok: true });
+    const res = await request(app).delete('/api/me').set('Authorization', `Bearer ${token()}`).send({ password: 'password123' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(deleteAccount).toHaveBeenCalledWith('u1', 'password123');
   });
 });
