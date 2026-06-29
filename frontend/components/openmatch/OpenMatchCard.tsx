@@ -31,6 +31,7 @@ export interface OpenMatchCardProps {
   onToggleInterest: (m: OpenMatch) => void;
   onOpenChat: (m: OpenMatch) => void;
   hasUnread: boolean;
+  showSport?: boolean; // club multi-sport → chip sport près du terrain
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
@@ -38,7 +39,7 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
-  onToggleInterest, onOpenChat, hasUnread,
+  onToggleInterest, onOpenChat, hasUnread, showSport,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   return (
@@ -46,6 +47,7 @@ export function OpenMatchCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <Icon name="users" size={18} color={th.accent} />
         <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{m.resourceName}</span>
+        {showSport && m.sport && <Chip tone="line">{m.sport.name}</Chip>}
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           {(m.targetLevelMin != null || m.targetLevelMax != null) && (
             <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>

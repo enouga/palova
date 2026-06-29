@@ -99,6 +99,26 @@ describe('OpenMatchCard', () => {
     expect(btn).toBeDisabled();
   });
 
+  it('affiche le chip sport quand showSport et sport sont fournis', () => {
+    const match = makeMatch({ sport: { key: 'padel', name: 'Padel' } });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { showSport: true })} />
+      </ThemeProvider>
+    );
+    expect(screen.getByText('Padel')).toBeInTheDocument();
+  });
+
+  it('masque le chip sport quand showSport est false', () => {
+    const match = makeMatch({ sport: { key: 'padel', name: 'Padel' } });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { showSport: false })} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByText('Padel')).not.toBeInTheDocument();
+  });
+
   it('affiche « 3 intéressés » quand interestedCount est 3', () => {
     const match = makeMatch({ interestedCount: 3 });
     render(

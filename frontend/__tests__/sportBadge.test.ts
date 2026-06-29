@@ -4,6 +4,7 @@ describe('sportBadge', () => {
   it('clubIsMultiSport : ≥2 sports => true', () => {
     expect(clubIsMultiSport(null)).toBe(false);
     expect(clubIsMultiSport(undefined)).toBe(false);
+    expect(clubIsMultiSport({})).toBe(false); // clubSports absent → pas de crash
     expect(clubIsMultiSport({ clubSports: [] })).toBe(false);
     expect(clubIsMultiSport({ clubSports: [{ id: 'a' }] })).toBe(false);
     expect(clubIsMultiSport({ clubSports: [{ id: 'a' }, { id: 'b' }] })).toBe(true);

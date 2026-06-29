@@ -8,6 +8,7 @@ import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -36,6 +37,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const levelEnabled = club.levelSystemEnabled !== false;
+  const multiSport = clubIsMultiSport(club);
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
@@ -173,6 +175,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onToggleInterest={toggleInterest}
                   onOpenChat={openChat}
                   hasUnread={hasUnread(m)}
+                  showSport={multiSport}
                 />
               ))}
             </div>
@@ -215,6 +218,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               onToggleInterest={toggleInterest}
               onOpenChat={openChat}
               hasUnread={hasUnread(m)}
+              showSport={multiSport}
             />
           ))}
         </div>
