@@ -33,3 +33,22 @@ export function authMiddleware(
     res.status(401).json({ error: 'Token invalide' });
   }
 }
+
+/**
+ * Authentification facultative : pose req.user si un Bearer valide est présent,
+ * sinon laisse passer en anonyme (jamais de 401). Pour les lectures publiques.
+ */
+export function optionalAuth(
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as { id: string; email: string };
+      req.user = { id: payload.id, email: payload.email };
+    } catch { /* token invalide → on continue en anonyme */ }
+  }
+  next();
+}
