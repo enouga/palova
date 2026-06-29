@@ -56,3 +56,13 @@ it('rend une pierre tombale pour un message supprimé reçu en SSE', async () =>
   act(() => lastES!.emit({ type: 'chat_deleted', message: { id: 'm1', author: { userId: 'u2', firstName: 'Bob', lastName: 'Y', avatarUrl: null }, body: '', createdAt: '2026-06-28T10:00:00Z', deleted: true } }));
   expect(await screen.findByText(/message supprimé/i)).toBeInTheDocument();
 });
+
+it('insère un emoji dans le champ via le sélecteur', async () => {
+  renderSheet();
+  await screen.findByText('salut');
+  const input = screen.getByPlaceholderText(/message/i) as HTMLInputElement;
+  fireEvent.change(input, { target: { value: 'bravo ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Emojis' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Emoji 🎾' }));
+  expect(input.value).toBe('bravo 🎾');
+});
