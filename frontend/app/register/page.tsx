@@ -5,6 +5,7 @@ import { api, AuthResponse, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { setSession } from '@/lib/session';
 import { useClub } from '@/lib/ClubProvider';
+import { safeNext } from '@/lib/postAuth';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
 import { VerifyCodeForm } from '@/components/VerifyCodeForm';
@@ -33,7 +34,7 @@ export default function RegisterPage() {
   const finish = async (auth: AuthResponse) => {
     setSession(auth.token, null);
     if (slug) await api.joinClub(slug, auth.token).catch(() => {}); // adhésion auto au club du host
-    router.push(slug ? (nextPath() || '/') : '/clubs');
+    router.push(slug ? (safeNext(nextPath()) || '/') : '/clubs');
   };
 
   async function handleSubmit(e: FormEvent) {
