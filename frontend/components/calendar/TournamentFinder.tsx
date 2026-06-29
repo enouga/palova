@@ -7,6 +7,7 @@ import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
+import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 import {
   CalendarFilterState, DatePreset, emptyCalendarState, applyFilters, calendarFacets,
@@ -105,6 +106,8 @@ export function TournamentFinder() {
       : null),
     [items, state, now],
   );
+  // Vue cross-club : chip sport seulement si l'ensemble affiché couvre plusieurs sports.
+  const showSport = setSpansMultipleSports((results ?? []).map((r) => r.tournament.sport?.key));
 
   return (
     <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
@@ -147,6 +150,7 @@ export function TournamentFinder() {
               ratio={fillRatio(t)}
               places={tournamentPlacesLabel(t)}
               extra={t.entryFee ? `${t.entryFee} €` : null}
+              sportLabel={showSport ? (t.sport?.name ?? null) : null}
               onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
             />
           );

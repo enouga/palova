@@ -6,6 +6,7 @@ import { clubUrl, platformUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
+import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
@@ -23,6 +24,7 @@ export function UpcomingTournaments() {
   if (!items || items.length === 0) return null; // déjà trié par date côté backend
 
   const top = items.slice(0, MAX);
+  const showSport = setSpansMultipleSports(top.map((t) => t.sport?.key));
   return (
     <>
       <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, padding: '30px 20px 0' }}>
@@ -43,6 +45,7 @@ export function UpcomingTournaments() {
             ratio={fillRatio(t)}
             places={tournamentPlacesLabel(t)}
             extra={t.entryFee ? `${t.entryFee} €` : null}
+            sportLabel={showSport ? (t.sport?.name ?? null) : null}
             onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
           />
         ))}
