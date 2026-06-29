@@ -88,6 +88,12 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string, token: string) =>
     request<{ ok: boolean }>('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }, token),
 
+  // Suppression de compte (anonymisation) — résumé des blocages/avertissements puis suppression.
+  getAccountDeletionSummary: (token: string) =>
+    request<AccountDeletionSummary>('/api/me/account-deletion-summary', {}, token),
+  deleteMyAccount: (password: string, token: string) =>
+    request<{ ok: boolean }>('/api/me', { method: 'DELETE', body: JSON.stringify({ password }) }, token),
+
   getMyClubs: (token: string) => request<ManagedClub[]>('/api/me/clubs', {}, token),
 
   getMyReservations: (token: string) => request<MyReservation[]>('/api/me/reservations', {}, token),
@@ -587,6 +593,16 @@ export const api = {
   // Le club a-t-il déjà une carte enregistrée pour le joueur (empreinte no-show) ?
   getMyCardStatus: (slug: string, token: string) =>
     request<{ hasCardOnFile: boolean }>(`/api/clubs/${slug}/me/card-status`, {}, token),
+
+  // Carte enregistrée du joueur (club courant) : marque + 4 chiffres + expiration.
+  getMyPaymentMethod: (slug: string, token: string) =>
+    request<MyPaymentMethod | null>(`/api/clubs/${slug}/me/payment-method`, {}, token),
+  removeMyPaymentMethod: (slug: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${slug}/me/payment-method`, { method: 'DELETE' }, token),
+
+  // Historique des paiements du joueur (club courant).
+  getMyPayments: (slug: string, token: string) =>
+    request<MyPayment[]>(`/api/clubs/${slug}/me/payments`, {}, token),
 
   // Abonnements actifs du joueur sur ce club.
   getMyClubSubscriptions: (slug: string, token: string) =>
@@ -1481,6 +1497,30 @@ export interface MemberPackage {
 
 /** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
 export type ActiveMemberPackage = MemberPackage & { userId: string };
+
+export interface MyPaymentMethod {
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+export interface MyPayment {
+  id: string;
+  date: string;            // ISO
+  amountCents: number;
+  refundedCents: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  label: string;
+}
+
+export interface AccountDeletionSummary {
+  blockingClubs: string[];
+  futureReservations: number;
+  activeSubscriptions: number;
+  balances: string[];
+}
 
 export interface CaissePayment extends Payment {
   reservation: {
