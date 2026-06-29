@@ -19,6 +19,12 @@ jest.mock('../lib/api', () => ({
     getMyClubs: jest.fn(),
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
+    getMyClubSubscriptions: jest.fn(),
+    getMyPayments: jest.fn(),
+    getMyPaymentMethod: jest.fn(),
+    removeMyPaymentMethod: jest.fn(),
+    getAccountDeletionSummary: jest.fn(),
+    deleteMyAccount: jest.fn(),
     updateMyProfile: jest.fn(),
     updateMyClubMembership: jest.fn(),
     uploadMyAvatar: jest.fn(),
@@ -51,6 +57,10 @@ describe('Page Mon profil', () => {
     api.getMyClubs.mockResolvedValue([]);
     api.getMyClubMembership.mockResolvedValue(null);
     api.getMyClubPackages.mockResolvedValue([]);
+    api.getMyClubSubscriptions.mockResolvedValue([]);
+    api.getMyPayments.mockResolvedValue([]);
+    api.getMyPaymentMethod.mockResolvedValue(null);
+    api.getAccountDeletionSummary.mockResolvedValue({ blockingClubs: [], futureReservations: 0, activeSubscriptions: 0, balances: [] });
     api.updateMyProfile.mockResolvedValue(profile);
     api.uploadMyAvatar.mockResolvedValue({ ...profile, avatarUrl: '/uploads/avatars/u1-2.png' });
     api.changePassword.mockResolvedValue({ ok: true });

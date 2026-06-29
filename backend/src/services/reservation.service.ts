@@ -714,6 +714,23 @@ export class ReservationService {
     return refunded;
   }
 
+  /**
+   * Annule toutes les réservations À VENIR dont l'utilisateur est organisateur
+   * (suppression de compte). Bypass volontaire du délai d'annulation. Réutilise
+   * `performCancel` (libère le verrou Redis + SSE slot_released). Pas de remboursement
+   * auto ici (le club garde le remboursement manuel). Renvoie le nombre annulé.
+   */
+  async cancelFutureReservationsForUser(userId: string): Promise<number> {
+    const future = await prisma.reservation.findMany({
+      where: { userId, status: { in: ['CONFIRMED', 'PENDING'] }, startTime: { gt: new Date() } },
+      select: { id: true, resourceId: true, startTime: true, endTime: true },
+    });
+    for (const r of future) {
+      await this.performCancel(r);
+    }
+    return future.length;
+  }
+
   async cancelReservation(reservationId: string, userId: string) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },

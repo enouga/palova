@@ -12,12 +12,14 @@ import { lessonService } from '../services/lesson.service';
 import { RatingService } from '../services/rating.service';
 import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { AccountService } from '../services/account.service';
 
 const router = Router();
 const reservationService = new ReservationService();
 const tournamentService = new TournamentService();
 const eventService = new EventService();
 const ratingService = new RatingService();
+const accountService = new AccountService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
@@ -299,6 +301,28 @@ router.post('/password', authMiddleware, async (req: AuthRequest, res: Response,
     await prisma.user.update({ where: { id: req.user!.id }, data: { password: hashed } });
     res.json({ ok: true });
   } catch (err) { next(err); }
+});
+
+// Résumé avant suppression : blocages (unique OWNER) + avertissements (résas/abos/soldes).
+router.get('/account-deletion-summary', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await accountService.getDeletionSummary(req.user!.id)); }
+  catch (err) { next(err); }
+});
+
+// Suppression (anonymisation) du compte. Re-saisie du mot de passe requise.
+router.delete('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { password } = req.body;
+    if (!password || typeof password !== 'string') {
+      return void res.status(400).json({ error: 'password requis' });
+    }
+    res.json(await accountService.deleteAccount(req.user!.id, password));
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === 'INVALID_PASSWORD') return void res.status(401).json({ error: 'INVALID_PASSWORD' });
+    if (msg === 'OWNS_CLUB') return void res.status(409).json({ error: 'OWNS_CLUB', clubs: (err as Error & { clubs?: string[] }).clubs ?? [] });
+    next(err);
+  }
 });
 
 export default router;

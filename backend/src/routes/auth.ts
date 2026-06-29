@@ -62,6 +62,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     res.status(401).json({ error: 'Identifiants invalides' });
     return;
   }
+  if (user.deletedAt) {
+    res.status(401).json({ error: 'Identifiants invalides' });
+    return;
+  }
   if (!user.emailVerified) {
     res.status(403).json({ error: 'EMAIL_NOT_VERIFIED', email: user.email });
     return;

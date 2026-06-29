@@ -33,6 +33,7 @@ jest.mock('../../db/stripe', () => ({
     paymentIntents: { create: jest.fn(), retrieve: jest.fn() },
     setupIntents:   { create: jest.fn(), retrieve: jest.fn() },
     refunds:        { create: jest.fn() },
+    paymentMethods: { retrieve: jest.fn(), detach: jest.fn() },
   },
 }));
 
@@ -459,5 +460,31 @@ describe('disconnectAccount', () => {
   it('lève STRIPE_NOT_CONFIGURED si aucun compte lié', async () => {
     (prisma.club.findUnique as jest.Mock).mockResolvedValue(mockClub()); // stripeAccountId null
     await expect(svc.disconnectAccount('club-1')).rejects.toThrow('STRIPE_NOT_CONFIGURED');
+  });
+});
+
+describe('getCardDetails', () => {
+  it('retourne brand/last4/exp depuis le PaymentMethod du compte connecté', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (stripe.paymentMethods.retrieve as jest.Mock).mockResolvedValue({
+      card: { brand: 'visa', last4: '4242', exp_month: 4, exp_year: 2027 },
+    });
+    const res = await new StripeService().getCardDetails('club-1', 'pm_123');
+    expect(res).toEqual({ brand: 'visa', last4: '4242', expMonth: 4, expYear: 2027 });
+    expect(stripe.paymentMethods.retrieve).toHaveBeenCalledWith('pm_123', undefined, { stripeAccount: 'acct_1' });
+  });
+
+  it('lève STRIPE_NOT_CONFIGURED si le club n a pas de compte', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: null });
+    await expect(new StripeService().getCardDetails('club-1', 'pm_123')).rejects.toThrow('STRIPE_NOT_CONFIGURED');
+  });
+});
+
+describe('detachCard', () => {
+  it('détache le PaymentMethod sur le compte connecté', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
+    (stripe.paymentMethods.detach as jest.Mock).mockResolvedValue({ id: 'pm_123' });
+    await new StripeService().detachCard('club-1', 'pm_123');
+    expect(stripe.paymentMethods.detach).toHaveBeenCalledWith('pm_123', undefined, { stripeAccount: 'acct_1' });
   });
 });
