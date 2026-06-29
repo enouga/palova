@@ -811,7 +811,7 @@ export interface MyReservation {
   endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
-  resource: { id: string; name: string; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
+  resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null }[];
 }
@@ -1132,6 +1132,7 @@ export interface OpenMatch {
   viewerIsInterested: boolean;
   interested: OpenMatchPlayer[];
   lastMessageAt: string | null;
+  sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
 }
 
 export interface OpenMatchMessage {
@@ -1631,6 +1632,7 @@ export interface Tournament {
   status: TournamentStatus;
   confirmedCount: number;
   waitlistCount: number;
+  sport?: { key: string; name: string } | null; // peuplé par les listes (club / national / mes tournois) ; le détail garde clubSport
 }
 
 /** Projection club renvoyée par le calendrier national (publique, sans données privées). */
@@ -1829,6 +1831,7 @@ export interface ClubEvent {
   confirmedCount: number;
   waitlistCount: number;
   clubSportId?: string | null;
+  sport?: { key: string; name: string } | null; // peuplé par les listes/détail events + mes events
 }
 
 export interface ClubEventDetail extends ClubEvent {
@@ -1972,6 +1975,7 @@ export interface LessonSummary {
   seriesId: string | null;
   coach: { name: string; photoUrl: string | null };
   reservation: { startTime: string; endTime: string; resource: { name: string } };
+  sport?: { key: string; name: string } | null;
   series?: { enrollmentMode: 'SERIES' | 'PER_SESSION'; title: string | null } | null;
 }
 
