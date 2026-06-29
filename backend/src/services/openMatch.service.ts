@@ -104,11 +104,13 @@ export class OpenMatchService {
       ? await this.ratingService.getLevelsBySport(pairs)
       : {};
 
-    // Compteur de messages de chat non lus par partie (notifications serveur).
-    const unreadNotifs = await prisma.notification.findMany({
-      where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
-      select: { data: true },
-    });
+    // Compteur de messages de chat non lus par partie (notifications serveur) — vide pour un visiteur anonyme.
+    const unreadNotifs = viewerUserId != null
+      ? await prisma.notification.findMany({
+          where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
+          select: { data: true },
+        })
+      : [];
     const unreadByMatch = new Map<string, number>();
     for (const n of unreadNotifs) {
       const mid = (n.data as { matchId?: string } | null)?.matchId;
