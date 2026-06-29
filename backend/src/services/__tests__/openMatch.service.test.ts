@@ -66,6 +66,20 @@ describe('OpenMatchService', () => {
       expect(out[0].players).toHaveLength(2);
     });
 
+    it('expose le sport du terrain sur chaque partie', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'm1', startTime: future(48), endTime: future(49),
+          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+          participants: [], openMatchInterests: [], openMatchMessages: [],
+        },
+      ] as any);
+
+      const [match] = await service.listOpenMatches('club-demo', 'viewer');
+
+      expect(match.sport).toEqual({ key: 'padel', name: 'Padel' });
+    });
+
     it('ne remonte que les parties padel (filtre clubSport.sport.key)', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([] as any);
       await service.listOpenMatches('club-demo', 'viewer');

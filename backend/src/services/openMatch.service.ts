@@ -57,7 +57,7 @@ export class OpenMatchService {
       },
       orderBy: { startTime: 'asc' },
       include: {
-        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } },
+        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
           select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
@@ -91,6 +91,7 @@ export class OpenMatchService {
       return {
         id: m.id,
         resourceName: m.resource.name,
+        sport: { key: m.resource.clubSport.sport.key, name: m.resource.clubSport.sport.name },
         startTime: m.startTime.toISOString(),
         endTime: m.endTime.toISOString(),
         maxPlayers,
