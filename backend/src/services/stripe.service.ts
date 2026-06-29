@@ -296,6 +296,23 @@ export class StripeService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
+  /** Détails (marque/4 chiffres/expiration) d'une carte enregistrée, lus sur le compte connecté. */
+  async getCardDetails(clubId: string, paymentMethodId: string): Promise<{ brand: string | null; last4: string | null; expMonth: number | null; expYear: number | null } | null> {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { stripeAccountId: true } });
+    if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId, undefined, { stripeAccount: club.stripeAccountId });
+    const card = pm.card;
+    if (!card) return null;
+    return { brand: card.brand ?? null, last4: card.last4 ?? null, expMonth: card.exp_month ?? null, expYear: card.exp_year ?? null };
+  }
+
+  /** Délie une carte du Customer (compte connecté). À appeler avant de nullifier defaultPaymentMethodId. */
+  async detachCard(clubId: string, paymentMethodId: string): Promise<void> {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { stripeAccountId: true } });
+    if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
+    await stripe.paymentMethods.detach(paymentMethodId, undefined, { stripeAccount: club.stripeAccountId });
+  }
+
   async refundPaymentIntent(params: {
     stripeAccountId: string;
     paymentIntentId: string;
