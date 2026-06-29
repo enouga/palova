@@ -8,6 +8,7 @@ import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
+import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { inRange } from '@/lib/levelMatch';
@@ -24,6 +25,10 @@ const JOIN_ERRORS: Record<string, string> = {
   NOT_ORGANIZER:          "Seul l'organisateur peut retirer un joueur.",
   CANNOT_REMOVE_ORGANIZER: "L'organisateur ne peut pas être retiré.",
   PARTICIPANT_NOT_FOUND:  "Ce joueur n'est plus dans la partie.",
+  ALREADY_PARTICIPANT:   'Vous participez déjà à cette partie.',
+  CHAT_FORBIDDEN:        'Réservé aux inscrits et aux intéressés.',
+  NOT_ALLOWED:           'Action non autorisée.',
+  RESERVATION_NOT_FOUND: "Cette partie n'existe plus.",
 };
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
@@ -41,6 +46,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [filterMyLevel, setFilterMyLevel] = useState(false);
   const [joinWarning, setJoinWarning] = useState<OpenMatch | null>(null);
   const [view, setView] = useState<'parties' | 'classement'>('parties');
+  const [chatting, setChatting] = useState<OpenMatch | null>(null);
+  const [viewerUserId, setViewerUserId] = useState('');
+  const [canModerate, setCanModerate] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) { setMatches([]); setLoading(false); return; }
@@ -57,6 +66,20 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     api.getMyRating(token, 'padel').then((r) => setMyLevel(r?.level ?? null)).catch(() => {});
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
+    api.getMyProfile(token).then((p) => setViewerUserId(p.id)).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    api.getMyClubs(token)
+      .then((list) => setCanModerate(list.some((c) => c.slug === club.slug && (c.role === 'OWNER' || c.role === 'ADMIN'))))
+      .catch(() => {});
+  }, [token, club.slug]);
+
+  useEffect(() => { setMounted(true); }, []);
+
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
     if (!token) return;
     setBusyId(m.id); setError('');
@@ -64,6 +87,19 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     catch (e) { setError(JOIN_ERRORS[(e as Error).message] ?? (e as Error).message); }
     finally { setBusyId(null); }
   };
+
+  const lastReadKey = (id: string) => `palova:match-chat-read:${id}`;
+  const hasUnread = (m: OpenMatch) => {
+    if (!mounted || !m.lastMessageAt || typeof window === 'undefined') return false;
+    const seen = window.localStorage.getItem(lastReadKey(m.id));
+    return !seen || new Date(m.lastMessageAt) > new Date(seen);
+  };
+  const openChat = (m: OpenMatch) => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(lastReadKey(m.id), new Date().toISOString());
+    setChatting(m);
+  };
+  const toggleInterest = (m: OpenMatch) =>
+    act(m, () => (m.viewerIsInterested ? api.removeInterested(club.slug, m.id, token!) : api.setInterested(club.slug, m.id, token!)));
 
   const handleJoin = (m: OpenMatch) => {
     const min = m.targetLevelMin ?? null;
@@ -134,6 +170,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onCancelAdd={() => setAddingId(null)}
                   onRecordResult={(mm) => setRecordingFor(mm)}
                   canRecordResult={levelEnabled}
+                  onToggleInterest={toggleInterest}
+                  onOpenChat={openChat}
+                  hasUnread={hasUnread(m)}
                 />
               ))}
             </div>
@@ -173,6 +212,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               onCancelAdd={() => setAddingId(null)}
               onRecordResult={(mm) => setRecordingFor(mm)}
               canRecordResult={levelEnabled}
+              onToggleInterest={toggleInterest}
+              onOpenChat={openChat}
+              hasUnread={hasUnread(m)}
             />
           ))}
         </div>
@@ -200,6 +242,16 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           busy={busyId === joinWarning.id}
           onConfirm={() => { const m = joinWarning; setJoinWarning(null); act(m, () => api.joinOpenMatch(club.slug, m.id, token!)); }}
           onCancel={() => setJoinWarning(null)}
+        />
+      )}
+      {chatting && token && (
+        <OpenMatchChatSheet
+          slug={club.slug} token={token} reservationId={chatting.id} viewerUserId={viewerUserId}
+          viewerIsOrganizer={chatting.viewerIsOrganizer}
+          canModerate={canModerate}
+          title={`${chatting.resourceName} · ${new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(chatting.startTime)).replace(':', 'h')}`}
+          timezone={club.timezone}
+          onClose={() => { setChatting(null); load(); }}
         />
       )}
     </Screen>

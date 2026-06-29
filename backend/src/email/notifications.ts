@@ -21,6 +21,7 @@ import {
 import { playerCount } from '../utils/courtType';
 import { RatingService } from '../services/rating.service';
 import { inRange } from '../services/rating/range';
+import { SSEService } from '../services/sse.service';
 
 const ratingService = new RatingService();
 
@@ -383,6 +384,85 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
     title: 'Nouveau joueur dans ta partie', body: `${fullName(joiner)} a rejoint ta partie du ${dateLabel}.`,
     url, email: { to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
+}
+
+/** Prévient l'organisateur qu'un membre est « intéressé » par sa partie (in-app + push, pas d'email). */
+export async function notifyOpenMatchInterest(reservationId: string, interestedUserId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: { select: { name: true, club: { select: { id: true, slug: true, timezone: true } } } },
+      participants: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const organizerP = resa.participants.find((p) => p.isOrganizer);
+  if (!organizerP || organizerP.userId === interestedUserId) return;
+
+  const interested = await prisma.user.findUnique({
+    where: { id: interestedUserId },
+    select: { firstName: true, lastName: true },
+  });
+  if (!interested) return;
+
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const url = clubAppUrl(club.slug, '/parties');
+  await dispatch({
+    userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.interested',
+    title: 'Quelqu’un est intéressé par ta partie',
+    body: `${fullName(interested)} est intéressé par ta partie du ${dateLabel}.`,
+    url, email: null,
+  });
+}
+
+/**
+ * Notifie les membres du chat (participants + intéressés) ABSENTS du fil qu'un message
+ * a été posté (in-app + push, pas d'email). Exclut l'auteur et les connectés au flux SSE.
+ * Coalescing : on saute un destinataire qui a déjà une notif « message » non lue pour cette
+ * partie (le badge in-app agrège, on n'empile pas un push par message).
+ */
+export async function notifyOpenMatchChatMessage(reservationId: string, messageId: string, authorUserId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: { select: { name: true, club: { select: { id: true, slug: true } } } },
+      participants: { select: { userId: true } },
+      openMatchMessages: { where: { id: messageId }, select: { id: true, body: true, user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+  if (!resa) return;
+  const msg = resa.openMatchMessages[0];
+  if (!msg) return;
+
+  const interests = await prisma.openMatchInterest.findMany({ where: { reservationId }, select: { userId: true } });
+  const connected = SSEService.getInstance().getMatchUserIds(reservationId);
+
+  const recipients = new Set<string>();
+  for (const p of resa.participants) recipients.add(p.userId);
+  for (const i of interests) recipients.add(i.userId);
+  recipients.delete(authorUserId);
+  for (const u of connected) recipients.delete(u);
+
+  const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/parties');
+  const authorName = fullName(msg.user);
+  const snippet = msg.body.length > 80 ? `${msg.body.slice(0, 80)}…` : msg.body;
+
+  for (const userId of recipients) {
+    // Coalescing : déjà une notif « message » non lue pour cette partie → on ne ré-empile pas.
+    const existing = await prisma.notification.findFirst({
+      where: { userId, type: 'open_match.message', readAt: null, data: { path: ['matchId'], equals: reservationId } } as any,
+      select: { id: true },
+    });
+    if (existing) continue;
+    await dispatch({
+      userId, clubId: club.id, category: 'OPEN_MATCH_CHAT', type: 'open_match.message',
+      title: `Nouveau message — ${resa.resource.name}`,
+      body: `${authorName} : ${snippet}`,
+      url, data: { matchId: reservationId }, email: null,
+    });
+  }
 }
 
 /**
