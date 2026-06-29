@@ -17,6 +17,7 @@ import { MyRegistrationCard } from '@/components/tournament/MyRegistrationCard';
 import { ProfileCompletion } from '@/components/tournament/ProfileCompletion';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { timelineSteps, waitlistPosition } from '@/lib/tournament';
+import StripePaymentStep from '@/components/StripePaymentStep';
 
 const ERROR_FR: Record<string, string> = {
   TOURNAMENT_NOT_OPEN: 'Les inscriptions ne sont pas ouvertes.',
@@ -58,6 +59,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const [busy, setBusy] = useState(false);
   // Horloge unique de la page : null au premier rendu (hydration-safe), puis tick chaque minute.
   const [now, setNow] = useState<Date | null>(null);
+  // Étape de paiement Stripe en cours (non-null quand une inscription payante vient d'être créée).
+  const [payStep, setPayStep] = useState<{ regId: string; mode: 'payment' | 'setup' } | null>(null);
 
   const load = () => api.getTournament(id).then(setT).catch(() => setT(null));
   const loadParticipants = () => api.getTournamentParticipants(id).then(setParticipants).catch(() => setParticipants([]));
@@ -103,17 +106,29 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
     finally { setBusy(false); }
   };
 
+  const reloadAfterRegistration = async () => {
+    await load();
+    loadParticipants();
+    if (token) {
+      const rs = await api.getMyTournaments(token);
+      setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
+    }
+  };
+
   const register = async () => {
     if (!token) { router.push('/login'); return; }
     if (!partner) return;
     setBusy(true); setError(null);
     try {
-      await api.registerTournament(id, partner.id, token);
+      const res = await api.registerTournament(id, partner.id, token);
       setPartner(null);
-      await load();
-      loadParticipants();
-      const rs = await api.getMyTournaments(token);
-      setMyReg(rs.find((r) => r.tournament.id === id) ?? null);
+      if (res.payment) {
+        // Épreuve payante : ouvrir le parcours Stripe avant de rafraîchir l'affichage.
+        setPayStep({ regId: res.registration.id, mode: res.payment.mode });
+      } else {
+        // Épreuve gratuite : flux habituel.
+        await reloadAfterRegistration();
+      }
     } catch (e) { setError(messageFor(e)); }
     finally { setBusy(false); }
   };
@@ -190,8 +205,35 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
             />
           )}
 
+          {/* Étape Stripe — paiement d'une inscription payante ou enregistrement carte (liste d'attente) */}
+          {payStep && (
+            <div>
+              {payStep.mode === 'setup' && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 12, lineHeight: 1.5 }}>
+                  Votre carte sera débitée seulement si une place se libère.
+                </div>
+              )}
+              <StripePaymentStep
+                type={payStep.mode}
+                amountLabel={`${Number(t.entryFee ?? 0)} €`}
+                createIntent={async () => {
+                  const r = await api.createRegistrationIntent('tournaments', id, payStep.regId, token!);
+                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId };
+                }}
+                confirm={payStep.mode === 'payment'
+                  ? async (ids) => { await api.confirmRegistrationPayment('tournaments', id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
+                  : async () => {}}
+                onSuccess={async () => {
+                  setPayStep(null);
+                  await reloadAfterRegistration();
+                }}
+                onCancel={() => setPayStep(null)}
+              />
+            </div>
+          )}
+
           {/* Pas encore inscrit, inscriptions ouvertes */}
-          {token && !myReg && !closed && (
+          {token && !myReg && !closed && !payStep && (
             <div>
               {profileIncomplete && (
                 <ProfileCompletion busy={busy} initialPhone={profile?.phone ?? ''} initialSex={profile?.sex ?? ''} initialLicense={membership?.membershipNo ?? ''} onSave={saveProfile} />

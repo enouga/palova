@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClubDetail, assetUrl } from '@/lib/api';
+import { ClubDetail, assetUrl, api, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
@@ -10,8 +10,18 @@ import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { clubHasPadel } from '@/lib/sport';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
+
+// Pastille de compteur rouge posée sur un onglet (non lus Parties, réservations à venir…).
+function CountBadge({ count, label, fontFamily }: { count: number; label: string; fontFamily: string }) {
+  return (
+    <span aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: '#e5484d', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
 
 // Barre de navigation club, présente sur toutes les pages d'un sous-domaine club.
 // Figée en haut (position: sticky) : une carte flottante « verre dépoli » qui reste collée au
@@ -28,11 +38,48 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const [logoFailed, setLogoFailed] = useState(false);
   const showClubLogo = !!club.logoUrl && !logoFailed;
 
+  const [partiesUnread, setPartiesUnread] = useState(0);
+  const showPartiesTab = ready && !!token && clubHasPadel(club);
+  useEffect(() => {
+    if (!showPartiesTab || !token) { setPartiesUnread(0); return; }
+    let alive = true;
+    const refresh = () => api.getOpenMatchUnread(club.slug, token)
+      .then((r) => { if (alive) setPartiesUnread(r.count); }).catch(() => {});
+    refresh();
+    const es = new EventSource(notificationsStreamUrl(token));
+    es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
+    es.onerror = () => es.close();
+    const onLocal = () => refresh();
+    window.addEventListener('palova:openmatch-unread', onLocal);
+    return () => { alive = false; es.close(); window.removeEventListener('palova:openmatch-unread', onLocal); };
+  }, [showPartiesTab, token, club.slug, pathname]);
+
+  // Compteur de réservations terrain À VENIR (status ≠ annulé, fin ≥ maintenant), même
+  // cloisonnement par club que la page /me/reservations (sauf si le club ouvre la vue des autres).
+  // Calculé en effet (jamais au rendu → pas de mismatch d'hydration), rafraîchi à chaque navigation.
+  const [upcomingResas, setUpcomingResas] = useState(0);
+  const showResasTab = ready && !!token;
+  const showAllResas = !!club.showOtherClubsReservations;
+  useEffect(() => {
+    if (!showResasTab || !token) { setUpcomingResas(0); return; }
+    let alive = true;
+    api.getMyReservations(token).then((rs) => {
+      if (!alive) return;
+      const now = Date.now();
+      setUpcomingResas(rs.filter((r) =>
+        r.status !== 'CANCELLED' &&
+        new Date(r.endTime).getTime() >= now &&
+        (showAllResas || r.resource.club.slug === club.slug),
+      ).length);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [showResasTab, token, club.slug, showAllResas, pathname]);
+
   const tabs: Tab[] = [
     { label: 'Club-house', short: 'Club', href: '/', icon: 'home', brand: true, match: (p) => p === '/' || p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
     { label: 'Réserver', href: '/reserver', icon: 'calendar', match: (p) => p.startsWith('/reserver') || p.startsWith('/courts'), show: true },
     { label: 'Mes réservations', short: 'Résas', href: '/me/reservations', icon: 'ticket', match: (p) => p.startsWith('/me/'), show: ready && !!token },
-    { label: 'Parties', href: '/parties', icon: 'users', match: (p) => p.startsWith('/parties'), show: ready && !!token },
+    { label: 'Parties', href: '/parties', icon: 'users', match: (p) => p.startsWith('/parties'), show: ready && clubHasPadel(club) },
     { label: 'Events', href: '/events', icon: 'trophy', match: (p) => p.startsWith('/events') || p.startsWith('/tournois'), show: true },
     { label: 'Connexion', href: '/login', icon: 'user', match: (p) => p.startsWith('/login'), show: ready && !token },
   ];
@@ -121,6 +168,12 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 <span className="cn-tab-label cn-lbl-full" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.label}</span>
                 {t.short && (
                   <span className="cn-tab-label cn-lbl-short" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.short}</span>
+                )}
+                {t.href === '/parties' && partiesUnread > 0 && (
+                  <CountBadge count={partiesUnread} label={`${partiesUnread} non lus`} fontFamily={th.fontUI} />
+                )}
+                {t.href === '/me/reservations' && upcomingResas > 0 && (
+                  <CountBadge count={upcomingResas} label={`${upcomingResas} réservations à venir`} fontFamily={th.fontUI} />
                 )}
               </Link>
             );

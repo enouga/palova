@@ -114,6 +114,14 @@ enum RegistrationStatus {
   CANCELLED
 }
 
+/// Statut de paiement d'une inscription payante (tournoi/event). NONE = épreuve gratuite.
+enum RegistrationPaymentStatus {
+  NONE
+  DUE
+  PAID
+  REFUNDED
+}
+
 enum ClubEventKind {
   MELEE       // mêlée / americano / mexicano
   STAGE       // stage, clinic, cours ponctuel
@@ -214,6 +222,16 @@ model Club {
   address          String
   city             String?
   country          String?    @default("FR")
+  // Géolocalisation (annuaire « près de moi » / par région). Renseignés par géocodage
+  // de l'adresse (Base Adresse Nationale) à la création/màj ; null si géocodage indisponible.
+  latitude         Float?     @map("latitude")
+  longitude        Float?     @map("longitude")
+  region           String?    @map("region")
+  postalCode       String?    @map("postal_code")
+  // Calendrier national des tournois : opt-in club + département (facette + affichage)
+  department                String?  @map("department")
+  departmentCode            String?  @map("department_code")
+  listTournamentsNationally Boolean  @default(false) @map("list_tournaments_nationally")
   description      String?
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
@@ -442,6 +460,8 @@ model User {
   memberNotes             MemberNote[] @relation("MemberNoteSubject")
   authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
   subscriptions           Subscription[]
+  openMatchInterests      OpenMatchInterest[]
+  openMatchMessages       OpenMatchMessage[]
 
   @@map("users")
 }
@@ -677,6 +697,8 @@ model Reservation {
   matches      Match[]
   series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   lesson       Lesson?
+  openMatchInterests OpenMatchInterest[]
+  openMatchMessages  OpenMatchMessage[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
@@ -715,6 +737,8 @@ model Payment {
   reservationId   String?        @map("reservation_id")
   participantId   String?        @map("participant_id") // paiement attribué à un joueur précis ; null = paiement « résa » global
   clubId          String?        @map("club_id")
+  tournamentRegistrationId String? @map("tournament_registration_id")
+  eventRegistrationId      String? @map("event_registration_id")
   amount          Decimal        @db.Decimal(10, 2)
   method          PaymentMethod  @default(CASH)
   payerName       String?        @map("payer_name")
@@ -741,6 +765,8 @@ model Payment {
   subscriptionSale   Subscription? @relation("SubscriptionSale", fields: [subscriptionId], references: [id], onDelete: SetNull)
   sourceSubscription Subscription? @relation("SubscriptionCoverage", fields: [sourceSubscriptionId], references: [id], onDelete: SetNull)
   createdBy     User?                   @relation("PaymentsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  tournamentRegistration TournamentRegistration? @relation(fields: [tournamentRegistrationId], references: [id], onDelete: SetNull)
+  eventRegistration      EventRegistration?      @relation(fields: [eventRegistrationId], references: [id], onDelete: SetNull)
   refunds       Refund[]
 
   @@index([reservationId])
@@ -748,6 +774,8 @@ model Payment {
   @@index([clubId, createdAt])
   @@index([clubId, status])
   @@index([stripePaymentIntentId])
+  @@index([tournamentRegistrationId])
+  @@index([eventRegistrationId])
   @@unique([clubId, receiptNo])
   @@map("payments")
 }
@@ -959,6 +987,7 @@ model Tournament {
   registrationDeadline DateTime         @map("registration_deadline") @db.Timestamptz
   maxTeams             Int?             @map("max_teams")        // null = illimité
   entryFee             Decimal?         @map("entry_fee") @db.Decimal(10, 2)
+  requirePrepayment    Boolean          @default(false) @map("require_prepayment")
   status               TournamentStatus @default(DRAFT)
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
@@ -978,14 +1007,17 @@ model TournamentRegistration {
   tournamentId  String             @map("tournament_id")
   captainUserId String             @map("captain_user_id")
   partnerUserId String             @map("partner_user_id")
-  status        RegistrationStatus @default(CONFIRMED)
-  cancelledAt   DateTime?          @map("cancelled_at")
-  createdAt     DateTime           @default(now()) @map("created_at") // = ordre liste d'attente
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  status          RegistrationStatus        @default(CONFIRMED)
+  paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
+  paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
+  cancelledAt     DateTime?                 @map("cancelled_at")
+  createdAt       DateTime                  @default(now()) @map("created_at") // = ordre liste d'attente
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   captain    User       @relation("CaptainRegistrations", fields: [captainUserId], references: [id], onDelete: Restrict)
   partner    User       @relation("PartnerRegistrations", fields: [partnerUserId], references: [id], onDelete: Restrict)
+  payments   Payment[]
 
   @@index([tournamentId, status, createdAt])
   @@index([captainUserId])
@@ -1006,6 +1038,7 @@ model ClubEvent {
   registrationDeadline DateTime        @map("registration_deadline") @db.Timestamptz
   capacity             Int?                                            // null = illimité
   price                Decimal?        @db.Decimal(10, 2)              // informatif — règlement au club
+  requirePrepayment    Boolean         @default(false) @map("require_prepayment")
   memberOnly           Boolean         @default(true) @map("member_only")
   status               ClubEventStatus @default(DRAFT)
   createdAt            DateTime        @default(now()) @map("created_at")
@@ -1027,13 +1060,16 @@ model EventRegistration {
   id          String             @id @default(cuid())
   eventId     String             @map("event_id")
   userId      String             @map("user_id")
-  status      RegistrationStatus @default(CONFIRMED)
-  cancelledAt DateTime?          @map("cancelled_at") @db.Timestamptz
-  createdAt   DateTime           @default(now()) @map("created_at") // = ordre de liste d'attente
-  updatedAt   DateTime           @updatedAt @map("updated_at")
+  status          RegistrationStatus        @default(CONFIRMED)
+  paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
+  paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
+  cancelledAt     DateTime?                 @map("cancelled_at") @db.Timestamptz
+  createdAt       DateTime                  @default(now()) @map("created_at") // = ordre de liste d'attente
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
 
-  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  event    ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payments Payment[]
 
   @@unique([eventId, userId]) // une seule ligne par joueur et par événement (réinscription = update)
   @@index([eventId, status, createdAt])
@@ -1147,6 +1183,7 @@ enum NotificationCategory {
   CLUB_MESSAGES
   ORGANIZER
   REMINDERS
+  OPEN_MATCH_CHAT
 }
 
 enum NotificationChannel {
@@ -1227,4 +1264,38 @@ model ClubBroadcast {
 
   @@index([clubId, createdAt])
   @@map("club_broadcasts")
+}
+
+/// Membre « intéressé » par une partie ouverte (n'occupe pas de place).
+/// Débloque l'accès au chat et alimente le compteur d'intéressés sur la carte.
+model OpenMatchInterest {
+  id            String   @id @default(cuid())
+  reservationId String   @map("reservation_id")
+  userId        String   @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, userId])
+  @@index([reservationId])
+  @@map("open_match_interests")
+}
+
+/// Message du fil de discussion d'une partie ouverte. Soft-delete (deletedAt) :
+/// un message supprimé reste en base et s'affiche en pierre tombale « message supprimé ».
+model OpenMatchMessage {
+  id            String    @id @default(cuid())
+  reservationId String    @map("reservation_id")
+  userId        String    @map("user_id") // auteur
+  body          String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedById   String?   @map("deleted_by_id")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId, createdAt])
+  @@map("open_match_messages")
 }

@@ -19,6 +19,8 @@ jest.mock('../../services/reservation.service', () => ({
 
 import { stripe } from '../../db/stripe';
 import { ReservationService } from '../../services/reservation.service';
+import { TournamentService } from '../../services/tournament.service';
+import { EventService } from '../../services/event.service';
 const mockConstructEvent = stripe.webhooks.constructEvent as jest.Mock;
 
 let mockConfirmReservation: jest.Mock;
@@ -176,5 +178,51 @@ describe('POST /api/stripe/webhooks', () => {
 
     expect(res.status).toBe(200);
     expect(mockConfirmReservation).not.toHaveBeenCalled();
+  });
+
+  it('payment_intent.succeeded avec tournamentRegistrationId → confirme l\'inscription tournoi', async () => {
+    const spy = jest.spyOn(TournamentService.prototype, 'confirmRegistrationPayment').mockResolvedValue({} as any);
+    mockConstructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_1',
+          metadata: { tournamentRegistrationId: 'reg1' },
+          payment_method: null,
+        },
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/stripe/webhooks')
+      .set('stripe-signature', SIG)
+      .set('Content-Type', 'application/json')
+      .send(RAW_BODY);
+
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('reg1', { stripePaymentIntentId: 'pi_1' });
+  });
+
+  it('payment_intent.succeeded avec eventRegistrationId → confirme l\'inscription event', async () => {
+    const spy = jest.spyOn(EventService.prototype, 'confirmRegistrationPayment').mockResolvedValue({} as any);
+    mockConstructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_2',
+          metadata: { eventRegistrationId: 'reg2' },
+          payment_method: null,
+        },
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/stripe/webhooks')
+      .set('stripe-signature', SIG)
+      .set('Content-Type', 'application/json')
+      .send(RAW_BODY);
+
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('reg2', { stripePaymentIntentId: 'pi_2' });
   });
 });

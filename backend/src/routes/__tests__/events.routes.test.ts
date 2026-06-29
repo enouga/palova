@@ -1,0 +1,219 @@
+import '../../__mocks__/prisma';
+import { prismaMock } from '../../__mocks__/prisma';
+import request from 'supertest';
+import jwt from 'jsonwebtoken';
+import app from '../../app';
+import { EventService } from '../../services/event.service';
+
+// Mock StripeService avant tout import de l'app (hoist garanti par jest.mock).
+jest.mock('../../services/stripe.service', () => {
+  const createRegistrationPaymentIntent = jest.fn().mockResolvedValue({ clientSecret: 'cs_ev_payment' });
+  const createRegistrationSetupIntent   = jest.fn().mockResolvedValue({ clientSecret: 'cs_ev_setup' });
+  return {
+    StripeService: jest.fn().mockImplementation(() => ({
+      createRegistrationPaymentIntent,
+      createRegistrationSetupIntent,
+    })),
+  };
+});
+
+import { StripeService } from '../../services/stripe.service';
+const stripeInstance = new (StripeService as any)();
+const createRegistrationPaymentIntent = stripeInstance.createRegistrationPaymentIntent as jest.Mock;
+const createRegistrationSetupIntent   = stripeInstance.createRegistrationSetupIntent   as jest.Mock;
+
+const SECRET = process.env.JWT_SECRET!;
+if (!SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
+
+const token1 = jwt.sign({ id: 'user-1', email: 'u@x.fr' }, SECRET, { expiresIn: '1h' });
+
+beforeEach(() => {
+  createRegistrationPaymentIntent.mockClear();
+  createRegistrationSetupIntent.mockClear();
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/events/:id/register → { registration, payment }
+// ---------------------------------------------------------------------------
+describe('POST /api/events/:id/register', () => {
+  it('201 — renvoie { registration, payment }', async () => {
+    const spy = jest.spyOn(EventService.prototype, 'register').mockResolvedValue({
+      registration: { id: 'ereg-1', status: 'CONFIRMED', paymentStatus: 'NONE' },
+      payment: null,
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/register')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('registration');
+    expect(res.body).toHaveProperty('payment');
+    spy.mockRestore();
+  });
+
+  it('201 — renvoie payment avec mode quand paiement requis', async () => {
+    const spy = jest.spyOn(EventService.prototype, 'register').mockResolvedValue({
+      registration: { id: 'ereg-1', status: 'CONFIRMED', paymentStatus: 'DUE' },
+      payment: { mode: 'payment' },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/register')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(201);
+    expect(res.body.payment).toEqual({ mode: 'payment' });
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/events/:id/registrations/:regId/intent
+// ---------------------------------------------------------------------------
+describe('POST /api/events/:id/registrations/:regId/intent', () => {
+  it('401 sans token', async () => {
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent');
+    expect(res.status).toBe(401);
+  });
+
+  it('404 si l\'inscription n\'existe pas', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue(null);
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-x/intent')
+      .set('Authorization', `Bearer ${token1}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('403 si l\'inscription n\'appartient pas à l\'appelant', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'autre-user',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('409 NOT_PAYABLE si paymentStatus !== DUE', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'PAID',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('NOT_PAYABLE');
+  });
+
+  it('200 — CONFIRMED DUE → PaymentIntent + clientSecret + stripeAccountId', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.clientSecret).toBe('cs_ev_payment');
+    expect(res.body.stripeAccountId).toBe('acct_1');
+    expect(res.body.type).toBe('payment');
+    expect(createRegistrationPaymentIntent).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 1200, kind: 'event' }),
+    );
+  });
+
+  it('400 AMOUNT_TOO_SMALL si price donne < 50 centimes', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 0.40, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('AMOUNT_TOO_SMALL');
+    expect(createRegistrationPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it('200 — WAITLISTED DUE → SetupIntent + stripeAccountId', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'WAITLISTED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.clientSecret).toBe('cs_ev_setup');
+    expect(res.body.type).toBe('setup');
+    expect(createRegistrationSetupIntent).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'event' }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/events/:id/registrations/:regId/confirm-payment
+// ---------------------------------------------------------------------------
+describe('POST /api/events/:id/registrations/:regId/confirm-payment', () => {
+  it('401 sans token', async () => {
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/confirm-payment');
+    expect(res.status).toBe(401);
+  });
+
+  it('400 VALIDATION_ERROR si stripePaymentIntentId absent', async () => {
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/confirm-payment')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('200 — appelle service.confirmRegistrationPayment et renvoie le résultat', async () => {
+    const spy = jest.spyOn(EventService.prototype, 'confirmRegistrationPayment').mockResolvedValue({
+      id: 'ereg-1', paymentStatus: 'PAID',
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/confirm-payment')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ stripePaymentIntentId: 'pi_ev_456' });
+
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('ereg-1', { stripePaymentIntentId: 'pi_ev_456' });
+    expect(res.body.paymentStatus).toBe('PAID');
+    spy.mockRestore();
+  });
+});

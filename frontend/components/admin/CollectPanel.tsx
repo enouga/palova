@@ -28,6 +28,8 @@ export interface CollectPanelProps {
   token: string;
   /** moyens rapides configurés par le club → mis en avant (mêmes règles que la page). */
   quickMethods?: PaymentMethod[];
+  /** soldes prépayés utilisables, indexés par userId (résolus pour la cible courante). */
+  packagesByUser?: Record<string, MemberPackage[]>;
   /** mutation joueurs/participants réussie → le parent recharge (et met à jour la résa si fournie). */
   onChanged: (updated?: ClubReservation) => void;
   /** un encaissement a été enregistré (le parent peut fermer la modale). */
@@ -35,7 +37,7 @@ export interface CollectPanelProps {
   onError?: (msg: string) => void;
 }
 
-export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, onChanged, onPaid, onError }: CollectPanelProps) {
+export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, onError }: CollectPanelProps) {
   const { th } = useTheme();
 
   // Moyens mis en avant (boutons pleins) = ceux configurés par le club, dans le même ordre que
@@ -47,10 +49,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherRef, setVoucherRef] = useState('');
   const [voucherIssuer, setVoucherIssuer] = useState('');
-  const [selPackages, setSelPackages] = useState<MemberPackage[]>([]);
-  const [pkgLoading, setPkgLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);   // participant en cours de remplacement (sélecteur inline)
+  const [associatingIndex, setAssociatingIndex] = useState<number | null>(null);   // place libre en cours d'association
 
   const fail = (msg: string) => onError?.(msg);
   const remaining = Math.max(0, due - toCents(reservation.paidAmount));
@@ -63,18 +64,13 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id, reservation.paidAmount]);
 
-  // Carnets/porte-monnaie utilisables du joueur de la résa.
-  const userId = reservation.user?.id ?? null;
-  useEffect(() => {
-    if (!userId) { setSelPackages([]); return; }
-    setPkgLoading(true);
-    api.adminGetMemberPackages(clubId, userId, token)
-      .then((pkgs) => setSelPackages(pkgs.filter((p) => isUsable(p))))
-      .catch(() => setSelPackages([]))
-      .finally(() => setPkgLoading(false));
-  }, [userId, clubId, token]);
-
   const bills = reservation.participants ?? [];
+  const isCourt = reservation.type === 'COURT';
+  // Places de la réservation = capacité du terrain (comme la page Encaissement) : les places
+  // remplies viennent des participants (à défaut le titulaire occupe 1 place, affichée via
+  // « Réservation au nom de »), le reste est libre/associable et numéroté. Hors COURT : aucune place.
+  const filled = Math.max(bills.length, reservation.user ? 1 : 0);
+  const emptyCount = isCourt ? Math.max(0, players - filled) : 0;
   const activePart = payParticipantId ? bills.find((p) => p.id === payParticipantId) ?? null : null;
   const maxPayable = activePart ? toCents(activePart.outstanding) : remaining;
   const amountC = toCents(payAmount);
@@ -83,6 +79,10 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
   // Soldé = il y a un prix dû et il est entièrement couvert (les events libres, due=0, restent encaissables).
   const settled = due > 0 && remaining <= 0;
+
+  // Soldes prépayés utilisables de la cible courante (joueur sélectionné, sinon titulaire).
+  const targetUserId = activePart?.userId ?? reservation.user?.id ?? null;
+  const selPackages = (targetUserId ? (packagesByUser?.[targetUserId] ?? []) : []).filter((p) => isUsable(p));
 
   const payNow = async (method: PaymentMethod) => {
     const amount = Number(payAmount);
@@ -105,12 +105,12 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   };
 
   const payWithPackage = async (pkg: MemberPackage) => {
-    const rest = activePart ? toCents(activePart.outstanding) / 100 : remaining / 100;
-    if (rest <= 0) { fail('Rien à encaisser.'); return; }
+    const amount = Number(payAmount);
+    if (!amount || amount <= 0) { fail('Montant invalide.'); return; }
     setBusy(true);
     try {
       await api.adminAddPayment(clubId, reservation.id, {
-        amount: rest,
+        amount,
         method: pkg.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET',
         sourcePackageId: pkg.id,
         participantId: payParticipantId ?? undefined,
@@ -118,7 +118,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
       setPayParticipantId(null);
       onChanged(); onPaid?.();
     } catch (e) {
-      fail((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.' : (e as Error).message);
+      fail((e as Error).message === 'INSUFFICIENT_BALANCE' ? 'Solde du package insuffisant.'
+        : (e as Error).message === 'PAYMENT_EXCEEDS_DUE' ? (payParticipantId ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le prix de la réservation.')
+        : (e as Error).message);
     } finally { setBusy(false); }
   };
 
@@ -186,8 +188,14 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   };
   const createAndAssign = (body: CreateMemberBody) => createThen(body, assignPlayer);
   const createAndAddParticipant = (body: CreateMemberBody) => createThen(body, addParticipant);
-
-  const coverAmt = activePart ? toCents(activePart.outstanding) / 100 : remaining / 100;
+  // Associe un membre à une place libre : 1re place sans titulaire → titulaire (assign),
+  // sinon → participant supplémentaire (comme la page Encaissement).
+  const associateEmpty = async (m: Member) => {
+    if (!reservation.user && bills.length === 0) await assignPlayer(m);
+    else await addParticipant(m);
+    setAssociatingIndex(null);
+  };
+  const createAndAssociateEmpty = (body: CreateMemberBody) => createThen(body, associateEmpty);
 
   // ── tokens de style partagés ───────────────────────────────────────────
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
@@ -206,6 +214,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     );
   };
 
+  // Avatar neutre numéroté pour une place libre (joueur non renseigné).
+  const genericAvatar = (n: number) => (
+    <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: th.surfaceHi, color: th.textMute, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700 }}>{n}</span>
+  );
+
   return (
     <div>
       {/* ── JOUEURS (fusion « Joueur » + « Par joueur ») — en tête, juste sous « Reste à encaisser » ── */}
@@ -213,7 +226,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
         <div style={{ ...sectionLabel, marginBottom: 10 }}>Joueurs</div>
 
         {/* Titulaire de la réservation */}
-        <div style={{ marginBottom: bills.length > 0 ? 12 : 4 }}>
+        <div style={{ marginBottom: bills.length > 0 || emptyCount > 0 ? 12 : 4 }}>
           <div style={caption}>Réservation au nom de</div>
           <PlayerPicker
             members={members}
@@ -223,8 +236,8 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           />
         </div>
 
-        {/* Répartition par joueur */}
-        {bills.length > 0 && (
+        {/* Répartition par joueur — places remplies + places libres jusqu'à la capacité */}
+        {(bills.length > 0 || emptyCount > 0) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {bills.map((p) => {
               const rest = toCents(p.outstanding);
@@ -287,17 +300,40 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                 </div>
               );
             })}
+
+            {/* Places libres (jusqu'à la capacité) — numérotées + associables, comme la page */}
+            {Array.from({ length: emptyCount }).map((_, j) => {
+              const idx = filled + j;   // index de place (stable parmi les places libres)
+              const n = idx + 1;        // numéro affiché « Joueur N »
+              if (associatingIndex === idx) {
+                return (
+                  <div key={`empty-${idx}`} style={{ padding: '2px 0' }}>
+                    <PlayerPicker members={members} value={null}
+                      onSelect={associateEmpty} onClear={() => setAssociatingIndex(null)}
+                      onCreate={createAndAssociateEmpty} placeholder="Rechercher un membre…" />
+                  </div>
+                );
+              }
+              return (
+                <div key={`empty-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 12, background: th.surface2, boxShadow: 'inset 0 0 0 1px transparent' }}>
+                  {genericAvatar(n)}
+                  <span style={{ flex: 1, minWidth: 90, fontFamily: th.fontUI, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: th.textMute }}>Joueur {n}</span>
+                    <button type="button" aria-label="Associer un membre" disabled={busy} onClick={() => setAssociatingIndex(idx)}
+                      style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>associer</button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Ajouter un joueur */}
-        <div style={{ marginTop: 10 }}>
-          {bills.length >= players ? (
-            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({players} joueurs).</div>
-          ) : (
+        {/* Ajout libre — events / réservations hors capacité COURT (les places numérotées remplacent ce picker pour un terrain) */}
+        {!isCourt && (
+          <div style={{ marginTop: 10 }}>
             <PlayerPicker members={members} value={null} onSelect={addParticipant} onClear={() => {}} onCreate={createAndAddParticipant} placeholder="+ Ajouter un joueur…" />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── ENCAISSER — masqué quand soldé ─────────────────────── */}
@@ -342,6 +378,18 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                 {METHOD_LABEL[m]}
               </button>
             ))}
+            {selPackages.map((p) => {
+              const ok = !cannotPay && canCover(p, amountC / 100);
+              return (
+                <button key={p.id} type="button" disabled={!ok} title={ok ? `Régler avec ${packageLabel(p)}` : 'Solde insuffisant'}
+                  onClick={() => payWithPackage(p)}
+                  style={{ flex: '1 1 130px', minWidth: 124, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
+                    cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.45, background: th.accent, color: th.onAccent,
+                    fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none' }}>
+                  <Icon name="ticket" size={16} color={th.onAccent} />{packageLabel(p)}
+                </button>
+              );
+            })}
           </div>
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {secondaryMethods.map((m) => (
@@ -371,25 +419,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
             </div>
           )}
 
-          {/* Carnets / porte-monnaie prépayés */}
-          {selPackages.length > 0 ? (
-            <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {selPackages.map((p) => {
-                const ok = canCover(p, coverAmt);
-                return (
-                  <button key={p.id} type="button" disabled={busy || !ok} onClick={() => payWithPackage(p)}
-                    title={ok ? 'Solder avec ce package' : 'Solde insuffisant'}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: th.surface, boxShadow: `inset 0 0 0 1px ${ok ? th.accent : th.line}`, borderRadius: 10, padding: '9px 13px',
-                      cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                    <Icon name="ticket" size={15} color={ok ? th.accent : th.textMute} />{packageLabel(p)}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (!pkgLoading && (() => {
-            const msg = prepaidHint(!!reservation.user, selPackages.length, maxPayable);
+          {/* Repli : aucun solde prépayé utilisable pour la cible */}
+          {selPackages.length === 0 && (() => {
+            const msg = prepaidHint(!!targetUserId, 0, maxPayable);
             return msg ? <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div> : null;
-          })())}
+          })()}
         </div>
       )}
     </div>

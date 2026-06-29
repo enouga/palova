@@ -35,6 +35,12 @@ const pkg: MemberPackage = {
   expiresAt: null, template: { name: '10 entrées' },
 };
 
+const poorWallet: MemberPackage = {
+  id: 'w-1', kind: 'WALLET', creditsTotal: null, creditsRemaining: null,
+  amountTotal: '10.00', amountRemaining: '10.00', purchasedAt: '2026-06-01T00:00:00Z',
+  expiresAt: null, template: { name: 'Porte-monnaie' },
+};
+
 function renderWithPackages(packages: MemberPackage[]) {
   render(
     <ThemeProvider>
@@ -99,5 +105,36 @@ describe('BookingModal — paiement par carnet', () => {
     expect(await screen.findByText(/Solde insuffisant/)).toBeInTheDocument();
     // toujours en phase held : le bouton de confirmation standard est revenu
     expect(screen.getByRole('button', { name: /Confirmer la réservation/ })).toBeInTheDocument();
+  });
+
+  it('affiche le solde restant projeté à la sélection du carnet', async () => {
+    renderWithPackages([pkg]);
+    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
+    expect(screen.getByText(/il restera 6 entrées/)).toBeInTheDocument();
+  });
+
+  it('porte-monnaie insuffisant : puce désactivée + mention « solde insuffisant »', async () => {
+    renderWithPackages([poorWallet]);
+    await screen.findByText(/Créneau bloqué/);
+    expect(screen.getByRole('button', { name: /Porte-monnaie/ })).toBeDisabled();
+    expect(screen.getByText(/solde insuffisant/)).toBeInTheDocument();
+  });
+
+  it('confirme avec un carnet → onConfirmed reçoit le résumé du solde restant', async () => {
+    const onConfirmed = jest.fn();
+    render(
+      <ThemeProvider>
+        <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+          token="jwt-token" packages={[pkg]} onClose={jest.fn()} onConfirmed={onConfirmed} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
+    await waitFor(() => {
+      expect(onConfirmed).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'res-1' }),
+        { label: 'Payé avec votre carnet · 6 entrées restantes' },
+      );
+    });
   });
 });

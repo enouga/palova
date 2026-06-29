@@ -108,12 +108,13 @@ async function main() {
 
     const club = await prisma.club.upsert({
       where: { slug: cdef.slug },
-      update: { accentColor: cdef.accent, defaultThemeMode: cdef.theme },
+      update: { accentColor: cdef.accent, defaultThemeMode: cdef.theme, listTournamentsNationally: true },
       create: {
         slug: cdef.slug, name: cdef.name, city: cdef.city, country: 'FR',
         address: `1 avenue du Padel, ${cdef.city}`, timezone: 'Europe/Paris',
         accentColor: cdef.accent, defaultThemeMode: cdef.theme,
         description: `Club de padel à ${cdef.city} — réservations et tournois.`,
+        listTournamentsNationally: true,
       },
     });
     createdClubs.push({ id: club.id, slug: cdef.slug, name: cdef.name });

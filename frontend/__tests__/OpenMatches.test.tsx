@@ -9,10 +9,12 @@ jest.mock('next/navigation', () => ({
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
   notificationsStreamUrl: () => 'http://x/stream',
+  chatStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
     // Chargé au montage par ProfileMenu (info-bulle d'identité dans le header) ; menu jamais ouvert ici.
-    getMyProfile:     jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
+    getMyProfile:     jest.fn().mockResolvedValue({ id: 'u1', firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
+    getMyClubs:       jest.fn().mockResolvedValue([]),
     getMyRating:      jest.fn().mockResolvedValue(null),
     getOpenMatches:   jest.fn(),
     joinOpenMatch:    jest.fn().mockResolvedValue({ id: 'm1' }),
@@ -21,6 +23,15 @@ jest.mock('../lib/api', () => ({
     searchClubMembers: jest.fn().mockResolvedValue([]),
     addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
     recordMatchResult: jest.fn().mockResolvedValue({ id: 'mr1', status: 'PENDING' }),
+    setInterested:    jest.fn().mockResolvedValue({}),
+    removeInterested: jest.fn().mockResolvedValue({}),
+    getChatMessages:  jest.fn().mockResolvedValue([]),
+    postChatMessage:  jest.fn(),
+    deleteChatMessage: jest.fn(),
+    markOpenMatchChatRead: jest.fn().mockResolvedValue({ count: 0 }),
+    getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
@@ -28,9 +39,9 @@ jest.mock('../lib/api', () => ({
     markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
   },
 }));
-// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell).
+// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell et OpenMatchChatSheet).
 beforeAll(() => {
-  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; close() {} };
+  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; onerror: ((e: any) => void) | null = null; close() {} };
 });
 import { api } from '../lib/api';
 const mocked = api as jest.Mocked<typeof api>;
@@ -42,6 +53,7 @@ const match = (over: Record<string, unknown> = {}) => ({
   id: 'm1', resourceName: 'Terrain 1', startTime: future, endTime: future,
   maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true }],
+  interestedCount: 0, viewerIsInterested: false, interested: [], lastMessageAt: null, unreadCount: 0,
   ...over,
 });
 
@@ -58,6 +70,12 @@ describe('OpenMatches', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc'));
+  });
+
+  it('lit le niveau PADEL (pas le sport préféré)', async () => {
+    mocked.getOpenMatches.mockResolvedValue([] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await waitFor(() => expect(mocked.getMyRating).toHaveBeenCalledWith('abc', 'padel'));
   });
 
   it('affiche « Quitter » pour un participant non-organisateur', async () => {
@@ -160,5 +178,43 @@ describe('OpenMatches', () => {
     expect(await screen.findByText('Court A')).toBeInTheDocument();
     expect(screen.queryByText('Classement')).not.toBeInTheDocument();
     expect(screen.queryByText(/Pour toi/i)).not.toBeInTheDocument();
+  });
+
+  it('cliquer « Ça m intéresse » appelle setInterested puis recharge', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match()] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ça m'intéresse/ }));
+    await waitFor(() => expect(mocked.setInterested).toHaveBeenCalledWith('demo', 'm1', 'abc'));
+    await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledTimes(2));
+  });
+
+  it('cliquer « Discuter » sur une partie où viewerIsInterested ouvre la feuille de chat', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsInterested: true })] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Discuter/ }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('cliquer « Discuter » appelle markOpenMatchChatRead', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsInterested: true })] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Discuter/ }));
+    await waitFor(() => expect(mocked.markOpenMatchChatRead).toHaveBeenCalledWith('demo', 'm1', 'abc'));
+  });
+
+  it('anonyme : affiche la liste, charge sans token, et « Rejoindre » ouvre le prompt d\'auth', async () => {
+    document.cookie = 'token=; max-age=0; path=/'; // pas de session
+    mocked.getOpenMatches.mockResolvedValue([match()] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
+    await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledWith('demo', undefined));
+
+    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mocked.joinOpenMatch).not.toHaveBeenCalled();
   });
 });

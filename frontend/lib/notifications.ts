@@ -3,7 +3,7 @@ import type { IconName } from '@/components/ui/Icon';
 import { ACCENTS } from '@/lib/theme';
 
 export type NotifCategory =
-  | 'MY_GAMES' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
+  | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
   | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS';
 export type NotifChannel = 'INAPP' | 'PUSH' | 'EMAIL';
 
@@ -12,6 +12,7 @@ export interface CategoryMeta { key: NotifCategory; label: string; desc: string;
 // Ordre d'affichage dans la grille de préférences.
 export const CATEGORY_META: CategoryMeta[] = [
   { key: 'MY_GAMES', label: 'Mes parties', desc: "Ajout/retrait, arrivée/départ d’un joueur, statut de mes réservations" },
+  { key: 'OPEN_MATCH_CHAT', label: 'Messages de partie', desc: 'Chat des parties ouvertes que vous suivez ou auxquelles vous participez' },
   { key: 'MY_REGISTRATIONS', label: 'Mes inscriptions', desc: "Tournois, events, cours : confirmation, liste d’attente, annulation" },
   { key: 'MY_MATCHES', label: 'Mes matchs', desc: 'Confirmation de résultat, litige' },
   { key: 'PAYMENTS', label: 'Paiements', desc: 'Remboursements' },

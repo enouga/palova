@@ -42,4 +42,37 @@ describe('QuotaStatus', () => {
     wrap({ model: 'WEEKLY', peak: { used: 2, limit: 2 }, offPeak: null });
     expect(screen.getByText('2/2')).toBeInTheDocument();
   });
+
+  it('marque seulement la classe au plafond avec data-warn', () => {
+    wrap({ model: 'WEEKLY', peak: { used: 30, limit: 1 }, offPeak: { used: 0, limit: 2 } });
+    expect(screen.getByText('Heures pleines').closest('[data-warn]')).toHaveAttribute('data-warn', '1');
+    expect(screen.getByText('Heures creuses').closest('[data-warn="1"]')).toBeNull();
+  });
+
+  it('défaut : enveloppe les pastilles dans un conteneur div', () => {
+    const { container } = wrap({ model: 'WEEKLY', peak: { used: 1, limit: 2 }, offPeak: { used: 0, limit: 2 } });
+    const kids = Array.from(container.children);
+    expect(kids).toHaveLength(1);
+    expect(kids[0].tagName).toBe('DIV');
+  });
+
+  it('inline : émet les pastilles sans conteneur (enfants directs)', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <QuotaStatus status={{ model: 'WEEKLY', peak: { used: 1, limit: 2 }, offPeak: { used: 0, limit: 2 } }} inline />
+      </ThemeProvider>,
+    );
+    const kids = Array.from(container.children);
+    expect(kids).toHaveLength(2);
+    expect(kids.every((k) => k.tagName === 'SPAN')).toBe(true);
+  });
+
+  it('fill : transmet la pleine largeur aux pastilles', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <QuotaStatus status={{ model: 'WEEKLY', peak: { used: 1, limit: 2 }, offPeak: null }} inline fill />
+      </ThemeProvider>,
+    );
+    expect(container.firstChild).toHaveStyle({ width: '100%' });
+  });
 });

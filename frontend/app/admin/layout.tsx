@@ -114,6 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
+      { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
     ] },
@@ -213,13 +214,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <main style={{ flex: 1, minWidth: 0, maxWidth: '100%', padding: collapsed ? '22px 30px 48px' : '28px 32px 48px' }}>
         {collapsed && (
-          // height: 0 — le bouton flotte sans décaler le contenu ; sticky pour rester accessible en scrollant.
-          <div style={{ position: 'sticky', top: 12, zIndex: 40, height: 0, marginLeft: -14 }}>
+          // Bouton de réouverture explicite (libellé « Menu ») : en flux au-dessus du contenu
+          // pour ne JAMAIS recouvrir le titre de page ; sticky pour rester accessible au scroll.
+          <div style={{ position: 'sticky', top: 12, zIndex: 40, marginBottom: 16 }}>
             <button type="button" aria-label="Afficher le menu" title="Afficher le menu" onClick={() => setCollapsed(false)} style={{
-              width: 28, height: 28, borderRadius: 8, cursor: 'pointer',
-              background: th.bgElev, border: `1px solid ${th.line}`, color: th.textMute,
-              fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>⟩</button>
+              display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px 0 13px',
+              borderRadius: 10, cursor: 'pointer', background: th.bgElev, border: `1px solid ${th.line}`, color: th.text,
+              fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, lineHeight: 1,
+              boxShadow: th.mode === 'daylight' ? '0 1px 3px rgba(0,0,0,0.08)' : '0 1px 3px rgba(0,0,0,0.45)',
+            }}>
+              <Icon name="menu" size={18} color={th.accent} />Menu
+            </button>
           </div>
         )}
         {children}

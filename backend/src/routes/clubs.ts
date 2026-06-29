@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { ClubPageKind } from '@prisma/client';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, optionalAuth, AuthRequest } from '../middleware/auth';
 import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { ClubService } from '../services/club.service';
 import { ClubPageService } from '../services/clubPage.service';
@@ -12,9 +12,12 @@ import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { PackageService } from '../services/package.service';
 import { SubscriptionService } from '../services/subscription.service';
+import jwt from 'jsonwebtoken';
 import { OpenMatchService } from '../services/openMatch.service';
+import { OpenMatchChatService } from '../services/openMatchChat.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
+import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
 import { capacityFor } from '../utils/courtType';
 import { prisma } from '../db/prisma';
@@ -31,6 +34,7 @@ const tournamentService = new TournamentService();
 const eventService = new EventService();
 const packageService = new PackageService();
 const openMatchService = new OpenMatchService();
+const openMatchChatService = new OpenMatchChatService();
 const reservationService = new ReservationService();
 const subscriptionService = new SubscriptionService();
 
@@ -55,6 +59,10 @@ const ERROR_STATUS: Record<string, number> = {
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTICIPANT_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_FOUND: 404,
+  ALREADY_PARTICIPANT:   409,
+  CHAT_FORBIDDEN:        403,
+  NOT_ALLOWED:           403,
+  MESSAGE_NOT_FOUND:     404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -87,13 +95,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: N
   } catch (err) { handleError(err, res, next); }
 });
 
-// Annuaire public — filtres optionnels sport (key), city, q (nom).
+// Annuaire public — filtres optionnels sport (key), city (ville ou région), q (nom),
+// region (exact), lat/lng (tri par distance).
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const latRaw = asString(req.query.lat), lngRaw = asString(req.query.lng);
+    const lat = latRaw ? Number(latRaw) : undefined;
+    const lng = lngRaw ? Number(lngRaw) : undefined;
     const clubs = await clubService.listClubs({
-      sport: asString(req.query.sport) || undefined,
-      city:  asString(req.query.city) || undefined,
-      q:     asString(req.query.q) || undefined,
+      sport:  asString(req.query.sport) || undefined,
+      city:   asString(req.query.city) || undefined,
+      q:      asString(req.query.q) || undefined,
+      region: asString(req.query.region) || undefined,
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
     });
     res.json(clubs);
   } catch (err) { handleError(err, res, next); }
@@ -187,9 +202,16 @@ router.get('/:slug/leaderboard', authMiddleware, async (req: AuthRequest, res: R
   } catch (err) { handleError(err, res, next); }
 });
 
-// Parties ouvertes du club (réservé aux membres) : découverte + rejoindre / quitter.
-router.get('/:slug/open-matches', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user!.id)); }
+// Parties ouvertes du club : lecture PUBLIQUE (membre, non-membre ou anonyme).
+router.get('/:slug/open-matches', optionalAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.listOpenMatches(asString(req.params.slug), req.user?.id ?? null)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Compteur de messages de chat non lus du club (badge de l'onglet « Parties »).
+// ⚠️ Déclaré AVANT toute route GET `/:slug/open-matches/:id...` pour ne pas être capturé comme un id.
+router.get('/:slug/open-matches/unread-count', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.unreadCount(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 
@@ -211,6 +233,49 @@ router.delete('/:slug/open-matches/:id/participants/:userId', authMiddleware, as
 router.post('/:slug/open-matches/:id/participants', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.addOpenMatchPlayer(asString(req.params.slug), asString(req.params.id), req.user!.id, asString((req.body as { userId?: unknown }).userId))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// « Ça m'intéresse » sur une partie ouverte (n'occupe pas de place, débloque le chat).
+router.post('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.setInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.removeInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Chat de la partie ouverte (inscrits + intéressés).
+router.get('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.listMessages(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.post('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = typeof (req.body as { body?: unknown }).body === 'string' ? (req.body as { body: string }).body : '';
+    res.json(await openMatchChatService.postMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, body));
+  } catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.deleteMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Marque lus les messages de chat d'une partie pour l'utilisateur.
+router.post('/:slug/open-matches/:id/chat/read', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.markRead(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Flux SSE du chat. EventSource ne pose pas d'en-tête Authorization → token en query, puis garde d'accès.
+router.get('/:slug/open-matches/:id/chat/stream', async (req: AuthRequest, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  let userId: string;
+  try { userId = (jwt.verify(token, process.env.JWT_SECRET!) as { id: string }).id; }
+  catch { return void res.status(401).end(); }
+  try { await openMatchChatService.assertChatAccessPublic(asString(req.params.slug), asString(req.params.id), userId); }
+  catch { return void res.status(403).end(); }
+  SSEService.getInstance().addMatchClient(asString(req.params.id), userId, res);
 });
 
 // Adhésion du joueur connecté à ce club (licence / statut).

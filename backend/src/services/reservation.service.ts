@@ -352,6 +352,11 @@ export class ReservationService {
     const age = Date.now() - reservation.createdAt.getTime();
     if (age > HOLD_EXPIRY_MS)             throw new Error('RESERVATION_NOT_PENDING');
 
+    // Parties ouvertes = padel uniquement : pas de visibilité PUBLIC sur un autre sport.
+    if (setup.visibility === 'PUBLIC' && reservation.resource.clubSport.sport.key !== 'padel') {
+      throw new Error('OPEN_MATCH_PADEL_ONLY');
+    }
+
     const format = (reservation.resource.attributes as { format?: string } | null)?.format;
     const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
     const priceCents = Math.round(Number(reservation.totalPrice) * 100);

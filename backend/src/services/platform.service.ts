@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
 import { slugify, RESERVED_SLUGS } from './club.service';
+import { geocodeAddress } from './geo.service';
 
 export interface CreateClubByPlatformParams {
   club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
@@ -125,6 +126,7 @@ export class PlatformService {
     if (existing) throw new Error('EMAIL_TAKEN');
 
     const hashed = await bcrypt.hash(password, 10);
+    const geo = await geocodeAddress({ address: params.club.address, city: params.club.city });
 
     try {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
@@ -146,6 +148,7 @@ export class PlatformService {
             city: params.club.city?.trim() || null,
             timezone: params.club.timezone || 'Europe/Paris',
             status: 'ACTIVE',
+            ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: owner.id, clubId: club.id, role: 'OWNER' } });

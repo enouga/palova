@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import { ClubDirectory } from '@/components/ClubDirectory';
 
@@ -77,4 +77,16 @@ it('sans token, ne charge pas le profil et ne force aucun sport', async () => {
   expect(getMyProfile).not.toHaveBeenCalled();
   const calls = listClubs.mock.calls as [{ sport?: string }][];
   calls.forEach((args) => expect(args[0].sport).toBeUndefined());
+});
+
+it('« Autour de moi » relance listClubs avec lat/lng', async () => {
+  const ok = (cb: PositionCallback) => cb({ coords: { latitude: 48.86, longitude: 2.35 } } as GeolocationPosition);
+  Object.defineProperty(global.navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: ok } });
+
+  wrap();
+  fireEvent.click(await screen.findByRole('button', { name: /autour de moi/i }));
+
+  await waitFor(() =>
+    expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ lat: 48.86, lng: 2.35 })),
+  );
 });

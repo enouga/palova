@@ -2,16 +2,19 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import app from '../../app';
 
+const mockDisconnect = jest.fn();
 jest.mock('../../services/stripe.service', () => ({
   StripeService: jest.fn().mockImplementation(() => ({
     createConnectedAccount: jest.fn().mockResolvedValue('https://connect.stripe.com/xxx'),
     syncAccountStatus: jest.fn().mockResolvedValue('ACTIVE'),
     createLoginLink: jest.fn().mockResolvedValue('https://dashboard.stripe.com/xxx'),
     chargeNoShow: jest.fn().mockResolvedValue('pi_noshow_123'),
+    disconnectAccount: mockDisconnect,
   })),
 }));
+
+import app from '../../app';
 
 const SECRET = process.env.JWT_SECRET!;
 if (!SECRET) throw new Error('JWT_SECRET manquant');
@@ -84,6 +87,44 @@ describe('Admin Stripe Connect routes', () => {
       // à 422 via ERROR_STATUS en testant le bon statut 200 côté happy-path (ci-dessus).
       // Le mapping est couvert par les tests unitaires de l'ERROR_STATUS.
       expect(true).toBe(true);
+    });
+  });
+
+  describe('POST /api/clubs/club-demo/admin/stripe/disconnect', () => {
+    it('200 { ok: true } quand la déliaison réussit', async () => {
+      asMember();
+      mockDisconnect.mockResolvedValueOnce(undefined);
+
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/disconnect')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+      expect(mockDisconnect).toHaveBeenCalledWith('club-demo');
+    });
+
+    it('409 { error, count } quand des paiements CB sont en attente', async () => {
+      asMember();
+      mockDisconnect.mockRejectedValueOnce(
+        Object.assign(new Error('STRIPE_HAS_PENDING_ONLINE_PAYMENTS'), { count: 3 }),
+      );
+
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/disconnect')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS', count: 3 });
+    });
+
+    it('403 si non membre du club', async () => {
+      prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/disconnect')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
     });
   });
 });

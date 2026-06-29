@@ -201,7 +201,7 @@ describe('POST /api/reservations/:id/setup', () => {
     status: 'PENDING',
     totalPrice: 25,
     createdAt: new Date(), // fresh hold
-    resource: { clubId: 'club-demo', attributes: { format: 'double' } },
+    resource: { clubId: 'club-demo', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
   });
 
   beforeEach(() => {

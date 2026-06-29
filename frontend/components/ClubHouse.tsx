@@ -80,7 +80,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   }, [club.slug, duration]);
   useEffect(() => { if (ready && token) loadNext(); }, [ready, token, loadNext]);
   useEffect(() => { if (!token) return; api.getOpenMatches(club.slug, token).then(setOpenMatches).catch(() => setOpenMatches([])); }, [club.slug, token]);
-  useEffect(() => { if (!token) return; api.getMyRating(token).then((r) => setMyLevel(r?.level ?? null)).catch(() => {}); }, [token]);
+  useEffect(() => { if (!token) return; api.getMyRating(token, 'padel').then((r) => setMyLevel(r?.level ?? null)).catch(() => {}); }, [token]);
 
   const cancel = async (r: MyReservation) => {
     if (!token) return;

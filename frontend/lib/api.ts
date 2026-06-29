@@ -25,6 +25,7 @@ async function request<T>(
     const body = await res.json().catch(() => ({ error: res.statusText }));
     const err = new Error(body.error || `HTTP ${res.status}`);
     if (body && typeof body.subject === 'string') (err as Error & { subject?: string }).subject = body.subject;
+    if (body && typeof body.count === 'number') (err as Error & { count?: number }).count = body.count;
     throw err;
   }
 
@@ -35,16 +36,23 @@ export const api = {
   // --- Public ---
   getSports: () => request<Sport[]>('/api/sports'),
 
-  listClubs: (filters: { sport?: string; city?: string; q?: string } = {}) => {
+  listClubs: (filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number } = {}) => {
     const qs = new URLSearchParams();
-    if (filters.sport) qs.set('sport', filters.sport);
-    if (filters.city)  qs.set('city', filters.city);
-    if (filters.q)     qs.set('q', filters.q);
+    if (filters.sport)  qs.set('sport', filters.sport);
+    if (filters.city)   qs.set('city', filters.city);
+    if (filters.q)      qs.set('q', filters.q);
+    if (filters.region) qs.set('region', filters.region);
+    if (typeof filters.lat === 'number' && typeof filters.lng === 'number') {
+      qs.set('lat', String(filters.lat));
+      qs.set('lng', String(filters.lng));
+    }
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<ClubSummary[]>(`/api/clubs${suffix}`);
   },
 
   getClub: (slug: string) => request<ClubDetail>(`/api/clubs/${slug}`),
+
+  listNationalTournaments: () => request<NationalTournament[]>('/api/tournaments/national'),
 
   /** Résout un libellé de sous-domaine (slug actuel ou alias historique). 404 si inconnu. */
   resolveClubSlug: (slug: string) =>
@@ -174,6 +182,9 @@ export const api = {
   getStripeLoginLink: (clubId: string, token: string) =>
     request<{ url: string }>(`/api/clubs/${clubId}/admin/stripe/login-link`, {}, token),
 
+  disconnectStripe: (clubId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/stripe/disconnect`, { method: 'POST' }, token),
+
   // --- Stripe Intent (joueur) ---
   createStripeIntent: (
     slug: string,
@@ -183,6 +194,33 @@ export const api = {
     request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
       `/api/clubs/${slug}/stripe/intent`,
       { method: 'POST', body: JSON.stringify(body) },
+      token,
+    ),
+
+  /** Crée un PaymentIntent ou SetupIntent pour une inscription payante. */
+  createRegistrationIntent: (
+    kind: 'tournaments' | 'events',
+    eventId: string,
+    regId: string,
+    token: string,
+  ) =>
+    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
+      `/api/${kind}/${eventId}/registrations/${regId}/intent`,
+      { method: 'POST' },
+      token,
+    ),
+
+  /** Confirme côté serveur le paiement d'une inscription (après webhook Stripe). */
+  confirmRegistrationPayment: (
+    kind: 'tournaments' | 'events',
+    eventId: string,
+    regId: string,
+    stripePaymentIntentId: string,
+    token: string,
+  ) =>
+    request(
+      `/api/${kind}/${eventId}/registrations/${regId}/confirm-payment`,
+      { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) },
       token,
     ),
 
@@ -209,8 +247,8 @@ export const api = {
   removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
 
-  // --- Parties ouvertes (membres du club) ---
-  getOpenMatches: (slug: string, token: string) =>
+  // --- Parties ouvertes (visibles de tous ; token facultatif) ---
+  getOpenMatches: (slug: string, token?: string) =>
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
   joinOpenMatch: (slug: string, id: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'POST' }, token),
@@ -220,6 +258,20 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  setInterested: (slug: string, id: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'POST' }, token),
+  removeInterested: (slug: string, id: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'DELETE' }, token),
+  markOpenMatchChatRead: (slug: string, id: string, token: string) =>
+    request<{ count: number }>(`/api/clubs/${slug}/open-matches/${id}/chat/read`, { method: 'POST' }, token),
+  getOpenMatchUnread: (slug: string, token: string) =>
+    request<{ count: number }>(`/api/clubs/${slug}/open-matches/unread-count`, {}, token),
+  getChatMessages: (slug: string, id: string, token: string) =>
+    request<OpenMatchMessage[]>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, {}, token),
+  postChatMessage: (slug: string, id: string, body: string, token: string) =>
+    request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+  deleteChatMessage: (slug: string, id: string, messageId: string, token: string) =>
+    request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}`, { method: 'DELETE' }, token),
 
   // --- Back-office club (scopé par clubId) ---
   adminGetClub: (clubId: string, token: string) =>
@@ -364,6 +416,9 @@ export const api = {
   adminGetMemberPackages: (clubId: string, userId: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, {}, token),
 
+  adminGetActivePackages: (clubId: string, token: string) =>
+    request<ActiveMemberPackage[]>(`/api/clubs/${clubId}/admin/packages/active`, {}, token),
+
   adminGetMemberHistory: (clubId: string, userId: string, token: string) =>
     request<MemberHistory>(`/api/clubs/${clubId}/admin/members/${userId}/history`, {}, token),
 
@@ -459,7 +514,7 @@ export const api = {
   getTournamentParticipants: (id: string) => request<TournamentParticipant[]>(`/api/tournaments/${id}/participants`),
 
   registerTournament: (id: string, partnerUserId: string, token: string) =>
-    request<TournamentRegistrationRecord>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerUserId }) }, token),
+    request<{ registration: TournamentRegistrationRecord; payment: RegistrationPaymentInfo }>(`/api/tournaments/${id}/register`, { method: 'POST', body: JSON.stringify({ partnerUserId }) }, token),
 
   changeTournamentPartner: (id: string, partnerUserId: string, token: string) =>
     request<TournamentRegistrationRecord>(`/api/tournaments/${id}/registration`, { method: 'PATCH', body: JSON.stringify({ partnerUserId }) }, token),
@@ -475,7 +530,7 @@ export const api = {
   getEventParticipants: (id: string) => request<EventParticipant[]>(`/api/events/${id}/participants`),
 
   registerEvent: (id: string, token: string) =>
-    request<EventRegistrationRecord>(`/api/events/${id}/register`, { method: 'POST' }, token),
+    request<{ registration: EventRegistrationRecord; payment: RegistrationPaymentInfo }>(`/api/events/${id}/register`, { method: 'POST' }, token),
 
   cancelEventRegistration: (id: string, token: string) =>
     request<EventRegistrationRecord>(`/api/events/${id}/registration`, { method: 'DELETE' }, token),
@@ -853,6 +908,9 @@ export interface ClubSummary {
   slug: string;
   name: string;
   city: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string | null;
   accentColor: string;
   logoUrl: string | null;
@@ -1074,6 +1132,19 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
+  interestedCount: number;
+  viewerIsInterested: boolean;
+  interested: OpenMatchPlayer[];
+  lastMessageAt: string | null;
+  unreadCount: number;
+}
+
+export interface OpenMatchMessage {
+  id: string;
+  author: { userId: string; firstName: string; lastName: string; avatarUrl: string | null };
+  body: string;
+  createdAt: string;
+  deleted: boolean;
 }
 
 export interface CreateClubBody {
@@ -1120,6 +1191,7 @@ export interface ClubAdminDetail {
   defaultThemeMode: string;
   status: string;
   listedInDirectory: boolean;
+  listTournamentsNationally: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1212,6 +1284,7 @@ export type UpdateClubBody = Partial<{
   accentColor: string;
   defaultThemeMode: string;
   listedInDirectory: boolean;
+  listTournamentsNationally: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1406,6 +1479,9 @@ export interface MemberPackage {
   template: { name: string };
 }
 
+/** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
+export type ActiveMemberPackage = MemberPackage & { userId: string };
+
 export interface CaissePayment extends Payment {
   reservation: {
     id: string; startTime: string;
@@ -1534,6 +1610,13 @@ export type TournamentStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
 export type RegistrationStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED';
 export type Sex = 'MALE' | 'FEMALE';
 
+/**
+ * Présent dans la réponse de `registerTournament`/`registerEvent`.
+ * null = épreuve gratuite → flux habituel.
+ * non-null → parcours Stripe : 'payment' = place confirmée, 'setup' = liste d'attente.
+ */
+export type RegistrationPaymentInfo = { mode: 'payment' | 'setup' } | null;
+
 export interface Tournament {
   id: string;
   clubId: string;
@@ -1549,9 +1632,29 @@ export interface Tournament {
   registrationDeadline: string;
   maxTeams: number | null;
   entryFee: string | null;
+  requirePrepayment?: boolean; // true = inscription à régler en ligne via Stripe
   status: TournamentStatus;
   confirmedCount: number;
   waitlistCount: number;
+}
+
+/** Projection club renvoyée par le calendrier national (publique, sans données privées). */
+export interface NationalTournamentClub {
+  slug: string;
+  name: string;
+  city: string | null;
+  department: string | null;
+  departmentCode: string | null;
+  timezone: string;
+  accentColor: string;
+  logoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/** Un tournoi du calendrier national = tournoi public + son club. */
+export interface NationalTournament extends Tournament {
+  club: NationalTournamentClub;
 }
 
 export interface TournamentDetail extends Tournament {
@@ -1705,6 +1808,7 @@ export type CreateTournamentBody = {
   registrationDeadline: string;
   maxTeams?: number | null;
   entryFee?: number | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateTournamentBody = Partial<CreateTournamentBody & { status: TournamentStatus }>;
 
@@ -1723,7 +1827,8 @@ export interface ClubEvent {
   endTime: string | null;
   registrationDeadline: string;
   capacity: number | null;
-  price: string | null;       // Decimal sérialisé — informatif, règlement au club
+  price: string | null;            // Decimal sérialisé
+  requirePrepayment?: boolean;     // true = inscription à régler en ligne via Stripe
   memberOnly: boolean;
   status: ClubEventStatus;
   confirmedCount: number;
@@ -1778,6 +1883,7 @@ export type CreateEventBody = {
   price?: number | null;
   memberOnly?: boolean;
   clubSportId?: string | null;
+  requirePrepayment?: boolean;
 };
 export type UpdateEventBody = Partial<CreateEventBody & { status: ClubEventStatus }>;
 
@@ -1906,4 +2012,9 @@ export interface MyLessonEnrollment {
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).
 export function notificationsStreamUrl(token: string): string {
   return `${BASE_URL}/api/me/notifications/stream?token=${encodeURIComponent(token)}`;
+}
+
+/** URL du flux SSE du chat d'une partie (token en query : EventSource ne pose pas d'en-tête). */
+export function chatStreamUrl(slug: string, id: string, token: string): string {
+  return `${BASE_URL}/api/clubs/${slug}/open-matches/${id}/chat/stream?token=${encodeURIComponent(token)}`;
 }

@@ -479,6 +479,44 @@ export function buildPasswordResetEmail(code: string, brand: Brand): BuiltEmail 
   return { subject, html, text };
 }
 
+export interface OpenMatchChatEmailInput {
+  recipientFirstName: string;
+  authorName: string;
+  resourceName: string;
+  message: string;
+  clubName: string;
+  url: string;
+  brand: Brand;
+}
+
+/** Email à un membre absent du chat quand un nouveau message est posté dans une partie ouverte. */
+export function buildOpenMatchChatEmail(i: OpenMatchChatEmailInput): BuiltEmail {
+  const subject = `Nouveau message — ${i.resourceName}`;
+  const heading = 'Nouveau message dans ta partie 💬';
+  const body =
+    `<p style="margin:0 0 12px;">Un nouveau message a été posté dans ta partie :</p>` +
+    `<p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;">` +
+    `<strong>${escapeHtml(i.authorName)}</strong> : ${escapeHtml(i.message)}` +
+    `</p>`;
+  const introHtml = `<p style="margin:0 0 12px;">Bonjour ${escapeHtml(i.recipientFirstName)},</p>${body}`;
+  const infoRows: InfoRow[] = [
+    { label: 'Terrain', value: i.resourceName },
+    { label: 'Club', value: i.clubName },
+  ];
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading, introHtml, infoRows,
+    ctaLabel: 'Voir la discussion', ctaUrl: i.url,
+  });
+  const text = [
+    `Bonjour ${i.recipientFirstName},`, '',
+    `${i.authorName} : ${i.message}`, '',
+    `Terrain : ${i.resourceName}`,
+    `Club : ${i.clubName}`, '',
+    `Voir la discussion : ${i.url}`,
+  ].join('\n');
+  return { subject, html, text };
+}
+
 export interface MatchCommentEmailInput {
   recipientFirstName: string;
   authorName: string;

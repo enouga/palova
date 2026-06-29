@@ -1,4 +1,4 @@
-import { isPublicPath } from '../lib/authGate';
+import { isPublicPath, isPlatformPublicPath } from '../lib/authGate';
 
 describe('isPublicPath', () => {
   it('autorise les portes d\'entrée', () => {
@@ -29,5 +29,37 @@ describe('isPublicPath', () => {
     for (const p of ['/faq', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs']) {
       expect(isPublicPath(p)).toBe(true);
     }
+  });
+
+  it('rend /parties public (parties ouvertes visibles sans login)', () => {
+    expect(isPublicPath('/parties')).toBe(true);
+  });
+});
+
+describe('isPlatformPublicPath', () => {
+  it('ouvre la racine `/` (vitrine marketing) — propre à l\'hôte plateforme', () => {
+    expect(isPlatformPublicPath('/')).toBe(true);
+  });
+
+  it('hérite des chemins publics communs', () => {
+    expect(isPlatformPublicPath('/tarifs')).toBe(true);
+    expect(isPlatformPublicPath('/login')).toBe(true);
+  });
+
+  it('garde les chemins privés verrouillés', () => {
+    expect(isPlatformPublicPath('/me/reservations')).toBe(false);
+    expect(isPlatformPublicPath('/superadmin')).toBe(false);
+  });
+
+  it('/tournois est public sur l\'hôte plateforme (calendrier national)', () => {
+    expect(isPlatformPublicPath('/tournois')).toBe(true);
+  });
+
+  it('/tournois/abc (fiche) n\'est PAS forcé public par cette règle (vit sur l\'hôte club)', () => {
+    expect(isPlatformPublicPath('/tournois/abc')).toBe(false);
+  });
+
+  it('n\'altère pas isPublicPath : `/` reste privé pour l\'hôte club', () => {
+    expect(isPublicPath('/')).toBe(false);
   });
 });

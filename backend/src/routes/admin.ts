@@ -70,8 +70,9 @@ const ERROR_STATUS: Record<string, number> = {
   SPONSOR_NOT_FOUND:      404,
   TOURNAMENT_NOT_FOUND:   404,
   EVENT_NOT_FOUND:        404,
-  HAS_REGISTRATIONS:      409,
-  REGISTRATION_NOT_FOUND: 404,
+  HAS_REGISTRATIONS:           409,
+  REGISTRATION_NOT_FOUND:      404,
+  ONLINE_PAYMENT_NOT_ENABLED:  409,
   SLOT_NOT_AVAILABLE:    409,
   TEMPLATE_NOT_FOUND:     404,
   PACKAGE_NOT_FOUND:      404,
@@ -747,6 +748,11 @@ router.patch('/packages/templates/:id', async (req: ClubScopedRequest, res: Resp
   try { res.json(await packageService.updateTemplate(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
 
+// Soldes actifs du club (pour les boutons d'encaissement rapide par joueur).
+router.get('/packages/active', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await packageService.listActiveByClub(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
 // --- Abonnements (plans configurables) ---
 router.get('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.listPlans(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
@@ -871,6 +877,22 @@ router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, n
     const url = await stripeService.createLoginLink(req.membership!.clubId);
     res.json({ url });
   } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/stripe/disconnect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await stripeService.disconnectAccount(req.membership!.clubId);
+    res.json({ ok: true });
+  } catch (err) {
+    // handleError ne porte que { error } ; on traite ce code à part pour transmettre le count.
+    if ((err as Error).message === 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS') {
+      return void res.status(409).json({
+        error: 'STRIPE_HAS_PENDING_ONLINE_PAYMENTS',
+        count: (err as { count?: number }).count ?? 0,
+      });
+    }
+    handleError(err, res, next);
+  }
 });
 
 router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {

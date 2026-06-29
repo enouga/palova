@@ -16,6 +16,7 @@ const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
 const emptyForm = (clubSportId: string): CreateTournamentBody => ({
   clubSportId, name: '', category: 'P100', gender: 'MEN', openToWomen: true,
   description: '', contactInfo: '', startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
+  requirePrepayment: false,
 });
 
 export default function AdminTournamentsPage() {
@@ -27,6 +28,7 @@ export default function AdminTournamentsPage() {
   const [form, setForm] = useState<CreateTournamentBody | null>(null);
   const [detail, setDetail] = useState<AdminTournamentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stripeActive, setStripeActive] = useState(false);
 
   const reload = useCallback(() => {
     if (!club || !token) return;
@@ -37,6 +39,10 @@ export default function AdminTournamentsPage() {
   useEffect(() => {
     if (!club || !token) return;
     api.adminGetSports(club.id, token).then(setSports).catch(() => setSports([]));
+  }, [club?.id, token]);
+  useEffect(() => {
+    if (!club || !token) return;
+    api.adminGetClub(club.id, token).then((c) => setStripeActive(c.stripeAccountStatus === 'ACTIVE')).catch(() => {});
   }, [club?.id, token]);
 
   if (!club || !token) return null;
@@ -140,6 +146,17 @@ export default function AdminTournamentsPage() {
           <textarea style={{ ...input, minHeight: 70, resize: 'vertical' }} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div style={label}>Contact (affiché une fois les inscriptions closes)</div>
           <textarea style={{ ...input, minHeight: 50, resize: 'vertical' }} value={form.contactInfo ?? ''} onChange={(e) => setForm({ ...form, contactInfo: e.target.value })} placeholder="Ex. Vous devez contacter le Juge Arbitre au 06 02 32 33 65" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: stripeActive ? 'pointer' : 'default', fontFamily: th.fontUI, fontSize: 13.5, color: th.text, opacity: stripeActive ? 1 : 0.5 }}>
+            <input type="checkbox" checked={form.requirePrepayment ?? false} disabled={!stripeActive}
+              onChange={(e) => setForm({ ...form, requirePrepayment: e.target.checked })} />
+            Inscription à régler en ligne (CB)
+          </label>
+          {!stripeActive && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 4 }}>
+              Activez d&apos;abord le paiement en ligne dans{' '}
+              <a href="/admin/payments" style={{ color: th.accent }}>Paiement en ligne →</a>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button onClick={submit} style={btn}>Créer (brouillon)</button>
             <button onClick={() => setForm(null)} style={ghost}>Annuler</button>

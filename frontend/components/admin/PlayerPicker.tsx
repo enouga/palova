@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Member, CreateMemberBody } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { Icon } from '@/components/ui/Icon';
 
 export interface PlayerPickerProps {
   members: Member[];
@@ -84,6 +85,8 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
   };
 
   const input = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 } as const;
+  // Champ de recherche « voyant » : loupe à gauche + bordure à l'accent du club + halo au focus.
+  const searchInput = { ...input, border: `1.5px solid ${th.accent}`, borderRadius: 10, padding: '11px 12px 11px 38px', fontSize: 14.5, outline: 'none', boxShadow: open ? `0 0 0 3px ${th.accent}22` : 'none', transition: 'box-shadow .15s ease' } as const;
 
   return (
     <div style={{ position: 'relative' }}>
@@ -110,9 +113,14 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
           </div>
         </div>
       ) : (
-        <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder ?? 'Rechercher un joueur…'}
-          onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
-          style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
+        <div style={{ position: 'relative' }}>
+          <span data-testid="player-search-loupe" aria-hidden style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex', pointerEvents: 'none' }}>
+            <Icon name="search" size={16} color={th.textMute} />
+          </span>
+          <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder ?? 'Rechercher un joueur…'}
+            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+            style={{ ...searchInput, width: '100%', boxSizing: 'border-box' }} />
+        </div>
       )}
 
       {showList && (

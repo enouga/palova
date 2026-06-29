@@ -2,6 +2,10 @@ import { ClubEventKind, ClubEventStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as notify from '../email/notifications';
 import { RatingService } from './rating.service';
+import { occupiesSpotWhere, holdDeadline, entryFeeCents } from './registrationPayment';
+import { PackageService } from './package.service';
+import { StripeService } from './stripe.service';
+import { RefundService } from './refund.service';
 
 export interface CreateEventInput {
   name: string;
@@ -14,6 +18,7 @@ export interface CreateEventInput {
   price?: number | null;
   memberOnly?: boolean;
   clubSportId?: string | null;
+  requirePrepayment?: boolean;
 }
 export type UpdateEventInput = Partial<CreateEventInput & { status: ClubEventStatus }>;
 
@@ -27,7 +32,7 @@ export class EventService {
   async register(eventId: string, userId: string) {
     const event = await prisma.clubEvent.findUnique({
       where: { id: eventId },
-      select: { id: true, clubId: true, status: true, registrationDeadline: true, capacity: true, memberOnly: true },
+      select: { id: true, clubId: true, status: true, registrationDeadline: true, capacity: true, memberOnly: true, requirePrepayment: true, price: true },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
     if (event.status !== 'PUBLISHED') throw new Error('EVENT_NOT_OPEN');
@@ -40,6 +45,8 @@ export class EventService {
     if (membership?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
     if (event.memberOnly && membership?.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
 
+    const paid = event.requirePrepayment;
+
     const registration = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const existing = await tx.eventRegistration.findUnique({
@@ -48,7 +55,8 @@ export class EventService {
       });
       if (existing && existing.status !== 'CANCELLED') throw new Error('ALREADY_REGISTERED');
 
-      const confirmed = await tx.eventRegistration.count({ where: { eventId, status: 'CONFIRMED' } });
+      const now = new Date();
+      const confirmed = await tx.eventRegistration.count({ where: { eventId, ...(occupiesSpotWhere(now) as any) } });
       const status = event.capacity == null || confirmed < event.capacity ? 'CONFIRMED' : 'WAITLISTED';
 
       if (existing) {
@@ -56,15 +64,57 @@ export class EventService {
         // maintenant — le joueur ne récupère pas son ancienne position d'attente.
         return tx.eventRegistration.update({
           where: { id: existing.id },
-          data: { status, cancelledAt: null, createdAt: new Date() },
+          data: {
+            status, cancelledAt: null, createdAt: new Date(),
+            ...(paid ? { paymentStatus: 'DUE', paymentDeadline: paid && status === 'CONFIRMED' ? holdDeadline(now) : null } : { paymentStatus: 'NONE', paymentDeadline: null }),
+          },
         });
       }
-      return tx.eventRegistration.create({ data: { eventId, userId, status } });
+      return tx.eventRegistration.create({
+        data: {
+          eventId, userId, status,
+          ...(paid ? { paymentStatus: 'DUE', paymentDeadline: status === 'CONFIRMED' ? holdDeadline(now) : null } : {}),
+        },
+      });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    // Emails hors transaction, best-effort (ne fait jamais échouer l'inscription).
-    await this.safeNotify(() => notify.notifyEventRegistration(registration.id));
-    return registration;
+    // Pour une place CONFIRMED payante, la notif d'inscription part au paiement confirmé.
+    if (!paid || registration.status === 'WAITLISTED') {
+      await this.safeNotify(() => notify.notifyEventRegistration(registration.id));
+    }
+    const payment = paid ? { mode: (registration.status === 'CONFIRMED' ? 'payment' : 'setup') as 'payment' | 'setup' } : null;
+    return { registration, payment };
+  }
+
+  /** Confirme le paiement d'une inscription DUE → PAID + Payment ONLINE. Idempotent (client + webhook). */
+  async confirmRegistrationPayment(regId: string, opts: { stripePaymentIntentId: string }) {
+    const reg = await prisma.eventRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, paymentStatus: true, event: { select: { clubId: true, price: true } } },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    if (reg.paymentStatus !== 'DUE') return reg; // déjà confirmé / non payant → no-op idempotent
+
+    const amountCents = entryFeeCents(reg.event.price);
+    const result = await prisma.$transaction(async (tx) => {
+      const flip = await tx.eventRegistration.updateMany({
+        where: { id: regId, paymentStatus: 'DUE' },
+        data: { paymentStatus: 'PAID', paymentDeadline: null },
+      });
+      if (flip.count === 0) return null; // confirmé concurremment
+      const receiptNo = await PackageService.nextReceiptNo(tx, reg.event.clubId);
+      await tx.payment.create({
+        data: {
+          clubId: reg.event.clubId, eventRegistrationId: regId,
+          amount: new Prisma.Decimal(amountCents).div(100),
+          method: 'ONLINE', status: 'CAPTURED', stripePaymentIntentId: opts.stripePaymentIntentId, receiptNo,
+        },
+      });
+      return tx.eventRegistration.findUnique({ where: { id: regId } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    if (result) await this.safeNotify(() => notify.notifyEventRegistration(regId));
+    return result ?? reg;
   }
 
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
@@ -76,26 +126,67 @@ export class EventService {
     }
   }
 
+  /** Refuse d'activer le paiement en ligne si le club n'a pas Stripe ACTIVE ou si le montant est < 0,50 €. */
+  private async assertPrepaymentAllowed(clubId: string, priceCents: number): Promise<void> {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { stripeAccountStatus: true } });
+    if (club?.stripeAccountStatus !== 'ACTIVE') throw new Error('ONLINE_PAYMENT_NOT_ENABLED');
+    if (priceCents < 50) throw new Error('ONLINE_PAYMENT_NOT_ENABLED');
+  }
+
+  /** Libère une place dont le paiement initial a expiré (CONFIRMED+DUE échue) et promeut le suivant. */
+  async releaseExpiredRegistration(regId: string): Promise<void> {
+    const reg = await prisma.eventRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, status: true, paymentStatus: true, eventId: true, event: { select: { requirePrepayment: true } } },
+    });
+    if (!reg || reg.status !== 'CONFIRMED' || reg.paymentStatus !== 'DUE') return;
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${reg.eventId} FOR UPDATE`;
+      return this.cancelAndPromoteTx(tx, reg.eventId, regId, true, reg.event.requirePrepayment);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    if (promotedRegistrationId && reg.event.requirePrepayment) {
+      // Payant : la notif de promotion part du débit réussi (safeCharge), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyEventCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
+  }
+
   /** Le joueur se désinscrit avant la deadline ; promotion auto du 1er en attente. */
   async cancelRegistration(eventId: string, userId: string) {
     const event = await prisma.clubEvent.findUnique({
       where: { id: eventId },
-      select: { registrationDeadline: true },
+      select: { registrationDeadline: true, clubId: true, requirePrepayment: true },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
     if (new Date() >= event.registrationDeadline) throw new Error('REGISTRATION_LOCKED');
 
-    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+    const { cancelled, promotedRegistrationId, refundInfo } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const reg = await tx.eventRegistration.findFirst({
         where: { eventId, userId, status: { not: 'CANCELLED' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, paymentStatus: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, eventId, reg.id, reg.status === 'CONFIRMED');
+      const res = await this.cancelAndPromoteTx(tx, eventId, reg.id, reg.status === 'CONFIRMED', event.requirePrepayment);
+      let refundInfo: { paymentId: string; amount: number; regId: string } | null = null;
+      if (reg.paymentStatus === 'PAID') {
+        const pay = await tx.payment.findFirst({ where: { eventRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+        if (pay) refundInfo = { paymentId: pay.id, amount: Number(pay.amount), regId: reg.id };
+      }
+      return { ...res, refundInfo };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    if (promotedRegistrationId && event.requirePrepayment) {
+      // Payant : la notif de promotion part du débit réussi (chargePromotedRegistration), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyEventCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
+    // Remboursement best-effort post-commit (seulement si paiement ONLINE trouvé).
+    if (refundInfo) await this.safeRefund(refundInfo, event.clubId);
     return cancelled;
   }
 
@@ -105,8 +196,27 @@ export class EventService {
     if (promotedRegistrationId) await this.safeNotify(() => notify.notifyEventPromotion(promotedRegistrationId));
   }
 
+  /** Débite la place promue en best-effort : un échec post-commit ne doit jamais casser la réponse de désinscription. */
+  private async safeCharge(regId: string): Promise<void> {
+    try {
+      await this.chargePromotedRegistration(regId);
+    } catch (err) {
+      console.error('[paiement] débit promotion échoué (réconciliation par webhook) :', err);
+    }
+  }
+
+  /** Remboursement best-effort (avant clôture) ; ne fait jamais échouer la désinscription. */
+  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string): Promise<void> {
+    try {
+      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason: 'Désinscription avant clôture' });
+      await prisma.eventRegistration.update({ where: { id: info.regId }, data: { paymentStatus: 'REFUNDED' } });
+    } catch (err) {
+      console.error('[refund] désinscription event : remboursement échoué', err);
+    }
+  }
+
   /** Passe une inscription CANCELLED et, si elle était CONFIRMED, promeut le 1er WAITLISTED. Renvoie l'inscription annulée + l'id éventuellement promu. À appeler sous verrou de l'événement. */
-  private async cancelAndPromoteTx(tx: Prisma.TransactionClient, eventId: string, regId: string, wasConfirmed: boolean) {
+  private async cancelAndPromoteTx(tx: Prisma.TransactionClient, eventId: string, regId: string, wasConfirmed: boolean, paid = false) {
     const cancelled = await tx.eventRegistration.update({
       where: { id: regId },
       data: { status: 'CANCELLED', cancelledAt: new Date() },
@@ -119,11 +229,52 @@ export class EventService {
         select: { id: true },
       });
       if (next) {
-        await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'CONFIRMED' } });
+        await tx.eventRegistration.update({
+          where: { id: next.id },
+          data: { status: 'CONFIRMED', ...(paid ? { paymentDeadline: holdDeadline(new Date()) } : {}) },
+        });
         promotedRegistrationId = next.id;
       }
     }
     return { cancelled, promotedRegistrationId };
+  }
+
+  /** Débite off-session une place promue payante (DUE). Échec → libère la place et promeut le suivant. Best-effort, post-commit. */
+  async chargePromotedRegistration(regId: string): Promise<void> {
+    const reg = await prisma.eventRegistration.findUnique({
+      where: { id: regId },
+      select: { id: true, status: true, paymentStatus: true, userId: true, eventId: true, event: { select: { clubId: true, price: true } } },
+    });
+    if (!reg || reg.status !== 'CONFIRMED' || reg.paymentStatus !== 'DUE') return;
+    const amountCents = entryFeeCents(reg.event.price);
+
+    let piId: string;
+    try {
+      piId = await new StripeService().chargeRegistrationOffSession({
+        clubId: reg.event.clubId, userId: reg.userId, registrationId: regId, kind: 'event', amountCents,
+        idempotencyKey: `reg-charge-${regId}`,
+      });
+    } catch {
+      // Carte refusée / absente → on libère cette place et on promeut le suivant.
+      const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${reg.eventId} FOR UPDATE`;
+        return this.cancelAndPromoteTx(tx, reg.eventId, regId, true, true);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+      await this.safeNotify(() => notify.notifyEventCancellation(cancelled.id));
+      // La récursion notifiera elle-même la promotion du suivant (sur débit réussi) — ne pas pré-notifier ici (doublon).
+      if (promotedRegistrationId) await this.chargePromotedRegistration(promotedRegistrationId);
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const flip = await tx.eventRegistration.updateMany({ where: { id: regId, paymentStatus: 'DUE' }, data: { paymentStatus: 'PAID', paymentDeadline: null } });
+      if (flip.count === 0) return;
+      const receiptNo = await PackageService.nextReceiptNo(tx, reg.event.clubId);
+      await tx.payment.create({
+        data: { clubId: reg.event.clubId, eventRegistrationId: regId, amount: new Prisma.Decimal(amountCents).div(100), method: 'ONLINE', status: 'CAPTURED', stripePaymentIntentId: piId, receiptNo },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    await this.safeNotify(() => notify.notifyEventPromotion(regId));
   }
 
   // --------------------------------------------------------- Lectures publiques
@@ -227,11 +378,17 @@ export class EventService {
       if (!cs) throw new Error('VALIDATION_ERROR');
     }
     (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
+    if (data.requirePrepayment) {
+      await this.assertPrepaymentAllowed(clubId, Math.round(Number((data as any).price ?? 0) * 100));
+    }
     return prisma.clubEvent.create({ data: { clubId, ...data } as Prisma.ClubEventUncheckedCreateInput });
   }
 
   async updateEvent(eventId: string, clubId: string, input: UpdateEventInput) {
-    const found = await prisma.clubEvent.findFirst({ where: { id: eventId, clubId }, select: { id: true, status: true } });
+    const found = await prisma.clubEvent.findFirst({
+      where: { id: eventId, clubId },
+      select: { id: true, status: true, price: true, requirePrepayment: true },
+    });
     if (!found) throw new Error('EVENT_NOT_FOUND');
     const data = this.validateEventInput(input, false);
     if (input.status !== undefined) {
@@ -244,6 +401,12 @@ export class EventService {
         if (!cs) throw new Error('VALIDATION_ERROR');
       }
       (data as Record<string, unknown>).clubSportId = input.clubSportId ?? null;
+    }
+    // Effective requirePrepayment après cette màj : si on l'active, exiger Stripe ACTIVE + montant valide.
+    const willRequire = input.requirePrepayment !== undefined ? Boolean(input.requirePrepayment) : found.requirePrepayment;
+    if (willRequire) {
+      const price = input.price !== undefined ? Number(input.price) : Number(found.price);
+      await this.assertPrepaymentAllowed(clubId, Math.round(price * 100));
     }
     const updated = await prisma.clubEvent.update({ where: { id: eventId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
@@ -264,6 +427,20 @@ export class EventService {
   async adminPromoteRegistration(eventId: string, regId: string, clubId: string) {
     const reg = await this.findClubRegistration(eventId, regId, clubId);
     if (reg.status !== 'WAITLISTED') throw new Error('VALIDATION_ERROR');
+    const e = await prisma.clubEvent.findUnique({ where: { id: eventId }, select: { requirePrepayment: true } });
+    if (e?.requirePrepayment) {
+      // Verrou + bascule conditionnelle : deux promotions concurrentes de la même place ne posent DUE qu'une fois → un seul débit.
+      const promoted = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
+        return tx.eventRegistration.updateMany({
+          where: { id: regId, status: 'WAITLISTED' },
+          data: { status: 'CONFIRMED', paymentStatus: 'DUE', paymentDeadline: holdDeadline(new Date()) },
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+      // Une autre promotion a déjà gagné → ne pas re-débiter.
+      if (promoted.count > 0) await this.chargePromotedRegistration(regId);
+      return prisma.eventRegistration.findUnique({ where: { id: regId } });
+    }
     const promoted = await prisma.eventRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
     await this.safeNotify(() => notify.notifyEventPromotion(promoted.id));
     return promoted;
@@ -272,6 +449,7 @@ export class EventService {
   /** Désinscription manuelle par le club (promeut le 1er en attente si CONFIRMED). */
   async adminRemoveRegistration(eventId: string, regId: string, clubId: string) {
     await this.findClubRegistration(eventId, regId, clubId); // vérifie l'appartenance au club
+    const e = await prisma.clubEvent.findUnique({ where: { id: eventId }, select: { requirePrepayment: true } });
     const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const reg = await tx.eventRegistration.findFirst({
@@ -279,10 +457,16 @@ export class EventService {
         select: { id: true, status: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, eventId, regId, reg.status === 'CONFIRMED');
+      return this.cancelAndPromoteTx(tx, eventId, regId, reg.status === 'CONFIRMED', e?.requirePrepayment ?? false);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
 
-    await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    if (promotedRegistrationId && e?.requirePrepayment) {
+      // Payant : la notif de promotion part du débit réussi (chargePromotedRegistration), pas ici, pour ne pas doubler.
+      await this.safeNotify(() => notify.notifyEventCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
     return cancelled;
   }
 
@@ -327,6 +511,7 @@ export class EventService {
       if (typeof input.memberOnly !== 'boolean') throw new Error('VALIDATION_ERROR');
       data.memberOnly = input.memberOnly;
     }
+    if (input.requirePrepayment !== undefined) data.requirePrepayment = Boolean(input.requirePrepayment);
     return data;
   }
 }

@@ -19,6 +19,7 @@ jest.mock('../lib/api', () => ({
     adminAddReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminGetMemberPackages: jest.fn().mockResolvedValue([]),
+    adminGetActivePackages: jest.fn().mockResolvedValue([]),
     refundPayment: jest.fn().mockResolvedValue({ id: 'rf1' }),
   },
   assetUrl: (u: string | null) => u,
@@ -69,6 +70,26 @@ it("encaisse la part d'un seul joueur (CB → participantId)", async () => {
   fireEvent.click(screen.getAllByRole('button', { name: 'CB' })[0]);    // 1re ligne joueur = pt-1
   await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
     'club-1', 'rv-2', expect.objectContaining({ participantId: 'pt-1', method: 'CARD', amount: 13 }), 'tok',
+  ));
+});
+
+it("paie la part d'un joueur avec son porte-monnaie (WALLET + sourcePackageId + participantId)", async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([{ id: 'court-1', name: 'C1', attributes: { format: 'single' }, isActive: true, price: '26.00', offPeakPrice: null, openHour: 8, closeHour: 22, slotStepMin: null, clubSport: { id: 'cs', slotStepMin: null, durationsMin: [60], sport: { key: 'padel', name: 'Padel', resourceNoun: 'Terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60], surfaces: [], hasLighting: false } } }]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue({ reservations: [
+    { id: 'rv-2', resourceId: 'court-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', status: 'CONFIRMED', type: 'COURT', title: null, totalPrice: '26.00', paidAmount: '0.00', dueAmount: '26.00', resource: { id: 'court-1', name: 'C1' }, user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' }, payments: [], participants: [
+      { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' },
+      { id: 'pt-2', userId: 'u2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', share: '13.00', paid: '0.00', outstanding: '13.00' },
+    ] },
+  ], summary: { total: '26', paid: '0', paidTotal: '0', outstanding: '26' } });
+  (api.adminGetActivePackages as jest.Mock).mockResolvedValue([
+    { id: 'pk-w', userId: 'u1', kind: 'WALLET', creditsTotal: null, creditsRemaining: null, amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null },
+  ]);
+  renderPage();
+  await screen.findByText('C1');
+  // 1re occurrence = ligne du joueur pt-1 (u1). pt-2 (u2) n'a pas de solde → pas de bouton.
+  fireEvent.click(screen.getAllByRole('button', { name: /Porte-monnaie/ })[0]);
+  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+    'club-1', 'rv-2', expect.objectContaining({ method: 'WALLET', sourcePackageId: 'pk-w', participantId: 'pt-1', amount: 13 }), 'tok',
   ));
 });
 
