@@ -44,7 +44,7 @@ const mocked = api as jest.Mocked<typeof api>;
 const club = {
   id: 'c1', slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris', description: null,
   memberBookingDays: 7, publicBookingDays: 7,
-  clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] }],
+  clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'r1' }] }],
 } as never;
 
 const availability = [{
