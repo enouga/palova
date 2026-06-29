@@ -92,14 +92,15 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
     <div role="dialog" aria-label="Discussion de la partie"
       style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
         ...(isDesktop
-          ? { alignItems: 'center', justifyContent: 'center', padding: 24 }
-          : { flexDirection: 'column', justifyContent: 'flex-end' }),
-        background: 'rgba(0,0,0,0.4)' }}
+          // Desktop : widget ancré en bas à droite, sans fond grisé — la page reste
+          // visible ET cliquable (pointerEvents:none sur l'enveloppe, auto sur le panneau).
+          ? { alignItems: 'flex-end', justifyContent: 'flex-end', padding: 24, background: 'transparent', pointerEvents: 'none' }
+          : { flexDirection: 'column', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.4)' }) }}
       onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: th.bg, display: 'flex', flexDirection: 'column',
+        style={{ background: th.bg, display: 'flex', flexDirection: 'column', pointerEvents: 'auto',
           ...(isDesktop
-            ? { width: 'min(440px, 92vw)', maxHeight: '80vh', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }
+            ? { width: 'min(380px, 92vw)', maxHeight: '70vh', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }
             : { width: '100%', maxHeight: '85vh', borderTopLeftRadius: 20, borderTopRightRadius: 20 }) }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${th.line}` }}>
           <Icon name="users" size={18} color={th.accent} />
