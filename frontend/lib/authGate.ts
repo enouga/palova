@@ -2,6 +2,7 @@
 // contenu public : légales, FAQ, offres/tarifs — lisibles par tout visiteur).
 export const PUBLIC_PATHS = [
   '/login', '/register', '/clubs/new', '/forgot-password',
+  '/parties',
   '/faq', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs',
 ];
 
