@@ -2148,3 +2148,20 @@ describe('ReservationService', () => {
     });
   });
 });
+
+describe('cancelFutureReservationsForUser', () => {
+  it('annule chaque résa future (CONFIRMED/PENDING) de l organisateur', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { id: 'r1', resourceId: 'res-1', startTime: new Date(Date.now() + 86400000), endTime: new Date(Date.now() + 90000000) },
+      { id: 'r2', resourceId: 'res-2', startTime: new Date(Date.now() + 172800000), endTime: new Date(Date.now() + 176400000) },
+    ] as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'r1' } as any);
+
+    const n = await new ReservationService().cancelFutureReservationsForUser('u1');
+    expect(n).toBe(2);
+    expect(prismaMock.reservation.update).toHaveBeenCalledTimes(2);
+    expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'u1', status: { in: ['CONFIRMED', 'PENDING'] } }),
+    }));
+  });
+});
