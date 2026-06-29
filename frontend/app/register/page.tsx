@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { slug } = useClub();
+  const nextPath = () => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') || undefined : undefined);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
   const [email, setEmail]         = useState('');
@@ -32,7 +33,7 @@ export default function RegisterPage() {
   const finish = async (auth: AuthResponse) => {
     setSession(auth.token, null);
     if (slug) await api.joinClub(slug, auth.token).catch(() => {}); // adhésion auto au club du host
-    router.push(slug ? '/' : '/clubs');
+    router.push(slug ? (nextPath() || '/') : '/clubs');
   };
 
   async function handleSubmit(e: FormEvent) {
