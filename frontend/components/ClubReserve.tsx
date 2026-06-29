@@ -54,6 +54,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // Résumé d'un règlement par solde prépayé (moyen + restant), affiché sous la bannière de confirmation.
+  const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
@@ -197,9 +199,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         )}
 
         {confirmed && (
-          <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
+          <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'flex-start', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
             <Icon name="check" size={18} color={th.onAccent} stroke={2.4} />
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+            <div>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+              {confirmedNote && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 500, opacity: 0.92, marginTop: 2 }}>{confirmedNote}</div>
+              )}
+            </div>
           </div>
         )}
 
@@ -356,9 +363,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           cancellationCutoffHours={club.cancellationCutoffHours}
           refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}
           onClose={() => setBooking(null)}
-          onConfirmed={() => {
+          onConfirmed={(_res, paid) => {
             setBooking(null);
             setConfirmed(true);
+            setConfirmedNote(paid?.label ?? null);
             if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
             refreshQuota();
             reloadAll();
