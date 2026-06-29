@@ -1642,7 +1642,7 @@ describe('ReservationService', () => {
       status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-1', type: 'COURT',
       resource: {
         id: 'court-1', name: 'Terrain 2', attributes: { format: 'double' },
-        clubSport: { sport: { key: 'padel' } },
+        clubSport: { sport: { key: 'padel', name: 'Padel' } },
         club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
       },
       participants: [
@@ -1667,6 +1667,7 @@ describe('ReservationService', () => {
       expect(out[0].resource.name).toBe('Terrain 2');
       expect((out[0].resource as any).attributes).toBeUndefined();
       expect((out[0].resource as any).clubSport).toBeUndefined();
+      expect((out[0].resource as any).sport).toEqual({ key: 'padel', name: 'Padel' });
     });
 
     it('ajoute level sur les participants qui ont un rating', async () => {

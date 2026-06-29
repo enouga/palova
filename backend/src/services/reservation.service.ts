@@ -1432,7 +1432,7 @@ export class ReservationService {
         resource: {
           select: {
             id: true, name: true, attributes: true,
-            clubSport: { select: { sport: { select: { key: true } } } },
+            clubSport: { select: { sport: { select: { key: true, name: true } } } },
             club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } },
           },
         },
@@ -1452,7 +1452,7 @@ export class ReservationService {
       const sportKey = clubSport.sport.key;
       return {
         ...rest,
-        resource: resourcePublic,
+        resource: { ...resourcePublic, sport: { key: clubSport.sport.key, name: clubSport.sport.name } },
         capacity: playerCount((attributes as { format?: string } | null)?.format),
         participants: participants.map((p) => ({
           id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
