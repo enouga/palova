@@ -208,6 +208,13 @@ router.get('/:slug/open-matches', authMiddleware, async (req: AuthRequest, res: 
   catch (err) { handleError(err, res, next); }
 });
 
+// Compteur de messages de chat non lus du club (badge de l'onglet « Parties »).
+// ⚠️ Déclaré AVANT toute route GET `/:slug/open-matches/:id...` pour ne pas être capturé comme un id.
+router.get('/:slug/open-matches/unread-count', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.unreadCount(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
 router.post('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.joinOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
@@ -251,6 +258,12 @@ router.post('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req:
 });
 router.delete('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchChatService.deleteMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Marque lus les messages de chat d'une partie pour l'utilisateur.
+router.post('/:slug/open-matches/:id/chat/read', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchChatService.markRead(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 

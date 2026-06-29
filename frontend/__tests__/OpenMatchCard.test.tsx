@@ -35,6 +35,7 @@ function makeMatch(over: Partial<OpenMatch> = {}): OpenMatch {
     viewerIsInterested: false,
     interested: [],
     lastMessageAt: null,
+    unreadCount: 0,
     ...over,
   };
 }
@@ -57,7 +58,6 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
     canRecordResult: false,
     onToggleInterest: jest.fn(),
     onOpenChat: jest.fn(),
-    hasUnread: false,
     ...overProps,
   };
 }
@@ -97,6 +97,27 @@ describe('OpenMatchCard', () => {
     );
     const btn = screen.getByRole('button', { name: /discuter/i });
     expect(btn).toBeDisabled();
+  });
+
+  it('affiche le badge numérique quand unreadCount > 0', () => {
+    const match = makeMatch({ unreadCount: 3, viewerIsParticipant: true });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    expect(screen.getByLabelText('3 non lus')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('n\'affiche pas de badge quand unreadCount est 0', () => {
+    const match = makeMatch({ unreadCount: 0 });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByLabelText(/non lus/)).not.toBeInTheDocument();
   });
 
   it('affiche « 3 intéressés » quand interestedCount est 3', () => {

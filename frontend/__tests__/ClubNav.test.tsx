@@ -2,9 +2,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ClubNav } from '../components/ClubNav';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
-// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell).
+// EventSource n'existe pas en jsdom : stub minimal (requis par NotificationBell et ClubNav).
 beforeAll(() => {
-  (global as any).EventSource = class { onmessage: ((e: any) => void) | null = null; close() {} };
+  (global as any).EventSource = class { onmessage: any = null; onerror: any = null; close() {} };
 });
 
 let pathname = '/tournois';
@@ -24,6 +24,8 @@ jest.mock('../lib/api', () => ({
     getMyClubPackages: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge Parties)
+    getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
     markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
@@ -147,6 +149,15 @@ describe('ClubNav', () => {
     wrap();
     expect(await screen.findByText('Mes réservations')).toBeInTheDocument();
     expect(screen.queryByText('Connexion')).not.toBeInTheDocument();
+  });
+
+  it("affiche un badge de non lus sur l'onglet Parties quand count > 0", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getOpenMatchUnread.mockResolvedValueOnce({ count: 2 });
+    document.cookie = 'token=abc; path=/';
+    const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
+    render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
+    expect(await screen.findByLabelText('2 non lus')).toBeInTheDocument();
   });
 
   it('expose un libellé court (.cn-lbl-short) pour les onglets longs — affiché à la place du long sur mobile actif', async () => {

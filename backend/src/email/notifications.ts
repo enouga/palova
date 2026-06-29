@@ -17,6 +17,7 @@ import {
   buildMatchConfirmEmail,
   buildMatchCommentEmail,
   buildOpenMatchProposedEmail,
+  buildOpenMatchChatEmail,
 } from './templates/emails';
 import { playerCount } from '../utils/courtType';
 import { RatingService } from '../services/rating.service';
@@ -418,15 +419,14 @@ export async function notifyOpenMatchInterest(reservationId: string, interestedU
 
 /**
  * Notifie les membres du chat (participants + intéressés) ABSENTS du fil qu'un message
- * a été posté (in-app + push, pas d'email). Exclut l'auteur et les connectés au flux SSE.
- * Coalescing : on saute un destinataire qui a déjà une notif « message » non lue pour cette
- * partie (le badge in-app agrège, on n'empile pas un push par message).
+ * a été posté (in-app + push + email). Exclut l'auteur et les connectés au flux SSE.
+ * Un email + une notif PAR message (pas de coalescing) → le compteur de non-lus est exact.
  */
 export async function notifyOpenMatchChatMessage(reservationId: string, messageId: string, authorUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { id: true, slug: true } } } },
+      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
       participants: { select: { userId: true } },
       openMatchMessages: { where: { id: messageId }, select: { id: true, body: true, user: { select: { firstName: true, lastName: true } } } },
     },
@@ -443,24 +443,30 @@ export async function notifyOpenMatchChatMessage(reservationId: string, messageI
   for (const i of interests) recipients.add(i.userId);
   recipients.delete(authorUserId);
   for (const u of connected) recipients.delete(u);
+  if (recipients.size === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...recipients] } },
+    select: { id: true, email: true, firstName: true },
+  });
 
   const club = resa.resource.club;
   const url = clubAppUrl(club.slug, '/parties');
   const authorName = fullName(msg.user);
-  const snippet = msg.body.length > 80 ? `${msg.body.slice(0, 80)}…` : msg.body;
+  const snippet = msg.body.length > 140 ? `${msg.body.slice(0, 140)}…` : msg.body;
 
-  for (const userId of recipients) {
-    // Coalescing : déjà une notif « message » non lue pour cette partie → on ne ré-empile pas.
-    const existing = await prisma.notification.findFirst({
-      where: { userId, type: 'open_match.message', readAt: null, data: { path: ['matchId'], equals: reservationId } } as any,
-      select: { id: true },
+  // Un email + une notif PAR message (pas de coalescing) → le compteur de non-lus est exact.
+  for (const u of users) {
+    const mail = buildOpenMatchChatEmail({
+      recipientFirstName: u.firstName, authorName, resourceName: resa.resource.name,
+      message: snippet, clubName: club.name, url, brand: brandOf(club),
     });
-    if (existing) continue;
     await dispatch({
-      userId, clubId: club.id, category: 'OPEN_MATCH_CHAT', type: 'open_match.message',
+      userId: u.id, clubId: club.id, category: 'OPEN_MATCH_CHAT', type: 'open_match.message',
       title: `Nouveau message — ${resa.resource.name}`,
       body: `${authorName} : ${snippet}`,
-      url, data: { matchId: reservationId }, email: null,
+      url, data: { matchId: reservationId },
+      email: { to: u.email, subject: mail.subject, html: mail.html, text: mail.text },
     });
   }
 }
