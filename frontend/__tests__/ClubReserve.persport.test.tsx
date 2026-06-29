@@ -18,6 +18,10 @@ jest.mock('../lib/api', () => ({
     getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'T', lastName: 'U', email: 't@p.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
+    // consommé par ClubNav (badge non lus de l'onglet Parties — club avec padel)
+    getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
@@ -37,8 +41,8 @@ const club = {
   id: 'c1', slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris', description: null,
   memberBookingDays: 7, publicBookingDays: 7,
   clubSports: [
-    { id: 'cs1', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] },
-    { id: 'cs2', durationsMin: [45, 60], sport: { key: 'squash', defaultDurationsMin: [45, 60], name: 'Squash', icon: null }, resources: [] },
+    { id: 'cs1', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'r1' }] },
+    { id: 'cs2', durationsMin: [45, 60], sport: { key: 'squash', defaultDurationsMin: [45, 60], name: 'Squash', icon: null }, resources: [{ id: 'r2' }] },
   ],
 } as never;
 
@@ -47,8 +51,8 @@ const clubPadelTennis = {
   id: 'c2', slug: 'demo2', name: 'Club Multi', timezone: 'Europe/Paris', description: null,
   memberBookingDays: 7, publicBookingDays: 7,
   clubSports: [
-    { id: 'cs-padel', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] },
-    { id: 'cs-tennis', durationsMin: [60, 90], sport: { key: 'tennis', defaultDurationsMin: [60, 90], name: 'Tennis', icon: null }, resources: [] },
+    { id: 'cs-padel', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'rp' }] },
+    { id: 'cs-tennis', durationsMin: [60, 90], sport: { key: 'tennis', defaultDurationsMin: [60, 90], name: 'Tennis', icon: null }, resources: [{ id: 'rt' }] },
   ],
 } as never;
 
@@ -139,6 +143,38 @@ describe('ClubReserve — sport préféré par défaut', () => {
   });
 });
 
+describe('ClubReserve — sport sans terrain', () => {
+  beforeEach(() => {
+    document.cookie = 'token=abc; path=/';
+    localStorage.clear();
+    mocked.getClubAvailability.mockResolvedValue([] as never);
+    window.history.pushState({}, '', '/reserver');
+  });
+  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; jest.clearAllMocks(); });
+
+  // Padel a un terrain, Tennis n'en a aucun (resources vides) → Tennis ne doit pas être proposé.
+  const clubPadelNoTennis = {
+    id: 'c4', slug: 'demo4', name: 'Club Padel', timezone: 'Europe/Paris', description: null,
+    memberBookingDays: 7, publicBookingDays: 7,
+    clubSports: [
+      { id: 'cs-p', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'rp' }] },
+      { id: 'cs-t', durationsMin: [60], sport: { key: 'tennis', defaultDurationsMin: [60], name: 'Tennis', icon: null }, resources: [] },
+    ],
+  } as never;
+
+  it('n\'affiche ni la section ni le sélecteur pour un sport sans terrain', async () => {
+    render(<ThemeProvider><ClubReserve club={clubPadelNoTennis} /></ThemeProvider>);
+    await waitFor(() => expect(mocked.getClubAvailability).toHaveBeenCalled());
+    // Une seule discipline réservable → pas de sélecteur « changer ».
+    expect(screen.queryByRole('button', { name: /· changer/ })).not.toBeInTheDocument();
+    // Tennis n'apparaît nulle part (ni section, ni option du sélecteur).
+    expect(screen.queryByText('Tennis')).not.toBeInTheDocument();
+    // La disponibilité n'est demandée que pour le terrain qui existe (padel).
+    expect(mocked.getClubAvailability).toHaveBeenCalledTimes(1);
+    expect(mocked.getClubAvailability.mock.calls.map((c) => c[3])).toEqual(['cs-p']);
+  });
+});
+
 describe('ClubReserve — club mono-sport', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
@@ -152,7 +188,7 @@ describe('ClubReserve — club mono-sport', () => {
     id: 'c3', slug: 'solo', name: 'Club Solo', timezone: 'Europe/Paris', description: null,
     memberBookingDays: 7, publicBookingDays: 7,
     clubSports: [
-      { id: 'only', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] },
+      { id: 'only', durationsMin: [90], sport: { key: 'padel', defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'ro' }] },
     ],
   } as never;
 

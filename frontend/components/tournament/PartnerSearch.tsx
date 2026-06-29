@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, ClubMemberSearchResult } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { LevelChip } from '@/components/player/LevelChip';
+import { Icon } from '@/components/ui/Icon';
 
 // Annuaire du club : recherche d'un coéquipier par nom (membres actifs uniquement).
 export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect }: {
@@ -36,6 +37,8 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
   const visible = excludeIds?.length ? results.filter((m) => !excludeIds.includes(m.id)) : results;
 
   const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+  // Champ de recherche « voyant » : loupe à gauche + bordure à l'accent du club + halo au focus.
+  const searchFieldStyle: React.CSSProperties = { ...inputStyle, border: `1.5px solid ${th.accent}`, padding: '13px 14px 13px 42px', fontSize: 15, outline: 'none', boxShadow: open ? `0 0 0 3px ${th.accent}22` : 'none', transition: 'box-shadow .15s ease' };
 
   if (selected) {
     return (
@@ -48,10 +51,13 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
 
   return (
     <div style={{ position: 'relative' }}>
+      <span aria-hidden style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', display: 'flex', pointerEvents: 'none' }}>
+        <Icon name="search" size={18} color={th.textMute} />
+      </span>
       <input value={q} onChange={(e) => setQ(e.target.value)}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Cliquez pour voir les membres, ou tapez un nom…" disabled={disabled} style={inputStyle} />
+        placeholder="Cliquez pour voir les membres, ou tapez un nom…" disabled={disabled} style={searchFieldStyle} />
       {open && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 260, overflowY: 'auto', background: th.surface, borderRadius: 11, boxShadow: `0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px ${th.line}` }}>
           {visible.length === 0

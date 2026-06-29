@@ -22,6 +22,11 @@ function setup(over: Partial<React.ComponentProps<typeof PlayerPicker>> = {}) {
 }
 
 describe('PlayerPicker', () => {
+  it('affiche une loupe dans le champ de recherche', () => {
+    setup();
+    expect(screen.getByTestId('player-search-loupe').querySelector('svg')).toBeInTheDocument();
+  });
+
   it('filtre les membres et sélectionne au clic', () => {
     const { onSelect } = setup();
     fireEvent.change(screen.getByPlaceholderText('Rechercher un joueur…'), { target: { value: 'mar' } });
