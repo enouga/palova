@@ -21,6 +21,7 @@ export interface PublicLessonRow {
     endTime: Date;
     resource: { name: string };
   };
+  sport: { key: string; name: string } | null;
   series: { enrollmentMode: EnrollmentMode | null; title: string | null } | null;
   club: { slug: string; name: string; timezone: string };
   confirmedCount: number;
@@ -355,7 +356,7 @@ class LessonService {
       capacity: number;
       allowSelfEnroll: boolean;
       coach: { name: string; photoUrl: string | null };
-      reservation: { startTime: Date; endTime: Date; resource: { name: string } };
+      reservation: { startTime: Date; endTime: Date; resource: { name: string; clubSport: { sport: { key: string; name: string } } | null } };
       series: { id: string; capacity: number | null; enrollmentMode: EnrollmentMode | null; title: string | null } | null;
       club: { slug: string; name: string; timezone: string };
     },
@@ -371,8 +372,9 @@ class LessonService {
       reservation: {
         startTime: lesson.reservation.startTime,
         endTime: lesson.reservation.endTime,
-        resource: lesson.reservation.resource,
+        resource: { name: lesson.reservation.resource.name },
       },
+      sport: lesson.reservation.resource.clubSport?.sport ?? null,
       series: lesson.series
         ? { enrollmentMode: lesson.series.enrollmentMode, title: lesson.series.title }
         : null,
@@ -603,7 +605,7 @@ class LessonService {
           select: {
             startTime: true,
             endTime: true,
-            resource: { select: { name: true } },
+            resource: { select: { name: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
           },
         },
         series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
@@ -646,7 +648,7 @@ class LessonService {
           select: {
             startTime: true,
             endTime: true,
-            resource: { select: { name: true } },
+            resource: { select: { name: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
           },
         },
         series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
@@ -709,7 +711,7 @@ class LessonService {
               select: {
                 startTime: true,
                 endTime: true,
-                resource: { select: { name: true } },
+                resource: { select: { name: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
               },
             },
             series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
