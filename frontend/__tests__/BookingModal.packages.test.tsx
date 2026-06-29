@@ -119,4 +119,22 @@ describe('BookingModal — paiement par carnet', () => {
     expect(screen.getByRole('button', { name: /Porte-monnaie/ })).toBeDisabled();
     expect(screen.getByText(/solde insuffisant/)).toBeInTheDocument();
   });
+
+  it('confirme avec un carnet → onConfirmed reçoit le résumé du solde restant', async () => {
+    const onConfirmed = jest.fn();
+    render(
+      <ThemeProvider>
+        <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+          token="jwt-token" packages={[pkg]} onClose={jest.fn()} onConfirmed={onConfirmed} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
+    await waitFor(() => {
+      expect(onConfirmed).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'res-1' }),
+        { label: 'Payé avec votre carnet · 6 entrées restantes' },
+      );
+    });
+  });
 });

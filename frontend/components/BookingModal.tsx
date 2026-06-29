@@ -46,7 +46,8 @@ interface BookingModalProps {
   /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
   quotaStatus?: MyQuotaStatus | null;
   onClose: () => void;
-  onConfirmed: (reservation: Reservation) => void;
+  /** `paid` (optionnel) résume un règlement par solde prépayé (moyen + restant). */
+  onConfirmed: (reservation: Reservation, paid?: { label: string }) => void;
   /** ID du club (pour les appels Stripe). */
   clubId?: string;
   /** Exige un paiement CB en ligne. */
@@ -334,11 +335,12 @@ export default function BookingModal({
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
+      const usedPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
       const confirmed = await api.confirmReservation(
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
       settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
-      onConfirmed(confirmed);
+      onConfirmed(confirmed, usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined);
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
