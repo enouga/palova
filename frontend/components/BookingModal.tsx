@@ -16,6 +16,7 @@ import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel } from '@/lib/reservations';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -152,6 +153,8 @@ export default function BookingModal({
 }: BookingModalProps) {
   const { th } = useTheme();
   const levelEnabled = useLevelSystemEnabled();
+  // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel.
+  const levelForSport = levelEnabled && sportHasLevels(sportKey);
 
   const [phase, setPhase]             = useState<'holding' | 'held' | 'error'>('holding');
   const [reservation, setReservation] = useState<Reservation | null>(null);
@@ -266,7 +269,7 @@ export default function BookingModal({
   // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
   // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
   useEffect(() => {
-    if (!showPartners || !levelEnabled) return;
+    if (!showPartners || !levelForSport) return;
     const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
     const pref = loadLevelPref();
     if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
@@ -276,7 +279,7 @@ export default function BookingModal({
       const lvl = r?.level ?? null;
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
-  }, [showPartners, token, levelEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showPartners, token, levelForSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
@@ -315,11 +318,11 @@ export default function BookingModal({
   // joueurs soient enregistrés quel que soit le confirmeur (client OU webhook), sans course.
   const persistHoldSetup = async () => {
     if (!showPartners || !reservation) return;
-    const limiting = visibility === 'PUBLIC' && levelEnabled && levelLimited;
+    const limiting = visibility === 'PUBLIC' && levelForSport && levelLimited;
     await api.applyHoldSetup(reservation.id, token, {
       partnerUserIds: partners.map((p) => p.id),
       visibility,
-      ...(visibility === 'PUBLIC' && levelEnabled
+      ...(visibility === 'PUBLIC' && levelForSport
         ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
         : {}),
     });
@@ -487,7 +490,7 @@ export default function BookingModal({
                         : 'Visible uniquement par vous et vos partenaires.'}
                     </div>
 
-                    {visibility === 'PUBLIC' && levelEnabled && (
+                    {visibility === 'PUBLIC' && levelForSport && (
                       <div style={{ marginTop: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>

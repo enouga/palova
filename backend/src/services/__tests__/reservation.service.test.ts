@@ -2092,6 +2092,31 @@ describe('ReservationService', () => {
       }));
     });
 
+    it('hors padel : ignore la fourchette de niveau (targetLevel forcé à null)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseReservation,
+        resource: { clubId: 'club-1', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
+      } as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([{ userId: 'user-2' }] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      // visibilité PRIVATE : PUBLIC est désormais réservé au padel (OPEN_MATCH_PADEL_ONLY,
+      // testé à part) ; ici on isole le comportement « hors padel → niveau forcé à null ».
+      await service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['user-2'], visibility: 'PRIVATE',
+        targetLevelMin: 3, targetLevelMax: 5,
+      });
+
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'res-1' },
+        data: expect.objectContaining({ visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null }),
+      }));
+    });
+
     it('rejette TOO_MANY_PLAYERS au-delà de la capacité du terrain', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
       prismaMock.clubMembership.findMany.mockResolvedValue(
