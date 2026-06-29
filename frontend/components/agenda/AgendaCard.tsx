@@ -16,11 +16,12 @@ export interface AgendaCardProps {
   places: { text: string; urgent: boolean };
   extra?: string | null;       // « 40 € » / « Membres » — chip discret
   subtitle?: string | null;    // « Club · Ville · 8 km » — ligne secondaire (calendrier national)
+  sportLabel?: string | null;  // « Tennis » — chip sport (vue multi-sport / multi-club) ; null = masqué
   onClick: () => void;
 }
 
 // Carte de la liste Events : tuile icône teintée, infos, countdown, jauge de remplissage.
-export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now, ratio, places, extra, subtitle, onClick }: AgendaCardProps) {
+export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now, ratio, places, extra, subtitle, sportLabel, onClick }: AgendaCardProps) {
   const { th } = useTheme();
   const countdown = now ? deadlineCountdown(deadline, now) : null;
 
@@ -40,6 +41,12 @@ export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now,
 
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {sportLabel && (
+            <span data-testid="sport-badge" style={{
+              fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', flexShrink: 0,
+              borderRadius: 999, padding: '2px 8px', background: th.surface2, color: th.textMute, boxShadow: `inset 0 0 0 1px ${th.line}`,
+            }}>{sportLabel}</span>
+          )}
           <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
           <span style={{ flex: 1 }} />
           {countdown && (

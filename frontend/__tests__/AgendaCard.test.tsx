@@ -18,7 +18,7 @@ const base = {
   onClick: jest.fn(),
 };
 
-const wrap = (over: Partial<typeof base> & { now: Date | null; subtitle?: string | null }) =>
+const wrap = (over: Partial<typeof base> & { now: Date | null; subtitle?: string | null; sportLabel?: string | null }) =>
   render(<ThemeProvider><AgendaCard {...base} {...over} /></ThemeProvider>);
 
 describe('AgendaCard', () => {
@@ -41,6 +41,13 @@ describe('AgendaCard', () => {
   it('affiche le subtitle quand fourni', () => {
     wrap({ now: NOW, subtitle: 'Padel Paris · Paris · 8 km' });
     expect(screen.getByText('Padel Paris · Paris · 8 km')).toBeInTheDocument();
+  });
+
+  it('affiche le chip sport quand sportLabel fourni, sinon non', () => {
+    const { rerender } = wrap({ now: NOW, sportLabel: 'Tennis' });
+    expect(screen.getByTestId('sport-badge')).toHaveTextContent('Tennis');
+    rerender(<ThemeProvider><AgendaCard {...base} now={NOW} sportLabel={null} /></ThemeProvider>);
+    expect(screen.queryByTestId('sport-badge')).not.toBeInTheDocument();
   });
 
   it('sans capacité → pas de jauge ; clic → onClick', () => {
