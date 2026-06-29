@@ -160,6 +160,12 @@ describe('ClubNav', () => {
     expect(await screen.findByLabelText('2 non lus')).toBeInTheDocument();
   });
 
+  it('montre « Parties » sans session si le club a du padel (parties ouvertes publiques)', async () => {
+    const padelClub = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
+    render(<ThemeProvider><ClubNav club={padelClub} /></ThemeProvider>);
+    expect(await screen.findByText('Parties')).toBeInTheDocument();
+  });
+
   it('expose un libellé court (.cn-lbl-short) pour les onglets longs — affiché à la place du long sur mobile actif', async () => {
     document.cookie = 'token=abc; path=/';
     pathname = '/me/reservations';
