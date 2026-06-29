@@ -16,7 +16,7 @@ function formatDay(iso: string, tz: string): string {
 // « Prochains events » : tournois + animations fusionnés (nom de fichier historique conservé).
 // Chaque ligne : nom + chip compte à rebours, badge + date, mini-jauge de remplissage et urgence.
 // `now` null avant le mount (hydration-safe) : les countdowns n'apparaissent qu'ensuite.
-export function TournamentsAlaUne({ items, timezone, now = null }: { items: AgendaItem[]; timezone: string; now?: Date | null }) {
+export function TournamentsAlaUne({ items, timezone, now = null, multiSport = false }: { items: AgendaItem[]; timezone: string; now?: Date | null; multiSport?: boolean }) {
   const { th } = useTheme();
   if (items.length === 0) return null;
   return (
@@ -30,6 +30,7 @@ export function TournamentsAlaUne({ items, timezone, now = null }: { items: Agen
           const id = isT ? item.tournament.id : item.event.id;
           const name = isT ? item.tournament.name : item.event.name;
           const badge = isT ? `${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}` : KIND_LABEL[item.event.kind];
+          const sportName = multiSport ? ((isT ? item.tournament.sport?.name : item.event.sport?.name) ?? null) : null;
           const places = isT ? tournamentPlacesLabel(item.tournament) : eventPlacesLabel(item.event);
           const href = isT ? `/tournois/${id}` : `/events/${id}`;
           const deadline = isT ? item.tournament.registrationDeadline : item.event.registrationDeadline;
@@ -52,7 +53,7 @@ export function TournamentsAlaUne({ items, timezone, now = null }: { items: Agen
                 )}
               </span>
               <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
-                {badge}
+                {sportName ? `${sportName} · ` : ''}{badge}
                 {' · '}
                 {formatDay(item.startTime, timezone)}
                 {' · '}
