@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClubDetail, assetUrl } from '@/lib/api';
+import { ClubDetail, assetUrl, api, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
@@ -28,6 +28,22 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const showClubLogo = !!club.logoUrl && !logoFailed;
+
+  const [partiesUnread, setPartiesUnread] = useState(0);
+  const showPartiesTab = ready && !!token && clubHasPadel(club);
+  useEffect(() => {
+    if (!showPartiesTab || !token) { setPartiesUnread(0); return; }
+    let alive = true;
+    const refresh = () => api.getOpenMatchUnread(club.slug, token)
+      .then((r) => { if (alive) setPartiesUnread(r.count); }).catch(() => {});
+    refresh();
+    const es = new EventSource(notificationsStreamUrl(token));
+    es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
+    es.onerror = () => es.close();
+    const onLocal = () => refresh();
+    window.addEventListener('palova:openmatch-unread', onLocal);
+    return () => { alive = false; es.close(); window.removeEventListener('palova:openmatch-unread', onLocal); };
+  }, [showPartiesTab, token, club.slug, pathname]);
 
   const tabs: Tab[] = [
     { label: 'Club-house', short: 'Club', href: '/', icon: 'home', brand: true, match: (p) => p === '/' || p.startsWith('/club-house') || p.startsWith('/infos'), show: true },
@@ -122,6 +138,11 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 <span className="cn-tab-label cn-lbl-full" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.label}</span>
                 {t.short && (
                   <span className="cn-tab-label cn-lbl-short" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.short}</span>
+                )}
+                {t.href === '/parties' && partiesUnread > 0 && (
+                  <span aria-label={`${partiesUnread} non lus`} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: '#e5484d', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, flexShrink: 0 }}>
+                    {partiesUnread > 99 ? '99+' : partiesUnread}
+                  </span>
                 )}
               </Link>
             );
