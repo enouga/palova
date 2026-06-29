@@ -25,6 +25,8 @@ jest.mock('../lib/api', () => ({
     // Chargé au montage par ProfileMenu (info-bulle d'identité dans le header) ; menu jamais ouvert ici.
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
