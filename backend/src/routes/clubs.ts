@@ -18,6 +18,7 @@ import { OpenMatchChatService } from '../services/openMatchChat.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
+import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
 import { capacityFor } from '../utils/courtType';
@@ -39,6 +40,7 @@ const openMatchChatService = new OpenMatchChatService();
 const reservationService = new ReservationService();
 const subscriptionService = new SubscriptionService();
 const paymentMethodService = new PaymentMethodService();
+const paymentHistoryService = new PaymentHistoryService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -327,6 +329,12 @@ router.get('/:slug/me/payment-method', authMiddleware, async (req: AuthRequest, 
 // Retrait de la carte enregistrée du joueur.
 router.delete('/:slug/me/payment-method', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await paymentMethodService.removeMyPaymentMethod(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Historique des paiements du joueur sur ce club.
+router.get('/:slug/me/payments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await paymentHistoryService.listMyPaymentsBySlug(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 
