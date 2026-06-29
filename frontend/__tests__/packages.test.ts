@@ -126,6 +126,10 @@ describe('paidWithLabel', () => {
   it('porte-monnaie : moyen + solde restant', () => {
     expect(paidWithLabel(wallet('53.50'), 25)).toBe('Payé avec votre porte-monnaie · solde restant 28,50 €');
   });
+  it('couvre les soldes épuisés (carnet/porte-monnaie à 0)', () => {
+    expect(paidWithLabel(entries(1), 25)).toBe('Payé avec votre carnet · 0 entrée restante');
+    expect(paidWithLabel(wallet('25.00'), 25)).toBe('Payé avec votre porte-monnaie · solde restant 0,00 €');
+  });
 });
 
 describe('indexPackagesByUser', () => {

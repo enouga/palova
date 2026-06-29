@@ -58,6 +58,7 @@ export function indexPackagesByUser(rows: ActiveMemberPackage[]): Record<string,
 /** Solde restant projeté après un paiement de `amountEuros` € (jamais négatif). */
 export function remainingAfterLabel(p: MemberPackage, amountEuros: number): string {
   if (p.kind === 'ENTRIES') {
+    // ENTRIES : toujours 1 entrée consommée — amountEuros ignoré
     const n = Math.max(0, (p.creditsRemaining ?? 0) - 1);
     return `il restera ${n} entrée${n > 1 ? 's' : ''}`;
   }
@@ -68,6 +69,7 @@ export function remainingAfterLabel(p: MemberPackage, amountEuros: number): stri
 /** Résumé d'un paiement par solde (moyen + restant) — pour la confirmation. */
 export function paidWithLabel(p: MemberPackage, amountEuros: number): string {
   if (p.kind === 'ENTRIES') {
+    // ENTRIES : toujours 1 entrée consommée — amountEuros ignoré
     const n = Math.max(0, (p.creditsRemaining ?? 0) - 1);
     return `Payé avec votre carnet · ${n} entrée${n > 1 ? 's' : ''} restante${n > 1 ? 's' : ''}`;
   }
