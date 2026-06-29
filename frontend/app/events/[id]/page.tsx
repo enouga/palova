@@ -13,6 +13,7 @@ import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { AboutCard, RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
 import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { ShareActions } from '@/components/tournament/ShareActions';
@@ -127,7 +128,11 @@ export default function EventDetailPage() {
         </div>
 
         <AgendaHero
-          pills={[{ label: KIND_LABEL[event.kind], strong: true }, ...(event.memberOnly ? [{ label: 'Réservé aux membres' }] : [])]}
+          pills={[
+            ...(clubIsMultiSport(club) && event.sport ? [{ label: event.sport.name }] : []),
+            { label: KIND_LABEL[event.kind], strong: true },
+            ...(event.memberOnly ? [{ label: 'Réservé aux membres' }] : []),
+          ]}
           title={event.name}
           subtitle={event.club.name}
           deadline={event.registrationDeadline}

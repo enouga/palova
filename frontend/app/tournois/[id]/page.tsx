@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { TournamentHero, MetaCards } from '@/components/tournament/TournamentHero';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { AboutCard } from '@/components/agenda/RegistrationUI';
 import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { TeamsGrid } from '@/components/tournament/TeamsGrid';
@@ -171,7 +172,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
           </button>
         </div>
 
-        <TournamentHero t={t} now={now} />
+        <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)} />
         <MetaCards t={t} />
         <ShareActions item={t} uidPrefix="tournament" />
         {now && <TournamentTimeline steps={timelineSteps(t, now)} tz={t.club.timezone} />}
