@@ -803,6 +803,10 @@ model ClubStripeCustomer {
   userId                 String   @map("user_id")
   stripeCustomerId       String   @map("stripe_customer_id")
   defaultPaymentMethodId String?  @map("default_payment_method_id")
+  cardBrand              String?  @map("card_brand")
+  cardLast4              String?  @map("card_last4")
+  cardExpMonth           Int?     @map("card_exp_month")
+  cardExpYear            Int?     @map("card_exp_year")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
