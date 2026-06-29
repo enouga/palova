@@ -57,7 +57,7 @@ export class OpenMatchService {
       },
       orderBy: { startTime: 'asc' },
       include: {
-        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } },
+        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
           select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
@@ -84,6 +84,17 @@ export class OpenMatchService {
       ? await this.ratingService.getLevelsBySport(pairs)
       : {};
 
+    // Compteur de messages de chat non lus par partie (notifications serveur).
+    const unreadNotifs = await prisma.notification.findMany({
+      where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
+      select: { data: true },
+    });
+    const unreadByMatch = new Map<string, number>();
+    for (const n of unreadNotifs) {
+      const mid = (n.data as { matchId?: string } | null)?.matchId;
+      if (mid) unreadByMatch.set(mid, (unreadByMatch.get(mid) ?? 0) + 1);
+    }
+
     return matches.map((m) => {
       const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
       const row = m as typeof m & { targetLevelMin: number | null; targetLevelMax: number | null };
@@ -91,6 +102,7 @@ export class OpenMatchService {
       return {
         id: m.id,
         resourceName: m.resource.name,
+        sport: { key: m.resource.clubSport.sport.key, name: m.resource.clubSport.sport.name },
         startTime: m.startTime.toISOString(),
         endTime: m.endTime.toISOString(),
         maxPlayers,
@@ -110,6 +122,7 @@ export class OpenMatchService {
           userId: i.userId, firstName: i.user.firstName, lastName: i.user.lastName, avatarUrl: i.user.avatarUrl, isOrganizer: false,
         })),
         lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
+        unreadCount: unreadByMatch.get(m.id) ?? 0,
       };
     });
   }

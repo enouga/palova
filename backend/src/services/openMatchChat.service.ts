@@ -110,6 +110,25 @@ export class OpenMatchChatService {
     return dto;
   }
 
+  /** Marque lus les messages de chat de cette partie pour l'utilisateur (notifications serveur). */
+  async markRead(_slug: string, reservationId: string, userId: string): Promise<{ count: number }> {
+    const res = await prisma.notification.updateMany({
+      where: { userId, type: 'open_match.message', readAt: null, data: { path: ['matchId'], equals: reservationId } } as any,
+      data: { readAt: new Date() },
+    });
+    return { count: res.count };
+  }
+
+  /** Nombre total de messages de chat non lus du club pour l'utilisateur (badge de l'onglet). */
+  async unreadCount(slug: string, userId: string): Promise<{ count: number }> {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true } });
+    if (!club) return { count: 0 };
+    const count = await prisma.notification.count({
+      where: { userId, type: 'open_match.message', readAt: null, clubId: club.id },
+    });
+    return { count };
+  }
+
   /** Supprime un message : auteur, organisateur de la partie, ou staff OWNER/ADMIN du club.
    *  N'exige PAS d'être participant/intéressé (un modérateur du club peut agir). */
   async deleteMessage(slug: string, reservationId: string, userId: string, messageId: string): Promise<ChatMessageDTO> {
