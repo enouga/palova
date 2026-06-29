@@ -293,8 +293,10 @@ export class TournamentService {
     const tournaments = await prisma.tournament.findMany({
       where: { clubId: club.id, status: 'PUBLISHED' },
       orderBy: { startTime: 'asc' },
+      include: { clubSport: { select: { sport: { select: { key: true, name: true } } } } },
     });
-    return this.withCounts(tournaments);
+    const withCounts = await this.withCounts(tournaments);
+    return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
   }
 
   /**
@@ -314,10 +316,12 @@ export class TournamentService {
       },
       include: {
         club: { select: { slug: true, name: true, city: true, department: true, departmentCode: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true } },
+        clubSport: { select: { sport: { select: { key: true, name: true } } } },
       },
       orderBy: { startTime: 'asc' },
     });
-    return this.withCounts(tournaments);
+    const withCounts = await this.withCounts(tournaments);
+    return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
   }
 
   /** Détail public d'un tournoi (DRAFT masqué) + compteurs. */
@@ -367,7 +371,7 @@ export class TournamentService {
       where: { status: { not: 'CANCELLED' }, OR: [{ captainUserId: userId }, { partnerUserId: userId }] },
       orderBy: { tournament: { startTime: 'asc' } },
       include: {
-        tournament: { include: { club: { select: { slug: true, name: true, timezone: true } } } },
+        tournament: { include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
         captain: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         partner: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       },
@@ -387,13 +391,17 @@ export class TournamentService {
       : [];
     const licByKey = new Map(memberships.map((m) => [`${m.userId}:${m.clubId}`, m.membershipNo]));
 
-    return regs.map((r) => ({
-      ...r,
-      captain: { ...r.captain, phone: r.captainUserId === userId ? r.captain.phone : null },
-      partner: { ...r.partner, phone: r.partnerUserId === userId ? r.partner.phone : null },
-      captainLicense: licByKey.get(`${r.captainUserId}:${r.tournament.clubId}`) ?? null,
-      partnerLicense: licByKey.get(`${r.partnerUserId}:${r.tournament.clubId}`) ?? null,
-    }));
+    return regs.map((r) => {
+      const { clubSport, ...tournament } = r.tournament;
+      return {
+        ...r,
+        tournament: { ...tournament, sport: clubSport?.sport ?? null },
+        captain: { ...r.captain, phone: r.captainUserId === userId ? r.captain.phone : null },
+        partner: { ...r.partner, phone: r.partnerUserId === userId ? r.partner.phone : null },
+        captainLicense: licByKey.get(`${r.captainUserId}:${r.tournament.clubId}`) ?? null,
+        partnerLicense: licByKey.get(`${r.partnerUserId}:${r.tournament.clubId}`) ?? null,
+      };
+    });
   }
 
   /** Ajoute confirmedCount / waitlistCount à une liste de tournois. */
