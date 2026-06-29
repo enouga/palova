@@ -30,6 +30,8 @@ jest.mock('../lib/api', () => ({
     deleteChatMessage: jest.fn(),
     markOpenMatchChatRead: jest.fn().mockResolvedValue({ count: 0 }),
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
@@ -32,13 +32,16 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const router = useRouter();
   const { token, ready: authReady } = useAuth();
   const [tab, setTab]           = useState<'book' | 'courts'>('book');
+  // Sports réservables = ceux qui ont au moins un terrain actif. Un sport configuré sans
+  // terrain (ex. Tennis sans court) n'a rien à réserver → on ne l'affiche pas sur Réserver.
+  const bookableSports = useMemo(() => club.clubSports.filter((cs) => cs.resources.length > 0), [club.clubSports]);
   // Sélection multi-sports (ids de clubSport, ordre du club). null = pas encore résolue
   // (on évite d'afficher le mauvais sport le temps de lire le profil). Jamais vide une fois résolue.
   const SPORTS_KEY = `palova:reserve-sports:${club.id}`;
   // Club mono-sport : on résout tout de suite (pas de localStorage/profil à attendre,
   // pure dérivation des props → sûr pour l'hydratation). Multi-sport : null → résolu par l'effet.
   const [selectedSportIds, setSelectedSportIds] = useState<string[] | null>(
-    () => (club.clubSports.length === 1 && club.clubSports[0]?.id ? [club.clubSports[0].id] : null),
+    () => (bookableSports.length === 1 && bookableSports[0]?.id ? [bookableSports[0].id] : null),
   );
   // Persiste un changement manuel (l'utilisateur a coché/décoché) et le mémorise par club.
   const changeSports = (ids: string[]) => {
@@ -48,12 +51,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [date, setDate]         = useState(todayISO());
   // Durée choisie PAR sport (clé = clubSport.id) : chaque sport propose ses propres durées.
   const [durationBySport, setDurationBySport] = useState<Record<string, number>>(
-    () => Object.fromEntries(club.clubSports.map((cs) => [cs.id, defaultDuration(effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin))])),
+    () => Object.fromEntries(bookableSports.map((cs) => [cs.id, defaultDuration(effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin))])),
   );
   const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // Résumé d'un règlement par solde prépayé (moyen + restant), affiché sous la bannière de confirmation.
+  const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
   const [isSub, setIsSub]       = useState(false);
   // Lien profond depuis le Club-house : ?resource=<id>&start=<ISO> pré-ouvre la confirmation.
   const [deepSlot, setDeepSlot] = useState<{ resourceId: string; start: string } | null>(null);
@@ -115,21 +120,21 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   useEffect(() => {
     if (selectedSportIds !== null) return; // déjà résolu
     if (!authReady) return; // attendre que le cookie ait été lu
-    const valid = (ids: string[]) => ids.filter((id) => club.clubSports.some((cs) => cs.id === id));
+    const valid = (ids: string[]) => ids.filter((id) => bookableSports.some((cs) => cs.id === id));
     try {
       const raw = localStorage.getItem(SPORTS_KEY);
       if (raw) { const ids = valid(JSON.parse(raw)); if (ids.length) { setSelectedSportIds(ids); return; } }
     } catch { /* localStorage indispo */ }
-    const fallback = club.clubSports[0]?.id ? [club.clubSports[0].id] : [];
+    const fallback = bookableSports[0]?.id ? [bookableSports[0].id] : [];
     if (token) {
       api.getMyProfile(token).then((p) => {
-        const match = club.clubSports.find((cs) => cs.sport.key === p.preferredSport?.key);
+        const match = bookableSports.find((cs) => cs.sport.key === p.preferredSport?.key);
         setSelectedSportIds(match ? [match.id] : fallback);
       }).catch(() => setSelectedSportIds(fallback));
     } else {
       setSelectedSportIds(fallback);
     }
-  }, [token, authReady, club.clubSports, SPORTS_KEY, selectedSportIds]);
+  }, [token, authReady, bookableSports, SPORTS_KEY, selectedSportIds]);
 
   const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
     setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
@@ -139,8 +144,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   }, [club.slug]);
 
   const reloadAll = useCallback(() => {
-    for (const cs of club.clubSports) loadSport(cs.id, durationsRef.current[cs.id], date);
-  }, [club.clubSports, loadSport, date]);
+    for (const cs of bookableSports) loadSport(cs.id, durationsRef.current[cs.id], date);
+  }, [bookableSports, loadSport, date]);
 
   useEffect(() => { if (tab === 'book') reloadAll(); }, [tab, reloadAll]);
 
@@ -153,7 +158,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   // encore libre → pré-ouvre la confirmation (à la durée du sport) ; sinon page normale.
   useEffect(() => {
     if (!deepSlot || !token) return;
-    for (const cs of club.clubSports) {
+    for (const cs of bookableSports) {
       const res = (availBySport[cs.id] ?? []).find((a) => a.resource.id === deepSlot.resourceId);
       const slot = res?.slots.find((s) => s.startTime === deepSlot.start && s.available);
       if (res && slot) {
@@ -164,7 +169,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         return;
       }
     }
-  }, [deepSlot, availBySport, token, club.clubSports, durationBySport]);
+  }, [deepSlot, availBySport, token, bookableSports, durationBySport]);
 
   const onSlot = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string, sportKey?: string, resourceName?: string) => {
     if (!token) { router.push('/login'); return; }
@@ -197,9 +202,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         )}
 
         {confirmed && (
-          <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
+          <div style={{ margin: '14px 20px 0', display: 'flex', alignItems: 'flex-start', gap: 10, background: th.accent, color: th.onAccent, borderRadius: 14, padding: '12px 14px' }}>
             <Icon name="check" size={18} color={th.onAccent} stroke={2.4} />
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+            <div>
+              <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600 }}>Réservation confirmée !</span>
+              {confirmedNote && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 500, opacity: 0.92, marginTop: 2 }}>{confirmedNote}</div>
+              )}
+            </div>
           </div>
         )}
 
@@ -210,11 +220,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
-            {/* sélecteur de sport discret — affiché seulement si le club propose plusieurs sports */}
-            {club.clubSports.length > 1 && selectedSportIds !== null && (
+            {/* sélecteur de sport discret — affiché seulement si le club a plusieurs sports réservables */}
+            {bookableSports.length > 1 && selectedSportIds !== null && (
               <div style={{ padding: '12px 20px 0' }}>
                 <SportPicker
-                  sports={club.clubSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
+                  sports={bookableSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
                   selectedIds={selectedSportIds}
                   onChange={changeSports}
                 />
@@ -222,10 +232,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             )}
             {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
-              {selectedSportIds === null && (
+              {bookableSports.length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun terrain disponible pour le moment.</div>
+              )}
+              {bookableSports.length > 0 && selectedSportIds === null && (
                 <div style={{ padding: '20px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
               )}
-              {selectedSportIds !== null && club.clubSports.filter((cs) => selectedSportIds.includes(cs.id)).map((cs) => {
+              {selectedSportIds !== null && bookableSports.filter((cs) => selectedSportIds.includes(cs.id)).map((cs) => {
                 const durations = effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin);
                 const selDur = durationBySport[cs.id];
                 const items = availBySport[cs.id];
@@ -233,7 +246,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                 return (
                   <div key={cs.id} style={{ marginTop: 14 }}>
                     {/* titre de section : si plusieurs sports affichés (pour les distinguer) ou club mono-sport (cosmétique) */}
-                    {(selectedSportIds.length > 1 || club.clubSports.length === 1) && (
+                    {(selectedSportIds.length > 1 || bookableSports.length === 1) && (
                       <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
                     )}
                     {durations.length > 1 && (
@@ -297,8 +310,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             </div>
           </>
         ) : (
-          /* onglet Terrains : cartes vers la page détail */
-          club.clubSports.map((cs) => (
+          /* onglet Terrains : cartes vers la page détail (sports sans terrain masqués) */
+          bookableSports.map((cs) => (
             <div key={cs.id} style={{ padding: '18px 20px 0' }}>
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
@@ -356,9 +369,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           cancellationCutoffHours={club.cancellationCutoffHours}
           refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}
           onClose={() => setBooking(null)}
-          onConfirmed={() => {
+          onConfirmed={(_res, paid) => {
             setBooking(null);
             setConfirmed(true);
+            setConfirmedNote(paid?.label ?? null);
             if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
             refreshQuota();
             reloadAll();

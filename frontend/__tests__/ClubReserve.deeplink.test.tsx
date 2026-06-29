@@ -25,6 +25,8 @@ jest.mock('../lib/api', () => ({
     // Chargé au montage par ProfileMenu (info-bulle d'identité dans le header) ; menu jamais ouvert ici.
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 'test@palova.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
@@ -42,7 +44,7 @@ const mocked = api as jest.Mocked<typeof api>;
 const club = {
   id: 'c1', slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris', description: null,
   memberBookingDays: 7, publicBookingDays: 7,
-  clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [] }],
+  clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90], name: 'Padel', icon: null }, resources: [{ id: 'r1' }] }],
 } as never;
 
 const availability = [{

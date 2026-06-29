@@ -1,6 +1,7 @@
 'use client';
 import { OpenMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
@@ -43,6 +44,19 @@ export function OpenMatchCard({
   onToggleInterest, onOpenChat, isAnonymous = false, onAuthPrompt,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
+  // Taille unique pour tous les boutons d'action → bord net, pas de largeurs en escalier.
+  const actionBtn = { height: 46, fontSize: 15, padding: '0 18px' } as const;
+  // Teinte douce dérivée d'une couleur (miroir du ton « accent » des Chip).
+  const tint = (hex: string) => ({
+    background: th.mode === 'floodlit' ? `${hex}1f` : `${hex}55`,
+    color: th.mode === 'floodlit' ? hex : th.ink,
+  });
+  // Deux couleurs distinctes pour les actions secondaires, séparées entre elles
+  // et de l'accent plein du bouton principal « Rejoindre » : émeraude = Discuter,
+  // apricot = intérêt.
+  const chatTint = tint(ACCENTS.emerald);
+  const interestTint = tint(ACCENTS.apricot);
+  const canChat = m.viewerIsParticipant || m.viewerIsInterested;
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -61,49 +75,56 @@ export function OpenMatchCard({
       <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 12 }}>
         {formatWhen(m.startTime, timezone)} → {formatWhen(m.endTime, timezone)}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <PlayerPills
-            players={m.players}
-            spotsLeft={m.spotsLeft}
-            onRemove={(p) => onRemovePlayer(m, p)}
-            canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
-            busy={busy}
-            firstSpotSlot={m.viewerIsOrganizer ? (
-              <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`}
-                onClick={() => onToggleAdd(m)} />
-            ) : undefined}
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+      <PlayerPills
+        players={m.players}
+        spotsLeft={m.spotsLeft}
+        onRemove={(p) => onRemovePlayer(m, p)}
+        canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
+        busy={busy}
+        firstSpotSlot={m.viewerIsOrganizer ? (
+          <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`}
+            onClick={() => onToggleAdd(m)} />
+        ) : undefined}
+      />
+
+      {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite.
+          Visiteur anonyme : actions membres masquées, seul « Rejoindre » (→ invite à s'inscrire) reste. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+        {!isAnonymous && (
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <Btn variant="surface" style={{ ...actionBtn, ...(canChat ? chatTint : {}) }} disabled={!canChat} onClick={() => onOpenChat(m)}>
+              Discuter
+            </Btn>
+            {m.unreadCount > 0 && (
+              <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
+                {m.unreadCount > 99 ? '99+' : m.unreadCount}
+              </span>
+            )}
+          </span>
+        )}
+        {!isAnonymous && !m.viewerIsParticipant && (
+          m.viewerIsInterested ? (
+            <Btn variant="surface" style={{ ...actionBtn, ...interestTint }} disabled={busy} onClick={() => onToggleInterest(m)}>
+              <Icon name="check" size={18} color={interestTint.color} />Intéressé
+            </Btn>
+          ) : (
+            <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onToggleInterest(m)}>
+              {"Ça m'intéresse"}
+            </Btn>
+          )
+        )}
+        {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
+          <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
+        )}
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>
           {m.viewerIsOrganizer ? (
             <Chip tone="line" icon="check">Vous organisez</Chip>
           ) : m.viewerIsParticipant ? (
-            <Btn variant="surface" disabled={busy} onClick={() => onLeave(m)}>Quitter</Btn>
+            <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onLeave(m)}>Quitter</Btn>
           ) : (
-            <Btn icon="plus" disabled={busy || m.full} onClick={() => (isAnonymous ? onAuthPrompt(m) : onJoin(m))}>Rejoindre</Btn>
+            <Btn icon="plus" style={actionBtn} disabled={busy || m.full} onClick={() => (isAnonymous ? onAuthPrompt(m) : onJoin(m))}>Rejoindre</Btn>
           )}
-          {!isAnonymous && (
-            <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <Btn variant="surface" disabled={!(m.viewerIsParticipant || m.viewerIsInterested)} onClick={() => onOpenChat(m)}>
-                Discuter
-              </Btn>
-              {m.unreadCount > 0 && (
-                <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
-                  {m.unreadCount > 99 ? '99+' : m.unreadCount}
-                </span>
-              )}
-            </span>
-          )}
-          {!isAnonymous && !m.viewerIsParticipant && (
-            <Btn variant={m.viewerIsInterested ? 'primary' : 'surface'} disabled={busy} onClick={() => onToggleInterest(m)}>
-              {m.viewerIsInterested ? 'Intéressé ✓' : "Ça m'intéresse"}
-            </Btn>
-          )}
-          {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
-            <Btn variant="surface" disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
-          )}
-        </div>
+        </span>
       </div>
       {m.viewerIsOrganizer && addingOpen && (
         <div style={{ marginTop: 12 }}>

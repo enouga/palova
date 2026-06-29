@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Icon } from '@/components/ui/Icon';
+import { NotificationRow } from '@/components/notifications/NotificationRow';
 
 // Cloche du header : badge de non-lus, panneau déroulant, live via SSE.
 export function NotificationBell() {
@@ -18,6 +19,7 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState<Date | null>(null); // horloge unique posée à l'ouverture (hydration-safe)
 
   // Compteur initial + abonnement live (incrémente à chaque évènement).
   useEffect(() => {
@@ -49,6 +51,7 @@ export function NotificationBell() {
 
   const toggle = () => {
     if (!open && token) {
+      setNow(new Date());
       api.getNotifications(token).then((p) => { setItems(p.items); setLoaded(true); }).catch(() => {});
     }
     setOpen(!open);
@@ -73,34 +76,46 @@ export function NotificationBell() {
   // Contenu du panneau, partagé par les deux variantes (dropdown desktop / feuille mobile).
   const panelInner = (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${th.line}` }}>
-        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>Notifications</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px 12px', borderBottom: `1px solid ${th.line}` }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 16, color: th.text }}>Notifications</span>
+          {unread > 0 && (
+            <span style={{
+              minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999,
+              background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 800,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>{unread > 99 ? '99+' : unread}</span>
+          )}
+        </span>
         {unread > 0 && (
-          <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 12.5 }}>
+          <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
             Tout marquer comme lu
           </button>
         )}
       </div>
-      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+
+      <div style={{ maxHeight: 380, overflowY: 'auto' }}>
         {loaded && items.length === 0 && (
-          <div style={{ padding: 24, textAlign: 'center', color: th.textFaint, fontFamily: th.fontUI, fontSize: 13.5 }}>Aucune notification</div>
+          <div style={{ padding: '40px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <span aria-hidden="true" style={{ width: 52, height: 52, borderRadius: '50%', background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="bell" size={24} color={th.textFaint} />
+            </span>
+            <span style={{ color: th.textMute, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>Aucune notification</span>
+            <span style={{ color: th.textFaint, fontFamily: th.fontUI, fontSize: 12.5 }}>Vous êtes à jour.</span>
+          </div>
         )}
         {items.map((n) => (
-          <button key={n.id} onClick={() => openItem(n)}
-            style={{
-              display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-              background: n.readAt ? 'transparent' : th.surface2, padding: '12px 16px',
-              borderBottom: `1px solid ${th.line}`, fontFamily: th.fontUI,
-            }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: th.text }}>{n.title}</div>
-            <div style={{ fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{n.body}</div>
-          </button>
+          <NotificationRow key={n.id} n={n} now={now} onClick={() => openItem(n)} />
         ))}
       </div>
-      <button onClick={() => { setOpen(false); router.push('/me/notifications'); }}
-        style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '12px 16px', color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>
-        Voir toutes les notifications
-      </button>
+
+      {items.length > 0 && (
+        <button onClick={() => { setOpen(false); router.push('/me/notifications'); }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', border: 'none', borderTop: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', padding: '13px 16px', color: th.accent, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+          Voir toutes les notifications
+          <Icon name="arrowR" size={15} color={th.accent} />
+        </button>
+      )}
     </>
   );
 

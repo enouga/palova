@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
-import { packageLabel, canCover } from '@/lib/packages';
+import { packageLabel, canCover, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, Theme } from '@/lib/theme';
@@ -46,7 +46,8 @@ interface BookingModalProps {
   /** État des quotas du joueur (compteur affiché à la confirmation) — null si pas de quota. */
   quotaStatus?: MyQuotaStatus | null;
   onClose: () => void;
-  onConfirmed: (reservation: Reservation) => void;
+  /** `paid` (optionnel) résume un règlement par solde prépayé (moyen + restant). */
+  onConfirmed: (reservation: Reservation, paid?: { label: string }) => void;
   /** ID du club (pour les appels Stripe). */
   clubId?: string;
   /** Exige un paiement CB en ligne. */
@@ -334,11 +335,12 @@ export default function BookingModal({
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
+      const usedPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
       const confirmed = await api.confirmReservation(
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
       settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
-      onConfirmed(confirmed);
+      onConfirmed(confirmed, usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined);
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
@@ -585,22 +587,33 @@ export default function BookingModal({
                   })()}
 
                   {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
-                  {packages.length > 0 && (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {packages.map((p) => {
-                        const ok = canCover(p, totalEuros);
-                        const sel = paySource === p.id;
-                        return (
-                          <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px solid ${sel ? th.accent : th.lineStrong}`, background: sel ? `${th.accent}14` : th.surface, borderRadius: 12, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
-                            <Icon name="ticket" size={15} color={sel ? th.accent : th.textMute} />
-                            {packageLabel(p)}
-                            {sel && <Icon name="check" size={13} color={th.accent} />}
-                          </button>
-                        );
-                      })}
+                  {packages.length > 0 && (() => {
+                    const selPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+                    return (
+                    <div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {packages.map((p) => {
+                          const ok = canCover(p, totalEuros);
+                          const sel = paySource === p.id;
+                          return (
+                            <button key={p.id} type="button" disabled={!ok} onClick={() => { setUseSub(false); setPaySource(p.id); setPayMode('club'); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px solid ${sel ? th.accent : th.lineStrong}`, background: sel ? `${th.accent}14` : th.surface, borderRadius: 12, padding: '9px 12px', cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.5, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                              <Icon name="ticket" size={15} color={sel ? th.accent : th.textMute} />
+                              {packageLabel(p)}
+                              {!ok && <span style={{ color: th.textFaint, fontWeight: 600 }}>· solde insuffisant</span>}
+                              {sel && <Icon name="check" size={13} color={th.accent} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selPkg && (
+                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 8 }}>
+                          Après paiement : {remainingAfterLabel(selPkg, totalEuros)}
+                        </div>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
 
