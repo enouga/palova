@@ -1195,6 +1195,11 @@ export async function notifyActivityCancelledByClub(
   }
 }
 
+// Notif « X vous suit » (in-app + push, pas d'email). Implémentée en Task 6.
+export async function notifyNewFollower(_followerId: string, _targetUserId: string, _clubId: string): Promise<void> {
+  // TODO Task 6 — orchestration dispatch()
+}
+
 export async function notifyReservationReminder(reservationId: string, window: 'J-1' | 'H-2'): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
