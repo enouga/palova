@@ -15,6 +15,7 @@ import { SubscriptionService } from '../services/subscription.service';
 import jwt from 'jsonwebtoken';
 import { OpenMatchService } from '../services/openMatch.service';
 import { OpenMatchChatService } from '../services/openMatchChat.service';
+import { FollowService } from '../services/follow.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
@@ -41,6 +42,7 @@ const reservationService = new ReservationService();
 const subscriptionService = new SubscriptionService();
 const paymentMethodService = new PaymentMethodService();
 const paymentHistoryService = new PaymentHistoryService();
+const followService = new FollowService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -67,6 +69,7 @@ const ERROR_STATUS: Record<string, number> = {
   CHAT_FORBIDDEN:        403,
   NOT_ALLOWED:           403,
   MESSAGE_NOT_FOUND:     404,
+  NOT_A_MEMBER:          404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -195,6 +198,22 @@ router.get('/:slug/pages/:kind', async (req, res, next) => {
 // Recherche de membres du club par nom (réservé aux membres ; pour choisir un coéquipier de tournoi).
 router.get('/:slug/members/search', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubService.searchMembers(asString(req.params.slug), req.user!.id, asString(req.query.q))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// --- Amis / suivi ---
+router.get('/:slug/friends', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await followService.listClubFriends(asString(req.params.slug), req.user!.id, asString(req.query.q))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+router.post('/:slug/follows/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await followService.follow(asString(req.params.slug), req.user!.id, asString(req.params.userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/:slug/follows/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await followService.unfollow(asString(req.params.slug), req.user!.id, asString(req.params.userId))); }
   catch (err) { handleError(err, res, next); }
 });
 

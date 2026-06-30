@@ -100,14 +100,16 @@ ALTER TABLE "follows" ADD CONSTRAINT "follows_following_id_fkey"
   FOREIGN KEY ("following_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
-- [ ] **Step 5: Appliquer en dev + régénérer le client**
+- [ ] **Step 5: Appliquer en dev (SQL additif direct, PAS `db push`) + régénérer le client**
+
+⚠️ La base dev est **partagée avec la checkout principale** et a une dérive de migrations connue. **Ne PAS utiliser `prisma db push`** : il synchronise tout le schéma et pourrait **supprimer** des colonnes que la base possède mais que ce schéma (basé origin/main) ne déclare pas. Appliquer **uniquement** le SQL additif :
 
 Run (depuis `backend/`) :
 ```bash
-npx prisma db push
+npx prisma db execute --file prisma/migrations/20260630120000_add_player_follows/migration.sql --schema prisma/schema.prisma
 npx prisma generate
 ```
-Expected: `db push` ajoute la table `follows` et la valeur d'enum `SOCIAL` (peut aussi réconcilier d'autres colonnes additives en attente — sans perte). `generate` régénère le client avec `prisma.follow`. Si `db push` se plaint d'une dérive bloquante, appliquer le SQL du Step 4 directement sur la base dev puis relancer `npx prisma generate`.
+Expected: la table `follows` + la valeur d'enum `SOCIAL` sont créées (SQL idempotent : `IF NOT EXISTS`). `generate` régénère le client avec `prisma.follow` (écrit dans le `node_modules` jonctionné, partagé avec main — inoffensif car additif). Vérifier ensuite : `node -e "const{PrismaClient}=require('@prisma/client'); console.log(typeof new PrismaClient().follow)"` → `object`.
 
 - [ ] **Step 6: Commit**
 

@@ -452,7 +452,24 @@ export class ClubService {
     const userIds = members.map((m) => m.user.id);
     const sportKey = await resolvePreferredSportKey(callerUserId);
     const levels = await this.ratingService.getLevelsForUsers(userIds, sportKey);
-    return members.map((m) => ({ ...m.user, level: levels[m.user.id] ?? null }));
+    // Annoter le lien de suivi avec le caller (1 requête sur les ids retournés, sens A↔B).
+    const links = await prisma.follow.findMany({
+      where: {
+        OR: [
+          { followerId: callerUserId, followingId: { in: userIds } },
+          { followerId: { in: userIds }, followingId: callerUserId },
+        ],
+      },
+      select: { followerId: true, followingId: true },
+    });
+    const iFollowSet = new Set(links.filter((l) => l.followerId === callerUserId).map((l) => l.followingId));
+    const followsMe  = new Set(links.filter((l) => l.followingId === callerUserId).map((l) => l.followerId));
+    return members.map((m) => ({
+      ...m.user,
+      level: levels[m.user.id] ?? null,
+      iFollow: iFollowSet.has(m.user.id),
+      mutual: iFollowSet.has(m.user.id) && followsMe.has(m.user.id),
+    }));
   }
 
   /** Classement du club pour un sport : membres ACTIFS opt-in avec >= MIN_RANKED_MATCHES, triés par niveau. */

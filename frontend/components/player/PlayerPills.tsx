@@ -19,7 +19,7 @@ export interface PlayerPillData {
 // Rangée de pastilles de joueurs façon Parties ouvertes : avatar coloré (couleur par userId),
 // badge « orga », × de retrait optionnel, puis N cases « Place libre » en pointillés.
 export function PlayerPills({
-  players, spotsLeft = 0, onRemove, canRemove, busy = false, size = 'md', showOrgaBadge = true, firstSpotSlot,
+  players, spotsLeft = 0, onRemove, canRemove, busy = false, size = 'md', showOrgaBadge = true, firstSpotSlot, friendIds,
 }: {
   players: PlayerPillData[];
   spotsLeft?: number;
@@ -29,6 +29,8 @@ export function PlayerPills({
   size?: 'sm' | 'md';
   showOrgaBadge?: boolean;
   firstSpotSlot?: React.ReactNode;
+  /** Ids des joueurs suivis (amis) : anneau d'accent autour de leur avatar. Absent ⇒ markup inchangé. */
+  friendIds?: Set<string>;
 }) {
   const { th } = useTheme();
   const av = size === 'sm' ? 20 : 22;
@@ -38,6 +40,8 @@ export function PlayerPills({
       {players.map((p) => {
         const c = colorForSeed(p.userId);
         const removable = !!onRemove && (canRemove ? canRemove(p) : true);
+        const isFriend = !!friendIds?.has(p.userId);
+        const avatar = <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl ?? null} size={av} color={c} />;
         return (
           <span key={p.userId} style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -45,7 +49,9 @@ export function PlayerPills({
             borderRadius: 999, padding: '4px 11px 4px 4px',
             fontFamily: th.fontUI, fontSize: fs, fontWeight: 600, color: th.text,
           }}>
-            <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl ?? null} size={av} color={c} />
+            {isFriend ? (
+              <span title="Vous suivez ce joueur" style={{ display: 'inline-flex', borderRadius: '50%', padding: 1.5, background: th.accent, flexShrink: 0 }}>{avatar}</span>
+            ) : avatar}
             {p.firstName} {p.lastName}
             <LevelChip level={p.level} size="xs" />
             {showOrgaBadge && p.isOrganizer && (
