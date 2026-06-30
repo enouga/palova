@@ -9,6 +9,7 @@ import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
@@ -39,6 +40,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const { token, ready } = useAuth();
   const router = useRouter();
   const levelEnabled = club.levelSystemEnabled !== false;
+  const multiSport = clubIsMultiSport(club);
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
@@ -179,6 +181,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   canRecordResult={levelEnabled}
                   onToggleInterest={toggleInterest}
                   onOpenChat={openChat}
+                  showSport={multiSport}
                   isAnonymous={false}
                   onAuthPrompt={setAuthPrompt}
                 />
@@ -220,6 +223,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               canRecordResult={levelEnabled}
               onToggleInterest={toggleInterest}
               onOpenChat={openChat}
+              showSport={multiSport}
               isAnonymous={!token}
               onAuthPrompt={setAuthPrompt}
             />

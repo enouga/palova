@@ -14,7 +14,8 @@ import { ClubNav } from '@/components/ClubNav';
 import { MonthCalendar } from '@/components/calendar/MonthCalendar';
 import { DayPanel } from '@/components/calendar/DayPanel';
 import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
-import { buildCalendarEntries, entriesByDay, buildAgendaList, todayKey, addMonths } from '@/lib/calendar';
+import { buildCalendarEntries, entriesByDay, buildAgendaList, agendaEntrySportKey, todayKey, addMonths } from '@/lib/calendar';
+import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
@@ -116,10 +117,13 @@ export default function MyReservationsPage() {
   const past     = useMemo(() => agenda.filter((i) =>  i.past), [agenda]);
   const list = tab === 'past' ? past : upcoming;
 
-  const byDay = useMemo(
-    () => entriesByDay(buildCalendarEntries(fItems, fRegs, fEvts, fLessons, nowDate)),
+  const entries = useMemo(
+    () => buildCalendarEntries(fItems, fRegs, fEvts, fLessons, nowDate),
     [fItems, fRegs, fEvts, fLessons, nowDate],
   );
+  const byDay = useMemo(() => entriesByDay(entries), [entries]);
+  // Vue cross-club / multi-sport : préfixe le sport au sous-titre quand l'agenda couvre plusieurs sports.
+  const showSport = useMemo(() => setSpansMultipleSports(entries.map(agendaEntrySportKey)), [entries]);
   const matchFor = (rid: string) => matches.find((m) => m.reservationId === rid);
 
   const cancel = async (r: MyReservation) => {
@@ -207,6 +211,7 @@ export default function MyReservationsPage() {
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
                   canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
                   onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
+                  showSport={showSport}
                 />
               </>
             )}
@@ -245,6 +250,7 @@ export default function MyReservationsPage() {
                 canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
                 onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
                 existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
+                showSport={showSport}
               />
             ))
           )}

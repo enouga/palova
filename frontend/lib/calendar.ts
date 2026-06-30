@@ -38,6 +38,14 @@ export type CalendarEntry =
     }
   | { kind: 'lesson'; id: string; dayKey: string; past: boolean; enrollment: MyLessonEnrollment };
 
+/** Clé du sport d'une entrée d'agenda (pour décider d'afficher le badge sport en vue cross-club). */
+export function agendaEntrySportKey(e: CalendarEntry): string | null {
+  if (e.kind === 'reservation') return e.r.resource.sport?.key ?? null;
+  if (e.kind === 'tournament')  return e.reg.tournament.sport?.key ?? null;
+  if (e.kind === 'event')       return e.ev.event.sport?.key ?? null;
+  return e.enrollment.lesson.sport?.key ?? null; // lesson
+}
+
 /**
  * Clé jour YYYY-MM-DD d'un instant ISO dans le fuseau donné.
  * Seule conversion instant→jour de la lib : tout le reste manipule des clés

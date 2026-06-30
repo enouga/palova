@@ -378,10 +378,23 @@ describe('TournamentService — admin & lectures', () => {
     expect(result[1]).toMatchObject({ id: 't2', confirmedCount: 0, waitlistCount: 0 });
   });
 
+  it('listPublicByClubSlug expose le sport (aplati depuis clubSport)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.tournament.findMany.mockResolvedValue([
+      { id: 't1', clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+    ] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([]);
+
+    const [t] = await service.listPublicByClubSlug('club-demo');
+
+    expect(t.sport).toEqual({ key: 'padel', name: 'Padel' });
+    expect((t as Record<string, unknown>).clubSport).toBeUndefined(); // aplati, pas de fuite de forme
+  });
+
   it("listUserRegistrations n'expose que le téléphone du membre connecté", async () => {
     prismaMock.tournamentRegistration.findMany.mockResolvedValue([
       { id: 'r1', captainUserId: 'cap', partnerUserId: 'par',
-        tournament: { clubId: 'club-demo', club: { slug: 'demo' } },
+        tournament: { clubId: 'club-demo', club: { slug: 'demo' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
         captain: { id: 'cap', firstName: 'A', lastName: 'A', email: 'a@x', phone: '0600' },
         partner: { id: 'par', firstName: 'B', lastName: 'B', email: 'b@x', phone: '0601' } },
     ] as any);
@@ -396,6 +409,7 @@ describe('TournamentService — admin & lectures', () => {
     expect(reg.partner.phone).toBeNull();      // tél du coéquipier masqué
     expect(reg.captainLicense).toBe('LIC-CAP');
     expect(reg.partnerLicense).toBe('LIC-PAR');
+    expect(reg.tournament.sport).toEqual({ key: 'padel', name: 'Padel' });
   });
 
   it('listParticipants masque un tournoi DRAFT', async () => {
@@ -739,7 +753,8 @@ describe('TournamentService.listNationalTournaments', () => {
   it('filtre PUBLISHED + à venir + club ACTIVE & opt-in ; renvoie club + compteurs', async () => {
     prismaMock.tournament.findMany.mockResolvedValue([
       { id: 't1', name: 'GP Paris', category: 'P500', gender: 'MEN', startTime: FUTURE, maxTeams: 16,
-        club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', department: 'Paris', departmentCode: '75', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35 } },
+        club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', department: 'Paris', departmentCode: '75', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35 },
+        clubSport: { sport: { key: 'padel', name: 'Padel' } } },
     ] as any);
     (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([
       { tournamentId: 't1', status: 'CONFIRMED', _count: { _all: 3 } },
@@ -752,7 +767,7 @@ describe('TournamentService.listNationalTournaments', () => {
     expect(where.club).toEqual({ status: 'ACTIVE', listTournamentsNationally: true });
     expect(where.startTime.gte).toBeInstanceOf(Date);
     expect(where.startTime.lte).toBeInstanceOf(Date);
-    expect(res[0]).toMatchObject({ id: 't1', confirmedCount: 3, waitlistCount: 0, club: { departmentCode: '75', timezone: 'Europe/Paris' } });
+    expect(res[0]).toMatchObject({ id: 't1', confirmedCount: 3, waitlistCount: 0, club: { departmentCode: '75', timezone: 'Europe/Paris' }, sport: { key: 'padel', name: 'Padel' } });
   });
 
   it('liste vide si aucun tournoi', async () => {

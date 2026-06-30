@@ -23,7 +23,7 @@ function fmtDate(iso: string, tz: string): string {
  * `localSlug` = club courant (sous-domaine), ou null sur la plateforme. Une entrée d'un AUTRE club
  * (« étrangère ») devient une carte-lien qui renvoie vers l'app de ce club, sans actions inline.
  */
-export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged, onRecordResult, canRecord, existingMatchStatus }: {
+export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged, onRecordResult, canRecord, existingMatchStatus, showSport }: {
   item: AgendaListItem;
   now: number;
   localSlug: string | null;
@@ -33,8 +33,16 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   onRecordResult?: (r: MyReservation) => void;
   canRecord?: (r: MyReservation) => boolean;
   existingMatchStatus?: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
+  showSport?: boolean; // vue cross-club couvrant plusieurs sports → préfixe le sport au sous-titre
 }) {
   const { th } = useTheme();
+  // Préfixe « Sport · » sur le sous-titre quand la vue couvre plusieurs sports.
+  const sportName = !showSport ? null
+    : item.kind === 'reservation' ? item.r.resource.sport?.name ?? null
+    : item.kind === 'tournament' ? item.reg.tournament.sport?.name ?? null
+    : item.kind === 'event' ? item.ev.event.sport?.name ?? null
+    : item.enrollment.lesson.sport?.name ?? null;
+  const sportPrefix = sportName ? `${sportName} · ` : '';
   const color = agendaKindMeta(item.kind).color;
   const itemSlug = agendaItemClubSlug(item);
   // Les cours (lesson) n'ont pas de slug de club — jamais « étrangers ».
@@ -72,7 +80,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>{r.resource.name}</span>
           <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
         </div>
-        <div style={subtitle}>{r.resource.club.name}</div>
+        <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
           <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
@@ -112,6 +120,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>Cours · {lesson.coach.name} · {res.resource.name}</span>
           <Chip color={color}>{item.enrollment.status === 'CONFIRMED' ? 'Inscrit' : item.enrollment.status}</Chip>
         </div>
+        {sportName && <div style={subtitle}>{sportName}</div>}
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Icon name="clock" size={14} color={th.textMute} />{fmtHour(res.startTime, tz)}–{fmtHour(res.endTime, tz)}
@@ -128,7 +137,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>{t.name}</span>
           <Chip color={color}>{REG_LABEL[item.reg.status] ?? item.reg.status}</Chip>
         </div>
-        <div style={subtitle}>{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}</div>
+        <div style={subtitle}>{sportPrefix}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}</div>
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(t.startTime, tz)}{t.endTime && ` – ${fmtDate(t.endTime, tz)}`} · {fmtHour(t.startTime, tz)}</span>
           {isForeign ? goHint : <a href={clubUrl(t.club.slug, `/tournois/${t.id}`)} style={linkStyle}>Voir</a>}
@@ -143,7 +152,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
           <span style={title}>{ev.name}</span>
           <Chip color={color}>{REG_LABEL[item.ev.status] ?? item.ev.status}</Chip>
         </div>
-        <div style={subtitle}>{KIND_LABEL[ev.kind]} · {ev.club.name}</div>
+        <div style={subtitle}>{sportPrefix}{KIND_LABEL[ev.kind]} · {ev.club.name}</div>
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(ev.startTime, tz)}{ev.endTime && ` – ${fmtDate(ev.endTime, tz)}`} · {fmtHour(ev.startTime, tz)}</span>
           {isForeign ? goHint : <a href={clubUrl(ev.club.slug, `/events/${ev.id}`)} style={linkStyle}>Voir</a>}
