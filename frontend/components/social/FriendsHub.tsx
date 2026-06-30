@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ClubMemberSearchResult, Friend } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
@@ -18,8 +18,13 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
   const [q, setQ] = useState('');
   const [searchResults, setSearchResults] = useState<ClubMemberSearchResult[]>([]);
 
-  useEffect(() => { api.listFollowing(token).then(setFollowing).catch(() => {}); }, [token]);
-  useEffect(() => { api.listFollowers(token).then(setFollowers).catch(() => {}); }, [token]);
+  // Recharge mes listes (suivis + abonnés) — au montage ET après chaque (dé)suivi,
+  // pour que les compteurs d'onglets (Amis / Je suis / Me suivent) se mettent à jour en direct.
+  const reload = useCallback(() => {
+    api.listFollowing(token).then(setFollowing).catch(() => {});
+    api.listFollowers(token).then(setFollowers).catch(() => {});
+  }, [token]);
+  useEffect(() => { reload(); }, [reload]);
 
   // Debounced directory search — only active on the 'search' tab.
   useEffect(() => {
@@ -77,7 +82,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
                 <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14.5, color: th.text, fontWeight: 600 }}>{r.firstName} {r.lastName}</span>
                 <LevelChip level={r.level} />
                 <FollowButton slug={slug} userId={r.id} token={token}
-                  initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} />
+                  initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
               </div>
             ))
       ) : (
@@ -90,7 +95,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
                 <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl} size={36} color={colorForSeed(f.id)} />
                 <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14.5, color: th.text, fontWeight: 600 }}>{f.firstName} {f.lastName}</span>
                 <FollowButton slug={slug} userId={f.id} token={token}
-                  initial={{ iFollow: tab !== 'followers' || f.mutual, mutual: f.mutual }} />
+                  initial={{ iFollow: tab !== 'followers' || f.mutual, mutual: f.mutual }} onChange={reload} />
               </div>
             ))
       )}

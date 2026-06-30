@@ -51,4 +51,14 @@ describe('FriendsHub', () => {
     await waitFor(() => expect(searchClubMembers).toHaveBeenCalledWith('demo', 'New', 't'));
     expect(await screen.findByText(/New Player/)).toBeInTheDocument();
   });
+
+  it('rafraîchit mes listes après un suivi (onChange → reload) pour mettre à jour les compteurs', async () => {
+    render(<FriendsHub slug="demo" token="t" />);
+    fireEvent.click(screen.getByText('Trouver'));
+    const followBtn = await screen.findByRole('button', { name: /Suivre/i });
+    const before = listFollowing.mock.calls.length; // appelé une fois au montage
+    fireEvent.click(followBtn);
+    // le suivi réussit → onChange déclenche un re-fetch de listFollowing (compteur « Je suis »)
+    await waitFor(() => expect(listFollowing.mock.calls.length).toBeGreaterThan(before));
+  });
 });
