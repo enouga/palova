@@ -40,10 +40,13 @@ Mécanisme Stripe officiel pour ré-afficher une carte enregistrée dans le
 1. Côté serveur, créer une **`CustomerSession`** liée au customer, avec le composant
    `payment_element` et la feature `payment_method_redisplay: 'enabled'`, et renvoyer
    son `client_secret` au client.
-2. La carte enregistrée doit avoir `allow_redisplay = 'always'` pour être ré-affichée.
+2. Par défaut, le `PaymentElement` n'affiche que les cartes dont `allow_redisplay = 'always'`.
    Les cartes sauvées précédemment via `setup_future_usage`/SetupIntent ont
-   `allow_redisplay = 'unspecified'` et **ne s'affichent pas** tant qu'on ne les bascule
-   pas en `'always'` (consentement déjà obtenu lors de l'enregistrement).
+   `allow_redisplay = 'unspecified'`. Pour les ré-afficher **sans muter le PaymentMethod**,
+   on élargit le filtre de la `CustomerSession` :
+   `features.payment_method_allow_redisplay_filters = ['always', 'limited', 'unspecified']`
+   (voie documentée Stripe « include payment methods where allow_redisplay=unspecified » ;
+   consentement déjà obtenu lors de l'enregistrement off-session de la carte).
 3. Côté client, passer `customerSessionClientSecret` dans les options d'`Elements` :
    `stripe.elements({ clientSecret, customerSessionClientSecret })`.
 
@@ -63,22 +66,26 @@ gratuitement.
 
 ### `StripeService`
 
-- **`createPaymentIntent`** et **`createRegistrationPaymentIntent`** :
-  1. après `createOrGetCustomer`, si `defaultPaymentMethodId` existe, **best-effort**
-     `stripe.paymentMethods.update(pmId, { allow_redisplay: 'always' }, { stripeAccount })` ;
-  2. créer la `CustomerSession` :
-     ```ts
-     const cs = await stripe.customerSessions.create(
-       { customer: customer.stripeCustomerId,
-         components: { payment_element: {
-           enabled: true,
-           features: { payment_method_redisplay: 'enabled' } } } },
-       { stripeAccount: club.stripeAccountId });
-     ```
-  3. renvoyer `{ clientSecret, customerSessionClientSecret: cs.client_secret }`.
-  - **Dégradation** : étapes 1 et 2 enveloppées en `try/catch`. Tout échec →
-    `customerSessionClientSecret: null` et le paiement continue (formulaire vierge).
-    Le paiement n'échoue **jamais** à cause de cette feature.
+- **`createPaymentIntent`** et **`createRegistrationPaymentIntent`** : après avoir créé
+  le PaymentIntent (inchangé), créer une `CustomerSession` via un helper privé partagé
+  `buildCustomerSession(stripeAccountId, stripeCustomerId)` :
+  ```ts
+  const cs = await stripe.customerSessions.create(
+    { customer: stripeCustomerId,
+      components: { payment_element: {
+        enabled: true,
+        features: {
+          payment_method_redisplay: 'enabled',
+          payment_method_allow_redisplay_filters: ['always', 'limited', 'unspecified'],
+        } } } },
+    { stripeAccount: stripeAccountId });
+  return cs.client_secret ?? null;
+  ```
+  et renvoyer `{ clientSecret, customerSessionClientSecret }`.
+  - **Dégradation** : `buildCustomerSession` enveloppe l'appel en `try/catch` et renvoie
+    `null` à tout échec → le paiement continue (formulaire vierge). Le paiement n'échoue
+    **jamais** à cause de cette feature. (Pas de mutation de PaymentMethod : le filtre
+    `payment_method_allow_redisplay_filters` suffit à ré-afficher les cartes `unspecified`.)
 
 - **`createSetupIntent`** et **`createRegistrationSetupIntent`** : inchangées sur le fond ;
   renvoient `customerSessionClientSecret: null` pour uniformiser la forme. (Ces flux ne
@@ -127,14 +134,14 @@ gratuitement.
 
 ### Backend (`backend/src/services/__tests__/stripe.service.test.ts`)
 - `createPaymentIntent` (et `createRegistrationPaymentIntent`) :
-  - appelle `customerSessions.create` avec `payment_method_redisplay: 'enabled'` et
+  - appelle `customerSessions.create` avec `payment_method_redisplay: 'enabled'`,
+    `payment_method_allow_redisplay_filters: ['always','limited','unspecified']` et
     l'en-tête `{ stripeAccount }` ;
-  - appelle `paymentMethods.update(pmId, { allow_redisplay: 'always' })` quand
-    `defaultPaymentMethodId` existe ;
-  - **ne** l'appelle **pas** quand aucune carte n'est au dossier ;
   - renvoie `customerSessionClientSecret` ;
   - gracieux : si `customerSessions.create` jette → renvoie `customerSessionClientSecret: null`
     sans propager l'erreur (le `clientSecret` du PaymentIntent reste valide).
+- `createSetupIntent` / `createRegistrationSetupIntent` : renvoient
+  `customerSessionClientSecret: null` et **n'appellent pas** `customerSessions.create`.
 - Routes (`clubs.stripe-intent.routes.test.ts`, `tournaments.routes.test.ts`,
   `events.routes.test.ts`) : le champ `customerSessionClientSecret` traverse la réponse.
 
