@@ -53,6 +53,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [authPrompt, setAuthPrompt] = useState<OpenMatch | null>(null);
   const [viewerUserId, setViewerUserId] = useState('');
   const [canModerate, setCanModerate] = useState(false);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +80,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
       .then((list) => setCanModerate(list.some((c) => c.slug === club.slug && (c.role === 'OWNER' || c.role === 'ADMIN'))))
       .catch(() => {});
   }, [token, club.slug]);
+
+  useEffect(() => {
+    if (!token) return;
+    api.listFollowing(token).then((fs) => setFriendIds(new Set(fs.map((f) => f.id)))).catch(() => {});
+  }, [token]);
 
   const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
     if (!token) return;
@@ -167,7 +173,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {recommended.map((m) => (
                 <OpenMatchCard
-                  key={m.id} match={m} timezone={club.timezone} slug={club.slug} token={token}
+                  key={m.id} match={m} friendIds={friendIds} timezone={club.timezone} slug={club.slug} token={token}
                   busy={busyId === m.id} addingOpen={addingId === m.id}
                   onJoin={handleJoin}
                   onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token))}
@@ -205,6 +211,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             <OpenMatchCard
               key={m.id}
               match={m}
+              friendIds={friendIds}
               timezone={club.timezone}
               slug={club.slug}
               token={token ?? ''}

@@ -34,6 +34,8 @@ export interface OpenMatchCardProps {
   /** Visiteur non connecté : « Rejoindre » invite à s'inscrire ; actions membres masquées. */
   isAnonymous?: boolean;
   onAuthPrompt: (m: OpenMatch) => void;
+  /** Ids des joueurs suivis (amis) du viewer : anneau d'accent + ligne de preuve sociale. */
+  friendIds?: Set<string>;
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
@@ -41,9 +43,10 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
-  onToggleInterest, onOpenChat, isAnonymous = false, onAuthPrompt,
+  onToggleInterest, onOpenChat, isAnonymous = false, onAuthPrompt, friendIds,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
+  const friendCount = m.players.filter((p) => friendIds?.has(p.userId)).length;
   // Taille unique pour tous les boutons d'action → bord net, pas de largeurs en escalier.
   const actionBtn = { height: 46, fontSize: 15, padding: '0 18px' } as const;
   // Teinte douce dérivée d'une couleur (miroir du ton « accent » des Chip).
@@ -75,9 +78,16 @@ export function OpenMatchCard({
       <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 12 }}>
         {formatWhen(m.startTime, timezone)} → {formatWhen(m.endTime, timezone)}
       </div>
+      {friendCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>
+          <Icon name="users" size={14} color={th.accent} />
+          {friendCount === 1 ? '1 de vos amis joue ici' : `${friendCount} de vos amis jouent ici`}
+        </div>
+      )}
       <PlayerPills
         players={m.players}
         spotsLeft={m.spotsLeft}
+        friendIds={friendIds}
         onRemove={(p) => onRemovePlayer(m, p)}
         canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         busy={busy}

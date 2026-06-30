@@ -30,6 +30,10 @@ jest.mock('../lib/api', () => ({
     deleteChatMessage: jest.fn(),
     markOpenMatchChatRead: jest.fn().mockResolvedValue({ count: 0 }),
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // Chargé par OpenMatches pour la preuve sociale (anneau ami).
+    listFollowing: jest.fn().mockResolvedValue([]),
+    // Chargé par FriendsQuickRow (monté via PartnerSearch dans le flux d'ajout de joueur).
+    listClubFriends: jest.fn().mockResolvedValue([]),
     // consommé par ClubNav (badge réservations à venir)
     getMyReservations: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
