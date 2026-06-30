@@ -15,6 +15,7 @@ import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyRese
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
+import { sportHasLevels } from './rating/level';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -334,7 +335,15 @@ export class ReservationService {
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubId: true, attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } } },
+      include: {
+        resource: {
+          select: {
+            clubId: true,
+            attributes: true,
+            clubSport: { select: { sport: { select: { key: true } } } },
+          },
+        },
+      },
     });
     if (!reservation)                     throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)    throw new Error('UNAUTHORIZED');
@@ -351,6 +360,9 @@ export class ReservationService {
     const format = (reservation.resource.attributes as { format?: string } | null)?.format;
     const partners = await this.validatePartners(userId, reservation.resource.clubId, format, setup.partnerUserIds);
     const priceCents = Math.round(Number(reservation.totalPrice) * 100);
+    // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel :
+    // hors padel, on ignore toute fourchette demandée.
+    const levelOk = sportHasLevels(reservation.resource.clubSport?.sport?.key);
 
     return prisma.$transaction(async (tx) => {
       await tx.reservationParticipant.deleteMany({ where: { reservationId } });
@@ -361,8 +373,8 @@ export class ReservationService {
         where: { id: reservationId },
         data: {
           visibility: setup.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
-          targetLevelMin: setup.targetLevelMin ?? null,
-          targetLevelMax: setup.targetLevelMax ?? null,
+          targetLevelMin: levelOk ? (setup.targetLevelMin ?? null) : null,
+          targetLevelMax: levelOk ? (setup.targetLevelMax ?? null) : null,
         },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -700,6 +712,23 @@ export class ReservationService {
       }
     }
     return refunded;
+  }
+
+  /**
+   * Annule toutes les réservations À VENIR dont l'utilisateur est organisateur
+   * (suppression de compte). Bypass volontaire du délai d'annulation. Réutilise
+   * `performCancel` (libère le verrou Redis + SSE slot_released). Pas de remboursement
+   * auto ici (le club garde le remboursement manuel). Renvoie le nombre annulé.
+   */
+  async cancelFutureReservationsForUser(userId: string): Promise<number> {
+    const future = await prisma.reservation.findMany({
+      where: { userId, status: { in: ['CONFIRMED', 'PENDING'] }, startTime: { gt: new Date() } },
+      select: { id: true, resourceId: true, startTime: true, endTime: true },
+    });
+    for (const r of future) {
+      await this.performCancel(r);
+    }
+    return future.length;
   }
 
   async cancelReservation(reservationId: string, userId: string) {

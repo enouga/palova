@@ -66,8 +66,9 @@ export function Btn({
     border: 'none', borderRadius: 14, padding: '0 20px', height: 54, cursor: disabled ? 'default' : 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9,
     width: full ? '100%' : 'auto', transition: 'transform .12s, filter .15s, opacity .15s',
-    opacity: disabled ? 0.45 : 1, WebkitTapHighlightColor: 'transparent', ...style,
+    opacity: disabled ? 0.45 : 1, WebkitTapHighlightColor: 'transparent',
   };
+  // `style` (prop) prime sur la variante : un fond/couleur passé explicitement gagne.
   const skins: Record<BtnVariant, CSSProperties> = {
     primary: { background: th.accent, color: th.onAccent, boxShadow: th.neon ? `0 6px 22px ${th.accent}33` : 'none' },
     dark: { background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee' },
@@ -81,7 +82,7 @@ export function Btn({
       onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = 'scale(0.975)')}
       onMouseUp={(e) => (e.currentTarget.style.transform = '')}
       onMouseLeave={(e) => (e.currentTarget.style.transform = '')}
-      style={{ ...base, ...skins[variant] }}>
+      style={{ ...base, ...skins[variant], ...style }}>
       {icon && <Icon name={icon} size={19} color={iconColor} />}
       {children}
     </button>

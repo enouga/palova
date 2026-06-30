@@ -26,6 +26,8 @@ jest.mock('../lib/api', () => ({
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     // consommé par ClubNav (badge Parties)
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge réservations à venir)
+    getMyReservations: jest.fn().mockResolvedValue([]),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
     markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
@@ -151,6 +153,22 @@ describe('ClubNav', () => {
     expect(screen.queryByText('Connexion')).not.toBeInTheDocument();
   });
 
+  it("affiche un badge du nombre de réservations à venir sur l'onglet Mes réservations", async () => {
+    const { api: mockApi } = require('../lib/api');
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    const past = new Date(Date.now() - 86_400_000).toISOString();
+    mockApi.getMyReservations.mockResolvedValueOnce([
+      { id: 'r1', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'demo' } } },
+      { id: 'r2', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'demo' } } },
+      { id: 'r3', status: 'CANCELLED', endTime: future, resource: { club: { slug: 'demo' } } }, // annulée → exclue
+      { id: 'r4', status: 'CONFIRMED', endTime: past, resource: { club: { slug: 'demo' } } },   // passée → exclue
+      { id: 'r5', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'autre' } } }, // autre club → exclue
+    ]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    expect(await screen.findByLabelText('2 réservations à venir')).toBeInTheDocument();
+  });
+
   it("affiche un badge de non lus sur l'onglet Parties quand count > 0", async () => {
     const { api: mockApi } = require('../lib/api');
     mockApi.getOpenMatchUnread.mockResolvedValueOnce({ count: 2 });
@@ -158,6 +176,12 @@ describe('ClubNav', () => {
     const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
     render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
     expect(await screen.findByLabelText('2 non lus')).toBeInTheDocument();
+  });
+
+  it('montre « Parties » sans session si le club a du padel (parties ouvertes publiques)', async () => {
+    const padelClub = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
+    render(<ThemeProvider><ClubNav club={padelClub} /></ThemeProvider>);
+    expect(await screen.findByText('Parties')).toBeInTheDocument();
   });
 
   it('expose un libellé court (.cn-lbl-short) pour les onglets longs — affiché à la place du long sur mobile actif', async () => {

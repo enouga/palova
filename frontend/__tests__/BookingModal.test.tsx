@@ -199,4 +199,17 @@ describe('BookingModal — page unique', () => {
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
   });
+
+  it('partie ouverte sur un terrain padel : le limiteur de niveau s affiche', async () => {
+    mockClub = { levelSystemEnabled: true };
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    fireEvent.click(await screen.findByRole('button', { name: /Partie ouverte/ }));
+    expect(screen.getByText(/Limiter le niveau/)).toBeInTheDocument();
+  });
+
+  // NB : les parties ouvertes sont désormais padel-only (feat/parties-padel-only, sur main).
+  // Les tests « partie ouverte sur non-padel » de la branche niveau sont donc devenus
+  // sans objet — le bouton « Partie ouverte » n'apparaît plus hors padel (couvert par le
+  // test « cache Partie ouverte sur un terrain non-padel » ci-dessus), et le limiteur de
+  // niveau sur partie ouverte padel reste testé plus haut. Retirés à la fusion.
 });

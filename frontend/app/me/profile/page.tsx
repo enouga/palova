@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport } from '@/lib/api';
+import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport, MemberPackage, Subscription, MyPayment } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
 import { ReliabilityMeter } from '@/components/player/ReliabilityMeter';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
@@ -17,6 +17,10 @@ import { DateField } from '@/components/ui/DateField';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
 import { ProfileSectionNav, ProfileNavItem } from '@/components/profile/ProfileSectionNav';
+import { WalletSection } from '@/components/profile/WalletSection';
+import { PaymentMethodSection } from '@/components/profile/PaymentMethodSection';
+import { PaymentsHistory } from '@/components/profile/PaymentsHistory';
+import { DeleteAccountSection } from '@/components/profile/DeleteAccountSection';
 
 const LOCALE_OPTIONS = [
   { value: 'fr', label: 'Français' },
@@ -67,6 +71,11 @@ export default function MyProfilePage() {
   // Sports disponibles (pour le sélecteur de sport préféré)
   const [sports, setSports] = useState<Sport[]>([]);
 
+  // Portefeuille & paiements du club courant (sections compte)
+  const [walletPackages, setWalletPackages] = useState<MemberPackage[]>([]);
+  const [walletSubs, setWalletSubs] = useState<Subscription[]>([]);
+  const [payments, setPayments] = useState<MyPayment[]>([]);
+
   // Préférences & licence
   const [savingLocale, setSavingLocale] = useState(false);
   const [license, setLicense] = useState('');
@@ -109,6 +118,10 @@ export default function MyProfilePage() {
           const m = await api.getMyClubMembership(slug, token).catch(() => null);
           setMembership(m);
           setLicense(m?.membershipNo ?? '');
+          // Sections compte (best-effort, ne bloquent jamais le profil).
+          api.getMyClubPackages(slug, token).then(setWalletPackages).catch(() => {});
+          api.getMyClubSubscriptions(slug, token).then(setWalletSubs).catch(() => {});
+          api.getMyPayments(slug, token).then(setPayments).catch(() => {});
         }
       } catch (e) { setError((e as Error).message); }
       finally { setLoading(false); }
@@ -261,8 +274,14 @@ export default function MyProfilePage() {
     ...(club?.levelSystemEnabled !== false ? ([{ id: 'niveau', icon: 'chart', label: 'Niveau' }] satisfies ProfileNavItem[]) : []),
     { id: 'infos', icon: 'info', label: 'Infos' },
     { id: 'preferences', icon: 'settings', label: 'Préf.' },
+    ...(slug && club && membership ? ([
+      { id: 'portefeuille', icon: 'wallet', label: 'Solde' },
+      { id: 'paiement', icon: 'card', label: 'Carte' },
+      { id: 'paiements', icon: 'euro', label: 'Paie.' },
+    ] satisfies ProfileNavItem[]) : []),
     { id: 'securite', icon: 'lock', label: 'Sécu.' },
     ...(slug && club && membership ? ([{ id: 'licence', icon: 'ticket', label: 'Licence' }] satisfies ProfileNavItem[]) : []),
+    ...(token ? ([{ id: 'suppression', icon: 'trash', label: 'Suppr.' }] satisfies ProfileNavItem[]) : []),
   ];
 
   const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
@@ -463,6 +482,26 @@ export default function MyProfilePage() {
                 </div>
               </section>
 
+              {/* Sections compte club-scopées : portefeuille, carte, historique */}
+              {slug && club && membership && (
+                <>
+                  <section id="portefeuille" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Portefeuille">
+                    <div style={cardTitle}>Portefeuille</div>
+                    <WalletSection packages={walletPackages} subscriptions={walletSubs} />
+                  </section>
+
+                  <section id="paiement" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Méthodes de paiement">
+                    <div style={cardTitle}>Méthodes de paiement</div>
+                    {token && <PaymentMethodSection slug={slug} token={token} />}
+                  </section>
+
+                  <section id="paiements" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mes paiements">
+                    <div style={cardTitle}>Mes paiements</div>
+                    <PaymentsHistory payments={payments} />
+                  </section>
+                </>
+              )}
+
               {/* Mot de passe */}
               <section id="securite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mot de passe">
                 <div style={cardTitle}>Mot de passe</div>
@@ -507,6 +546,14 @@ export default function MyProfilePage() {
                     <button onClick={saveLicense} disabled={savingLicense} style={primaryBtn(savingLicense)}>Enregistrer</button>
                     {savedLicense && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
                   </div>
+                </section>
+              )}
+
+              {/* Suppression de compte (globale, toujours rendue) */}
+              {token && (
+                <section id="suppression" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Supprimer mon compte">
+                  <div style={cardTitle}>Supprimer mon compte</div>
+                  <DeleteAccountSection token={token} />
                 </section>
               )}
             </div>

@@ -39,3 +39,11 @@ export function namedTier(level: number): string {
   const idx = clamp(Math.round(level), 1, 8);
   return TIERS[idx - 1];
 }
+
+/** Clé du sport qui porte le système de niveau (grille Padel Magazine). */
+export const LEVEL_SPORT_KEY = 'padel';
+
+/** Ce sport utilise-t-il le système de niveau ? (padel uniquement) */
+export function sportHasLevels(sportKey?: string | null): boolean {
+  return sportKey === LEVEL_SPORT_KEY;
+}

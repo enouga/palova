@@ -58,6 +58,7 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
     canRecordResult: false,
     onToggleInterest: jest.fn(),
     onOpenChat: jest.fn(),
+    onAuthPrompt: jest.fn(),
     ...overProps,
   };
 }
@@ -148,5 +149,20 @@ describe('OpenMatchCard', () => {
       </ThemeProvider>
     );
     expect(screen.getByText(/3 intéressés/)).toBeInTheDocument();
+  });
+
+  it('anonyme : « Rejoindre » appelle onAuthPrompt (pas onJoin) et masque Discuter / Ça m\'intéresse', () => {
+    const match = makeMatch();
+    const onAuthPrompt = jest.fn(), onJoin = jest.fn();
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { isAnonymous: true, onAuthPrompt, onJoin })} />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
+    expect(onAuthPrompt).toHaveBeenCalledWith(match);
+    expect(onJoin).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Discuter/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ça m'intéresse/i })).not.toBeInTheDocument();
   });
 });
