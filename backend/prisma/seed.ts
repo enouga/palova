@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { seedDefaultOffers, seedDefaultSubscriptionPlans } from './seed-offers';
+import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_PACKAGE_OFFERS, DEFAULT_SUBSCRIPTION_PLANS } from './seed-offers';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -100,27 +100,89 @@ async function main() {
   // 5. Comptes de démo — un par rôle (mot de passe commun : password123)
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // role = null → simple joueur (CLIENT), sans rattachement à un club.
-  const demoAccounts: Array<{ email: string; firstName: string; lastName: string; role: 'OWNER' | 'ADMIN' | 'STAFF' | null }> = [
-    { email: 'test@palova.fr', firstName: 'Jean',   lastName: 'Dupont',   role: 'OWNER' }, // compte historique
+  // `role` = rôle staff (ClubMember). role = null → pas de back-office (simple joueur CLIENT).
+  // Tous les comptes de démo reçoivent en plus une adhésion joueur (ClubMembership) au club :
+  // les sections « compte » de /me/profile (portefeuille, méthodes de paiement, licence) sont
+  // gardées par `slug && club && membership`, donc invisibles tant qu'on n'a pas d'adhésion —
+  // on en crée une dès le seed pour les voir sans avoir à réserver d'abord.
+  const demoAccounts: Array<{ email: string; firstName: string; lastName: string; role: 'OWNER' | 'ADMIN' | 'STAFF' | null; isSubscriber?: boolean; membershipNo?: string }> = [
+    { email: 'test@palova.fr',    firstName: 'Jean',   lastName: 'Dupont',   role: 'OWNER', isSubscriber: true, membershipNo: 'PAR1001' }, // compte historique
     { email: 'owner@palova.fr',   firstName: 'Olivia', lastName: 'Martin',   role: 'OWNER' },
     { email: 'admin@palova.fr',   firstName: 'Adam',   lastName: 'Bernard',  role: 'ADMIN' },
     { email: 'staff@palova.fr',   firstName: 'Sarah',  lastName: 'Petit',    role: 'STAFF' },
-    { email: 'joueur@palova.fr',  firstName: 'Lucas',  lastName: 'Moreau',   role: null },
+    { email: 'joueur@palova.fr',  firstName: 'Lucas',  lastName: 'Moreau',   role: null,    membershipNo: 'PAR1002' },
   ];
 
+  let testUserId = '';
   for (const acc of demoAccounts) {
     const u = await prisma.user.upsert({
       where: { email: acc.email },
       update: { emailVerified: true },
       create: { email: acc.email, password: hashedPassword, firstName: acc.firstName, lastName: acc.lastName, emailVerified: true },
     });
+    if (acc.email === 'test@palova.fr') testUserId = u.id;
     if (acc.role) {
       await prisma.clubMember.upsert({
         where: { userId_clubId: { userId: u.id, clubId: club.id } },
         update: { role: acc.role },
         create: { userId: u.id, clubId: club.id, role: acc.role },
       });
+    }
+    // Adhésion joueur (ClubMembership) — distincte du rôle staff (ClubMember).
+    await prisma.clubMembership.upsert({
+      where: { userId_clubId: { userId: u.id, clubId: club.id } },
+      update: { status: 'ACTIVE', isSubscriber: acc.isSubscriber ?? false, membershipNo: acc.membershipNo ?? null },
+      create: { userId: u.id, clubId: club.id, status: 'ACTIVE', isSubscriber: acc.isSubscriber ?? false, membershipNo: acc.membershipNo ?? null },
+    });
+  }
+
+  // 5a. Portefeuille de démo pour le compte historique (test@palova.fr) : un abonnement
+  // Padel actif + un porte-monnaie partiellement consommé, pour que la section « Portefeuille »
+  // de /me/profile affiche du contenu réel dès le seed. Idempotent (find-or-create, jamais de
+  // doublon ni de suppression — un MemberPackage vendu est référencé par d'éventuels Payment).
+  if (testUserId) {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = new Date();
+
+    const walletTpl = await prisma.packageTemplate.findFirst({
+      where: { clubId: club.id, name: DEFAULT_PACKAGE_OFFERS[0].name }, // « Carte Padel 10 parties » (WALLET)
+    });
+    if (walletTpl) {
+      const existing = await prisma.memberPackage.findFirst({
+        where: { clubId: club.id, userId: testUserId, templateId: walletTpl.id },
+      });
+      if (!existing) {
+        await prisma.memberPackage.create({
+          data: {
+            clubId: club.id, userId: testUserId, templateId: walletTpl.id, kind: 'WALLET',
+            amountTotal: walletTpl.walletAmount, amountRemaining: 104.5, // ~25,50 € déjà consommés
+            purchasedAt: new Date(now.getTime() - 20 * DAY),
+            expiresAt: new Date(now.getTime() + (walletTpl.validityDays ?? 180) * DAY),
+          },
+        });
+      }
+    }
+
+    const padelPlan = await prisma.subscriptionPlan.findFirst({
+      where: { clubId: club.id, name: DEFAULT_SUBSCRIPTION_PLANS[0].name }, // « Abonnement Padel — heures creuses »
+    });
+    if (padelPlan) {
+      const existing = await prisma.subscription.findFirst({
+        where: { clubId: club.id, userId: testUserId, planId: padelPlan.id, status: 'ACTIVE' },
+      });
+      if (!existing) {
+        await prisma.subscription.create({
+          data: {
+            clubId: club.id, userId: testUserId, planId: padelPlan.id, status: 'ACTIVE',
+            startedAt: new Date(now.getTime() - 30 * DAY),
+            expiresAt: new Date(now.getTime() + 330 * DAY), // ~11 mois restants
+            monthlyPriceSnapshot: padelPlan.monthlyPrice,
+            sportKeys: padelPlan.sportKeys, offPeakOnly: padelPlan.offPeakOnly,
+            benefit: padelPlan.benefit, discountPercent: padelPlan.discountPercent,
+            dailyCap: padelPlan.dailyCap, weeklyCap: padelPlan.weeklyCap,
+          },
+        });
+      }
     }
   }
 
