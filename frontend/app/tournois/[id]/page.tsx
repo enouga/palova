@@ -219,7 +219,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                 amountLabel={`${Number(t.entryFee ?? 0)} €`}
                 createIntent={async () => {
                   const r = await api.createRegistrationIntent('tournaments', id, payStep.regId, token!);
-                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId };
+                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
                 }}
                 confirm={payStep.mode === 'payment'
                   ? async (ids) => { await api.confirmRegistrationPayment('tournaments', id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }

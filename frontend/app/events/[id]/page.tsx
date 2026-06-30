@@ -171,7 +171,7 @@ export default function EventDetailPage() {
                 amountLabel={`${Number(event.price ?? 0)} €`}
                 createIntent={async () => {
                   const r = await api.createRegistrationIntent('events', event.id, payStep.regId, token!);
-                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId };
+                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
                 }}
                 confirm={payStep.mode === 'payment'
                   ? async (ids) => { await api.confirmRegistrationPayment('events', event.id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }

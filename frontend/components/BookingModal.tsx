@@ -662,7 +662,7 @@ export default function BookingModal({
                             { reservationId: reservation.id, type: intentType, payShare: intentType === 'payment' ? onlineShare : undefined },
                             token,
                           );
-                          return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null };
+                          return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
                         }}
                         confirm={async (ids) => { await api.confirmReservation(reservation.id, token, { ...ids, cgvAccepted }); }}
                         onSuccess={() => { settled.current = true; onConfirmed(reservation); }}

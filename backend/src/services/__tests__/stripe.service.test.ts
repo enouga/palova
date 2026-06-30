@@ -30,6 +30,7 @@ jest.mock('../../db/stripe', () => ({
     },
     accountLinks: { create: jest.fn() },
     customers: { create: jest.fn() },
+    customerSessions: { create: jest.fn() },
     paymentIntents: { create: jest.fn(), retrieve: jest.fn() },
     setupIntents:   { create: jest.fn(), retrieve: jest.fn() },
     refunds:        { create: jest.fn() },
@@ -190,6 +191,57 @@ describe('createPaymentIntent', () => {
       clubId: 'club-1', userId: 'user-1', reservationId: 'r-1', amountCents: 1000,
     })).rejects.toThrow('STRIPE_NOT_CONFIGURED');
   });
+
+  it('crée une CustomerSession (redisplay + filtres) et renvoie son client_secret', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_secret_xxx' });
+    (stripe.customerSessions.create as jest.Mock).mockResolvedValue({ client_secret: 'cuss_secret' });
+
+    const result = await svc.createPaymentIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1', amountCents: 2500,
+    });
+
+    expect(stripe.customerSessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_1',
+        components: expect.objectContaining({
+          payment_element: expect.objectContaining({
+            enabled: true,
+            features: expect.objectContaining({
+              payment_method_redisplay: 'enabled',
+              payment_method_allow_redisplay_filters: ['always', 'limited', 'unspecified'],
+            }),
+          }),
+        }),
+      }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(result.clientSecret).toBe('pi_secret_xxx');
+    expect(result.customerSessionClientSecret).toBe('cuss_secret');
+  });
+
+  it('renvoie customerSessionClientSecret=null si customerSessions.create échoue (paiement non bloqué)', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_secret_xxx' });
+    (stripe.customerSessions.create as jest.Mock).mockRejectedValue(new Error('stripe down'));
+
+    const result = await svc.createPaymentIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1', amountCents: 2500,
+    });
+
+    expect(result.clientSecret).toBe('pi_secret_xxx');
+    expect(result.customerSessionClientSecret).toBeNull();
+  });
 });
 
 describe('createSetupIntent', () => {
@@ -211,6 +263,23 @@ describe('createSetupIntent', () => {
       { stripeAccount: 'acct_1' },
     );
     expect(result.clientSecret).toBe('seti_secret_yyy');
+  });
+
+  it('ne crée PAS de CustomerSession et renvoie customerSessionClientSecret=null', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.setupIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'seti_secret_yyy' });
+
+    const result = await svc.createSetupIntent({
+      clubId: 'club-1', userId: 'user-1', reservationId: 'resa-1',
+    });
+
+    expect(stripe.customerSessions.create).not.toHaveBeenCalled();
+    expect(result.customerSessionClientSecret).toBeNull();
   });
 });
 
@@ -309,6 +378,39 @@ describe('createRegistrationPaymentIntent', () => {
       kind: 'tournament', amountCents: 1000,
     })).rejects.toThrow('STRIPE_NOT_CONFIGURED');
   });
+
+  it('crée une CustomerSession et renvoie son client_secret', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_reg_secret' });
+    (stripe.customerSessions.create as jest.Mock).mockResolvedValue({ client_secret: 'cuss_reg' });
+
+    const result = await svc.createRegistrationPaymentIntent({
+      clubId: 'club-1', userId: 'user-1', registrationId: 'reg-1',
+      kind: 'tournament', amountCents: 2000,
+    });
+
+    expect(stripe.customerSessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_1',
+        components: expect.objectContaining({
+          payment_element: expect.objectContaining({
+            enabled: true,
+            features: expect.objectContaining({
+              payment_method_redisplay: 'enabled',
+              payment_method_allow_redisplay_filters: ['always', 'limited', 'unspecified'],
+            }),
+          }),
+        }),
+      }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(result.customerSessionClientSecret).toBe('cuss_reg');
+  });
 });
 
 describe('createRegistrationSetupIntent', () => {
@@ -334,6 +436,23 @@ describe('createRegistrationSetupIntent', () => {
       { stripeAccount: 'acct_1' },
     );
     expect(result.clientSecret).toBe('seti_reg_secret');
+  });
+
+  it('ne crée PAS de CustomerSession et renvoie customerSessionClientSecret=null', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_saved',
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.setupIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'seti_reg_secret' });
+
+    const result = await svc.createRegistrationSetupIntent({
+      clubId: 'club-1', userId: 'user-1', registrationId: 'reg-event-1', kind: 'event',
+    });
+
+    expect(stripe.customerSessions.create).not.toHaveBeenCalled();
+    expect(result.customerSessionClientSecret).toBeNull();
   });
 });
 
