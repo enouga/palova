@@ -463,6 +463,8 @@ model User {
   subscriptions           Subscription[]
   openMatchInterests      OpenMatchInterest[]
   openMatchMessages       OpenMatchMessage[]
+  followsGiven            Follow[] @relation("FollowsGiven")
+  followsReceived         Follow[] @relation("FollowsReceived")
 
   @@map("users")
 }
@@ -1189,6 +1191,7 @@ enum NotificationCategory {
   ORGANIZER
   REMINDERS
   OPEN_MATCH_CHAT
+  SOCIAL
 }
 
 enum NotificationChannel {
@@ -1303,4 +1306,20 @@ model OpenMatchMessage {
 
   @@index([reservationId, createdAt])
   @@map("open_match_messages")
+}
+
+// Suivi de joueur à sens unique (« ami »). Friendship GLOBALE (pas de clubId) ;
+// l'action de suivi est gardée club-scoped côté route. « Ami » mutuel = dérivé (les 2 lignes existent).
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("FollowsGiven",    fields: [followerId],  references: [id], onDelete: Cascade)
+  following User @relation("FollowsReceived", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
 }
