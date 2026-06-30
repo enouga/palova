@@ -62,17 +62,21 @@ export class FollowService {
       select: { id: true },
     });
     if (!existing) {
-      await prisma.follow.create({ data: { followerId, followingId: targetUserId } });
-      // best-effort, après écriture : ne jamais faire échouer le suivi sur une notif.
-      notifyNewFollower(followerId, targetUserId, clubId).catch(() => {});
+      try {
+        await prisma.follow.create({ data: { followerId, followingId: targetUserId } });
+        // best-effort, après écriture : ne jamais faire échouer le suivi sur une notif.
+        notifyNewFollower(followerId, targetUserId, clubId).catch(() => {});
+      } catch (err) {
+        // Course concurrente : un autre 1er-suivi a gagné entre le findUnique et le create.
+        // P2002 = violation d'unicité → déjà suivi, no-op (et surtout : pas de notif).
+        if ((err as { code?: string })?.code !== 'P2002') throw err;
+      }
     }
     return this.getRelationship(followerId, targetUserId);
   }
 
-  /** Cesse de suivre. Idempotent (deleteMany). */
-  async unfollow(slug: string, followerId: string, targetUserId: string): Promise<FollowRelation> {
-    const clubId = await this.activeClubId(slug);
-    await this.assertActiveMember(followerId, clubId, 'MEMBERSHIP_REQUIRED');
+  /** Cesse de suivre. Idempotent (deleteMany). Aucune appartenance requise : on peut toujours se désabonner. */
+  async unfollow(_slug: string, followerId: string, targetUserId: string): Promise<FollowRelation> {
     await prisma.follow.deleteMany({ where: { followerId, followingId: targetUserId } });
     return this.getRelationship(followerId, targetUserId);
   }

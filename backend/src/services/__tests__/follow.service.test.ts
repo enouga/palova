@@ -72,6 +72,15 @@ describe('FollowService — follow/unfollow', () => {
     expect(prismaMock.follow.deleteMany).toHaveBeenCalledWith({ where: { followerId: 'u1', followingId: 'u2' } });
     expect(rel).toEqual({ iFollow: false, followsMe: false, mutual: false });
   });
+
+  it('best-effort : un échec de notification ne fait pas échouer le suivi', async () => {
+    mockNotifyFollow.mockRejectedValue(new Error('smtp down'));
+    prismaMock.follow.findUnique.mockResolvedValue(null);
+    prismaMock.follow.create.mockResolvedValue({ id: 'f1' } as any);
+    prismaMock.follow.findMany.mockResolvedValue([{ followerId: 'u1', followingId: 'u2' }] as any);
+
+    await expect(service.follow('demo', 'u1', 'u2')).resolves.toBeDefined();
+  });
 });
 
 describe('FollowService — listes', () => {
@@ -128,5 +137,11 @@ describe('FollowService — amis du club (ajout rapide)', () => {
     // le filtre passe bien par la co-appartenance active au club
     const arg = (prismaMock.follow.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.following.clubMemberships.some).toEqual({ clubId: 'club-demo', status: 'ACTIVE' });
+  });
+
+  it('renvoie [] si je ne suis aucun membre du club', async () => {
+    prismaMock.follow.findMany.mockResolvedValueOnce([] as any);
+    const list = await service.listClubFriends('demo', 'u1');
+    expect(list).toEqual([]);
   });
 });
