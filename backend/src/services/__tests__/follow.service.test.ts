@@ -105,3 +105,28 @@ describe('FollowService — listes', () => {
     expect(list).toEqual([{ id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, mutual: true }]);
   });
 });
+
+describe('FollowService — amis du club (ajout rapide)', () => {
+  let service: FollowService;
+  beforeEach(() => {
+    service = new FollowService();
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+  });
+
+  it('renvoie mes amis qui sont membres actifs du club, avec niveau et avatar', async () => {
+    // mes amis globaux qui sont aussi membres actifs de ce club
+    prismaMock.follow.findMany
+      .mockResolvedValueOnce([
+        { following: { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null } },
+      ] as any)
+      .mockResolvedValueOnce([{ followerId: 'u2' }] as any); // mutual
+    const list = await service.listClubFriends('demo', 'u1');
+    expect(list).toEqual([{ id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, level: null, mutual: true }]);
+    // le filtre passe bien par la co-appartenance active au club
+    const arg = (prismaMock.follow.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.following.clubMemberships.some).toEqual({ clubId: 'club-demo', status: 'ACTIVE' });
+  });
+});

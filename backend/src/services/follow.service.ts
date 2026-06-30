@@ -1,5 +1,8 @@
 import { prisma } from '../db/prisma';
 import { notifyNewFollower } from '../email/notifications';
+import { RatingService } from './rating.service';
+import { resolvePreferredSportKey } from './rating/preferredSport';
+import type { UserLevel } from './rating.service';
 
 export interface FollowRelation {
   iFollow: boolean;
@@ -15,7 +18,12 @@ export interface Friend {
   mutual: boolean;
 }
 
+export interface ClubFriend extends Friend {
+  level: UserLevel | null;
+}
+
 export class FollowService {
+  private ratingService = new RatingService();
   /** Vérifie que le club existe/ACTIVE et renvoie son id. */
   private async activeClubId(slug: string): Promise<string> {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
@@ -105,5 +113,46 @@ export class FollowService {
     });
     const mutualSet = new Set(mine.map((m) => m.followingId));
     return rows.map((r) => ({ ...r.follower, mutual: mutualSet.has(r.follower.id) }));
+  }
+
+  /** Mes amis ∩ membres ACTIFS du club, avec niveau (sport préféré du caller) + avatar. */
+  async listClubFriends(slug: string, userId: string, q?: string): Promise<ClubFriend[]> {
+    const clubId = await this.activeClubId(slug);
+    await this.assertActiveMember(userId, clubId, 'MEMBERSHIP_REQUIRED');
+    const query = (q ?? '').trim();
+
+    const rows = await prisma.follow.findMany({
+      where: {
+        followerId: userId,
+        following: {
+          clubMemberships: { some: { clubId, status: 'ACTIVE' } },
+          ...(query
+            ? { OR: [{ firstName: { contains: query, mode: 'insensitive' } }, { lastName: { contains: query, mode: 'insensitive' } }] }
+            : {}),
+        },
+      },
+      orderBy: [{ following: { lastName: 'asc' } }, { following: { firstName: 'asc' } }],
+      take: 30,
+      select: { following: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } },
+    });
+    const ids = rows.map((r) => r.following.id);
+    if (ids.length === 0) return [];
+
+    const back = await prisma.follow.findMany({
+      where: { followerId: { in: ids }, followingId: userId },
+      select: { followerId: true },
+    });
+    const mutualSet = new Set(back.map((b) => b.followerId));
+    const sportKey = await resolvePreferredSportKey(userId);
+    const levels = await this.ratingService.getLevelsForUsers(ids, sportKey);
+
+    return rows.map((r) => ({
+      id: r.following.id,
+      firstName: r.following.firstName,
+      lastName: r.following.lastName,
+      avatarUrl: r.following.avatarUrl,
+      level: levels[r.following.id] ?? null,
+      mutual: mutualSet.has(r.following.id),
+    }));
   }
 }
