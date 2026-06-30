@@ -8,6 +8,7 @@ jest.mock('../lib/api', () => ({
     addReservationPlayer: jest.fn().mockResolvedValue({ id: 'r1', capacity: 4, participants: [] }),
     removeReservationPlayer: jest.fn().mockResolvedValue({ id: 'r1', capacity: 4, participants: [] }),
     searchClubMembers: jest.fn().mockResolvedValue([]),
+    listClubFriends: jest.fn().mockResolvedValue([]),
   },
 }));
 import { api } from '../lib/api';

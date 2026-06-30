@@ -1195,6 +1195,30 @@ export async function notifyActivityCancelledByClub(
   }
 }
 
+// Notif « X vous suit » (in-app + push, pas d'email). Best-effort.
+// Coalescing : on saute si une notif follow.new non lue du même suiveur existe déjà pour ce destinataire.
+export async function notifyNewFollower(followerId: string, targetUserId: string, clubId: string): Promise<void> {
+  const follower = await prisma.user.findUnique({ where: { id: followerId }, select: { firstName: true, lastName: true } });
+  if (!follower) return;
+  const already = await prisma.notification.findFirst({
+    where: { userId: targetUserId, type: 'follow.new', readAt: null, data: { path: ['followerId'], equals: followerId } },
+    select: { id: true },
+  });
+  if (already) return;
+  const name = `${follower.firstName} ${follower.lastName}`.trim();
+  await dispatch({
+    userId: targetUserId,
+    clubId,
+    category: 'SOCIAL',
+    type: 'follow.new',
+    title: `${name} vous suit`,
+    body: `${name} vous a ajouté à ses amis. Suivez-le en retour pour vous retrouver plus vite.`,
+    url: '/me/friends?tab=followers',
+    data: { followerId },
+    email: null,
+  });
+}
+
 export async function notifyReservationReminder(reservationId: string, window: 'J-1' | 'H-2'): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },

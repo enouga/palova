@@ -4,6 +4,7 @@ import { api, ClubMemberSearchResult } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { LevelChip } from '@/components/player/LevelChip';
 import { Icon } from '@/components/ui/Icon';
+import { FriendsQuickRow } from '@/components/social/FriendsQuickRow';
 
 // Annuaire du club : recherche d'un coéquipier par nom (membres actifs uniquement).
 export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect }: {
@@ -59,11 +60,13 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Cliquez pour voir les membres, ou tapez un nom…" disabled={disabled} style={searchFieldStyle} />
       {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 260, overflowY: 'auto', background: th.surface, borderRadius: 11, boxShadow: `0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px ${th.line}` }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 320, overflowY: 'auto', background: th.surface, borderRadius: 11, boxShadow: `0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px ${th.line}`, padding: 8 }}>
+          <FriendsQuickRow slug={slug} token={token} excludeIds={excludeIds ?? []} query={q}
+            onPick={(f) => { onSelect(f); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} />
           {visible.length === 0
-            ? <div style={{ padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
+            ? <div style={{ padding: '10px 5px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
             : visible.map((m) => (
-                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 13px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+                <button key={m.id} onMouseDown={(e) => { e.preventDefault(); onSelect(m); setQ(''); if (!keepOpenOnSelect) setOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '10px 5px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
                   {m.firstName} {m.lastName}
                   <LevelChip level={m.level} size="xs" />
                 </button>
