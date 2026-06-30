@@ -4,7 +4,7 @@ import { ACCENTS } from '@/lib/theme';
 
 export type NotifCategory =
   | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
-  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS';
+  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL';
 export type NotifChannel = 'INAPP' | 'PUSH' | 'EMAIL';
 
 export interface CategoryMeta { key: NotifCategory; label: string; desc: string; staffOnly?: boolean }
@@ -19,6 +19,7 @@ export const CATEGORY_META: CategoryMeta[] = [
   { key: 'CLUB_MESSAGES', label: 'Messages du club', desc: "Annonces de l’équipe du club" },
   { key: 'ORGANIZER', label: 'Activité de mes events', desc: "Inscriptions/désinscriptions sur ce que j’organise", staffOnly: true },
   { key: 'REMINDERS', label: 'Rappels', desc: 'Avant une partie ou un event' },
+  { key: 'SOCIAL', label: 'Amis & suivi', desc: 'Quand un joueur commence à vous suivre' },
 ];
 
 export const CHANNELS: NotifChannel[] = ['INAPP', 'PUSH', 'EMAIL'];

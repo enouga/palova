@@ -153,6 +153,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           {/* Liens */}
           <div style={{ paddingTop: 6 }}>
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
+            {slug && <MenuItem th={th} icon="users" label="Mes amis" onClick={() => go('/me/friends')} />}
             {club?.levelSystemEnabled !== false && <MenuItem th={th} icon="trophy" label="Mes matchs" onClick={() => go('/me/matches')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
