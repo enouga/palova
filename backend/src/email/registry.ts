@@ -456,3 +456,58 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Club', v.club), row('Remboursé', v.montant)],
   },
 };
+
+/** Surcharge club minimale (sous-ensemble du modèle ClubEmailTemplate). */
+export interface EmailOverride {
+  subject: string; heading: string; bodyHtml: string;
+  ctaLabel: string | null; footerNote: string | null;
+}
+
+export interface BuiltEmail { subject: string; html: string; text: string; }
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, '');
+}
+
+function buildText(introHtml: string, infoRows: InfoRow[], ctaLabel: string | undefined, ctaUrl: string | undefined, footerNote: string | undefined): string {
+  const lines = [stripTags(introHtml).replace(/\s+/g, ' ').trim(), ''];
+  for (const r of infoRows) lines.push(`${r.label} : ${r.value}`);
+  if (ctaLabel && ctaUrl) { lines.push('', `${ctaLabel} : ${ctaUrl}`); }
+  if (footerNote) { lines.push('', footerNote); }
+  return lines.filter((l, i) => !(l === '' && lines[i - 1] === '')).join('\n').trim();
+}
+
+/**
+ * Construit un email club : surcharge si fournie, sinon défaut du registre.
+ * Le corps PAR DÉFAUT est de confiance (non assaini, styles préservés) ; le corps
+ * PERSONNALISÉ est assaini. Les valeurs de variables sont HTML-échappées dans le corps.
+ */
+export function renderClubEmail(
+  type: string,
+  vars: Record<string, string>,
+  brand: Brand,
+  override?: EmailOverride | null,
+): BuiltEmail {
+  const def = EMAIL_DEFS[type];
+  if (!def) throw new Error('EMAIL_TYPE_UNKNOWN');
+
+  const usingCustomBody = override?.bodyHtml != null;
+  const subjectTpl = override?.subject ?? def.defaults.subject;
+  const headingTpl = override?.heading ?? def.defaults.heading;
+  const bodyTpl = override?.bodyHtml ?? def.defaults.bodyHtml;
+  const ctaTpl = (override?.ctaLabel ?? def.defaults.ctaLabel) || undefined;
+  const footerTpl = (override?.footerNote ?? def.defaults.footerNote) || '';
+
+  const subject = substituteText(subjectTpl, vars);
+  const heading = substituteText(headingTpl, vars);
+  const substitutedBody = substituteHtml(bodyTpl, vars);
+  const introHtml = usingCustomBody ? sanitizeBodyHtml(substitutedBody) : substitutedBody;
+  const ctaLabel = ctaTpl ? substituteText(ctaTpl, vars) : undefined;
+  const footerNote = substituteText(footerTpl, vars) || undefined;
+  const infoRows = def.infoRows ? def.infoRows(vars) : [];
+  const ctaUrl = def.hasCta ? vars.lien : undefined;
+
+  const html = renderLayout({ brand, preheader: subject, heading, introHtml, infoRows, ctaLabel, ctaUrl, footerNote });
+  const text = buildText(introHtml, infoRows, ctaLabel, ctaUrl, footerNote);
+  return { subject, html, text };
+}

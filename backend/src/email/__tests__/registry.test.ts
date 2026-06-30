@@ -5,6 +5,9 @@ import {
   collectPlaceholders,
 } from '../registry';
 import { EMAIL_DEFS, sampleVars } from '../registry';
+import { renderClubEmail, brandFromClub } from '../registry';
+
+const brand = brandFromClub({ name: 'Padel Arena', logoUrl: null, accentColor: '#1a2b3c' });
 
 describe('substituteText', () => {
   it('remplace les variables connues par leur valeur brute', () => {
@@ -84,5 +87,51 @@ describe('EMAIL_DEFS', () => {
     const def = EMAIL_DEFS['registration.confirmed'];
     const s = sampleVars(def);
     for (const v of def.vars) expect(s[v.key]).toBe(v.sample);
+  });
+});
+
+describe('renderClubEmail', () => {
+  const vars = {
+    prenom: 'Marie', activite: 'Tournoi P100', ref_activite: 'le tournoi',
+    club: 'Padel Arena', date: 'dim. 6 juil. 14h00', coequipier: '', phrase_coequipier: '',
+    lien: 'https://x.fr/t/1',
+  };
+
+  it('utilise les défauts quand pas de surcharge', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, null);
+    expect(mail.subject).toBe('Inscription confirmée — Tournoi P100');
+    expect(mail.html).toContain('Inscription confirmée ✅');
+    expect(mail.html).toContain('<strong>Tournoi P100</strong>');
+    expect(mail.html).toContain('href="https://x.fr/t/1"');
+    expect(mail.text).toContain('Marie');
+    expect(mail.text).toContain('Club : Padel Arena');
+  });
+
+  it('applique la surcharge club', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, {
+      subject: 'Bienvenue {{prenom}} !', heading: 'Yes', bodyHtml: '<p>OK {{activite}}</p>',
+      ctaLabel: null, footerNote: null,
+    } as any);
+    expect(mail.subject).toBe('Bienvenue Marie !');
+    expect(mail.html).toContain('OK Tournoi P100');
+  });
+
+  it('échappe les valeurs et retire les placeholders inconnus dans le corps', () => {
+    const mail = renderClubEmail('registration.confirmed', { ...vars, activite: '<b>x</b>' }, brand, {
+      subject: 's', heading: 'h', bodyHtml: '<p>{{activite}} {{inconnu}}</p>', ctaLabel: null, footerNote: null,
+    } as any);
+    expect(mail.html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(mail.html).not.toContain('{{inconnu}}');
+  });
+
+  it('assainit le corps personnalisé', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, {
+      subject: 's', heading: 'h', bodyHtml: '<p>hi<script>alert(1)</script></p>', ctaLabel: null, footerNote: null,
+    } as any);
+    expect(mail.html).not.toContain('<script');
+  });
+
+  it('lève EMAIL_TYPE_UNKNOWN pour un type inconnu', () => {
+    expect(() => renderClubEmail('nope', {}, brand, null)).toThrow('EMAIL_TYPE_UNKNOWN');
   });
 });
