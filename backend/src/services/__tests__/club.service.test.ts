@@ -11,7 +11,11 @@ const geocodeMock = geocodeAddress as jest.Mock;
 
 describe('ClubService — recherche de membres', () => {
   let service: ClubService;
-  beforeEach(() => { service = new ClubService(); });
+  beforeEach(() => {
+    service = new ClubService();
+    // Par défaut : aucun lien de suivi → iFollow/mutual = false sur tous les résultats
+    prismaMock.follow.findMany.mockResolvedValue([] as any);
+  });
 
   it('refuse un non-membre (MEMBERSHIP_REQUIRED)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
@@ -30,7 +34,7 @@ describe('ClubService — recherche de membres', () => {
 
     const result = await service.searchMembers('demo', 'caller', '');
 
-    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null }]);
+    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false }]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.user).toBeUndefined(); // pas de filtre nom quand la requête est vide
     expect(arg.take).toBe(20);
@@ -49,8 +53,8 @@ describe('ClubService — recherche de membres', () => {
     const result = await service.searchMembers('demo', 'caller', 'dup');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null },
-      { id: 'u2', firstName: 'Julie', lastName: 'Dupond', level: null },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false },
+      { id: 'u2', firstName: 'Julie', lastName: 'Dupond', level: null, iFollow: false, mutual: false },
     ]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.userId).toEqual({ not: 'caller' });
@@ -72,7 +76,7 @@ describe('ClubService — recherche de membres', () => {
     const result = await service.searchMembers('demo', 'caller', '');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 } },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 }, iFollow: false, mutual: false },
     ]);
   });
 
@@ -100,6 +104,29 @@ describe('ClubService — recherche de membres', () => {
   it('refuse un club suspendu / introuvable (CLUB_NOT_FOUND)', async () => {
     prismaMock.club.findUnique.mockResolvedValue(null as any);
     await expect(service.searchMembers('demo', 'caller', 'dup')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('annote chaque résultat avec iFollow / mutual', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u2', firstName: 'Léa', lastName: 'M' } },
+      { user: { id: 'u3', firstName: 'Tom', lastName: 'B' } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+    // u2 : je le suis et il me suit (mutual) ; u3 : aucun lien
+    prismaMock.follow.findMany.mockResolvedValue([
+      { followerId: 'caller', followingId: 'u2' },
+      { followerId: 'u2', followingId: 'caller' },
+    ] as any);
+
+    const result = await service.searchMembers('demo', 'caller', '');
+
+    expect(result).toEqual([
+      { id: 'u2', firstName: 'Léa', lastName: 'M', level: null, iFollow: true,  mutual: true },
+      { id: 'u3', firstName: 'Tom', lastName: 'B', level: null, iFollow: false, mutual: false },
+    ]);
   });
 });
 
