@@ -141,6 +141,24 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
     );
   });
 
+  it('propage customerSessionClientSecret renvoyé par le service', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+    createRegistrationPaymentIntent.mockResolvedValueOnce({ clientSecret: 'cs_ev_payment', customerSessionClientSecret: 'cuss_ev' });
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.customerSessionClientSecret).toBe('cuss_ev');
+  });
+
   it('400 AMOUNT_TOO_SMALL si price donne < 50 centimes', async () => {
     prismaMock.eventRegistration.findUnique.mockResolvedValue({
       userId: 'user-1',

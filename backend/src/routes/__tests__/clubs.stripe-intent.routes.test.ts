@@ -98,4 +98,15 @@ describe('POST /api/clubs/:slug/stripe/intent — payShare', () => {
     expect(createSetupIntent).toHaveBeenCalled();
     expect(createPaymentIntent).not.toHaveBeenCalled();
   });
+
+  it('propage customerSessionClientSecret renvoyé par le service', async () => {
+    mockResa('padel', 'double', 40);
+    createPaymentIntent.mockResolvedValueOnce({ clientSecret: 'cs_test', customerSessionClientSecret: 'cuss_x' });
+
+    const res = await request(app).post(url).set('Authorization', `Bearer ${token}`)
+      .send({ reservationId: 'res-1', type: 'payment' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.customerSessionClientSecret).toBe('cuss_x');
+  });
 });
