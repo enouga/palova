@@ -19,6 +19,7 @@ import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel } from '@/lib/reservations';
+import { hasAcceptedCgv, rememberCgvAccepted } from '@/lib/cgv';
 import { Icon, IconName } from '@/components/ui/Icon';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
@@ -286,6 +287,14 @@ export default function BookingModal({
   useEffect(() => {
     setUseSub(!!cover);
   }, [cover?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pré-coche la case CGV si le joueur a déjà accepté les conditions de CE club
+  // (mémoire locale). Lu en effet — jamais au render — car le deep-link
+  // `?resource=&start=` peut pré-ouvrir la modale (hydration-safe). La trace légale
+  // reste envoyée par transaction au confirmReservation ; ceci ne fait que pré-cocher.
+  useEffect(() => {
+    if (hasAcceptedCgv(slug)) setCgvAccepted(true);
+  }, [slug]);
 
   // Au moment où le chemin CB Stripe devient actif, on vérifie (une seule fois) si le
   // club a publié ses CGV. Publié → lien vers /cgv ; sinon (PAGE_NOT_FOUND ou erreur) →
@@ -633,7 +642,8 @@ export default function BookingModal({
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
                   {/* CGV — requise avant tout intent CB ; cocher révèle le formulaire Stripe. */}
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)}
+                    <input type="checkbox" checked={cgvAccepted}
+                      onChange={(e) => { const v = e.target.checked; setCgvAccepted(v); if (v) rememberCgvAccepted(slug); }}
                       aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
                       style={{ width: 15, height: 15, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
                     <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
