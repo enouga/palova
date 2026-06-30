@@ -263,7 +263,7 @@ describe('LessonService.getPublicLesson — lessonKind + seriesId présents dans
       reservation: {
         startTime: new Date('2026-07-01T09:00:00Z'),
         endTime: new Date('2026-07-01T10:00:00Z'),
-        resource: { name: 'T1' },
+        resource: { name: 'T1', clubSport: { sport: { key: 'padel', name: 'Padel' } } },
       },
       series: { id: 's1', capacity: 4, enrollmentMode: 'SERIES', title: 'Cours débutants' },
       club: { slug: 'club-demo', name: 'Club Démo', timezone: 'Europe/Paris' },
@@ -275,6 +275,7 @@ describe('LessonService.getPublicLesson — lessonKind + seriesId présents dans
     const row = await lessonService.getPublicLesson('l1');
     expect(row.lessonKind).toBe('INDIVIDUAL');
     expect(row.seriesId).toBe('s1');
+    expect(row.sport).toEqual({ key: 'padel', name: 'Padel' });
   });
 });
 

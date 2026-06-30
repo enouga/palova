@@ -100,6 +100,26 @@ describe('OpenMatchCard', () => {
     expect(btn).toBeDisabled();
   });
 
+  it('affiche le chip sport quand showSport et sport sont fournis', () => {
+    const match = makeMatch({ sport: { key: 'padel', name: 'Padel' } });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { showSport: true })} />
+      </ThemeProvider>
+    );
+    expect(screen.getByText('Padel')).toBeInTheDocument();
+  });
+
+  it('masque le chip sport quand showSport est false', () => {
+    const match = makeMatch({ sport: { key: 'padel', name: 'Padel' } });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { showSport: false })} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByText('Padel')).not.toBeInTheDocument();
+  });
+
   it('affiche le badge numérique quand unreadCount > 0', () => {
     const match = makeMatch({ unreadCount: 3, viewerIsParticipant: true });
     render(

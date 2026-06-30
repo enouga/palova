@@ -7,10 +7,12 @@ import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHe
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
 // Hero de la fiche tournoi : habillage tournoi au-dessus du AgendaHero partagé.
-export function TournamentHero({ t, now }: { t: TournamentDetail; now: Date | null }) {
+// `multiSport` (club à ≥2 sports) → pill sport en tête.
+export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDetail; now: Date | null; multiSport?: boolean }) {
   return (
     <AgendaHero
       pills={[
+        ...(multiSport ? [{ label: t.clubSport.sport.name }] : []),
         { label: t.category, strong: true },
         { label: GENDER_LABEL[t.gender] ?? t.gender },
         ...(t.gender === 'MEN' && t.openToWomen ? [{ label: 'Ouvert aux femmes' }] : []),

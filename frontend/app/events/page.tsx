@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, ClubEvent, TournamentGender, ClubEventKind, LessonSummary } from '@/lib/api';
 import { mergeAgenda, applyAgendaFilters, agendaFacets, eventPlacesLabel, AgendaFilter, KIND_LABEL } from '@/lib/events';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
 import { lessonKindLabel } from '@/lib/lessons';
 import { fillRatioLesson } from '@/lib/lessons';
@@ -98,6 +99,9 @@ export default function EventsPage() {
     return <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>Chargement…</div>;
   }
 
+  // Badge sport sur les cartes uniquement si le club propose plusieurs sports.
+  const multiSport = clubIsMultiSport(club);
+
   // Toggle générique d'une valeur dans un Set d'état (immutable pour déclencher le rendu).
   function toggle<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) {
     setter((prev) => { const next = new Set(prev); if (next.has(value)) next.delete(value); else next.add(value); return next; });
@@ -167,6 +171,7 @@ export default function EventsPage() {
                   ratio={fillRatio(item.tournament)}
                   places={tournamentPlacesLabel(item.tournament)}
                   extra={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
+                  sportLabel={multiSport ? (item.tournament.sport?.name ?? null) : null}
                   onClick={() => router.push(`/tournois/${item.tournament.id}`)}
                 />
               );
@@ -185,6 +190,7 @@ export default function EventsPage() {
                   ratio={fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
                   places={eventPlacesLabel(item.event)}
                   extra={[item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
+                  sportLabel={multiSport ? (item.event.sport?.name ?? null) : null}
                   onClick={() => router.push(`/events/${item.event.id}`)}
                 />
               );
@@ -203,6 +209,7 @@ export default function EventsPage() {
                 ratio={fillRatioLesson(item.lesson.confirmedCount, item.lesson.capacity)}
                 places={{ text: `${item.lesson.confirmedCount} / ${item.lesson.capacity} inscrits`, urgent: item.lesson.confirmedCount >= item.lesson.capacity }}
                 extra={`Coach : ${item.lesson.coach.name}`}
+                sportLabel={multiSport ? (item.lesson.sport?.name ?? null) : null}
                 onClick={() => router.push(`/cours/${item.lesson.id}`)}
               />
             );

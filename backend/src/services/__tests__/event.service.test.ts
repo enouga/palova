@@ -249,7 +249,10 @@ describe('EventService lectures', () => {
 
   it('listPublicByClubSlug : PUBLISHED seulement, avec compteurs', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
-    prismaMock.clubEvent.findMany.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }] as any);
+    prismaMock.clubEvent.findMany.mockResolvedValue([
+      { id: 'e1', clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+      { id: 'e2', clubSport: null },
+    ] as any);
     (prismaMock.eventRegistration.groupBy as jest.Mock).mockResolvedValue([
       { eventId: 'e1', status: 'CONFIRMED', _count: { _all: 4 } },
       { eventId: 'e1', status: 'WAITLISTED', _count: { _all: 2 } },
@@ -260,13 +263,24 @@ describe('EventService lectures', () => {
     expect(prismaMock.clubEvent.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { clubId: 'club-demo', status: 'PUBLISHED' },
     }));
-    expect(out[0]).toMatchObject({ id: 'e1', confirmedCount: 4, waitlistCount: 2 });
-    expect(out[1]).toMatchObject({ id: 'e2', confirmedCount: 0, waitlistCount: 0 });
+    expect(out[0]).toMatchObject({ id: 'e1', confirmedCount: 4, waitlistCount: 2, sport: { key: 'padel', name: 'Padel' } });
+    expect(out[1]).toMatchObject({ id: 'e2', confirmedCount: 0, waitlistCount: 0, sport: null });
+    expect((out[0] as Record<string, unknown>).clubSport).toBeUndefined();
   });
 
   it('getById : masque les DRAFT', async () => {
     prismaMock.clubEvent.findUnique.mockResolvedValue({ id: 'e1', status: 'DRAFT' } as any);
     await expect(service.getById('e1')).rejects.toThrow('EVENT_NOT_FOUND');
+  });
+
+  it('getById : expose le sport (aplati, null si clubSport absent)', async () => {
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' }, clubSport: { sport: { key: 'tennis', name: 'Tennis' } } } as any);
+    (prismaMock.eventRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+
+    const out = await service.getById('e1');
+
+    expect(out.sport).toEqual({ key: 'tennis', name: 'Tennis' });
+    expect((out as Record<string, unknown>).clubSport).toBeUndefined();
   });
 
   it('listParticipants : masque les DRAFT', async () => {
@@ -341,13 +355,17 @@ describe('EventService lectures', () => {
     expect(prismaMock.playerRating.findMany).not.toHaveBeenCalled();
   });
 
-  it('listUserRegistrations : inscriptions actives avec event + club', async () => {
-    prismaMock.eventRegistration.findMany.mockResolvedValue([{ id: 'r1', status: 'CONFIRMED' }] as any);
+  it('listUserRegistrations : inscriptions actives avec event + club + sport aplati', async () => {
+    prismaMock.eventRegistration.findMany.mockResolvedValue([
+      { id: 'r1', status: 'CONFIRMED', event: { id: 'e1', club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } } },
+    ] as any);
     const out = await service.listUserRegistrations('user-1');
     expect(prismaMock.eventRegistration.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { userId: 'user-1', status: { not: 'CANCELLED' } },
     }));
     expect(out).toHaveLength(1);
+    expect(out[0].event.sport).toEqual({ key: 'padel', name: 'Padel' });
+    expect((out[0].event as Record<string, unknown>).clubSport).toBeUndefined();
   });
 });
 

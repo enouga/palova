@@ -286,19 +286,25 @@ export class EventService {
     const events = await prisma.clubEvent.findMany({
       where: { clubId: club.id, status: 'PUBLISHED' },
       orderBy: { startTime: 'asc' },
+      include: { clubSport: { select: { sport: { select: { key: true, name: true } } } } },
     });
-    return this.withCounts(events);
+    const withCounts = await this.withCounts(events);
+    return withCounts.map(({ clubSport, ...e }) => ({ ...e, sport: clubSport?.sport ?? null }));
   }
 
   /** Détail public (DRAFT masqué) + compteurs + infos club. */
   async getById(eventId: string) {
     const e = await prisma.clubEvent.findUnique({
       where: { id: eventId },
-      include: { club: { select: { slug: true, name: true, timezone: true } } },
+      include: {
+        club: { select: { slug: true, name: true, timezone: true } },
+        clubSport: { select: { sport: { select: { key: true, name: true } } } },
+      },
     });
     if (!e || e.status === 'DRAFT') throw new Error('EVENT_NOT_FOUND');
     const [withCount] = await this.withCounts([e]);
-    return withCount;
+    const { clubSport, ...rest } = withCount;
+    return { ...rest, sport: clubSport?.sport ?? null };
   }
 
   /** Liste publique des inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
@@ -330,10 +336,17 @@ export class EventService {
 
   /** Inscriptions actives du joueur connecté, tous clubs, avec event + club. */
   async listUserRegistrations(userId: string) {
-    return prisma.eventRegistration.findMany({
+    const regs = await prisma.eventRegistration.findMany({
       where: { userId, status: { not: 'CANCELLED' } },
       orderBy: { event: { startTime: 'asc' } },
-      include: { event: { include: { club: { select: { slug: true, name: true, timezone: true } } } } },
+      include: { event: { include: {
+        club: { select: { slug: true, name: true, timezone: true } },
+        clubSport: { select: { sport: { select: { key: true, name: true } } } },
+      } } },
+    });
+    return regs.map((r) => {
+      const { clubSport, ...event } = r.event;
+      return { ...r, event: { ...event, sport: clubSport?.sport ?? null } };
     });
   }
 

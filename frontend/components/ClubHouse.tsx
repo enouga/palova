@@ -13,6 +13,7 @@ import { Icon } from '@/components/ui/Icon';
 import { HeroAnnouncement } from '@/components/clubhouse/HeroAnnouncement';
 import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { PartnerOffers } from '@/components/clubhouse/PartnerOffers';
 import { MatchesForYou } from '@/components/clubhouse/MatchesForYou';
 
@@ -114,7 +115,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
           <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:600px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
           <div className="ch-grid">
             <SlotsAlaUne slots={slots} timezone={club.timezone} />
-            <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} />
+            <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
           </div>
         </div>
       )}
