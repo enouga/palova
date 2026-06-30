@@ -73,3 +73,35 @@ describe('FollowService — follow/unfollow', () => {
     expect(rel).toEqual({ iFollow: false, followsMe: false, mutual: false });
   });
 });
+
+describe('FollowService — listes', () => {
+  let service: FollowService;
+  beforeEach(() => { service = new FollowService(); });
+
+  it('listFollowing renvoie mes suivis avec le flag mutual', async () => {
+    prismaMock.follow.findMany
+      .mockResolvedValueOnce([ // mes suivis
+        { following: { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null } },
+        { following: { id: 'u3', firstName: 'Tom', lastName: 'B', avatarUrl: 'a.png' } },
+      ] as any)
+      .mockResolvedValueOnce([{ followerId: 'u2' }] as any); // qui me suit en retour (parmi u2,u3)
+
+    const list = await service.listFollowing('u1');
+
+    expect(list).toEqual([
+      { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null,    mutual: true },
+      { id: 'u3', firstName: 'Tom', lastName: 'B', avatarUrl: 'a.png', mutual: false },
+    ]);
+  });
+
+  it('listFollowers renvoie ceux qui me suivent avec le flag mutual', async () => {
+    prismaMock.follow.findMany
+      .mockResolvedValueOnce([
+        { follower: { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null } },
+      ] as any)
+      .mockResolvedValueOnce([{ followingId: 'u2' }] as any); // ceux que je suis (parmi mes followers)
+
+    const list = await service.listFollowers('u1');
+    expect(list).toEqual([{ id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, mutual: true }]);
+  });
+});
