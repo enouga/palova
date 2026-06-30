@@ -580,6 +580,18 @@ export const api = {
   searchClubMembers: (slug: string, q: string, token: string) =>
     request<ClubMemberSearchResult[]>(`/api/clubs/${slug}/members/search?q=${encodeURIComponent(q)}`, {}, token),
 
+  // --- Amis / suivi ---
+  listClubFriends: (slug: string, token: string, q?: string) =>
+    request<Friend[]>(`/api/clubs/${slug}/friends${q ? `?q=${encodeURIComponent(q)}` : ''}`, {}, token),
+  listFollowing: (token: string, q?: string) =>
+    request<Friend[]>(`/api/me/following${q ? `?q=${encodeURIComponent(q)}` : ''}`, {}, token),
+  listFollowers: (token: string) =>
+    request<Friend[]>(`/api/me/followers`, {}, token),
+  followUser: (slug: string, userId: string, token: string) =>
+    request<FollowRelation>(`/api/clubs/${slug}/follows/${userId}`, { method: 'POST' }, token),
+  unfollowUser: (slug: string, userId: string, token: string) =>
+    request<FollowRelation>(`/api/clubs/${slug}/follows/${userId}`, { method: 'DELETE' }, token),
+
   getMyClubMembership: (slug: string, token: string) =>
     request<MyClubMembership>(`/api/clubs/${slug}/me/membership`, {}, token),
 
@@ -1812,6 +1824,23 @@ export interface ClubMemberSearchResult {
   firstName: string;
   lastName: string;
   level?: UserLevel | null;
+  iFollow?: boolean;   // annoté par searchMembers
+  mutual?: boolean;
+}
+
+export interface Friend {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  level?: UserLevel | null;
+  mutual: boolean;
+}
+
+export interface FollowRelation {
+  iFollow: boolean;
+  followsMe: boolean;
+  mutual: boolean;
 }
 
 export interface MyClubMembership {
