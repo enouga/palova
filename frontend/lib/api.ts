@@ -197,7 +197,7 @@ export const api = {
     body: { reservationId: string; type: 'payment' | 'setup'; payShare?: boolean },
     token: string,
   ) =>
-    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
+    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null; customerSessionClientSecret: string | null }>(
       `/api/clubs/${slug}/stripe/intent`,
       { method: 'POST', body: JSON.stringify(body) },
       token,
@@ -210,7 +210,7 @@ export const api = {
     regId: string,
     token: string,
   ) =>
-    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null }>(
+    request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null; customerSessionClientSecret: string | null }>(
       `/api/${kind}/${eventId}/registrations/${regId}/intent`,
       { method: 'POST' },
       token,

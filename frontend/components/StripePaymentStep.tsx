@@ -18,7 +18,7 @@ interface Props {
   /** Étape à exécuter juste avant la confirmation Stripe (ex. persister les joueurs/visibilité). */
   beforeSubmit?: () => Promise<void>;
   /** Crée un PaymentIntent ou SetupIntent et renvoie son client_secret + le compte Connect. */
-  createIntent: () => Promise<{ clientSecret: string; stripeAccountId: string | null }>;
+  createIntent: () => Promise<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret?: string | null }>;
   /** Confirme le paiement/setup côté backend après validation Stripe. */
   confirm: (ids: { stripePaymentIntentId?: string; stripeSetupIntentId?: string }) => Promise<void>;
   onSuccess: () => void;
@@ -85,12 +85,14 @@ function StripeForm({ type, amountLabel, cgvAccepted, beforeSubmit, confirm, onS
 export default function StripePaymentStep(props: Props) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [customerSessionClientSecret, setCustomerSessionClientSecret] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     props.createIntent()
       .then((r) => {
         setStripeAccountId(r.stripeAccountId ?? null);
+        setCustomerSessionClientSecret(r.customerSessionClientSecret ?? null);
         setClientSecret(r.clientSecret);
       })
       .catch(() => setFetchError('Impossible d\'initialiser le paiement.'));
@@ -115,7 +117,10 @@ export default function StripePaymentStep(props: Props) {
   }
 
   return (
-    <Elements stripe={getStripe(stripeAccountId)} options={{ clientSecret, locale: 'fr' }}>
+    <Elements
+      stripe={getStripe(stripeAccountId)}
+      options={{ clientSecret, ...(customerSessionClientSecret ? { customerSessionClientSecret } : {}), locale: 'fr' }}
+    >
       <StripeForm {...props} />
     </Elements>
   );

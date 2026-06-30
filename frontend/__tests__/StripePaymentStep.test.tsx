@@ -4,6 +4,7 @@ import StripePaymentStep from '@/components/StripePaymentStep';
 
 const mockConfirmPayment = jest.fn();
 const mockConfirmSetup = jest.fn();
+let mockLastElementsOptions: any = null;
 
 jest.mock('@/components/ui/atoms', () => ({
   Btn: ({ onClick, children, disabled, variant }: any) => (
@@ -12,7 +13,7 @@ jest.mock('@/components/ui/atoms', () => ({
 }));
 
 jest.mock('@stripe/react-stripe-js', () => ({
-  Elements: ({ children }: any) => <div>{children}</div>,
+  Elements: ({ children, options }: any) => { mockLastElementsOptions = options; return <div>{children}</div>; },
   PaymentElement: () => <div data-testid="payment-element" />,
   useStripe: () => ({ confirmPayment: mockConfirmPayment, confirmSetup: mockConfirmSetup }),
   useElements: () => ({}),
@@ -29,7 +30,7 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); mockLastElementsOptions = null; });
 
 const defaultProps = {
   type: 'payment' as const,
@@ -88,5 +89,23 @@ describe('StripePaymentStep', () => {
     render(<StripePaymentStep {...defaultProps} />);
     fireEvent.click(screen.getByText(/Annuler/));
     expect(defaultProps.onCancel).toHaveBeenCalled();
+  });
+
+  it('passe customerSessionClientSecret aux options Elements quand fourni', async () => {
+    const props = {
+      ...defaultProps,
+      createIntent: jest.fn().mockResolvedValue({
+        clientSecret: 'pi_test_secret', stripeAccountId: null, customerSessionClientSecret: 'cuss_x',
+      }),
+    };
+    render(<StripePaymentStep {...props} />);
+    await waitFor(() => expect(screen.getByTestId('payment-element')).toBeInTheDocument());
+    expect(mockLastElementsOptions.customerSessionClientSecret).toBe('cuss_x');
+  });
+
+  it('omet customerSessionClientSecret des options quand null', async () => {
+    render(<StripePaymentStep {...defaultProps} />);
+    await waitFor(() => expect(screen.getByTestId('payment-element')).toBeInTheDocument());
+    expect(mockLastElementsOptions.customerSessionClientSecret).toBeUndefined();
   });
 });
