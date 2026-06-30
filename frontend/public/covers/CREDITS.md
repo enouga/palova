@@ -17,6 +17,10 @@ commercial, **sans attribution requise** ni inscription. <https://www.pexels.com
 | court-6.jpg | 30617588 | https://www.pexels.com/photo/30617588/ |
 | court-7.jpg | 27151849 | https://www.pexels.com/photo/27151849/ |
 | court-8.jpg | 12029162 | https://www.pexels.com/photo/12029162/ |
+| court-9.jpg | 29820786 | https://www.pexels.com/photo/29820786/ |
+| court-10.jpg | 29821186 | https://www.pexels.com/photo/29821186/ |
+| court-11.jpg | 34116480 | https://www.pexels.com/photo/34116480/ |
+| court-12.jpg | 32832523 | https://www.pexels.com/photo/32832523/ |
 
 Pour remplacer/ajouter des photos : déposer des JPEG ~1200×600 ici et mettre à jour la
 liste `COVER_PHOTOS` dans `frontend/lib/clubCover.ts`.

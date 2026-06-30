@@ -8,7 +8,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/components/ClubCard', () => ({
-  ClubCard: ({ club }: { club: { name: string } }) => <div>{club.name}</div>,
+  ClubCard: ({ club, defaultCover }: { club: { name: string }; defaultCover?: string }) =>
+    <div data-testid="club-card" data-cover={defaultCover}>{club.name}</div>,
 }));
 
 const getSports = jest.fn();
@@ -89,4 +90,17 @@ it('« Autour de moi » relance listClubs avec lat/lng', async () => {
   await waitFor(() =>
     expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ lat: 48.86, lng: 2.35 })),
   );
+});
+
+it('fait tourner la banque de couvertures → cartes voisines distinctes', async () => {
+  authToken = null; // évite le filtre sport, simplifie le chargement
+  const club = (id: string) => ({
+    id, slug: id, name: id.toUpperCase(), city: null, description: null,
+    accentColor: '#123456', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1,
+  });
+  listClubs.mockResolvedValue([club('a'), club('b'), club('c')]);
+  wrap();
+  await waitFor(() => expect(screen.getAllByTestId('club-card')).toHaveLength(3));
+  const covers = screen.getAllByTestId('club-card').map((el) => el.getAttribute('data-cover'));
+  expect(new Set(covers).size).toBe(3); // 3 cartes → 3 couvertures distinctes (rotation)
 });

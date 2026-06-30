@@ -18,6 +18,11 @@ describe('ClubCover', () => {
     expect(img.getAttribute('src')).toMatch(/^\/covers\/court-\d+\.jpg$/);
   });
 
+  it('defaultPhoto impose la photo par défaut (rotation de l annuaire)', () => {
+    wrap(<ClubCover club={base} defaultPhoto="/covers/court-5.jpg" />);
+    expect(screen.getByRole('img', { name: /Couverture Padel Arena/ }).getAttribute('src')).toBe('/covers/court-5.jpg');
+  });
+
   it('si la photo par défaut échoue → repli mesh + initiales', () => {
     wrap(<ClubCover club={base} />);
     fireEvent.error(screen.getByRole('img', { name: /Couverture Padel Arena/ }));
