@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma';
-import { EMAIL_DEFS, EmailDef, EmailOverride } from '../email/registry';
+import { EMAIL_DEFS, EmailDef, EmailOverride, sanitizeBodyHtml, collectPlaceholders } from '../email/registry';
 
 export interface EmailSummary {
   type: string; group: EmailDef['group']; title: string; description: string; customized: boolean;
@@ -45,6 +45,50 @@ export class EmailTemplateService {
     } catch {
       return null;
     }
+  }
+
+  /** Variables `{{…}}` du brouillon non déclarées par la définition. */
+  private unknownVarsFor(def: EmailDef, draft: { subject: string; heading: string; bodyHtml: string; ctaLabel?: string; footerNote?: string }): string[] {
+    const declared = new Set(def.vars.map((v) => v.key));
+    const used = new Set<string>([
+      ...collectPlaceholders(draft.subject),
+      ...collectPlaceholders(draft.heading),
+      ...collectPlaceholders(draft.bodyHtml),
+      ...collectPlaceholders(draft.ctaLabel ?? ''),
+      ...collectPlaceholders(draft.footerNote ?? ''),
+    ]);
+    return [...used].filter((k) => !declared.has(k));
+  }
+
+  async upsert(
+    clubId: string,
+    type: string,
+    draft: { subject: string; heading: string; bodyHtml: string; ctaLabel?: string | null; footerNote?: string | null },
+  ): Promise<{ override: EmailOverride; unknownVars: string[] }> {
+    const def = EMAIL_DEFS[type];
+    if (!def) throw new Error('EMAIL_TYPE_UNKNOWN');
+
+    const subject = (draft.subject ?? '').trim();
+    const heading = (draft.heading ?? '').trim();
+    const bodyRaw = (draft.bodyHtml ?? '').trim();
+    if (!subject || !heading || !bodyRaw) throw new Error('VALIDATION_ERROR');
+    if (subject.length > 200 || heading.length > 200 || bodyRaw.length > 10000) throw new Error('VALIDATION_ERROR');
+
+    const bodyHtml = sanitizeBodyHtml(bodyRaw);
+    const ctaLabel = (draft.ctaLabel ?? '').trim() || null;
+    const footerNote = (draft.footerNote ?? '').trim() || null;
+
+    const data = { subject, heading, bodyHtml, ctaLabel, footerNote };
+    await prisma.clubEmailTemplate.upsert({
+      where: { clubId_type: { clubId, type } },
+      create: { clubId, type, ...data },
+      update: data,
+    });
+    return { override: { subject, heading, bodyHtml, ctaLabel, footerNote }, unknownVars: this.unknownVarsFor(def, { subject, heading, bodyHtml, ctaLabel: ctaLabel ?? '', footerNote: footerNote ?? '' }) };
+  }
+
+  async remove(clubId: string, type: string): Promise<void> {
+    await prisma.clubEmailTemplate.deleteMany({ where: { clubId, type } });
   }
 }
 

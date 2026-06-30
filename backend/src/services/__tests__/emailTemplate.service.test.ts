@@ -45,3 +45,34 @@ describe('EmailTemplateService (lecture)', () => {
     });
   });
 });
+
+describe('EmailTemplateService (écriture)', () => {
+  const service = new EmailTemplateService();
+  const draft = { subject: 'Salut {{prenom}}', heading: 'Hello', bodyHtml: '<p>Yo <script>x</script></p>', ctaLabel: '', footerNote: '' };
+
+  it('upsert assainit le corps et renvoie unknownVars', async () => {
+    (prismaMock.clubEmailTemplate.upsert as jest.Mock).mockImplementation(async (args: any) => args.create);
+    const res = await service.upsert('club-1', 'registration.confirmed', { ...draft, bodyHtml: '<p>{{prenom}} {{inconnu}}<script>x</script></p>' });
+    expect(res.unknownVars).toContain('inconnu');
+    const call = prismaMock.clubEmailTemplate.upsert.mock.calls[0][0] as any;
+    expect(call.create.bodyHtml).not.toContain('<script');
+    expect(call.create.ctaLabel).toBeNull(); // '' → null
+  });
+
+  it('upsert refuse un type inconnu', async () => {
+    await expect(service.upsert('club-1', 'nope', draft)).rejects.toThrow('EMAIL_TYPE_UNKNOWN');
+  });
+
+  it('upsert refuse un champ requis vide', async () => {
+    await expect(service.upsert('club-1', 'registration.confirmed', { ...draft, subject: '   ' }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('remove supprime la surcharge (idempotent)', async () => {
+    prismaMock.clubEmailTemplate.deleteMany.mockResolvedValue({ count: 1 } as any);
+    await service.remove('club-1', 'registration.confirmed');
+    expect(prismaMock.clubEmailTemplate.deleteMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-1', type: 'registration.confirmed' },
+    });
+  });
+});
