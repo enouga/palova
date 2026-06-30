@@ -4,14 +4,18 @@ import { absoluteAsset } from './links';
 
 const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
+/** Vrai si `vars` porte la clé en propre (jamais une clé héritée du prototype, ex. `toString`). */
+const hasVar = (vars: Record<string, string>, k: string): boolean =>
+  Object.prototype.hasOwnProperty.call(vars, k);
+
 /** Substitution texte : valeur brute, placeholder inconnu → retiré. */
 export function substituteText(tpl: string, vars: Record<string, string>): string {
-  return tpl.replace(PLACEHOLDER, (_m, k: string) => (k in vars ? vars[k] : ''));
+  return tpl.replace(PLACEHOLDER, (_m, k: string) => (hasVar(vars, k) ? vars[k] : ''));
 }
 
 /** Substitution dans du HTML : valeur HTML-échappée, placeholder inconnu → retiré. */
 export function substituteHtml(tpl: string, vars: Record<string, string>): string {
-  return tpl.replace(PLACEHOLDER, (_m, k: string) => (k in vars ? escapeHtml(vars[k]) : ''));
+  return tpl.replace(PLACEHOLDER, (_m, k: string) => (hasVar(vars, k) ? escapeHtml(vars[k]) : ''));
 }
 
 /** Clés `{{…}}` uniques présentes dans un gabarit. */
@@ -465,12 +469,20 @@ export interface EmailOverride {
 
 export interface BuiltEmail { subject: string; html: string; text: string; }
 
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '');
+/** Convertit du HTML en texte brut : balises de bloc → saut de ligne, autres balises retirées. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/\s*(p|li|h2|h3|blockquote|ul|ol)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
-function buildText(introHtml: string, infoRows: InfoRow[], ctaLabel: string | undefined, ctaUrl: string | undefined, footerNote: string | undefined): string {
-  const lines = [stripTags(introHtml).replace(/\s+/g, ' ').trim(), ''];
+function buildText(textBody: string, infoRows: InfoRow[], ctaLabel: string | undefined, ctaUrl: string | undefined, footerNote: string | undefined): string {
+  const lines = [textBody, ''];
   for (const r of infoRows) lines.push(`${r.label} : ${r.value}`);
   if (ctaLabel && ctaUrl) { lines.push('', `${ctaLabel} : ${ctaUrl}`); }
   if (footerNote) { lines.push('', footerNote); }
@@ -502,12 +514,15 @@ export function renderClubEmail(
   const heading = substituteText(headingTpl, vars);
   const substitutedBody = substituteHtml(bodyTpl, vars);
   const introHtml = usingCustomBody ? sanitizeBodyHtml(substitutedBody) : substitutedBody;
+  // Texte brut dérivé du gabarit substitué AVEC valeurs brutes (non échappées) :
+  // évite les entités HTML (&amp;) et fusionne pas les paragraphes (sauts de ligne).
+  const textBody = htmlToText(substituteText(bodyTpl, vars));
   const ctaLabel = ctaTpl ? substituteText(ctaTpl, vars) : undefined;
   const footerNote = substituteText(footerTpl, vars) || undefined;
   const infoRows = def.infoRows ? def.infoRows(vars) : [];
   const ctaUrl = def.hasCta ? vars.lien : undefined;
 
   const html = renderLayout({ brand, preheader: subject, heading, introHtml, infoRows, ctaLabel, ctaUrl, footerNote });
-  const text = buildText(introHtml, infoRows, ctaLabel, ctaUrl, footerNote);
+  const text = buildText(textBody, infoRows, ctaLabel, ctaUrl, footerNote);
   return { subject, html, text };
 }

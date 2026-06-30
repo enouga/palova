@@ -17,6 +17,12 @@ describe('substituteText', () => {
   it('retire les placeholders inconnus', () => {
     expect(substituteText('A {{x}} B', {})).toBe('A  B');
   });
+  it('retire les clés héritées du prototype (toString, constructor)', () => {
+    expect(substituteText('a {{toString}} z', {})).toBe('a  z');
+  });
+  it('tolère les espaces autour du nom de variable', () => {
+    expect(substituteText('a {{ prenom }} z', { prenom: 'X' })).toBe('a X z');
+  });
 });
 
 describe('substituteHtml', () => {
@@ -133,5 +139,27 @@ describe('renderClubEmail', () => {
 
   it('lève EMAIL_TYPE_UNKNOWN pour un type inconnu', () => {
     expect(() => renderClubEmail('nope', {}, brand, null)).toThrow('EMAIL_TYPE_UNKNOWN');
+  });
+
+  it('produit un texte brut lisible (valeurs brutes, paragraphes séparés)', () => {
+    const mail = renderClubEmail('registration.confirmed', {
+      prenom: 'Léa', activite: 'Tennis & Padel', ref_activite: 'le tournoi',
+      club: 'Smith & Co', date: 'dim. 6 juil. 14h00', coequipier: '', phrase_coequipier: '',
+      lien: 'https://x.fr/t/1',
+    }, brand, null);
+    expect(mail.text).toContain('Bonjour Léa,');
+    expect(mail.text).toContain('Tennis & Padel');
+    expect(mail.text).toContain('Club : Smith & Co');
+    expect(mail.text).not.toContain('&amp;');
+    expect(mail.text).not.toContain('&lt;');
+    expect(mail.text).not.toContain('Léa,Votre');
+  });
+
+  it('ne nettoie PAS le corps par défaut (styles inline préservés)', () => {
+    const mail = renderClubEmail('match.disputed', {
+      prenom: 'Marie', auteur: 'Éric', score: '6-4 / 6-3', extrait: 'Litige',
+      lien: 'https://x.fr/m/1',
+    }, brand, null);
+    expect(mail.html).toContain('background:#f4f4f5');
   });
 });
