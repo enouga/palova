@@ -98,6 +98,6 @@ describe('EmailTemplateService (aperçu/test)', () => {
   it('sendTest envoie au destinataire fourni', async () => {
     prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
     await service.sendTest('club-1', 'registration.confirmed', draft, 'admin@x.fr');
-    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@x.fr', subject: 'Salut Marie' }));
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@x.fr', subject: '[Test] Salut Marie' }));
   });
 });

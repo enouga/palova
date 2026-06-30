@@ -115,7 +115,7 @@ export class EmailTemplateService {
     if (!to) throw new Error('VALIDATION_ERROR');
     const brand = await this.loadBrand(clubId);
     const mail = renderClubEmail(type, sampleVars(def), brand, draft);
-    await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
+    await sendMail({ to, subject: `[Test] ${mail.subject}`, html: mail.html, text: mail.text });
   }
 }
 
