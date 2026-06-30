@@ -1,5 +1,9 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+
+jest.mock('../../email/mailer', () => ({ sendMail: jest.fn().mockResolvedValue(undefined) }));
+const { sendMail } = require('../../email/mailer') as { sendMail: jest.Mock };
+
 import { EmailTemplateService } from '../emailTemplate.service';
 
 describe('EmailTemplateService (lecture)', () => {
@@ -74,5 +78,26 @@ describe('EmailTemplateService (écriture)', () => {
     expect(prismaMock.clubEmailTemplate.deleteMany).toHaveBeenCalledWith({
       where: { clubId: 'club-1', type: 'registration.confirmed' },
     });
+  });
+});
+
+describe('EmailTemplateService (aperçu/test)', () => {
+  const service = new EmailTemplateService();
+  const club = { name: 'Padel Arena', logoUrl: null, accentColor: '#1a2b3c' };
+  const draft = { subject: 'Salut {{prenom}}', heading: 'Hello', bodyHtml: '<p>Yo {{activite}}</p>', ctaLabel: '', footerNote: '' };
+
+  beforeEach(() => sendMail.mockClear());
+
+  it('renderPreview rend avec les valeurs d\'exemple', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
+    const res = await service.renderPreview('club-1', 'registration.confirmed', draft);
+    expect(res.subject).toBe('Salut Marie'); // sample prenom = Marie
+    expect(res.html).toContain('Yo Tournoi P100 du dimanche');
+  });
+
+  it('sendTest envoie au destinataire fourni', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue(club as any);
+    await service.sendTest('club-1', 'registration.confirmed', draft, 'admin@x.fr');
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@x.fr', subject: 'Salut Marie' }));
   });
 });

@@ -1,5 +1,7 @@
 import { prisma } from '../db/prisma';
-import { EMAIL_DEFS, EmailDef, EmailOverride, sanitizeBodyHtml, collectPlaceholders } from '../email/registry';
+import { EMAIL_DEFS, EmailDef, EmailOverride, sanitizeBodyHtml, collectPlaceholders, renderClubEmail, brandFromClub, sampleVars } from '../email/registry';
+import { sendMail } from '../email/mailer';
+import { Brand } from '../email/templates/layout';
 
 export interface EmailSummary {
   type: string; group: EmailDef['group']; title: string; description: string; customized: boolean;
@@ -89,6 +91,31 @@ export class EmailTemplateService {
 
   async remove(clubId: string, type: string): Promise<void> {
     await prisma.clubEmailTemplate.deleteMany({ where: { clubId, type } });
+  }
+
+  private async loadBrand(clubId: string): Promise<Brand> {
+    const club = await prisma.club.findUniqueOrThrow({
+      where: { id: clubId }, select: { name: true, logoUrl: true, accentColor: true },
+    });
+    return brandFromClub(club);
+  }
+
+  /** Rend l'email avec les valeurs d'exemple du registre, en appliquant le brouillon. */
+  async renderPreview(clubId: string, type: string, draft: EmailOverride): Promise<{ subject: string; html: string }> {
+    const def = EMAIL_DEFS[type];
+    if (!def) throw new Error('EMAIL_TYPE_UNKNOWN');
+    const brand = await this.loadBrand(clubId);
+    const mail = renderClubEmail(type, sampleVars(def), brand, draft);
+    return { subject: mail.subject, html: mail.html };
+  }
+
+  async sendTest(clubId: string, type: string, draft: EmailOverride, to: string): Promise<void> {
+    const def = EMAIL_DEFS[type];
+    if (!def) throw new Error('EMAIL_TYPE_UNKNOWN');
+    if (!to) throw new Error('VALIDATION_ERROR');
+    const brand = await this.loadBrand(clubId);
+    const mail = renderClubEmail(type, sampleVars(def), brand, draft);
+    await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
   }
 }
 
