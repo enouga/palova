@@ -81,12 +81,45 @@ export class StripeService {
     });
   }
 
+  /**
+   * Crée une CustomerSession pour ré-afficher la carte enregistrée du joueur
+   * (pré-sélectionnée) dans le PaymentElement. Le filtre allow_redisplay inclut
+   * 'unspecified' pour faire apparaître les cartes déjà enregistrées sans muter
+   * le PaymentMethod. Best-effort : tout échec renvoie null → le PaymentElement
+   * retombe sur le formulaire vierge, le paiement n'échoue jamais.
+   */
+  private async buildCustomerSession(
+    stripeAccountId: string,
+    stripeCustomerId: string,
+  ): Promise<string | null> {
+    try {
+      const cs = await stripe.customerSessions.create(
+        {
+          customer: stripeCustomerId,
+          components: {
+            payment_element: {
+              enabled: true,
+              features: {
+                payment_method_redisplay: 'enabled',
+                payment_method_allow_redisplay_filters: ['always', 'limited', 'unspecified'],
+              },
+            },
+          },
+        },
+        { stripeAccount: stripeAccountId },
+      );
+      return cs.client_secret ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async createPaymentIntent(params: {
     clubId: string;
     userId: string;
     reservationId: string;
     amountCents: number;
-  }): Promise<{ clientSecret: string }> {
+  }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
     const club = await prisma.club.findUnique({
       where: { id: params.clubId },
       select: { stripeAccountId: true, stripeAccountStatus: true },
@@ -109,14 +142,17 @@ export class StripeService {
     );
 
     if (!pi.client_secret) throw new Error('STRIPE_ERROR');
-    return { clientSecret: pi.client_secret };
+    const customerSessionClientSecret = await this.buildCustomerSession(
+      club.stripeAccountId, customer.stripeCustomerId,
+    );
+    return { clientSecret: pi.client_secret, customerSessionClientSecret };
   }
 
   async createSetupIntent(params: {
     clubId: string;
     userId: string;
     reservationId: string;
-  }): Promise<{ clientSecret: string }> {
+  }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
     const club = await prisma.club.findUnique({
       where: { id: params.clubId },
       select: { stripeAccountId: true, stripeAccountStatus: true },
@@ -138,7 +174,7 @@ export class StripeService {
     );
 
     if (!si.client_secret) throw new Error('STRIPE_ERROR');
-    return { clientSecret: si.client_secret };
+    return { clientSecret: si.client_secret, customerSessionClientSecret: null };
   }
 
   private regMetaKey(kind: 'tournament' | 'event'): 'tournamentRegistrationId' | 'eventRegistrationId' {
@@ -147,7 +183,7 @@ export class StripeService {
 
   async createRegistrationPaymentIntent(params: {
     clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event'; amountCents: number;
-  }): Promise<{ clientSecret: string }> {
+  }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
     const club = await prisma.club.findUnique({
       where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
     });
@@ -162,12 +198,15 @@ export class StripeService {
       { stripeAccount: club.stripeAccountId },
     );
     if (!pi.client_secret) throw new Error('STRIPE_ERROR');
-    return { clientSecret: pi.client_secret };
+    const customerSessionClientSecret = await this.buildCustomerSession(
+      club.stripeAccountId, customer.stripeCustomerId,
+    );
+    return { clientSecret: pi.client_secret, customerSessionClientSecret };
   }
 
   async createRegistrationSetupIntent(params: {
     clubId: string; userId: string; registrationId: string; kind: 'tournament' | 'event';
-  }): Promise<{ clientSecret: string }> {
+  }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
     const club = await prisma.club.findUnique({
       where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
     });
@@ -181,7 +220,7 @@ export class StripeService {
       { stripeAccount: club.stripeAccountId },
     );
     if (!si.client_secret) throw new Error('STRIPE_ERROR');
-    return { clientSecret: si.client_secret };
+    return { clientSecret: si.client_secret, customerSessionClientSecret: null };
   }
 
   async chargeRegistrationOffSession(params: {
