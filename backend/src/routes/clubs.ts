@@ -240,6 +240,13 @@ router.get('/:slug/open-matches/unread-count', authMiddleware, async (req: AuthR
   catch (err) { handleError(err, res, next); }
 });
 
+// Lecture publique d'une partie ouverte (page /parties/[id]). Déclarée APRÈS /unread-count
+// pour que ce segment ne soit pas capturé comme un id.
+router.get('/:slug/open-matches/:id', optionalAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.getOpenMatch(asString(req.params.slug), asString(req.params.id), req.user?.id ?? null)); }
+  catch (err) { handleError(err, res, next); }
+});
+
 router.post('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.joinOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }

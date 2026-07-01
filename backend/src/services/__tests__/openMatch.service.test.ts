@@ -688,4 +688,67 @@ describe('OpenMatchService', () => {
       })).rejects.toThrow('NOT_ORGANIZER');
     });
   });
+
+  describe('getOpenMatch', () => {
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'm1', startTime: future(48), endTime: future(49),
+      visibility: 'PUBLIC', status: 'CONFIRMED',
+      targetLevelMin: null, targetLevelMax: null,
+      resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubId: 'club-demo', clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+      participants: [
+        { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
+      ],
+      openMatchInterests: [],
+      openMatchMessages: [],
+      ...over,
+    });
+
+    it('renvoie la partie avec les flags du viewer (membre)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row() as any);
+      const out = await service.getOpenMatch('club-demo', 'm1', 'org');
+      expect(out.id).toBe('m1');
+      expect(out.resourceName).toBe('Court 1');
+      expect(out.sport).toEqual({ key: 'padel', name: 'Padel' });
+      expect(out.maxPlayers).toBe(4);
+      expect(out.spotsLeft).toBe(3);
+      expect(out.viewerIsOrganizer).toBe(true);
+      expect(out.viewerIsParticipant).toBe(true);
+      for (const p of out.players) expect([1, 2]).toContain(p.team);
+    });
+
+    it('renvoie la partie pour un viewer anonyme (flags à false)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row() as any);
+      const out = await service.getOpenMatch('club-demo', 'm1', null);
+      expect(out.viewerIsParticipant).toBe(false);
+      expect(out.viewerIsOrganizer).toBe(false);
+      expect(out.viewerIsInterested).toBe(false);
+      expect(out.unreadCount).toBe(0);
+    });
+
+    it('autorise une partie déjà passée (lien partagé résout toujours)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ startTime: new Date(Date.now() - 3_600_000), endTime: new Date() }) as any);
+      const out = await service.getOpenMatch('club-demo', 'm1', null);
+      expect(out.id).toBe('m1');
+    });
+
+    it('404 RESERVATION_NOT_FOUND si introuvable', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(null as any);
+      await expect(service.getOpenMatch('club-demo', 'nope', null)).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+
+    it('404 si visibilité non PUBLIC', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ visibility: 'PRIVATE' }) as any);
+      await expect(service.getOpenMatch('club-demo', 'm1', null)).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+
+    it('404 si la partie appartient à un autre club', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ resource: { id: 'c', name: 'X', attributes: {}, clubId: 'autre-club', clubSport: { sport: { key: 'padel', name: 'Padel' } } } }) as any);
+      await expect(service.getOpenMatch('club-demo', 'm1', null)).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+
+    it('404 si le sport n’est pas le padel', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ resource: { id: 'c', name: 'X', attributes: {}, clubId: 'club-demo', clubSport: { sport: { key: 'tennis', name: 'Tennis' } } } }) as any);
+      await expect(service.getOpenMatch('club-demo', 'm1', null)).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+  });
 });

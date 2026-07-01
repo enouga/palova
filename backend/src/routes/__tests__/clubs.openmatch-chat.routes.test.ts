@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 // de la factory et sont donc les mêmes références quel que soit le nombre de `new …()`.
 jest.mock('../../services/openMatch.service', () => {
   const listOpenMatches  = jest.fn().mockResolvedValue([]);
+  const getOpenMatch     = jest.fn().mockResolvedValue({ id: 'match-1' });
   const joinOpenMatch    = jest.fn().mockResolvedValue({});
   const setInterested    = jest.fn().mockResolvedValue({ id: 'match-1' });
   const removeInterested = jest.fn().mockResolvedValue({ id: 'match-1' });
@@ -13,6 +14,7 @@ jest.mock('../../services/openMatch.service', () => {
   return {
     OpenMatchService: jest.fn().mockImplementation(() => ({
       listOpenMatches,
+      getOpenMatch,
       joinOpenMatch,
       leaveOpenMatch:      jest.fn().mockResolvedValue({}),
       removeOpenMatchPlayer: jest.fn().mockResolvedValue({}),
@@ -55,6 +57,7 @@ const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, SECRET);
 // Récupère les références partagées en instanciant une fois les services mockés.
 const omInst   = new (OpenMatchService as any)();
 const listOpenMatches = omInst.listOpenMatches as jest.Mock;
+const getOpenMatch     = omInst.getOpenMatch     as jest.Mock;
 const joinOpenMatch    = omInst.joinOpenMatch    as jest.Mock;
 const setInterested    = omInst.setInterested    as jest.Mock;
 const removeInterested = omInst.removeInterested as jest.Mock;
@@ -77,6 +80,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   // Restaure les valeurs par défaut après clearAllMocks (qui efface les calls mais pas les implémentations).
   listOpenMatches.mockResolvedValue([]);
+  getOpenMatch.mockResolvedValue({ id: MATCH_ID });
   joinOpenMatch.mockResolvedValue({});
   setInterested.mockResolvedValue({ id: MATCH_ID });
   removeInterested.mockResolvedValue({ id: MATCH_ID });
@@ -307,5 +311,21 @@ describe('lecture publique de la liste', () => {
     const res = await request(app).post(`${list}/${MATCH_ID}/join`);
     expect(res.status).toBe(401);
     expect(joinOpenMatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/clubs/:slug/open-matches/:id', () => {
+  it('200 en public (sans token) et délègue au service', async () => {
+    (getOpenMatch as jest.Mock).mockResolvedValue({ id: 'm1', resourceName: 'Court 1' });
+    const res = await request(app).get('/api/clubs/demo/open-matches/m1');
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('m1');
+    expect(getOpenMatch).toHaveBeenCalledWith('demo', 'm1', null);
+  });
+
+  it('404 quand le service lève RESERVATION_NOT_FOUND', async () => {
+    (getOpenMatch as jest.Mock).mockRejectedValue(new Error('RESERVATION_NOT_FOUND'));
+    const res = await request(app).get('/api/clubs/demo/open-matches/nope');
+    expect(res.status).toBe(404);
   });
 });

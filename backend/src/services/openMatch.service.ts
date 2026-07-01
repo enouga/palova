@@ -2,8 +2,24 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded, notifyOpenMatchInterest } from '../email/notifications';
-import { RatingService } from './rating.service';
+import { RatingService, UserLevel } from './rating.service';
 import { effectiveTeams, applyTeams } from './matchTeams';
+
+// Include commun à la liste et à la lecture unitaire d'une partie ouverte.
+const MATCH_INCLUDE = {
+  resource: { select: { id: true, name: true, attributes: true, clubId: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
+  participants: {
+    orderBy: { joinedAt: 'asc' },
+    select: { userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+  },
+  openMatchInterests: {
+    orderBy: { createdAt: 'asc' },
+    select: { userId: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+  },
+  openMatchMessages: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+} satisfies Prisma.ReservationInclude;
+
+type MatchRow = Prisma.ReservationGetPayload<{ include: typeof MATCH_INCLUDE }>;
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
@@ -66,6 +82,39 @@ export class OpenMatchService {
     catch (err) { console.error('[openMatch] notification échouée', err); }
   }
 
+  /** Sérialise une réservation-partie en DTO. Partagé par listOpenMatches et getOpenMatch. */
+  private toDTO(m: MatchRow, levels: Record<string, UserLevel>, unreadCount: number, viewerUserId: string | null) {
+    const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
+    const teamed = effectiveTeams(m.participants, maxPlayers);
+    const sportKey = m.resource.clubSport.sport.key;
+    return {
+      id: m.id,
+      resourceName: m.resource.name,
+      sport: { key: m.resource.clubSport.sport.key, name: m.resource.clubSport.sport.name },
+      startTime: m.startTime.toISOString(),
+      endTime: m.endTime.toISOString(),
+      maxPlayers,
+      spotsLeft: Math.max(0, maxPlayers - m.participants.length),
+      full: m.participants.length >= maxPlayers,
+      viewerIsParticipant: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId),
+      viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
+      targetLevelMin: m.targetLevelMin ?? null,
+      targetLevelMax: m.targetLevelMax ?? null,
+      players: teamed.map((p) => ({
+        userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
+        level: levels[`${p.userId}:${sportKey}`] ?? null,
+        team: p.team,
+      })),
+      interestedCount: m.openMatchInterests.length,
+      viewerIsInterested: viewerUserId != null && m.openMatchInterests.some((i) => i.userId === viewerUserId),
+      interested: m.openMatchInterests.slice(0, 5).map((i) => ({
+        userId: i.userId, firstName: i.user.firstName, lastName: i.user.lastName, avatarUrl: i.user.avatarUrl, isOrganizer: false,
+      })),
+      lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
+      unreadCount,
+    };
+  }
+
   /** Parties ouvertes à venir d'un club, visibles de tous (membre, non-membre ou anonyme). */
   async listOpenMatches(slug: string, viewerUserId: string | null) {
     const club = await this.resolveActiveClub(slug);
@@ -77,24 +126,7 @@ export class OpenMatchService {
         resource: { clubId: club.id, clubSport: { sport: { key: 'padel' } } },
       },
       orderBy: { startTime: 'asc' },
-      include: {
-        resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
-        participants: {
-          orderBy: { joinedAt: 'asc' },
-          select: { userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
-        },
-        openMatchInterests: {
-          orderBy: { createdAt: 'asc' },
-          select: { userId: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
-        },
-        openMatchMessages: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { createdAt: true },
-        },
-      },
-      // targetLevelMin / targetLevelMax are top-level scalar fields returned by include by default
+      include: MATCH_INCLUDE,
     });
 
     // Collect (userId, sportKey) pairs — one per participant per match — for a single batched lookup.
@@ -118,38 +150,34 @@ export class OpenMatchService {
       if (mid) unreadByMatch.set(mid, (unreadByMatch.get(mid) ?? 0) + 1);
     }
 
-    return matches.map((m) => {
-      const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
-      const teamed = effectiveTeams(m.participants, maxPlayers);
-      const row = m as typeof m & { targetLevelMin: number | null; targetLevelMax: number | null };
-      const sportKey = m.resource.clubSport.sport.key;
-      return {
-        id: m.id,
-        resourceName: m.resource.name,
-        sport: { key: m.resource.clubSport.sport.key, name: m.resource.clubSport.sport.name },
-        startTime: m.startTime.toISOString(),
-        endTime: m.endTime.toISOString(),
-        maxPlayers,
-        spotsLeft: Math.max(0, maxPlayers - m.participants.length),
-        full: m.participants.length >= maxPlayers,
-        viewerIsParticipant: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId),
-        viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
-        targetLevelMin: row.targetLevelMin ?? null,
-        targetLevelMax: row.targetLevelMax ?? null,
-        players: teamed.map((p) => ({
-          userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
-          level: levels[`${p.userId}:${sportKey}`] ?? null,
-          team: p.team,
-        })),
-        interestedCount: m.openMatchInterests.length,
-        viewerIsInterested: viewerUserId != null && m.openMatchInterests.some((i) => i.userId === viewerUserId),
-        interested: m.openMatchInterests.slice(0, 5).map((i) => ({
-          userId: i.userId, firstName: i.user.firstName, lastName: i.user.lastName, avatarUrl: i.user.avatarUrl, isOrganizer: false,
-        })),
-        lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
-        unreadCount: unreadByMatch.get(m.id) ?? 0,
-      };
-    });
+    return matches.map((m) => this.toDTO(m, levels, unreadByMatch.get(m.id) ?? 0, viewerUserId));
+  }
+
+  /** Lecture d'UNE partie ouverte (page /parties/[id]) — publique, autorise les parties passées. */
+  async getOpenMatch(slug: string, id: string, viewerUserId: string | null) {
+    const club = await this.resolveActiveClub(slug);
+    const m = await prisma.reservation.findUnique({ where: { id }, include: MATCH_INCLUDE });
+    if (
+      !m ||
+      m.visibility !== 'PUBLIC' ||
+      m.status !== 'CONFIRMED' ||
+      m.resource.clubId !== club.id ||
+      m.resource.clubSport.sport.key !== 'padel'
+    ) throw new Error('RESERVATION_NOT_FOUND');
+
+    const sportKey = m.resource.clubSport.sport.key;
+    const pairs = m.participants.map((p) => ({ userId: p.userId, sportKey }));
+    const levels = pairs.length > 0 ? await this.ratingService.getLevelsBySport(pairs) : {};
+
+    const unreadNotifs = viewerUserId != null
+      ? await prisma.notification.findMany({
+          where: { userId: viewerUserId, type: 'open_match.message', readAt: null, clubId: club.id },
+          select: { data: true },
+        })
+      : [];
+    const unreadCount = unreadNotifs.filter((n) => (n.data as { matchId?: string } | null)?.matchId === id).length;
+
+    return this.toDTO(m, levels, unreadCount, viewerUserId);
   }
 
   /** Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation). */
