@@ -14,6 +14,7 @@ import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { AccountService } from '../services/account.service';
 import { FollowService } from '../services/follow.service';
+import { FriendshipService } from '../services/friendship.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -22,6 +23,7 @@ const eventService = new EventService();
 const ratingService = new RatingService();
 const accountService = new AccountService();
 const followService = new FollowService();
+const friendshipService = new FriendshipService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
@@ -201,6 +203,18 @@ router.get('/following', authMiddleware, async (req: AuthRequest, res: Response,
 // Joueurs qui suivent le joueur connecté.
 router.get('/followers', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await followService.listFollowers(req.user!.id)); }
+  catch (err) { next(err); }
+});
+
+// Amitiés confirmées du joueur connecté (filtrables par nom).
+router.get('/friendships', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.listFriends(req.user!.id, typeof req.query.q === 'string' ? req.query.q : undefined)); }
+  catch (err) { next(err); }
+});
+
+// Demandes d'ami en attente (reçues + envoyées).
+router.get('/friend-requests', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.listRequests(req.user!.id)); }
   catch (err) { next(err); }
 });
 

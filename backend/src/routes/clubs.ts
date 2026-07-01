@@ -16,6 +16,7 @@ import jwt from 'jsonwebtoken';
 import { OpenMatchService } from '../services/openMatch.service';
 import { OpenMatchChatService } from '../services/openMatchChat.service';
 import { FollowService } from '../services/follow.service';
+import { FriendshipService } from '../services/friendship.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
@@ -43,6 +44,7 @@ const subscriptionService = new SubscriptionService();
 const paymentMethodService = new PaymentMethodService();
 const paymentHistoryService = new PaymentHistoryService();
 const followService = new FollowService();
+const friendshipService = new FriendshipService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -72,6 +74,9 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_ALLOWED:           403,
   MESSAGE_NOT_FOUND:     404,
   NOT_A_MEMBER:          404,
+  FRIEND_REQUESTS_DISABLED: 409,
+  CANNOT_FRIEND_SELF:       400,
+  REQUEST_NOT_FOUND:        404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -216,6 +221,20 @@ router.post('/:slug/follows/:userId', authMiddleware, async (req: AuthRequest, r
 
 router.delete('/:slug/follows/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await followService.unfollow(asString(req.params.slug), req.user!.id, asString(req.params.userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// --- Amitiés confirmées (demande / réponse / retrait) ---
+router.post('/:slug/friends/:userId/request', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.requestFriend(asString(req.params.slug), req.user!.id, asString(req.params.userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+router.post('/:slug/friends/:userId/respond', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.respond(asString(req.params.slug), req.user!.id, asString(req.params.userId), req.body?.accept === true)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/friends/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.removeFriend(req.user!.id, asString(req.params.userId))); }
   catch (err) { handleError(err, res, next); }
 });
 
