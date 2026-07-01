@@ -10,6 +10,7 @@ import { clubUrl } from '@/lib/clubUrl';
 import { KIND_LABEL } from '@/lib/events';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
+import { MatchTeams } from '@/components/match/MatchTeams';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -102,11 +103,23 @@ export function DayPanel({
                     <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
                   ) : (r.participants?.length ?? 0) > 0 ? (
                     <div style={{ marginTop: 10 }}>
-                      <PlayerPills
-                        players={r.participants ?? []}
-                        spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))}
-                        size="sm"
-                      />
+                      {r.resource.sport?.key === 'padel' ? (
+                        <MatchTeams
+                          players={(r.participants ?? []).map((p) => ({
+                            userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+                            avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
+                            team: (p.team ?? 1) as 1 | 2,
+                          }))}
+                          capacity={r.capacity ?? 4}
+                          size="sm"
+                        />
+                      ) : (
+                        <PlayerPills
+                          players={r.participants ?? []}
+                          spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))}
+                          size="sm"
+                        />
+                      )}
                     </div>
                   ) : null}
                   {e.past && !isForeign && canRecord?.(r) && onRecordResult && (
