@@ -14,6 +14,18 @@ describe('computeResultStats', () => {
     expect(res).toEqual({ wins: 3, losses: 1, streak: 3 });
   });
 
+  it('trie lui-même : entrée en ordre ascendant → même résultat', () => {
+    // rows en ordre ASCENDANT (plus ancien d'abord) : L, W, W, W
+    const res = computeResultStats([
+      { team: 1, winningTeam: 2, playedAt: d('2026-06-02') }, // L (le + ancien)
+      { team: 1, winningTeam: 1, playedAt: d('2026-06-03') }, // W
+      { team: 1, winningTeam: 1, playedAt: d('2026-06-04') }, // W
+      { team: 1, winningTeam: 1, playedAt: d('2026-06-05') }, // W (le + récent)
+    ]);
+    // Après tri interne desc : W,W,W,L → série de 3 victoires
+    expect(res).toEqual({ wins: 3, losses: 1, streak: 3 });
+  });
+
   it('série de défaites → streak négatif', () => {
     const res = computeResultStats([
       { team: 2, winningTeam: 1, playedAt: d('2026-06-05') }, // L

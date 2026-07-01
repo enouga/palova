@@ -1,3 +1,4 @@
+// Module PUR : bilan victoires/défaites + série en cours d'un joueur à partir de ses matchs.
 export interface ResultStatRow {
   team: number;
   winningTeam: number | null;
@@ -17,7 +18,11 @@ export interface ResultStats {
  * Seuls les matchs décidés (winningTeam != null) sont pris en compte.
  */
 export function computeResultStats(rows: ResultStatRow[]): ResultStats {
-  const decided = rows.filter((r) => r.winningTeam != null);
+  // Tri défensif : la série dépend de l'ordre (plus récent d'abord), on ne fait pas
+  // confiance à l'ordre d'arrivée (certaines requêtes de matchs trient en ascendant).
+  const decided = rows
+    .filter((r) => r.winningTeam != null)
+    .sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime());
   let wins = 0;
   let losses = 0;
   for (const r of decided) {
