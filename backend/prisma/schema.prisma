@@ -428,6 +428,8 @@ model User {
   showInLeaderboard Boolean @default(false) @map("show_in_leaderboard")
   /// Opt-in : « Propose-moi les parties à mon niveau » — notification (jamais d'inscription auto).
   autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
+  /// Opt-in : autoriser les autres membres à m'envoyer une demande d'ami (ne concerne PAS le chat).
+  acceptsFriendRequests Boolean @default(false) @map("accepts_friend_requests")
   preferredSportId String? @map("preferred_sport_id")
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
@@ -466,6 +468,8 @@ model User {
   openMatchMessages       OpenMatchMessage[]
   followsGiven            Follow[] @relation("FollowsGiven")
   followsReceived         Follow[] @relation("FollowsReceived")
+  friendshipsA           Friendship[] @relation("FriendshipA")
+  friendshipsB           Friendship[] @relation("FriendshipB")
 
   @@map("users")
 }
@@ -1343,4 +1347,28 @@ model Follow {
   @@unique([followerId, followingId])
   @@index([followingId])
   @@map("follows")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+/// Amitié confirmée (réciproque, consentie). GLOBALE (pas de clubId) : le club de contexte
+/// sert seulement à brander la notif. Paire canonique userAId < userBId (une seule ligne).
+model Friendship {
+  id            String           @id @default(cuid())
+  userAId       String           @map("user_a_id")
+  userBId       String           @map("user_b_id")
+  requestedById String           @map("requested_by_id")
+  status        FriendshipStatus @default(PENDING)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  respondedAt   DateTime?        @map("responded_at")
+
+  userA User @relation("FriendshipA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("FriendshipB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+  @@map("friendships")
 }
