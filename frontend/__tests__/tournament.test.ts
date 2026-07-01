@@ -94,6 +94,13 @@ describe('buildAgendaICS', () => {
     const ics = buildAgendaICS(t, 'https://x', NOW, 'event');
     expect(ics).toContain('UID:event-t1@palova');
   });
+
+  it('buildAgendaICS accepte uidPrefix "match" et préfixe l’UID', () => {
+    const item = { id: 'm1', name: 'Partie ouverte · Court 2', description: null, startTime: '2026-07-05T12:00:00.000Z', endTime: '2026-07-05T13:30:00.000Z', club: { name: 'Padel Arena' } };
+    const ics = buildAgendaICS(item, 'https://demo.palova.fr/parties/m1', new Date('2026-07-01T00:00:00Z'), 'match');
+    expect(ics).toContain('UID:match-m1@palova');
+    expect(ics).toContain('SUMMARY:Partie ouverte');
+  });
 });
 
 describe('icsFilename', () => {

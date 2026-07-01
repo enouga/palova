@@ -7,7 +7,7 @@ import { AgendaICSItem, buildAgendaICS, icsFilename } from '@/lib/tournament';
 // Partager la fiche (Web Share API, repli copie de lien) + export agenda (.ics).
 // Sert aux fiches tournoi (uidPrefix 'tournament') et event ('event').
 // L'URL est lue au clic (window absent au rendu serveur).
-export function ShareActions({ item, uidPrefix = 'tournament' }: { item: AgendaICSItem; uidPrefix?: 'tournament' | 'event' }) {
+export function ShareActions({ item, uidPrefix = 'tournament' }: { item: AgendaICSItem; uidPrefix?: 'tournament' | 'event' | 'match' }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);

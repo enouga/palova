@@ -140,7 +140,7 @@ export function buildAgendaICS(
   t: AgendaICSItem,
   pageUrl: string,
   now: Date,
-  uidPrefix: 'tournament' | 'event' = 'tournament',
+  uidPrefix: 'tournament' | 'event' | 'match' = 'tournament',
 ): string {
   const end = t.endTime ?? new Date(new Date(t.startTime).getTime() + ICS_DEFAULT_DURATION_MS).toISOString();
   const description = [t.description, pageUrl].filter(Boolean).join('\n\n');

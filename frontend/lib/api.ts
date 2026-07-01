@@ -259,6 +259,8 @@ export const api = {
   // --- Parties ouvertes (visibles de tous ; token facultatif) ---
   getOpenMatches: (slug: string, token?: string) =>
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
+  getOpenMatch: (slug: string, id: string, token?: string) =>
+    request<OpenMatch>(`/api/clubs/${slug}/open-matches/${id}`, {}, token),
   joinOpenMatch: (slug: string, id: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'POST' }, token),
   leaveOpenMatch: (slug: string, id: string, token: string) =>
