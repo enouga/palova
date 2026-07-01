@@ -19,11 +19,14 @@ export default function AdminEmailsPage() {
   const clubId = club?.id;
   const [items, setItems] = useState<AdminEmailSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
     setLoading(true);
+    setError(null);
     try { setItems((await api.adminListEmails(clubId, token)).items); }
+    catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, [token, clubId]);
 
@@ -36,6 +39,7 @@ export default function AdminEmailsPage() {
         Personnalisez le contenu de chaque email automatique envoyé à vos membres.
       </p>
       {loading && <p style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</p>}
+      {error && <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55', margin: '0 0 20px' }}>{error}</p>}
       {GROUP_ORDER.map((g) => {
         const groupItems = items.filter((i) => i.group === g);
         if (groupItems.length === 0) return null;

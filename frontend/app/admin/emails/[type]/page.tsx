@@ -22,6 +22,7 @@ export default function EmailEditorPage() {
   const [draft, setDraft] = useState<EmailDraft>({ subject: '', heading: '', bodyHtml: '', ctaLabel: '', footerNote: '' });
   const [previewHtml, setPreviewHtml] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const focused = useRef<Field>('bodyHtml');
   const refs = {
@@ -31,10 +32,13 @@ export default function EmailEditorPage() {
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
-    const d = await api.adminGetEmail(clubId, type, token);
-    setDetail(d);
-    const src = d.override ?? d.defaults;
-    setDraft({ subject: src.subject, heading: src.heading, bodyHtml: src.bodyHtml, ctaLabel: src.ctaLabel ?? '', footerNote: src.footerNote ?? '' });
+    setLoadError(null);
+    try {
+      const d = await api.adminGetEmail(clubId, type, token);
+      setDetail(d);
+      const src = d.override ?? d.defaults;
+      setDraft({ subject: src.subject, heading: src.heading, bodyHtml: src.bodyHtml, ctaLabel: src.ctaLabel ?? '', footerNote: src.footerNote ?? '' });
+    } catch (e) { setLoadError((e as Error).message); }
   }, [token, clubId, type]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
@@ -88,7 +92,10 @@ export default function EmailEditorPage() {
   const inputStyle: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 12, background: th.bg, color: th.text, border: `1px solid ${th.line}`, fontFamily: th.fontUI, fontSize: 15 };
   const areaStyle: CSSProperties = { padding: '12px 14px', borderRadius: 12, background: th.bg, color: th.text, border: `1px solid ${th.line}`, fontFamily: 'monospace', fontSize: 14, minHeight: 150, resize: 'vertical' };
 
-  if (!detail) return <p style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</p>;
+  if (!detail) {
+    if (loadError) return <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55' }}>{loadError}</p>;
+    return <p style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</p>;
+  }
 
   return (
     <div style={{ maxWidth: 1080, display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
