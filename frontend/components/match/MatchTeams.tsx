@@ -1,4 +1,5 @@
 'use client';
+import { useRef } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
@@ -22,11 +23,12 @@ export interface MatchPlayerData {
 const SIDE_COLOR: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
 
 // Deux équipes côte à côte (Éq.1 gauche / Éq.2 droite) avec « VS » central, joueurs empilés.
-// Repère G/D (1er = gauche, 2e = droite) en double. Côte à côte même sur mobile.
-// En mode `editable`, chaque joueur porte des boutons explicites (un tap = une action) :
-//   → (passe dans l'autre équipe ; si pleine, échange avec le joueur en face),
-//   loupe (remplacer par un autre membre), × (retirer).
-// Chaque emplacement libre montre un « + » (ajout ciblé sur cette équipe) via `onAddToTeam`.
+// Emplacements FIXES par équipe (G = 1er, D = 2e) : chaque joueur garde sa place — retirer le
+// joueur de gauche laisse un trou à gauche et le droit reste à droite. Les positions sont
+// mémorisées pendant la session (ref, aucun backend). Côte à côte même sur mobile.
+// En `editable`, chaque joueur porte des boutons explicites (un tap = une action) :
+//   → (passe dans l'autre équipe ; si pleine, échange avec le joueur d'en face),
+//   loupe (remplacer), × (retirer). Chaque emplacement libre montre un « + » (ajout ciblé).
 export function MatchTeams({
   players, capacity, friendIds, size = 'md', busy = false,
   onRemove, canRemove, onReplace, canReplace, onAddToTeam, editable = false, onSetTeams,
@@ -51,24 +53,50 @@ export function MatchTeams({
   const showGD = half >= 2;               // repère Gauche/Droite seulement en double
   const canMove = editable && !!onSetTeams;
 
-  const sideOf = (t: 1 | 2) => players.filter((p) => p.team === t);
+  // Position mémorisée par joueur (équipe + emplacement), stable sur la session.
+  const posRef = useRef<Record<string, { team: 1 | 2; slot: number }>>({});
+
+  // Layout : chaque équipe = `half` emplacements. On honore d'abord la position mémorisée,
+  // puis on place les nouveaux au 1er emplacement libre — d'où la stabilité au retrait.
+  const layout: Record<1 | 2, (MatchPlayerData | null)[]> = {
+    1: new Array<MatchPlayerData | null>(half).fill(null),
+    2: new Array<MatchPlayerData | null>(half).fill(null),
+  };
+  for (const p of players) {
+    const rem = posRef.current[p.userId];
+    if (rem && rem.team === p.team && rem.slot < half && layout[p.team][rem.slot] === null) {
+      layout[p.team][rem.slot] = p;
+    }
+  }
+  for (const p of players) {
+    if (layout[1].includes(p) || layout[2].includes(p)) continue;
+    const arr = layout[p.team];
+    let slot = arr.findIndex((s) => s === null);
+    if (slot < 0) slot = 0;
+    arr[slot] = p;
+    posRef.current[p.userId] = { team: p.team, slot };
+  }
+
   const currentTeams = (): Record<string, 1 | 2> =>
     Object.fromEntries(players.map((p) => [p.userId, p.team]));
 
-  // Déplace le joueur dans l'autre équipe : place libre → simple déplacement ;
-  // sinon échange avec le joueur d'en face (même position). Émet la map complète.
+  // Déplace le joueur dans l'autre équipe : place libre → déplacement (même emplacement si libre) ;
+  // sinon échange avec le joueur du même emplacement en face. Émet la map complète + mémorise les positions.
   const onMove = (p: MatchPlayerData) => {
     if (busy) return;
     const target: 1 | 2 = p.team === 1 ? 2 : 1;
+    const pSlot = layout[p.team].indexOf(p);
     const next = currentTeams();
-    const targetSide = sideOf(target);
-    if (targetSide.length < half) {
+    const freeInTarget = layout[target].findIndex((s) => s === null);
+    if (freeInTarget >= 0) {
+      const dest = layout[target][pSlot] === null ? pSlot : freeInTarget;
       next[p.userId] = target;
+      posRef.current[p.userId] = { team: target, slot: dest };
     } else {
-      const myIdx = sideOf(p.team).findIndex((x) => x.userId === p.userId);
-      const opp = targetSide[myIdx] ?? targetSide[0];
+      const opp = layout[target][pSlot];
       next[p.userId] = target;
-      if (opp) next[opp.userId] = p.team;
+      posRef.current[p.userId] = { team: target, slot: pSlot };
+      if (opp) { next[opp.userId] = p.team; posRef.current[opp.userId] = { team: p.team, slot: pSlot }; }
     }
     onSetTeams?.(next);
   };
@@ -136,21 +164,16 @@ export function MatchTeams({
     );
   };
 
-  const column = (side: 1 | 2) => {
-    const list = sideOf(side);
-    const freeCount = Math.max(0, half - list.length);
+  const column = (side: 1 | 2) => (
     // alignItems:flex-start → les pastilles épousent leur contenu au lieu de s'étirer sur toute la colonne
-    return (
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[side], flexShrink: 0 }} />
-          <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe {side}</span>
-        </div>
-        {list.map((p, i) => renderPlayer(p, i))}
-        {Array.from({ length: freeCount }).map((_, i) => renderFree(side, `free-${side}-${i}`))}
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[side], flexShrink: 0 }} />
+        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe {side}</span>
       </div>
-    );
-  };
+      {layout[side].map((p, i) => (p ? renderPlayer(p, i) : renderFree(side, `free-${side}-${i}`)))}
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>

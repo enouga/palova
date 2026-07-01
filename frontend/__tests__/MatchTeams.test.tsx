@@ -65,4 +65,19 @@ describe('MatchTeams', () => {
     fireEvent.click(screen.getByRole('button', { name: /Retirer Paul B/ }));
     expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ userId: 'b' }));
   });
+
+  it('retirer le joueur de gauche laisse le droit à droite (emplacements fixes)', () => {
+    const A: MatchPlayerData = { userId: 'a', firstName: 'Marc', lastName: 'A', team: 1 };
+    const B: MatchPlayerData = { userId: 'b', firstName: 'Paul', lastName: 'B', team: 1 };
+    const View = ({ pl }: { pl: MatchPlayerData[] }) => (
+      <ThemeProvider><MatchTeams players={pl} capacity={4} onSetTeams={jest.fn()} /></ThemeProvider>
+    );
+    const { rerender } = render(<View pl={[A, B]} />);
+    expect(screen.getAllByText('G')).toHaveLength(1); // Marc à gauche
+    expect(screen.getAllByText('D')).toHaveLength(1); // Paul à droite
+    // On retire Marc (le gauche) → Paul doit RESTER à droite (D), pas basculer à gauche.
+    rerender(<View pl={[B]} />);
+    expect(screen.queryByText('G')).not.toBeInTheDocument();
+    expect(screen.getAllByText('D')).toHaveLength(1);
+  });
 });
