@@ -1608,10 +1608,10 @@ describe('ReservationService', () => {
     it('renvoie capacité + joueurs (avec avatarUrl) pour le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', userId: 'user-1',
-        resource: { attributes: { format: 'double' } },
+        resource: { attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
         participants: [
-          { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
-          { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
+          { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
+          { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  team: null, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
         ],
       } as any);
 
@@ -1619,13 +1619,13 @@ describe('ReservationService', () => {
 
       expect(out.capacity).toBe(4);
       expect(out.participants).toHaveLength(2);
-      expect(out.participants[0]).toMatchObject({ id: 'p1', isOrganizer: true, firstName: 'Eric', share: '25.00', avatarUrl: '/uploads/avatars/eric.png' });
+      expect(out.participants[0]).toMatchObject({ id: 'p1', isOrganizer: true, firstName: 'Eric', share: '25.00', avatarUrl: '/uploads/avatars/eric.png', team: 1 });
       expect(out.participants[1].avatarUrl).toBeNull();
     });
 
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
-        id: 'res-1', userId: 'autre', resource: { attributes: {} }, participants: [],
+        id: 'res-1', userId: 'autre', resource: { attributes: {}, clubSport: { sport: { key: 'padel' } } }, participants: [],
       } as any);
       await expect(service.getOwnReservationPlayers('res-1', 'user-1')).rejects.toThrow('UNAUTHORIZED');
     });
@@ -1646,8 +1646,8 @@ describe('ReservationService', () => {
         club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
       },
       participants: [
-        { id: 'p1', userId: 'user-1', isOrganizer: true,  user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
-        { id: 'p2', userId: 'user-2', isOrganizer: false, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png' } },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, team: null, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
       ],
     });
 
@@ -1660,9 +1660,10 @@ describe('ReservationService', () => {
 
       expect(out).toHaveLength(1);
       expect(out[0].capacity).toBe(4);
+      // 2 participants sur 4 places (double) → tous assignés à l'équipe 1 (half=2, aucun dépassement)
       expect(out[0].participants).toEqual([
-        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png', level: null },
-        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null, level: null },
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png', level: null, team: 1 },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null, level: null, team: 1 },
       ]);
       expect(out[0].resource.name).toBe('Terrain 2');
       expect((out[0].resource as any).attributes).toBeUndefined();
@@ -1703,7 +1704,7 @@ describe('ReservationService', () => {
           club: { name: 'Club A', slug: 'club-a', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
         },
         participants: [
-          { id: 'pp1', userId: 'user-1', isOrganizer: true, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+          { id: 'pp1', userId: 'user-1', isOrganizer: true, team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
         ],
       };
       const resaTennis = {
@@ -1715,7 +1716,7 @@ describe('ReservationService', () => {
           club: { name: 'Club B', slug: 'club-b', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
         },
         participants: [
-          { id: 'pt1', userId: 'user-1', isOrganizer: true, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+          { id: 'pt1', userId: 'user-1', isOrganizer: true, team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
         ],
       };
 
@@ -1757,6 +1758,51 @@ describe('ReservationService', () => {
 
       expect(out).toHaveLength(1);
       expect(out[0].participants).toEqual([]);
+    });
+
+    it('attribue une équipe (1/2) aux participants d\'une résa padel, null hors padel', async () => {
+      const resaPadel = {
+        id: 'res-padel', startTime: new Date('2026-06-20T10:00:00Z'), endTime: new Date('2026-06-20T11:00:00Z'),
+        status: 'CONFIRMED', totalPrice: 25, userId: 'user-1', resourceId: 'court-padel', type: 'COURT',
+        resource: {
+          id: 'court-padel', name: 'Court Padel', attributes: { format: 'double' },
+          clubSport: { sport: { key: 'padel', name: 'Padel' } },
+          club: { name: 'Club Padel', slug: 'club-padel', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+        },
+        participants: [
+          { id: 'tp1', userId: 'user-1', isOrganizer: true,  team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+          { id: 'tp2', userId: 'user-2', isOrganizer: false, team: null, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
+        ],
+      };
+      const resaTennis = {
+        id: 'res-tennis2', startTime: new Date('2026-06-21T10:00:00Z'), endTime: new Date('2026-06-21T11:00:00Z'),
+        status: 'CONFIRMED', totalPrice: 20, userId: 'user-1', resourceId: 'court-tennis2', type: 'COURT',
+        resource: {
+          id: 'court-tennis2', name: 'Court Tennis', attributes: { format: 'single' },
+          clubSport: { sport: { key: 'tennis', name: 'Tennis' } },
+          club: { name: 'Club Tennis', slug: 'club-tennis', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
+        },
+        participants: [
+          { id: 'tt1', userId: 'user-1', isOrganizer: true, team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+        ],
+      };
+
+      prismaMock.reservation.findMany.mockResolvedValue([resaPadel, resaTennis] as any);
+      prismaMock.sport.findMany.mockResolvedValue([
+        { id: 'sport-padel',  key: 'padel' },
+        { id: 'sport-tennis', key: 'tennis' },
+      ] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      const list = await service.listUserReservations('user-1');
+      const padel = list.find((r) => (r.resource as any).sport.key === 'padel');
+      const tennis = list.find((r) => (r.resource as any).sport.key === 'tennis');
+
+      expect(padel).toBeTruthy();
+      for (const p of padel!.participants) expect([1, 2]).toContain(p.team);
+      // hors padel → team null
+      expect(tennis).toBeTruthy();
+      for (const p of tennis!.participants) expect(p.team).toBeNull();
     });
   });
 

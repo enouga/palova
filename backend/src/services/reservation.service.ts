@@ -16,6 +16,7 @@ import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { sportHasLevels } from './rating/level';
+import { effectiveTeams } from './matchTeams';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -1380,18 +1381,24 @@ export class ReservationService {
   /** Forme JSON du modal « Gérer les joueurs » : capacité + joueurs (id/nom/part/organisateur). */
   private mapOwnPlayers(r: {
     id: string;
-    resource: { attributes: Prisma.JsonValue };
-    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; user: { firstName: string; lastName: string; avatarUrl: string | null } }>;
+    resource: { attributes: Prisma.JsonValue; clubSport: { sport: { key: string } } };
+    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; team: number | null; user: { firstName: string; lastName: string; avatarUrl: string | null } }>;
   }) {
     const format = (r.resource.attributes as { format?: string } | null)?.format;
+    const capacity = playerCount(format);
+    const sportKey = r.resource.clubSport.sport.key;
+    const teamed = sportKey === 'padel'
+      ? effectiveTeams(r.participants, capacity)
+      : r.participants.map((p) => ({ ...p, team: null as 1 | 2 | null }));
     return {
       id: r.id,
-      capacity: playerCount(format),
-      participants: r.participants.map((p) => ({
+      sportKey,
+      capacity,
+      participants: teamed.map((p) => ({
         id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
-        firstName: p.user.firstName, lastName: p.user.lastName,
-        avatarUrl: p.user.avatarUrl,
+        firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
         share: Number(p.share).toFixed(2),
+        team: p.team,
       })),
     };
   }
@@ -1401,10 +1408,10 @@ export class ReservationService {
     const r = await prisma.reservation.findUnique({
       where: { id: reservationId },
       include: {
-        resource: { select: { attributes: true } },
+        resource: { select: { attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { id: true, userId: true, isOrganizer: true, share: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+          select: { id: true, userId: true, isOrganizer: true, share: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
     });
@@ -1467,7 +1474,7 @@ export class ReservationService {
         },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { id: true, userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+          select: { id: true, userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
     });
@@ -1479,14 +1486,19 @@ export class ReservationService {
     return rows.map(({ participants, resource, ...rest }) => {
       const { attributes, clubSport, ...resourcePublic } = resource;
       const sportKey = clubSport.sport.key;
+      const capacity = playerCount((attributes as { format?: string } | null)?.format);
+      const teamed = sportKey === 'padel'
+        ? effectiveTeams(participants, capacity)
+        : participants.map((p) => ({ ...p, team: null as 1 | 2 | null }));
       return {
         ...rest,
         resource: { ...resourcePublic, sport: { key: clubSport.sport.key, name: clubSport.sport.name } },
-        capacity: playerCount((attributes as { format?: string } | null)?.format),
-        participants: participants.map((p) => ({
+        capacity,
+        participants: teamed.map((p) => ({
           id: p.id, userId: p.userId, isOrganizer: p.isOrganizer,
           firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
           level: levels[`${p.userId}:${sportKey}`] ?? null,
+          team: p.team,
         })),
       };
     });
