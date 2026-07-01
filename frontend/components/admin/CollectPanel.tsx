@@ -34,21 +34,37 @@ export interface CollectPanelProps {
   onChanged: (updated?: ClubReservation) => void;
   /** un encaissement a été enregistré (le parent peut fermer la modale). */
   onPaid?: () => void;
+  /** rend les places SANS joueur sélectionnables (« Régler ») pour encaisser une part
+   *  anonyme, et affiche leur statut « réglé » — utilisé par la modale du planning. Défaut false. */
+  collectEmptyPlaces?: boolean;
+  /** règlements « sans encaissement » (débités au joueur : coffre, offres, abonnement…) rendus
+   *  en boutons 1 clic → enregistrés en MEMBER (hors totaux caisse) avec `note` = libellé.
+   *  Affichés seulement si le joueur ciblé a souscrit à des offres (abonnement actif OU
+   *  carnet/porte-monnaie). */
+  settlementPresets?: { label: string; note: string }[];
+  /** userId ayant un abonnement ACTIF (résolu par le parent) — pour la garde ci-dessus. */
+  subscribedUserIds?: ReadonlySet<string>;
   onError?: (msg: string) => void;
 }
 
-export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, onError }: CollectPanelProps) {
+export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, collectEmptyPlaces = false, settlementPresets, subscribedUserIds, onError }: CollectPanelProps) {
   const { th } = useTheme();
 
   // Moyens mis en avant (boutons pleins) = ceux configurés par le club, dans le même ordre que
   // la page Encaissement ; les autres moyens manuels restent disponibles en rangée discrète.
-  const primaryMethods = (quickMethods && quickMethods.length ? quickMethods : DEFAULT_QUICK_METHODS).filter((m) => ALL_METHODS.includes(m));
-  const secondaryMethods = ALL_METHODS.filter((m) => !primaryMethods.includes(m));
+  // En présence de règlements « sans encaissement » (dont Abonnement), le bouton générique
+  // « Abo / Membre » (MEMBER) ferait doublon → on le retire des moyens.
+  const methodPool = ALL_METHODS.filter((m) => !(settlementPresets?.length && m === 'MEMBER'));
+  const primaryMethods = (quickMethods && quickMethods.length ? quickMethods : DEFAULT_QUICK_METHODS).filter((m) => methodPool.includes(m));
+  const secondaryMethods = methodPool.filter((m) => !primaryMethods.includes(m));
   const [payAmount, setPayAmount] = useState('');
   const [payParticipantId, setPayParticipantId] = useState<string | null>(null);
+  const [payGenericN, setPayGenericN] = useState<number | null>(null);   // place SANS joueur sélectionnée (n° affiché)
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherRef, setVoucherRef] = useState('');
   const [voucherIssuer, setVoucherIssuer] = useState('');
+  const [otherOpen, setOtherOpen] = useState(false);   // moyen « Autre » → champ « comment ça a été réglé »
+  const [otherNote, setOtherNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);   // participant en cours de remplacement (sélecteur inline)
   const [associatingIndex, setAssociatingIndex] = useState<number | null>(null);   // place libre en cours d'association
@@ -60,7 +76,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   useEffect(() => {
     setPayAmount(centsToInput(remaining));
     setPayParticipantId(null);
+    setPayGenericN(null);
     setVoucherOpen(false); setVoucherRef(''); setVoucherIssuer('');
+    setOtherOpen(false); setOtherNote('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id, reservation.paidAmount]);
 
@@ -80,11 +98,23 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   // Soldé = il y a un prix dû et il est entièrement couvert (les events libres, due=0, restent encaissables).
   const settled = due > 0 && remaining <= 0;
 
+  // Part d'une place (dû ÷ capacité) + places SANS joueur couvertes par les paiements anonymes
+  // (payé total − payé attribué aux joueurs nommés) → statut « réglé » de haut en bas, comme la page.
+  const perPlayerCents = players > 0 ? Math.round(due / players) : remaining;
+  const participantPaidCents = bills.reduce((s, p) => s + toCents(p.paid), 0);
+  const anonPaidCents = Math.max(0, toCents(reservation.paidAmount) - participantPaidCents);
+  const coveredGeneric = perPlayerCents > 0 ? Math.floor(anonPaidCents / perPlayerCents) : 0;
+  const anonPays = (reservation.payments ?? []).filter((p) => !p.participantId && toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0);
+
   // Soldes prépayés utilisables de la cible courante (joueur sélectionné, sinon titulaire).
   const targetUserId = activePart?.userId ?? reservation.user?.id ?? null;
   const selPackages = (targetUserId ? (packagesByUser?.[targetUserId] ?? []) : []).filter((p) => isUsable(p));
+  // Règlements « sans encaissement » (offres souscrites) : proposés seulement si le joueur ciblé
+  // (participant sélectionné, sinon titulaire) a souscrit à des offres — abonnement ACTIF en base
+  // OU carnet/porte-monnaie utilisable.
+  const hasSubscribedOffer = selPackages.length > 0 || !!(targetUserId && subscribedUserIds?.has(targetUserId));
 
-  const payNow = async (method: PaymentMethod) => {
+  const payNow = async (method: PaymentMethod, noteOverride?: string) => {
     const amount = Number(payAmount);
     if (!amount || amount <= 0) { fail('Montant invalide.'); return; }
     setBusy(true);
@@ -92,10 +122,12 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
       await api.adminAddPayment(clubId, reservation.id, {
         amount, method,
         participantId: payParticipantId ?? undefined,
+        note: noteOverride ?? (method === 'OTHER' ? otherNote.trim() || undefined : undefined),
         voucherRef: method === 'VOUCHER' ? voucherRef.trim() || undefined : undefined,
         voucherIssuer: method === 'VOUCHER' ? voucherIssuer.trim() || undefined : undefined,
       }, token);
       setPayParticipantId(null);
+      setOtherOpen(false); setOtherNote('');
       onChanged(); onPaid?.();
     } catch (e) {
       fail((e as Error).message === 'PAYMENT_EXCEEDS_DUE'
@@ -122,6 +154,14 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
         : (e as Error).message === 'PAYMENT_EXCEEDS_DUE' ? (payParticipantId ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le prix de la réservation.')
         : (e as Error).message);
     } finally { setBusy(false); }
+  };
+
+  // Clic sur un moyen : VOUCHER / OTHER ouvrent leur champ (réf. Ticket CE / « comment ça a été réglé »),
+  // les autres encaissent directement.
+  const onMethod = (m: PaymentMethod) => {
+    if (m === 'VOUCHER') { setVoucherOpen((v) => !v); setOtherOpen(false); }
+    else if (m === 'OTHER') { setOtherOpen((v) => !v); setVoucherOpen(false); }
+    else payNow(m);
   };
 
   const participantErr = (code: string): string => ({
@@ -202,7 +242,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const sectionLabel: CSSProperties = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute };
   const caption: CSSProperties = { fontSize: 12, color: th.textMute, marginBottom: 8 };
 
-  const targetTo = (id: string | null, cents: number) => { setPayParticipantId(id); setPayAmount(centsToInput(cents)); };
+  const targetTo = (id: string | null, cents: number) => { setPayParticipantId(id); setPayGenericN(null); setPayAmount(centsToInput(cents)); };
+  // Sélectionne une place SANS joueur : encaissement anonyme (participantId null) d'une part.
+  const targetGeneric = (n: number, cents: number) => { setPayParticipantId(null); setPayGenericN(n); setPayAmount(centsToInput(cents)); };
 
   // Avatar initiales, teinté par identité (cohérent avec le reste de l'app).
   const avatar = (seed: string, first: string, last: string) => {
@@ -314,14 +356,32 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                   </div>
                 );
               }
+              const gPaid = collectEmptyPlaces && (settled || j < coveredGeneric);   // place couverte par un paiement anonyme
+              const gPay = collectEmptyPlaces && j < coveredGeneric ? anonPays[j] : undefined;   // règlement anonyme (best-effort) → moyen + annulation
+              const gOn = payGenericN === n;
               return (
-                <div key={`empty-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 12, background: th.surface2, boxShadow: 'inset 0 0 0 1px transparent' }}>
+                <div key={`empty-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 11px', borderRadius: 12, background: gOn ? `${th.accent}14` : th.surface2, boxShadow: gOn ? `inset 0 0 0 1.5px ${th.accent}` : 'inset 0 0 0 1px transparent' }}>
                   {genericAvatar(n)}
                   <span style={{ flex: 1, minWidth: 90, fontFamily: th.fontUI, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: th.textMute }}>Joueur {n}</span>
                     <button type="button" aria-label="Associer un membre" disabled={busy} onClick={() => setAssociatingIndex(idx)}
                       style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>associer</button>
                   </span>
+                  {collectEmptyPlaces && !settled && (gPaid ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>
+                        <Icon name="check" size={13} color={th.accent} />réglé
+                        {gPay?.method && <span style={{ fontWeight: 600, color: th.textMute }}>· {METHOD_SHORT[gPay.method] ?? gPay.method}</span>}
+                      </span>
+                      {gPay && rem(gPay) > 0 && (
+                        <button type="button" disabled={busy} onClick={() => refundParticipant([gPay])}
+                          style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', padding: 0 }}>annuler</button>
+                      )}
+                    </span>
+                  ) : (remaining > 0 && (
+                    <button type="button" disabled={busy} onClick={() => targetGeneric(n, Math.min(perPlayerCents, remaining))}
+                      style={{ border: 'none', background: gOn ? th.accent : th.surface, color: gOn ? th.onAccent : th.text, boxShadow: gOn ? 'none' : `inset 0 0 0 1px ${th.line}`, borderRadius: 9, padding: '6px 12px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Régler</button>
+                  )))}
                 </div>
               );
             })}
@@ -339,10 +399,10 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
       {/* ── ENCAISSER — masqué quand soldé ─────────────────────── */}
       {!settled && (
         <div style={{ marginTop: 22, borderRadius: 16, background: th.surface2, padding: 14 }}>
-          {/* Cible active : encaissement ciblé sur un joueur (sinon, résa entière) */}
-          {activePart && (
+          {/* Cible active : encaissement ciblé sur un joueur ou une place sans joueur (sinon, résa entière) */}
+          {(activePart || payGenericN != null) && (
             <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10, background: `${th.accent}1f`, fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
-              Encaisser pour <b>{activePart.firstName} {activePart.lastName}</b>
+              Encaisser pour <b>{activePart ? `${activePart.firstName} ${activePart.lastName}` : `Joueur ${payGenericN}`}</b>
               <button type="button" onClick={() => targetTo(null, remaining)}
                 style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: th.accent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Réservation entière</button>
             </div>
@@ -369,11 +429,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {primaryMethods.map((m) => (
               <button key={m} type="button" disabled={cannotPay} title={capTitle}
-                onClick={() => (m === 'VOUCHER' ? setVoucherOpen((v) => !v) : payNow(m))}
+                onClick={() => onMethod(m)}
                 style={{ flex: '1 1 130px', minWidth: 124, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 11,
                   cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: th.accent, color: th.onAccent,
                   fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none',
-                  outline: m === 'VOUCHER' && voucherOpen ? `2px solid ${th.text}` : 'none', outlineOffset: 2 }}>
+                  outline: (m === 'VOUCHER' && voucherOpen) || (m === 'OTHER' && otherOpen) ? `2px solid ${th.text}` : 'none', outlineOffset: 2 }}>
                 {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={16} color={th.onAccent} />}
                 {METHOD_LABEL[m]}
               </button>
@@ -394,16 +454,35 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {secondaryMethods.map((m) => (
               <button key={m} type="button" disabled={cannotPay} title={capTitle}
-                onClick={() => (m === 'VOUCHER' ? setVoucherOpen((v) => !v) : payNow(m))}
+                onClick={() => onMethod(m)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 14px',
                   cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: 'transparent',
-                  boxShadow: `inset 0 0 0 1px ${m === 'VOUCHER' && voucherOpen ? th.text : th.line}`,
+                  boxShadow: `inset 0 0 0 1px ${(m === 'VOUCHER' && voucherOpen) || (m === 'OTHER' && otherOpen) ? th.text : th.line}`,
                   color: th.textMute, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
                 {METHOD_ICON[m] && <Icon name={METHOD_ICON[m]!} size={15} color={th.textMute} />}
                 {METHOD_LABEL[m]}
               </button>
             ))}
           </div>
+
+          {/* Règlements SANS encaissement (débités au joueur : coffre, offres, abonnement) →
+              MEMBER (hors totaux caisse), le libellé est stocké en note. */}
+          {settlementPresets && settlementPresets.length > 0 && hasSubscribedOffer && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ ...caption, marginBottom: 6 }}>Sans encaissement (débité au joueur)</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {settlementPresets.map((s) => (
+                  <button key={s.note} type="button" disabled={cannotPay} title={capTitle}
+                    onClick={() => payNow('MEMBER', s.note)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 10, padding: '9px 14px',
+                      cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: 'transparent',
+                      boxShadow: `inset 0 0 0 1px ${th.line}`, color: th.textMute, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
+                    <Icon name="user" size={15} color={th.textMute} />{s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Ticket CE : référence / émetteur */}
           {voucherOpen && (
@@ -416,6 +495,17 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
               </label>
               <Btn onClick={() => payNow('VOUCHER')} icon="check" disabled={cannotPay}>{busy ? '…' : 'Valider Ticket CE'}</Btn>
               <button type="button" onClick={() => setVoucherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
+            </div>
+          )}
+
+          {/* Autre : préciser comment ça a été réglé (ex. abonnement, coffre-fort) → note du paiement */}
+          {otherOpen && (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 180 }}>Comment ça a été réglé ?
+                <input type="text" value={otherNote} onChange={(e) => setOtherNote(e.target.value)} placeholder="Ex. abonnement, coffre-fort…" style={input} />
+              </label>
+              <Btn onClick={() => payNow('OTHER')} icon="check" disabled={cannotPay}>{busy ? '…' : 'Valider'}</Btn>
+              <button type="button" onClick={() => setOtherOpen(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, paddingBottom: 10 }}>Annuler</button>
             </div>
           )}
 

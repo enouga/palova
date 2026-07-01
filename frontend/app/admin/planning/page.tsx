@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage } from '@/lib/api';
+import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage, Payment, CaissePayment, ClubAdminDetail } from '@/lib/api';
 import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
@@ -9,6 +9,8 @@ import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
+import { Receipt } from '@/components/admin/Receipt';
+import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -27,6 +29,31 @@ const TYPE_META: Record<ReservationType, { label: string; color: string }> = {
 };
 const TYPE_ORDER: ReservationType[] = ['COURT', 'COACHING', 'TOURNAMENT', 'EVENT'];
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
+// Libellés / icônes des moyens de paiement pour la liste « Encaissements » (cohérent page Encaissement).
+const METHOD_LABEL: Record<PaymentMethod, string> = {
+  CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
+  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement',
+};
+const METHOD_ICON: Record<PaymentMethod, IconName> = {
+  CASH: 'euro', CARD: 'card', TRANSFER: 'arrowR', ONLINE: 'card', OTHER: 'euro',
+  VOUCHER: 'ticket', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user', SUBSCRIPTION: 'user',
+};
+// Règlements « sans encaissement » (débités au joueur : coffre, offres, abonnement) : enregistrés
+// en MEMBER (hors totaux caisse) avec la note = libellé. Affichés en boutons 1 clic dans la modale.
+const SETTLEMENT_PRESETS = [
+  { label: 'Coffre', note: 'Coffre' },
+  { label: 'Offres', note: 'Offres' },
+  { label: 'Abonnement', note: 'Abonnement' },
+];
+
+// Adapte un paiement de réservation au format attendu par le reçu (Receipt).
+function toCaissePayment(p: Payment, rv: ClubReservation): CaissePayment {
+  return {
+    ...p,
+    reservation: { id: rv.id, startTime: rv.startTime, resource: { name: rv.resource.name }, user: rv.user ? { firstName: rv.user.firstName, lastName: rv.user.lastName } : null },
+    memberPackage: null,
+  };
+}
 // Dimensions de la grille verticale (terrains en colonnes, heures en lignes).
 const HOUR_H = 68, TIME_W = 56, COL_MIN_W = 120, HEADER_H = 52;
 
@@ -102,6 +129,9 @@ export default function AdminPlanningPage() {
   const [error, setError]         = useState<string | null>(null);
   const [hidden, setHidden]       = useState<Set<ReservationType>>(new Set());
   const [selected, setSelected]   = useState<ClubReservation | null>(null);
+  const [clubDetail, setClubDetail] = useState<ClubAdminDetail | null>(null);   // nom/adresse pour les reçus
+  const [receiptTarget, setReceiptTarget] = useState<{ payment: Payment; rv: ClubReservation } | null>(null);
+  const [subscribedIds, setSubscribedIds] = useState<Set<string>>(new Set());   // joueurs de la résa ouverte avec un abonnement ACTIF
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<string | null>(null);
@@ -139,6 +169,7 @@ export default function AdminPlanningPage() {
         api.adminGetMembers(clubId, token),
         api.adminGetActivePackages(clubId, token),
       ]);
+      setClubDetail(c);
       setTz(c.timezone);
       setPeak(c.offPeakHours ?? null);
       setQuickMethods(c.quickPaymentMethods?.length ? c.quickPaymentMethods : DEFAULT_QUICK_METHODS);
@@ -152,11 +183,36 @@ export default function AdminPlanningPage() {
     finally { setLoading(false); }
   }, [token, clubId, date]);
 
-  // Après une mutation du CollectPanel : recharge et garde la modale à jour.
-  const refreshSelected = useCallback(async (updated?: ClubReservation) => {
-    const list = await load();
-    setSelected((cur) => (updated ?? (cur ? list.find((r) => r.id === cur.id) ?? cur : cur)));
-  }, [load]);
+  // Rechargement LÉGER des réservations après un encaissement (pas de setLoading → la
+  // modale ne se démonte pas ; une seule requête au lieu des quatre de `load`).
+  const reloadReservations = useCallback(async (): Promise<ClubReservation[]> => {
+    if (!token || !clubId) return [];
+    try {
+      const resv = await api.adminGetReservations(clubId, { date }, token);
+      setRes(resv.reservations);
+      return resv.reservations;
+    } catch (e) { setError((e as Error).message); return []; }
+  }, [token, clubId, date]);
+
+  // Recharge les soldes prépayés (après un règlement carnet/porte-monnaie). Best-effort.
+  const reloadPackages = useCallback(async () => {
+    if (!token || !clubId) return;
+    try { setPackagesByUser(indexPackagesByUser(await api.adminGetActivePackages(clubId, token))); }
+    catch { /* ignore */ }
+  }, [token, clubId]);
+
+  // Remplace UNE réservation dans la grille sans requête (mutation qui renvoie la résa à jour).
+  const patchReservation = useCallback((updated: ClubReservation) => {
+    setRes((cur) => cur.map((r) => (r.id === updated.id ? updated : r)));
+  }, []);
+
+  // Mutation d'encaissement/joueur réussie : patch (grille + modale) si la résa à jour est
+  // fournie (association/retrait/remplacement), sinon rechargement léger + re-synchro de la modale.
+  const onCollected = useCallback(async (updated?: ClubReservation) => {
+    if (updated) { patchReservation(updated); setSelected((cur) => (cur && cur.id === updated.id ? updated : cur)); return; }
+    const [list] = await Promise.all([reloadReservations(), reloadPackages()]);
+    setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
+  }, [patchReservation, reloadReservations, reloadPackages]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
@@ -173,6 +229,22 @@ export default function AdminPlanningPage() {
       setStudents([]);
     }
   }, [selected?.lesson?.id, loadStudents]);
+
+  // Abonnements ACTIFS des joueurs de la réservation ouverte (titulaire + participants) → garde des
+  // règlements « sans encaissement ». Le carnet/porte-monnaie vient déjà de packagesByUser. Chargé à
+  // l'ouverture (et si les joueurs changent). Un abonnement suffit sur au moins un joueur ciblable.
+  const subsSig = selected ? [selected.user?.id, ...(selected.participants ?? []).map((p) => p.userId)].filter(Boolean).join(',') : '';
+  useEffect(() => {
+    if (!token || !clubId || !subsSig) { setSubscribedIds(new Set()); return; }
+    const ids = [...new Set(subsSig.split(','))];
+    let alive = true;
+    Promise.all(ids.map((uid) =>
+      api.adminGetMemberSubscriptions(clubId, uid, token)
+        .then((subs) => (subs.some((s) => s.status === 'ACTIVE' && new Date(s.expiresAt).getTime() > Date.now()) ? uid : null))
+        .catch(() => null),
+    )).then((rows) => { if (alive) setSubscribedIds(new Set(rows.filter(Boolean) as string[])); });
+    return () => { alive = false; };
+  }, [token, clubId, subsSig]);
 
   // Suivi de l'état plein écran.
   useEffect(() => {
@@ -599,6 +671,10 @@ export default function AdminPlanningPage() {
 
             {selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 16 }}>
+                {/* Encaissement par joueur : chaque ligne se sélectionne (« Régler ») et TOUS les
+                    moyens s'activent en bas, sous les lignes, pour le joueur sélectionné (sinon la
+                    réservation entière). Affiché directement — aucun panneau « Détails / options ».
+                    La modale ne se ferme pas au paiement (pas de `onPaid`). */}
                 <CollectPanel
                   reservation={selected}
                   due={dueOf(selected)}
@@ -606,12 +682,45 @@ export default function AdminPlanningPage() {
                   members={members}
                   quickMethods={quickMethods}
                   packagesByUser={packagesByUser}
+                  collectEmptyPlaces
+                  settlementPresets={SETTLEMENT_PRESETS}
+                  subscribedUserIds={subscribedIds}
                   clubId={clubId!}
                   token={token!}
-                  onChanged={refreshSelected}
-                  onPaid={() => setSelected(null)}
+                  onChanged={onCollected}
                   onError={(msg) => setError(msg)}
                 />
+              </div>
+            )}
+
+            {/* Encaissements enregistrés + reçu imprimable (cohérent modale page Encaissement). */}
+            {selected.payments.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute }}>Encaissements</span>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
+                </div>
+                <div>
+                  {selected.payments.map((p, i) => {
+                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
+                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
+                        </span>
+                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {who
+                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {p.note || METHOD_LABEL[p.method]}</>
+                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
+                        </span>
+                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
+                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -721,6 +830,21 @@ export default function AdminPlanningPage() {
           onSuccess={() => { setNoShowTarget(null); load(); }}
           onClose={() => setNoShowTarget(null)}
         />
+      )}
+
+      {receiptTarget && clubDetail && (
+        <>
+          <style>{`@media print { body * { visibility: hidden !important; } .receipt-print-overlay, .receipt-print-overlay * { visibility: visible !important; } .receipt-print-overlay { position: absolute; inset: 0; background: #fff !important; } .receipt-print-overlay .no-print { display: none !important; } }`}</style>
+          <div className="receipt-print-overlay" onClick={() => setReceiptTarget(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+              <Receipt payment={toCaissePayment(receiptTarget.payment, receiptTarget.rv)} clubName={clubDetail.name} clubAddress={clubDetail.address} />
+              <div className="no-print" style={{ display: 'flex', gap: 10, padding: '12px 24px 20px', background: '#fff' }}>
+                <button type="button" onClick={() => window.print()} style={{ flex: 1, border: 'none', background: '#111', color: '#fff', borderRadius: 10, padding: '10px 0', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 700 }}>Imprimer</button>
+                <button type="button" onClick={() => setReceiptTarget(null)} style={{ border: '1px solid #ccc', background: 'transparent', color: '#555', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontFamily: 'Arial, sans-serif', fontSize: 14 }}>Fermer</button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {createOpen && (

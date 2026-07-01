@@ -147,6 +147,77 @@ describe('CollectPanel', () => {
     await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
   });
 
+  it('collectEmptyPlaces : une place sans joueur est sélectionnable (« Régler ») et encaisse une part anonyme', async () => {
+    const orga = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [orga] }, { collectEmptyPlaces: true });   // capacité 4 → 3 places vides
+    const reglers = screen.getAllByRole('button', { name: 'Régler' });
+    expect(reglers).toHaveLength(4);           // pt-1 + 3 places vides
+    fireEvent.click(reglers[1]);               // 1re place vide
+    fireEvent.click(screen.getByRole('button', { name: 'Carte' }));
+    await waitFor(() => {
+      const call = (api.adminAddPayment as jest.Mock).mock.calls.at(-1)!;
+      expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4)
+      expect(call[2].participantId).toBeUndefined();                    // paiement anonyme
+    });
+  });
+
+  it('sans collectEmptyPlaces (défaut) : les places vides ne proposent pas « Régler »', () => {
+    const orga = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [orga] });
+    expect(screen.getAllByRole('button', { name: 'Régler' })).toHaveLength(1);   // seul pt-1
+  });
+
+  it('collectEmptyPlaces : une place vide couverte par un paiement anonyme affiche « réglé »', () => {
+    const orga = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '13.00', outstanding: '0.00' };
+    const anon = { id: 'pay-a', amount: '13.00', method: 'CASH' as const, participantId: null, payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2026-06-22T13:46:00.000Z', refundedAmount: '0.00', receiptNo: null };
+    renderPanel({ participants: [orga], payments: [anon], paidAmount: '26.00' }, { collectEmptyPlaces: true });
+    expect(screen.getAllByText(/réglé/)).toHaveLength(2);   // organisateur + 1 place vide couverte
+  });
+
+  it('« Autre » ouvre un champ « comment » et enregistre le paiement avec la note', async () => {
+    renderPanel();   // dû 52 €, aucun joueur ciblé
+    (api.adminAddPayment as jest.Mock).mockClear();   // ce fichier n'a pas de beforeEach → on ignore les appels des tests précédents
+    fireEvent.click(screen.getByRole('button', { name: 'Autre' }));       // ouvre le champ (ne paie PAS encore)
+    expect(api.adminAddPayment).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByPlaceholderText(/coffre-fort/i), { target: { value: 'Abonnement Jean' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'OTHER', amount: 52, note: 'Abonnement Jean' }), 'tok',
+    ));
+  });
+
+  const holder = { user: { id: 'u1', firstName: 'Jean', lastName: 'Test', email: 'j@x.fr' } };
+  const PRESETS = [{ label: 'Coffre', note: 'Coffre' }, { label: 'Offres', note: 'Offres' }, { label: 'Abonnement', note: 'Abonnement' }];
+  const withSub = { settlementPresets: PRESETS, subscribedUserIds: new Set(['u1']) };   // titulaire u1 a un abonnement actif
+  const wallet = { id: 'pk-w', kind: 'WALLET', creditsTotal: null, creditsRemaining: null, amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null };
+
+  it('règlements « sans encaissement » (Coffre/Offres/Abonnement) → MEMBER + note, hors argent réel', async () => {
+    renderPanel(holder, withSub);
+    (api.adminAddPayment as jest.Mock).mockClear();
+    ['Coffre', 'Offres', 'Abonnement'].forEach((l) => expect(screen.getByRole('button', { name: l })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Coffre' }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'MEMBER', amount: 52, note: 'Coffre' }), 'tok',   // MEMBER = hors MONEY_METHODS
+    ));
+  });
+
+  it('affichés aussi si le joueur a un carnet/porte-monnaie (sans abonnement)', () => {
+    renderPanel(holder, { settlementPresets: PRESETS, packagesByUser: { u1: [wallet] } });
+    expect(screen.getByRole('button', { name: 'Coffre' })).toBeInTheDocument();
+  });
+
+  it("ne s'affichent QUE si le joueur a souscrit à des offres (ni abonnement ni carnet → masqués)", () => {
+    renderPanel(holder, { settlementPresets: PRESETS });   // aucune offre pour u1
+    expect(screen.queryByRole('button', { name: 'Coffre' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abonnement' })).toBeNull();
+  });
+
+  it('avec settlementPresets (joueur avec offre) : le bouton générique « Abo / Membre » est retiré (doublon avec Abonnement)', () => {
+    renderPanel(holder, withSub);
+    expect(screen.queryByRole('button', { name: 'Abo / Membre' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Abonnement' })).toBeInTheDocument();
+  });
+
   it('le montant se recalcule quand le payé change (panneau resté ouvert)', () => {
     const onChanged = jest.fn();
     const { rerender } = render(
