@@ -30,7 +30,7 @@ function makeMatch(over: Partial<OpenMatch> = {}): OpenMatch {
     full: false,
     viewerIsParticipant: false,
     viewerIsOrganizer: false,
-    players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true }],
+    players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2) }],
     interestedCount: 0,
     viewerIsInterested: false,
     interested: [],
@@ -72,6 +72,7 @@ describe('OpenMatchCard', () => {
         <OpenMatchCard {...makeProps(match, { onToggleInterest })} />
       </ThemeProvider>
     );
+    expect(screen.getByText('VS')).toBeInTheDocument();
     const btn = screen.getByRole('button', { name: /Ça m'intéresse/i });
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);

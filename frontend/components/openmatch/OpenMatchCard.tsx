@@ -5,7 +5,8 @@ import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
-import { PlayerPills, PlayerPillData } from '@/components/player/PlayerPills';
+import type { PlayerPillData } from '@/components/player/PlayerPills';
+import { MatchTeams } from '@/components/match/MatchTeams';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 import { rangeLabel } from '@/lib/levelMatch';
 
@@ -86,16 +87,19 @@ export function OpenMatchCard({
           {friendCount === 1 ? '1 de vos amis joue ici' : `${friendCount} de vos amis jouent ici`}
         </div>
       )}
-      <PlayerPills
-        players={m.players}
-        spotsLeft={m.spotsLeft}
+      <MatchTeams
+        players={m.players.map((p) => ({
+          userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+          avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
+          team: (p.team ?? 1) as 1 | 2,
+        }))}
+        capacity={m.maxPlayers}
         friendIds={friendIds}
-        onRemove={(p) => onRemovePlayer(m, p)}
-        canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         busy={busy}
-        firstSpotSlot={m.viewerIsOrganizer ? (
-          <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`}
-            onClick={() => onToggleAdd(m)} />
+        onRemove={(p) => onRemovePlayer(m, { userId: p.userId, firstName: p.firstName, lastName: p.lastName, isOrganizer: p.isOrganizer })}
+        canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
+        addSlot={m.viewerIsOrganizer ? (
+          <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`} onClick={() => onToggleAdd(m)} />
         ) : undefined}
       />
 
