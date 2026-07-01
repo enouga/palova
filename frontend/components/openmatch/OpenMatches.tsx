@@ -180,6 +180,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onJoin={handleJoin}
                   onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token))}
                   onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token))}
+                  onSetTeams={(mm, teams) => act(mm, () => api.setOpenMatchTeams(club.slug, mm.id, teams, token))}
                   onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token)); }}
                   onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
                   onCancelAdd={() => setAddingId(null)}
@@ -223,6 +224,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               onJoin={handleJoin}
               onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token!))}
               onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token!))}
+              onSetTeams={(mm, teams) => act(mm, () => api.setOpenMatchTeams(club.slug, mm.id, teams, token!))}
               onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token!)); }}
               onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
               onCancelAdd={() => setAddingId(null)}

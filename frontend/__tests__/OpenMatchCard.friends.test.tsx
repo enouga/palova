@@ -15,7 +15,7 @@ const baseMatch: any = {
 };
 const noop = () => {};
 const props: any = { timezone: 'Europe/Paris', slug: 'demo', token: 't', busy: false, addingOpen: false,
-  onJoin: noop, onLeave: noop, onRemovePlayer: noop, onAddPlayer: noop, onToggleAdd: noop, onCancelAdd: noop,
+  onJoin: noop, onLeave: noop, onRemovePlayer: noop, onSetTeams: noop, onAddPlayer: noop, onToggleAdd: noop, onCancelAdd: noop,
   onRecordResult: noop, canRecordResult: false, onToggleInterest: noop, onOpenChat: noop, onAuthPrompt: noop };
 
 describe('OpenMatchCard — preuve sociale amis', () => {

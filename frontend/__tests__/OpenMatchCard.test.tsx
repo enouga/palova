@@ -14,6 +14,7 @@ jest.mock('../lib/api', () => ({
   api: {
     searchClubMembers: jest.fn().mockResolvedValue([]),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Test', lastName: 'User', email: 't@t.fr', avatarUrl: null }),
+    setOpenMatchTeams: jest.fn().mockResolvedValue({ id: 'r1' }),
   },
 }));
 
@@ -51,6 +52,7 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
     onJoin: jest.fn(),
     onLeave: jest.fn(),
     onRemovePlayer: jest.fn(),
+    onSetTeams: jest.fn(),
     onAddPlayer: jest.fn(),
     onToggleAdd: jest.fn(),
     onCancelAdd: jest.fn(),
@@ -165,5 +167,33 @@ describe('OpenMatchCard', () => {
     expect(onJoin).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Discuter/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ça m'intéresse/i })).not.toBeInTheDocument();
+  });
+
+  it('organisateur : taper 2 joueurs de côtés opposés appelle onSetTeams avec les côtés échangés', () => {
+    const match = makeMatch({
+      viewerIsOrganizer: true, viewerIsParticipant: true, spotsLeft: 0, full: true,
+      players: [
+        { userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2) },
+        { userId: 'u-bob', firstName: 'Bob', lastName: 'B', avatarUrl: null, isOrganizer: false, team: 1 as (1 | 2) },
+        { userId: 'u-cara', firstName: 'Cara', lastName: 'C', avatarUrl: null, isOrganizer: false, team: 2 as (1 | 2) },
+        { userId: 'u-dan', firstName: 'Dan', lastName: 'D', avatarUrl: null, isOrganizer: false, team: 2 as (1 | 2) },
+      ],
+    });
+    const onSetTeams = jest.fn();
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { onSetTeams })} />
+      </ThemeProvider>
+    );
+    // Les joueurs éditables sont rendus comme <span role="button"> (les <button> réels = actions/retrait).
+    const playerOf = (name: string) =>
+      screen.getAllByRole('button').find((b) => b.tagName === 'SPAN' && (b.textContent ?? '').includes(name))!;
+
+    fireEvent.click(playerOf('Bob'));   // sélectionne Bob (côté 1)
+    fireEvent.click(playerOf('Cara'));  // puis Cara (côté 2) → échange
+
+    expect(onSetTeams).toHaveBeenCalledWith(match, {
+      'u-org': 1, 'u-bob': 2, 'u-cara': 1, 'u-dan': 2,
+    });
   });
 });

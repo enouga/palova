@@ -25,6 +25,7 @@ export interface OpenMatchCardProps {
   onJoin: (m: OpenMatch) => void;
   onLeave: (m: OpenMatch) => void;
   onRemovePlayer: (m: OpenMatch, p: PlayerPillData) => void;
+  onSetTeams: (m: OpenMatch, teams: Record<string, 1 | 2>) => void;
   onAddPlayer: (m: OpenMatch, memberId: string) => void;
   onToggleAdd: (m: OpenMatch) => void;
   onCancelAdd: () => void;
@@ -44,7 +45,7 @@ export interface OpenMatchCardProps {
 // Extraite d'OpenMatches pour être réutilisée dans la section « Pour toi ».
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
-  onJoin, onLeave, onRemovePlayer, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
+  onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
   onToggleInterest, onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
@@ -96,6 +97,8 @@ export function OpenMatchCard({
         capacity={m.maxPlayers}
         friendIds={friendIds}
         busy={busy}
+        editable={m.viewerIsOrganizer}
+        onSetTeams={(teams) => onSetTeams(m, teams)}
         onRemove={(p) => onRemovePlayer(m, { userId: p.userId, firstName: p.firstName, lastName: p.lastName, isOrganizer: p.isOrganizer })}
         canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         addSlot={m.viewerIsOrganizer ? (

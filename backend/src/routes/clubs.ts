@@ -62,6 +62,8 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_JOINED:        409,
   ORGANIZER_CANNOT_LEAVE: 403,
   NOT_ORGANIZER:          403,
+  TEAM_SIDE_FULL:         400,
+  TEAM_INVALID:           400,
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTICIPANT_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_FOUND: 404,
@@ -255,6 +257,12 @@ router.delete('/:slug/open-matches/:id/participants/:userId', authMiddleware, as
 
 router.post('/:slug/open-matches/:id/participants', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.addOpenMatchPlayer(asString(req.params.slug), asString(req.params.id), req.user!.id, asString((req.body as { userId?: unknown }).userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Réorganisation des équipes par l'organisateur (tap-to-swap) — chemin plus spécifique que /:userId (DELETE), pas de collision.
+router.post('/:slug/open-matches/:id/participants/teams', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await openMatchService.setTeams(asString(req.params.slug), asString(req.params.id), req.user!.id, (req.body as { teams?: Record<string, number> }).teams ?? {})); }
   catch (err) { handleError(err, res, next); }
 });
 

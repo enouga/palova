@@ -3,7 +3,7 @@ import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded, notifyOpenMatchInterest } from '../email/notifications';
 import { RatingService } from './rating.service';
-import { effectiveTeams } from './matchTeams';
+import { effectiveTeams, applyTeams } from './matchTeams';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
@@ -287,6 +287,26 @@ export class OpenMatchService {
 
     await this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
     return result;
+  }
+
+  /** Réorganise les équipes d'une partie ouverte (organisateur seul). Transaction Serializable + FOR UPDATE. */
+  async setTeams(slug: string, reservationId: string, organizerUserId: string, teams: Record<string, number>) {
+    const club = await this.resolveActiveMember(slug, organizerUserId);
+    await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ start_time: Date; resource_id: string }>>`
+        SELECT start_time, resource_id FROM reservations WHERE id = ${reservationId} FOR UPDATE
+      `;
+      const r = locked[0];
+      if (!r) throw new Error('RESERVATION_NOT_FOUND');
+      const resource = await tx.resource.findUnique({ where: { id: r.resource_id }, select: { clubId: true, attributes: true } });
+      if (!resource || resource.clubId !== club.id) throw new Error('CLUB_MISMATCH');
+      const parts = await tx.reservationParticipant.findMany({ where: { reservationId }, select: { userId: true, isOrganizer: true } });
+      const actor = parts.find((p) => p.userId === organizerUserId);
+      if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
+      const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
+      await applyTeams(tx, reservationId, teams, maxPlayers);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    return { id: reservationId };
   }
 
   /** Quitter une partie ouverte (départ volontaire) — délègue au retrait unifié. */

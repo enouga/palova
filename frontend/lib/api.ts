@@ -262,6 +262,8 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'DELETE' }, token),
   removeOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
+  setOpenMatchTeams: (slug: string, id: string, teams: Record<string, 1 | 2>, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
   setInterested: (slug: string, id: string, token: string) =>
