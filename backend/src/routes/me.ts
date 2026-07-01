@@ -14,6 +14,7 @@ import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { AccountService } from '../services/account.service';
 import { FollowService } from '../services/follow.service';
+import { FriendshipService } from '../services/friendship.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -22,12 +23,13 @@ const eventService = new EventService();
 const ratingService = new RatingService();
 const accountService = new AccountService();
 const followService = new FollowService();
+const friendshipService = new FriendshipService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
   id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
   birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true, showInLeaderboard: true,
-  autoMatchProposals: true,
+  autoMatchProposals: true, acceptsFriendRequests: true,
   preferredSport: { select: { id: true, key: true, name: true } },
 } as const;
 
@@ -108,8 +110,8 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, n
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, preferredSportId } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; preferredSportId?: string | null } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, preferredSportId } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; preferredSportId?: string | null } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
@@ -137,6 +139,10 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     if (autoMatchProposals !== undefined) {
       if (typeof autoMatchProposals !== 'boolean') return void res.status(400).json({ error: 'autoMatchProposals invalide' });
       data.autoMatchProposals = autoMatchProposals;
+    }
+    if (acceptsFriendRequests !== undefined) {
+      if (typeof acceptsFriendRequests !== 'boolean') return void res.status(400).json({ error: 'acceptsFriendRequests invalide' });
+      data.acceptsFriendRequests = acceptsFriendRequests;
     }
     if (preferredSportId !== undefined) {
       if (preferredSportId === null) {
@@ -201,6 +207,18 @@ router.get('/following', authMiddleware, async (req: AuthRequest, res: Response,
 // Joueurs qui suivent le joueur connecté.
 router.get('/followers', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await followService.listFollowers(req.user!.id)); }
+  catch (err) { next(err); }
+});
+
+// Amitiés confirmées du joueur connecté (filtrables par nom).
+router.get('/friendships', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.listFriends(req.user!.id, typeof req.query.q === 'string' ? req.query.q : undefined)); }
+  catch (err) { next(err); }
+});
+
+// Demandes d'ami en attente (reçues + envoyées).
+router.get('/friend-requests', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await friendshipService.listRequests(req.user!.id)); }
   catch (err) { next(err); }
 });
 

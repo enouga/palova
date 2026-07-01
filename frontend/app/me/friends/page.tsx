@@ -15,7 +15,7 @@ export default function FriendsPage() {
   const { slug, club } = useClub();
 
   const tabParam = useSearchParams().get('tab');
-  const initialTab = tabParam === 'followers' ? 'followers' : tabParam === 'following' ? 'following' : 'amis';
+  const initialTab = tabParam === 'followers' ? 'followers' : tabParam === 'following' ? 'following' : tabParam === 'demandes' ? 'demandes' : 'amis';
 
   if (!ready) return null;
   if (!token || !slug || !club) return null; // hub disponible sur un hôte club, connecté

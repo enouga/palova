@@ -551,7 +551,7 @@ export const api = {
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
 
-  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; preferredSportId?: string | null }, token: string) =>
+  updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; preferredSportId?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
 
   // --- Niveau Glicko-2 ---
@@ -598,6 +598,16 @@ export const api = {
     request<FollowRelation>(`/api/clubs/${slug}/follows/${userId}`, { method: 'POST' }, token),
   unfollowUser: (slug: string, userId: string, token: string) =>
     request<FollowRelation>(`/api/clubs/${slug}/follows/${userId}`, { method: 'DELETE' }, token),
+  requestFriend: (slug: string, userId: string, token: string) =>
+    request<FriendRelation>(`/api/clubs/${slug}/friends/${userId}/request`, { method: 'POST' }, token),
+  respondFriend: (slug: string, userId: string, accept: boolean, token: string) =>
+    request<FriendRelation>(`/api/clubs/${slug}/friends/${userId}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }, token),
+  removeFriend: (slug: string, userId: string, token: string) =>
+    request<FriendRelation>(`/api/clubs/${slug}/friends/${userId}`, { method: 'DELETE' }, token),
+  listFriendships: (token: string, q?: string) =>
+    request<Friend[]>(`/api/me/friendships${q ? `?q=${encodeURIComponent(q)}` : ''}`, {}, token),
+  listFriendRequests: (token: string) =>
+    request<FriendRequests>(`/api/me/friend-requests`, {}, token),
 
   getMyClubMembership: (slug: string, token: string) =>
     request<MyClubMembership>(`/api/clubs/${slug}/me/membership`, {}, token),
@@ -1795,6 +1805,7 @@ export interface MyProfile {
   isSuperAdmin: boolean;
   showInLeaderboard: boolean;
   autoMatchProposals: boolean;
+  acceptsFriendRequests: boolean;
   preferredSport: { id: string; key: string; name: string } | null;
 }
 
@@ -1863,6 +1874,7 @@ export interface ClubMemberSearchResult {
   level?: UserLevel | null;
   iFollow?: boolean;   // annoté par searchMembers
   mutual?: boolean;
+  friend?: FriendRelation; // annoté par searchMembers
 }
 
 export interface Friend {
@@ -1878,6 +1890,16 @@ export interface FollowRelation {
   iFollow: boolean;
   followsMe: boolean;
   mutual: boolean;
+}
+
+export type FriendStatus = 'none' | 'pending_out' | 'pending_in' | 'friends';
+export interface FriendRelation {
+  status: FriendStatus;
+  requestable: boolean;
+}
+export interface FriendRequests {
+  received: Friend[];
+  sent: Friend[];
 }
 
 export interface MyClubMembership {

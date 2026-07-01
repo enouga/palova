@@ -24,9 +24,10 @@ describe('FollowButton', () => {
     await waitFor(() => expect(unfollowUser).toHaveBeenCalledWith('demo', 'u2', 't'));
   });
 
-  it('affiche « Amis » quand mutuel', () => {
+  it('un suivi mutuel affiche « Suivi(e) » (plus « Amis »)', () => {
     render(<FollowButton slug="demo" userId="u2" token="t" initial={{ iFollow: true, mutual: true }} />);
-    expect(screen.getByRole('button', { name: /amis/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Suivi\(e\)/ })).toBeInTheDocument();
+    expect(screen.queryByText('Amis')).not.toBeInTheDocument();
   });
 
   it('revient à l\'état initial si l\'API échoue', async () => {

@@ -15,6 +15,8 @@ describe('ClubService — recherche de membres', () => {
     service = new ClubService();
     // Par défaut : aucun lien de suivi → iFollow/mutual = false sur tous les résultats
     prismaMock.follow.findMany.mockResolvedValue([] as any);
+    // Par défaut : aucune amitié → friend = { status:'none', requestable:false } sur tous les résultats
+    prismaMock.friendship.findMany.mockResolvedValue([] as any);
   });
 
   it('refuse un non-membre (MEMBERSHIP_REQUIRED)', async () => {
@@ -34,7 +36,7 @@ describe('ClubService — recherche de membres', () => {
 
     const result = await service.searchMembers('demo', 'caller', '');
 
-    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false }]);
+    expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } }]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.user).toBeUndefined(); // pas de filtre nom quand la requête est vide
     expect(arg.take).toBe(20);
@@ -53,8 +55,8 @@ describe('ClubService — recherche de membres', () => {
     const result = await service.searchMembers('demo', 'caller', 'dup');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false },
-      { id: 'u2', firstName: 'Julie', lastName: 'Dupond', level: null, iFollow: false, mutual: false },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } },
+      { id: 'u2', firstName: 'Julie', lastName: 'Dupond', level: null, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } },
     ]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.userId).toEqual({ not: 'caller' });
@@ -76,7 +78,7 @@ describe('ClubService — recherche de membres', () => {
     const result = await service.searchMembers('demo', 'caller', '');
 
     expect(result).toEqual([
-      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 }, iFollow: false, mutual: false },
+      { id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: { level: 5, tier: 'Confirmé', isProvisional: false, reliability: 93 }, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } },
     ]);
   });
 
@@ -124,9 +126,35 @@ describe('ClubService — recherche de membres', () => {
     const result = await service.searchMembers('demo', 'caller', '');
 
     expect(result).toEqual([
-      { id: 'u2', firstName: 'Léa', lastName: 'M', level: null, iFollow: true,  mutual: true },
-      { id: 'u3', firstName: 'Tom', lastName: 'B', level: null, iFollow: false, mutual: false },
+      { id: 'u2', firstName: 'Léa', lastName: 'M', level: null, iFollow: true,  mutual: true,  friend: { status: 'none', requestable: false } },
+      { id: 'u3', firstName: 'Tom', lastName: 'B', level: null, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } },
     ]);
+  });
+});
+
+describe('ClubService.searchMembers — annotation friend', () => {
+  let svc: ClubService;
+  beforeEach(() => {
+    svc = new ClubService();
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u2', firstName: 'Léa', lastName: 'M', acceptsFriendRequests: true } },
+      { user: { id: 'u3', firstName: 'Tom', lastName: 'B', acceptsFriendRequests: false } },
+    ] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+    prismaMock.follow.findMany.mockResolvedValue([] as any);
+  });
+
+  it('renvoie friend={status,requestable} par membre (opt-in reflété)', async () => {
+    prismaMock.friendship.findMany.mockResolvedValue([
+      { userAId: 'u1', userBId: 'u2', status: 'PENDING', requestedById: 'u1' },
+    ] as any);
+    const res = await svc.searchMembers('demo', 'u1', '');
+    const byId = Object.fromEntries(res.map((r: any) => [r.id, r.friend]));
+    expect(byId['u2']).toEqual({ status: 'pending_out', requestable: false });
+    expect(byId['u3']).toEqual({ status: 'none', requestable: false }); // u3 opt-in OFF
   });
 });
 

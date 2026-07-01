@@ -42,7 +42,7 @@ const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 const profile = {
   id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
   birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
-  autoMatchProposals: false,
+  autoMatchProposals: false, acceptsFriendRequests: false,
 };
 
 const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
@@ -123,6 +123,16 @@ describe('Page Mon profil', () => {
     const group = await screen.findByRole('group', { name: /parties à mon niveau/i });
     fireEvent.click(within(group).getByText('Oui'));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ autoMatchProposals: true }, 'abc'));
+    // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
+    await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
+  });
+
+  it('active « Autoriser les demandes d\'ami » appelle updateMyProfile({ acceptsFriendRequests: true })', async () => {
+    api.updateMyProfile.mockResolvedValue({ ...profile, acceptsFriendRequests: true });
+    wrap();
+    const group = await screen.findByRole('group', { name: /autoriser les demandes d'ami/i });
+    fireEvent.click(within(group).getByText('Oui'));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ acceptsFriendRequests: true }, 'abc'));
     // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
     await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
   });

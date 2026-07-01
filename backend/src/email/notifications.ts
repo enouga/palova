@@ -1263,6 +1263,45 @@ export async function notifyNewFollower(followerId: string, targetUserId: string
   });
 }
 
+export async function notifyFriendRequest(requesterId: string, targetId: string, clubId: string): Promise<void> {
+  const requester = await prisma.user.findUnique({ where: { id: requesterId }, select: { firstName: true, lastName: true } });
+  if (!requester) return;
+  const already = await prisma.notification.findFirst({
+    where: { userId: targetId, type: 'friend.request', readAt: null, data: { path: ['requesterId'], equals: requesterId } },
+    select: { id: true },
+  });
+  if (already) return;
+  const name = `${requester.firstName} ${requester.lastName}`.trim();
+  await dispatch({
+    userId: targetId,
+    clubId,
+    category: 'SOCIAL',
+    type: 'friend.request',
+    title: `${name} veut vous ajouter en ami`,
+    body: `${name} vous a envoyé une demande d'ami. Ouvrez « Mes amis » pour l'accepter.`,
+    url: '/me/friends?tab=demandes',
+    data: { requesterId },
+    email: null,
+  });
+}
+
+export async function notifyFriendAccepted(accepterId: string, requesterId: string, clubId: string): Promise<void> {
+  const accepter = await prisma.user.findUnique({ where: { id: accepterId }, select: { firstName: true, lastName: true } });
+  if (!accepter) return;
+  const name = `${accepter.firstName} ${accepter.lastName}`.trim();
+  await dispatch({
+    userId: requesterId,
+    clubId,
+    category: 'SOCIAL',
+    type: 'friend.accepted',
+    title: `${name} a accepté votre demande`,
+    body: `Vous êtes désormais amis avec ${name}.`,
+    url: '/me/friends',
+    data: { accepterId },
+    email: null,
+  });
+}
+
 export async function notifyReservationReminder(reservationId: string, window: 'J-1' | 'H-2'): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },

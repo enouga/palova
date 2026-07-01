@@ -172,6 +172,14 @@ export default function MyProfilePage() {
     catch (e) { setError((e as Error).message); }
   };
 
+  const changeAcceptsFriendRequests = async (next: boolean) => {
+    if (!token || !profile) return;
+    setError(null);
+    setProfile({ ...profile, acceptsFriendRequests: next }); // optimiste
+    try { setProfile(await api.updateMyProfile({ acceptsFriendRequests: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const handlePreferredSport = async (id: string) => {
     if (!token) return;
     setError(null);
@@ -478,6 +486,19 @@ export default function MyProfilePage() {
                   </div>
                   <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
                     Reçois une notification quand une partie ouverte à ton niveau est créée dans ton club. Tu rejoins en un tap — jamais d’inscription automatique.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Autoriser les demandes d&apos;ami</span>
+                  <div role="group" aria-label="Autoriser les demandes d'ami">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.acceptsFriendRequests ? 'oui' : 'non'}
+                      onChange={(v) => changeAcceptsFriendRequests(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
+                    La messagerie reste ouverte à tous les membres du club ; ce réglage ne concerne que les amitiés.
                   </span>
                 </div>
               </section>

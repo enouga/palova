@@ -106,6 +106,18 @@ describe('PATCH /api/me', () => {
     expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { autoMatchProposals: true } }));
     expect(res.body.autoMatchProposals).toBe(true);
   });
+
+  it('PATCH /api/me accepte acceptsFriendRequests (booléen)', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, acceptsFriendRequests: true } as any);
+    const res = await request(app).patch('/api/me').send({ acceptsFriendRequests: true }).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { acceptsFriendRequests: true } }));
+  });
+
+  it('PATCH /api/me rejette acceptsFriendRequests non booléen', async () => {
+    const res = await request(app).patch('/api/me').send({ acceptsFriendRequests: 'oui' }).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /api/me/avatar', () => {
