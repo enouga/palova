@@ -870,7 +870,7 @@ export interface MyReservation {
   totalPrice: string;
   resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
-  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null }[];
+  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null }[];
 }
 
 export interface MyMatchPlayer {
@@ -932,11 +932,13 @@ export interface ReservationPlayer {
   lastName: string;
   avatarUrl: string | null;
   share: string;
+  team?: 1 | 2 | null;
 }
 export interface ReservationPlayers {
   id: string;
   capacity: number;
   participants: ReservationPlayer[];
+  sportKey?: string;
 }
 
 export interface Resource {
@@ -1170,6 +1172,7 @@ export interface OpenMatchPlayer {
   avatarUrl: string | null;
   isOrganizer: boolean;
   level?: UserLevel | null;
+  team?: 1 | 2 | null;
 }
 
 export interface OpenMatch {
