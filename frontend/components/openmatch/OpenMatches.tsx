@@ -249,6 +249,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           players={recordingFor.players.map(({ userId, firstName, lastName, avatarUrl }) => ({ userId, firstName, lastName, avatarUrl }))}
           token={token}
           context={{ whenIso: recordingFor.startTime, tz: club.timezone, courtName: recordingFor.resourceName }}
+          initialTeams={Object.fromEntries(recordingFor.players.filter((p) => p.team === 1 || p.team === 2).map((p) => [p.userId, p.team as 1 | 2]))}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); load(); }}
         />

@@ -100,6 +100,23 @@ it('pas de badge vainqueur si les sets sont à égalité (1 set chacun)', () => 
   expect(screen.queryByText(/gagne/)).toBeNull();
 });
 
+describe('MatchResultModal', () => {
+  it('pré-sélectionne les équipes depuis initialTeams', () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" token="t" onClose={() => {}} onSaved={() => {}}
+      players={[
+        { userId: 'a', firstName: 'A', lastName: 'A', avatarUrl: null },
+        { userId: 'b', firstName: 'B', lastName: 'B', avatarUrl: null },
+        { userId: 'c', firstName: 'C', lastName: 'C', avatarUrl: null },
+        { userId: 'd', firstName: 'D', lastName: 'D', avatarUrl: null },
+      ]}
+      initialTeams={{ a: 1, b: 1, c: 2, d: 2 }}
+    /></ThemeProvider>);
+    expect(screen.getByTestId('team1-a')).toHaveAttribute('data-active', 'true');
+    expect(screen.getByTestId('team2-c')).toHaveAttribute('data-active', 'true');
+  });
+});
+
 it('permet de retirer un set ajouté (pas de bouton retirer avec un seul set)', () => {
   renderModal();
   expect(screen.queryByTestId('set0-remove')).toBeNull();

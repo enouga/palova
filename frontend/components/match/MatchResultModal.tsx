@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   context?: MatchContext;
+  initialTeams?: Record<string, 1 | 2>;
 }
 
 const TEAM_COLORS: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
@@ -27,9 +28,9 @@ function fmtContext(ctx: MatchContext): string {
   return `${date} · ${hour} · ${ctx.courtName}`;
 }
 
-export function MatchResultModal({ reservationId, players, token, onClose, onSaved, context }: Props) {
+export function MatchResultModal({ reservationId, players, token, onClose, onSaved, context, initialTeams }: Props) {
   const { th } = useTheme();
-  const [team, setTeam] = useState<Record<string, 1 | 2 | undefined>>({});
+  const [team, setTeam] = useState<Record<string, 1 | 2 | undefined>>(() => ({ ...(initialTeams ?? {}) }));
   const [sets, setSets] = useState<SetScore[]>([[0, 0]]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +99,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
                 {([1, 2] as const).map((t) => {
                   const active = team[p.userId] === t;
                   return (
-                    <button key={t} type="button" data-testid={`team${t}-${p.userId}`} aria-label={`Équipe ${t}`} disabled={teamFull(t, p.userId)}
+                    <button key={t} type="button" data-testid={`team${t}-${p.userId}`} data-active={active ? 'true' : 'false'} aria-label={`Équipe ${t}`} disabled={teamFull(t, p.userId)}
                       onClick={() => assign(p.userId, t)}
                       className="px-3 py-1 text-sm font-semibold disabled:opacity-40"
                       style={active ? { background: TEAM_COLORS[t], color: inkOn(TEAM_COLORS[t]) } : { background: th.surface2, color: th.textMute }}>
