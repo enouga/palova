@@ -722,6 +722,7 @@ model ReservationParticipant {
   isOrganizer   Boolean  @default(false) @map("is_organizer")
   share         Decimal  @db.Decimal(10, 2) // part du montant total à régler par ce joueur
   joinedAt      DateTime @default(now()) @map("joined_at")
+  team          Int?     // 1 = côté gauche (Éq.1), 2 = côté droit (Éq.2) ; null = non assigné (dérivé à la lecture)
 
   reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
