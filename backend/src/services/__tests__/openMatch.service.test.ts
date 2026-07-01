@@ -44,8 +44,8 @@ describe('OpenMatchService', () => {
           id: 'm1', startTime: future(48), endTime: future(49),
           resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [
-            { userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
-            { userId: 'viewer', isOrganizer: false, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
+            { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
+            { userId: 'viewer', isOrganizer: false, team: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
           ],
           openMatchInterests: [],
           openMatchMessages: [],
@@ -66,6 +66,14 @@ describe('OpenMatchService', () => {
       expect(out[0].viewerIsParticipant).toBe(true);
       expect(out[0].viewerIsOrganizer).toBe(false); // viewer est partenaire, pas organisateur
       expect(out[0].players).toHaveLength(2);
+      // Chaque joueur reçoit un côté concret 1 ou 2 (dérivé), jamais null.
+      const match = out[0];
+      for (const player of match.players) {
+        expect([1, 2]).toContain(player.team);
+      }
+      // Répartition par défaut (null → 1,1,2,2) : au plus la moitié par côté.
+      const side1 = match.players.filter((p: any) => p.team === 1).length;
+      expect(side1).toBeLessThanOrEqual(match.maxPlayers / 2);
     });
 
     it('expose le sport du terrain sur chaque partie', async () => {

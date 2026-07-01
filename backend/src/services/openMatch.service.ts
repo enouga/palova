@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded, notifyOpenMatchInterest } from '../email/notifications';
 import { RatingService } from './rating.service';
+import { effectiveTeams } from './matchTeams';
 
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
@@ -80,7 +81,7 @@ export class OpenMatchService {
         resource: { select: { id: true, name: true, attributes: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { userId: true, isOrganizer: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+          select: { userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
         openMatchInterests: {
           orderBy: { createdAt: 'asc' },
@@ -119,6 +120,7 @@ export class OpenMatchService {
 
     return matches.map((m) => {
       const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
+      const teamed = effectiveTeams(m.participants, maxPlayers);
       const row = m as typeof m & { targetLevelMin: number | null; targetLevelMax: number | null };
       const sportKey = m.resource.clubSport.sport.key;
       return {
@@ -134,9 +136,10 @@ export class OpenMatchService {
         viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
         targetLevelMin: row.targetLevelMin ?? null,
         targetLevelMax: row.targetLevelMax ?? null,
-        players: m.participants.map((p) => ({
+        players: teamed.map((p) => ({
           userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
           level: levels[`${p.userId}:${sportKey}`] ?? null,
+          team: p.team,
         })),
         interestedCount: m.openMatchInterests.length,
         viewerIsInterested: viewerUserId != null && m.openMatchInterests.some((i) => i.userId === viewerUserId),
