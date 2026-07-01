@@ -1,24 +1,10 @@
 import { ClubRole } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { dispatch } from '../services/notification/dispatcher';
-import { absoluteAsset, clubAppUrl, formatDateRangeFr } from './links';
-import { Brand, PALOVA_BRAND } from './templates/layout';
-import {
-  ActivityType,
-  OrganizerKind,
-  PlayerAction,
-  buildOrganizerEmail,
-  buildPlayerEmail,
-  buildMatchJoinEmail,
-  buildMatchInviteEmail,
-  buildMatchRemovedEmail,
-  buildMatchLeftEmail,
-  buildRefundEmail,
-  buildMatchConfirmEmail,
-  buildMatchCommentEmail,
-  buildOpenMatchProposedEmail,
-  buildOpenMatchChatEmail,
-} from './templates/emails';
+import { clubAppUrl, formatDateRangeFr } from './links';
+import { Brand } from './templates/layout';
+import { renderClubEmail, brandFromClub } from './registry';
+import { emailTemplates } from '../services/emailTemplate.service';
 import { playerCount } from '../utils/courtType';
 import { RatingService } from '../services/rating.service';
 import { inRange } from '../services/rating/range';
@@ -39,20 +25,21 @@ function levelRangeLabel(min: number | null, max: number | null): string {
 // et les envoie aux bons destinataires. Ces fonctions PEUVENT lever (DB/SMTP) ; les
 // appelants (services) les enveloppent en best-effort pour ne jamais casser l'inscription.
 
-interface ClubBrandFields {
-  name: string;
-  slug: string;
-  logoUrl: string | null;
-  accentColor: string;
-  timezone: string;
-}
+type ActivityType = 'tournament' | 'event' | 'lesson';
+type PlayerAction = 'confirmed' | 'waitlisted' | 'cancelled' | 'promoted';
+type OrganizerKind = 'registration' | 'cancellation';
 
-function brandOf(club: ClubBrandFields): Brand {
-  return {
-    name: club.name || PALOVA_BRAND.name,
-    logoUrl: absoluteAsset(club.logoUrl),
-    accentColor: club.accentColor || PALOVA_BRAND.accentColor,
-  };
+/** Référence de l'activité dans une phrase (« Voir le tournoi », « Gérer le cours »). */
+function refActivite(t: ActivityType): string {
+  return t === 'tournament' ? 'le tournoi' : t === 'lesson' ? 'le cours' : "l'événement";
+}
+/** Nom simple du type d'activité. */
+function typeActivite(t: ActivityType): string {
+  return t === 'tournament' ? 'tournoi' : t === 'lesson' ? 'cours' : 'événement';
+}
+/** Phrase « places restantes » pour une partie ouverte. */
+function placesPhrase(spotsLeft: number): string {
+  return spotsLeft <= 0 ? 'La partie est désormais complète.' : `Il reste ${spotsLeft} place${spotsLeft > 1 ? 's' : ''}.`;
 }
 
 /** Staff destinataire des notifications « organisateur » : propriétaires + admins du club. */
@@ -87,18 +74,19 @@ async function notifyOrganizers(opts: {
         ? '/admin/lessons'
         : '/admin/events',
   );
+  const emailType = opts.kind === 'registration' ? 'organizer.registration' : 'organizer.cancellation';
+  const override = await emailTemplates.getOverride(opts.clubId, emailType);
   for (const s of staff) {
-    const mail = buildOrganizerEmail({
-      staffFirstName: s.firstName,
-      kind: opts.kind,
-      activityType: opts.activityType,
-      activityName: opts.activityName,
-      playerNames: opts.playerNames,
-      statusLabel: opts.statusLabel,
-      confirmedCount: opts.confirmedCount,
-      url: adminUrl,
-      brand: opts.brand,
-    });
+    const vars: Record<string, string> = {
+      prenom: s.firstName,
+      joueurs: opts.playerNames,
+      statut: opts.statusLabel,
+      nb_inscrits: opts.confirmedCount != null ? String(opts.confirmedCount) : '',
+      activite: opts.activityName,
+      ref_activite: refActivite(opts.activityType),
+      lien: adminUrl,
+    };
+    const mail = renderClubEmail(emailType, vars, opts.brand, override);
     const notifType = opts.kind === 'registration' ? 'organizer.registration' : 'organizer.cancellation';
     const notifTitle = opts.kind === 'registration' ? 'Nouvelle inscription' : 'Désinscription';
     const notifBody =
@@ -162,26 +150,31 @@ async function sendTournamentPlayerEmails(
   action: PlayerAction,
 ): Promise<void> {
   const t = reg.tournament;
-  const brand = brandOf(t.club);
+  const brand = brandFromClub(t.club);
   const dateLabel = formatDateRangeFr(t.startTime, t.endTime, t.club.timezone);
   const url = clubAppUrl(t.club.slug, `/tournois/${t.id}`);
+  const emailType = `registration.${action}`;
+  const override = await emailTemplates.getOverride(t.club.id, emailType);
   const recipients = [
     { user: reg.captain, partner: reg.partner },
     { user: reg.partner, partner: reg.captain },
   ];
   for (const { user, partner } of recipients) {
     if (!user.email) continue;
-    const mail = buildPlayerEmail({
-      firstName: user.firstName,
-      action,
-      activityType: 'tournament',
-      activityName: t.name,
-      clubName: t.club.name,
-      dateLabel,
-      url,
-      brand,
-      partnerName: fullName(partner),
-    });
+    const coequipier = fullName(partner);
+    const vars: Record<string, string> = {
+      prenom: user.firstName,
+      activite: t.name,
+      ref_activite: refActivite('tournament'),
+      type_activite: typeActivite('tournament'),
+      club: t.club.name,
+      date: dateLabel,
+      lien: url,
+      coequipier,
+      phrase_coequipier: coequipier ? ` Vous êtes inscrit·e en binôme avec ${coequipier}.` : '',
+      phrase_position: '',
+    };
+    const mail = renderClubEmail(emailType, vars, brand, override);
     const notifType =
       action === 'confirmed'
         ? 'registration.confirmed'
@@ -214,7 +207,7 @@ export async function notifyTournamentRegistration(registrationId: string): Prom
   });
   await notifyOrganizers({
     clubId: reg.tournament.clubId,
-    brand: brandOf(reg.tournament.club),
+    brand: brandFromClub(reg.tournament.club),
     slug: reg.tournament.club.slug,
     activityType: 'tournament',
     activityName: reg.tournament.name,
@@ -231,7 +224,7 @@ export async function notifyTournamentCancellation(registrationId: string): Prom
   await sendTournamentPlayerEmails(reg, 'cancelled');
   await notifyOrganizers({
     clubId: reg.tournament.clubId,
-    brand: brandOf(reg.tournament.club),
+    brand: brandFromClub(reg.tournament.club),
     slug: reg.tournament.club.slug,
     activityType: 'tournament',
     activityName: reg.tournament.name,
@@ -267,17 +260,24 @@ async function sendEventPlayerEmail(
 ): Promise<void> {
   const e = reg.event;
   if (!reg.user.email) return;
+  const brand = brandFromClub(e.club);
+  const dateLabel = formatDateRangeFr(e.startTime, e.endTime, e.club.timezone);
   const url = clubAppUrl(e.club.slug, `/events/${e.id}`);
-  const mail = buildPlayerEmail({
-    firstName: reg.user.firstName,
-    action,
-    activityType: 'event',
-    activityName: e.name,
-    clubName: e.club.name,
-    dateLabel: formatDateRangeFr(e.startTime, e.endTime, e.club.timezone),
-    url,
-    brand: brandOf(e.club),
-  });
+  const emailType = `registration.${action}`;
+  const override = await emailTemplates.getOverride(e.club.id, emailType);
+  const vars: Record<string, string> = {
+    prenom: reg.user.firstName,
+    activite: e.name,
+    ref_activite: refActivite('event'),
+    type_activite: typeActivite('event'),
+    club: e.club.name,
+    date: dateLabel,
+    lien: url,
+    coequipier: '',
+    phrase_coequipier: '',
+    phrase_position: '',
+  };
+  const mail = renderClubEmail(emailType, vars, brand, override);
   const notifType =
     action === 'confirmed'
       ? 'registration.confirmed'
@@ -309,7 +309,7 @@ export async function notifyEventRegistration(registrationId: string): Promise<v
   });
   await notifyOrganizers({
     clubId: reg.event.clubId,
-    brand: brandOf(reg.event.club),
+    brand: brandFromClub(reg.event.club),
     slug: reg.event.club.slug,
     activityType: 'event',
     activityName: reg.event.name,
@@ -326,7 +326,7 @@ export async function notifyEventCancellation(registrationId: string): Promise<v
   await sendEventPlayerEmail(reg, 'cancelled');
   await notifyOrganizers({
     clubId: reg.event.clubId,
-    brand: brandOf(reg.event.club),
+    brand: brandFromClub(reg.event.club),
     slug: reg.event.club.slug,
     activityType: 'event',
     activityName: reg.event.name,
@@ -370,16 +370,17 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
   const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/parties');
-  const mail = buildMatchJoinEmail({
-    organizerFirstName: organizer.firstName,
-    joinerName: fullName(joiner),
-    resourceName: resa.resource.name,
-    dateLabel,
-    clubName: club.name,
-    spotsLeft: Math.max(0, maxPlayers - resa.participants.length),
-    url,
-    brand: brandOf(club),
-  });
+  const spotsLeft = Math.max(0, maxPlayers - resa.participants.length);
+  const override = await emailTemplates.getOverride(club.id, 'open_match.joined');
+  const mail = renderClubEmail('open_match.joined', {
+    prenom: organizer.firstName,
+    joueur: fullName(joiner),
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    phrase_places: placesPhrase(spotsLeft),
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.joined',
     title: 'Nouveau joueur dans ta partie', body: `${fullName(joiner)} a rejoint ta partie du ${dateLabel}.`,
@@ -454,13 +455,19 @@ export async function notifyOpenMatchChatMessage(reservationId: string, messageI
   const url = clubAppUrl(club.slug, '/parties');
   const authorName = fullName(msg.user);
   const snippet = msg.body.length > 140 ? `${msg.body.slice(0, 140)}…` : msg.body;
+  const brand = brandFromClub(club);
+  const override = await emailTemplates.getOverride(club.id, 'open_match.message');
 
   // Un email + une notif PAR message (pas de coalescing) → le compteur de non-lus est exact.
   for (const u of users) {
-    const mail = buildOpenMatchChatEmail({
-      recipientFirstName: u.firstName, authorName, resourceName: resa.resource.name,
-      message: snippet, clubName: club.name, url, brand: brandOf(club),
-    });
+    const mail = renderClubEmail('open_match.message', {
+      prenom: u.firstName,
+      auteur: authorName,
+      message: snippet,
+      terrain: resa.resource.name,
+      club: club.name,
+      lien: url,
+    }, brand, override);
     await dispatch({
       userId: u.id, clubId: club.id, category: 'OPEN_MATCH_CHAT', type: 'open_match.message',
       title: `Nouveau message — ${resa.resource.name}`,
@@ -519,10 +526,11 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
   // (un membre non calibré n'est pas démarché — parité avec frontend/lib/recommend.ts).
   const levels = await ratingService.getLevelsBySport(candidates.map((c) => ({ userId: c.userId, sportKey })));
 
-  const brand = brandOf(club);
+  const brand = brandFromClub(club);
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const levelLabel = levelRangeLabel(row.targetLevelMin, row.targetLevelMax);
   const url = clubAppUrl(club.slug, '/parties');
+  const override = await emailTemplates.getOverride(club.id, 'open_match.proposed');
 
   for (const c of candidates) {
     if (!c.user.email) continue;
@@ -531,12 +539,15 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
     // n'est pas démarché — on ne propose qu'à un niveau connu et dans la fourchette.
     if (level == null || !inRange(level, row.targetLevelMin, row.targetLevelMax)) continue;
 
-    const mail = buildOpenMatchProposedEmail({
-      recipientFirstName: c.user.firstName,
-      resourceName: resa.resource.name,
-      dateLabel, clubName: club.name, levelLabel, spotsLeft,
-      url, brand,
-    });
+    const mail = renderClubEmail('open_match.proposed', {
+      prenom: c.user.firstName,
+      terrain: resa.resource.name,
+      date: dateLabel,
+      club: club.name,
+      niveau: levelLabel,
+      phrase_places: placesPhrase(spotsLeft),
+      lien: url,
+    }, brand, override);
     // Chaque destinataire est indépendant : un échec (SMTP/notif) ne doit pas couper les autres.
     try {
       await dispatch({
@@ -564,16 +575,23 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
   const organizer = resa.participants.find((p) => p.isOrganizer)?.user;
   const byName = organizer ? fullName(organizer) : null;
   const club = resa.resource.club;
-  const brand = brandOf(club);
+  const brand = brandFromClub(club);
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/me/reservations');
+  const override = await emailTemplates.getOverride(club.id, 'open_match.added');
 
   for (const p of resa.participants) {
     if (p.isOrganizer || !p.user.email) continue;
-    const mail = buildMatchInviteEmail({
-      recipientFirstName: p.user.firstName, byName,
-      resourceName: resa.resource.name, dateLabel, clubName: club.name, url, brand,
-    });
+    const mail = renderClubEmail('open_match.added', {
+      prenom: p.user.firstName,
+      phrase_par: byName
+        ? `${byName} vous a ajouté·e à une partie de padel.`
+        : 'Vous avez été ajouté·e à une partie de padel.',
+      terrain: resa.resource.name,
+      date: dateLabel,
+      club: club.name,
+      lien: url,
+    }, brand, override);
     await dispatch({
       userId: p.userId, clubId: club.id, category: 'MY_GAMES', type: 'match.partners_invited',
       title: 'Tu as été ajouté à une partie',
@@ -595,10 +613,14 @@ export async function notifyOpenMatchRemoved(reservationId: string, removedUserI
   const club = resa.resource.club;
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/parties');
-  const mail = buildMatchRemovedEmail({
-    recipientFirstName: member.firstName, resourceName: resa.resource.name,
-    dateLabel, clubName: club.name, url, brand: brandOf(club),
-  });
+  const override = await emailTemplates.getOverride(club.id, 'open_match.removed');
+  const mail = renderClubEmail('open_match.removed', {
+    prenom: member.firstName,
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: removedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.removed',
     title: "Tu as été retiré d'une partie", body: `Tu as été retiré de la partie du ${dateLabel}.`,
@@ -622,12 +644,17 @@ export async function notifyOpenMatchAdded(reservationId: string, addedUserId: s
   const club = resa.resource.club;
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/parties');
-  const mail = buildMatchInviteEmail({
-    recipientFirstName: added.firstName,
-    byName: organizer ? fullName(organizer) : null,
-    resourceName: resa.resource.name,
-    dateLabel, clubName: club.name, url, brand: brandOf(club),
-  });
+  const override = await emailTemplates.getOverride(club.id, 'open_match.added');
+  const mail = renderClubEmail('open_match.added', {
+    prenom: added.firstName,
+    phrase_par: organizer
+      ? `${fullName(organizer)} vous a ajouté·e à une partie de padel.`
+      : 'Vous avez été ajouté·e à une partie de padel.',
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: addedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.added',
     title: 'Tu as été ajouté à une partie', body: `Tu as été ajouté à la partie du ${dateLabel}.`,
@@ -653,14 +680,17 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
   const maxPlayers = playerCount((resa.resource.attributes as { format?: string } | null)?.format);
   const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/parties');
-  const mail = buildMatchLeftEmail({
-    organizerFirstName: organizerP.user.firstName,
-    leaverName: fullName(leaver),
-    resourceName: resa.resource.name,
-    dateLabel, clubName: club.name,
-    spotsLeft: Math.max(0, maxPlayers - resa.participants.length),
-    url, brand: brandOf(club),
-  });
+  const spotsLeft = Math.max(0, maxPlayers - resa.participants.length);
+  const override = await emailTemplates.getOverride(club.id, 'open_match.left');
+  const mail = renderClubEmail('open_match.left', {
+    prenom: organizerP.user.firstName,
+    joueur: fullName(leaver),
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    phrase_places: placesPhrase(spotsLeft),
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.left',
     title: 'Un joueur a quitté ta partie', body: `${fullName(leaver)} a quitté ta partie du ${dateLabel}.`,
@@ -679,13 +709,17 @@ export async function notifyReservationMemberAssigned(reservationId: string, mem
   if (!member?.email) return;
 
   const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/me/reservations');
-  const mail = buildMatchInviteEmail({
-    recipientFirstName: member.firstName, byName: null,
-    resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name, url, brand: brandOf(club),
-  });
+  const override = await emailTemplates.getOverride(club.id, 'open_match.added');
+  const mail = renderClubEmail('open_match.added', {
+    prenom: member.firstName,
+    phrase_par: 'Vous avez été ajouté·e à une réservation par le club.',
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: memberUserId,
     clubId: club.id,
@@ -716,14 +750,18 @@ export async function notifyReservationRefunded(
   const amountLabel = (totalCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
   const prepaid = refunds.some((r) => r.method === 'PACK_CREDIT' || r.method === 'WALLET');
   const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
   const url = clubAppUrl(club.slug, '/me/reservations');
-  const mail = buildRefundEmail({
-    recipientFirstName: resa.user.firstName,
-    resourceName: resa.resource.name,
-    dateLabel: formatDateRangeFr(resa.startTime, resa.endTime, club.timezone),
-    clubName: club.name, amountLabel, prepaid,
-    url, brand: brandOf(club),
-  });
+  const override = await emailTemplates.getOverride(club.id, 'payment.refunded');
+  const mail = renderClubEmail('payment.refunded', {
+    prenom: resa.user.firstName,
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    montant: amountLabel,
+    support_solde: prepaid ? ' recrédité sur votre solde (carnet / porte-monnaie)' : '',
+    lien: url,
+  }, brandFromClub(club), override);
   await dispatch({
     userId: resa.user.id,
     clubId: club.id,
@@ -775,7 +813,7 @@ function lessonEmailContext(enr: LessonEnrollmentLoaded) {
   const club = enr.lesson?.club ?? enr.series?.club;
   if (!club) return null;
 
-  const brand = brandOf(club);
+  const brand = brandFromClub(club);
   const coachName = enr.lesson?.coach?.name ?? enr.series?.coach?.name ?? null;
   const activityName = coachName ? `Cours — ${coachName}` : 'Cours';
 
@@ -800,16 +838,20 @@ async function sendLessonPlayerEmail(enr: LessonEnrollmentLoaded, action: Player
   const ctx = lessonEmailContext(enr);
   if (!ctx) return;
 
-  const mail = buildPlayerEmail({
-    firstName: enr.user.firstName,
-    action,
-    activityType: 'lesson',
-    activityName: ctx.activityName,
-    clubName: ctx.club.name,
-    dateLabel: ctx.dateLabel,
-    url: ctx.url,
-    brand: ctx.brand,
-  });
+  const emailType = `registration.${action}`;
+  const override = await emailTemplates.getOverride(ctx.club.id, emailType);
+  const mail = renderClubEmail(emailType, {
+    prenom: enr.user.firstName,
+    activite: ctx.activityName,
+    ref_activite: refActivite('lesson'),
+    type_activite: typeActivite('lesson'),
+    club: ctx.club.name,
+    date: ctx.dateLabel,
+    lien: ctx.url,
+    coequipier: '',
+    phrase_coequipier: '',
+    phrase_position: '',
+  }, ctx.brand, override);
   const notifType =
     action === 'confirmed'
       ? 'registration.confirmed'
@@ -913,8 +955,10 @@ export async function notifyNewMatchComment(
   const authorName = fullName(last.user);
   const excerpt = last.body.length > 280 ? last.body.slice(0, 277) + '…' : last.body;
   const scoreLine = setsToScoreLine(match.sets);
-  const brand = brandOf(match.club);
+  const brand = brandFromClub(match.club);
   const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
+  const emailType = opts.isFirst ? 'match.disputed' : 'match.comment';
+  const override = await emailTemplates.getOverride(match.club.id, emailType);
 
   const staff = await prisma.clubMember.findMany({
     where: { clubId: match.club.id, role: { in: [ClubRole.OWNER, ClubRole.ADMIN, ClubRole.STAFF] } },
@@ -934,10 +978,13 @@ export async function notifyNewMatchComment(
   }
 
   for (const r of recipients.values()) {
-    const mail = buildMatchCommentEmail({
-      recipientFirstName: r.firstName, authorName, isFirst: opts.isFirst,
-      scoreLine, excerpt, matchUrl, brand,
-    });
+    const mail = renderClubEmail(emailType, {
+      prenom: r.firstName,
+      auteur: authorName,
+      score: scoreLine,
+      extrait: excerpt,
+      lien: matchUrl,
+    }, brand, override);
     await dispatch({
       userId: r.userId,
       clubId: match.club.id,
@@ -977,20 +1024,20 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
   if (!match) return;
 
   const scoreLine = setsToScoreLine(match.sets);
-  const brand = brandOf(match.club);
+  const brand = brandFromClub(match.club);
   const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
   const authorName = fullName(match.creator);
+  const override = await emailTemplates.getOverride(match.club.id, 'match.pending_confirmation');
 
   for (const mp of match.players) {
     if (mp.userId === match.createdByUserId) continue;
     if (!mp.user.email) continue;
-    const mail = buildMatchConfirmEmail({
-      brand,
-      recipientFirstName: mp.user.firstName,
-      scoreLine,
-      matchUrl,
-      authorName,
-    });
+    const mail = renderClubEmail('match.pending_confirmation', {
+      prenom: mp.user.firstName,
+      auteur: authorName,
+      score: scoreLine,
+      lien: matchUrl,
+    }, brand, override);
     await dispatch({
       userId: mp.userId,
       clubId: match.club.id,
@@ -1080,24 +1127,24 @@ export async function notifyActivityCancelledByClub(
     });
     if (!tournament) return;
     const club = tournament.club;
-    const brand = brandOf(club);
+    const brand = brandFromClub(club);
     const dateLabel = tournament.startTime ? formatDateRangeFr(tournament.startTime, tournament.endTime, club.timezone) : '';
     const url = clubAppUrl(club.slug, `/tournois/${tournament.id}`);
+    const override = await emailTemplates.getOverride(club.id, 'activity.cancelled_by_club');
     const seen = new Set<string>();
     for (const reg of tournament.registrations) {
       for (const user of [reg.captain, reg.partner]) {
         if (!user || seen.has(user.id)) continue;
         seen.add(user.id);
-        const mail = buildPlayerEmail({
-          firstName: user.firstName,
-          action: 'cancelled',
-          activityType: 'tournament',
-          activityName: tournament.name,
-          clubName: club.name,
-          dateLabel,
-          url,
-          brand,
-        });
+        const mail = renderClubEmail('activity.cancelled_by_club', {
+          prenom: user.firstName,
+          activite: tournament.name,
+          ref_activite: refActivite('tournament'),
+          type_activite: typeActivite('tournament'),
+          club: club.name,
+          date: dateLabel,
+          lien: url,
+        }, brand, override);
         await dispatch({
           userId: user.id,
           clubId: club.id,
@@ -1123,21 +1170,21 @@ export async function notifyActivityCancelledByClub(
     });
     if (!event) return;
     const club = event.club;
-    const brand = brandOf(club);
+    const brand = brandFromClub(club);
     const dateLabel = formatDateRangeFr(event.startTime, event.endTime ?? event.startTime, club.timezone);
     const url = clubAppUrl(club.slug, `/events/${event.id}`);
+    const override = await emailTemplates.getOverride(club.id, 'activity.cancelled_by_club');
     for (const reg of event.registrations) {
       const user = reg.user;
-      const mail = buildPlayerEmail({
-        firstName: user.firstName,
-        action: 'cancelled',
-        activityType: 'event',
-        activityName: event.name,
-        clubName: club.name,
-        dateLabel,
-        url,
-        brand,
-      });
+      const mail = renderClubEmail('activity.cancelled_by_club', {
+        prenom: user.firstName,
+        activite: event.name,
+        ref_activite: refActivite('event'),
+        type_activite: typeActivite('event'),
+        club: club.name,
+        date: dateLabel,
+        lien: url,
+      }, brand, override);
       await dispatch({
         userId: user.id,
         clubId: club.id,
@@ -1165,22 +1212,22 @@ export async function notifyActivityCancelledByClub(
     });
     if (!lesson) return;
     const club = lesson.club;
-    const brand = brandOf(club);
+    const brand = brandFromClub(club);
     const activityName = lesson.coach?.name ? `Cours — ${lesson.coach.name}` : 'Cours';
     const dateLabel = formatDateRangeFr(lesson.reservation.startTime, lesson.reservation.endTime, club.timezone);
     const url = clubAppUrl(club.slug, `/cours/${lesson.id}`);
+    const override = await emailTemplates.getOverride(club.id, 'activity.cancelled_by_club');
     for (const enr of lesson.enrollments) {
       const user = enr.user;
-      const mail = buildPlayerEmail({
-        firstName: user.firstName,
-        action: 'cancelled',
-        activityType: 'lesson',
-        activityName,
-        clubName: club.name,
-        dateLabel,
-        url,
-        brand,
-      });
+      const mail = renderClubEmail('activity.cancelled_by_club', {
+        prenom: user.firstName,
+        activite: activityName,
+        ref_activite: refActivite('lesson'),
+        type_activite: typeActivite('lesson'),
+        club: club.name,
+        date: dateLabel,
+        lien: url,
+      }, brand, override);
       await dispatch({
         userId: user.id,
         clubId: club.id,
