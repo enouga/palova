@@ -39,7 +39,7 @@ export function FollowButton({ slug, userId, token, initial, size = 'sm', onChan
 
   const pad = size === 'xs' ? '3px 8px' : '5px 11px';
   const fs  = size === 'xs' ? 12 : 13;
-  const label = mutual ? 'Amis' : iFollow ? 'Suivi(e)' : 'Suivre';
+  const label = iFollow ? 'Suivi(e)' : 'Suivre';
   const filled = iFollow;
   const style: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 5, border: `1px solid ${th.accent}`,
@@ -49,7 +49,7 @@ export function FollowButton({ slug, userId, token, initial, size = 'sm', onChan
   };
   return (
     <button type="button" onClick={toggle} disabled={busy} style={style} aria-pressed={iFollow}>
-      <Icon name={mutual ? 'users' : iFollow ? 'check' : 'plus'} size={fs} color={filled ? th.onAccent : th.accent} />
+      <Icon name={iFollow ? 'check' : 'plus'} size={fs} color={filled ? th.onAccent : th.accent} />
       {label}
     </button>
   );
