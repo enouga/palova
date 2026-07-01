@@ -9,6 +9,7 @@ import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
+import { MatchPlayerData } from '@/components/match/MatchTeams';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
@@ -96,6 +97,28 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     finally { setBusyId(null); }
   };
 
+  // Ajout ciblé : ajoute le membre puis l'épingle sur l'équipe choisie (setTeams réutilisé, une seule requête de rechargement).
+  const addPlayerToTeam = (m: OpenMatch, memberId: string, team?: 1 | 2) => {
+    setAddingId(null);
+    act(m, async () => {
+      await api.addOpenMatchPlayer(club.slug, m.id, memberId, token!);
+      if (team) {
+        const map: Record<string, 1 | 2> = { ...Object.fromEntries(m.players.map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: team };
+        await api.setOpenMatchTeams(club.slug, m.id, map, token!);
+      }
+    });
+  };
+  // Remplacement : retire l'ancien joueur, ajoute le nouveau, et le place dans l'équipe de l'ancien.
+  const replacePlayer = (m: OpenMatch, oldPlayer: MatchPlayerData, memberId: string) => {
+    setAddingId(null);
+    act(m, async () => {
+      await api.removeOpenMatchPlayer(club.slug, m.id, oldPlayer.userId, token!);
+      await api.addOpenMatchPlayer(club.slug, m.id, memberId, token!);
+      const map: Record<string, 1 | 2> = { ...Object.fromEntries(m.players.filter((p) => p.userId !== oldPlayer.userId).map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: oldPlayer.team };
+      await api.setOpenMatchTeams(club.slug, m.id, map, token!);
+    });
+  };
+
   const openChat = (m: OpenMatch) => {
     setChatting(m);
     if (token) api.markOpenMatchChatRead(club.slug, m.id, token)
@@ -181,7 +204,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token))}
                   onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token))}
                   onSetTeams={(mm, teams) => act(mm, () => api.setOpenMatchTeams(club.slug, mm.id, teams, token))}
-                  onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token)); }}
+                  onAddPlayer={addPlayerToTeam}
+                  onReplacePlayer={replacePlayer}
                   onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
                   onCancelAdd={() => setAddingId(null)}
                   onRecordResult={(mm) => setRecordingFor(mm)}
@@ -225,7 +249,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               onLeave={(mm) => act(mm, () => api.leaveOpenMatch(club.slug, mm.id, token!))}
               onRemovePlayer={(mm, p) => act(mm, () => api.removeOpenMatchPlayer(club.slug, mm.id, p.userId, token!))}
               onSetTeams={(mm, teams) => act(mm, () => api.setOpenMatchTeams(club.slug, mm.id, teams, token!))}
-              onAddPlayer={(mm, memberId) => { setAddingId(null); act(mm, () => api.addOpenMatchPlayer(club.slug, mm.id, memberId, token!)); }}
+              onAddPlayer={addPlayerToTeam}
+              onReplacePlayer={replacePlayer}
               onToggleAdd={(mm) => setAddingId((prev) => (prev === mm.id ? null : mm.id))}
               onCancelAdd={() => setAddingId(null)}
               onRecordResult={(mm) => setRecordingFor(mm)}

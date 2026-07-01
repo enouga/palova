@@ -54,6 +54,7 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
     onRemovePlayer: jest.fn(),
     onSetTeams: jest.fn(),
     onAddPlayer: jest.fn(),
+    onReplacePlayer: jest.fn(),
     onToggleAdd: jest.fn(),
     onCancelAdd: jest.fn(),
     onRecordResult: jest.fn(),

@@ -6,7 +6,7 @@ import { isPlayerChangeOpen } from '@/lib/reservations';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
-import { MatchTeams } from '@/components/match/MatchTeams';
+import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -16,12 +16,13 @@ const ERR: Record<string, string> = {
   PARTNER_DUPLICATE: 'Ce joueur est déjà dans la partie.',
   CANNOT_REMOVE_ORGANIZER: "L'organisateur ne peut pas être retiré.",
   PARTICIPANT_NOT_FOUND: 'Joueur introuvable.',
+  TEAM_SIDE_FULL: 'Cette équipe est déjà complète.',
   UNAUTHORIZED: "Seul l'organisateur peut modifier cette réservation.",
 };
 const msg = (e: string) => ERR[e] ?? e;
 
-// Édition inline des joueurs d'une réservation (chips + « Ajouter un joueur » + recherche),
-// même expérience que Parties ouvertes. Remplace l'ancienne modale.
+// Édition inline des joueurs d'une réservation. Padel → MatchTeams (équipes G/D, ajout ciblé,
+// remplacer / déplacer). Autres sports → liste plate PlayerPills.
 export function ReservationPlayersInline({ reservation, token, now, onChanged }: {
   reservation: MyReservation;
   token: string;
@@ -29,11 +30,13 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
   onChanged: () => void;
 }) {
   const { th } = useTheme();
-  const [adding, setAdding] = useState(false);
+  // Cible de la recherche : ajouter à une équipe précise, ou remplacer un joueur.
+  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2 } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
   const canEdit      = isPlayerChangeOpen(reservation, now);
+  const isPadel      = reservation.resource.sport?.key === 'padel';
   const participants = reservation.participants ?? [];
   const capacity     = reservation.capacity ?? 0;
   const spotsLeft    = Math.max(0, capacity - participants.length);
@@ -45,12 +48,43 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
     finally { setBusy(false); }
   };
 
+  // Ajout ciblé : ajoute le membre puis (padel) l'épingle sur l'équipe choisie.
+  const addPlayer = (memberId: string, team?: 1 | 2) => {
+    setAddMode(null);
+    run(async () => {
+      await api.addReservationPlayer(reservation.id, memberId, token);
+      if (isPadel && team) {
+        const map: Record<string, 1 | 2> = { ...Object.fromEntries(participants.map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: team };
+        await api.setReservationTeams(reservation.id, map, token);
+      }
+    });
+  };
+  // Remplacement : retire l'ancien, ajoute le nouveau, (padel) dans l'équipe de l'ancien.
+  const replacePlayer = (oldPlayer: MatchPlayerData, memberId: string) => {
+    setAddMode(null);
+    run(async () => {
+      if (oldPlayer.participantId) await api.removeReservationPlayer(reservation.id, oldPlayer.participantId, token);
+      await api.addReservationPlayer(reservation.id, memberId, token);
+      if (isPadel) {
+        const map: Record<string, 1 | 2> = { ...Object.fromEntries(participants.filter((p) => p.userId !== oldPlayer.userId).map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: oldPlayer.team };
+        await api.setReservationTeams(reservation.id, map, token);
+      }
+    });
+  };
+
+  // Membre choisi dans la recherche → ajoute ou remplace selon la cible courante.
+  const onPickMember = (memberId: string) => {
+    if (!addMode) return;
+    if (addMode.kind === 'replace') replacePlayer(addMode.player, memberId);
+    else addPlayer(memberId, addMode.team);
+  };
+
   return (
     <div style={{ marginTop: 9 }}>
       {error && (
         <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
       )}
-      {reservation.resource.sport?.key === 'padel' ? (
+      {isPadel ? (
         <MatchTeams
           players={participants.map((p) => ({
             userId: p.userId, firstName: p.firstName, lastName: p.lastName,
@@ -64,11 +98,9 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
           onSetTeams={(teams) => run(() => api.setReservationTeams(reservation.id, teams, token))}
           onRemove={canEdit ? (p) => run(() => api.removeReservationPlayer(reservation.id, p.participantId!, token)) : undefined}
           canRemove={(p) => canEdit && !p.isOrganizer}
-          addSlot={canEdit ? (
-            <AddPlayerPill size="sm" disabled={busy}
-              ariaLabel={`Ajouter un joueur à ${reservation.resource.name}`}
-              onClick={() => setAdding((a) => !a)} />
-          ) : undefined}
+          onReplace={canEdit ? ((p) => setAddMode({ kind: 'replace', player: p })) : undefined}
+          canReplace={(p) => canEdit && !p.isOrganizer}
+          onAddToTeam={canEdit ? ((team) => setAddMode({ kind: 'add', team })) : undefined}
         />
       ) : (
         <PlayerPills
@@ -85,20 +117,27 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
           firstSpotSlot={canEdit ? (
             <AddPlayerPill size="sm" disabled={busy}
               ariaLabel={`Ajouter un joueur à ${reservation.resource.name}`}
-              onClick={() => setAdding((a) => !a)} />
+              onClick={() => setAddMode({ kind: 'add', team: 1 })} />
           ) : undefined}
         />
       )}
-      {canEdit && adding && (
+      {canEdit && addMode && (
         <div style={{ marginTop: 10 }}>
+          {isPadel && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>
+              {addMode.kind === 'replace'
+                ? `Remplacer ${addMode.player.firstName} ${addMode.player.lastName} par…`
+                : `Ajouter un joueur à l'équipe ${addMode.team}`}
+            </div>
+          )}
           <PartnerSearch
             slug={reservation.resource.club.slug} token={token} selected={null}
             excludeIds={participants.map((p) => p.userId)}
-            onSelect={(m) => { setAdding(false); run(() => api.addReservationPlayer(reservation.id, m.id, token)); }}
+            onSelect={(m) => onPickMember(m.id)}
             onClear={() => {}}
             disabled={busy}
           />
-          <button type="button" onClick={() => setAdding(false)}
+          <button type="button" onClick={() => setAddMode(null)}
             style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
         </div>
       )}

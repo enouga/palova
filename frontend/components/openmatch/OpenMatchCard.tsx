@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { OpenMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
@@ -6,8 +7,7 @@ import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
-import { MatchTeams } from '@/components/match/MatchTeams';
-import { AddPlayerPill } from '@/components/player/AddPlayerPill';
+import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { rangeLabel } from '@/lib/levelMatch';
 
 function formatWhen(iso: string, tz: string): string {
@@ -26,7 +26,8 @@ export interface OpenMatchCardProps {
   onLeave: (m: OpenMatch) => void;
   onRemovePlayer: (m: OpenMatch, p: PlayerPillData) => void;
   onSetTeams: (m: OpenMatch, teams: Record<string, 1 | 2>) => void;
-  onAddPlayer: (m: OpenMatch, memberId: string) => void;
+  onAddPlayer: (m: OpenMatch, memberId: string, team?: 1 | 2) => void;
+  onReplacePlayer: (m: OpenMatch, oldPlayer: MatchPlayerData, memberId: string) => void;
   onToggleAdd: (m: OpenMatch) => void;
   onCancelAdd: () => void;
   onRecordResult: (m: OpenMatch) => void;
@@ -45,10 +46,12 @@ export interface OpenMatchCardProps {
 // Extraite d'OpenMatches pour être réutilisée dans la section « Pour toi ».
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
-  onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
+  onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onReplacePlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
   onToggleInterest, onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
+  // Cible de la recherche de joueur : ajouter à une équipe précise, ou remplacer un joueur.
+  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2 } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
   const friendCount = m.players.filter((p) => friendIds?.has(p.userId)).length;
   // Taille unique pour tous les boutons d'action → bord net, pas de largeurs en escalier.
   const actionBtn = { height: 46, fontSize: 15, padding: '0 18px' } as const;
@@ -101,9 +104,9 @@ export function OpenMatchCard({
         onSetTeams={(teams) => onSetTeams(m, teams)}
         onRemove={(p) => onRemovePlayer(m, { userId: p.userId, firstName: p.firstName, lastName: p.lastName, isOrganizer: p.isOrganizer })}
         canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
-        addSlot={m.viewerIsOrganizer ? (
-          <AddPlayerPill disabled={busy} ariaLabel={`Ajouter un joueur à ${m.resourceName}`} onClick={() => onToggleAdd(m)} />
-        ) : undefined}
+        onReplace={m.viewerIsOrganizer ? ((p) => { setAddMode({ kind: 'replace', player: p }); if (!addingOpen) onToggleAdd(m); }) : undefined}
+        canReplace={(p) => m.viewerIsOrganizer && !p.isOrganizer}
+        onAddToTeam={m.viewerIsOrganizer ? ((team) => { setAddMode({ kind: 'add', team }); if (!addingOpen) onToggleAdd(m); }) : undefined}
       />
 
       {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite.
@@ -147,14 +150,25 @@ export function OpenMatchCard({
       </div>
       {m.viewerIsOrganizer && addingOpen && (
         <div style={{ marginTop: 12 }}>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>
+            {addMode?.kind === 'replace'
+              ? `Remplacer ${addMode.player.firstName} ${addMode.player.lastName} par…`
+              : addMode?.kind === 'add'
+                ? `Ajouter un joueur à l'équipe ${addMode.team}`
+                : 'Ajouter un joueur'}
+          </div>
           <PartnerSearch
             slug={slug} token={token} selected={null}
             excludeIds={m.players.map((p) => p.userId)}
-            onSelect={(member) => onAddPlayer(m, member.id)}
+            onSelect={(member) => {
+              if (addMode?.kind === 'replace') onReplacePlayer(m, addMode.player, member.id);
+              else onAddPlayer(m, member.id, addMode?.kind === 'add' ? addMode.team : undefined);
+              setAddMode(null);
+            }}
             onClear={() => {}}
             disabled={busy}
           />
-          <button type="button" onClick={onCancelAdd} style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
+          <button type="button" onClick={() => { setAddMode(null); onCancelAdd(); }} style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
         </div>
       )}
     </div>

@@ -34,8 +34,11 @@ jest.mock('../lib/api', () => ({
     listFollowing: jest.fn().mockResolvedValue([]),
     // Chargé par FriendsQuickRow (monté via PartnerSearch dans le flux d'ajout de joueur).
     listClubFriends: jest.fn().mockResolvedValue([]),
-    // consommé par ClubNav (badge réservations à venir)
+    // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
+    getMyTournaments: jest.fn().mockResolvedValue([]),
+    getMyEvents: jest.fn().mockResolvedValue([]),
+    getMyLessons: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
@@ -114,7 +117,8 @@ describe('OpenMatches', () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsOrganizer: true, players, spotsLeft: 1 })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    expect(await screen.findByText('Emma Bernard')).toBeInTheDocument();
+    // Nouvelle interaction : sélectionner le joueur fait apparaître la barre d'actions (Retirer).
+    fireEvent.click(await screen.findByText('Emma Bernard'));
     const remove = await screen.findByRole('button', { name: /Retirer Emma Bernard/ });
     fireEvent.click(remove);
     await waitFor(() => expect(mocked.removeOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-emma', 'abc'));
@@ -137,7 +141,9 @@ describe('OpenMatches', () => {
     (mocked.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }]);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Ajouter un joueur/ }));
+    // Un « + » par emplacement libre désormais : on clique le premier (équipe 1).
+    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur/ });
+    fireEvent.click(addBtns[0]);
     fireEvent.focus(screen.getByPlaceholderText(/membres/i));
     fireEvent.mouseDown(await screen.findByText('New Player'));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
