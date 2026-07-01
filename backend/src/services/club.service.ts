@@ -521,22 +521,27 @@ export class ClubService {
         matchesPlayed: x.r.matchesPlayed,
       }));
 
-    const meUser = await prisma.user.findUnique({
-      where: { id: callerUserId },
-      select: { showInLeaderboard: true, playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, matchesPlayed: true } } },
-    });
+    // meUser (niveau/opt-in) et myMatches (bilan V/D du club) sont indépendants → en parallèle.
+    const [meUser, myMatches] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: callerUserId },
+        select: { showInLeaderboard: true, playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, matchesPlayed: true } } },
+      }),
+      prisma.matchPlayer.findMany({
+        where: { userId: callerUserId, match: { clubId: club.id, status: 'CONFIRMED', sportId: sport.id } },
+        orderBy: { match: { playedAt: 'desc' } },
+        select: { team: true, match: { select: { winningTeam: true, playedAt: true } } },
+      }),
+    ]);
     const myRating = meUser?.playerRatings[0] ?? null;
     const matchesPlayed = myRating?.matchesPlayed ?? 0;
     const myRank = entries.find((e) => e.userId === callerUserId)?.rank ?? null;
-    const myMatches = await prisma.matchPlayer.findMany({
-      where: { userId: callerUserId, match: { clubId: club.id, status: 'CONFIRMED', sport: { key: sportKey } } },
-      orderBy: { match: { playedAt: 'desc' } },
-      select: { team: true, match: { select: { winningTeam: true, playedAt: true } } },
-    });
     const stats = computeResultStats(
       myMatches.map((mp) => ({ team: mp.team, winningTeam: mp.match.winningTeam, playedAt: mp.match.playedAt })),
     );
 
+    // matchesPlayed = compteur GLOBAL (seuil de classement) ; wins+losses = CE club, CE sport,
+    // matchs CONFIRMED uniquement — périmètres volontairement distincts (ils peuvent diverger).
     const me = {
       optedIn: meUser?.showInLeaderboard ?? false,
       ranked: myRank !== null,

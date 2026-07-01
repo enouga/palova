@@ -264,7 +264,7 @@ describe('clubLeaderboard', () => {
     expect(res.me).toEqual({ optedIn: true, ranked: false, rank: null, level: 5.2, matchesPlayed: 25, matchesToGo: 0, wins: 3, losses: 1, streak: 3 });
     // Scoping : requête matchPlayer filtrée club + sport + confirmés
     expect(prismaMock.matchPlayer.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: 'u1', match: { clubId: 'club-1', status: 'CONFIRMED', sport: { key: 'padel' } } },
+      where: { userId: 'u1', match: { clubId: 'club-1', status: 'CONFIRMED', sportId: 'sport-padel' } },
     }));
   });
 
