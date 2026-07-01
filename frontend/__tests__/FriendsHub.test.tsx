@@ -53,4 +53,12 @@ describe('FriendsHub', () => {
     render(<FriendsHub slug="demo" token="t" initialTab="demandes" />);
     expect(await screen.findByText('Zoé K')).toBeInTheDocument();
   });
+
+  it('onglet Abonnés : un follower que je suis en retour affiche « Suivi(e) », pas « Suivre »', async () => {
+    listFollowers.mockResolvedValue([{ id: 'u5', firstName: 'Max', lastName: 'R', avatarUrl: null, mutual: true }]);
+    render(<FriendsHub slug="demo" token="t" initialTab="followers" />);
+    expect(await screen.findByText('Max R')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Suivi\(e\)/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Suivre$/ })).not.toBeInTheDocument();
+  });
 });

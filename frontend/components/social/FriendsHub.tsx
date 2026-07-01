@@ -138,7 +138,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
                   {identity(f)}
                   {tab === 'amis'
                     ? <FriendButton slug={slug} userId={f.id} token={token} relation={{ status: 'friends', requestable: false }} onChange={reload} />
-                    : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following', mutual: f.mutual }} onChange={reload} />}
+                    : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following' || f.mutual, mutual: f.mutual }} onChange={reload} />}
                 </div>
               ));
         })()
