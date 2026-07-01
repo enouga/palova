@@ -1,8 +1,8 @@
 'use client';
-import { Fragment, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
+import { Icon } from '@/components/ui/Icon';
 import { colorForSeed } from '@/lib/playerColors';
 import { UserLevel } from '@/lib/api';
 import { LevelChip } from '@/components/player/LevelChip';
@@ -23,11 +23,10 @@ const SIDE_COLOR: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
 
 // Deux équipes côte à côte (Éq.1 gauche / Éq.2 droite) avec « VS » central, joueurs empilés.
 // Repère G/D (1er = gauche, 2e = droite) en double. Côte à côte même sur mobile.
-// Prop `editable` :
-//  - taper une pastille la sélectionne → barre d'actions (Remplacer / Retirer) + déplacement
-//    en tapant un autre joueur (échange) ou une place libre (déplacement) ;
-//  - chaque emplacement libre montre un « + » (ajout ciblé sur cette équipe) via `onAddToTeam`,
-//    et devient une cible « Placer ici » quand un joueur est sélectionné.
+// En mode `editable`, chaque joueur porte des boutons explicites (un tap = une action) :
+//   → (passe dans l'autre équipe ; si pleine, échange avec le joueur en face),
+//   loupe (remplacer par un autre membre), × (retirer).
+// Chaque emplacement libre montre un « + » (ajout ciblé sur cette équipe) via `onAddToTeam`.
 export function MatchTeams({
   players, capacity, friendIds, size = 'md', busy = false,
   onRemove, canRemove, onReplace, canReplace, onAddToTeam, editable = false, onSetTeams,
@@ -46,59 +45,49 @@ export function MatchTeams({
   onSetTeams?: (teamsByUserId: Record<string, 1 | 2>) => void;
 }) {
   const { th } = useTheme();
-  const [picked, setPicked] = useState<string | null>(null);
   const av = size === 'sm' ? 20 : 22;
   const fs = size === 'sm' ? 12.5 : 13;
   const half = Math.max(1, Math.floor(capacity / 2));
-  const showGD = half >= 2; // repère Gauche/Droite seulement en double (2 joueurs/équipe)
+  const showGD = half >= 2;               // repère Gauche/Droite seulement en double
+  const canMove = editable && !!onSetTeams;
 
   const sideOf = (t: 1 | 2) => players.filter((p) => p.team === t);
   const currentTeams = (): Record<string, 1 | 2> =>
     Object.fromEntries(players.map((p) => [p.userId, p.team]));
 
-  const commit = (next: Record<string, 1 | 2>) => { setPicked(null); onSetTeams?.(next); };
-
-  const onPick = (p: MatchPlayerData) => {
-    if (!editable || busy) return;
-    if (picked === null) { setPicked(p.userId); return; }
-    if (picked === p.userId) { setPicked(null); return; }
-    // échange des deux joueurs (leurs équipes)
-    const a = players.find((x) => x.userId === picked)!;
+  // Déplace le joueur dans l'autre équipe : place libre → simple déplacement ;
+  // sinon échange avec le joueur d'en face (même position). Émet la map complète.
+  const onMove = (p: MatchPlayerData) => {
+    if (busy) return;
+    const target: 1 | 2 = p.team === 1 ? 2 : 1;
     const next = currentTeams();
-    next[a.userId] = p.team;
-    next[p.userId] = a.team;
-    commit(next);
+    const targetSide = sideOf(target);
+    if (targetSide.length < half) {
+      next[p.userId] = target;
+    } else {
+      const myIdx = sideOf(p.team).findIndex((x) => x.userId === p.userId);
+      const opp = targetSide[myIdx] ?? targetSide[0];
+      next[p.userId] = target;
+      if (opp) next[opp.userId] = p.team;
+    }
+    onSetTeams?.(next);
   };
 
-  const onPickFree = (side: 1 | 2) => {
-    if (!editable || busy || picked === null) return;
-    const a = players.find((x) => x.userId === picked)!;
-    if (a.team === side) { setPicked(null); return; }
-    if (sideOf(side).length >= half) return;   // côté plein : pas de place libre à occuper
-    const next = currentTeams();
-    next[a.userId] = side;
-    commit(next);
-  };
+  const iconBtn = { border: 'none', background: 'transparent', padding: 2, cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', flexShrink: 0, lineHeight: 0 } as const;
 
   const renderPlayer = (p: MatchPlayerData, idx: number) => {
     const c = colorForSeed(p.userId);
     const isFriend = !!friendIds?.has(p.userId);
-    const isPicked = picked === p.userId;
+    const canRep = !!onReplace && (canReplace ? canReplace(p) : !p.isOrganizer);
+    const canRem = !!onRemove && (canRemove ? canRemove(p) : !p.isOrganizer);
     const avatar = <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl ?? null} size={av} color={c} />;
     return (
-      <span
-        key={p.userId}
-        onClick={editable ? () => onPick(p) : undefined}
-        role={editable ? 'button' : undefined}
-        tabIndex={editable ? 0 : undefined}
-        title={editable ? 'Toucher pour sélectionner / déplacer' : undefined}
+      <span key={p.userId}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%',
-          background: `${c}22`, border: `1px solid ${isPicked ? th.accent : c}`,
-          outline: isPicked ? `2px solid ${th.accent}` : 'none',
-          borderRadius: 999, padding: '4px 11px 4px 4px',
+          background: `${c}22`, border: `1px solid ${c}`,
+          borderRadius: 999, padding: '4px 8px 4px 4px',
           fontFamily: th.fontUI, fontSize: fs, fontWeight: 600, color: th.text,
-          cursor: editable ? 'pointer' : 'default',
         }}
       >
         {isFriend ? (
@@ -114,46 +103,30 @@ export function MatchTeams({
         {p.isOrganizer && (
           <span style={{ fontSize: 10, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0 }}>orga</span>
         )}
-      </span>
-    );
-  };
-
-  // Barre d'actions affichée sous la pastille sélectionnée (organisateur exclu de remplacer/retirer).
-  const renderActions = (p: MatchPlayerData) => {
-    const canRep = !!onReplace && (canReplace ? canReplace(p) : !p.isOrganizer);
-    const canRem = !!onRemove && (canRemove ? canRemove(p) : !p.isOrganizer);
-    const actBtn = { border: `1px solid ${th.lineStrong}`, background: th.surface, borderRadius: 8, padding: '3px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, cursor: busy ? 'default' : 'pointer' } as const;
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingLeft: 4 }}>
+        {canMove && (
+          <button type="button" disabled={busy} aria-label="Passer dans l'autre équipe" title="Passer dans l'autre équipe" style={iconBtn} onClick={() => onMove(p)}>
+            <span style={{ display: 'inline-flex', transform: p.team === 2 ? 'scaleX(-1)' : undefined }}><Icon name="arrowR" size={15} color={th.textMute} /></span>
+          </button>
+        )}
         {canRep && (
-          <button type="button" disabled={busy} aria-label={`Remplacer ${p.firstName} ${p.lastName}`} style={{ ...actBtn, color: th.text }}
-            onClick={(e) => { e.stopPropagation(); setPicked(null); onReplace!(p); }}>Remplacer</button>
+          <button type="button" disabled={busy} aria-label={`Remplacer ${p.firstName} ${p.lastName}`} title="Remplacer ce joueur" style={iconBtn} onClick={() => onReplace!(p)}>
+            <Icon name="search" size={14} color={th.textMute} />
+          </button>
         )}
         {canRem && (
-          <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} style={{ ...actBtn, color: ACCENTS.coral, borderColor: ACCENTS.coral }}
-            onClick={(e) => { e.stopPropagation(); setPicked(null); onRemove!(p); }}>Retirer</button>
+          <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur" style={iconBtn} onClick={() => onRemove!(p)}>
+            <Icon name="x" size={15} color={th.textMute} />
+          </button>
         )}
-        <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint }}>ou touche un joueur / une place pour déplacer</span>
       </span>
     );
   };
 
   const renderFree = (side: 1 | 2, key: string) => {
-    // Joueur sélectionné → la place libre devient une cible de déplacement « Placer ici ».
-    if (editable && picked) {
-      return (
-        <span key={key} role="button" aria-label={`Déplacer vers l'équipe ${side}`} onClick={() => onPickFree(side)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.accent}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent, cursor: 'pointer' }}>
-          <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.accent}` }} />
-          Placer ici
-        </span>
-      );
-    }
-    // Sinon, si l'ajout est permis : bouton « + » qui ajoute à CETTE équipe.
+    // Ajout permis : bouton « + » qui ajoute à CETTE équipe. Sinon place libre en pointillés.
     if (editable && onAddToTeam) {
       return <AddPlayerPill key={key} size={size} disabled={busy} ariaLabel={`Ajouter un joueur à l'équipe ${side}`} onClick={() => onAddToTeam(side)} />;
     }
-    // Sinon (lecture seule) : place libre en pointillés.
     return (
       <span key={key}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
@@ -173,12 +146,7 @@ export function MatchTeams({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[side], flexShrink: 0 }} />
           <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe {side}</span>
         </div>
-        {list.map((p, i) => (
-          <Fragment key={p.userId}>
-            {renderPlayer(p, i)}
-            {editable && picked === p.userId && renderActions(p)}
-          </Fragment>
-        ))}
+        {list.map((p, i) => renderPlayer(p, i))}
         {Array.from({ length: freeCount }).map((_, i) => renderFree(side, `free-${side}-${i}`))}
       </div>
     );

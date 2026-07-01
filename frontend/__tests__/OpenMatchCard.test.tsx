@@ -170,7 +170,7 @@ describe('OpenMatchCard', () => {
     expect(screen.queryByRole('button', { name: /Ça m'intéresse/i })).not.toBeInTheDocument();
   });
 
-  it('organisateur : taper 2 joueurs de côtés opposés appelle onSetTeams avec les côtés échangés', () => {
+  it('organisateur : « → » déplace un joueur dans l\'autre équipe et appelle onSetTeams', () => {
     const match = makeMatch({
       viewerIsOrganizer: true, viewerIsParticipant: true, spotsLeft: 0, full: true,
       players: [
@@ -186,15 +186,13 @@ describe('OpenMatchCard', () => {
         <OpenMatchCard {...makeProps(match, { onSetTeams })} />
       </ThemeProvider>
     );
-    // Les joueurs éditables sont rendus comme <span role="button"> (les <button> réels = actions/retrait).
-    const playerOf = (name: string) =>
-      screen.getAllByRole('button').find((b) => b.tagName === 'SPAN' && (b.textContent ?? '').includes(name))!;
-
-    fireEvent.click(playerOf('Bob'));   // sélectionne Bob (côté 1)
-    fireEvent.click(playerOf('Cara'));  // puis Cara (côté 2) → échange
+    // Chaque joueur a un bouton « → » ; ordre DOM : Org, Bob, Cara, Dan.
+    const moveBtns = screen.getAllByRole('button', { name: /Passer dans l'autre équipe/ });
+    // Bob (team1[1]) → l'équipe 2 étant pleine, échange avec le joueur d'en face (Dan, team2[1]).
+    fireEvent.click(moveBtns[1]);
 
     expect(onSetTeams).toHaveBeenCalledWith(match, {
-      'u-org': 1, 'u-bob': 2, 'u-cara': 1, 'u-dan': 2,
+      'u-org': 1, 'u-bob': 2, 'u-cara': 2, 'u-dan': 1,
     });
   });
 });

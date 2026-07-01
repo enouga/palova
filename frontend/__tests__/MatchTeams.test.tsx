@@ -24,28 +24,24 @@ describe('MatchTeams', () => {
     expect(screen.getAllByText('Place libre')).toHaveLength(1);
   });
 
-  it('en mode editable, tap joueur puis tap joueur adverse émet la nouvelle map d\'équipes', () => {
-    const onSetTeams = jest.fn();
-    wrap(<MatchTeams players={players} capacity={4} editable onSetTeams={onSetTeams} />);
-    fireEvent.click(screen.getByText('Marc A'));   // pick Marc (team 1)
-    fireEvent.click(screen.getByText('Lea C'));     // swap avec Lea (team 2)
-    expect(onSetTeams).toHaveBeenCalledWith(
-      expect.objectContaining({ a: 2, c: 1, b: 1 }),
-    );
-  });
-
-  it('non editable : cliquer un joueur n\'émet rien', () => {
-    const onSetTeams = jest.fn();
-    wrap(<MatchTeams players={players} capacity={4} onSetTeams={onSetTeams} />);
-    fireEvent.click(screen.getByText('Marc A'));
-    expect(onSetTeams).not.toHaveBeenCalled();
-  });
-
   it('affiche le repère G (1er) / D (2e) par équipe en double', () => {
     wrap(<MatchTeams players={players} capacity={4} />);
     // team1: Marc=G, Paul=D ; team2: Lea=G → 2×G, 1×D
     expect(screen.getAllByText('G')).toHaveLength(2);
     expect(screen.getAllByText('D')).toHaveLength(1);
+  });
+
+  it('lecture seule : aucun bouton d\'action', () => {
+    wrap(<MatchTeams players={players} capacity={4} />);
+    expect(screen.queryByRole('button', { name: /Passer dans l'autre équipe/ })).not.toBeInTheDocument();
+  });
+
+  it('editable : « → » déplace le joueur dans l\'autre équipe (émet la map)', () => {
+    const onSetTeams = jest.fn();
+    wrap(<MatchTeams players={players} capacity={4} editable onSetTeams={onSetTeams} />);
+    // 1er bouton « Passer… » = celui de Marc (team 1) → part côté 2 (place libre côté 2)
+    fireEvent.click(screen.getAllByRole('button', { name: /Passer dans l'autre équipe/ })[0]);
+    expect(onSetTeams).toHaveBeenCalledWith({ a: 2, b: 1, c: 2 });
   });
 
   it('editable : un « + » par emplacement libre appelle onAddToTeam(côté)', () => {
@@ -56,11 +52,17 @@ describe('MatchTeams', () => {
     expect(onAddToTeam).toHaveBeenCalledWith(2);
   });
 
-  it('editable : sélectionner un joueur puis « Remplacer » appelle onReplace', () => {
+  it('editable : le bouton « Remplacer » appelle onReplace', () => {
     const onReplace = jest.fn();
     wrap(<MatchTeams players={players} capacity={4} editable onReplace={onReplace} />);
-    fireEvent.click(screen.getByText('Paul B'));   // sélectionne Paul → barre d'actions
     fireEvent.click(screen.getByRole('button', { name: /Remplacer Paul B/ }));
     expect(onReplace).toHaveBeenCalledWith(expect.objectContaining({ userId: 'b' }));
+  });
+
+  it('editable : le bouton « Retirer » appelle onRemove', () => {
+    const onRemove = jest.fn();
+    wrap(<MatchTeams players={players} capacity={4} editable onRemove={onRemove} />);
+    fireEvent.click(screen.getByRole('button', { name: /Retirer Paul B/ }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ userId: 'b' }));
   });
 });

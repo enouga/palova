@@ -117,8 +117,8 @@ describe('OpenMatches', () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsOrganizer: true, players, spotsLeft: 1 })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    // Nouvelle interaction : sélectionner le joueur fait apparaître la barre d'actions (Retirer).
-    fireEvent.click(await screen.findByText('Emma Bernard'));
+    expect(await screen.findByText('Emma Bernard')).toBeInTheDocument();
+    // Bouton « Retirer » toujours visible sur la pastille (plus de mode sélection).
     const remove = await screen.findByRole('button', { name: /Retirer Emma Bernard/ });
     fireEvent.click(remove);
     await waitFor(() => expect(mocked.removeOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-emma', 'abc'));
