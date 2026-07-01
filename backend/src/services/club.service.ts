@@ -6,6 +6,7 @@ import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
 import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
+import { computeResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
 
@@ -527,6 +528,15 @@ export class ClubService {
     const myRating = meUser?.playerRatings[0] ?? null;
     const matchesPlayed = myRating?.matchesPlayed ?? 0;
     const myRank = entries.find((e) => e.userId === callerUserId)?.rank ?? null;
+    const myMatches = await prisma.matchPlayer.findMany({
+      where: { userId: callerUserId, match: { clubId: club.id, status: 'CONFIRMED', sport: { key: sportKey } } },
+      orderBy: { match: { playedAt: 'desc' } },
+      select: { team: true, match: { select: { winningTeam: true, playedAt: true } } },
+    });
+    const stats = computeResultStats(
+      myMatches.map((mp) => ({ team: mp.team, winningTeam: mp.match.winningTeam, playedAt: mp.match.playedAt })),
+    );
+
     const me = {
       optedIn: meUser?.showInLeaderboard ?? false,
       ranked: myRank !== null,
@@ -534,6 +544,9 @@ export class ClubService {
       level: myRating?.displayLevel ?? null,
       matchesPlayed,
       matchesToGo: Math.max(0, MIN_RANKED_MATCHES - matchesPlayed),
+      wins: stats.wins,
+      losses: stats.losses,
+      streak: stats.streak,
     };
 
     return { sport: sportKey, entries, me };
