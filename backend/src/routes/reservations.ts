@@ -44,6 +44,8 @@ const ERROR_STATUS: Record<string, number> = {
   CANNOT_REMOVE_ORGANIZER:  409,
   RESERVATION_HAS_NO_MEMBER: 409,
   LEVEL_SYSTEM_DISABLED:     403,
+  TEAM_INVALID:             400,
+  TEAM_SIDE_FULL:           400,
 };
 
 function asString(v: unknown): string {
@@ -178,6 +180,12 @@ router.delete('/:id/players/:participantId', authMiddleware, async (req: AuthReq
   try {
     res.json(await reservationService.removeOwnReservationParticipant(asString(req.params.id), req.user!.id, asString(req.params.participantId)));
   } catch (err) { handleError(err, res, next); }
+});
+
+// Réorganise les équipes d'une partie padel (propriétaire uniquement).
+router.post('/:id/teams', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await reservationService.setReservationTeams(asString(req.params.id), req.user!.id, (req.body as { teams?: Record<string, number> }).teams ?? {})); }
+  catch (err) { handleError(err, res, next); }
 });
 
 // Saisie du résultat d'un match depuis une réservation de terrain.

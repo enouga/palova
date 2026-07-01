@@ -273,3 +273,44 @@ describe('POST /api/reservations/:id/setup', () => {
     expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 });
+
+describe('POST /api/reservations/:id/teams', () => {
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+  });
+
+  it('200 : le propriétaire réorganise les équipes', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'user-1',
+      resource: { attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
+      participants: [
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, team: 2, user: { firstName: 'A', lastName: 'B', avatarUrl: null } },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  team: 1, user: { firstName: 'C', lastName: 'D', avatarUrl: null } },
+      ],
+    } as any);
+    prismaMock.reservationParticipant.findMany.mockResolvedValue([
+      { id: 'p1', userId: 'user-1' }, { id: 'p2', userId: 'user-2' },
+    ] as any);
+    prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+    const res = await request(app).post('/api/reservations/res-1/teams')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ teams: { 'user-1': 2, 'user-2': 1 } });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.reservationParticipant.update).toHaveBeenCalled();
+  });
+
+  it('403 UNAUTHORIZED si ce n est pas le propriétaire', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'autre', resource: { attributes: { format: 'double' } },
+    } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/teams')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ teams: {} });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('UNAUTHORIZED');
+  });
+});

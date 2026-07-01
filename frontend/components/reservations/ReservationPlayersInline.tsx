@@ -6,6 +6,7 @@ import { isPlayerChangeOpen } from '@/lib/reservations';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
+import { MatchTeams } from '@/components/match/MatchTeams';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -49,23 +50,45 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
       {error && (
         <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
       )}
-      <PlayerPills
-        players={participants.map((p) => ({
-          userId: p.userId, firstName: p.firstName, lastName: p.lastName,
-          avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id,
-          level: p.level,
-        }))}
-        spotsLeft={spotsLeft}
-        size="sm"
-        busy={busy}
-        onRemove={canEdit ? (p) => run(() => api.removeReservationPlayer(reservation.id, p.participantId!, token)) : undefined}
-        canRemove={(p) => canEdit && !p.isOrganizer}
-        firstSpotSlot={canEdit ? (
-          <AddPlayerPill size="sm" disabled={busy}
-            ariaLabel={`Ajouter un joueur à ${reservation.resource.name}`}
-            onClick={() => setAdding((a) => !a)} />
-        ) : undefined}
-      />
+      {reservation.resource.sport?.key === 'padel' ? (
+        <MatchTeams
+          players={participants.map((p) => ({
+            userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+            avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id, level: p.level,
+            team: (p.team ?? 1) as 1 | 2,
+          }))}
+          capacity={capacity}
+          size="sm"
+          busy={busy}
+          editable={canEdit}
+          onSetTeams={(teams) => run(() => api.setReservationTeams(reservation.id, teams, token))}
+          onRemove={canEdit ? (p) => run(() => api.removeReservationPlayer(reservation.id, p.participantId!, token)) : undefined}
+          canRemove={(p) => canEdit && !p.isOrganizer}
+          addSlot={canEdit ? (
+            <AddPlayerPill size="sm" disabled={busy}
+              ariaLabel={`Ajouter un joueur à ${reservation.resource.name}`}
+              onClick={() => setAdding((a) => !a)} />
+          ) : undefined}
+        />
+      ) : (
+        <PlayerPills
+          players={participants.map((p) => ({
+            userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+            avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id,
+            level: p.level,
+          }))}
+          spotsLeft={spotsLeft}
+          size="sm"
+          busy={busy}
+          onRemove={canEdit ? (p) => run(() => api.removeReservationPlayer(reservation.id, p.participantId!, token)) : undefined}
+          canRemove={(p) => canEdit && !p.isOrganizer}
+          firstSpotSlot={canEdit ? (
+            <AddPlayerPill size="sm" disabled={busy}
+              ariaLabel={`Ajouter un joueur à ${reservation.resource.name}`}
+              onClick={() => setAdding((a) => !a)} />
+          ) : undefined}
+        />
+      )}
       {canEdit && adding && (
         <div style={{ marginTop: 10 }}>
           <PartnerSearch

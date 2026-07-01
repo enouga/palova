@@ -1880,6 +1880,42 @@ describe('ReservationService', () => {
     });
   });
 
+  describe('setReservationTeams', () => {
+    const reservationId = 'res-1';
+    const ownerUserId = 'user-1';
+    const p2 = 'user-2';
+
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      jest.spyOn(service as any, 'getOwnReservationPlayers').mockResolvedValue({ id: reservationId, capacity: 4, participants: [] } as any);
+    });
+
+    it('persiste les équipes pour le propriétaire d’une résa padel', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: reservationId, userId: ownerUserId, resource: { attributes: { format: 'double' } },
+      } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: ownerUserId },
+        { id: 'p2', userId: p2 },
+      ] as any);
+
+      await service.setReservationTeams(reservationId, ownerUserId, { [ownerUserId]: 2, [p2]: 1 });
+
+      const u1 = prismaMock.reservationParticipant.update.mock.calls.map((c: any) => c[0]).find((u: any) => u.where.id === 'p1');
+      const u2 = prismaMock.reservationParticipant.update.mock.calls.map((c: any) => c[0]).find((u: any) => u.where.id === 'p2');
+      expect(u1.data.team).toBe(2);
+      expect(u2.data.team).toBe(1);
+    });
+
+    it('refuse un non-propriétaire (UNAUTHORIZED)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: reservationId, userId: ownerUserId, resource: { attributes: { format: 'double' } },
+      } as any);
+      await expect(service.setReservationTeams(reservationId, p2, { [ownerUserId]: 1, [p2]: 2 }))
+        .rejects.toThrow('UNAUTHORIZED');
+    });
+  });
+
   describe('assertMembershipAndWindow — heure d\'ouverture', () => {
     beforeEach(() => {
       prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));

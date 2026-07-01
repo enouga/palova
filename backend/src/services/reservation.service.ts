@@ -16,7 +16,7 @@ import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { sportHasLevels } from './rating/level';
-import { effectiveTeams } from './matchTeams';
+import { effectiveTeams, applyTeams } from './matchTeams';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -1456,6 +1456,21 @@ export class ReservationService {
     this.assertWithinCutoff(reservation.startTime, reservation.resource.club.playerChangeCutoffHours, 'PLAYER_CHANGE_TOO_LATE');
 
     await this.applyRemoveParticipant(reservation, participantId);
+    return this.getOwnReservationPlayers(reservationId, userId);
+  }
+
+  /** Réorganise les équipes d'une réservation (propriétaire seul). */
+  async setReservationTeams(reservationId: string, userId: string, teams: Record<string, number>) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: { resource: { select: { attributes: true } } },
+    });
+    if (!reservation)                  throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.userId !== userId) throw new Error('UNAUTHORIZED');
+    const maxPlayers = playerCount((reservation.resource.attributes as { format?: string } | null)?.format);
+    await prisma.$transaction(async (tx) => {
+      await applyTeams(tx, reservationId, teams, maxPlayers);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return this.getOwnReservationPlayers(reservationId, userId);
   }
 

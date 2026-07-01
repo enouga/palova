@@ -252,6 +252,8 @@ export const api = {
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players`, { method: 'POST', body: JSON.stringify({ memberUserId }) }, token),
   removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
+  setReservationTeams: (reservationId: string, teams: Record<string, 1 | 2>, token: string) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
 
   // --- Parties ouvertes (visibles de tous ; token facultatif) ---
   getOpenMatches: (slug: string, token?: string) =>
