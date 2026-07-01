@@ -149,6 +149,17 @@ describe('OpenMatches', () => {
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
   });
 
+  it('ajoute un ami via la rangée « Mes amis »', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: true, spotsLeft: 2 })] as never);
+    (mocked.listClubFriends as jest.Mock).mockResolvedValue([{ id: 'u-ami', firstName: 'Ami', lastName: 'X', avatarUrl: null, level: null, mutual: true }]);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur/ });
+    fireEvent.click(addBtns[0]);
+    fireEvent.focus(screen.getByPlaceholderText(/membres|nom/i));
+    fireEvent.click(await screen.findByRole('button', { name: /Ami/ }));
+    await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-ami', 'abc'));
+  });
+
   it('ne montre pas « Ajouter un joueur » à un non-organisateur', async () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: false, spotsLeft: 2 })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);

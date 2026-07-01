@@ -131,6 +131,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
             </div>
           )}
           <PartnerSearch
+            autoFocus
             slug={reservation.resource.club.slug} token={token} selected={null}
             excludeIds={participants.map((p) => p.userId)}
             onSelect={(m) => onPickMember(m.id)}

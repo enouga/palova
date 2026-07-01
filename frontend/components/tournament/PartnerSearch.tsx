@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { FriendsQuickRow } from '@/components/social/FriendsQuickRow';
 
 // Annuaire du club : recherche d'un coéquipier par nom (membres actifs uniquement).
-export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect }: {
+export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabled, excludeIds, keepOpenOnSelect, autoFocus }: {
   slug: string;
   token: string;
   selected: ClubMemberSearchResult | null;
@@ -18,11 +18,13 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
   excludeIds?: string[];
   /** Garde le menu ouvert après une sélection — pour enchaîner les ajouts (multi). */
   keepOpenOnSelect?: boolean;
+  /** Focus + ouvre le menu au montage (ex. panneau d'ajout qui vient de s'ouvrir → amis visibles tout de suite). */
+  autoFocus?: boolean;
 }) {
   const { th } = useTheme();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<ClubMemberSearchResult[]>([]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!autoFocus);
 
   useEffect(() => {
     if (selected || !open) return;
@@ -56,6 +58,7 @@ export function PartnerSearch({ slug, token, selected, onSelect, onClear, disabl
         <Icon name="search" size={18} color={th.textMute} />
       </span>
       <input value={q} onChange={(e) => setQ(e.target.value)}
+        autoFocus={autoFocus}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Cliquez pour voir les membres, ou tapez un nom…" disabled={disabled} style={searchFieldStyle} />

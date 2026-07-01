@@ -36,7 +36,10 @@ export function FriendsQuickRow({ slug, token, excludeIds, query, onPick }: {
       <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Mes amis</div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
         {visible.map((f) => (
-          <button key={f.id} type="button" onClick={() => onPick(f)}
+          <button key={f.id} type="button"
+            // preventDefault sur mousedown : garde le focus de l'input pour que le dropdown ne se
+            // ferme pas avant le clic (même robustesse que la liste de résultats de PartnerSearch).
+            onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(f)}
             style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${th.line}`, background: th.surface2, borderRadius: 999, padding: '4px 11px 4px 4px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
             <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl} size={26} color={colorForSeed(f.id)} />
             <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, fontWeight: 600 }}>{f.firstName}</span>

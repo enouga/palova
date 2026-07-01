@@ -158,6 +158,7 @@ export function OpenMatchCard({
                 : 'Ajouter un joueur'}
           </div>
           <PartnerSearch
+            autoFocus
             slug={slug} token={token} selected={null}
             excludeIds={m.players.map((p) => p.userId)}
             onSelect={(member) => {
