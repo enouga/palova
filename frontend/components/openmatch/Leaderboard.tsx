@@ -6,6 +6,7 @@ import { ACCENTS } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
+import { winRate } from '@/lib/memberStats';
 
 // Classement des joueurs du club par niveau. Content-only (pas de Screen/ClubNav) :
 // rendu dans l'onglet « Classement » d'OpenMatches.
@@ -76,8 +77,10 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   }
 
   const { entries, me } = data;
-  const decided = (me.wins ?? 0) + (me.losses ?? 0);
-  const winRate = decided > 0 ? Math.round((me.wins / decided) * 100) : 0;
+  const wins = me.wins ?? 0;
+  const losses = me.losses ?? 0;
+  const decided = wins + losses;
+  const rate = winRate(wins, losses) ?? 0;
   const streakN = Math.abs(me.streak ?? 0);
   const streakWin = (me.streak ?? 0) > 0;
 
@@ -130,8 +133,8 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
         {decided > 0 && (
           <div style={{ borderTop: `1px solid ${th.onAccent}33`, paddingTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
             <span>{decided} match{decided > 1 ? 's' : ''}</span>
-            <span>{winRate}% de victoires</span>
-            <span>{me.wins} V · {me.losses} D</span>
+            <span>{rate}% de victoires</span>
+            <span>{wins} V · {losses} D</span>
             {streakN > 0 && (
               <span style={{ borderRadius: 999, padding: '2px 9px', fontSize: 12.5, fontWeight: 700, background: streakWin ? th.onAccent : ACCENTS.coral, color: streakWin ? th.accent : '#fff' }}>
                 {streakN} {streakWin ? 'victoire' : 'défaite'}{streakN > 1 ? 's' : ''} d&apos;affilée

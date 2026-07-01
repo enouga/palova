@@ -113,13 +113,21 @@ it("selecteur masque si le club n'a qu'un seul sport", async () => {
 
 it('bandeau moi : rangée de stats V/D quand il y a des matchs', async () => {
   getClubLeaderboard.mockResolvedValue(payload({
-    me: { optedIn: true, ranked: true, rank: 3, level: 5.2, matchesPlayed: 25, matchesToGo: 0, wins: 18, losses: 7, streak: 3 },
+    me: { optedIn: true, ranked: true, rank: 3, level: 5.2, matchesPlayed: 40, matchesToGo: 0, wins: 18, losses: 7, streak: 3 },
   }));
   wrap(<Leaderboard club={club} viewerUserId="u1" />);
   await screen.findByText(/25 matchs/i);
   expect(screen.getByText(/72\s*% de victoires/i)).toBeInTheDocument();
   expect(screen.getByText(/18 V/)).toBeInTheDocument();
   expect(screen.getByText(/3 victoires d'affilée/i)).toBeInTheDocument();
+});
+
+it('bandeau moi : série de défaites → pastille "défaites"', async () => {
+  getClubLeaderboard.mockResolvedValue(payload({
+    me: { optedIn: true, ranked: true, rank: 4, level: 4.8, matchesPlayed: 30, matchesToGo: 0, wins: 10, losses: 12, streak: -2 },
+  }));
+  wrap(<Leaderboard club={club} viewerUserId="u1" />);
+  await screen.findByText(/2 défaites d'affilée/i);
 });
 
 it('bandeau moi : pas de rangée de stats sans match décidé', async () => {
