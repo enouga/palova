@@ -168,6 +168,7 @@ export const api = {
       visibility?: 'PRIVATE' | 'PUBLIC';
       targetLevelMin?: number | null;
       targetLevelMax?: number | null;
+      teams?: Record<string, 1 | 2>;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {

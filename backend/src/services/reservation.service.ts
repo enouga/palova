@@ -332,6 +332,7 @@ export class ReservationService {
       visibility?: 'PRIVATE' | 'PUBLIC';
       targetLevelMin?: number | null;
       targetLevelMax?: number | null;
+      teams?: Record<string, number>;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -370,6 +371,22 @@ export class ReservationService {
       await tx.reservationParticipant.createMany({
         data: this.participantRows(reservationId, userId, partners, priceCents),
       });
+      // Répartition d'équipes proposée par l'organisateur À LA CRÉATION : indice
+      // d'affichage BEST-EFFORT. À la différence d'applyTeams (strict, throw), on
+      // n'exige rien : une map incomplète/malformée ne doit JAMAIS faire échouer
+      // la confirmation. On ignore les entrées inconnues/hors {1,2} ; à la lecture,
+      // effectiveTeams comble les côtés non assignés.
+      if (setup.teams) {
+        const created = await tx.reservationParticipant.findMany({
+          where: { reservationId }, select: { id: true, userId: true },
+        });
+        for (const cp of created) {
+          const t = setup.teams[cp.userId];
+          if (t === 1 || t === 2) {
+            await tx.reservationParticipant.update({ where: { id: cp.id }, data: { team: t } });
+          }
+        }
+      }
       return tx.reservation.update({
         where: { id: reservationId },
         data: {

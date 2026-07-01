@@ -2175,6 +2175,37 @@ describe('ReservationService', () => {
       }));
     });
 
+    it('persiste les équipes fournies (padel double)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue(
+        [{ userId: 'user-2' }, { userId: 'user-3' }, { userId: 'user-4' }] as any,
+      );
+      const tx = {
+        reservationParticipant: {
+          deleteMany: jest.fn(),
+          createMany: jest.fn(),
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'p-org', userId: 'user-1' },
+            { id: 'p-2',   userId: 'user-2' },
+            { id: 'p-3',   userId: 'user-3' },
+            { id: 'p-4',   userId: 'user-4' },
+          ]),
+          update: jest.fn(),
+        },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['user-2', 'user-3', 'user-4'], visibility: 'PUBLIC',
+        teams: { 'user-1': 1, 'user-2': 2, 'user-3': 1, 'user-4': 2 },
+      });
+
+      // best-effort : un update par participant, p-2 (user-2) → équipe 2.
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-2' }, data: { team: 2 } });
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-3' }, data: { team: 1 } });
+    });
+
     it('hors padel : ignore la fourchette de niveau (targetLevel forcé à null)', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         ...baseReservation,

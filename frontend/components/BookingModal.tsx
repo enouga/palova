@@ -11,6 +11,7 @@ import { Btn, Segmented } from '@/components/ui/atoms';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
+import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { LevelChip } from '@/components/player/LevelChip';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
@@ -185,6 +186,10 @@ export default function BookingModal({
   const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
+  // Répartition d'équipes (padel) proposée à la création : indice d'affichage envoyé
+  // en best-effort via applyHoldSetup.teams. `me` = organisateur (identité du préview).
+  const [me, setMe] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null } | null>(null);
+  const [teamsDraft, setTeamsDraft] = useState<Record<string, 1 | 2>>({});
 
   // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
@@ -213,6 +218,30 @@ export default function BookingModal({
   const capacity = capacityFor(sportKey, format);
   const shareCents = Math.round(totalCents / capacity);
   const perPerson = euros(shareCents);
+
+  // ── Équipes (padel) ─────────────────────────────────────────────────────────
+  // Côté le moins rempli : Équipe 1 tant qu'il reste de la place (capacity/2), sinon Équipe 2.
+  const nextSide = (draft: Record<string, 1 | 2>): 1 | 2 => {
+    const half = Math.max(1, Math.floor(capacity / 2));
+    const c1 = Object.values(draft).filter((t) => t === 1).length;
+    return c1 < half ? 1 : 2;
+  };
+  const addPartner = (m: ClubMemberSearchResult) => {
+    setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
+    setTeamsDraft((d) => (d[m.id] ? d : { ...d, [m.id]: nextSide(d) }));
+  };
+  const removePartner = (id: string) => {
+    setPartners((xs) => xs.filter((x) => x.id !== id));
+    setTeamsDraft((d) => { const n = { ...d }; delete n[id]; return n; });
+  };
+  // [organisateur, …partenaires] pour l'aperçu d'équipes (padel). Vide tant que `me` inconnu.
+  const buildPlayers = (): MatchPlayerData[] => {
+    if (!me) return [];
+    return [
+      { userId: me.id, firstName: me.firstName, lastName: me.lastName, avatarUrl: me.avatarUrl, isOrganizer: true, team: (teamsDraft[me.id] ?? 1) as 1 | 2 },
+      ...partners.map((p) => ({ userId: p.id, firstName: p.firstName, lastName: p.lastName, level: p.level, team: (teamsDraft[p.id] ?? 1) as 1 | 2 })),
+    ];
+  };
   const shareTooSmall = shareCents < 50; // minimum Stripe (0,50 €) → le backend refuse (AMOUNT_TOO_SMALL)
 
   // Le paiement en ligne est-il disponible ? (compte Stripe actif, ou imposé par le club)
@@ -282,6 +311,23 @@ export default function BookingModal({
     }).catch(() => {});
   }, [showPartners, token, levelForSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Identité de l'organisateur (padel multi-joueurs) : sert d'ancre à l'aperçu d'équipes.
+  // Best-effort — un échec laisse l'affichage sur les pastilles partenaires classiques.
+  useEffect(() => {
+    if (!showPartners || !isPadel || !token) return;
+    let alive = true;
+    api.getMyProfile(token)
+      .then((p) => { if (alive) setMe({ id: p.id, firstName: p.firstName, lastName: p.lastName, avatarUrl: p.avatarUrl }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [showPartners, isPadel, token]);
+
+  // L'organisateur occupe l'Équipe 1 par défaut dès que son identité est connue.
+  useEffect(() => {
+    if (!me) return;
+    setTeamsDraft((d) => (d[me.id] ? d : { ...d, [me.id]: 1 }));
+  }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
   useEffect(() => {
@@ -334,6 +380,8 @@ export default function BookingModal({
       ...(visibility === 'PUBLIC' && levelForSport
         ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
         : {}),
+      // Padel : indice de composition d'équipes (best-effort côté serveur).
+      ...(isPadel ? { teams: teamsDraft } : {}),
     });
     saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
   };
@@ -463,8 +511,16 @@ export default function BookingModal({
               {/* Joueurs / visibilité / niveau — terrain multi-joueurs */}
               {showPartners && (
                 <div style={{ marginTop: 20 }}>
-                  {sectionLabel('users', <>Partenaires <span style={{ color: th.textFaint, fontWeight: 600 }}>· membres du club</span></>)}
-                  {partners.length > 0 && (
+                  {sectionLabel('users', isPadel && me
+                    ? <>Joueurs <span style={{ color: th.textFaint, fontWeight: 600 }}>· composez les équipes</span></>
+                    : <>Partenaires <span style={{ color: th.textFaint, fontWeight: 600 }}>· membres du club</span></>)}
+                  {isPadel && me ? (
+                    <div style={{ marginBottom: 8 }}>
+                      <MatchTeams size="sm" editable capacity={capacity} players={buildPlayers()}
+                        onSetTeams={setTeamsDraft}
+                        onRemove={(pl) => removePartner(pl.userId)} canRemove={(pl) => !pl.isOrganizer} />
+                    </div>
+                  ) : partners.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                       {partners.map((p) => {
                         const c = colorForSeed(p.id);
@@ -473,7 +529,7 @@ export default function BookingModal({
                           <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={24} color={c} />
                           <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>{p.firstName} {p.lastName}</span>
                           <LevelChip level={p.level} size="xs" />
-                          <button type="button" onClick={() => setPartners((xs) => xs.filter((x) => x.id !== p.id))} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
+                          <button type="button" onClick={() => removePartner(p.id)} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
                             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
                         </span>
                         );
@@ -485,7 +541,7 @@ export default function BookingModal({
                   ) : (
                     <PartnerSearch slug={slug!} token={token} selected={null}
                       excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
-                      onSelect={(m) => setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]))}
+                      onSelect={addPartner}
                       onClear={() => {}} />
                   )}
 
