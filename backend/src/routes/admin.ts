@@ -27,6 +27,7 @@ import { lessonService } from '../services/lesson.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { RatingService } from '../services/rating.service';
 import { SubscriptionService } from '../services/subscription.service';
+import { EmailTemplateService } from '../services/emailTemplate.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -47,6 +48,7 @@ const coachService = new CoachService();
 const broadcastService = new BroadcastService();
 const ratingService = new RatingService();
 const subscriptionService = new SubscriptionService();
+const emailTemplateService = new EmailTemplateService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -102,6 +104,7 @@ const ERROR_STATUS: Record<string, number> = {
   MEMBERSHIP_BLOCKED:     403,
   PLAN_NOT_FOUND:         404,
   SUBSCRIPTION_NOT_FOUND: 404,
+  EMAIL_TYPE_UNKNOWN:     404,
 };
 
 function asString(v: unknown): string {
@@ -1065,6 +1068,59 @@ router.get('/broadcasts', requireClubMember('ADMIN'), async (req: ClubScopedRequ
       broadcastService.history(req.membership!.clubId),
     ]);
     res.json({ recipientCount, items });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- Emails automatiques personnalisables (OWNER/ADMIN) ---
+
+router.get('/emails', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const items = await emailTemplateService.listForAdmin(req.membership!.clubId);
+    res.json({ items });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await emailTemplateService.getForAdmin(req.membership!.clubId, asString(req.params.type)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.put('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
+    const result = await emailTemplateService.upsert(req.membership!.clubId, asString(req.params.type), {
+      subject, heading, bodyHtml, ctaLabel, footerNote,
+    });
+    res.json(result);
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.delete('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await emailTemplateService.remove(req.membership!.clubId, asString(req.params.type));
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/emails/:type/preview', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
+    res.json(await emailTemplateService.renderPreview(req.membership!.clubId, asString(req.params.type), {
+      subject, heading, bodyHtml, ctaLabel: ctaLabel ?? null, footerNote: footerNote ?? null,
+    }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/emails/:type/test', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { email: true } });
+    if (!me?.email) throw new Error('VALIDATION_ERROR');
+    await emailTemplateService.sendTest(req.membership!.clubId, asString(req.params.type), {
+      subject, heading, bodyHtml, ctaLabel: ctaLabel ?? null, footerNote: footerNote ?? null,
+    }, me.email);
+    res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
 });
 

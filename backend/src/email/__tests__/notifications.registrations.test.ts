@@ -48,7 +48,12 @@ describe('notifyTournamentRegistration → dispatch MY_REGISTRATIONS', () => {
         userId: 'u-cap',
         category: 'MY_REGISTRATIONS',
         type: 'registration.confirmed',
-        email: expect.objectContaining({ to: 'captain@x.fr' }),
+        // renderClubEmail runs for real (only dispatch is mocked) → the email payload is real.
+        email: expect.objectContaining({
+          to: 'captain@x.fr',
+          subject: expect.stringContaining('Open Padel Paris'),
+          html: expect.stringContaining('Inscription confirmée'),
+        }),
       }),
     );
     expect(dispatchMock).toHaveBeenCalledWith(

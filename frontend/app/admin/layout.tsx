@@ -111,6 +111,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/members',       label: 'Membres',     icon: 'users' },
       { href: '/admin/announcements', label: 'Annonces',    icon: 'bell' },
       { href: '/admin/broadcast',     label: 'Messages',    icon: 'mail' },
+      { href: '/admin/emails',        label: 'Emails',      icon: 'mail' },
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [

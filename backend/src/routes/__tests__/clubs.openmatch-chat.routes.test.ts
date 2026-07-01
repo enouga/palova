@@ -9,6 +9,7 @@ jest.mock('../../services/openMatch.service', () => {
   const joinOpenMatch    = jest.fn().mockResolvedValue({});
   const setInterested    = jest.fn().mockResolvedValue({ id: 'match-1' });
   const removeInterested = jest.fn().mockResolvedValue({ id: 'match-1' });
+  const setTeams         = jest.fn().mockResolvedValue({ id: 'match-1' });
   return {
     OpenMatchService: jest.fn().mockImplementation(() => ({
       listOpenMatches,
@@ -18,6 +19,7 @@ jest.mock('../../services/openMatch.service', () => {
       addOpenMatchPlayer:  jest.fn().mockResolvedValue({}),
       setInterested,
       removeInterested,
+      setTeams,
     })),
   };
 });
@@ -56,6 +58,7 @@ const listOpenMatches = omInst.listOpenMatches as jest.Mock;
 const joinOpenMatch    = omInst.joinOpenMatch    as jest.Mock;
 const setInterested    = omInst.setInterested    as jest.Mock;
 const removeInterested = omInst.removeInterested as jest.Mock;
+const setTeams         = omInst.setTeams         as jest.Mock;
 
 const chatInst  = new (OpenMatchChatService as any)();
 const listMessages           = chatInst.listMessages           as jest.Mock;
@@ -77,6 +80,7 @@ beforeEach(() => {
   joinOpenMatch.mockResolvedValue({});
   setInterested.mockResolvedValue({ id: MATCH_ID });
   removeInterested.mockResolvedValue({ id: MATCH_ID });
+  setTeams.mockResolvedValue({ id: MATCH_ID });
   listMessages.mockResolvedValue([]);
   postMessage.mockResolvedValue(stubMsg);
   deleteMessage.mockResolvedValue({ ...stubMsg, body: '', deleted: true });
@@ -109,6 +113,36 @@ describe('DELETE /api/clubs/:slug/open-matches/:id/interest', () => {
       .set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(200);
     expect(removeInterested).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1');
+  });
+});
+
+// ─── Teams (réorganisation par l'organisateur) ────────────────────────────────
+
+describe('POST /api/clubs/:slug/open-matches/:id/participants/teams', () => {
+  it('200 — appelle setTeams(slug, id, userId, teams)', async () => {
+    const teams = { u1: 1, u2: 2, u3: 1, u4: 2 };
+    const res = await request(app)
+      .post(`${base}/participants/teams`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ teams });
+    expect(res.status).toBe(200);
+    expect(setTeams).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', teams);
+  });
+
+  it('400 — un côté sur-rempli (TEAM_SIDE_FULL) est mappé', async () => {
+    setTeams.mockRejectedValue(new Error('TEAM_SIDE_FULL'));
+    const res = await request(app)
+      .post(`${base}/participants/teams`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ teams: { u1: 1, u2: 1, u3: 1, u4: 2 } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('TEAM_SIDE_FULL');
+  });
+
+  it('401 sans token', async () => {
+    const res = await request(app).post(`${base}/participants/teams`).send({ teams: {} });
+    expect(res.status).toBe(401);
+    expect(setTeams).not.toHaveBeenCalled();
   });
 });
 

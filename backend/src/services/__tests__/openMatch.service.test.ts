@@ -44,8 +44,8 @@ describe('OpenMatchService', () => {
           id: 'm1', startTime: future(48), endTime: future(49),
           resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [
-            { userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
-            { userId: 'viewer', isOrganizer: false, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
+            { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
+            { userId: 'viewer', isOrganizer: false, team: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
           ],
           openMatchInterests: [],
           openMatchMessages: [],
@@ -66,6 +66,14 @@ describe('OpenMatchService', () => {
       expect(out[0].viewerIsParticipant).toBe(true);
       expect(out[0].viewerIsOrganizer).toBe(false); // viewer est partenaire, pas organisateur
       expect(out[0].players).toHaveLength(2);
+      // Chaque joueur reçoit un côté concret 1 ou 2 (dérivé), jamais null.
+      const match = out[0];
+      for (const player of match.players) {
+        expect([1, 2]).toContain(player.team);
+      }
+      // Répartition par défaut (null → 1,1,2,2) : au plus la moitié par côté.
+      const side1 = match.players.filter((p: any) => p.team === 1).length;
+      expect(side1).toBeLessThanOrEqual(match.maxPlayers / 2);
     });
 
     it('expose le sport du terrain sur chaque partie', async () => {
@@ -628,6 +636,56 @@ describe('OpenMatchService', () => {
       mockNotifyRemoved.mockRejectedValue(new Error('SMTP down'));
 
       await expect(service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3')).resolves.toBeDefined();
+    });
+  });
+
+  describe('setTeams', () => {
+    // FOR UPDATE lock : start_time + resource_id (pas d'autre colonne nécessaire).
+    const lockRow = (over: Record<string, unknown> = {}) =>
+      (prismaMock.$queryRaw as jest.Mock).mockResolvedValue([{ start_time: future(48), resource_id: 'court-1', ...over }]);
+    const happyTx = () => prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    const resource = (over: Record<string, unknown> = {}) =>
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo', attributes: { format: 'double' }, ...over } as any);
+    // findMany est appelé 2× (acteur puis applyTeams) ; le mock renvoie le même tableau,
+    // qui porte id + userId + isOrganizer pour couvrir les deux select.
+    const parts = () => prismaMock.reservationParticipant.findMany.mockResolvedValue([
+      { id: 'p1', userId: 'org', isOrganizer: true },
+      { id: 'p2', userId: 'user-2', isOrganizer: false },
+      { id: 'p3', userId: 'user-3', isOrganizer: false },
+      { id: 'p4', userId: 'user-4', isOrganizer: false },
+    ] as any);
+
+    it('persiste les côtés choisis pour une partie 2v2 (organisateur)', async () => {
+      happyTx(); lockRow(); resource(); parts();
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.setTeams('club-demo', 'm1', 'org', {
+        org: 2, 'user-2': 2, 'user-3': 1, 'user-4': 1,
+      });
+
+      // Reconstruit id → côté depuis les updates persistés (mock prisma : pas de round-trip DB).
+      const byId: Record<string, number> = {};
+      for (const call of (prismaMock.reservationParticipant.update as jest.Mock).mock.calls) {
+        byId[call[0].where.id] = call[0].data.team;
+      }
+      const team1 = Object.keys(byId).filter((id) => byId[id] === 1).sort();
+      const team2 = Object.keys(byId).filter((id) => byId[id] === 2).sort();
+      expect(team1).toEqual(['p3', 'p4']); // user-3 + user-4 côté 1
+      expect(team2).toEqual(['p1', 'p2']); // org + user-2 côté 2
+    });
+
+    it('refuse un côté sur-rempli (TEAM_SIDE_FULL)', async () => {
+      happyTx(); lockRow(); resource(); parts();
+      await expect(service.setTeams('club-demo', 'm1', 'org', {
+        org: 1, 'user-2': 1, 'user-3': 1, 'user-4': 2,
+      })).rejects.toThrow('TEAM_SIDE_FULL');
+    });
+
+    it('refuse un non-organisateur (NOT_ORGANIZER)', async () => {
+      happyTx(); lockRow(); resource(); parts();
+      await expect(service.setTeams('club-demo', 'm1', 'user-2', {
+        org: 1, 'user-2': 2, 'user-3': 1, 'user-4': 2,
+      })).rejects.toThrow('NOT_ORGANIZER');
     });
   });
 });

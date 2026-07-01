@@ -18,6 +18,7 @@ jest.mock('../lib/api', () => ({
     searchClubMembers:  jest.fn(),
     listClubFriends:    jest.fn().mockResolvedValue([]),
     getMyRating:        jest.fn().mockResolvedValue(null),
+    getMyProfile:       jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null }),
     getClubPage:        jest.fn().mockResolvedValue({}),
   },
   assetUrl: (u: string | null) => u,
@@ -45,6 +46,7 @@ describe('BookingModal — page unique', () => {
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
+    (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null });
   });
 
   it('en dev (StrictMode, double montage) : atteint « held » avec un seul hold, sans auto-annulation', async () => {
@@ -111,6 +113,20 @@ describe('BookingModal — page unique', () => {
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
       'res-1', 'jwt-token',
       expect.objectContaining({ partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
+    ));
+  });
+
+  it('padel : applyHoldSetup reçoit teams (organisateur + partenaire, côtés)', async () => {
+    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
+    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
+    await screen.findByText('Alice Org');
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
+      'res-1', 'jwt-token',
+      expect.objectContaining({ teams: expect.objectContaining({ 'user-1': 1, 'user-2': 1 }) }),
     ));
   });
 

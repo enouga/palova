@@ -168,6 +168,7 @@ export const api = {
       visibility?: 'PRIVATE' | 'PUBLIC';
       targetLevelMin?: number | null;
       targetLevelMax?: number | null;
+      teams?: Record<string, 1 | 2>;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {
@@ -252,6 +253,8 @@ export const api = {
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players`, { method: 'POST', body: JSON.stringify({ memberUserId }) }, token),
   removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
+  setReservationTeams: (reservationId: string, teams: Record<string, 1 | 2>, token: string) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
 
   // --- Parties ouvertes (visibles de tous ; token facultatif) ---
   getOpenMatches: (slug: string, token?: string) =>
@@ -262,6 +265,8 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'DELETE' }, token),
   removeOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
+  setOpenMatchTeams: (slug: string, id: string, teams: Record<string, 1 | 2>, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
   setInterested: (slug: string, id: string, token: string) =>
@@ -784,6 +789,20 @@ export const api = {
     request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
   sendClubBroadcast: (clubId: string, body: { title: string; body: string; url?: string }, token: string) =>
     request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  // --- Emails automatiques personnalisables (admin) ---
+  adminListEmails: (clubId: string, token: string) =>
+    request<{ items: AdminEmailSummary[] }>(`/api/clubs/${clubId}/admin/emails`, {}, token),
+  adminGetEmail: (clubId: string, type: string, token: string) =>
+    request<AdminEmailDetail>(`/api/clubs/${clubId}/admin/emails/${type}`, {}, token),
+  adminSaveEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ unknownVars: string[] }>(`/api/clubs/${clubId}/admin/emails/${type}`, { method: 'PUT', body: JSON.stringify(draft) }, token),
+  adminResetEmail: (clubId: string, type: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/emails/${type}`, { method: 'DELETE' }, token),
+  adminPreviewEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ subject: string; html: string }>(`/api/clubs/${clubId}/admin/emails/${type}/preview`, { method: 'POST', body: JSON.stringify(draft) }, token),
+  adminTestEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/emails/${type}/test`, { method: 'POST', body: JSON.stringify(draft) }, token),
 };
 
 // --- Types ---
@@ -796,6 +815,17 @@ export interface ClubBroadcastItem {
   url: string | null;
   recipientCount: number;
   createdAt: string;
+}
+
+// --- Emails automatiques personnalisables (admin) ---
+export interface EmailVarDef { key: string; label: string; sample: string; }
+export interface AdminEmailSummary { type: string; group: string; title: string; description: string; customized: boolean; }
+export interface EmailDraft { subject: string; heading: string; bodyHtml: string; ctaLabel?: string; footerNote?: string; }
+export interface AdminEmailDetail {
+  type: string; group: string; title: string; description: string; hasCta: boolean;
+  vars: EmailVarDef[];
+  defaults: { subject: string; heading: string; bodyHtml: string; ctaLabel?: string; footerNote?: string };
+  override: { subject: string; heading: string; bodyHtml: string; ctaLabel: string | null; footerNote: string | null } | null;
 }
 
 // --- Notifications ---
@@ -845,7 +875,7 @@ export interface MyReservation {
   totalPrice: string;
   resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
-  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null }[];
+  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null }[];
 }
 
 export interface MyMatchPlayer {
@@ -907,11 +937,13 @@ export interface ReservationPlayer {
   lastName: string;
   avatarUrl: string | null;
   share: string;
+  team?: 1 | 2 | null;
 }
 export interface ReservationPlayers {
   id: string;
   capacity: number;
   participants: ReservationPlayer[];
+  sportKey?: string;
 }
 
 export interface Resource {
@@ -1145,6 +1177,7 @@ export interface OpenMatchPlayer {
   avatarUrl: string | null;
   isOrganizer: boolean;
   level?: UserLevel | null;
+  team?: 1 | 2 | null;
 }
 
 export interface OpenMatch {
