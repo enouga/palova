@@ -447,7 +447,7 @@ export class ClubService {
       },
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
       take: 20,
-      select: { user: { select: { id: true, firstName: true, lastName: true } } },
+      select: { user: { select: { id: true, firstName: true, lastName: true, acceptsFriendRequests: true } } },
     });
     const userIds = members.map((m) => m.user.id);
     const sportKey = await resolvePreferredSportKey(callerUserId);
@@ -464,12 +464,40 @@ export class ClubService {
     });
     const iFollowSet = new Set(links.filter((l) => l.followerId === callerUserId).map((l) => l.followingId));
     const followsMe  = new Set(links.filter((l) => l.followingId === callerUserId).map((l) => l.followerId));
-    return members.map((m) => ({
-      ...m.user,
-      level: levels[m.user.id] ?? null,
-      iFollow: iFollowSet.has(m.user.id),
-      mutual: iFollowSet.has(m.user.id) && followsMe.has(m.user.id),
-    }));
+
+    // Annoter la relation d'amitié (paire canonique) en une requête sur les ids retournés.
+    const fr = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { userAId: callerUserId, userBId: { in: userIds } },
+          { userBId: callerUserId, userAId: { in: userIds } },
+        ],
+      },
+      select: { userAId: true, userBId: true, status: true, requestedById: true },
+    });
+    const frByOther = new Map<string, { status: string; requestedById: string }>();
+    for (const f of fr) {
+      const other = f.userAId === callerUserId ? f.userBId : f.userAId;
+      frByOther.set(other, { status: f.status, requestedById: f.requestedById });
+    }
+
+    return members.map((m) => {
+      const rel = frByOther.get(m.user.id);
+      const friend: { status: 'none' | 'pending_out' | 'pending_in' | 'friends'; requestable: boolean } = !rel
+        ? { status: 'none', requestable: !!m.user.acceptsFriendRequests }
+        : rel.status === 'ACCEPTED'
+          ? { status: 'friends', requestable: false }
+          : { status: rel.requestedById === callerUserId ? 'pending_out' : 'pending_in', requestable: false };
+      return {
+        id: m.user.id,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        level: levels[m.user.id] ?? null,
+        iFollow: iFollowSet.has(m.user.id),
+        mutual: iFollowSet.has(m.user.id) && followsMe.has(m.user.id),
+        friend,
+      };
+    });
   }
 
   /** Classement du club pour un sport : membres ACTIFS opt-in avec >= MIN_RANKED_MATCHES, triés par niveau. */
