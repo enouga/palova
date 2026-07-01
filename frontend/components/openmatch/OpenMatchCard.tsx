@@ -9,6 +9,7 @@ import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { rangeLabel } from '@/lib/levelMatch';
+import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
 
 function formatWhen(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz })
@@ -138,6 +139,11 @@ export function OpenMatchCard({
         {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
           <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
         )}
+        <MatchShareButton
+          style={actionBtn}
+          title={`Partie ouverte · ${m.resourceName}`}
+          url={typeof window !== 'undefined' ? `${window.location.origin}/parties/${m.id}` : `/parties/${m.id}`}
+        />
         <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>
           {m.viewerIsOrganizer ? (
             <Chip tone="line" icon="check">Vous organisez</Chip>

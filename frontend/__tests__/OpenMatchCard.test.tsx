@@ -195,4 +195,14 @@ describe('OpenMatchCard', () => {
       'u-org': 1, 'u-bob': 2, 'u-cara': 2, 'u-dan': 1,
     });
   });
+
+  it('affiche un bouton Partager (même en anonyme)', () => {
+    const match = makeMatch();
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { isAnonymous: true })} />
+      </ThemeProvider>
+    );
+    expect(screen.getByRole('button', { name: /partager/i })).toBeInTheDocument();
+  });
 });

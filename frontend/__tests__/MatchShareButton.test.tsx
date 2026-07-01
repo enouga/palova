@@ -1,0 +1,26 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MatchShareButton } from '../components/openmatch/MatchShareButton';
+import { ThemeProvider } from '../lib/ThemeProvider';
+
+const wrap = (ui: React.ReactElement) => render(<ThemeProvider>{ui}</ThemeProvider>);
+
+describe('MatchShareButton', () => {
+  afterEach(() => { delete (navigator as any).share; });
+
+  it('appelle navigator.share quand disponible', async () => {
+    const share = jest.fn().mockResolvedValue(undefined);
+    (navigator as any).share = share;
+    wrap(<MatchShareButton url="https://demo.palova.fr/parties/m1" title="Partie ouverte · Court 2" />);
+    fireEvent.click(screen.getByRole('button', { name: /partager/i }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith({ title: 'Partie ouverte · Court 2', url: 'https://demo.palova.fr/parties/m1' }));
+  });
+
+  it('repli sur le presse-papier et affiche « Lien copié ! »', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    wrap(<MatchShareButton url="https://demo.palova.fr/parties/m1" title="X" />);
+    fireEvent.click(screen.getByRole('button', { name: /partager/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://demo.palova.fr/parties/m1'));
+    expect(await screen.findByText('Lien copié !')).toBeInTheDocument();
+  });
+});
