@@ -6,11 +6,6 @@ export interface BuiltEmail {
   text: string;
 }
 
-/** Retire les balises HTML pour produire la version texte. */
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '');
-}
-
 export interface BroadcastEmailInput {
   title: string;
   body: string;

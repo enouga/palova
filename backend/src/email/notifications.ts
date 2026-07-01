@@ -30,15 +30,15 @@ type PlayerAction = 'confirmed' | 'waitlisted' | 'cancelled' | 'promoted';
 type OrganizerKind = 'registration' | 'cancellation';
 
 /** Référence de l'activité dans une phrase (« Voir le tournoi », « Gérer le cours »). */
-function refActivite(t: ActivityType): string {
+export function refActivite(t: ActivityType): string {
   return t === 'tournament' ? 'le tournoi' : t === 'lesson' ? 'le cours' : "l'événement";
 }
 /** Nom simple du type d'activité. */
-function typeActivite(t: ActivityType): string {
+export function typeActivite(t: ActivityType): string {
   return t === 'tournament' ? 'tournoi' : t === 'lesson' ? 'cours' : 'événement';
 }
 /** Phrase « places restantes » pour une partie ouverte. */
-function placesPhrase(spotsLeft: number): string {
+export function placesPhrase(spotsLeft: number): string {
   return spotsLeft <= 0 ? 'La partie est désormais complète.' : `Il reste ${spotsLeft} place${spotsLeft > 1 ? 's' : ''}.`;
 }
 
@@ -172,7 +172,6 @@ async function sendTournamentPlayerEmails(
       lien: url,
       coequipier,
       phrase_coequipier: coequipier ? ` Vous êtes inscrit·e en binôme avec ${coequipier}.` : '',
-      phrase_position: '',
     };
     const mail = renderClubEmail(emailType, vars, brand, override);
     const notifType =
@@ -275,7 +274,6 @@ async function sendEventPlayerEmail(
     lien: url,
     coequipier: '',
     phrase_coequipier: '',
-    phrase_position: '',
   };
   const mail = renderClubEmail(emailType, vars, brand, override);
   const notifType =
@@ -850,7 +848,6 @@ async function sendLessonPlayerEmail(enr: LessonEnrollmentLoaded, action: Player
     lien: ctx.url,
     coequipier: '',
     phrase_coequipier: '',
-    phrase_position: '',
   }, ctx.brand, override);
   const notifType =
     action === 'confirmed'
