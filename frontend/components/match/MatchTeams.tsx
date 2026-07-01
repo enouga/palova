@@ -89,7 +89,7 @@ export function MatchTeams({
         role={editable ? 'button' : undefined}
         tabIndex={editable ? 0 : undefined}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
+          display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%',
           background: `${c}22`, border: `1px solid ${isPicked ? th.accent : c}`,
           outline: isPicked ? `2px solid ${th.accent}` : 'none',
           borderRadius: 999, padding: '4px 11px 4px 4px',
@@ -100,7 +100,8 @@ export function MatchTeams({
         {isFriend ? (
           <span title="Vous suivez ce joueur" style={{ display: 'inline-flex', borderRadius: '50%', padding: 1.5, background: th.accent, flexShrink: 0 }}>{avatar}</span>
         ) : avatar}
-        {p.firstName} {p.lastName}
+        {/* Nom tronqué (ellipsis) → jamais de débordement horizontal en colonne étroite (mobile). */}
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.firstName} {p.lastName}</span>
         <LevelChip level={p.level} size="xs" />
         {p.isOrganizer && (
           <span style={{ fontSize: 10, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3 }}>orga</span>
