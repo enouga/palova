@@ -784,6 +784,20 @@ export const api = {
     request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
   sendClubBroadcast: (clubId: string, body: { title: string; body: string; url?: string }, token: string) =>
     request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  // --- Emails automatiques personnalisables (admin) ---
+  adminListEmails: (clubId: string, token: string) =>
+    request<{ items: AdminEmailSummary[] }>(`/api/clubs/${clubId}/admin/emails`, {}, token),
+  adminGetEmail: (clubId: string, type: string, token: string) =>
+    request<AdminEmailDetail>(`/api/clubs/${clubId}/admin/emails/${type}`, {}, token),
+  adminSaveEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ unknownVars: string[] }>(`/api/clubs/${clubId}/admin/emails/${type}`, { method: 'PUT', body: JSON.stringify(draft) }, token),
+  adminResetEmail: (clubId: string, type: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/emails/${type}`, { method: 'DELETE' }, token),
+  adminPreviewEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ subject: string; html: string }>(`/api/clubs/${clubId}/admin/emails/${type}/preview`, { method: 'POST', body: JSON.stringify(draft) }, token),
+  adminTestEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/emails/${type}/test`, { method: 'POST', body: JSON.stringify(draft) }, token),
 };
 
 // --- Types ---
@@ -796,6 +810,17 @@ export interface ClubBroadcastItem {
   url: string | null;
   recipientCount: number;
   createdAt: string;
+}
+
+// --- Emails automatiques personnalisables (admin) ---
+export interface EmailVarDef { key: string; label: string; sample: string; }
+export interface AdminEmailSummary { type: string; group: string; title: string; description: string; customized: boolean; }
+export interface EmailDraft { subject: string; heading: string; bodyHtml: string; ctaLabel?: string; footerNote?: string; }
+export interface AdminEmailDetail {
+  type: string; group: string; title: string; description: string; hasCta: boolean;
+  vars: EmailVarDef[];
+  defaults: { subject: string; heading: string; bodyHtml: string; ctaLabel?: string; footerNote?: string };
+  override: { subject: string; heading: string; bodyHtml: string; ctaLabel: string | null; footerNote: string | null } | null;
 }
 
 // --- Notifications ---
