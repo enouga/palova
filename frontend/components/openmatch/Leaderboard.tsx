@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, ClubDetail, ClubLeaderboard } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
@@ -75,6 +76,10 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   }
 
   const { entries, me } = data;
+  const decided = (me.wins ?? 0) + (me.losses ?? 0);
+  const winRate = decided > 0 ? Math.round((me.wins / decided) * 100) : 0;
+  const streakN = Math.abs(me.streak ?? 0);
+  const streakWin = (me.streak ?? 0) > 0;
 
   return (
     <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -102,7 +107,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
       )}
 
       {/* Panneau « moi » */}
-      <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none' }}>
+      <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {me.ranked ? (
           <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15 }}>
             Vous êtes {me.rank}<sup>e</sup> sur {entries.length} · niveau {me.level!.toFixed(1)}
@@ -121,6 +126,18 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
           </div>
         ) : (
           <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5 }}>Vous figurez au classement dès qu&apos;il y aura des joueurs classés.</span>
+        )}
+        {decided > 0 && (
+          <div style={{ borderTop: `1px solid ${th.onAccent}33`, paddingTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
+            <span>{decided} match{decided > 1 ? 's' : ''}</span>
+            <span>{winRate}% de victoires</span>
+            <span>{me.wins} V · {me.losses} D</span>
+            {streakN > 0 && (
+              <span style={{ borderRadius: 999, padding: '2px 9px', fontSize: 12.5, fontWeight: 700, background: streakWin ? th.onAccent : ACCENTS.coral, color: streakWin ? th.accent : '#fff' }}>
+                {streakN} {streakWin ? 'victoire' : 'défaite'}{streakN > 1 ? 's' : ''} d&apos;affilée
+              </span>
+            )}
+          </div>
         )}
       </div>
 

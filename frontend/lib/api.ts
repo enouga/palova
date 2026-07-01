@@ -1846,6 +1846,9 @@ export interface LeaderboardMe {
   level: number | null;
   matchesPlayed: number;
   matchesToGo: number;
+  wins: number;
+  losses: number;
+  streak: number; // signé : +N victoires d'affilée, -N défaites, 0 aucune
 }
 
 export interface ClubLeaderboard {
