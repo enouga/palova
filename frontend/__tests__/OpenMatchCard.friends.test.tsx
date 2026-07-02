@@ -11,12 +11,12 @@ const baseMatch: any = {
     { userId: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, isOrganizer: true, level: null },
     { userId: 'u9', firstName: 'Zoé', lastName: 'X', avatarUrl: null, isOrganizer: false, level: null },
   ],
-  interestedCount: 0, viewerIsInterested: false, interested: [], lastMessageAt: null, unreadCount: 0,
+  lastMessageAt: null, unreadCount: 0,
 };
 const noop = () => {};
 const props: any = { timezone: 'Europe/Paris', slug: 'demo', token: 't', busy: false, addingOpen: false,
   onJoin: noop, onLeave: noop, onRemovePlayer: noop, onSetTeams: noop, onAddPlayer: noop, onToggleAdd: noop, onCancelAdd: noop,
-  onRecordResult: noop, canRecordResult: false, onToggleInterest: noop, onOpenChat: noop, onAuthPrompt: noop };
+  onRecordResult: noop, canRecordResult: false, onOpenChat: noop, onAuthPrompt: noop };
 
 describe('OpenMatchCard — preuve sociale amis', () => {
   it('affiche « X de vos amis » quand des amis jouent', () => {

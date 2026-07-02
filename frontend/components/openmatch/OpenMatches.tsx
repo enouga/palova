@@ -144,7 +144,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onCancelAdd={a.onCancelAdd}
                   onRecordResult={(mm) => a.setRecordingFor(mm)}
                   canRecordResult={levelEnabled}
-                  onToggleInterest={a.toggleInterest}
                   onOpenChat={a.openChat}
                   showSport={multiSport}
                   isAnonymous={false}
@@ -191,7 +190,6 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   onCancelAdd={a.onCancelAdd}
                   onRecordResult={(mm) => a.setRecordingFor(mm)}
                   canRecordResult={levelEnabled}
-                  onToggleInterest={a.toggleInterest}
                   onOpenChat={a.openChat}
                   showSport={multiSport}
                   isAnonymous={!token}

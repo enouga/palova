@@ -24,8 +24,6 @@ jest.mock('../lib/api', () => ({
     addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
     setOpenMatchTeams: jest.fn().mockResolvedValue({ id: 'm1' }),
     recordMatchResult: jest.fn().mockResolvedValue({ id: 'mr1', status: 'PENDING' }),
-    setInterested:    jest.fn().mockResolvedValue({}),
-    removeInterested: jest.fn().mockResolvedValue({}),
     getChatMessages:  jest.fn().mockResolvedValue([]),
     postChatMessage:  jest.fn(),
     deleteChatMessage: jest.fn(),
@@ -61,7 +59,7 @@ const match = (over: Record<string, unknown> = {}) => ({
   id: 'm1', resourceName: 'Terrain 1', startTime: future, endTime: future,
   maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true }],
-  interestedCount: 0, viewerIsInterested: false, interested: [], lastMessageAt: null, unreadCount: 0,
+  lastMessageAt: null, unreadCount: 0,
   ...over,
 });
 
@@ -226,17 +224,8 @@ describe('OpenMatches', () => {
     expect(screen.queryByText(/Pour toi/i)).not.toBeInTheDocument();
   });
 
-  it('cliquer « Ça m intéresse » appelle setInterested puis recharge', async () => {
+  it('cliquer « Discuter » (connecté) ouvre la feuille de chat', async () => {
     mocked.getOpenMatches.mockResolvedValue([match()] as never);
-    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
-
-    fireEvent.click(await screen.findByRole('button', { name: /Ça m'intéresse/ }));
-    await waitFor(() => expect(mocked.setInterested).toHaveBeenCalledWith('demo', 'm1', 'abc'));
-    await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledTimes(2));
-  });
-
-  it('cliquer « Discuter » sur une partie où viewerIsInterested ouvre la feuille de chat', async () => {
-    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsInterested: true })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
     fireEvent.click(await screen.findByRole('button', { name: /Discuter/ }));
@@ -244,7 +233,7 @@ describe('OpenMatches', () => {
   });
 
   it('cliquer « Discuter » appelle markOpenMatchChatRead', async () => {
-    mocked.getOpenMatches.mockResolvedValue([match({ viewerIsInterested: true })] as never);
+    mocked.getOpenMatches.mockResolvedValue([match()] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
     fireEvent.click(await screen.findByRole('button', { name: /Discuter/ }));

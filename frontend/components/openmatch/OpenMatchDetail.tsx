@@ -99,7 +99,7 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
                 onAddPlayer={a.addPlayerToTeam} onReplacePlayer={a.replacePlayer}
                 onToggleAdd={a.onToggleAdd} onCancelAdd={a.onCancelAdd}
                 onRecordResult={(mm) => a.setRecordingFor(mm)} canRecordResult={club.levelSystemEnabled !== false}
-                onToggleInterest={a.toggleInterest} onOpenChat={a.openChat}
+                onOpenChat={a.openChat}
                 showSport={clubIsMultiSport(club)} isAnonymous={!token} onAuthPrompt={a.setAuthPrompt}
               />
             </div>

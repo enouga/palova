@@ -70,9 +70,6 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
     });
   };
 
-  const toggleInterest = (m: OpenMatch) =>
-    act(m, () => (m.viewerIsInterested ? api.removeInterested(club.slug, m.id, token!) : api.setInterested(club.slug, m.id, token!)));
-
   const openChat = (m: OpenMatch) => {
     setChatting(m);
     if (token) api.markOpenMatchChatRead(club.slug, m.id, token)
@@ -96,7 +93,7 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
     busyId, error, addingId, recordingFor, joinWarning, chatting, authPrompt,
     setError, setAddingId, setRecordingFor, setJoinWarning, setChatting, setAuthPrompt,
     join, confirmJoin, leave, removePlayer, setTeams, addPlayerToTeam, replacePlayer,
-    toggleInterest, openChat, onToggleAdd, onCancelAdd,
+    openChat, onToggleAdd, onCancelAdd,
   };
 }
 
