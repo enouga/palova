@@ -4,6 +4,7 @@ import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded, notifyOpenMatchInterest } from '../email/notifications';
 import { RatingService, UserLevel } from './rating.service';
 import { effectiveTeams, applyTeams } from './matchTeams';
+import { ensureActiveMembership } from './membership';
 
 // Include commun à la liste et à la lecture unitaire d'une partie ouverte.
 const MATCH_INCLUDE = {
@@ -42,19 +43,6 @@ export class OpenMatchService {
   private async resolveActiveClub(slug: string): Promise<{ id: string }> {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
-    return { id: club.id };
-  }
-
-  /** Résout un club ACTIVE et GARANTIT l'adhésion ACTIVE de l'appelant : créée si absente
-   *  (comme à la 1re réservation), refus si BLOCKED. Utilisé par join / setInterested. */
-  private async ensureActiveMembership(slug: string, userId: string): Promise<{ id: string }> {
-    const club = await this.resolveActiveClub(slug);
-    const member = await prisma.clubMembership.findUnique({
-      where: { userId_clubId: { userId, clubId: club.id } },
-      select: { status: true },
-    });
-    if (member?.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
-    if (!member) await prisma.clubMembership.create({ data: { userId, clubId: club.id } });
     return { id: club.id };
   }
 
@@ -183,7 +171,7 @@ export class OpenMatchService {
 
   /** Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation). */
   async joinOpenMatch(slug: string, reservationId: string, userId: string) {
-    const club = await this.ensureActiveMembership(slug, userId);
+    const club = await ensureActiveMembership(slug, userId);
 
     const result = await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
@@ -345,7 +333,7 @@ export class OpenMatchService {
 
   /** Marque l'appelant « intéressé » par une partie ouverte (n'occupe pas de place). */
   async setInterested(slug: string, reservationId: string, userId: string) {
-    const club = await this.ensureActiveMembership(slug, userId);
+    const club = await ensureActiveMembership(slug, userId);
 
     const resa = await prisma.reservation.findUnique({
       where: { id: reservationId },
