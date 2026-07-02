@@ -77,6 +77,12 @@ imprimable (`Receipt` + overlay d'impression + `toCaissePayment`) + la **note**
 `clubDetail` (`ClubAdminDetail`, pour nom + adresse du reçu) — déjà chargé via
 `adminGetClub` dans `load()`, il suffit de le stocker.
 
+Chaque ligne remboursable (reste = `amount − refundedAmount > 0`) porte un lien
+**« annuler »** (`cancelPayment` → `api.refundPayment`, motif « Annulation au comptoir »,
+puis `onCollected`). C'est le seul point qui permet d'annuler un paiement **anonyme**
+(réservation entière / place vide / préréglé / « Autre ») — le `CollectPanel` ne
+propose « annuler » que sur une ligne joueur **nommée** payée.
+
 ### 4. Moyen « Autre » → champ « comment ça a été réglé » (note)
 
 Certains règlements ne rentrent dans aucun bouton dédié (par l'abonnement du joueur,

@@ -170,7 +170,10 @@ export default function MyReservationsPage() {
 
         {quotaStatus && (
           <div style={{ padding: '14px 20px 0' }}>
-            <QuotaStatus status={quotaStatus} />
+            {/* Quotas : même rendu compact (pleines & creuses sur une ligne) que Réserver/BookingModal. */}
+            <div style={{ maxWidth: 360 }}>
+              <QuotaStatus status={quotaStatus} compact />
+            </div>
           </div>
         )}
 

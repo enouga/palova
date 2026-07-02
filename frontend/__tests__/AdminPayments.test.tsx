@@ -48,6 +48,29 @@ describe('AdminPaymentsPage', () => {
     expect(screen.getByRole('button', { name: 'Changer de compte Stripe' })).toBeInTheDocument();
   });
 
+  it('réglages : le bouton Enregistrer persiste les deux drapeaux et affiche « Enregistré ✓ »', async () => {
+    api.adminGetClub.mockResolvedValue(clubWith());
+    await wrap();
+
+    // Bouton désactivé tant qu'aucune modification.
+    const saveBtn = await screen.findByRole('button', { name: 'Enregistrer' });
+    expect(saveBtn).toBeDisabled();
+
+    // Cocher une case ne persiste pas immédiatement.
+    fireEvent.click(screen.getByLabelText('Exiger le paiement CB à la réservation'));
+    expect(api.adminUpdateClub).not.toHaveBeenCalled();
+    expect(saveBtn).not.toBeDisabled();
+
+    // Enregistrer persiste les deux drapeaux ensemble.
+    fireEvent.click(saveBtn);
+    await waitFor(() =>
+      expect(api.adminUpdateClub).toHaveBeenCalledWith(
+        'c1', { requireOnlinePayment: true, requireCardFingerprint: false }, 'abc',
+      ),
+    );
+    expect(await screen.findByText('Enregistré ✓')).toBeInTheDocument();
+  });
+
   it('état NONE : affiche le bouton de connexion, pas de changement de compte', async () => {
     api.adminGetClub.mockResolvedValue(clubWith({ stripeAccountId: null, stripeAccountStatus: 'NONE' }));
     await wrap();

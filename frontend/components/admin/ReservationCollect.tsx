@@ -166,10 +166,12 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
   };
 
   // ── styles (lignes fines, une rangée qui s'enroule) ─────────────────────
-  const container: CSSProperties = { background: th.surface, borderRadius: 12, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '4px 12px 10px', marginBottom: 10 };
-  const row = (i: number): CSSProperties => ({ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '5px 0', borderTop: i > 0 ? `1px solid ${th.line}` : 'none', minHeight: 34 });
-  const nameStyle: CSSProperties = { flex: '1 1 100px', minWidth: 0, fontFamily: th.fontUI, fontSize: 13, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 };
-  const regle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.accent, whiteSpace: 'nowrap' };
+  const container: CSSProperties = { background: th.surface, borderRadius: 12, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '6px 6px 10px', marginBottom: 10 };
+  // Bandes zébrées : chaque place lit comme une rangée continue en pleine largeur — l'œil
+  // relie sans effort le nom (à gauche) à son statut / ses boutons (à droite), même large.
+  const row = (i: number): CSSProperties => ({ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 8px', borderRadius: 9, minHeight: 40, background: i % 2 === 1 ? th.surface2 : 'transparent' });
+  const nameStyle: CSSProperties = { flex: '1 1 100px', minWidth: 0, fontFamily: th.fontUI, fontSize: 14, fontWeight: 500, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 };
+  const regle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent, whiteSpace: 'nowrap' };
 
   // Badge « réglé » + MOYEN de règlement (comment ça a été réglé) + lien discret « annuler » (remboursement) si remboursable.
   const settledBadge = (pays: Payment[], method?: PaymentMethod) => (
@@ -208,10 +210,10 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
           const primary = m === methods[0];
           return (
             <button key={m} type="button" disabled={anyBusy} onClick={() => pay(amountCents, m, participantId)}
-              style={{ height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 11px', border: 'none', borderRadius: 9,
+              style={{ height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 12px', border: 'none', borderRadius: 9,
                 cursor: anyBusy ? 'default' : 'pointer', opacity: anyBusy ? 0.5 : 1,
                 background: primary ? th.accent : th.surface, color: primary ? th.onAccent : th.text,
-                boxShadow: primary ? 'none' : `inset 0 0 0 1.5px ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                boxShadow: primary ? 'none' : `inset 0 0 0 1.5px ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
               <Icon name={METHOD_ICON[m]} size={13} color={primary ? th.onAccent : th.textMute} />{QUICK_METHOD_LABEL[m]}
             </button>
           );
@@ -220,9 +222,9 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
           <button key="prepaid" type="button" disabled={anyBusy}
             onClick={() => pay(amountCents, pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', participantId, pk.id)}
             title={`Régler avec ${packageLabel(pk)}`}
-            style={{ height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 11px', border: 'none', borderRadius: 9,
+            style={{ height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 12px', border: 'none', borderRadius: 9,
               cursor: anyBusy ? 'default' : 'pointer', opacity: anyBusy ? 0.5 : 1, background: th.surface, color: th.text,
-              boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
             <Icon name="ticket" size={13} color={th.accent} />{pk.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
           </button>
         )}
@@ -302,8 +304,8 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
       {slots.map(renderSlot)}
 
       {wholeRow && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '5px 0', borderTop: slots.length ? `1px dashed ${th.line}` : 'none', marginTop: slots.length ? 4 : 0 }}>
-          <span style={{ flex: '1 1 90px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>{wholeLabel} · <span style={{ color: CORAL }}>{fmtEuros(remaining)}</span></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 8px', borderTop: slots.length ? `1px dashed ${th.line}` : 'none', marginTop: slots.length ? 6 : 0 }}>
+          <span style={{ flex: '1 1 90px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>{wholeLabel} · <span style={{ color: CORAL }}>{fmtEuros(remaining)}</span></span>
           {quickRow(remaining, undefined, reservation.user?.id ?? undefined, false)}
         </div>
       )}
@@ -312,7 +314,7 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
         <button type="button" onClick={onOpenDetails} style={{ width: '100%', height: 38, border: 'none', borderRadius: 10, background: th.accent, color: th.onAccent, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginTop: 6 }}>Encaisser un montant…</button>
       )}
 
-      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ marginTop: 8, padding: '8px 8px 0', borderTop: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
         <button type="button" onClick={onOpenDetails} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0 }}>
           Détails / options <Icon name="chevR" size={14} color={th.accent} />
         </button>

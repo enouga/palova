@@ -4,6 +4,8 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { api, MyPaymentMethod } from '@/lib/api';
 import { cardLabel } from '@/lib/payments';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Icon } from '@/components/ui/Icon';
+import { AccountEmpty } from './AccountEmpty';
 
 interface Props { slug: string; token: string; }
 
@@ -28,26 +30,31 @@ export function PaymentMethodSection({ slug, token }: Props) {
     } finally { setBusy(false); }
   };
 
-  const faint: React.CSSProperties = { fontFamily: th.fontUI, fontSize: 13, color: th.textFaint };
+  const faint: React.CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.4, color: th.textFaint };
 
   if (!loaded) return <span style={faint}>Chargement…</span>;
 
+  if (!card) {
+    return <AccountEmpty icon="card" title="Aucune carte enregistrée"
+      hint="Enregistrez une carte lors d’une prochaine réservation pour payer en un clic." />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {card ? (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: th.surface2, borderRadius: 12, padding: '12px 14px' }}>
-            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text }}>{cardLabel(card)}</span>
-            <button onClick={() => setConfirming(true)}
-              style={{ cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
-              Retirer
-            </button>
-          </div>
-          <span style={faint}>Cette carte sert d’empreinte (anti no-show) et aux débits liste d’attente. Le club pourra la redemander à votre prochaine réservation.</span>
-        </>
-      ) : (
-        <span style={faint}>Aucune carte enregistrée.</span>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface2, borderRadius: 13, padding: '11px 13px' }}>
+        <span aria-hidden="true" style={{
+          width: 42, height: 30, flexShrink: 0, borderRadius: 7, background: th.surface,
+          boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon name="card" size={18} color={th.textMute} />
+        </span>
+        <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, flex: 1, minWidth: 0 }}>{cardLabel(card)}</span>
+        <button onClick={() => setConfirming(true)}
+          style={{ cursor: 'pointer', background: 'transparent', border: `1px solid ${th.line}`, borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute, flexShrink: 0 }}>
+          Retirer
+        </button>
+      </div>
+      <span style={faint}>Cette carte sert d’empreinte (anti no-show) et aux débits liste d’attente. Le club pourra la redemander à votre prochaine réservation.</span>
 
       {confirming && (
         <ConfirmDialog

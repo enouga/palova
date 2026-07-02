@@ -25,6 +25,8 @@ export default function AdminPaymentsPage() {
   const [error, setError]     = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [saved, setSaved]     = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [dirty, setDirty]     = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function AdminPaymentsPage() {
   const load = useCallback(async () => {
     if (!token || !clubId) return;
     setLoading(true);
-    try { setError(null); setClub(await api.adminGetClub(clubId, token)); }
+    try { setError(null); setClub(await api.adminGetClub(clubId, token)); setDirty(false); }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, [token, clubId]);
@@ -80,12 +82,25 @@ export default function AdminPaymentsPage() {
     try { await api.getStripeStatus(clubId, token); await load(); } catch { /* ignore */ }
   };
 
-  const setFlag = async (key: 'requireOnlinePayment' | 'requireCardFingerprint', value: boolean) => {
-    if (!token || !clubId || !club) return;
+  const setFlag = (key: 'requireOnlinePayment' | 'requireCardFingerprint', value: boolean) => {
+    if (!club) return;
     setClub({ ...club, [key]: value });
+    setDirty(true);
     setSaved(false);
-    try { await api.adminUpdateClub(clubId, { [key]: value }, token); setSaved(true); }
-    catch { load(); } // revert depuis la source en cas d'échec
+  };
+
+  const savePaymentSettings = async () => {
+    if (!token || !clubId || !club) return;
+    setSaving(true);
+    try {
+      await api.adminUpdateClub(clubId, {
+        requireOnlinePayment: club.requireOnlinePayment,
+        requireCardFingerprint: club.requireCardFingerprint,
+      }, token);
+      setDirty(false);
+      setSaved(true);
+    } catch { load(); } // revert depuis la source en cas d'échec
+    finally { setSaving(false); }
   };
 
   const handleDisconnect = async () => {
@@ -175,7 +190,12 @@ export default function AdminPaymentsPage() {
                 <input type="checkbox" checked={club.requireCardFingerprint} onChange={(e) => setFlag('requireCardFingerprint', e.target.checked)} style={{ width: 16, height: 16, accentColor: th.accent }} />
                 Enregistrer une empreinte bancaire (protection no-show)
               </label>
-              {saved && <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.accent }}>Enregistré ✓</span>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4 }}>
+              <Btn onClick={savePaymentSettings} icon="check" disabled={saving || !dirty}>
+                {saving ? 'Enregistrement…' : 'Enregistrer'}
+              </Btn>
+              {saved && !dirty && <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.accent, fontWeight: 600 }}>Enregistré ✓</span>}
             </div>
           </div>
         )}

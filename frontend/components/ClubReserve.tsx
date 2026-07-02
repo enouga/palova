@@ -187,19 +187,23 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         )}
 
         {(myPackages.length > 0 || mySubs.length > 0 || quotaStatus) && (
-          // Soldes, abonnements et quotas en colonnes de MÊME largeur : chaque pastille
-          // remplit sa cellule (fill). Grille auto-fill → une seule ligne tant qu'il y a la
-          // place, repli propre en colonnes égales sur écran étroit (jamais de débordement).
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, margin: '14px 20px 0' }}>
-            {myPackages.map((p) => {
-              const parts = packageParts(p);
-              return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} fill />;
-            })}
-            {mySubs.map((s) => (
-              <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné" fill
-                value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
-            ))}
-            <QuotaStatus status={quotaStatus} inline fill />
+          // Soldes, abonnements et quotas : pastilles de MÊME taille partout (Réserver,
+          // Mes réservations, BookingModal). Largeur bornée + colonnes égales 1fr/1fr →
+          // 2 pastilles par ligne (dont pleines & creuses ensemble), jamais de débordement.
+          <div style={{ margin: '14px 20px 0', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {(myPackages.length > 0 || mySubs.length > 0) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {myPackages.map((p) => {
+                  const parts = packageParts(p);
+                  return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} fill />;
+                })}
+                {mySubs.map((s) => (
+                  <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné" fill
+                    value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
+                ))}
+              </div>
+            )}
+            {quotaStatus && <QuotaStatus status={quotaStatus} compact />}
           </div>
         )}
 

@@ -368,7 +368,7 @@ export default function AdminReservationsPage() {
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
       ) : (
         // Liste groupée par terrain, triée par heure ; chaque réservation déplie ses lignes joueur.
-        <div data-testid="resa-list" style={{ maxWidth: 720 }}>
+        <div data-testid="resa-list" style={{ maxWidth: 960 }}>
           {groups.length === 0 ? (
             <div style={{ padding: '40px 16px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint, background: th.surface, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${th.line}` }}>Aucune réservation</div>
           ) : groups.map((g) => {

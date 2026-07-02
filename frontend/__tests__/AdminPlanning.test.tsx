@@ -159,6 +159,20 @@ it("masque les règlements sans encaissement si le joueur n'a ni abonnement ni c
   expect(screen.queryByRole('button', { name: 'Abonnement' })).toBeNull();
 });
 
+it("permet d'annuler un encaissement depuis la liste (même anonyme), comme la page Encaissement", async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa({
+    paidAmount: '13.00',   // un paiement anonyme (préréglé/Autre/entier) → n'apparaît sur aucune ligne joueur
+    payments: [{ id: 'pay-1', amount: '13.00', method: 'OTHER', participantId: null, note: 'Coffre', refundedAmount: '0.00', payerName: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2026-06-22T16:05:00.000Z' }],
+  })]));
+  renderPage();
+  await openModal();
+  fireEvent.click(await screen.findByRole('button', { name: 'annuler' }));
+  await waitFor(() => expect(api.refundPayment).toHaveBeenCalledWith(
+    'club-1', 'pay-1', expect.objectContaining({ amount: 13 }), 'tok',
+  ));
+});
+
 it("affiche la note d'un paiement « Autre » dans les encaissements (comment ça a été réglé)", async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa({

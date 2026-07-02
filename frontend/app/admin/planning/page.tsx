@@ -214,6 +214,19 @@ export default function AdminPlanningPage() {
     setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
   }, [patchReservation, reloadReservations, reloadPackages]);
 
+  // Annule (rembourse) un encaissement depuis la liste — couvre aussi les paiements ANONYMES
+  // (réservation entière / place vide / préréglé Coffre-Offres-Abonnement / « Autre ») qui ne
+  // s'accrochent à aucune ligne joueur du CollectPanel.
+  const cancelPayment = async (p: Payment) => {
+    if (!token || !clubId || busy) return;
+    const rem = toCents(p.amount) - toCents(p.refundedAmount ?? '0');
+    if (rem <= 0) return;
+    setBusy(true);
+    try { setError(null); await api.refundPayment(clubId, p.id, { amount: rem / 100, reason: 'Annulation au comptoir' }, token); await onCollected(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
   const loadStudents = useCallback((lessonId: string) => {
@@ -595,23 +608,20 @@ export default function AdminPlanningPage() {
         <div onClick={() => setSelected(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: isDesktop ? 640 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 30 : 22, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+            style={{ width: '100%', maxWidth: isDesktop ? 640 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 24 : 18, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-              <div>
-                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: isDesktop ? 26 : 21, color: th.text }}>{selected.resource.name}</div>
-                <div style={{ fontFamily: th.fontMono, fontSize: isDesktop ? 14 : 13, color: th.textMute, marginTop: 2 }}>{fmtHM(selected.startTime, tz)} – {fmtHM(selected.endTime, tz)} · {STATUS_LABEL[selected.status]}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: isDesktop ? 22 : 19, color: th.text, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis' }}>{selected.resource.name}</div>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
+                  <span style={{ fontFamily: th.fontMono }}>{fmtHM(selected.startTime, tz)} – {fmtHM(selected.endTime, tz)}</span> · {STATUS_LABEL[selected.status]} · <span style={{ color: th.text, fontWeight: 600 }}>{labelOf(selected)}</span>
+                </div>
               </div>
-              <button onClick={() => setSelected(null)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 32, height: 32, color: th.textMute, fontSize: 16 }}>✕</button>
+              <button onClick={() => setSelected(null)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 30, height: 30, color: th.textMute, fontSize: 16, flexShrink: 0 }}>✕</button>
             </div>
 
             {error && (
-              <div style={{ marginTop: 14, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+              <div style={{ marginTop: 10, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
             )}
-
-            <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
-              {labelOf(selected)}
-              {selected.user && <div style={{ fontSize: 12.5, color: th.textFaint }}>{selected.user.email}</div>}
-            </div>
             {/* Bandeau d'état — reste à encaisser / soldé (cohérent avec la page Paiements) */}
             {(() => {
               const dueC = dueOf(selected);
@@ -621,30 +631,30 @@ export default function AdminPlanningPage() {
               const done = dueC > 0 && restC <= 0;
               const tariff = toCents(selected.totalPrice) <= 0 && dueC > 0;
               return (
-                <div style={{ marginTop: 12, borderRadius: 16, padding: '15px 17px',
+                <div style={{ marginTop: 10, borderRadius: 12, padding: '9px 13px',
                   background: done ? 'rgba(52,184,136,0.10)' : th.surface2,
                   boxShadow: `inset 0 0 0 1px ${done ? 'rgba(52,184,136,0.30)' : th.line}` }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14 }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute }}>
-                        {dueC <= 0 ? 'Encaissé' : done ? 'Statut' : 'Reste à encaisser'}
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>
+                        {dueC <= 0 ? 'Encaissé' : done ? 'Statut' : 'Reste'}
+                      </span>
                       {dueC <= 0 ? (
-                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 28, letterSpacing: -0.5, lineHeight: 1, marginTop: 6, color: th.text }}>{fmtEuros(paidC)}</div>
+                        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, letterSpacing: -0.5, lineHeight: 1, color: th.text }}>{fmtEuros(paidC)}</span>
                       ) : done ? (
-                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, lineHeight: 1, marginTop: 6, color: SETTLED_COLOR }}>✓ Soldé</div>
+                        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 19, lineHeight: 1, color: SETTLED_COLOR }}>✓ Soldé</span>
                       ) : (
-                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -1, lineHeight: 1, marginTop: 6, color: '#ff7a4d' }}>{fmtEuros(restC)}</div>
+                        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, letterSpacing: -0.5, lineHeight: 1, color: '#ff7a4d' }}>{fmtEuros(restC)}</span>
                       )}
                     </div>
                     {dueC > 0 && (
-                      <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, lineHeight: 1.5 }}>
-                        Payé <b style={{ color: th.text }}>{fmtEuros(paidC)}</b><br />sur {fmtEuros(dueC)}{tariff ? <span style={{ color: th.textFaint }}> (tarif)</span> : null}
-                      </div>
+                      <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, whiteSpace: 'nowrap' }}>
+                        Payé <b style={{ color: th.text }}>{fmtEuros(paidC)}</b> / {fmtEuros(dueC)}{tariff ? <span style={{ color: th.textFaint }}> (tarif)</span> : null}
+                      </span>
                     )}
                   </div>
                   {dueC > 0 && (
-                    <div style={{ marginTop: 13, height: 8, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}>
+                    <div style={{ marginTop: 7, height: 5, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: SETTLED_COLOR, transition: 'width .35s ease' }} />
                     </div>
                   )}
@@ -652,25 +662,23 @@ export default function AdminPlanningPage() {
               );
             })()}
 
-            {/* choix du type */}
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Type</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {TYPE_ORDER.map((t) => {
-                  const on = selected.type === t;
-                  const c = TYPE_META[t].color;
-                  return (
-                    <button key={t} type="button" disabled={busy} onClick={() => changeType(t)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: busy ? 'default' : 'pointer', border: `1.5px solid ${on ? c : th.line}`, background: on ? tint(c) : 'transparent', borderRadius: 10, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{TYPE_META[t].label}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* choix du type — libellé en ligne pour gagner de la place */}
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginRight: 2 }}>Type</span>
+              {TYPE_ORDER.map((t) => {
+                const on = selected.type === t;
+                const c = TYPE_META[t].color;
+                return (
+                  <button key={t} type="button" disabled={busy} onClick={() => changeType(t)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: busy ? 'default' : 'pointer', border: `1.5px solid ${on ? c : th.line}`, background: on ? tint(c) : 'transparent', borderRadius: 9, padding: '5px 10px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: c }} />{TYPE_META[t].label}
+                  </button>
+                );
+              })}
             </div>
 
             {selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 12 }}>
                 {/* Encaissement par joueur : chaque ligne se sélectionne (« Régler ») et TOUS les
                     moyens s'activent en bas, sous les lignes, pour le joueur sélectionné (sinon la
                     réservation entière). Affiché directement — aucun panneau « Détails / options ».
@@ -716,6 +724,10 @@ export default function AdminPlanningPage() {
                             : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
                         </span>
                         <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
+                        {toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && (
+                          <button type="button" disabled={busy} onClick={() => cancelPayment(p)}
+                            style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textDecoration: 'underline', padding: '0 4px' }}>annuler</button>
+                        )}
                         <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
                       </div>
                     );
