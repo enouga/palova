@@ -262,8 +262,8 @@ export const api = {
     request<OpenMatch[]>(`/api/clubs/${slug}/open-matches`, {}, token),
   getOpenMatch: (slug: string, id: string, token?: string) =>
     request<OpenMatch>(`/api/clubs/${slug}/open-matches/${id}`, {}, token),
-  joinOpenMatch: (slug: string, id: string, token: string) =>
-    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'POST' }, token),
+  joinOpenMatch: (slug: string, id: string, token: string, target?: JoinTarget) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'POST', ...(target ? { body: JSON.stringify(target) } : {}) }, token),
   leaveOpenMatch: (slug: string, id: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'DELETE' }, token),
   removeOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
@@ -1182,6 +1182,9 @@ export interface HoldParams {
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
 }
+
+/** Place ciblée au moment de rejoindre une partie ouverte (tap sur une place libre). */
+export type JoinTarget = { team: 1 | 2; slot: number };
 
 export interface OpenMatchPlayer {
   userId: string;
