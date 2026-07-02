@@ -93,6 +93,8 @@ describe('ReservationPlayersInline', () => {
     // Org et Ines sont team 1 (défaut) → 2 places libres côté 2.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /New Player/ }));
+    // La feuille d'ajout se referme après le pick (la place visée est libérée).
+    expect(screen.queryByPlaceholderText(/Rechercher un membre/)).not.toBeInTheDocument();
     await waitFor(() => expect(mocked.addReservationPlayer).toHaveBeenCalledWith('r1', 'u-new', 'abc'));
     await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith('r1', { 'u-org': 1, u2: 1, 'u-new': 2 }, 'abc'));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());

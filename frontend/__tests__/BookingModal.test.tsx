@@ -126,6 +126,8 @@ describe('BookingModal — page unique', () => {
     // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
+    // La feuille d'ajout se referme après le pick (la place visée est libérée).
+    expect(screen.queryByPlaceholderText(/Rechercher un membre/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
       'res-1', 'jwt-token',
