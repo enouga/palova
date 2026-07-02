@@ -6,14 +6,14 @@ import { Btn } from '@/components/ui/atoms';
 // L'URL est explicite (les cartes de liste ne sont pas à l'URL de la partie).
 // `compact` = bouton à icône seule (barre d'actions des cartes — le libellé
 // passerait la barre à 2 lignes en mobile) ; l'état copié bascule l'icône en ✓.
-export function MatchShareButton({ url, title, style, compact = false }: { url: string; title: string; style?: React.CSSProperties; compact?: boolean }) {
+export function MatchShareButton({ url, title, text, style, compact = false }: { url: string; title: string; text?: string; style?: React.CSSProperties; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const share = async () => {
     if (typeof navigator.share === 'function') {
-      await navigator.share({ title, url }).catch(() => {}); // AbortError (feuille refermée) : silencieux
+      await navigator.share(text ? { title, text, url } : { title, url }).catch(() => {}); // AbortError (feuille refermée) : silencieux
       return;
     }
     try {

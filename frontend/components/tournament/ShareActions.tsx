@@ -5,18 +5,19 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { AgendaICSItem, buildAgendaICS, icsFilename } from '@/lib/tournament';
 
 // Partager la fiche (Web Share API, repli copie de lien) + export agenda (.ics).
-// Sert aux fiches tournoi (uidPrefix 'tournament') et event ('event').
-// L'URL est lue au clic (window absent au rendu serveur).
-export function ShareActions({ item, uidPrefix = 'tournament' }: { item: AgendaICSItem; uidPrefix?: 'tournament' | 'event' | 'match' }) {
+// Sert aux fiches tournoi (uidPrefix 'tournament'), event ('event') et partie ('match').
+// L'URL est lue au clic (window absent au rendu serveur) — sauf shareUrl fourni
+// (partie : URL versionnée par l'état ?s=) ; shareText enrichit les canaux sans aperçu.
+export function ShareActions({ item, uidPrefix = 'tournament', shareUrl, shareText }: { item: AgendaICSItem; uidPrefix?: 'tournament' | 'event' | 'match'; shareUrl?: string; shareText?: string }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const share = async () => {
-    const url = window.location.href;
+    const url = shareUrl ?? window.location.href;
     if (typeof navigator.share === 'function') {
       // AbortError quand l'utilisateur referme la feuille de partage : silencieux.
-      await navigator.share({ title: item.name, url }).catch(() => {});
+      await navigator.share(shareText ? { title: item.name, text: shareText, url } : { title: item.name, url }).catch(() => {});
       return;
     }
     try {

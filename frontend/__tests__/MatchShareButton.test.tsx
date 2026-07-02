@@ -24,6 +24,16 @@ describe('MatchShareButton', () => {
     expect(await screen.findByText('Lien copié !')).toBeInTheDocument();
   });
 
+  it('transmet le texte enrichi à navigator.share quand fourni', async () => {
+    const share = jest.fn().mockResolvedValue(undefined);
+    (navigator as any).share = share;
+    wrap(<MatchShareButton url="https://demo.palova.fr/parties/m1?s=abc" title="T" text="sam. 4 juil. · 2 places" />);
+    fireEvent.click(screen.getByRole('button', { name: /partager/i }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith({
+      title: 'T', text: 'sam. 4 juil. · 2 places', url: 'https://demo.palova.fr/parties/m1?s=abc',
+    }));
+  });
+
   it('compact : icône seule (nom accessible « Partager »), état copié porté par l\'aria-label', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

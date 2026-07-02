@@ -38,6 +38,18 @@ describe('ShareActions', () => {
     expect(screen.queryByText('Lien copié !')).not.toBeInTheDocument();
   });
 
+  it('shareUrl + shareText surchargent location.href et enrichissent le partage', async () => {
+    const share = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    render(<ThemeProvider><ShareActions item={t} uidPrefix="match"
+      shareUrl="https://demo.palova.fr/parties/m1?s=abc" shareText="sam. 4 juil. · 2 places" /></ThemeProvider>);
+    await act(async () => { fireEvent.click(screen.getByText('Partager')); });
+    expect(share).toHaveBeenCalledWith({
+      title: 'Grand Prix Messieurs', text: 'sam. 4 juil. · 2 places',
+      url: 'https://demo.palova.fr/parties/m1?s=abc',
+    });
+  });
+
   it('« Ajouter au calendrier » télécharge un .ics', () => {
     const createObjectURL = jest.fn().mockReturnValue('blob:x');
     const revokeObjectURL = jest.fn();
