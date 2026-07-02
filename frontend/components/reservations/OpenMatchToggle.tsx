@@ -38,8 +38,10 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   const spotsLeft = Math.max(0, (reservation.capacity ?? 0) - (reservation.participants?.length ?? 0));
   const canOpen = isPadel && reservation.status === 'CONFIRMED' && future && spotsLeft > 0;
 
-  // Rien à proposer si ce n'est ni ouvert (→ « Fermer ») ni ouvrable (→ « Ouvrir »).
-  if (!isPublic && !canOpen) return null;
+  // Rien à proposer sur une partie déjà commencée (ouvrir n'a plus de sens, et fermer est
+  // sans effet — elle est déjà hors de /parties qui filtre startTime > now), ni si ce n'est
+  // ni ouvert (→ « Fermer ») ni ouvrable (→ « Ouvrir »).
+  if (!future || (!isPublic && !canOpen)) return null;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null);

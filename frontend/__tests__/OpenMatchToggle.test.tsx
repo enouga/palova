@@ -49,6 +49,12 @@ describe('OpenMatchToggle', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('ne rend rien pour une partie ouverte déjà commencée (fermer serait sans effet)', () => {
+    const started = new Date(now - 3600e3).toISOString();
+    const { container } = wrap({ visibility: 'PUBLIC', startTime: started });
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('ouvre la feuille et publie sans fourchette de niveau', async () => {
     const onChanged = jest.fn();
     wrap({}, onChanged);
