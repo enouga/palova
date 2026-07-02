@@ -464,7 +464,6 @@ model User {
   memberNotes             MemberNote[] @relation("MemberNoteSubject")
   authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
   subscriptions           Subscription[]
-  openMatchInterests      OpenMatchInterest[]
   openMatchMessages       OpenMatchMessage[]
   followsGiven            Follow[] @relation("FollowsGiven")
   followsReceived         Follow[] @relation("FollowsReceived")
@@ -705,7 +704,6 @@ model Reservation {
   matches      Match[]
   series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   lesson       Lesson?
-  openMatchInterests OpenMatchInterest[]
   openMatchMessages  OpenMatchMessage[]
 
   @@index([resourceId, startTime, endTime])
@@ -1298,22 +1296,6 @@ model ClubEmailTemplate {
 
   @@unique([clubId, type])
   @@map("club_email_templates")
-}
-
-/// Membre « intéressé » par une partie ouverte (n'occupe pas de place).
-/// Débloque l'accès au chat et alimente le compteur d'intéressés sur la carte.
-model OpenMatchInterest {
-  id            String   @id @default(cuid())
-  reservationId String   @map("reservation_id")
-  userId        String   @map("user_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-
-  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([reservationId, userId])
-  @@index([reservationId])
-  @@map("open_match_interests")
 }
 
 /// Message du fil de discussion d'une partie ouverte. Soft-delete (deletedAt) :
