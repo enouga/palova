@@ -1,5 +1,5 @@
 import {
-  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatHourRange,
+  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatDateShortTimeRange, formatHourRange,
   icsFilename, timelineSteps, waitlistPosition,
 } from '../lib/tournament';
 import { TournamentParticipant } from '../lib/api';
@@ -136,6 +136,22 @@ describe('formatDateTimeRange', () => {
     // Même jour UTC (9 juillet) mais 23h30 → 00h30 à Paris : doit basculer en multi-jours.
     expect(formatDateTimeRange('2026-07-09T21:30:00.000Z', '2026-07-09T22:30:00.000Z', tz))
       .toBe('jeudi 9 juillet à 23h30 → vendredi 10 juillet à 00h30');
+  });
+});
+
+describe('formatDateShortTimeRange', () => {
+  const tz = 'Europe/Paris';
+  it('même jour → date courte non répétée, séparateur ·', () => {
+    expect(formatDateShortTimeRange('2026-07-09T12:01:00.000Z', '2026-07-09T16:00:00.000Z', tz))
+      .toBe('jeu. 9 juil. · 14h01 → 18h00');
+  });
+  it('jours différents → deux dates courtes', () => {
+    expect(formatDateShortTimeRange('2026-07-09T12:01:00.000Z', '2026-07-10T16:00:00.000Z', tz))
+      .toBe('jeu. 9 juil. 14h01 → ven. 10 juil. 18h00');
+  });
+  it('bascule de jour calculée dans le fuseau du club (pas en UTC)', () => {
+    expect(formatDateShortTimeRange('2026-07-09T21:30:00.000Z', '2026-07-09T22:30:00.000Z', tz))
+      .toBe('jeu. 9 juil. 23h30 → ven. 10 juil. 00h30');
   });
 });
 

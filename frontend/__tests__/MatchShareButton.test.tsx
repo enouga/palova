@@ -23,4 +23,14 @@ describe('MatchShareButton', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://demo.palova.fr/parties/m1'));
     expect(await screen.findByText('Lien copié !')).toBeInTheDocument();
   });
+
+  it('compact : icône seule (nom accessible « Partager »), état copié porté par l\'aria-label', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    wrap(<MatchShareButton compact url="https://demo.palova.fr/parties/m1" title="X" />);
+    const btn = screen.getByRole('button', { name: 'Partager' });
+    expect(btn.textContent).toBe(''); // pas de libellé visible
+    fireEvent.click(btn);
+    expect(await screen.findByRole('button', { name: 'Lien copié !' })).toBeInTheDocument();
+  });
 });

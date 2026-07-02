@@ -47,6 +47,19 @@ export function formatDateTimeRange(startIso: string, endIso: string | null | un
   return `${formatDateTime(startIso, tz)} → ${formatDateTime(endIso, tz)}`;
 }
 
+/**
+ * Variante courte de formatDateTimeRange (cartes compactes, ex. partie ouverte) :
+ *  - même jour        → « jeu. 9 juil. · 14h01 → 18h00 » (date non répétée)
+ *  - jours différents → « jeu. 9 juil. 14h01 → ven. 10 juil. 18h00 »
+ * Le « même jour » est calculé dans le fuseau du club, jamais en heure locale du navigateur.
+ */
+export function formatDateShortTimeRange(startIso: string, endIso: string, tz: string): string {
+  if (dayKey(startIso, tz) === dayKey(endIso, tz)) {
+    return `${formatDateShort(startIso, tz)} · ${formatHour(startIso, tz)} → ${formatHour(endIso, tz)}`;
+  }
+  return `${formatDateShort(startIso, tz)} ${formatHour(startIso, tz)} → ${formatDateShort(endIso, tz)} ${formatHour(endIso, tz)}`;
+}
+
 /** Plage d'heures seules dans le fuseau du club, ex. « 14h00 → 18h00 » (ou « 14h00 » sans fin). */
 export function formatHourRange(startIso: string, endIso: string | null | undefined, tz: string): string {
   return endIso ? `${formatHour(startIso, tz)} → ${formatHour(endIso, tz)}` : formatHour(startIso, tz);

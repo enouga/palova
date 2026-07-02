@@ -49,9 +49,9 @@ export function Logotype({ size = 26, color, href }: { size?: number; color?: st
 type BtnVariant = 'primary' | 'dark' | 'ghost' | 'surface' | 'danger';
 
 export function Btn({
-  children, variant = 'primary', full, onClick, icon, style, disabled, type,
+  children, variant = 'primary', full, onClick, icon, style, disabled, type, ariaLabel,
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: BtnVariant;
   full?: boolean;
   onClick?: () => void;
@@ -59,6 +59,8 @@ export function Btn({
   style?: CSSProperties;
   disabled?: boolean;
   type?: 'button' | 'submit';
+  /** Nom accessible d'un bouton à icône seule (sans libellé visible). */
+  ariaLabel?: string;
 }) {
   const { th } = useTheme();
   const base: CSSProperties = {
@@ -79,6 +81,7 @@ export function Btn({
   const iconColor = variant === 'primary' ? th.onAccent : (skins[variant].color as string);
   return (
     <button type={type || 'button'} disabled={disabled} onClick={disabled ? undefined : onClick}
+      aria-label={ariaLabel}
       onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = 'scale(0.975)')}
       onMouseUp={(e) => (e.currentTarget.style.transform = '')}
       onMouseLeave={(e) => (e.currentTarget.style.transform = '')}

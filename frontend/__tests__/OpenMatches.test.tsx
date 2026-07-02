@@ -80,6 +80,29 @@ describe('OpenMatches', () => {
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc'));
   });
 
+  it('mobile : les cartes restent en 1 colonne ; desktop : grille 2 colonnes', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match(), match({ id: 'm2', resourceName: 'Terrain 2' })] as never);
+    const { container, unmount } = render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await screen.findByText('Terrain 2');
+    // matchMedia stubé (matches: false) → mobile : 1 colonne.
+    expect((container.querySelector('[data-match-grid]') as HTMLElement).style.gridTemplateColumns).toBe('1fr');
+    unmount();
+
+    // Écran large : le stub renvoie matches: true → 2 colonnes.
+    const prev = window.matchMedia;
+    (window as any).matchMedia = (q: string) => ({
+      matches: true, media: q, addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false,
+    });
+    try {
+      const wide = render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+      await wide.findByText('Terrain 2');
+      expect((wide.container.querySelector('[data-match-grid]') as HTMLElement).style.gridTemplateColumns).toBe('1fr 1fr');
+    } finally {
+      window.matchMedia = prev;
+    }
+  });
+
   it('lit le niveau PADEL (pas le sport préféré)', async () => {
     mocked.getOpenMatches.mockResolvedValue([] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);

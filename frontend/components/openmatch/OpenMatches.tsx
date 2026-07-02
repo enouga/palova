@@ -13,6 +13,7 @@ import { inRange } from '@/lib/levelMatch';
 import { recommendMatches } from '@/lib/recommend';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -20,6 +21,15 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const { token, ready } = useAuth();
   const levelEnabled = club.levelSystemEnabled !== false;
   const multiSport = clubIsMultiSport(club);
+  // Écran large (le Screen fait 820px) : cartes en grille 2 colonnes — une carte
+  // pleine largeur étire le mini-terrain pour rien ; en mobile, 1 colonne.
+  const isDesktop = useIsDesktop(700);
+  const matchGrid = {
+    display: 'grid',
+    gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
+    gap: 12,
+    alignItems: 'start',
+  } as const;
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [myLevel, setMyLevel] = useState<number | null>(null);
@@ -119,7 +129,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         {token && recommended.length > 0 && (
           <div style={{ padding: '14px 20px 0' }}>
             <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Pour toi</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div data-match-grid style={matchGrid}>
               {recommended.map((m) => (
                 <OpenMatchCard
                   key={m.id} match={m} friendIds={friendIds} timezone={club.timezone} slug={club.slug} token={token}
@@ -145,9 +155,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           </div>
         )}
 
-        <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: '14px 20px 0' }}>
           {token && recommended.length > 0 && otherMatches.length > 0 && (
-            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 0 }}>Autres parties</div>
+            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Autres parties</div>
           )}
           {!ready || loading ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -159,33 +169,37 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                 {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
               </div>
             )
-          ) : otherMatches.map((m) => (
-            <OpenMatchCard
-              key={m.id}
-              match={m}
-              friendIds={friendIds}
-              timezone={club.timezone}
-              slug={club.slug}
-              token={token ?? ''}
-              busy={a.busyId === m.id}
-              addingOpen={a.addingId === m.id}
-              onJoin={a.join}
-              onLeave={a.leave}
-              onRemovePlayer={a.removePlayer}
-              onSetTeams={a.setTeams}
-              onAddPlayer={a.addPlayerToTeam}
-              onReplacePlayer={a.replacePlayer}
-              onToggleAdd={a.onToggleAdd}
-              onCancelAdd={a.onCancelAdd}
-              onRecordResult={(mm) => a.setRecordingFor(mm)}
-              canRecordResult={levelEnabled}
-              onToggleInterest={a.toggleInterest}
-              onOpenChat={a.openChat}
-              showSport={multiSport}
-              isAnonymous={!token}
-              onAuthPrompt={a.setAuthPrompt}
-            />
-          ))}
+          ) : (
+            <div data-match-grid style={matchGrid}>
+              {otherMatches.map((m) => (
+                <OpenMatchCard
+                  key={m.id}
+                  match={m}
+                  friendIds={friendIds}
+                  timezone={club.timezone}
+                  slug={club.slug}
+                  token={token ?? ''}
+                  busy={a.busyId === m.id}
+                  addingOpen={a.addingId === m.id}
+                  onJoin={a.join}
+                  onLeave={a.leave}
+                  onRemovePlayer={a.removePlayer}
+                  onSetTeams={a.setTeams}
+                  onAddPlayer={a.addPlayerToTeam}
+                  onReplacePlayer={a.replacePlayer}
+                  onToggleAdd={a.onToggleAdd}
+                  onCancelAdd={a.onCancelAdd}
+                  onRecordResult={(mm) => a.setRecordingFor(mm)}
+                  canRecordResult={levelEnabled}
+                  onToggleInterest={a.toggleInterest}
+                  onOpenChat={a.openChat}
+                  showSport={multiSport}
+                  isAnonymous={!token}
+                  onAuthPrompt={a.setAuthPrompt}
+                />
+              ))}
+            </div>
+          )}
         </div>
           </>
         ) : (

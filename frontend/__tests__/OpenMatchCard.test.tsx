@@ -104,6 +104,19 @@ describe('OpenMatchCard', () => {
     expect(btn).toBeDisabled();
   });
 
+  it("en-tête : date compacte (non répétée le même jour) et titre en une ligne avec title", () => {
+    const match = makeMatch({ startTime: '2030-01-15T10:00:00.000Z', endTime: '2030-01-15T11:30:00.000Z' });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    // Paris (UTC+1 en janvier) : la date courte n'apparaît qu'une seule fois.
+    expect(screen.getByText(/mar\. 15 janv\. · 11h00 → 12h30/)).toBeInTheDocument();
+    // Le titre est protégé de l'écrasement (ellipsis) : le nom complet reste lisible via title.
+    expect(screen.getByTitle('Terrain 1')).toBeInTheDocument();
+  });
+
   it('affiche le chip sport quand showSport et sport sont fournis', () => {
     const match = makeMatch({ sport: { key: 'padel', name: 'Padel' } });
     render(

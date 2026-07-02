@@ -10,11 +10,7 @@ import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { rangeLabel } from '@/lib/levelMatch';
 import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
-
-function formatWhen(iso: string, tz: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz })
-    .format(new Date(iso)).replace(':', 'h');
-}
+import { formatDateShortTimeRange } from '@/lib/tournament';
 
 export interface OpenMatchCardProps {
   match: OpenMatch;
@@ -69,22 +65,29 @@ export function OpenMatchCard({
   const canChat = m.viewerIsParticipant || m.viewerIsInterested;
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      {/* En-tête : titre pleine largeur (ellipsis, jamais écrasé) + chip place(s) épinglée à droite.
+          Les chips secondaires vivent sur la rangée méta en dessous, qui peut wrapper (mobile). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <Icon name="users" size={18} color={th.accent} />
-        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{m.resourceName}</span>
-        {showSport && m.sport && <Chip tone="line">{m.sport.name}</Chip>}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-          {(m.targetLevelMin != null || m.targetLevelMax != null) && (
-            <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
-          )}
-          {m.interestedCount > 0 && (
-            <Chip tone="line" icon="users">{m.interestedCount} intéressé{m.interestedCount > 1 ? 's' : ''}</Chip>
-          )}
+        <span title={m.resourceName} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text }}>
+          {m.resourceName}
+        </span>
+        <span style={{ flexShrink: 0 }}>
           <Chip tone={m.full ? 'mute' : 'accent'}>{m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''}`}</Chip>
         </span>
       </div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 12 }}>
-        {formatWhen(m.startTime, timezone)} → {formatWhen(m.endTime, timezone)}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginRight: 4 }}>
+          <Icon name="clock" size={14} color={th.textMute} />
+          {formatDateShortTimeRange(m.startTime, m.endTime, timezone)}
+        </span>
+        {showSport && m.sport && <Chip tone="line">{m.sport.name}</Chip>}
+        {(m.targetLevelMin != null || m.targetLevelMax != null) && (
+          <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
+        )}
+        {m.interestedCount > 0 && (
+          <Chip tone="line" icon="users">{m.interestedCount} intéressé{m.interestedCount > 1 ? 's' : ''}</Chip>
+        )}
       </div>
       {friendCount > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>
@@ -142,6 +145,7 @@ export function OpenMatchCard({
           <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
         )}
         <MatchShareButton
+          compact
           style={actionBtn}
           title={`Partie ouverte · ${m.resourceName}`}
           url={typeof window !== 'undefined' ? `${window.location.origin}/parties/${m.id}` : `/parties/${m.id}`}
