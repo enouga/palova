@@ -1210,6 +1210,7 @@ export interface OpenMatch {
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
+  cardVersion?: string; // hash d'état de la carte OG — versionne l'URL de partage (?s=) et l'og:image
 }
 
 export interface OpenMatchMessage {
