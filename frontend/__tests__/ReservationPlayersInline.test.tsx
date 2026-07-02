@@ -10,6 +10,7 @@ jest.mock('../lib/api', () => ({
     setReservationTeams: jest.fn().mockResolvedValue({ id: 'r1', capacity: 4, participants: [] }),
     searchClubMembers: jest.fn().mockResolvedValue([]),
     listClubFriends: jest.fn().mockResolvedValue([]),
+    setReservationVisibility: jest.fn().mockResolvedValue({ id: 'r1', visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null }),
   },
 }));
 import { api } from '../lib/api';
@@ -109,5 +110,10 @@ describe('ReservationPlayersInline', () => {
     // Ines (Éq.1 D) part en Éq.2 : sa place D est libre en face → elle la garde (slot 1).
     await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith(
       'r1', { 'u-org': 1, u2: 2 }, 'abc', { 'u-org': 0, u2: 1 }));
+  });
+
+  it('padel : propose d’ouvrir la partie aux joueurs du club', () => {
+    wrap(padel);
+    expect(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ })).toBeInTheDocument();
   });
 });

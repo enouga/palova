@@ -9,6 +9,7 @@ import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { AddPlayerSheet } from '@/components/match/AddPlayerSheet';
 import { teamSlotMaps } from '@/lib/matchSlots';
+import { OpenMatchToggle } from './OpenMatchToggle';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -87,6 +88,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
 
   return (
     <div style={{ marginTop: 9 }}>
+      <OpenMatchToggle reservation={reservation} token={token} now={now} onChanged={onChanged} />
       {error && (
         <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
       )}
