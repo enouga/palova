@@ -19,12 +19,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const level = (match.targetLevelMin != null || match.targetLevelMax != null) ? rangeLabel(match.targetLevelMin ?? null, match.targetLevelMax ?? null) : null;
     const title = `Partie ouverte · ${match.resourceName}`;
     const description = [when, places, level, club.name].filter(Boolean).join(' · ');
-    const image = `${API_URL}/api/clubs/${slug}/icon/512.png`;
+    // Carte OG dynamique 1200×630 (état réel du match), versionnée par ?v=<cardVersion>
+    // pour que les crawlers (qui cachent par URL) re-crawlent à chaque nouvel état.
+    const image = `${API_URL}/api/clubs/${slug}/open-matches/${id}/card.png${match.cardVersion ? `?v=${match.cardVersion}` : ''}`;
     return {
       title,
       description,
-      openGraph: { title, description, images: [image], type: 'website' },
-      twitter: { card: 'summary', title, description, images: [image] },
+      openGraph: { title, description, images: [{ url: image, width: 1200, height: 630 }], type: 'website' },
+      twitter: { card: 'summary_large_image', title, description, images: [image] },
     };
   } catch {
     return { title: 'Partie ouverte · Palova' };
