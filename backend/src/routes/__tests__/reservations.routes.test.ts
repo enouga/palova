@@ -373,3 +373,38 @@ describe('POST /api/reservations/:id/teams', () => {
     expect(res.body.error).toBe('UNAUTHORIZED');
   });
 });
+
+describe('POST /api/reservations/:id/visibility', () => {
+  const futureStart = () => new Date(Date.now() + 48 * 3600 * 1000);
+
+  it('200 : ouvre la partie (PUBLIC) et transmet la fourchette', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'user-1', status: 'CONFIRMED', startTime: futureStart(),
+      resource: { clubSport: { sport: { key: 'padel' } } },
+    } as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/visibility').set('Authorization', `Bearer ${token}`)
+      .send({ visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.visibility).toBe('PUBLIC');
+  });
+
+  it('400 si visibility est invalide', async () => {
+    const res = await request(app).post('/api/reservations/res-1/visibility').set('Authorization', `Bearer ${token}`)
+      .send({ visibility: 'SECRET' });
+    expect(res.status).toBe(400);
+  });
+
+  it('403 si ce n est pas le propriétaire (UNAUTHORIZED)', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'res-1', userId: 'autre', status: 'CONFIRMED', startTime: futureStart(),
+      resource: { clubSport: { sport: { key: 'padel' } } },
+    } as any);
+    const res = await request(app).post('/api/reservations/res-1/visibility').set('Authorization', `Bearer ${token}`)
+      .send({ visibility: 'PUBLIC' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('UNAUTHORIZED');
+  });
+});

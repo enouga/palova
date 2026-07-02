@@ -256,6 +256,17 @@ export const api = {
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
   setReservationTeams: (reservationId: string, teams: Record<string, 1 | 2>, token: string, slots?: Record<string, number>) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/teams`, { method: 'POST', body: JSON.stringify({ teams, slots }) }, token),
+  setReservationVisibility: (
+    reservationId: string,
+    visibility: 'PRIVATE' | 'PUBLIC',
+    token: string,
+    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null },
+  ) =>
+    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null }>(
+      `/api/reservations/${reservationId}/visibility`,
+      { method: 'POST', body: JSON.stringify({ visibility, ...opts }) },
+      token,
+    ),
 
   // --- Parties ouvertes (visibles de tous ; token facultatif) ---
   getOpenMatches: (slug: string, token?: string) =>
@@ -887,6 +898,9 @@ export interface MyReservation {
   totalPrice: string;
   resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
+  visibility?: 'PRIVATE' | 'PUBLIC';
+  targetLevelMin?: number | null;
+  targetLevelMax?: number | null;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null; slot?: number | null }[];
 }
 

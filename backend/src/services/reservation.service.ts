@@ -1503,6 +1503,44 @@ export class ReservationService {
     return this.getOwnReservationPlayers(reservationId, userId);
   }
 
+  /**
+   * Ouvre/ferme une réservation confirmée en « partie ouverte » (bascule de visibilité,
+   * après coup — la contrepartie post-confirmation d'applyHoldSetup). Owner-only. La place
+   * étant déjà tenue par une résa CONFIRMED, on ne pose aucun verrou Redis et on ne touche
+   * pas aux participants : simple update. PUBLIC réservé au padel ; la fourchette de niveau
+   * (grille Padel Magazine) ne vaut qu'en padel et est effacée en repassant PRIVATE.
+   */
+  async setReservationVisibility(
+    reservationId: string,
+    userId: string,
+    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null },
+  ) {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: { resource: { select: { clubSport: { select: { sport: { select: { key: true } } } } } } },
+    });
+    if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.userId !== userId)      throw new Error('UNAUTHORIZED');
+    if (reservation.status !== 'CONFIRMED') throw new Error('RESERVATION_NOT_ACTIVE');
+    if (reservation.startTime.getTime() <= Date.now()) throw new Error('RESERVATION_IN_PAST');
+
+    const sportKey = reservation.resource.clubSport.sport.key;
+    if (input.visibility === 'PUBLIC' && !sportHasLevels(sportKey)) throw new Error('OPEN_MATCH_PADEL_ONLY');
+
+    // Fourchette de niveau conservée uniquement en PUBLIC + padel ; sinon effacée.
+    const keepLevel = input.visibility === 'PUBLIC' && sportHasLevels(sportKey);
+
+    return prisma.reservation.update({
+      where: { id: reservationId },
+      data: {
+        visibility: input.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
+        targetLevelMin: keepLevel ? (input.targetLevelMin ?? null) : null,
+        targetLevelMax: keepLevel ? (input.targetLevelMax ?? null) : null,
+      },
+      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true },
+    });
+  }
+
   /** Réservations d'un joueur (les siennes), pour l'espace « Mes réservations ». */
   async listUserReservations(userId: string) {
     const rows = await prisma.reservation.findMany({

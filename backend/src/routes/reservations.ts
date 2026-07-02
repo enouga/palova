@@ -157,6 +157,36 @@ router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response
   } catch (err) { handleError(err, res, next); }
 });
 
+// Bascule de visibilité (transformer une résa confirmée en partie ouverte, ou refermer).
+// Owner-only ; validation calquée sur /setup. Aucune mutation de participants.
+router.post('/:id/visibility', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { visibility, targetLevelMin, targetLevelMax } = req.body ?? {};
+    if (visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (targetLevelMin !== undefined && targetLevelMin !== null) {
+      if (typeof targetLevelMin !== 'number' || targetLevelMin < 0 || targetLevelMin > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMax !== undefined && targetLevelMax !== null) {
+      if (typeof targetLevelMax !== 'number' || targetLevelMax < 0 || targetLevelMax > 8) {
+        return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      }
+    }
+    if (targetLevelMin != null && targetLevelMax != null && targetLevelMin > targetLevelMax) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    const updated = await reservationService.setReservationVisibility(asString(req.params.id), req.user!.id, {
+      visibility,
+      targetLevelMin: targetLevelMin === undefined ? undefined : (targetLevelMin === null ? null : Number(targetLevelMin)),
+      targetLevelMax: targetLevelMax === undefined ? undefined : (targetLevelMax === null ? null : Number(targetLevelMax)),
+    });
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const cancelled = await reservationService.cancelReservation(asString(req.params.id), req.user!.id);
