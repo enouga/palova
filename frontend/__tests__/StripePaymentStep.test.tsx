@@ -85,6 +85,22 @@ describe('StripePaymentStep', () => {
     expect(screen.getByText(/Enregistrer ma carte/)).toBeInTheDocument();
   });
 
+  it('recrée l\'intent quand le type change (setup → payment) — pas de confirmPayment sur un SetupIntent', async () => {
+    const createIntent = jest.fn()
+      .mockResolvedValueOnce({ clientSecret: 'seti_secret', stripeAccountId: null })
+      .mockResolvedValueOnce({ clientSecret: 'pi_secret', stripeAccountId: null });
+
+    const { rerender } = render(<StripePaymentStep {...defaultProps} type="setup" createIntent={createIntent} />);
+    await waitFor(() => screen.getByText(/Enregistrer ma carte/));
+    expect(createIntent).toHaveBeenCalledTimes(1);
+    expect(mockLastElementsOptions.clientSecret).toBe('seti_secret');
+
+    rerender(<StripePaymentStep {...defaultProps} type="payment" createIntent={createIntent} />);
+    await waitFor(() => expect(createIntent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockLastElementsOptions.clientSecret).toBe('pi_secret'));
+    expect(screen.getByText(/Payer/)).toBeInTheDocument();
+  });
+
   it('appelle onCancel au clic Annuler', async () => {
     render(<StripePaymentStep {...defaultProps} />);
     fireEvent.click(screen.getByText(/Annuler/));

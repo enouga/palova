@@ -136,6 +136,10 @@ export class StripeService {
         currency: 'eur',
         customer: customer.stripeCustomerId,
         setup_future_usage: 'off_session',
+        // Carte bancaire uniquement : la carte enregistrée sert d'empreinte anti no-show
+        // et de moyen de débit off-session (liste d'attente). Les portefeuilles type Link
+        // n'exposent pas de marque/4 chiffres/expiration et sont peu fiables off-session.
+        payment_method_types: ['card'],
         metadata: { reservationId: params.reservationId, clubId: params.clubId },
       },
       { stripeAccount: club.stripeAccountId },
@@ -193,6 +197,9 @@ export class StripeService {
       {
         amount: params.amountCents, currency: 'eur', customer: customer.stripeCustomerId,
         setup_future_usage: 'off_session',
+        // Carte bancaire uniquement (cf. createPaymentIntent) : la carte enregistrée
+        // sert d'empreinte + de débit off-session à la promotion depuis la liste d'attente.
+        payment_method_types: ['card'],
         metadata: { [this.regMetaKey(params.kind)]: params.registrationId, clubId: params.clubId },
       },
       { stripeAccount: club.stripeAccountId },

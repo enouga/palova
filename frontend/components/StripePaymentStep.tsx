@@ -89,14 +89,23 @@ export default function StripePaymentStep(props: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Recrée l'intent quand le TYPE change (setup ↔ payment). Le clientSecret d'un
+    // groupe Elements est immuable par montage : basculer « Régler au club » (empreinte,
+    // SetupIntent) ↔ « Payer en ligne » (PaymentIntent) sans recréer l'intent ferait
+    // appeler confirmPayment() sur un SetupIntent (ou l'inverse) → erreur Stripe.
+    let alive = true;
+    setClientSecret(null);
+    setFetchError(null);
     props.createIntent()
       .then((r) => {
+        if (!alive) return;
         setStripeAccountId(r.stripeAccountId ?? null);
         setCustomerSessionClientSecret(r.customerSessionClientSecret ?? null);
         setClientSecret(r.clientSecret);
       })
-      .catch(() => setFetchError('Impossible d\'initialiser le paiement.'));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(() => { if (alive) setFetchError('Impossible d\'initialiser le paiement.'); });
+    return () => { alive = false; };
+  }, [props.type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (fetchError) {
     return (

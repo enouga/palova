@@ -177,6 +177,7 @@ describe('createPaymentIntent', () => {
         currency: 'eur',
         customer: 'cus_1',
         setup_future_usage: 'off_session',
+        payment_method_types: ['card'],
       }),
       { stripeAccount: 'acct_1' },
     );
@@ -362,6 +363,7 @@ describe('createRegistrationPaymentIntent', () => {
         currency: 'eur',
         customer: 'cus_1',
         setup_future_usage: 'off_session',
+        payment_method_types: ['card'],
         metadata: expect.objectContaining({ tournamentRegistrationId: 'reg-1', clubId: 'club-1' }),
       }),
       { stripeAccount: 'acct_1' },
