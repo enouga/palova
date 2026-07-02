@@ -38,24 +38,6 @@ describe('OpenMatchChatService', () => {
   // ─────────────────────────────
 
   describe('access guard', () => {
-    it('refuse un membre ni participant ni interesse → CHAT_FORBIDDEN', async () => {
-      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
-      prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
-      prismaMock.reservation.findUnique.mockResolvedValue({
-        visibility: 'PUBLIC',
-        status: 'CONFIRMED',
-        resource: { clubId: 'club-1' },
-        participants: [{ userId: 'org', isOrganizer: true }], // viewer 'stranger' not in list
-      } as any);
-      // viewer is NOT a participant → check interest
-      prismaMock.openMatchInterest.findUnique.mockResolvedValue(null as any);
-      prismaMock.openMatchMessage.findMany.mockResolvedValue([] as any);
-
-      await expect(
-        service.listMessages('club-demo', 'resa-1', 'stranger'),
-      ).rejects.toThrow('CHAT_FORBIDDEN');
-    });
-
     it('permet à un participant de lire les messages', async () => {
       primeAccessOk({ participantUserId: 'viewer', isOrganizer: false });
       prismaMock.openMatchMessage.findMany.mockResolvedValue([] as any);
@@ -64,21 +46,45 @@ describe('OpenMatchChatService', () => {
       expect(result).toEqual([]);
     });
 
-    it('permet à un membre intéressé de lire les messages', async () => {
+    it('permet à un membre NON participant de lire (chat ouvert à tous)', async () => {
       prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
       prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
       prismaMock.reservation.findUnique.mockResolvedValue({
         visibility: 'PUBLIC',
         status: 'CONFIRMED',
         resource: { clubId: 'club-1' },
-        participants: [{ userId: 'org', isOrganizer: true }],
+        participants: [{ userId: 'org', isOrganizer: true }], // 'stranger' absent de la liste
       } as any);
-      // interested member
-      prismaMock.openMatchInterest.findUnique.mockResolvedValue({ id: 'interest-1' } as any);
       prismaMock.openMatchMessage.findMany.mockResolvedValue([] as any);
 
-      const result = await service.listMessages('club-demo', 'resa-1', 'interested-user');
+      const result = await service.listMessages('club-demo', 'resa-1', 'stranger');
       expect(result).toEqual([]);
+    });
+
+    it('crée l adhésion à la volée pour un non-membre puis autorise l accès', async () => {
+      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+      prismaMock.clubMembership.create.mockResolvedValue({ id: 'm1' } as any);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        visibility: 'PUBLIC',
+        status: 'CONFIRMED',
+        resource: { clubId: 'club-1' },
+        participants: [{ userId: 'org', isOrganizer: true }],
+      } as any);
+      prismaMock.openMatchMessage.findMany.mockResolvedValue([] as any);
+
+      const result = await service.listMessages('club-demo', 'resa-1', 'newcomer');
+      expect(prismaMock.clubMembership.create).toHaveBeenCalledWith({ data: { userId: 'newcomer', clubId: 'club-1' } });
+      expect(result).toEqual([]);
+    });
+
+    it('refuse un membre BLOCKED → MEMBERSHIP_BLOCKED', async () => {
+      prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+      prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);
+
+      await expect(
+        service.listMessages('club-demo', 'resa-1', 'blocked-user'),
+      ).rejects.toThrow('MEMBERSHIP_BLOCKED');
     });
   });
 
@@ -152,9 +158,8 @@ describe('OpenMatchChatService', () => {
     afterEach(() => broadcastSpy.mockRestore());
 
     it("l auteur peut supprimer son message (tombstone)", async () => {
-      // curious has access via interest record (not a participant)
+      // curious a accès (chat ouvert) — la garde de suppression est auteur/organisateur/staff, pas l'accès
       primeAccessOk();
-      prismaMock.openMatchInterest.findUnique.mockResolvedValue({ id: 'interest-1' } as any);
       msgBy('curious');
 
       const dto = await service.deleteMessage('club-demo', 'resa-1', 'curious', 'm1');
@@ -172,9 +177,8 @@ describe('OpenMatchChatService', () => {
     });
 
     it("un tiers ne peut pas supprimer (NOT_ALLOWED)", async () => {
-      // curious is interested but message was posted by someone else
+      // curious a accès mais le message a été posté par quelqu'un d'autre
       primeAccessOk();
-      prismaMock.openMatchInterest.findUnique.mockResolvedValue({ id: 'interest-1' } as any);
       msgBy('someoneElse'); // message not by curious
       prismaMock.clubMember.findFirst.mockResolvedValue(null as any); // curious is not staff
 

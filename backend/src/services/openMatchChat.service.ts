@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma';
 import { SSEService } from './sse.service';
 import { notifyOpenMatchChatMessage } from '../email/notifications';
+import { ensureActiveMembership } from './membership';
 
 const MAX_BODY = 2000;
 
@@ -35,16 +36,10 @@ function toDTO(m: MsgRow): ChatMessageDTO {
 }
 
 export class OpenMatchChatService {
-  /** Accès au chat : club ACTIVE, membre ACTIVE, résa PUBLIC/CONFIRMED, et participant OU intéressé. */
+  /** Accès au chat : adhésion ACTIVE (créée à la volée, refus BLOCKED) + résa PUBLIC/CONFIRMED.
+   *  Ouvert à tout utilisateur connecté du club — plus de condition participant/intéressé. */
   private async assertChatAccess(slug: string, reservationId: string, userId: string): Promise<ChatContext> {
-    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
-    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
-    const member = await prisma.clubMembership.findUnique({
-      where: { userId_clubId: { userId, clubId: club.id } },
-      select: { status: true },
-    });
-    if (!member) throw new Error('MEMBERSHIP_REQUIRED');
-    if (member.status === 'BLOCKED') throw new Error('MEMBERSHIP_BLOCKED');
+    const { id: clubId } = await ensureActiveMembership(slug, userId);
 
     const resa = await prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -54,21 +49,11 @@ export class OpenMatchChatService {
         participants: { select: { userId: true, isOrganizer: true } },
       },
     });
-    if (!resa || resa.resource.clubId !== club.id) throw new Error('RESERVATION_NOT_FOUND');
+    if (!resa || resa.resource.clubId !== clubId) throw new Error('RESERVATION_NOT_FOUND');
     if (resa.visibility !== 'PUBLIC' || resa.status !== 'CONFIRMED') throw new Error('MATCH_NOT_JOINABLE');
 
     const part = resa.participants.find((p) => p.userId === userId);
-    const isParticipant = !!part;
-    let isInterested = false;
-    if (!isParticipant) {
-      const interest = await prisma.openMatchInterest.findUnique({
-        where: { reservationId_userId: { reservationId, userId } },
-        select: { id: true },
-      });
-      isInterested = !!interest;
-    }
-    if (!isParticipant && !isInterested) throw new Error('CHAT_FORBIDDEN');
-    return { clubId: club.id, isParticipant, isOrganizer: !!part?.isOrganizer };
+    return { clubId, isParticipant: !!part, isOrganizer: !!part?.isOrganizer };
   }
 
   /** Variante publique de la garde d'accès, pour la route SSE (lève si pas d'accès). */
