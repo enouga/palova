@@ -40,7 +40,12 @@ export interface BookingCheckout {
   atCap: boolean; spotsLeft: number; cap: number; nbPlayers: number;
   visibility: 'PRIVATE' | 'PUBLIC'; setVisibility: (v: 'PRIVATE' | 'PUBLIC') => void; levelForSport: boolean;
   levelLimited: boolean; setLevelLimited: (v: boolean) => void; levelMin: number; levelMax: number; setLevel: (lo: number, hi: number) => void;
-  cover: ReturnType<typeof import('@/lib/subscriptions').coveringSubscription>;
+  // Le générique `coveringSubscription<T extends Coverage>` est appelé ci-dessous avec
+  // `subscriptions: Subscription[]` → la valeur réelle est un `Subscription | null` ; on
+  // le type précisément ici (ReturnType<typeof coveringSubscription> sans arguments concrets
+  // s'évaluerait à la contrainte générique `Coverage`, moins précise que ce que consomment
+  // les composants checkout, ex. CheckoutPayment).
+  cover: Subscription | null;
   useSub: boolean; setUseSub: (v: boolean) => void; payMode: 'club' | 'online'; setPayMode: (m: 'club' | 'online') => void;
   paySource: string | null; setPaySource: (id: string | null) => void; packages: MemberPackage[];
   onlineAvailable: boolean; onlineRequiredButUnavailable: boolean; onlineShare: boolean; requireOnlinePayment: boolean; requireCardFingerprint: boolean;
