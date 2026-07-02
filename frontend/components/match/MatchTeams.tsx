@@ -1,13 +1,13 @@
 'use client';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
-import { Icon } from '@/components/ui/Icon';
 import { colorForSeed } from '@/lib/playerColors';
 import { UserLevel } from '@/lib/api';
 import { LevelChip } from '@/components/player/LevelChip';
-import { AddPlayerPill } from '@/components/player/AddPlayerPill';
+import { shortNamesById } from '@/lib/names';
+import { PlayerActionSheet } from '@/components/match/PlayerActionSheet';
 
 export interface MatchPlayerData {
   userId: string;
@@ -20,18 +20,22 @@ export interface MatchPlayerData {
   team: 1 | 2;
 }
 
-const SIDE_COLOR: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
+// Couleurs d'équipe (Éq.1 bleu / Éq.2 corail) — partagées avec les feuilles d'ajout/actions.
+export const SIDE_COLOR: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
+export const SLOT_LABELS = ['G', 'D'] as const;
+// Sous cette largeur (px) du composant, les noms passent en « Prénom N. » (spec noms abrégés).
+export const NARROW_WIDTH = 380;
 
-// Deux équipes côte à côte (Éq.1 gauche / Éq.2 droite) avec « VS » central, joueurs empilés.
-// Emplacements FIXES par équipe (G = 1er, D = 2e) : chaque joueur garde sa place — retirer le
-// joueur de gauche laisse un trou à gauche et le droit reste à droite. Les positions sont
-// mémorisées pendant la session (ref, aucun backend). Côte à côte même sur mobile.
-// En `editable`, chaque joueur porte des boutons explicites (un tap = une action) :
-//   → (passe dans l'autre équipe ; si pleine, échange avec le joueur d'en face),
-//   loupe (remplacer), × (retirer). Chaque emplacement libre montre un « + » (ajout ciblé).
+// Mini-terrain de padel vu de dessus (spec 2026-07-02) : deux moitiés teintées côte à côte,
+// filet central pointillé + badge VS, chaque quadrant = une place précise (G = 1er, D = 2e).
+// Emplacements FIXES par équipe, mémorisés pendant la session (ref, aucun backend) : retirer
+// le joueur de gauche laisse un trou à gauche et le droit reste à droite.
+// En `editable`, un tap sur un joueur ouvre une feuille d'actions (déplacer / remplacer /
+// retirer) ; chaque place libre est un « + » d'ajout ciblé → `onAddToTeam(team, slot)`.
 export function MatchTeams({
   players, capacity, friendIds, size = 'md', busy = false,
   onRemove, canRemove, onReplace, canReplace, onAddToTeam, editable = false, onSetTeams,
+  activeTarget,
 }: {
   players: MatchPlayerData[];
   capacity: number;
@@ -42,16 +46,41 @@ export function MatchTeams({
   canRemove?: (player: MatchPlayerData) => boolean;
   onReplace?: (player: MatchPlayerData) => void;
   canReplace?: (player: MatchPlayerData) => boolean;
-  onAddToTeam?: (team: 1 | 2) => void;
+  /** Tap sur une place libre : côté + emplacement visé (0=G, 1=D). */
+  onAddToTeam?: (team: 1 | 2, slot?: number) => void;
   editable?: boolean;
   onSetTeams?: (teamsByUserId: Record<string, 1 | 2>) => void;
+  /** Place visée par la feuille d'ajout ouverte → reste en surbrillance. */
+  activeTarget?: { team: 1 | 2; slot?: number } | null;
 }) {
   const { th } = useTheme();
-  const av = size === 'sm' ? 20 : 22;
-  const fs = size === 'sm' ? 12.5 : 13;
+  const av = size === 'sm' ? 34 : 38;
+  const fs = size === 'sm' ? 12 : 12.5;
   const half = Math.max(1, Math.floor(capacity / 2));
   const showGD = half >= 2;               // repère Gauche/Droite seulement en double
   const canMove = editable && !!onSetTeams;
+
+  // Étroit → noms « Prénom N. » (mesure du conteneur, pas du viewport ; 1er rendu = large,
+  // hydration-safe, et le stub jsdom neutre laisse les tests en noms complets).
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width ?? 0;
+      // setState seulement au franchissement du seuil (identité conservée sinon).
+      setNarrow((prev) => { const next = w > 0 && w < NARROW_WIDTH; return next === prev ? prev : next; });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const shortNames = narrow
+    ? shortNamesById(players.map((p) => ({ id: p.userId, firstName: p.firstName, lastName: p.lastName })))
+    : null;
+  const fullName = (p: MatchPlayerData) => `${p.firstName} ${p.lastName}`;
+  const displayName = (p: MatchPlayerData) => shortNames?.[p.userId] ?? fullName(p);
 
   // Position mémorisée par joueur (équipe + emplacement), stable sur la session.
   const posRef = useRef<Record<string, { team: 1 | 2; slot: number }>>({});
@@ -80,8 +109,8 @@ export function MatchTeams({
   const currentTeams = (): Record<string, 1 | 2> =>
     Object.fromEntries(players.map((p) => [p.userId, p.team]));
 
-  // Déplace le joueur dans l'autre équipe : place libre → déplacement (même emplacement si libre) ;
-  // sinon échange avec le joueur du même emplacement en face. Émet la map complète + mémorise les positions.
+  // Déplace le joueur dans l'autre équipe : place libre → déplacement (même emplacement si
+  // libre) ; sinon échange avec le joueur du même emplacement en face. Émet la map complète.
   const onMove = (p: MatchPlayerData) => {
     if (busy) return;
     const target: 1 | 2 = p.team === 1 ? 2 : 1;
@@ -101,101 +130,151 @@ export function MatchTeams({
     onSetTeams?.(next);
   };
 
-  const iconBtn = { border: 'none', background: 'transparent', padding: 2, cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', flexShrink: 0, lineHeight: 0 } as const;
+  // Feuille d'actions : joueur sélectionné (re-résolu à chaque rendu — un joueur retiré
+  // pendant que la feuille est ouverte la fait disparaître proprement).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = selectedId ? players.find((p) => p.userId === selectedId) ?? null : null;
+
+  const repAllowed = (p: MatchPlayerData) => !!onReplace && (canReplace ? canReplace(p) : !p.isOrganizer);
+  const remAllowed = (p: MatchPlayerData) => !!onRemove && (canRemove ? canRemove(p) : !p.isOrganizer);
+  const hasActions = (p: MatchPlayerData) => canMove || repAllowed(p) || remAllowed(p);
 
   const renderPlayer = (p: MatchPlayerData, idx: number) => {
-    const c = colorForSeed(p.userId);          // couleur individuelle → avatar (distingue les joueurs)
-    const teamColor = SIDE_COLOR[p.team];       // couleur d'équipe → carte (Éq.1 bleu / Éq.2 corail)
+    const c = colorForSeed(p.userId);           // couleur individuelle → avatar
+    const teamColor = SIDE_COLOR[p.team];       // couleur d'équipe → quadrant
     const isFriend = !!friendIds?.has(p.userId);
-    const canRep = !!onReplace && (canReplace ? canReplace(p) : !p.isOrganizer);
-    const canRem = !!onRemove && (canRemove ? canRemove(p) : !p.isOrganizer);
+    const isSelected = selected?.userId === p.userId;
+    const tappable = editable && hasActions(p);
     const avatar = <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl ?? null} size={av} color={c} />;
-    // Y a-t-il une 2e ligne à afficher ? (niveau, repère G/D, orga, boutons)
-    const hasMeta = !!p.level || showGD || p.isOrganizer || canMove || canRep || canRem;
-    return (
-      // Mini-carte en 2 lignes (au lieu d'une pastille sur 1 ligne) : en colonne étroite (mobile,
-      // 2 équipes côte à côte) le nom occupe toute la largeur en ligne 1 et n'est jamais rogné à zéro
-      // par les puces/boutons — ceux-ci s'enroulent sous le nom en ligne 2.
-      <div key={p.userId}
-        style={{
-          display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, maxWidth: '100%',
-          background: `${teamColor}22`, border: `1px solid ${teamColor}`,
-          borderRadius: 12, padding: '5px 8px',
-          fontFamily: th.fontUI, fontSize: fs, fontWeight: 600, color: th.text,
-        }}
-      >
-        {/* Ligne 1 : avatar + nom (largeur restante ; ellipsis en tout dernier recours). */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          {isFriend ? (
-            <span title="Vous suivez ce joueur" style={{ display: 'inline-flex', borderRadius: '50%', padding: 1.5, background: th.accent, flexShrink: 0 }}>{avatar}</span>
-          ) : avatar}
-          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.firstName} {p.lastName}</span>
-        </div>
-        {/* Ligne 2 : niveau, repère G/D, orga, boutons — s'enroulent au lieu de rogner le nom. */}
-        {hasMeta && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-            <LevelChip level={p.level} size="xs" />
-            {showGD && (
-              <span title={idx === 0 ? 'Côté gauche' : 'Côté droit'} aria-label={idx === 0 ? 'Côté gauche' : 'Côté droit'}
-                style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 800, lineHeight: 1, padding: '2px 5px', borderRadius: 5, background: teamColor, color: inkOn(teamColor), letterSpacing: 0.3 }}>{idx === 0 ? 'G' : 'D'}</span>
-            )}
-            {p.isOrganizer && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0 }}>orga</span>
-            )}
-            {canMove && (
-              <button type="button" disabled={busy} aria-label="Passer dans l'autre équipe" title="Passer dans l'autre équipe" style={iconBtn} onClick={() => onMove(p)}>
-                <span style={{ display: 'inline-flex', transform: p.team === 2 ? 'scaleX(-1)' : undefined }}><Icon name="arrowR" size={15} color={th.textMute} /></span>
-              </button>
-            )}
-            {canRep && (
-              <button type="button" disabled={busy} aria-label={`Remplacer ${p.firstName} ${p.lastName}`} title="Remplacer ce joueur" style={iconBtn} onClick={() => onReplace!(p)}>
-                <Icon name="search" size={14} color={th.textMute} />
-              </button>
-            )}
-            {canRem && (
-              <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur" style={iconBtn} onClick={() => onRemove!(p)}>
-                <Icon name="x" size={15} color={th.textMute} />
-              </button>
-            )}
-          </div>
+    const inner = (
+      <>
+        {showGD && (
+          <span aria-label={idx === 0 ? 'Côté gauche' : 'Côté droit'}
+            style={{ position: 'absolute', top: 6, [p.team === 1 ? 'left' : 'right']: 6, fontSize: 9, fontWeight: 800, lineHeight: 1, padding: '2px 5px', borderRadius: 5, background: teamColor, color: inkOn(teamColor), letterSpacing: 0.3 }}>
+            {SLOT_LABELS[idx]}
+          </span>
         )}
-      </div>
+        {isFriend ? (
+          <span title="Vous suivez ce joueur" style={{ display: 'inline-flex', borderRadius: '50%', padding: 1.5, background: th.accent }}>{avatar}</span>
+        ) : avatar}
+        <span title={fullName(p)} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: th.fontUI, fontSize: fs, fontWeight: 700, color: th.text }}>
+          {displayName(p)}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <LevelChip level={p.level} size="xs" />
+          {p.isOrganizer && (
+            <span style={{ fontSize: 9.5, fontWeight: 800, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: th.fontUI }}>orga</span>
+          )}
+        </span>
+      </>
+    );
+    const cellStyle: React.CSSProperties = {
+      position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      width: '100%', boxSizing: 'border-box', minWidth: 0, padding: '12px 6px 10px',
+      border: 'none', background: isSelected ? `${teamColor}1c` : 'transparent', borderRadius: 12,
+      outline: isSelected ? `2.5px solid ${teamColor}` : 'none', outlineOffset: -2.5,
+    };
+    if (!tappable) return <div data-player-slot={SLOT_LABELS[idx]} style={cellStyle}>{inner}</div>;
+    return (
+      <button type="button" data-player-slot={SLOT_LABELS[idx]} disabled={busy}
+        aria-label={`Modifier ${fullName(p)}`} onClick={() => setSelectedId(p.userId)}
+        style={{ ...cellStyle, cursor: busy ? 'default' : 'pointer', font: 'inherit' }}>
+        {inner}
+      </button>
     );
   };
 
-  const renderFree = (side: 1 | 2, key: string) => {
-    // Ajout permis : bouton « + » qui ajoute à CETTE équipe. Sinon place libre en pointillés.
+  const renderFree = (side: 1 | 2, slotIdx: number) => {
+    const teamColor = SIDE_COLOR[side];
+    const isTarget = !!activeTarget && activeTarget.team === side && (activeTarget.slot == null || activeTarget.slot === slotIdx);
+    const base: React.CSSProperties = {
+      position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      width: '100%', boxSizing: 'border-box', padding: '12px 6px 10px', border: 'none', borderRadius: 12,
+      background: isTarget ? `${teamColor}1c` : 'transparent',
+      outline: isTarget ? `2px dashed ${teamColor}` : 'none', outlineOffset: -4,
+      fontFamily: th.fontUI,
+    };
+    const badge = showGD ? (
+      <span aria-hidden="true" style={{ position: 'absolute', top: 6, [side === 1 ? 'left' : 'right']: 6, fontSize: 9, fontWeight: 800, lineHeight: 1, padding: '2px 5px', borderRadius: 5, background: `${teamColor}55`, color: inkOn(teamColor), letterSpacing: 0.3 }}>
+        {SLOT_LABELS[slotIdx]}
+      </span>
+    ) : null;
     if (editable && onAddToTeam) {
-      return <AddPlayerPill key={key} size={size} disabled={busy} ariaLabel={`Ajouter un joueur à l'équipe ${side}`} onClick={() => onAddToTeam(side)} />;
+      return (
+        <button type="button" disabled={busy} data-target={isTarget || undefined}
+          aria-label={`Ajouter un joueur à l'équipe ${side}`}
+          onClick={() => onAddToTeam(side, slotIdx)}
+          style={{ ...base, cursor: busy ? 'default' : 'pointer' }}>
+          {badge}
+          <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', border: `1.5px dashed ${teamColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: teamColor, fontSize: 17, lineHeight: 1 }}>+</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: teamColor }}>Ajouter</span>
+        </button>
+      );
     }
     return (
-      <span key={key}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px 4px 4px', border: `1.5px dashed ${th.lineStrong}`, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
-        <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', flexShrink: 0, border: `1.5px dashed ${th.lineStrong}` }} />
-        Place libre
-      </span>
+      <div style={base}>
+        {badge}
+        <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', border: `1.5px dashed ${th.lineStrong}` }} />
+        <span style={{ fontSize: 11.5, color: th.textFaint }}>Place libre</span>
+      </div>
     );
   };
 
-  const column = (side: 1 | 2) => (
-    // alignItems:stretch → chaque mini-carte remplit la largeur de sa colonne (les 2 équipes se
-    // répartissent toute la largeur, sans grand vide à droite en desktop ; nom au maximum d'espace).
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[side], flexShrink: 0 }} />
-        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe {side}</span>
+  const halfCol = (side: 1 | 2) => {
+    const teamColor = SIDE_COLOR[side];
+    // Dégradé léger orienté vers le filet (moitié 1 vers la droite, moitié 2 vers la gauche).
+    const grad = side === 1
+      ? `linear-gradient(160deg, ${teamColor}10, ${teamColor}26)`
+      : `linear-gradient(200deg, ${teamColor}10, ${teamColor}26)`;
+    return (
+      <div style={{ flex: 1, minWidth: 0, background: grad, borderTop: `3px solid ${teamColor}`, display: 'flex', flexDirection: 'column' }}>
+        {layout[side].map((p, i) => (
+          <div key={p ? p.userId : `free-${side}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {i > 0 && <div aria-hidden="true" style={{ height: 1, background: th.line, margin: '0 8px' }} />}
+            {p ? renderPlayer(p, i) : renderFree(side, i)}
+          </div>
+        ))}
       </div>
-      {layout[side].map((p, i) => (p ? renderPlayer(p, i) : renderFree(side, `free-${side}-${i}`)))}
-    </div>
-  );
+    );
+  };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
-      {column(1)}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 12, color: th.textFaint, letterSpacing: 0.5 }}>VS</span>
+    <div ref={rootRef}>
+      {/* Libellés d'équipe au-dessus du terrain */}
+      <div style={{ display: 'flex', marginBottom: 6 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[1], flexShrink: 0 }} />
+          <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe 1</span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+          <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Équipe 2</span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: SIDE_COLOR[2], flexShrink: 0 }} />
+        </div>
       </div>
-      {column(2)}
+      {/* Terrain : moitiés teintées, filet pointillé, badge VS */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.lineStrong}` }}>
+        {halfCol(1)}
+        <div aria-hidden="true" style={{ width: 0, borderLeft: `2px dashed ${th.lineStrong}` }} />
+        {halfCol(2)}
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 32, height: 32, borderRadius: '50%', background: th.surface, border: `1px solid ${th.lineStrong}`, boxShadow: th.shadowSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontSize: 10, fontWeight: 800, color: th.textMute, letterSpacing: 0.5, pointerEvents: 'none' }}>VS</div>
+      </div>
+      {selected && (
+        <PlayerActionSheet
+          player={selected}
+          playerName={fullName(selected)}
+          slotLabel={showGD ? SLOT_LABELS[Math.max(0, layout[selected.team].findIndex((x) => x?.userId === selected.userId))] : undefined}
+          teamColor={SIDE_COLOR[selected.team]}
+          team={selected.team}
+          busy={busy}
+          canMove={canMove}
+          canReplace={repAllowed(selected)}
+          canRemove={remAllowed(selected)}
+          onMove={() => { setSelectedId(null); onMove(selected); }}
+          onReplace={() => { setSelectedId(null); onReplace!(selected); }}
+          onRemove={() => { setSelectedId(null); onRemove!(selected); }}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }
