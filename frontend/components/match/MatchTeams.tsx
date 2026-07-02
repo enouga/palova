@@ -61,6 +61,11 @@ export function MatchTeams({
   const { th } = useTheme();
   const av = size === 'sm' ? 34 : 38;
   const fs = size === 'sm' ? 12 : 12.5;
+  // Hauteur mini identique pour TOUTES les cellules (joueur ou place libre) : avatar + nom +
+  // rangée pastille niveau/orga tiennent dedans. Garantit deux colonnes de hauteur égale (donc
+  // pas d'étirement asymétrique) → avatars et noms parfaitement alignés d'une équipe à l'autre,
+  // qu'un joueur ait une pastille et l'autre non.
+  const cellMinH = av + 68;
   const half = Math.max(1, Math.floor(capacity / 2));
   const showGD = half >= 2;               // repère Gauche/Droite seulement en double
   const canMove = editable && !!onSetTeams;
@@ -200,7 +205,7 @@ export function MatchTeams({
     );
     const cellStyle: React.CSSProperties = {
       position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-      width: '100%', boxSizing: 'border-box', minWidth: 0, padding: '12px 6px 10px',
+      width: '100%', boxSizing: 'border-box', minWidth: 0, minHeight: cellMinH, padding: '12px 6px 10px',
       border: 'none', background: isSelected ? `${teamColor}1c` : 'transparent', borderRadius: 12,
       outline: isSelected ? `2.5px solid ${teamColor}` : 'none', outlineOffset: -2.5,
     };
@@ -219,7 +224,7 @@ export function MatchTeams({
     const isTarget = !!activeTarget && activeTarget.team === side && (activeTarget.slot == null || activeTarget.slot === slotIdx);
     const base: React.CSSProperties = {
       position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-      width: '100%', boxSizing: 'border-box', padding: '12px 6px 10px', border: 'none', borderRadius: 12,
+      width: '100%', boxSizing: 'border-box', minHeight: cellMinH, padding: '12px 6px 10px', border: 'none', borderRadius: 12,
       background: isTarget ? `${teamColor}1c` : 'transparent',
       outline: isTarget ? `2px dashed ${teamColor}` : 'none', outlineOffset: -4,
       fontFamily: th.fontUI,
@@ -259,7 +264,10 @@ export function MatchTeams({
     return (
       <div style={{ flex: 1, minWidth: 0, background: grad, borderTop: `3px solid ${teamColor}`, display: 'flex', flexDirection: 'column' }}>
         {layout[side].map((p, i) => (
-          <div key={p ? p.userId : `free-${side}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          // Contenu épinglé en haut du quadrant (flex-start) + `cellMinH` égal sur toutes les
+          // cellules → colonnes de hauteur identique, avatars et noms alignés d'une équipe à
+          // l'autre, qu'un joueur ait une pastille niveau/orga et l'autre non.
+          <div key={p ? p.userId : `free-${side}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
             {i > 0 && <div aria-hidden="true" style={{ height: 1, background: th.line, margin: '0 8px' }} />}
             {p ? renderPlayer(p, i) : renderFree(side, i)}
           </div>
