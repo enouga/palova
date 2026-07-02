@@ -38,7 +38,7 @@ export function iconCacheFile(clubId: string, variant: string, logoUrl: string):
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // garde poids/SSRF : 5 Mo max
 
-async function fetchLogo(url: string): Promise<Buffer> {
+export async function fetchLogo(url: string): Promise<Buffer> {
   // Logo uploadé localement (/uploads/...) : lecture disque directe — `fetch` exigerait
   // une URL absolue que le backend ne connaît pas. Garde anti-traversée de répertoire.
   if (url.startsWith('/uploads/')) {
