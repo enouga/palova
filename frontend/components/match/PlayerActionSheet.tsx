@@ -103,7 +103,14 @@ export function PlayerActionSheet({
       </div>
       <div aria-hidden="true" style={{ height: 1, background: th.line, marginBottom: 4 }} />
       {canMove && (
-        <button type="button" disabled={busy} style={row} onClick={onMove}>
+        <button
+          type="button"
+          disabled={busy}
+          style={row}
+          onClick={onMove}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.background = th.surface2; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
           <span style={{ display: 'inline-flex', transform: team === 2 ? 'scaleX(-1)' : undefined }}>
             <Icon name="arrowR" size={17} color={th.textMute} />
           </span>
@@ -111,18 +118,38 @@ export function PlayerActionSheet({
         </button>
       )}
       {canReplace && (
-        <button type="button" disabled={busy} style={row} onClick={onReplace}>
+        <button
+          type="button"
+          disabled={busy}
+          style={row}
+          onClick={onReplace}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.background = th.surface2; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
           <Icon name="search" size={16} color={th.textMute} />
           Remplacer par un autre joueur
         </button>
       )}
       {canRemove && (
-        <button type="button" disabled={busy} style={{ ...row, color: ACCENTS.coral }} onClick={onRemove}>
+        <button
+          type="button"
+          disabled={busy}
+          style={{ ...row, color: ACCENTS.coral }}
+          onClick={onRemove}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.background = th.surface2; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
           <Icon name="x" size={17} color={ACCENTS.coral} />
           Retirer de la partie
         </button>
       )}
-      <button type="button" style={{ ...row, justifyContent: 'center', color: th.textMute }} onClick={onClose}>
+      <button
+        type="button"
+        style={{ ...row, justifyContent: 'center', color: th.textMute }}
+        onClick={onClose}
+        onMouseEnter={(e) => { e.currentTarget.style.background = th.surface2; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      >
         Annuler
       </button>
     </SheetShell>

@@ -27,11 +27,20 @@ describe('PlayerActionSheet', () => {
     expect(base.onRemove).toHaveBeenCalled();
   });
 
-  it('masque les actions non permises (organisateur : pas de retrait/remplacement)', () => {
-    wrap({ canReplace: false, canRemove: false });
-    expect(screen.getByRole('button', { name: /Passer dans l'équipe 1/ })).toBeInTheDocument();
+  it('masque les actions non permises (canMove/canReplace/canRemove à false)', () => {
+    wrap({ canMove: false, canReplace: false, canRemove: false });
+    expect(screen.queryByRole('button', { name: /Passer dans l'équipe 1/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remplacer/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Retirer de la partie/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
+  });
+
+  it('busy : les actions sont désactivées (Annuler reste actif)', () => {
+    wrap({ busy: true });
+    expect(screen.getByRole('button', { name: /Passer dans l'équipe 1/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Remplacer par un autre joueur/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Retirer de la partie/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeEnabled();
   });
 
   it("« Annuler » ferme la feuille", () => {
