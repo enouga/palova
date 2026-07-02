@@ -27,6 +27,32 @@ const baseProps = {
   onPlayersChanged: jest.fn(),
 };
 
+describe('MyAgendaListItem — places G/D persistées (lecture seule)', () => {
+  it('un participant padel avec slot: 1 rend à droite (donnée serveur, pas l\'ordre d\'arrivée)', () => {
+    const item = {
+      kind: 'reservation' as const,
+      id: 'r1',
+      start: '2020-01-01T10:00:00Z',
+      past: true,
+      r: {
+        id: 'r1', startTime: '2020-01-01T10:00:00Z', endTime: '2020-01-01T11:00:00Z',
+        status: 'CONFIRMED', totalPrice: '25',
+        resource: { id: 'res1', name: 'Terrain 1', sport: { key: 'padel', name: 'Padel' }, club: { name: 'Demo', slug: 'demo', timezone: 'Europe/Paris' } },
+        capacity: 4,
+        participants: [
+          { id: 'p1', userId: 'u1', isOrganizer: true, firstName: 'Paul', lastName: 'B', avatarUrl: null, team: 1, slot: 1 },
+        ],
+      },
+    };
+    render(
+      <ThemeProvider>
+        <MyAgendaListItem {...baseProps} item={item as any} />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('Paul B').closest('[data-player-slot]')).toHaveAttribute('data-player-slot', 'D');
+  });
+});
+
 describe('MyAgendaListItem — badge sport', () => {
   it('préfixe le sport au sous-titre quand showSport', () => {
     render(

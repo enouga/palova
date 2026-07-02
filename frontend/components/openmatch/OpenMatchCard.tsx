@@ -26,8 +26,8 @@ export interface OpenMatchCardProps {
   onJoin: (m: OpenMatch) => void;
   onLeave: (m: OpenMatch) => void;
   onRemovePlayer: (m: OpenMatch, p: PlayerPillData) => void;
-  onSetTeams: (m: OpenMatch, teams: Record<string, 1 | 2>) => void;
-  onAddPlayer: (m: OpenMatch, memberId: string, team?: 1 | 2) => void;
+  onSetTeams: (m: OpenMatch, teams: Record<string, 1 | 2>, slots?: Record<string, number>) => void;
+  onAddPlayer: (m: OpenMatch, memberId: string, team?: 1 | 2, slot?: number) => void;
   onReplacePlayer: (m: OpenMatch, oldPlayer: MatchPlayerData, memberId: string) => void;
   onToggleAdd: (m: OpenMatch) => void;
   onCancelAdd: () => void;
@@ -97,12 +97,13 @@ export function OpenMatchCard({
           userId: p.userId, firstName: p.firstName, lastName: p.lastName,
           avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
           team: (p.team ?? 1) as 1 | 2,
+          slot: p.slot,
         }))}
         capacity={m.maxPlayers}
         friendIds={friendIds}
         busy={busy}
         editable={m.viewerIsOrganizer}
-        onSetTeams={(teams) => onSetTeams(m, teams)}
+        onSetTeams={(teams, slots) => onSetTeams(m, teams, slots)}
         onRemove={(p) => onRemovePlayer(m, { userId: p.userId, firstName: p.firstName, lastName: p.lastName, isOrganizer: p.isOrganizer })}
         canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         onReplace={m.viewerIsOrganizer ? ((p) => { setAddMode({ kind: 'replace', player: p }); if (!addingOpen) onToggleAdd(m); }) : undefined}
@@ -165,7 +166,7 @@ export function OpenMatchCard({
           busy={busy}
           onPick={(member) => {
             if (addMode.kind === 'replace') onReplacePlayer(m, addMode.player, member.id);
-            else onAddPlayer(m, member.id, addMode.team);
+            else onAddPlayer(m, member.id, addMode.team, addMode.slot);
             setAddMode(null); onCancelAdd();
           }}
           onClose={() => { setAddMode(null); onCancelAdd(); }}

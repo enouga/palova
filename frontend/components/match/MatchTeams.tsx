@@ -18,6 +18,8 @@ export interface MatchPlayerData {
   participantId?: string;
   level?: UserLevel | null;
   team: 1 | 2;
+  /** Place au sein de l'équipe (0=G, 1=D), persistée côté serveur — fait foi au rendu. */
+  slot?: number | null;
 }
 
 // Couleurs d'équipe (Éq.1 bleu / Éq.2 corail) — partagées avec les feuilles d'ajout/actions.
@@ -28,8 +30,10 @@ export const NARROW_WIDTH = 380;
 
 // Mini-terrain de padel vu de dessus (spec 2026-07-02) : deux moitiés teintées côte à côte,
 // filet central pointillé + badge VS, chaque quadrant = une place précise (G = 1er, D = 2e).
-// Emplacements FIXES par équipe, mémorisés pendant la session (ref, aucun backend) : retirer
-// le joueur de gauche laisse un trou à gauche et le droit reste à droite.
+// Emplacements FIXES par équipe, pilotés par la donnée : priorité au `slot` serveur
+// (spec places G/D persistées), puis mémoire de session (intervalle optimiste entre une
+// action et le reload, brouillons locaux), puis premier emplacement libre — retirer le
+// joueur de gauche laisse un trou à gauche et le droit reste à droite, même après remontage.
 // En `editable`, un tap sur un joueur ouvre une feuille d'actions (déplacer / remplacer /
 // retirer) ; chaque place libre est un « + » d'ajout ciblé → `onAddToTeam(team, slot)`.
 export function MatchTeams({
@@ -49,7 +53,8 @@ export function MatchTeams({
   /** Tap sur une place libre : côté + emplacement visé (0=G, 1=D). */
   onAddToTeam?: (team: 1 | 2, slot?: number) => void;
   editable?: boolean;
-  onSetTeams?: (teamsByUserId: Record<string, 1 | 2>) => void;
+  /** Réorganisation : maps complètes équipe + place (0=G, 1=D) par userId. */
+  onSetTeams?: (teamsByUserId: Record<string, 1 | 2>, slotsByUserId: Record<string, number>) => void;
   /** Place visée par la feuille d'ajout ouverte → reste en surbrillance. */
   activeTarget?: { team: 1 | 2; slot?: number } | null;
 }) {
@@ -85,13 +90,22 @@ export function MatchTeams({
   // Position mémorisée par joueur (équipe + emplacement), stable sur la session.
   const posRef = useRef<Record<string, { team: 1 | 2; slot: number }>>({});
 
-  // Layout : chaque équipe = `half` emplacements. On honore d'abord la position mémorisée,
-  // puis on place les nouveaux au 1er emplacement libre — d'où la stabilité au retrait.
+  // Layout : chaque équipe = `half` emplacements. Priorité au `slot` serveur (la donnée
+  // fait foi au montage — durable après F5 et remontage), puis à la position mémorisée,
+  // puis au 1er emplacement libre — d'où la stabilité au retrait.
   const layout: Record<1 | 2, (MatchPlayerData | null)[]> = {
     1: new Array<MatchPlayerData | null>(half).fill(null),
     2: new Array<MatchPlayerData | null>(half).fill(null),
   };
   for (const p of players) {
+    const s = p.slot;
+    if (typeof s === 'number' && Number.isInteger(s) && s >= 0 && s < half && layout[p.team][s] === null) {
+      layout[p.team][s] = p;
+      posRef.current[p.userId] = { team: p.team, slot: s };
+    }
+  }
+  for (const p of players) {
+    if (layout[1].includes(p) || layout[2].includes(p)) continue;
     const rem = posRef.current[p.userId];
     if (rem && rem.team === p.team && rem.slot < half && layout[p.team][rem.slot] === null) {
       layout[p.team][rem.slot] = p;
@@ -108,26 +122,42 @@ export function MatchTeams({
 
   const currentTeams = (): Record<string, 1 | 2> =>
     Object.fromEntries(players.map((p) => [p.userId, p.team]));
+  // Places courantes de TOUS les joueurs, dérivées du layout rendu.
+  const currentSlots = (): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const side of [1, 2] as const) {
+      layout[side].forEach((pl, i) => { if (pl) out[pl.userId] = i; });
+    }
+    return out;
+  };
 
   // Déplace le joueur dans l'autre équipe : place libre → déplacement (même emplacement si
-  // libre) ; sinon échange avec le joueur du même emplacement en face. Émet la map complète.
+  // libre) ; sinon échange avec le joueur du même emplacement en face. Émet les maps complètes
+  // (équipes + places) pour persistance serveur.
   const onMove = (p: MatchPlayerData) => {
     if (busy) return;
     const target: 1 | 2 = p.team === 1 ? 2 : 1;
     const pSlot = layout[p.team].indexOf(p);
     const next = currentTeams();
+    const nextSlots = currentSlots();
     const freeInTarget = layout[target].findIndex((s) => s === null);
     if (freeInTarget >= 0) {
       const dest = layout[target][pSlot] === null ? pSlot : freeInTarget;
       next[p.userId] = target;
+      nextSlots[p.userId] = dest;
       posRef.current[p.userId] = { team: target, slot: dest };
     } else {
       const opp = layout[target][pSlot];
       next[p.userId] = target;
+      nextSlots[p.userId] = pSlot;
       posRef.current[p.userId] = { team: target, slot: pSlot };
-      if (opp) { next[opp.userId] = p.team; posRef.current[opp.userId] = { team: p.team, slot: pSlot }; }
+      if (opp) {
+        next[opp.userId] = p.team;
+        nextSlots[opp.userId] = pSlot;
+        posRef.current[opp.userId] = { team: p.team, slot: pSlot };
+      }
     }
-    onSetTeams?.(next);
+    onSetTeams?.(next, nextSlots);
   };
 
   // Feuille d'actions : joueur sélectionné (re-résolu à chaque rendu — un joueur retiré

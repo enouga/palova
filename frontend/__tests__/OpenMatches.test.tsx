@@ -22,6 +22,7 @@ jest.mock('../lib/api', () => ({
     removeOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
     searchClubMembers: jest.fn().mockResolvedValue([]),
     addOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
+    setOpenMatchTeams: jest.fn().mockResolvedValue({ id: 'm1' }),
     recordMatchResult: jest.fn().mockResolvedValue({ id: 'mr1', status: 'PENDING' }),
     setInterested:    jest.fn().mockResolvedValue({}),
     removeInterested: jest.fn().mockResolvedValue({}),
@@ -146,6 +147,9 @@ describe('OpenMatches', () => {
     fireEvent.click(addBtns[0]);
     fireEvent.click(await screen.findByRole('button', { name: /New Player/ }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
+    // La place tapée est épinglée : org en G (slot 0), le nouveau sur la place D visée (slot 1).
+    await waitFor(() => expect(mocked.setOpenMatchTeams).toHaveBeenCalledWith(
+      'demo', 'm1', { 'u-org': 1, 'u-new': 1 }, 'abc', { 'u-org': 0, 'u-new': 1 }));
   });
 
   it('ajoute un ami via la rangée « Mes amis »', async () => {

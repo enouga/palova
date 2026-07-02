@@ -96,7 +96,18 @@ describe('ReservationPlayersInline', () => {
     // La feuille d'ajout se referme après le pick (la place visée est libérée).
     expect(screen.queryByPlaceholderText(/Rechercher un membre/)).not.toBeInTheDocument();
     await waitFor(() => expect(mocked.addReservationPlayer).toHaveBeenCalledWith('r1', 'u-new', 'abc'));
-    await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith('r1', { 'u-org': 1, u2: 1, 'u-new': 2 }, 'abc'));
+    // La place tapée (équipe 2, 1re libre = G) est transmise avec les places existantes.
+    await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith(
+      'r1', { 'u-org': 1, u2: 1, 'u-new': 2 }, 'abc', { 'u-org': 0, u2: 1, 'u-new': 0 }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it("padel : « Passer dans l'équipe 2 » envoie les équipes ET les places (slots)", async () => {
+    wrap(padel);
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier Ines B' }));
+    fireEvent.click(screen.getByRole('button', { name: /Passer dans l'équipe 2/ }));
+    // Ines (Éq.1 D) part en Éq.2 : sa place D est libre en face → elle la garde (slot 1).
+    await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith(
+      'r1', { 'u-org': 1, u2: 2 }, 'abc', { 'u-org': 0, u2: 1 }));
   });
 });

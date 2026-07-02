@@ -118,12 +118,12 @@ describe('BookingModal — page unique', () => {
     ));
   });
 
-  it('padel : applyHoldSetup reçoit teams (organisateur + partenaire, côtés)', async () => {
+  it('padel : applyHoldSetup reçoit teams + slots (organisateur + partenaire, place tapée)', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
-    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
+    // Ajout ciblé : « + » d'une place de l'équipe 1 (la D, l'organisateur occupe la G) → feuille → pick.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     // La feuille d'ajout se referme après le pick (la place visée est libérée).
@@ -131,7 +131,10 @@ describe('BookingModal — page unique', () => {
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
       'res-1', 'jwt-token',
-      expect.objectContaining({ teams: expect.objectContaining({ 'user-1': 1, 'user-2': 1 }) }),
+      expect.objectContaining({
+        teams: expect.objectContaining({ 'user-1': 1, 'user-2': 1 }),
+        slots: expect.objectContaining({ 'user-1': 0, 'user-2': 1 }),
+      }),
     ));
   });
 

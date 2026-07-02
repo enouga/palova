@@ -169,6 +169,7 @@ export const api = {
       targetLevelMin?: number | null;
       targetLevelMax?: number | null;
       teams?: Record<string, 1 | 2>;
+      slots?: Record<string, number>;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {
@@ -253,8 +254,8 @@ export const api = {
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players`, { method: 'POST', body: JSON.stringify({ memberUserId }) }, token),
   removeReservationPlayer: (reservationId: string, participantId: string, token: string) =>
     request<ReservationPlayers>(`/api/reservations/${reservationId}/players/${participantId}`, { method: 'DELETE' }, token),
-  setReservationTeams: (reservationId: string, teams: Record<string, 1 | 2>, token: string) =>
-    request<ReservationPlayers>(`/api/reservations/${reservationId}/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
+  setReservationTeams: (reservationId: string, teams: Record<string, 1 | 2>, token: string, slots?: Record<string, number>) =>
+    request<ReservationPlayers>(`/api/reservations/${reservationId}/teams`, { method: 'POST', body: JSON.stringify({ teams, slots }) }, token),
 
   // --- Parties ouvertes (visibles de tous ; token facultatif) ---
   getOpenMatches: (slug: string, token?: string) =>
@@ -267,8 +268,8 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/join`, { method: 'DELETE' }, token),
   removeOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/${userId}`, { method: 'DELETE' }, token),
-  setOpenMatchTeams: (slug: string, id: string, teams: Record<string, 1 | 2>, token: string) =>
-    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/teams`, { method: 'POST', body: JSON.stringify({ teams }) }, token),
+  setOpenMatchTeams: (slug: string, id: string, teams: Record<string, 1 | 2>, token: string, slots?: Record<string, number>) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/teams`, { method: 'POST', body: JSON.stringify({ teams, slots }) }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
   setInterested: (slug: string, id: string, token: string) =>
@@ -887,7 +888,7 @@ export interface MyReservation {
   totalPrice: string;
   resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
-  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null }[];
+  participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null; slot?: number | null }[];
 }
 
 export interface MyMatchPlayer {
@@ -950,6 +951,7 @@ export interface ReservationPlayer {
   avatarUrl: string | null;
   share: string;
   team?: 1 | 2 | null;
+  slot?: number | null; // place au sein de l'équipe (0=G, 1=D), concrète en padel
 }
 export interface ReservationPlayers {
   id: string;
@@ -1190,6 +1192,7 @@ export interface OpenMatchPlayer {
   isOrganizer: boolean;
   level?: UserLevel | null;
   team?: 1 | 2 | null;
+  slot?: number | null; // place au sein de l'équipe (0=G, 1=D), concrète en padel
 }
 
 export interface OpenMatch {

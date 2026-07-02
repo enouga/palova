@@ -109,6 +109,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
                   userId: p.userId, firstName: p.firstName, lastName: p.lastName,
                   avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
                   team: (p.team ?? 1) as 1 | 2,
+                  slot: p.slot,
                 }))}
                 capacity={r.capacity ?? 4}
                 size="sm"

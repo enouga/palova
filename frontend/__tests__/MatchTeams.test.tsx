@@ -33,14 +33,32 @@ describe('MatchTeams (mini-terrain)', () => {
     expect(screen.getAllByText('D')).toHaveLength(2);
   });
 
-  it("editable : tap joueur → feuille → « Passer dans l'équipe 2 » émet la map", () => {
+  it("editable : tap joueur → feuille → « Passer dans l'équipe 2 » émet les maps teams + slots", () => {
     const onSetTeams = jest.fn();
     wrap(<MatchTeams players={players} capacity={4} editable onSetTeams={onSetTeams} />);
     fireEvent.click(screen.getByRole('button', { name: 'Modifier Marc A' }));
     fireEvent.click(screen.getByRole('button', { name: /Passer dans l'équipe 2/ }));
-    expect(onSetTeams).toHaveBeenCalledWith({ a: 2, b: 1, c: 2 });
+    // Marc (t1, G) part en équipe 2 : place G prise par Lea → il va en D (slot 1) ;
+    // Paul garde sa place D (slot 1) en équipe 1, Lea garde G (slot 0).
+    expect(onSetTeams).toHaveBeenCalledWith({ a: 2, b: 1, c: 2 }, { a: 1, b: 1, c: 0 });
     // La feuille se referme après l'action.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it("un joueur seul avec slot: 1 rend à droite (piloté par la donnée serveur, sans mémoire d'instance)", () => {
+    wrap(<MatchTeams players={[
+      { userId: 'a', firstName: 'Marc', lastName: 'A', team: 1, slot: 1 },
+    ]} capacity={4} />);
+    expect(screen.getByText('Marc A').closest('[data-player-slot]')).toHaveAttribute('data-player-slot', 'D');
+  });
+
+  it("le slot serveur prime sur l'ordre d'arrivée", () => {
+    wrap(<MatchTeams players={[
+      { userId: 'a', firstName: 'Marc', lastName: 'A', team: 1, slot: 1 },
+      { userId: 'b', firstName: 'Paul', lastName: 'B', team: 1, slot: 0 },
+    ]} capacity={4} />);
+    expect(screen.getByText('Marc A').closest('[data-player-slot]')).toHaveAttribute('data-player-slot', 'D');
+    expect(screen.getByText('Paul B').closest('[data-player-slot]')).toHaveAttribute('data-player-slot', 'G');
   });
 
   it('editable : la feuille propose Remplacer / Retirer pour un non-organisateur', () => {

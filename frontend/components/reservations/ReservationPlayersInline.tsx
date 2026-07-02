@@ -8,6 +8,7 @@ import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { AddPlayerSheet } from '@/components/match/AddPlayerSheet';
+import { teamSlotMaps } from '@/lib/matchSlots';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -18,6 +19,7 @@ const ERR: Record<string, string> = {
   CANNOT_REMOVE_ORGANIZER: "L'organisateur ne peut pas être retiré.",
   PARTICIPANT_NOT_FOUND: 'Joueur introuvable.',
   TEAM_SIDE_FULL: 'Cette équipe est déjà complète.',
+  TEAM_SLOT_TAKEN: 'Cette place est déjà prise.',
   UNAUTHORIZED: "Seul l'organisateur peut modifier cette réservation.",
 };
 const msg = (e: string) => ERR[e] ?? e;
@@ -49,26 +51,29 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
     finally { setBusy(false); }
   };
 
-  // Ajout ciblé : ajoute le membre puis (padel) l'épingle sur l'équipe choisie.
-  const addPlayer = (memberId: string, team?: 1 | 2) => {
+  // Ajout ciblé : ajoute le membre puis (padel) l'épingle sur l'équipe ET la place choisies.
+  const addPlayer = (memberId: string, team?: 1 | 2, slot?: number) => {
     setAddMode(null);
     run(async () => {
       await api.addReservationPlayer(reservation.id, memberId, token);
       if (isPadel && team) {
-        const map: Record<string, 1 | 2> = { ...Object.fromEntries(participants.map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: team };
-        await api.setReservationTeams(reservation.id, map, token);
+        const { teams, slots } = teamSlotMaps(participants, capacity, { userId: memberId, team, slot });
+        await api.setReservationTeams(reservation.id, teams, token, slots);
       }
     });
   };
-  // Remplacement : retire l'ancien, ajoute le nouveau, (padel) dans l'équipe de l'ancien.
+  // Remplacement : retire l'ancien, ajoute le nouveau, (padel) sur la place de l'ancien.
   const replacePlayer = (oldPlayer: MatchPlayerData, memberId: string) => {
     setAddMode(null);
     run(async () => {
       if (oldPlayer.participantId) await api.removeReservationPlayer(reservation.id, oldPlayer.participantId, token);
       await api.addReservationPlayer(reservation.id, memberId, token);
       if (isPadel) {
-        const map: Record<string, 1 | 2> = { ...Object.fromEntries(participants.filter((p) => p.userId !== oldPlayer.userId).map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: oldPlayer.team };
-        await api.setReservationTeams(reservation.id, map, token);
+        const { teams, slots } = teamSlotMaps(
+          participants.filter((p) => p.userId !== oldPlayer.userId), capacity,
+          { userId: memberId, team: oldPlayer.team, slot: oldPlayer.slot ?? undefined },
+        );
+        await api.setReservationTeams(reservation.id, teams, token, slots);
       }
     });
   };
@@ -77,7 +82,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
   const onPickMember = (memberId: string) => {
     if (!addMode) return;
     if (addMode.kind === 'replace') replacePlayer(addMode.player, memberId);
-    else addPlayer(memberId, addMode.team);
+    else addPlayer(memberId, addMode.team, addMode.slot);
   };
 
   return (
@@ -91,12 +96,13 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
             userId: p.userId, firstName: p.firstName, lastName: p.lastName,
             avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, participantId: p.id, level: p.level,
             team: (p.team ?? 1) as 1 | 2,
+            slot: p.slot,
           }))}
           capacity={capacity}
           size="sm"
           busy={busy}
           editable={canEdit}
-          onSetTeams={(teams) => run(() => api.setReservationTeams(reservation.id, teams, token))}
+          onSetTeams={(teams, slots) => run(() => api.setReservationTeams(reservation.id, teams, token, slots))}
           onRemove={canEdit ? (p) => run(() => api.removeReservationPlayer(reservation.id, p.participantId!, token)) : undefined}
           canRemove={(p) => canEdit && !p.isOrganizer}
           onReplace={canEdit ? ((p) => setAddMode({ kind: 'replace', player: p })) : undefined}

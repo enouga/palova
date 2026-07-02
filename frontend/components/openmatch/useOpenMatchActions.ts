@@ -4,6 +4,7 @@ import { api, ClubDetail, OpenMatch } from '@/lib/api';
 import { MatchPlayerData } from '@/components/match/MatchTeams';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { inRange } from '@/lib/levelMatch';
+import { teamSlotMaps } from '@/lib/matchSlots';
 
 // Libellés d'erreur partagés (liste + page détail).
 export const JOIN_ERRORS: Record<string, string> = {
@@ -21,6 +22,7 @@ export const JOIN_ERRORS: Record<string, string> = {
   CHAT_FORBIDDEN:        'Réservé aux inscrits et aux intéressés.',
   NOT_ALLOWED:           'Action non autorisée.',
   RESERVATION_NOT_FOUND: "Cette partie n'existe plus.",
+  TEAM_SLOT_TAKEN:       'Cette place est déjà prise.',
 };
 
 // Logique d'actions d'une partie ouverte (rejoindre/quitter/équipes/chat/intérêt/résultat)
@@ -44,13 +46,13 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
     finally { setBusyId(null); }
   };
 
-  const addPlayerToTeam = (m: OpenMatch, memberId: string, team?: 1 | 2) => {
+  const addPlayerToTeam = (m: OpenMatch, memberId: string, team?: 1 | 2, slot?: number) => {
     setAddingId(null);
     act(m, async () => {
       await api.addOpenMatchPlayer(club.slug, m.id, memberId, token!);
       if (team) {
-        const map: Record<string, 1 | 2> = { ...Object.fromEntries(m.players.map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: team };
-        await api.setOpenMatchTeams(club.slug, m.id, map, token!);
+        const { teams, slots } = teamSlotMaps(m.players, m.maxPlayers, { userId: memberId, team, slot });
+        await api.setOpenMatchTeams(club.slug, m.id, teams, token!, slots);
       }
     });
   };
@@ -60,8 +62,11 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
     act(m, async () => {
       await api.removeOpenMatchPlayer(club.slug, m.id, oldPlayer.userId, token!);
       await api.addOpenMatchPlayer(club.slug, m.id, memberId, token!);
-      const map: Record<string, 1 | 2> = { ...Object.fromEntries(m.players.filter((p) => p.userId !== oldPlayer.userId).map((p) => [p.userId, (p.team ?? 1) as 1 | 2])), [memberId]: oldPlayer.team };
-      await api.setOpenMatchTeams(club.slug, m.id, map, token!);
+      const { teams, slots } = teamSlotMaps(
+        m.players.filter((p) => p.userId !== oldPlayer.userId), m.maxPlayers,
+        { userId: memberId, team: oldPlayer.team, slot: oldPlayer.slot ?? undefined },
+      );
+      await api.setOpenMatchTeams(club.slug, m.id, teams, token!, slots);
     });
   };
 
@@ -82,7 +87,8 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
   const confirmJoin = (m: OpenMatch) => { setJoinWarning(null); act(m, () => api.joinOpenMatch(club.slug, m.id, token!)); };
   const leave = (m: OpenMatch) => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!));
   const removePlayer = (m: OpenMatch, p: PlayerPillData) => act(m, () => api.removeOpenMatchPlayer(club.slug, m.id, p.userId, token!));
-  const setTeams = (m: OpenMatch, teams: Record<string, 1 | 2>) => act(m, () => api.setOpenMatchTeams(club.slug, m.id, teams, token!));
+  const setTeams = (m: OpenMatch, teams: Record<string, 1 | 2>, slots?: Record<string, number>) =>
+    act(m, () => api.setOpenMatchTeams(club.slug, m.id, teams, token!, slots));
   const onToggleAdd = (m: OpenMatch) => setAddingId((prev) => (prev === m.id ? null : m.id));
   const onCancelAdd = () => setAddingId(null);
 

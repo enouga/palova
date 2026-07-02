@@ -189,8 +189,11 @@ describe('OpenMatchCard', () => {
     // Tap sur Bob → feuille d'actions → « Passer dans l'équipe 2 » (pleine → échange avec Dan).
     fireEvent.click(screen.getByRole('button', { name: 'Modifier Bob B' }));
     fireEvent.click(screen.getByRole('button', { name: /Passer dans l'équipe 2/ }));
+    // Échange Bob ↔ Dan sur la place D (slot 1) ; Org et Cara gardent la place G (slot 0).
     expect(onSetTeams).toHaveBeenCalledWith(match, {
       'u-org': 1, 'u-bob': 2, 'u-cara': 2, 'u-dan': 1,
+    }, {
+      'u-org': 0, 'u-bob': 1, 'u-cara': 0, 'u-dan': 1,
     });
   });
 

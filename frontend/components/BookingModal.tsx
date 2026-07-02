@@ -187,10 +187,11 @@ export default function BookingModal({
   const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
-  // Répartition d'équipes (padel) proposée à la création : indice d'affichage envoyé
-  // en best-effort via applyHoldSetup.teams. `me` = organisateur (identité du préview).
+  // Répartition d'équipes + places G/D (padel) proposée à la création : indice d'affichage
+  // envoyé en best-effort via applyHoldSetup.teams/slots. `me` = organisateur (identité du préview).
   const [me, setMe] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null } | null>(null);
   const [teamsDraft, setTeamsDraft] = useState<Record<string, 1 | 2>>({});
+  const [slotsDraft, setSlotsDraft] = useState<Record<string, number>>({});
   // Ajout ciblé depuis le terrain (padel) : place visée par la feuille d'ajout.
   const [addTarget, setAddTarget] = useState<{ team: 1 | 2; slot?: number } | null>(null);
 
@@ -233,21 +234,23 @@ export default function BookingModal({
     setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
     setTeamsDraft((d) => (d[m.id] ? d : { ...d, [m.id]: nextSide(d) }));
   };
-  // Ajout depuis la feuille : la place tapée impose l'équipe (pas de nextSide).
-  const addPartnerTo = (m: PickedMember, team: 1 | 2) => {
+  // Ajout depuis la feuille : la place tapée impose l'équipe ET l'emplacement (pas de nextSide).
+  const addPartnerTo = (m: PickedMember, team: 1 | 2, slot?: number) => {
     setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
     setTeamsDraft((d) => ({ ...d, [m.id]: team }));
+    if (slot != null) setSlotsDraft((d) => ({ ...d, [m.id]: slot }));
   };
   const removePartner = (id: string) => {
     setPartners((xs) => xs.filter((x) => x.id !== id));
     setTeamsDraft((d) => { const n = { ...d }; delete n[id]; return n; });
+    setSlotsDraft((d) => { const n = { ...d }; delete n[id]; return n; });
   };
   // [organisateur, …partenaires] pour l'aperçu d'équipes (padel). Vide tant que `me` inconnu.
   const buildPlayers = (): MatchPlayerData[] => {
     if (!me) return [];
     return [
-      { userId: me.id, firstName: me.firstName, lastName: me.lastName, avatarUrl: me.avatarUrl, isOrganizer: true, team: (teamsDraft[me.id] ?? 1) as 1 | 2 },
-      ...partners.map((p) => ({ userId: p.id, firstName: p.firstName, lastName: p.lastName, level: p.level, team: (teamsDraft[p.id] ?? 1) as 1 | 2 })),
+      { userId: me.id, firstName: me.firstName, lastName: me.lastName, avatarUrl: me.avatarUrl, isOrganizer: true, team: (teamsDraft[me.id] ?? 1) as 1 | 2, slot: slotsDraft[me.id] },
+      ...partners.map((p) => ({ userId: p.id, firstName: p.firstName, lastName: p.lastName, level: p.level, team: (teamsDraft[p.id] ?? 1) as 1 | 2, slot: slotsDraft[p.id] })),
     ];
   };
   const shareTooSmall = shareCents < 50; // minimum Stripe (0,50 €) → le backend refuse (AMOUNT_TOO_SMALL)
@@ -330,10 +333,11 @@ export default function BookingModal({
     return () => { alive = false; };
   }, [showPartners, isPadel, token]);
 
-  // L'organisateur occupe l'Équipe 1 par défaut dès que son identité est connue.
+  // L'organisateur occupe l'Équipe 1, place G, par défaut dès que son identité est connue.
   useEffect(() => {
     if (!me) return;
     setTeamsDraft((d) => (d[me.id] ? d : { ...d, [me.id]: 1 }));
+    setSlotsDraft((d) => (d[me.id] != null ? d : { ...d, [me.id]: 0 }));
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
@@ -388,8 +392,8 @@ export default function BookingModal({
       ...(visibility === 'PUBLIC' && levelForSport
         ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
         : {}),
-      // Padel : indice de composition d'équipes (best-effort côté serveur).
-      ...(isPadel ? { teams: teamsDraft } : {}),
+      // Padel : indice de composition d'équipes + places G/D (best-effort côté serveur).
+      ...(isPadel ? { teams: teamsDraft, slots: slotsDraft } : {}),
     });
     saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
   };
@@ -525,7 +529,7 @@ export default function BookingModal({
                   {isPadel && me ? (
                     <div style={{ marginBottom: 8 }}>
                       <MatchTeams size="sm" editable capacity={capacity} players={buildPlayers()}
-                        onSetTeams={setTeamsDraft}
+                        onSetTeams={(teams, slots) => { setTeamsDraft(teams); setSlotsDraft(slots); }}
                         onRemove={(pl) => removePartner(pl.userId)} canRemove={(pl) => !pl.isOrganizer}
                         onAddToTeam={atCap ? undefined : (team, slot) => setAddTarget({ team, slot })}
                         activeTarget={addTarget} />
@@ -534,7 +538,7 @@ export default function BookingModal({
                   {addTarget && slug && me && (
                     <AddPlayerSheet slug={slug} token={token} team={addTarget.team} slot={addTarget.slot}
                       excludeIds={[me.id, ...partners.map((p) => p.id)]}
-                      onPick={(m) => { addPartnerTo(m, addTarget.team); setAddTarget(null); }}
+                      onPick={(m) => { addPartnerTo(m, addTarget.team, addTarget.slot); setAddTarget(null); }}
                       onClose={() => setAddTarget(null)} />
                   )}
                   {!(isPadel && me) && partners.length > 0 && (
