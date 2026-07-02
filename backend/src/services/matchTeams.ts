@@ -1,42 +1,74 @@
 import type { Prisma } from '@prisma/client';
 
-// Attribue un côté d'équipe (1 = gauche, 2 = droite) à CHAQUE participant d'un match padel.
+// Attribue un côté d'équipe (1 = gauche, 2 = droite) ET une place au sein de l'équipe
+// (0 = G, 1 = D…) à CHAQUE participant d'un match padel.
 // `team` explicite (1/2) est honoré tant que le côté n'est pas plein (maxPlayers/2) ;
 // les `null` (et tout surplus) sont répartis dans l'ordre d'entrée (joinedAt) : côté 1 tant
-// qu'il reste de la place, sinon côté 2. Pur, déterministe, sans effet de bord.
-export function effectiveTeams<T extends { team: number | null }>(
+// qu'il reste de la place, sinon côté 2. Une fois le côté résolu, `slot` explicite
+// (0 ≤ slot < half) est honoré s'il est libre dans son équipe (premier arrivé — ordre du
+// tableau — gagne en cas de collision) ; les non-assignés/invalides remplissent les places
+// libres restantes dans l'ordre croissant, ordre d'entrée. Pur, déterministe, sans effet de bord.
+export function effectiveTeams<T extends { team: number | null; slot?: number | null }>(
   participants: T[],
   maxPlayers: number,
-): Array<T & { team: 1 | 2 }> {
+): Array<T & { team: 1 | 2; slot: number }> {
   const half = Math.max(1, Math.floor(maxPlayers / 2));
   const count: Record<1 | 2, number> = { 1: 0, 2: 0 };
-  const out: Array<1 | 2 | undefined> = new Array(participants.length);
+  const teamOut: Array<1 | 2 | undefined> = new Array(participants.length);
 
   // Passe 1 : team explicite qui tient dans son côté.
   participants.forEach((p, i) => {
     if ((p.team === 1 || p.team === 2) && count[p.team] < half) {
       count[p.team]++;
-      out[i] = p.team;
+      teamOut[i] = p.team;
     }
   });
   // Passe 2 : remplissage des non-assignés, ordre d'entrée.
   participants.forEach((_p, i) => {
-    if (out[i]) return;
+    if (teamOut[i]) return;
     const side: 1 | 2 = count[1] < half ? 1 : 2;
     count[side]++;
-    out[i] = side;
+    teamOut[i] = side;
   });
 
-  return participants.map((p, i) => ({ ...p, team: out[i]! }));
+  // Résolution des slots par équipe.
+  const takenSlots: Record<1 | 2, Set<number>> = { 1: new Set(), 2: new Set() };
+  const slotOut: Array<number | undefined> = new Array(participants.length);
+
+  // Passe 1 : slot explicite valide et libre (premier arrivé — ordre du tableau — gagne).
+  participants.forEach((p, i) => {
+    const team = teamOut[i]!;
+    const s = p.slot;
+    if (typeof s === 'number' && Number.isInteger(s) && s >= 0 && s < half && !takenSlots[team].has(s)) {
+      takenSlots[team].add(s);
+      slotOut[i] = s;
+    }
+  });
+  // Passe 2 : remplissage ascendant des non-assignés/invalides/en collision.
+  participants.forEach((_p, i) => {
+    if (slotOut[i] !== undefined) return;
+    const team = teamOut[i]!;
+    let s = 0;
+    while (takenSlots[team].has(s)) s++;
+    takenSlots[team].add(s);
+    slotOut[i] = s;
+  });
+
+  return participants.map((p, i) => ({ ...p, team: teamOut[i]!, slot: slotOut[i]! }));
 }
 
-// Valide + persiste l'assignation complète d'équipes d'un match. `teamsByUserId` DOIT couvrir
-// tous les participants ; chaque côté ≤ maxPlayers/2 ; valeurs ∈ {1,2}. Transactionnel (tx fourni).
+// Valide + persiste l'assignation complète d'équipes (et, optionnellement, de places G/D)
+// d'un match. `teamsByUserId` DOIT couvrir tous les participants ; chaque côté ≤ maxPlayers/2 ;
+// valeurs ∈ {1,2}. `slotsByUserId`, si fourni, DOIT lui aussi couvrir tous les participants,
+// valeurs entières ∈ [0, half[ ; deux joueurs sur la même paire (équipe, slot) → TEAM_SLOT_TAKEN.
+// Sans `slotsByUserId`, le slot existant n'est jamais touché (comportement inchangé).
+// Transactionnel (tx fourni).
 export async function applyTeams(
   tx: Prisma.TransactionClient,
   reservationId: string,
   teamsByUserId: Record<string, number>,
   maxPlayers: number,
+  slotsByUserId?: Record<string, number>,
 ): Promise<void> {
   const parts = await tx.reservationParticipant.findMany({
     where: { reservationId },
@@ -50,7 +82,19 @@ export async function applyTeams(
     count[t]++;
     if (count[t] > half) throw new Error('TEAM_SIDE_FULL');
   }
+  if (slotsByUserId) {
+    const seenPairs = new Set<string>();
+    for (const p of parts) {
+      const s = slotsByUserId[p.userId];
+      if (!Number.isInteger(s) || s < 0 || s >= half) throw new Error('TEAM_INVALID');
+      const key = `${teamsByUserId[p.userId]}:${s}`;
+      if (seenPairs.has(key)) throw new Error('TEAM_SLOT_TAKEN');
+      seenPairs.add(key);
+    }
+  }
   for (const p of parts) {
-    await tx.reservationParticipant.update({ where: { id: p.id }, data: { team: teamsByUserId[p.userId] } });
+    const data: { team: number; slot?: number } = { team: teamsByUserId[p.userId] };
+    if (slotsByUserId) data.slot = slotsByUserId[p.userId];
+    await tx.reservationParticipant.update({ where: { id: p.id }, data });
   }
 }

@@ -123,14 +123,35 @@ describe('DELETE /api/clubs/:slug/open-matches/:id/interest', () => {
 // ─── Teams (réorganisation par l'organisateur) ────────────────────────────────
 
 describe('POST /api/clubs/:slug/open-matches/:id/participants/teams', () => {
-  it('200 — appelle setTeams(slug, id, userId, teams)', async () => {
+  it('200 — appelle setTeams(slug, id, userId, teams) (sans slots)', async () => {
     const teams = { u1: 1, u2: 2, u3: 1, u4: 2 };
     const res = await request(app)
       .post(`${base}/participants/teams`)
       .set('Authorization', `Bearer ${token()}`)
       .send({ teams });
     expect(res.status).toBe(200);
-    expect(setTeams).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', teams);
+    expect(setTeams).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', teams, undefined);
+  });
+
+  it('200 — transmet aussi les places (slots) quand fournies', async () => {
+    const teams = { u1: 1, u2: 2, u3: 1, u4: 2 };
+    const slots = { u1: 0, u2: 0, u3: 1, u4: 1 };
+    const res = await request(app)
+      .post(`${base}/participants/teams`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ teams, slots });
+    expect(res.status).toBe(200);
+    expect(setTeams).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', teams, slots);
+  });
+
+  it('400 — deux joueurs sur la même place (TEAM_SLOT_TAKEN) est mappé', async () => {
+    setTeams.mockRejectedValue(new Error('TEAM_SLOT_TAKEN'));
+    const res = await request(app)
+      .post(`${base}/participants/teams`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ teams: { u1: 1, u2: 1 }, slots: { u1: 0, u2: 0 } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('TEAM_SLOT_TAKEN');
   });
 
   it('400 — un côté sur-rempli (TEAM_SIDE_FULL) est mappé', async () => {

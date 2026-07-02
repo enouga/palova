@@ -10,7 +10,7 @@ const MATCH_INCLUDE = {
   resource: { select: { id: true, name: true, attributes: true, clubId: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
   participants: {
     orderBy: { joinedAt: 'asc' },
-    select: { userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+    select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
   },
   openMatchInterests: {
     orderBy: { createdAt: 'asc' },
@@ -104,6 +104,7 @@ export class OpenMatchService {
         userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
         level: levels[`${p.userId}:${sportKey}`] ?? null,
         team: p.team,
+        slot: p.slot,
       })),
       interestedCount: m.openMatchInterests.length,
       viewerIsInterested: viewerUserId != null && m.openMatchInterests.some((i) => i.userId === viewerUserId),
@@ -317,8 +318,8 @@ export class OpenMatchService {
     return result;
   }
 
-  /** Réorganise les équipes d'une partie ouverte (organisateur seul). Transaction Serializable + FOR UPDATE. */
-  async setTeams(slug: string, reservationId: string, organizerUserId: string, teams: Record<string, number>) {
+  /** Réorganise les équipes (+ places G/D) d'une partie ouverte (organisateur seul). Transaction Serializable + FOR UPDATE. */
+  async setTeams(slug: string, reservationId: string, organizerUserId: string, teams: Record<string, number>, slots?: Record<string, number>) {
     const club = await this.resolveActiveMember(slug, organizerUserId);
     await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ start_time: Date; resource_id: string }>>`
@@ -332,7 +333,7 @@ export class OpenMatchService {
       const actor = parts.find((p) => p.userId === organizerUserId);
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
-      await applyTeams(tx, reservationId, teams, maxPlayers);
+      await applyTeams(tx, reservationId, teams, maxPlayers, slots);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
     return { id: reservationId };
   }

@@ -333,6 +333,7 @@ export class ReservationService {
       targetLevelMin?: number | null;
       targetLevelMax?: number | null;
       teams?: Record<string, number>;
+      slots?: Record<string, number>;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -371,19 +372,24 @@ export class ReservationService {
       await tx.reservationParticipant.createMany({
         data: this.participantRows(reservationId, userId, partners, priceCents),
       });
-      // Répartition d'équipes proposée par l'organisateur À LA CRÉATION : indice
-      // d'affichage BEST-EFFORT. À la différence d'applyTeams (strict, throw), on
+      // Répartition d'équipes (+ place G/D) proposée par l'organisateur À LA CRÉATION :
+      // indice d'affichage BEST-EFFORT. À la différence d'applyTeams (strict, throw), on
       // n'exige rien : une map incomplète/malformée ne doit JAMAIS faire échouer
-      // la confirmation. On ignore les entrées inconnues/hors {1,2} ; à la lecture,
-      // effectiveTeams comble les côtés non assignés.
-      if (setup.teams) {
+      // la confirmation. On ignore les entrées inconnues/hors {1,2} (resp. hors
+      // [0, half[) ; à la lecture, effectiveTeams comble les côtés/places non assignés.
+      if (setup.teams || setup.slots) {
         const created = await tx.reservationParticipant.findMany({
           where: { reservationId }, select: { id: true, userId: true },
         });
+        const half = Math.max(1, Math.floor(playerCount(format) / 2));
         for (const cp of created) {
-          const t = setup.teams[cp.userId];
-          if (t === 1 || t === 2) {
-            await tx.reservationParticipant.update({ where: { id: cp.id }, data: { team: t } });
+          const t = setup.teams?.[cp.userId];
+          const s = setup.slots?.[cp.userId];
+          const data: { team?: number; slot?: number } = {};
+          if (t === 1 || t === 2) data.team = t;
+          if (typeof s === 'number' && Number.isInteger(s) && s >= 0 && s < half) data.slot = s;
+          if (Object.keys(data).length > 0) {
+            await tx.reservationParticipant.update({ where: { id: cp.id }, data });
           }
         }
       }
@@ -1399,14 +1405,14 @@ export class ReservationService {
   private mapOwnPlayers(r: {
     id: string;
     resource: { attributes: Prisma.JsonValue; clubSport: { sport: { key: string } } };
-    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; team: number | null; user: { firstName: string; lastName: string; avatarUrl: string | null } }>;
+    participants: Array<{ id: string; userId: string; isOrganizer: boolean; share: Prisma.Decimal; team: number | null; slot: number | null; user: { firstName: string; lastName: string; avatarUrl: string | null } }>;
   }) {
     const format = (r.resource.attributes as { format?: string } | null)?.format;
     const capacity = playerCount(format);
     const sportKey = r.resource.clubSport.sport.key;
     const teamed = sportKey === 'padel'
       ? effectiveTeams(r.participants, capacity)
-      : r.participants.map((p) => ({ ...p, team: null as 1 | 2 | null }));
+      : r.participants.map((p) => ({ ...p, team: null as 1 | 2 | null, slot: null as number | null }));
     return {
       id: r.id,
       sportKey,
@@ -1416,6 +1422,7 @@ export class ReservationService {
         firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
         share: Number(p.share).toFixed(2),
         team: p.team,
+        slot: p.slot,
       })),
     };
   }
@@ -1428,7 +1435,7 @@ export class ReservationService {
         resource: { select: { attributes: true, clubSport: { select: { sport: { select: { key: true } } } } } },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { id: true, userId: true, isOrganizer: true, share: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+          select: { id: true, userId: true, isOrganizer: true, share: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
     });
@@ -1476,8 +1483,13 @@ export class ReservationService {
     return this.getOwnReservationPlayers(reservationId, userId);
   }
 
-  /** Réorganise les équipes d'une réservation (propriétaire seul). */
-  async setReservationTeams(reservationId: string, userId: string, teams: Record<string, number>) {
+  /** Réorganise les équipes (+ places G/D) d'une réservation (propriétaire seul). */
+  async setReservationTeams(
+    reservationId: string,
+    userId: string,
+    teams: Record<string, number>,
+    slots?: Record<string, number>,
+  ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
       include: { resource: { select: { attributes: true } } },
@@ -1486,7 +1498,7 @@ export class ReservationService {
     if (reservation.userId !== userId) throw new Error('UNAUTHORIZED');
     const maxPlayers = playerCount((reservation.resource.attributes as { format?: string } | null)?.format);
     await prisma.$transaction(async (tx) => {
-      await applyTeams(tx, reservationId, teams, maxPlayers);
+      await applyTeams(tx, reservationId, teams, maxPlayers, slots);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return this.getOwnReservationPlayers(reservationId, userId);
   }
@@ -1506,7 +1518,7 @@ export class ReservationService {
         },
         participants: {
           orderBy: { joinedAt: 'asc' },
-          select: { id: true, userId: true, isOrganizer: true, team: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+          select: { id: true, userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
         },
       },
     });
@@ -1521,7 +1533,7 @@ export class ReservationService {
       const capacity = playerCount((attributes as { format?: string } | null)?.format);
       const teamed = sportKey === 'padel'
         ? effectiveTeams(participants, capacity)
-        : participants.map((p) => ({ ...p, team: null as 1 | 2 | null }));
+        : participants.map((p) => ({ ...p, team: null as 1 | 2 | null, slot: null as number | null }));
       return {
         ...rest,
         resource: { ...resourcePublic, sport: { key: clubSport.sport.key, name: clubSport.sport.name } },
@@ -1531,6 +1543,7 @@ export class ReservationService {
           firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
           level: levels[`${p.userId}:${sportKey}`] ?? null,
           team: p.team,
+          slot: p.slot,
         })),
       };
     });

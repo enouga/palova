@@ -46,6 +46,7 @@ const ERROR_STATUS: Record<string, number> = {
   LEVEL_SYSTEM_DISABLED:     403,
   TEAM_INVALID:             400,
   TEAM_SIDE_FULL:           400,
+  TEAM_SLOT_TAKEN:          400,
 };
 
 function asString(v: unknown): string {
@@ -119,7 +120,7 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
 
 router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { partnerUserIds, visibility, targetLevelMin, targetLevelMax } = req.body ?? {};
+    const { partnerUserIds, visibility, targetLevelMin, targetLevelMax, teams, slots } = req.body ?? {};
     // Validation alignée sur /hold : on rejette (400) au lieu de coercer silencieusement.
     if (visibility !== undefined && visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
       return void res.status(400).json({ error: 'VALIDATION_ERROR' });
@@ -147,6 +148,10 @@ router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response
       visibility,
       targetLevelMin: targetLevelMin === undefined ? undefined : (targetLevelMin === null ? null : Number(targetLevelMin)),
       targetLevelMax: targetLevelMax === undefined ? undefined : (targetLevelMax === null ? null : Number(targetLevelMax)),
+      // Répartition équipes + places G/D proposée à la création : best-effort côté service
+      // (entrées inconnues/invalides ignorées, jamais d'échec de confirmation).
+      teams: typeof teams === 'object' && teams !== null ? teams as Record<string, number> : undefined,
+      slots: typeof slots === 'object' && slots !== null ? slots as Record<string, number> : undefined,
     });
     res.json(updated);
   } catch (err) { handleError(err, res, next); }
@@ -182,9 +187,12 @@ router.delete('/:id/players/:participantId', authMiddleware, async (req: AuthReq
   } catch (err) { handleError(err, res, next); }
 });
 
-// Réorganise les équipes d'une partie padel (propriétaire uniquement).
+// Réorganise les équipes (+ places G/D) d'une partie padel (propriétaire uniquement).
 router.post('/:id/teams', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await reservationService.setReservationTeams(asString(req.params.id), req.user!.id, (req.body as { teams?: Record<string, number> }).teams ?? {})); }
+  try {
+    const body = req.body as { teams?: Record<string, number>; slots?: Record<string, number> };
+    res.json(await reservationService.setReservationTeams(asString(req.params.id), req.user!.id, body.teams ?? {}, body.slots));
+  }
   catch (err) { handleError(err, res, next); }
 });
 

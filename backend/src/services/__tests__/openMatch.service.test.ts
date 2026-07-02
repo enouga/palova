@@ -76,6 +76,27 @@ describe('OpenMatchService', () => {
       expect(side1).toBeLessThanOrEqual(match.maxPlayers / 2);
     });
 
+    it('expose une place G/D concrète (slot) par joueur — slot explicite honoré, les autres comblés', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'm1', startTime: future(48), endTime: future(49),
+          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+          participants: [
+            { userId: 'org', isOrganizer: true, team: 1, slot: 1, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
+            { userId: 'viewer', isOrganizer: false, team: 1, slot: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
+          ],
+          openMatchInterests: [],
+          openMatchMessages: [],
+        },
+      ] as any);
+
+      const out = await service.listOpenMatches('club-demo', 'viewer');
+
+      const byId = Object.fromEntries(out[0].players.map((p: any) => [p.userId, p]));
+      expect(byId.org).toMatchObject({ team: 1, slot: 1 });      // slot explicite honoré (D)
+      expect(byId.viewer).toMatchObject({ team: 1, slot: 0 });   // non assigné → comble G
+    });
+
     it('expose le sport du terrain sur chaque partie', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([
         {
@@ -672,6 +693,32 @@ describe('OpenMatchService', () => {
       const team2 = Object.keys(byId).filter((id) => byId[id] === 2).sort();
       expect(team1).toEqual(['p3', 'p4']); // user-3 + user-4 côté 1
       expect(team2).toEqual(['p1', 'p2']); // org + user-2 côté 2
+    });
+
+    it('persiste aussi les places G/D quand slots est fourni', async () => {
+      happyTx(); lockRow(); resource(); parts();
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.setTeams('club-demo', 'm1', 'org',
+        { org: 1, 'user-2': 1, 'user-3': 2, 'user-4': 2 },
+        { org: 1, 'user-2': 0, 'user-3': 0, 'user-4': 1 });
+
+      const byId: Record<string, { team: number; slot?: number }> = {};
+      for (const call of (prismaMock.reservationParticipant.update as jest.Mock).mock.calls) {
+        byId[call[0].where.id] = call[0].data;
+      }
+      expect(byId.p1).toEqual({ team: 1, slot: 1 });
+      expect(byId.p2).toEqual({ team: 1, slot: 0 });
+      expect(byId.p3).toEqual({ team: 2, slot: 0 });
+      expect(byId.p4).toEqual({ team: 2, slot: 1 });
+    });
+
+    it('refuse deux joueurs sur la même place (TEAM_SLOT_TAKEN)', async () => {
+      happyTx(); lockRow(); resource(); parts();
+      await expect(service.setTeams('club-demo', 'm1', 'org',
+        { org: 1, 'user-2': 1, 'user-3': 2, 'user-4': 2 },
+        { org: 0, 'user-2': 0, 'user-3': 0, 'user-4': 1 },
+      )).rejects.toThrow('TEAM_SLOT_TAKEN');
     });
 
     it('refuse un côté sur-rempli (TEAM_SIDE_FULL)', async () => {

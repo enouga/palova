@@ -1623,6 +1623,22 @@ describe('ReservationService', () => {
       expect(out.participants[1].avatarUrl).toBeNull();
     });
 
+    it('expose la place G/D concrète (slot explicite honoré, les autres comblés)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', userId: 'user-1',
+        resource: { attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
+        participants: [
+          { id: 'p1', userId: 'user-1', isOrganizer: true,  share: 25, team: 1, slot: 1,    user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+          { id: 'p2', userId: 'user-2', isOrganizer: false, share: 0,  team: 1, slot: null, user: { firstName: 'Sam',  lastName: 'P', avatarUrl: null } },
+        ],
+      } as any);
+
+      const out = await service.getOwnReservationPlayers('res-1', 'user-1');
+
+      expect(out.participants[0]).toMatchObject({ id: 'p1', team: 1, slot: 1 });  // D explicite
+      expect(out.participants[1]).toMatchObject({ id: 'p2', team: 1, slot: 0 }); // comble G
+    });
+
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', userId: 'autre', resource: { attributes: {}, clubSport: { sport: { key: 'padel' } } }, participants: [],
@@ -1660,10 +1676,11 @@ describe('ReservationService', () => {
 
       expect(out).toHaveLength(1);
       expect(out[0].capacity).toBe(4);
-      // 2 participants sur 4 places (double) → tous assignés à l'équipe 1 (half=2, aucun dépassement)
+      // 2 participants sur 4 places (double) → tous assignés à l'équipe 1 (half=2, aucun dépassement),
+      // places G/D comblées dans l'ordre d'arrivée (slot 0 puis 1).
       expect(out[0].participants).toEqual([
-        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png', level: null, team: 1 },
-        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null, level: null, team: 1 },
+        { id: 'p1', userId: 'user-1', isOrganizer: true,  firstName: 'Eric', lastName: 'N', avatarUrl: '/uploads/avatars/eric.png', level: null, team: 1, slot: 0 },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, firstName: 'Sam',  lastName: 'P', avatarUrl: null, level: null, team: 1, slot: 1 },
       ]);
       expect(out[0].resource.name).toBe('Terrain 2');
       expect((out[0].resource as any).attributes).toBeUndefined();
@@ -1783,7 +1800,8 @@ describe('ReservationService', () => {
           club: { name: 'Club Tennis', slug: 'club-tennis', timezone: 'Europe/Paris', playerChangeCutoffHours: null, cancellationCutoffHours: null },
         },
         participants: [
-          { id: 'tt1', userId: 'user-1', isOrganizer: true, team: null, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
+          // slot 0 volontaire : hors padel, la valeur en base est écrasée à null au mapping.
+          { id: 'tt1', userId: 'user-1', isOrganizer: true, team: null, slot: 0, user: { firstName: 'Eric', lastName: 'N', avatarUrl: null } },
         ],
       };
 
@@ -1799,10 +1817,16 @@ describe('ReservationService', () => {
       const tennis = list.find((r) => (r.resource as any).sport.key === 'tennis');
 
       expect(padel).toBeTruthy();
-      for (const p of padel!.participants) expect([1, 2]).toContain(p.team);
-      // hors padel → team null
+      for (const p of padel!.participants) {
+        expect([1, 2]).toContain(p.team);
+        expect([0, 1]).toContain(p.slot); // place G/D concrète en padel
+      }
+      // hors padel → team ET slot null
       expect(tennis).toBeTruthy();
-      for (const p of tennis!.participants) expect(p.team).toBeNull();
+      for (const p of tennis!.participants) {
+        expect(p.team).toBeNull();
+        expect(p.slot).toBeNull();
+      }
     });
   });
 
@@ -1905,6 +1929,24 @@ describe('ReservationService', () => {
       const u2 = prismaMock.reservationParticipant.update.mock.calls.map((c: any) => c[0]).find((u: any) => u.where.id === 'p2');
       expect(u1.data.team).toBe(2);
       expect(u2.data.team).toBe(1);
+    });
+
+    it('persiste aussi les places G/D quand slots est fourni', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: reservationId, userId: ownerUserId, resource: { attributes: { format: 'double' } },
+      } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: ownerUserId },
+        { id: 'p2', userId: p2 },
+      ] as any);
+
+      await service.setReservationTeams(reservationId, ownerUserId,
+        { [ownerUserId]: 2, [p2]: 1 }, { [ownerUserId]: 1, [p2]: 0 });
+
+      const u1 = prismaMock.reservationParticipant.update.mock.calls.map((c: any) => c[0]).find((u: any) => u.where.id === 'p1');
+      const u2 = prismaMock.reservationParticipant.update.mock.calls.map((c: any) => c[0]).find((u: any) => u.where.id === 'p2');
+      expect(u1.data).toEqual({ team: 2, slot: 1 });
+      expect(u2.data).toEqual({ team: 1, slot: 0 });
     });
 
     it('refuse un non-propriétaire (UNAUTHORIZED)', async () => {
@@ -2204,6 +2246,40 @@ describe('ReservationService', () => {
       // best-effort : un update par participant, p-2 (user-2) → équipe 2.
       expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-2' }, data: { team: 2 } });
       expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-3' }, data: { team: 1 } });
+    });
+
+    it('persiste les places fournies (slots best-effort : valide gardé, invalide ignoré, jamais d\'échec)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue(
+        [{ userId: 'user-2' }, { userId: 'user-3' }, { userId: 'user-4' }] as any,
+      );
+      const tx = {
+        reservationParticipant: {
+          deleteMany: jest.fn(),
+          createMany: jest.fn(),
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'p-org', userId: 'user-1' },
+            { id: 'p-2',   userId: 'user-2' },
+            { id: 'p-3',   userId: 'user-3' },
+            { id: 'p-4',   userId: 'user-4' },
+          ]),
+          update: jest.fn(),
+        },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', {
+        partnerUserIds: ['user-2', 'user-3', 'user-4'], visibility: 'PUBLIC',
+        teams: { 'user-1': 1, 'user-2': 1, 'user-3': 2, 'user-4': 2 },
+        // double → half = 2 : 5 et -1 hors [0, 2[ → ignorés (team seule persistée)
+        slots: { 'user-1': 0, 'user-2': 1, 'user-3': 5, 'user-4': -1 },
+      });
+
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-org' }, data: { team: 1, slot: 0 } });
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-2' }, data: { team: 1, slot: 1 } });
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-3' }, data: { team: 2 } });
+      expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p-4' }, data: { team: 2 } });
     });
 
     it('hors padel : ignore la fourchette de niveau (targetLevel forcé à null)', async () => {

@@ -66,6 +66,7 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_ORGANIZER:          403,
   TEAM_SIDE_FULL:         400,
   TEAM_INVALID:           400,
+  TEAM_SLOT_TAKEN:        400,
   CANNOT_REMOVE_ORGANIZER: 409,
   PARTICIPANT_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_FOUND: 404,
@@ -288,7 +289,10 @@ router.post('/:slug/open-matches/:id/participants', authMiddleware, async (req: 
 
 // Réorganisation des équipes par l'organisateur (tap-to-swap) — chemin plus spécifique que /:userId (DELETE), pas de collision.
 router.post('/:slug/open-matches/:id/participants/teams', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.setTeams(asString(req.params.slug), asString(req.params.id), req.user!.id, (req.body as { teams?: Record<string, number> }).teams ?? {})); }
+  try {
+    const body = req.body as { teams?: Record<string, number>; slots?: Record<string, number> };
+    res.json(await openMatchService.setTeams(asString(req.params.slug), asString(req.params.id), req.user!.id, body.teams ?? {}, body.slots));
+  }
   catch (err) { handleError(err, res, next); }
 });
 
