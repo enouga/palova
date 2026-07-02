@@ -71,10 +71,6 @@ body {
 .sp-scroll-x::-webkit-scrollbar { display: none; }
 @keyframes sp-pop { 0% { transform: scale(0); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 
-/* Hide scrollbars inside scroll areas but keep scrollability */
-.sp-noscroll::-webkit-scrollbar { width: 0; height: 0; }
-.sp-noscroll { scrollbar-width: none; }
-
 /* Retour visuel discret sur les boutons : léger relèvement au survol,
    enfoncement au clic. Transform/filter uniquement → n'écrase pas les
    couleurs ni les ombres posées en style inline. Respecte prefers-reduced-motion. */

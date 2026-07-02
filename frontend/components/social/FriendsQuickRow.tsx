@@ -15,7 +15,7 @@ export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeCo
   excludeIds: string[];
   query?: string;
   onPick: (friend: Friend) => void;
-  /** Couleur du fondu de débordement = fond du conteneur hôte (défaut th.surface). */
+  /** Couleur du fondu de débordement = fond du conteneur hôte (hex 6 chiffres uniquement — un suffixe alpha y est ajouté). Défaut th.surface. */
   fadeColor?: string;
 }) {
   const { th } = useTheme();
