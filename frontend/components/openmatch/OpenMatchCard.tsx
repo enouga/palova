@@ -10,6 +10,7 @@ import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { rangeLabel } from '@/lib/levelMatch';
 import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
+import { matchShareUrl, matchShareText } from '@/lib/matchShare';
 import { formatDateShortTimeRange } from '@/lib/tournament';
 
 export interface OpenMatchCardProps {
@@ -127,7 +128,8 @@ export function OpenMatchCard({
           compact
           style={actionBtn}
           title={`Partie ouverte · ${m.resourceName}`}
-          url={typeof window !== 'undefined' ? `${window.location.origin}/parties/${m.id}` : `/parties/${m.id}`}
+          text={matchShareText(m, null, timezone)}
+          url={typeof window !== 'undefined' ? matchShareUrl(window.location.origin, m) : `/parties/${m.id}`}
         />
         <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>
           {m.viewerIsOrganizer ? (

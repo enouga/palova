@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { OpenMatchCard, OpenMatchCardProps } from '../components/openmatch/OpenMatchCard';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { OpenMatch } from '../lib/api';
@@ -184,5 +184,22 @@ describe('OpenMatchCard', () => {
       </ThemeProvider>
     );
     expect(screen.getByRole('button', { name: /partager/i })).toBeInTheDocument();
+  });
+
+  it("l'URL partagée est versionnée par l'état (?s=cardVersion) et le texte enrichi", async () => {
+    const share = jest.fn().mockResolvedValue(undefined);
+    (navigator as { share?: unknown }).share = share;
+    const match = makeMatch({ cardVersion: 'abc123def456' });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /partager/i }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      url: expect.stringContaining('/parties/m1?s=abc123def456'),
+      text: expect.stringContaining('place'),
+    })));
+    delete (navigator as { share?: unknown }).share;
   });
 });

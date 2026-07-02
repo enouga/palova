@@ -16,6 +16,7 @@ import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { ShareActions } from '@/components/tournament/ShareActions';
+import { matchShareUrl, matchShareText } from '@/lib/matchShare';
 
 // /parties/[id] — vue détaillée d'une partie ouverte (cible d'un lien partagé).
 export function OpenMatchDetail({ matchId }: { matchId: string }) {
@@ -75,6 +76,8 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
           <>
             <ShareActions
               uidPrefix="match"
+              shareUrl={typeof window !== 'undefined' ? matchShareUrl(window.location.origin, match) : undefined}
+              shareText={matchShareText(match, club.name, club.timezone)}
               item={{
                 id: match.id,
                 name: `Partie ouverte · ${match.resourceName}`,
