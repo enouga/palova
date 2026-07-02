@@ -5,6 +5,7 @@ import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notif
 import { RatingService, UserLevel } from './rating.service';
 import { effectiveTeams, applyTeams } from './matchTeams';
 import { ensureActiveMembership } from './membership';
+import { matchCardStateHash } from './matchCardState';
 
 // Include commun à la liste et à la lecture unitaire d'une partie ouverte.
 const MATCH_INCLUDE = {
@@ -36,10 +37,13 @@ export class OpenMatchService {
   }
 
   /** Résout un club ACTIVE par slug, SANS exiger d'adhésion (lecture publique des parties). */
-  private async resolveActiveClub(slug: string): Promise<{ id: string }> {
-    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+  private async resolveActiveClub(slug: string): Promise<{ id: string; accentColor: string; logoUrl: string | null }> {
+    const club = await prisma.club.findUnique({
+      where: { slug },
+      select: { id: true, status: true, accentColor: true, logoUrl: true },
+    });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
-    return { id: club.id };
+    return { id: club.id, accentColor: club.accentColor, logoUrl: club.logoUrl };
   }
 
   /** Met à jour les parts de tous les participants : organisateur = reste au centime, autres = part égale. */
@@ -67,10 +71,23 @@ export class OpenMatchService {
   }
 
   /** Sérialise une réservation-partie en DTO. Partagé par listOpenMatches et getOpenMatch. */
-  private toDTO(m: MatchRow, levels: Record<string, UserLevel>, unreadCount: number, viewerUserId: string | null) {
+  private toDTO(
+    m: MatchRow,
+    levels: Record<string, UserLevel>,
+    unreadCount: number,
+    viewerUserId: string | null,
+    club: { accentColor: string; logoUrl: string | null },
+  ) {
     const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
     const teamed = effectiveTeams(m.participants, maxPlayers);
     const sportKey = m.resource.clubSport.sport.key;
+    const spotsLeft = Math.max(0, maxPlayers - m.participants.length);
+    const players = teamed.map((p) => ({
+      userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
+      level: levels[`${p.userId}:${sportKey}`] ?? null,
+      team: p.team,
+      slot: p.slot,
+    }));
     return {
       id: m.id,
       resourceName: m.resource.name,
@@ -78,20 +95,27 @@ export class OpenMatchService {
       startTime: m.startTime.toISOString(),
       endTime: m.endTime.toISOString(),
       maxPlayers,
-      spotsLeft: Math.max(0, maxPlayers - m.participants.length),
+      spotsLeft,
       full: m.participants.length >= maxPlayers,
       viewerIsParticipant: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId),
       viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
       targetLevelMin: m.targetLevelMin ?? null,
       targetLevelMax: m.targetLevelMax ?? null,
-      players: teamed.map((p) => ({
-        userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl, isOrganizer: p.isOrganizer,
-        level: levels[`${p.userId}:${sportKey}`] ?? null,
-        team: p.team,
-        slot: p.slot,
-      })),
+      players,
       lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
       unreadCount,
+      // Hash d'état de la carte OG : versionne l'og:image et l'URL de partage (?s=).
+      cardVersion: matchCardStateHash({
+        players: players.map((p) => ({ userId: p.userId, team: p.team, slot: p.slot, avatarUrl: p.avatarUrl, level: p.level })),
+        spotsLeft,
+        targetLevelMin: m.targetLevelMin ?? null,
+        targetLevelMax: m.targetLevelMax ?? null,
+        startTime: m.startTime.toISOString(),
+        endTime: m.endTime.toISOString(),
+        resourceName: m.resource.name,
+        accentColor: club.accentColor,
+        logoUrl: club.logoUrl,
+      }),
     };
   }
 
@@ -130,7 +154,7 @@ export class OpenMatchService {
       if (mid) unreadByMatch.set(mid, (unreadByMatch.get(mid) ?? 0) + 1);
     }
 
-    return matches.map((m) => this.toDTO(m, levels, unreadByMatch.get(m.id) ?? 0, viewerUserId));
+    return matches.map((m) => this.toDTO(m, levels, unreadByMatch.get(m.id) ?? 0, viewerUserId, club));
   }
 
   /** Lecture d'UNE partie ouverte (page /parties/[id]) — publique, autorise les parties passées. */
@@ -157,7 +181,7 @@ export class OpenMatchService {
       : [];
     const unreadCount = unreadNotifs.filter((n) => (n.data as { matchId?: string } | null)?.matchId === id).length;
 
-    return this.toDTO(m, levels, unreadCount, viewerUserId);
+    return this.toDTO(m, levels, unreadCount, viewerUserId, club);
   }
 
   /** Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation). */

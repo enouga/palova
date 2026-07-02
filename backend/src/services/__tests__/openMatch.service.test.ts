@@ -104,6 +104,26 @@ describe('OpenMatchService', () => {
       expect(match.sport).toEqual({ key: 'padel', name: 'Padel' });
     });
 
+    it('expose cardVersion : stable pour un même état, change après un join', async () => {
+      const t0 = future(48); const t1 = future(49);
+      const org = { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } };
+      const row = {
+        id: 'm1', startTime: t0, endTime: t1,
+        resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+        participants: [org], openMatchMessages: [],
+      };
+      prismaMock.reservation.findMany.mockResolvedValue([row] as any);
+      const [a] = await service.listOpenMatches('club-demo', null);
+      const [b] = await service.listOpenMatches('club-demo', null);
+      expect(a.cardVersion).toMatch(/^[0-9a-f]{12}$/);
+      expect(b.cardVersion).toBe(a.cardVersion);
+
+      const joiner = { userId: 'u2', isOrganizer: false, team: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } };
+      prismaMock.reservation.findMany.mockResolvedValue([{ ...row, participants: [org, joiner] }] as any);
+      const [c] = await service.listOpenMatches('club-demo', null);
+      expect(c.cardVersion).not.toBe(a.cardVersion);
+    });
+
     it('ne remonte que les parties padel (filtre clubSport.sport.key)', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([] as any);
       await service.listOpenMatches('club-demo', 'viewer');
