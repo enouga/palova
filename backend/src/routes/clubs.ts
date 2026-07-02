@@ -23,6 +23,7 @@ import { PaymentMethodService } from '../services/paymentMethod.service';
 import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
+import { matchCardService } from '../services/matchCard.service';
 import { capacityFor } from '../utils/courtType';
 import { prisma } from '../db/prisma';
 
@@ -265,6 +266,14 @@ router.get('/:slug/open-matches/unread-count', authMiddleware, async (req: AuthR
 router.get('/:slug/open-matches/:id', optionalAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchService.getOpenMatch(asString(req.params.slug), asString(req.params.id), req.user?.id ?? null)); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Carte Open Graph de la partie (aperçu de lien WhatsApp/réseaux) — publique, PNG,
+// repli embarqué : ne renvoie JAMAIS d'erreur à un crawler. L'URL est versionnée par
+// ?v=<cardVersion> côté consommateur (pur cache-busting, paramètre ignoré ici).
+router.get('/:slug/open-matches/:id/card.png', async (req: Request, res: Response) => {
+  const filePath = await matchCardService.getMatchCardPath(asString(req.params.slug), asString(req.params.id));
+  res.sendFile(filePath, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' } });
 });
 
 router.post('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
