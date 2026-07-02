@@ -288,6 +288,47 @@ describe('clubLeaderboard', () => {
   });
 });
 
+describe('myClubMatchStats', () => {
+  const service = new ClubService();
+  beforeEach(() => jest.clearAllMocks());
+
+  it('renvoie le bilan V/D + série du club (scopé club+sport+CONFIRMED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    // desc : W, W, L → wins 2, losses 1, streak 2
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-05') } },
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-04') } },
+      { team: 1, match: { winningTeam: 2, playedAt: new Date('2026-06-03') } },
+    ] as any);
+
+    const res = await service.myClubMatchStats('arena', 'u1', 'padel');
+    expect(res).toEqual({ wins: 2, losses: 1, streak: 2 });
+    expect(prismaMock.matchPlayer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'u1', match: { clubId: 'club-1', status: 'CONFIRMED', sportId: 'sport-padel' } },
+    }));
+  });
+
+  it('non-membre → MEMBERSHIP_REQUIRED', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('arena', 'uX', 'padel')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+
+  it('club inconnu → CLUB_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('nope', 'u1', 'padel')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('sport inconnu → SPORT_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('arena', 'u1', 'curling')).rejects.toThrow('SPORT_NOT_FOUND');
+  });
+});
+
 describe('ClubService.resolveSlug', () => {
   const service = new ClubService();
 
