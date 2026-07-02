@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
+import { ResultStats } from '@/components/player/ResultStats';
 
 // Classement des joueurs du club par niveau. Content-only (pas de Screen/ClubNav) :
 // rendu dans l'onglet « Classement » d'OpenMatches.
@@ -102,7 +103,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
       )}
 
       {/* Panneau « moi » */}
-      <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none' }}>
+      <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {me.ranked ? (
           <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15 }}>
             Vous êtes {me.rank}<sup>e</sup> sur {entries.length} · niveau {me.level!.toFixed(1)}
@@ -122,6 +123,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
         ) : (
           <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5 }}>Vous figurez au classement dès qu&apos;il y aura des joueurs classés.</span>
         )}
+        <ResultStats tone="onAccent" wins={me.wins ?? 0} losses={me.losses ?? 0} streak={me.streak ?? 0} />
       </div>
 
       {/* Liste */}

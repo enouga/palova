@@ -17,6 +17,7 @@ function mockLeaderboardSuccess(sportKey = 'padel') {
   prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
   prismaMock.sport.findUnique.mockResolvedValue({ id: `sport-${sportKey}` } as any);
   prismaMock.clubMembership.findMany.mockResolvedValue([]);
+  prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
   prismaMock.user.findUnique
     // 2e appel : meUser (showInLeaderboard + playerRatings)
     .mockResolvedValueOnce({ showInLeaderboard: false, playerRatings: [] } as any);
@@ -42,6 +43,7 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-tennis' } as any);
     prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
 
     const res = await request(app)
       .get('/api/clubs/arena/leaderboard')
@@ -72,6 +74,7 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
     prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
 
     const res = await request(app)
       .get('/api/clubs/arena/leaderboard')
@@ -97,6 +100,7 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
     prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
 
     const res = await request(app)
       .get('/api/clubs/arena/leaderboard?sport=padel')
