@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport, MemberPackage, Subscription, MyPayment } from '@/lib/api';
+import { api, assetUrl, ClubMatchStats, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport, MemberPackage, Subscription, MyPayment } from '@/lib/api';
 import { LevelBadge } from '@/components/player/LevelBadge';
 import { ReliabilityMeter } from '@/components/player/ReliabilityMeter';
 import { LevelCalibration } from '@/components/player/LevelCalibration';
 import { LevelSourceNote } from '@/components/player/LevelSourceNote';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
+import { ResultStats } from '@/components/player/ResultStats';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
@@ -63,6 +64,7 @@ export default function MyProfilePage() {
   // Niveau padel
   const [rating, setRating] = useState<MyRating | null>(null);
   const [history, setHistory] = useState<RatingPoint[]>([]);
+  const [matchStats, setMatchStats] = useState<ClubMatchStats | null>(null);
   const [calibrating, setCalibrating] = useState(false);
   const [ratingBusy, setRatingBusy] = useState(false);
   // Sport sélectionné pour la section niveau (distinct du sport préféré identité)
@@ -135,6 +137,12 @@ export default function MyProfilePage() {
     api.getRatingHistory(token, ratingSport).then(setHistory).catch(() => {});
     setCalibrating(false);
   }, [token, ratingSport]);
+
+  // Bilan V/D du club courant (padel) — seulement sur un hôte club où l'on est membre.
+  useEffect(() => {
+    if (!token || !slug) { setMatchStats(null); return; }
+    api.getMyClubMatchStats(slug, token, ratingSport).then(setMatchStats).catch(() => setMatchStats(null));
+  }, [token, slug, ratingSport]);
 
   const saveInfo = async () => {
     if (!token) return;
@@ -403,6 +411,12 @@ export default function MyProfilePage() {
                           Réévaluer
                         </button>
                       </div>
+                      {matchStats && matchStats.wins + matchStats.losses > 0 && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginBottom: 4 }}>Résultats · {club?.name}</div>
+                          <ResultStats tone="onSurface" wins={matchStats.wins} losses={matchStats.losses} streak={matchStats.streak} />
+                        </div>
+                      )}
                       {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
                       <LevelSourceNote style={{ marginTop: 10 }} />
                     </>

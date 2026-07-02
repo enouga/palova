@@ -30,6 +30,7 @@ jest.mock('../lib/api', () => ({
     uploadMyAvatar: jest.fn(),
     getMyRating: jest.fn().mockResolvedValue(null),
     getRatingHistory: jest.fn().mockResolvedValue([]),
+    getMyClubMatchStats: jest.fn(),
     calibrateRating: jest.fn(),
     changePassword: jest.fn(),
     getSports: jest.fn().mockResolvedValue([]),
@@ -64,6 +65,7 @@ describe('Page Mon profil', () => {
     api.updateMyProfile.mockResolvedValue(profile);
     api.uploadMyAvatar.mockResolvedValue({ ...profile, avatarUrl: '/uploads/avatars/u1-2.png' });
     api.changePassword.mockResolvedValue({ ok: true });
+    api.getMyClubMatchStats.mockResolvedValue({ wins: 0, losses: 0, streak: 0 });
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
@@ -75,6 +77,27 @@ describe('Page Mon profil', () => {
     expect(screen.getByText('L’email ne peut pas être modifié.')).toBeInTheDocument();
     expect(screen.getByLabelText('Téléphone')).toHaveValue('0609032635');
     expect(screen.getByLabelText('Date de naissance')).toHaveTextContent('08/07/1973');
+  });
+
+  it('affiche les stats de résultat du club sous le niveau', async () => {
+    clubCtx = { slug: 'arena', club: { id: 'c1', slug: 'arena', name: 'Padel Arena', levelSystemEnabled: true }, loading: false };
+    api.getMyRating.mockResolvedValue({ level: 5.2, tier: 'Confirmé', isProvisional: false, reliability: 0.85, calibrated: true, matchesPlayed: 25 });
+    api.getMyClubMatchStats.mockResolvedValue({ wins: 18, losses: 7, streak: 3 });
+    wrap();
+    expect(await screen.findByText(/Résultats · Padel Arena/i)).toBeInTheDocument();
+    expect(screen.getByText(/25 matchs/i)).toBeInTheDocument();
+    expect(screen.getByText(/72\s*% de victoires/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 victoires d'affilée/i)).toBeInTheDocument();
+  });
+
+  it("pas de stats de résultat sur l'hôte plateforme (slug null)", async () => {
+    // clubCtx reste { slug: null } (défaut du beforeEach)
+    api.getMyRating.mockResolvedValue({ level: 5.2, tier: 'Confirmé', isProvisional: false, reliability: 0.85, calibrated: true, matchesPlayed: 25 });
+    api.getMyClubMatchStats.mockResolvedValue({ wins: 18, losses: 7, streak: 3 });
+    wrap();
+    await screen.findByText('Eric');
+    expect(screen.queryByText(/Résultats ·/i)).toBeNull();
+    expect(api.getMyClubMatchStats).not.toHaveBeenCalled();
   });
 
   it('Enregistrer envoie téléphone, sexe et date de naissance', async () => {

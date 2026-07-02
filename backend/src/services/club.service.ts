@@ -6,6 +6,7 @@ import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
 import { RatingService } from './rating.service';
 import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
+import { computeResultStats, ResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
 
@@ -548,13 +549,20 @@ export class ClubService {
         matchesPlayed: x.r.matchesPlayed,
       }));
 
-    const meUser = await prisma.user.findUnique({
-      where: { id: callerUserId },
-      select: { showInLeaderboard: true, playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, matchesPlayed: true } } },
-    });
+    // meUser (niveau/opt-in) et le bilan V/D du club sont indépendants → en parallèle.
+    const [meUser, stats] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: callerUserId },
+        select: { showInLeaderboard: true, playerRatings: { where: { sportId: sport.id }, select: { displayLevel: true, matchesPlayed: true } } },
+      }),
+      this.computeClubMatchStats(club.id, callerUserId, sport.id),
+    ]);
     const myRating = meUser?.playerRatings[0] ?? null;
     const matchesPlayed = myRating?.matchesPlayed ?? 0;
     const myRank = entries.find((e) => e.userId === callerUserId)?.rank ?? null;
+
+    // matchesPlayed = compteur GLOBAL (seuil de classement) ; wins+losses = CE club, CE sport,
+    // matchs CONFIRMED uniquement — périmètres volontairement distincts (ils peuvent diverger).
     const me = {
       optedIn: meUser?.showInLeaderboard ?? false,
       ranked: myRank !== null,
@@ -562,9 +570,36 @@ export class ClubService {
       level: myRating?.displayLevel ?? null,
       matchesPlayed,
       matchesToGo: Math.max(0, MIN_RANKED_MATCHES - matchesPlayed),
+      wins: stats.wins,
+      losses: stats.losses,
+      streak: stats.streak,
     };
 
     return { sport: sportKey, entries, me };
+  }
+
+  /** Bilan V/D + série d'un joueur pour un club + sport donnés (matchs CONFIRMED). Partagé classement/profil. */
+  private async computeClubMatchStats(clubId: string, userId: string, sportId: string): Promise<ResultStats> {
+    const rows = await prisma.matchPlayer.findMany({
+      where: { userId, match: { clubId, status: 'CONFIRMED', sportId } },
+      orderBy: { match: { playedAt: 'desc' } },
+      select: { team: true, match: { select: { winningTeam: true, playedAt: true } } },
+    });
+    return computeResultStats(rows.map((mp) => ({ team: mp.team, winningTeam: mp.match.winningTeam, playedAt: mp.match.playedAt })));
+  }
+
+  /** Bilan V/D + série du joueur connecté, scopé à ce club + sport (défaut padel) — pour le profil. */
+  async myClubMatchStats(slug: string, userId: string, sportKey = 'padel'): Promise<ResultStats> {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId: club.id } },
+      select: { status: true },
+    });
+    if (!m || m.status !== 'ACTIVE') throw new Error('MEMBERSHIP_REQUIRED');
+    const sport = await prisma.sport.findUnique({ where: { key: sportKey }, select: { id: true } });
+    if (!sport) throw new Error('SPORT_NOT_FOUND');
+    return this.computeClubMatchStats(club.id, userId, sport.id);
   }
 
   /** Adhésion du joueur connecté à ce club (licence / statut). */

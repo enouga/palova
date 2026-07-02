@@ -385,6 +385,14 @@ router.get('/:slug/me/payments', authMiddleware, async (req: AuthRequest, res: R
   catch (err) { handleError(err, res, next); }
 });
 
+// Bilan V/D + série du joueur connecté sur ce club (padel par défaut) — pour la carte « Mon niveau ».
+router.get('/:slug/me/match-stats', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sport = typeof req.query.sport === 'string' ? req.query.sport : undefined;
+    res.json(await clubService.myClubMatchStats(asString(req.params.slug), req.user!.id, sport));
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Icône PWA du club (référencée par le manifest) — public, PNG, repli Palova.
 router.get('/:slug/icon/:file', async (req: Request, res: Response, next: NextFunction) => {
   try {

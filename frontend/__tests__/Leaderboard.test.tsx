@@ -32,7 +32,7 @@ function payload(over: any = {}) {
       { rank: 1, userId: 'u1', firstName: 'Ana', lastName: 'A', avatarUrl: null, level: 6.2, tier: 'Avancé', matchesPlayed: 30 },
       { rank: 2, userId: 'u2', firstName: 'Bea', lastName: 'B', avatarUrl: null, level: 5.0, tier: 'Confirmé', matchesPlayed: 12 },
     ],
-    me: { optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0 },
+    me: { optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0, wins: 0, losses: 0, streak: 0 },
     ...over,
   };
 }
@@ -109,4 +109,33 @@ it("selecteur masque si le club n'a qu'un seul sport", async () => {
   wrap(<Leaderboard club={clubSingle} viewerUserId="u1" />);
   await screen.findByText('Ana A');
   expect(screen.queryByRole('combobox')).toBeNull();
+});
+
+it('bandeau moi : rangée de stats V/D quand il y a des matchs', async () => {
+  getClubLeaderboard.mockResolvedValue(payload({
+    me: { optedIn: true, ranked: true, rank: 3, level: 5.2, matchesPlayed: 40, matchesToGo: 0, wins: 18, losses: 7, streak: 3 },
+  }));
+  wrap(<Leaderboard club={club} viewerUserId="u1" />);
+  await screen.findByText(/25 matchs/i);
+  expect(screen.getByText(/72\s*% de victoires/i)).toBeInTheDocument();
+  expect(screen.getByText(/18 V/)).toBeInTheDocument();
+  expect(screen.getByText(/3 victoires d'affilée/i)).toBeInTheDocument();
+});
+
+it('bandeau moi : série de défaites → pastille "défaites"', async () => {
+  getClubLeaderboard.mockResolvedValue(payload({
+    me: { optedIn: true, ranked: true, rank: 4, level: 4.8, matchesPlayed: 30, matchesToGo: 0, wins: 10, losses: 12, streak: -2 },
+  }));
+  wrap(<Leaderboard club={club} viewerUserId="u1" />);
+  await screen.findByText(/2 défaites d'affilée/i);
+});
+
+it('bandeau moi : pas de rangée de stats sans match décidé', async () => {
+  getClubLeaderboard.mockResolvedValue(payload({
+    entries: [],
+    me: { optedIn: true, ranked: false, rank: null, level: 5.0, matchesPlayed: 9, matchesToGo: 0, wins: 0, losses: 0, streak: 0 },
+  }));
+  wrap(<Leaderboard club={club} viewerUserId="u9" />);
+  await screen.findByText(/Aucun joueur classé/i);
+  expect(screen.queryByText(/de victoires/i)).toBeNull();
 });

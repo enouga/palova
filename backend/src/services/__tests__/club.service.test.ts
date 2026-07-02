@@ -239,6 +239,7 @@ describe('clubLeaderboard', () => {
     prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
   }
 
   it('classe les joueurs par niveau décroissant puis rating, avec rangs', async () => {
@@ -253,7 +254,7 @@ describe('clubLeaderboard', () => {
     const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
     expect(res.entries.map((e) => [e.rank, e.userId])).toEqual([[1, 'u1'], [2, 'u3'], [3, 'u2']]);
     expect(res.entries[0].tier).toBe('Avancé'); // namedTier(6.2)
-    expect(res.me).toEqual({ optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0 });
+    expect(res.me).toEqual({ optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0, wins: 0, losses: 0, streak: 0 });
   });
 
   it('me non classé : opt-in mais pas assez de matchs → matchesToGo', async () => {
@@ -263,7 +264,7 @@ describe('clubLeaderboard', () => {
 
     const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
     expect(res.entries).toEqual([]);
-    expect(res.me).toEqual({ optedIn: true, ranked: false, rank: null, level: 3.4, matchesPlayed: 3, matchesToGo: 2 });
+    expect(res.me).toEqual({ optedIn: true, ranked: false, rank: null, level: 3.4, matchesPlayed: 3, matchesToGo: 2, wins: 0, losses: 0, streak: 0 });
   });
 
   it('me non opté : optedIn false, ranked false', async () => {
@@ -272,7 +273,27 @@ describe('clubLeaderboard', () => {
     prismaMock.user.findUnique.mockResolvedValue({ showInLeaderboard: false, playerRatings: [] } as any);
 
     const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
-    expect(res.me).toEqual({ optedIn: false, ranked: false, rank: null, level: null, matchesPlayed: 0, matchesToGo: 5 });
+    expect(res.me).toEqual({ optedIn: false, ranked: false, rank: null, level: null, matchesPlayed: 0, matchesToGo: 5, wins: 0, losses: 0, streak: 0 });
+  });
+
+  it('me : bilan V/D + série depuis les matchs du club', async () => {
+    mockBase();
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+    prismaMock.user.findUnique.mockResolvedValue({ showInLeaderboard: true, playerRatings: [{ displayLevel: 5.2, matchesPlayed: 25 }] } as any);
+    // desc : 3 victoires récentes puis 1 défaite → wins 3, losses 1, streak 3
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-05') } },
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-04') } },
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-03') } },
+      { team: 1, match: { winningTeam: 2, playedAt: new Date('2026-06-02') } },
+    ] as any);
+
+    const res = await service.clubLeaderboard('padel-arena', 'u1', 'padel');
+    expect(res.me).toEqual({ optedIn: true, ranked: false, rank: null, level: 5.2, matchesPlayed: 25, matchesToGo: 0, wins: 3, losses: 1, streak: 3 });
+    // Scoping : requête matchPlayer filtrée club + sport + confirmés
+    expect(prismaMock.matchPlayer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'u1', match: { clubId: 'club-1', status: 'CONFIRMED', sportId: 'sport-padel' } },
+    }));
   });
 
   it('refuse un non-membre (MEMBERSHIP_REQUIRED)', async () => {
@@ -292,6 +313,47 @@ describe('clubLeaderboard', () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', levelSystemEnabled: false } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     await expect(service.clubLeaderboard('demo', 'u1')).rejects.toThrow('LEVEL_SYSTEM_DISABLED');
+  });
+});
+
+describe('myClubMatchStats', () => {
+  const service = new ClubService();
+  beforeEach(() => jest.clearAllMocks());
+
+  it('renvoie le bilan V/D + série du club (scopé club+sport+CONFIRMED)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any);
+    // desc : W, W, L → wins 2, losses 1, streak 2
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-05') } },
+      { team: 1, match: { winningTeam: 1, playedAt: new Date('2026-06-04') } },
+      { team: 1, match: { winningTeam: 2, playedAt: new Date('2026-06-03') } },
+    ] as any);
+
+    const res = await service.myClubMatchStats('arena', 'u1', 'padel');
+    expect(res).toEqual({ wins: 2, losses: 1, streak: 2 });
+    expect(prismaMock.matchPlayer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'u1', match: { clubId: 'club-1', status: 'CONFIRMED', sportId: 'sport-padel' } },
+    }));
+  });
+
+  it('non-membre → MEMBERSHIP_REQUIRED', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('arena', 'uX', 'padel')).rejects.toThrow('MEMBERSHIP_REQUIRED');
+  });
+
+  it('club inconnu → CLUB_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('nope', 'u1', 'padel')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('sport inconnu → SPORT_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.sport.findUnique.mockResolvedValue(null as any);
+    await expect(service.myClubMatchStats('arena', 'u1', 'curling')).rejects.toThrow('SPORT_NOT_FOUND');
   });
 });
 
