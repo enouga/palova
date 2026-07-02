@@ -353,6 +353,96 @@ describe('OpenMatchService', () => {
       await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3')).rejects.toThrow('MEMBERSHIP_BLOCKED');
       expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
     });
+
+    it('join ciblé : crée le participant avec team/slot explicites', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0 },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p2' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 2, slot: 1 });
+
+      expect(prismaMock.reservationParticipant.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ reservationId: 'm1', userId: 'user-3', team: 2, slot: 1 }),
+      }));
+    });
+
+    it('join ciblé sans slot : team explicite, slot null (dérivé à la lecture)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0 },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p2' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 2 });
+
+      expect(prismaMock.reservationParticipant.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ team: 2, slot: null }),
+      }));
+    });
+
+    it('lève TEAM_SLOT_TAKEN si la place visée est occupée (slot explicite)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0 },
+      ] as any);
+
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 1, slot: 0 }))
+        .rejects.toThrow('TEAM_SLOT_TAKEN');
+      expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
+    });
+
+    it('lève TEAM_SLOT_TAKEN aussi contre le layout dérivé (participant sans team/slot explicites)', async () => {
+      happyTx(); lockRow(); resource();
+      // org sans team/slot → le layout effectif le place en (1, G) : cette place n'est PAS libre.
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: null, slot: null },
+      ] as any);
+
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 1, slot: 0 }))
+        .rejects.toThrow('TEAM_SLOT_TAKEN');
+    });
+
+    it('lève TEAM_SIDE_FULL si le côté visé est plein', async () => {
+      happyTx(); lockRow(); resource(); // double → half = 2
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0 },
+        { id: 'p2', userId: 'user-2', isOrganizer: false, team: 1, slot: 1 },
+      ] as any);
+
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 1 }))
+        .rejects.toThrow('TEAM_SIDE_FULL');
+    });
+
+    it('lève TEAM_INVALID sur team hors {1,2} ou slot hors bornes', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0 },
+      ] as any);
+
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 3 }))
+        .rejects.toThrow('TEAM_INVALID');
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-3', { team: 1, slot: 5 }))
+        .rejects.toThrow('TEAM_INVALID');
+    });
+
+    it('sans cible : participant créé sans team/slot (comportement historique)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p2' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+
+      await service.joinOpenMatch('club-demo', 'm1', 'user-3');
+
+      const data = (prismaMock.reservationParticipant.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.team).toBeUndefined();
+      expect(data.slot).toBeUndefined();
+    });
   });
 
   describe('leaveOpenMatch', () => {

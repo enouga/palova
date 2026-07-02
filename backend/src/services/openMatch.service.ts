@@ -184,8 +184,18 @@ export class OpenMatchService {
     return this.toDTO(m, levels, unreadCount, viewerUserId, club);
   }
 
-  /** Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation). */
-  async joinOpenMatch(slug: string, reservationId: string, userId: string) {
+  /**
+   * Rejoindre une partie ouverte : transaction Serializable + FOR UPDATE (anti sur-réservation).
+   * `target` (tap sur une place libre) = place précise demandée, validée contre le layout
+   * effectif — celui que le front affiche : TEAM_INVALID / TEAM_SIDE_FULL / TEAM_SLOT_TAKEN.
+   * Sans `target`, comportement historique (team/slot null, dérivés à la lecture).
+   */
+  async joinOpenMatch(
+    slug: string,
+    reservationId: string,
+    userId: string,
+    target?: { team: number; slot?: number },
+  ) {
     const club = await ensureActiveMembership(slug, userId);
 
     const result = await prisma.$transaction(async (tx) => {
@@ -203,13 +213,27 @@ export class OpenMatchService {
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
       const parts = await tx.reservationParticipant.findMany({
         where: { reservationId },
-        select: { id: true, userId: true, isOrganizer: true },
+        orderBy: { joinedAt: 'asc' },
+        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true },
       });
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
       if (parts.some((p) => p.userId === userId)) throw new Error('ALREADY_JOINED');
 
+      // Place ciblée : validée contre le layout effectif (même dérivation que le DTO,
+      // ordre joinedAt) — une place « libre » à l'écran l'est aussi ici, sinon course perdue.
+      let placement: { team: number; slot: number | null } | undefined;
+      if (target) {
+        const half = Math.max(1, Math.floor(maxPlayers / 2));
+        if (target.team !== 1 && target.team !== 2) throw new Error('TEAM_INVALID');
+        if (target.slot !== undefined && (!Number.isInteger(target.slot) || target.slot < 0 || target.slot >= half)) throw new Error('TEAM_INVALID');
+        const layout = effectiveTeams(parts, maxPlayers);
+        if (layout.filter((p) => p.team === target.team).length >= half) throw new Error('TEAM_SIDE_FULL');
+        if (target.slot !== undefined && layout.some((p) => p.team === target.team && p.slot === target.slot)) throw new Error('TEAM_SLOT_TAKEN');
+        placement = { team: target.team, slot: target.slot ?? null };
+      }
+
       const created = await tx.reservationParticipant.create({
-        data: { reservationId, userId, isOrganizer: false, share: new Prisma.Decimal(0) },
+        data: { reservationId, userId, isOrganizer: false, share: new Prisma.Decimal(0), ...(placement ?? {}) },
       });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
