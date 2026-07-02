@@ -24,4 +24,13 @@ describe('FriendsQuickRow', () => {
     await waitFor(() => expect(listClubFriends).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement(); // tous filtrés → rien
   });
+
+  it("rend la rangée en avatars : prénom sous l'avatar, défilement sans barre (.sp-scroll-x)", async () => {
+    listClubFriends.mockResolvedValue([
+      { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, level: null, mutual: true },
+    ]);
+    const { container } = render(<FriendsQuickRow slug="demo" token="t" excludeIds={[]} onPick={jest.fn()} />);
+    await screen.findByRole('button', { name: /léa/i });
+    expect(container.querySelector('.sp-scroll-x')).toBeInTheDocument();
+  });
 });

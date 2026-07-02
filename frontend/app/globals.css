@@ -66,6 +66,9 @@ body {
 @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sp-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sp-sheet-in-top { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+/* Rangée défilante sans barre visible (FriendsQuickRow, feuilles de match) */
+.sp-scroll-x { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.sp-scroll-x::-webkit-scrollbar { display: none; }
 @keyframes sp-pop { 0% { transform: scale(0); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 
 /* Hide scrollbars inside scroll areas but keep scrollability */
