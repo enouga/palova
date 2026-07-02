@@ -73,7 +73,7 @@ export function AddPlayerSheet({ slug, token, team, slot, replaceName, excludeId
           style={{ width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 11, padding: '11px 13px 11px 40px', fontFamily: th.fontUI, fontSize: 14.5, color: th.text, outline: 'none' }} />
       </div>
       <FriendsQuickRow slug={slug} token={token} excludeIds={excludeIds} query={q} fadeColor={th.bgElev}
-        onPick={(f: Friend) => onPick(f)} />
+        disabled={busy} onPick={(f: Friend) => onPick(f)} />
       <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, margin: '2px 0 4px' }}>Membres du club</div>
       {visible.length === 0
         ? <div style={{ padding: '10px 5px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
@@ -81,7 +81,7 @@ export function AddPlayerSheet({ slug, token, team, slot, replaceName, excludeId
             <button key={m.id} type="button" disabled={busy} onClick={() => onPick(m)}
               onMouseEnter={(e) => { if (!busy) e.currentTarget.style.background = th.surface2; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
               <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={null} size={28} color={colorForSeed(m.id)} />
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{m.firstName} {m.lastName}</span>
               <LevelChip level={m.level} size="xs" />

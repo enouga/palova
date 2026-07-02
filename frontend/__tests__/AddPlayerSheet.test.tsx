@@ -26,9 +26,10 @@ describe('AddPlayerSheet', () => {
     await waitFor(() => expect(mocked.searchClubMembers).toHaveBeenCalledWith('demo', '', 't'));
   });
 
-  it('mode remplacement : titre « Remplacer {nom} »', () => {
+  it('mode remplacement : titre « Remplacer {nom} »', async () => {
     wrap({ replaceName: 'Karim B.' });
     expect(screen.getByText('Remplacer Karim B.')).toBeInTheDocument();
+    await waitFor(() => expect(mocked.listClubFriends).toHaveBeenCalled());
   });
 
   it('liste les membres (excludeIds filtrés) et émet onPick', async () => {
@@ -51,9 +52,19 @@ describe('AddPlayerSheet', () => {
     expect(base.onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
   });
 
-  it('le bouton Fermer appelle onClose', () => {
+  it('le bouton Fermer appelle onClose', async () => {
     wrap();
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
     expect(base.onClose).toHaveBeenCalled();
+    await waitFor(() => expect(mocked.listClubFriends).toHaveBeenCalled());
+  });
+
+  it('busy : recherche et rangées désactivées (amis compris)', async () => {
+    mocked.searchClubMembers.mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }] as never);
+    mocked.listClubFriends.mockResolvedValue([{ id: 'f1', firstName: 'Léa', lastName: 'M', avatarUrl: null, level: null, mutual: true }] as never);
+    wrap({ busy: true });
+    expect(screen.getByPlaceholderText(/Rechercher un membre/)).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /New Player/ })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /léa/i })).toBeDisabled();
   });
 });

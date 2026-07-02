@@ -9,7 +9,7 @@ import { colorForSeed } from '@/lib/playerColors';
 // Rangée « Mes amis » : avatars en colonne (niveau accroché sous l'avatar, prénom dessous),
 // ajout en un tap. Barre de défilement masquée (.sp-scroll-x) + fondu sur le bord droit.
 // Filtre par `query` (optionnel) et masque `excludeIds` (déjà ajoutés). Rien si liste vide.
-export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeColor }: {
+export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeColor, disabled }: {
   slug: string;
   token: string;
   excludeIds: string[];
@@ -17,6 +17,8 @@ export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeCo
   onPick: (friend: Friend) => void;
   /** Couleur du fondu de débordement = fond du conteneur hôte (hex 6 chiffres uniquement — un suffixe alpha y est ajouté). Défaut th.surface. */
   fadeColor?: string;
+  /** Désactive les boutons (action en vol dans le conteneur hôte). */
+  disabled?: boolean;
 }) {
   const { th } = useTheme();
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -41,11 +43,11 @@ export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeCo
       <div style={{ position: 'relative' }}>
         <div className="sp-scroll-x" style={{ display: 'flex', gap: 8, paddingBottom: 6 }}>
           {visible.map((f) => (
-            <button key={f.id} type="button"
+            <button key={f.id} type="button" disabled={disabled}
               // preventDefault sur mousedown : garde le focus de l'input pour que le dropdown ne se
               // ferme pas avant le clic (même robustesse que la liste de résultats de PartnerSearch).
               onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(f)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: 56, flexShrink: 0, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: 56, flexShrink: 0, border: 'none', background: 'transparent', cursor: disabled ? 'default' : 'pointer', padding: 0 }}>
               <span style={{ position: 'relative', display: 'inline-flex' }}>
                 <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl} size={40} color={colorForSeed(f.id)} />
                 {f.level && (
