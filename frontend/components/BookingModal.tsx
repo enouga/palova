@@ -584,10 +584,10 @@ export default function BookingModal({
                 </div>
               )}
 
-              {/* Quota (compteur du joueur) */}
+              {/* Quota (compteur du joueur) — pleines & creuses sur une ligne */}
               {quotaStatus && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-                  <QuotaStatus status={quotaStatus} />
+                <div style={{ marginTop: 16 }}>
+                  <QuotaStatus status={quotaStatus} compact />
                 </div>
               )}
 

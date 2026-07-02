@@ -67,6 +67,20 @@ describe('QuotaStatus', () => {
     expect(kids.every((k) => k.tagName === 'SPAN')).toBe(true);
   });
 
+  it('compact : pastilles pleines & creuses sur une ligne, suffixe affiché une seule fois', () => {
+    render(
+      <ThemeProvider>
+        <QuotaStatus status={{ model: 'WEEKLY', peak: { used: 3, limit: 5 }, offPeak: { used: 1, limit: 3 } }} compact />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('Heures pleines')).toBeInTheDocument();
+    expect(screen.getByText('Heures creuses')).toBeInTheDocument();
+    expect(screen.getByText('3/5')).toBeInTheDocument();
+    expect(screen.getByText('1/3')).toBeInTheDocument();
+    // suffixe mutualisé : une seule occurrence sous la rangée
+    expect(screen.getAllByText('cette semaine')).toHaveLength(1);
+  });
+
   it('fill : transmet la pleine largeur aux pastilles', () => {
     const { container } = render(
       <ThemeProvider>

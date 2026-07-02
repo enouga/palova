@@ -2,6 +2,7 @@
 
 import { StatPill } from '@/components/ui/StatPill';
 import { IconName } from '@/components/ui/Icon';
+import { useTheme } from '@/lib/ThemeProvider';
 import { MyQuotaStatus, QuotaCount } from '@/lib/api';
 
 // Affiche le compteur de quotas du joueur (« Heures pleines · 3/5 cette semaine »).
@@ -10,10 +11,13 @@ import { MyQuotaStatus, QuotaCount } from '@/lib/api';
 // Rien n'est rendu si le club n'a pas de quotas ou si la classe est illimitée (null).
 // `inline` : émet les pastilles sans conteneur (pour les fondre dans une rangée parente,
 // ex. la rangée « soldes & quotas » de Réserver). Défaut : rangée flex autonome (BookingModal).
+// `compact` : grille à colonnes égales (pleines / creuses sur UNE ligne dans un conteneur
+// étroit), suffixe de période affiché une seule fois sous la rangée (BookingModal).
 export function QuotaStatus(
-  { status, inline = false, fill = false }:
-  { status: MyQuotaStatus | null | undefined; inline?: boolean; fill?: boolean },
+  { status, inline = false, fill = false, compact = false }:
+  { status: MyQuotaStatus | null | undefined; inline?: boolean; fill?: boolean; compact?: boolean },
 ) {
+  const { th } = useTheme();
   if (!status) return null;
 
   const suffix = status.model === 'WEEKLY' ? 'cette semaine' : 'à venir';
@@ -29,9 +33,20 @@ export function QuotaStatus(
       label={label}
       meter={{ used: count.used, limit: count.limit, suffix }}
       warn={count.used >= count.limit} // plafond atteint → alerte douce coral
-      fill={fill}
+      fill={fill || compact}
+      compact={compact}
     />
   ));
+
+  // Compact : 2 colonnes égales (1 si une seule classe) + suffixe unique dessous.
+  if (compact) {
+    return (
+      <div>
+        <div style={{ display: 'grid', gridTemplateColumns: cells.length > 1 ? '1fr 1fr' : '1fr', gap: 10 }}>{pills}</div>
+        <div style={{ marginTop: 6, textAlign: 'center', fontFamily: th.fontUI, fontSize: 11, fontWeight: 500, color: th.textFaint }}>{suffix}</div>
+      </div>
+    );
+  }
 
   if (inline) return <>{pills}</>;
   return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{pills}</div>;
