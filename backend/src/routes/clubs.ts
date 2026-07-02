@@ -277,7 +277,14 @@ router.get('/:slug/open-matches/:id/card.png', async (req: Request, res: Respons
 });
 
 router.post('/:slug/open-matches/:id/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.joinOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
+  try {
+    // Body additif { team?, slot? } : place ciblée (tap sur une place libre). Sans team → join historique.
+    const body = (req.body ?? {}) as { team?: unknown; slot?: unknown };
+    const target = body.team !== undefined && body.team !== null
+      ? { team: Number(body.team), slot: body.slot === undefined || body.slot === null ? undefined : Number(body.slot) }
+      : undefined;
+    res.json(await openMatchService.joinOpenMatch(asString(req.params.slug), asString(req.params.id), req.user!.id, target));
+  }
   catch (err) { handleError(err, res, next); }
 });
 

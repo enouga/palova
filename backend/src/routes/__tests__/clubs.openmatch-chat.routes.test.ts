@@ -135,6 +135,37 @@ describe('POST /api/clubs/:slug/open-matches/:id/participants/teams', () => {
   });
 });
 
+// ─── Join (place ciblée) ──────────────────────────────────────────────────────
+
+describe('POST /api/clubs/:slug/open-matches/:id/join', () => {
+  it('relaie la place ciblée { team, slot } au service', async () => {
+    const res = await request(app)
+      .post(`${base}/join`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ team: 2, slot: 1 });
+    expect(res.status).toBe(200);
+    expect(joinOpenMatch).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', { team: 2, slot: 1 });
+  });
+
+  it('sans body → cible undefined (comportement historique)', async () => {
+    const res = await request(app)
+      .post(`${base}/join`)
+      .set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(joinOpenMatch).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', undefined);
+  });
+
+  it('TEAM_SLOT_TAKEN → 400', async () => {
+    joinOpenMatch.mockRejectedValue(new Error('TEAM_SLOT_TAKEN'));
+    const res = await request(app)
+      .post(`${base}/join`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ team: 1, slot: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('TEAM_SLOT_TAKEN');
+  });
+});
+
 // ─── Chat — messages ──────────────────────────────────────────────────────────
 
 describe('GET /api/clubs/:slug/open-matches/:id/chat/messages', () => {
