@@ -48,6 +48,7 @@ export interface BookingCheckout {
   createStripeIntent: () => Promise<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null }>;
   stripeType: 'payment' | 'setup'; stripeAmountLabel: string;
   persistHoldSetup: () => Promise<void>; handleConfirm: () => Promise<void>; handleExit: () => Promise<void>;
+  handleStripeSuccess: (r: Reservation) => void;
   confirmLabel: string; quotaStatus?: MyQuotaStatus | null; cancellationText: string;
   slot: TimeSlot; timezone?: string; resourceName?: string; format?: string; slug?: string; token: string;
 }
@@ -333,6 +334,10 @@ export function useBookingCheckout(input: BookingCheckoutInput): BookingCheckout
     }
   };
 
+  // Succès du paiement CB Stripe : marque la résa réglée (comme handleConfirm) AVANT
+  // d'avertir le parent, pour qu'un démontage concurrent ne l'annule pas.
+  const handleStripeSuccess = (r: Reservation) => { settled.current = true; onConfirmed(r); };
+
   const handleExit = async () => {
     // closedRef signale aux effets que l'utilisateur a fermé (≠ faux démontage StrictMode).
     // Si le hold est déjà posé, on l'annule ici ; s'il arrive APRÈS (fermeture pendant le
@@ -392,7 +397,7 @@ export function useBookingCheckout(input: BookingCheckoutInput): BookingCheckout
     requireOnlinePayment: !!requireOnlinePayment, requireCardFingerprint: !!requireCardFingerprint,
     cardPath, cgvAccepted, setCgvAccepted, cgvStatus,
     createStripeIntent, stripeType, stripeAmountLabel,
-    persistHoldSetup, handleConfirm, handleExit,
+    persistHoldSetup, handleConfirm, handleExit, handleStripeSuccess,
     confirmLabel, quotaStatus, cancellationText,
     slot, timezone, resourceName, format, slug, token,
   };

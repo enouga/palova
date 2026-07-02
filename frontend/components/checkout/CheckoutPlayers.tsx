@@ -29,7 +29,6 @@ export interface CheckoutPlayersProps {
    */
   setTeamsDraft: (t: Record<string, 1 | 2>) => void;
   setSlotsDraft: (s: Record<string, number>) => void;
-  spotsLeft: number;
   nbPlayers: number;
   perPlayer: string;
   cap: number;
@@ -47,7 +46,7 @@ export function CheckoutPlayers({
   showPartners, isPadel, me, partners, buildPlayers, capacity, atCap,
   addTarget, setAddTarget, addPartnerTo, removePartner, addPartner,
   setTeamsDraft, setSlotsDraft,
-  spotsLeft, nbPlayers, perPlayer, cap, slug, token,
+  nbPlayers, perPlayer, cap, slug, token,
 }: CheckoutPlayersProps) {
   const { th } = useTheme();
 

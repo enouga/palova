@@ -40,7 +40,7 @@ export interface CheckoutPaymentProps {
   stripeType: 'payment' | 'setup';
   stripeAmountLabel: string;
   persistHoldSetup: () => Promise<void>;
-  onConfirmed: (reservation: Reservation) => void;
+  handleStripeSuccess: (r: Reservation) => void;
   onExit: () => void;
   errorMsg: string;
 }
@@ -59,7 +59,7 @@ export function CheckoutPayment({
   cardPath, cgvAccepted, setCgvAccepted, cgvStatus,
   slug, reservation, token,
   createStripeIntent, stripeType, stripeAmountLabel,
-  persistHoldSetup, onConfirmed, onExit, errorMsg,
+  persistHoldSetup, handleStripeSuccess, onExit, errorMsg,
 }: CheckoutPaymentProps) {
   const { th } = useTheme();
 
@@ -221,7 +221,7 @@ export function CheckoutPayment({
                 cgvAccepted={cgvAccepted} beforeSubmit={persistHoldSetup}
                 createIntent={createStripeIntent}
                 confirm={async (ids) => { await api.confirmReservation(reservation!.id, token, { ...ids, cgvAccepted }); }}
-                onSuccess={() => onConfirmed(reservation!)}
+                onSuccess={() => handleStripeSuccess(reservation!)}
                 onCancel={onExit} />
             </div>
           ) : (

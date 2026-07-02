@@ -18,9 +18,10 @@ it('affiche court, prix, part joueur et timer', () => {
   expect(screen.getByText(/04:23/)).toBeInTheDocument();
 });
 
-it('barre de hold masquée en phase error', () => {
-  const { container } = wrap(<CheckoutHero slot={slot} timezone="Europe/Paris" resourceName="Court 2"
+it('barre de hold et timer masqués en phase error', () => {
+  wrap(<CheckoutHero slot={slot} timezone="Europe/Paris" resourceName="Court 2"
     sportKey="padel" totalPrice="25" perPerson="6,25" capacity={4} durLabel="1h30"
     phase="error" mm="00" ss="00" urgent={true} secondsLeft={0} holdSeconds={300} />);
   expect(screen.getByTestId('checkout-hero')).toBeInTheDocument();
+  expect(screen.queryByText(/00:00/)).toBeNull();   // timer pill hidden in error phase
 });
