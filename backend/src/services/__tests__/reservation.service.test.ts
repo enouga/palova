@@ -1958,6 +1958,64 @@ describe('ReservationService', () => {
     });
   });
 
+  describe('setReservationVisibility', () => {
+    const reservationId = 'res-1';
+    const ownerUserId = 'user-1';
+    const future = () => new Date(Date.now() + 48 * 3600 * 1000);
+    const past = () => new Date(Date.now() - 3600 * 1000);
+    const row = (over: any = {}) => ({
+      id: reservationId, userId: ownerUserId, status: 'CONFIRMED', startTime: future(),
+      resource: { clubSport: { sport: { key: 'padel' } } }, ...over,
+    });
+
+    it('ouvre une résa padel confirmée future en PUBLIC avec la fourchette de niveau', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row() as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 } as any);
+
+      const out = await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 });
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 },
+      }));
+      expect(out.visibility).toBe('PUBLIC');
+    });
+
+    it('efface la fourchette de niveau en repassant PRIVATE', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ visibility: 'PUBLIC' }) as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null } as any);
+
+      await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PRIVATE' });
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null },
+      }));
+    });
+
+    it('refuse un non-propriétaire (UNAUTHORIZED)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row() as any);
+      await expect(service.setReservationVisibility(reservationId, 'autre', { visibility: 'PUBLIC' }))
+        .rejects.toThrow('UNAUTHORIZED');
+    });
+
+    it('refuse une résa non confirmée (RESERVATION_NOT_ACTIVE)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ status: 'PENDING' }) as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC' }))
+        .rejects.toThrow('RESERVATION_NOT_ACTIVE');
+    });
+
+    it('refuse une résa passée (RESERVATION_IN_PAST)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ startTime: past() }) as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC' }))
+        .rejects.toThrow('RESERVATION_IN_PAST');
+    });
+
+    it('refuse PUBLIC sur un sport non-padel (OPEN_MATCH_PADEL_ONLY)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ resource: { clubSport: { sport: { key: 'tennis' } } } }) as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC' }))
+        .rejects.toThrow('OPEN_MATCH_PADEL_ONLY');
+    });
+  });
+
   describe('assertMembershipAndWindow — heure d\'ouverture', () => {
     beforeEach(() => {
       prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
