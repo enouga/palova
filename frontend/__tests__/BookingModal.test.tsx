@@ -105,9 +105,11 @@ describe('BookingModal — page unique', () => {
   it('partie ouverte : applyHoldSetup reçoit partnerUserIds + visibility', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    // attendre le hold (contenu interactif gated sur 'held')
-    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
+    await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
@@ -119,10 +121,11 @@ describe('BookingModal — page unique', () => {
   it('padel : applyHoldSetup reçoit teams (organisateur + partenaire, côtés)', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
     // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
       'res-1', 'jwt-token',
@@ -181,8 +184,11 @@ describe('BookingModal — page unique', () => {
     mockClub = { levelSystemEnabled: false };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
+    await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalled());
@@ -195,8 +201,11 @@ describe('BookingModal — page unique', () => {
     mockClub = { levelSystemEnabled: true };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    fireEvent.focus(await screen.findByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('Marc Dupont'));
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
+    await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(

@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
+import { AddPlayerSheet, PickedMember } from '@/components/match/AddPlayerSheet';
 import { LevelChip } from '@/components/player/LevelChip';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
@@ -190,6 +191,8 @@ export default function BookingModal({
   // en best-effort via applyHoldSetup.teams. `me` = organisateur (identité du préview).
   const [me, setMe] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null } | null>(null);
   const [teamsDraft, setTeamsDraft] = useState<Record<string, 1 | 2>>({});
+  // Ajout ciblé depuis le terrain (padel) : place visée par la feuille d'ajout.
+  const [addTarget, setAddTarget] = useState<{ team: 1 | 2; slot?: number } | null>(null);
 
   // Multi-joueurs : ajout de partenaires + partie publique/privée.
   const cap = maxPlayers ?? 1;
@@ -229,6 +232,11 @@ export default function BookingModal({
   const addPartner = (m: ClubMemberSearchResult) => {
     setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
     setTeamsDraft((d) => (d[m.id] ? d : { ...d, [m.id]: nextSide(d) }));
+  };
+  // Ajout depuis la feuille : la place tapée impose l'équipe (pas de nextSide).
+  const addPartnerTo = (m: PickedMember, team: 1 | 2) => {
+    setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
+    setTeamsDraft((d) => ({ ...d, [m.id]: team }));
   };
   const removePartner = (id: string) => {
     setPartners((xs) => xs.filter((x) => x.id !== id));
@@ -518,9 +526,18 @@ export default function BookingModal({
                     <div style={{ marginBottom: 8 }}>
                       <MatchTeams size="sm" editable capacity={capacity} players={buildPlayers()}
                         onSetTeams={setTeamsDraft}
-                        onRemove={(pl) => removePartner(pl.userId)} canRemove={(pl) => !pl.isOrganizer} />
+                        onRemove={(pl) => removePartner(pl.userId)} canRemove={(pl) => !pl.isOrganizer}
+                        onAddToTeam={atCap ? undefined : (team, slot) => setAddTarget({ team, slot })}
+                        activeTarget={addTarget} />
                     </div>
-                  ) : partners.length > 0 && (
+                  ) : null}
+                  {addTarget && slug && me && (
+                    <AddPlayerSheet slug={slug} token={token} team={addTarget.team} slot={addTarget.slot}
+                      excludeIds={[me.id, ...partners.map((p) => p.id)]}
+                      onPick={(m) => { addPartnerTo(m, addTarget.team); setAddTarget(null); }}
+                      onClose={() => setAddTarget(null)} />
+                  )}
+                  {!(isPadel && me) && partners.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                       {partners.map((p) => {
                         const c = colorForSeed(p.id);
@@ -538,7 +555,7 @@ export default function BookingModal({
                   )}
                   {atCap ? (
                     <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({cap} joueurs).</div>
-                  ) : (
+                  ) : !(isPadel && me) && (
                     <PartnerSearch slug={slug!} token={token} selected={null}
                       excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
                       onSelect={addPartner}
