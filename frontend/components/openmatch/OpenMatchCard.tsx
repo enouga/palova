@@ -29,7 +29,6 @@ export interface OpenMatchCardProps {
   onCancelAdd: () => void;
   onRecordResult: (m: OpenMatch) => void;
   canRecordResult: boolean;
-  onToggleInterest: (m: OpenMatch) => void;
   onOpenChat: (m: OpenMatch) => void;
   showSport?: boolean; // club multi-sport → chip sport près du terrain
   /** Visiteur non connecté : « Rejoindre » invite à s'inscrire ; actions membres masquées. */
@@ -44,7 +43,7 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onReplacePlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
-  onToggleInterest, onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds,
+  onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   // Cible de la recherche de joueur : ajouter à une équipe précise, ou remplacer un joueur.
@@ -57,12 +56,8 @@ export function OpenMatchCard({
     background: th.mode === 'floodlit' ? `${hex}1f` : `${hex}55`,
     color: th.mode === 'floodlit' ? hex : th.ink,
   });
-  // Deux couleurs distinctes pour les actions secondaires, séparées entre elles
-  // et de l'accent plein du bouton principal « Rejoindre » : émeraude = Discuter,
-  // apricot = intérêt.
+  // Émeraude = Discuter (action secondaire), distincte de l'accent plein « Rejoindre ».
   const chatTint = tint(ACCENTS.emerald);
-  const interestTint = tint(ACCENTS.apricot);
-  const canChat = m.viewerIsParticipant || m.viewerIsInterested;
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
       {/* En-tête : titre pleine largeur (ellipsis, jamais écrasé) + chip place(s) épinglée à droite.
@@ -84,9 +79,6 @@ export function OpenMatchCard({
         {showSport && m.sport && <Chip tone="line">{m.sport.name}</Chip>}
         {(m.targetLevelMin != null || m.targetLevelMax != null) && (
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
-        )}
-        {m.interestedCount > 0 && (
-          <Chip tone="line" icon="users">{m.interestedCount} intéressé{m.interestedCount > 1 ? 's' : ''}</Chip>
         )}
       </div>
       {friendCount > 0 && (
@@ -115,32 +107,19 @@ export function OpenMatchCard({
         activeTarget={addingOpen && addMode?.kind === 'add' ? { team: addMode.team, slot: addMode.slot } : null}
       />
 
-      {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite.
-          Visiteur anonyme : actions membres masquées, seul « Rejoindre » (→ invite à s'inscrire) reste. */}
+      {/* Barre d'actions : secondaires (Discuter / résultat) à gauche, action principale à droite.
+          « Discuter » est ouvert à tous : l'anonyme est renvoyé vers l'invite à s'inscrire. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
-        {!isAnonymous && (
-          <span style={{ position: 'relative', display: 'inline-flex' }}>
-            <Btn variant="surface" style={{ ...actionBtn, ...(canChat ? chatTint : {}) }} disabled={!canChat} onClick={() => onOpenChat(m)}>
-              Discuter
-            </Btn>
-            {m.unreadCount > 0 && (
-              <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
-                {m.unreadCount > 99 ? '99+' : m.unreadCount}
-              </span>
-            )}
-          </span>
-        )}
-        {!isAnonymous && !m.viewerIsParticipant && (
-          m.viewerIsInterested ? (
-            <Btn variant="surface" style={{ ...actionBtn, ...interestTint }} disabled={busy} onClick={() => onToggleInterest(m)}>
-              <Icon name="check" size={18} color={interestTint.color} />Intéressé
-            </Btn>
-          ) : (
-            <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onToggleInterest(m)}>
-              {"Ça m'intéresse"}
-            </Btn>
-          )
-        )}
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <Btn variant="surface" style={{ ...actionBtn, ...chatTint }} onClick={() => (isAnonymous ? onAuthPrompt(m) : onOpenChat(m))}>
+            Discuter
+          </Btn>
+          {!isAnonymous && m.unreadCount > 0 && (
+            <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
+              {m.unreadCount > 99 ? '99+' : m.unreadCount}
+            </span>
+          )}
+        </span>
         {canRecordResult && new Date(m.endTime).getTime() <= Date.now() && m.players.length === 4 && (
           <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onRecordResult(m)}>Saisir le résultat</Btn>
         )}

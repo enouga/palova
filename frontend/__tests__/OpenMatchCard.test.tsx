@@ -32,9 +32,6 @@ function makeMatch(over: Partial<OpenMatch> = {}): OpenMatch {
     viewerIsParticipant: false,
     viewerIsOrganizer: false,
     players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2) }],
-    interestedCount: 0,
-    viewerIsInterested: false,
-    interested: [],
     lastMessageAt: null,
     unreadCount: 0,
     ...over,
@@ -59,7 +56,6 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
     onCancelAdd: jest.fn(),
     onRecordResult: jest.fn(),
     canRecordResult: false,
-    onToggleInterest: jest.fn(),
     onOpenChat: jest.fn(),
     onAuthPrompt: jest.fn(),
     ...overProps,
@@ -67,41 +63,19 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
 }
 
 describe('OpenMatchCard', () => {
-  it('affiche « Ça m\'intéresse » pour un non-participant non-intéressé et appelle onToggleInterest au clic', () => {
-    const match = makeMatch({ viewerIsParticipant: false, viewerIsInterested: false });
-    const onToggleInterest = jest.fn();
+  it('« Discuter » est actif pour un utilisateur connecté et appelle onOpenChat', () => {
+    const match = makeMatch({ viewerIsParticipant: false });
+    const onOpenChat = jest.fn();
     render(
       <ThemeProvider>
-        <OpenMatchCard {...makeProps(match, { onToggleInterest })} />
+        <OpenMatchCard {...makeProps(match, { onOpenChat })} />
       </ThemeProvider>
     );
     expect(screen.getByText('VS')).toBeInTheDocument();
-    const btn = screen.getByRole('button', { name: /Ça m'intéresse/i });
-    expect(btn).toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: /discuter/i });
+    expect(btn).toBeEnabled();
     fireEvent.click(btn);
-    expect(onToggleInterest).toHaveBeenCalledWith(match);
-  });
-
-  it('active le bouton « Discuter » quand viewerIsInterested est true', () => {
-    const match = makeMatch({ viewerIsParticipant: false, viewerIsInterested: true });
-    render(
-      <ThemeProvider>
-        <OpenMatchCard {...makeProps(match)} />
-      </ThemeProvider>
-    );
-    const btn = screen.getByRole('button', { name: /discuter/i });
-    expect(btn).not.toBeDisabled();
-  });
-
-  it('désactive le bouton « Discuter » pour un non-participant non-intéressé', () => {
-    const match = makeMatch({ viewerIsParticipant: false, viewerIsInterested: false });
-    render(
-      <ThemeProvider>
-        <OpenMatchCard {...makeProps(match)} />
-      </ThemeProvider>
-    );
-    const btn = screen.getByRole('button', { name: /discuter/i });
-    expect(btn).toBeDisabled();
+    expect(onOpenChat).toHaveBeenCalledWith(match);
   });
 
   it("en-tête : date compacte (non répétée le même jour) et titre en une ligne avec title", () => {
@@ -158,28 +132,20 @@ describe('OpenMatchCard', () => {
     expect(screen.queryByLabelText(/non lus/)).not.toBeInTheDocument();
   });
 
-  it('affiche « 3 intéressés » quand interestedCount est 3', () => {
-    const match = makeMatch({ interestedCount: 3 });
-    render(
-      <ThemeProvider>
-        <OpenMatchCard {...makeProps(match)} />
-      </ThemeProvider>
-    );
-    expect(screen.getByText(/3 intéressés/)).toBeInTheDocument();
-  });
-
-  it('anonyme : « Rejoindre » appelle onAuthPrompt (pas onJoin) et masque Discuter / Ça m\'intéresse', () => {
+  it('anonyme : « Rejoindre » appelle onAuthPrompt, et « Discuter » ouvre aussi l\'invite', () => {
     const match = makeMatch();
-    const onAuthPrompt = jest.fn(), onJoin = jest.fn();
+    const onAuthPrompt = jest.fn(), onJoin = jest.fn(), onOpenChat = jest.fn();
     render(
       <ThemeProvider>
-        <OpenMatchCard {...makeProps(match, { isAnonymous: true, onAuthPrompt, onJoin })} />
+        <OpenMatchCard {...makeProps(match, { isAnonymous: true, onAuthPrompt, onJoin, onOpenChat })} />
       </ThemeProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
     expect(onAuthPrompt).toHaveBeenCalledWith(match);
     expect(onJoin).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /Discuter/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Discuter/i }));
+    expect(onAuthPrompt).toHaveBeenCalledTimes(2);
+    expect(onOpenChat).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Ça m'intéresse/i })).not.toBeInTheDocument();
   });
 
