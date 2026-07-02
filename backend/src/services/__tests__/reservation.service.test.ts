@@ -1688,6 +1688,20 @@ describe('ReservationService', () => {
       expect((out[0].resource as any).sport).toEqual({ key: 'padel', name: 'Padel' });
     });
 
+    it('expose visibility et la fourchette de niveau (partie ouverte)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        { ...baseReservation(), visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 },
+      ] as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      const out = await service.listUserReservations('user-1');
+
+      expect((out[0] as any).visibility).toBe('PUBLIC');
+      expect((out[0] as any).targetLevelMin).toBe(2);
+      expect((out[0] as any).targetLevelMax).toBe(5);
+    });
+
     it('ajoute level sur les participants qui ont un rating', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
       prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
