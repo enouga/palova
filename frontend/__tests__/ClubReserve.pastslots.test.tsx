@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ClubReserve } from '../components/ClubReserve';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -11,13 +11,11 @@ const fmt = (iso: string) =>
   new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
     .format(new Date(iso)).replace(':', 'h');
 
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
   usePathname: () => '/reserver',
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
-}));
-jest.mock('../components/BookingModal', () => ({
-  __esModule: true,
-  default: ({ resourceId }: { resourceId: string }) => <div data-testid="booking-modal">{resourceId}</div>,
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
@@ -67,6 +65,8 @@ describe('ClubReserve — créneaux déjà commencés', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
     mocked.getClubAvailability.mockResolvedValue(availability as never);
+    mockPush.mockClear();
+    mockReplace.mockClear();
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
@@ -74,11 +74,21 @@ describe('ClubReserve — créneaux déjà commencés', () => {
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
     // Le créneau à venir s'affiche et reste réservable (bouton).
     const futureEl = await screen.findByText(fmt(future));
-    expect(futureEl.closest('button')).not.toBeNull();
+    const futureBtn = futureEl.closest('button');
+    expect(futureBtn).not.toBeNull();
     // Le créneau déjà commencé reste affiché (même graphisme que les indisponibles)
     // mais n'est pas réservable (pas un bouton).
     const pastEl = screen.getByText(fmt(past));
     expect(pastEl).toBeInTheDocument();
     expect(pastEl.closest('button')).toBeNull();
+
+    // Taper sur le créneau à venir navigue vers la page checkout (plus de modale).
+    fireEvent.click(futureBtn!);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    const url = mockPush.mock.calls[0][0] as string;
+    expect(url.startsWith('/reserver/confirmer?')).toBe(true);
+    const params = new URLSearchParams(url.split('?')[1]);
+    expect(params.get('resource')).toBe('court-1');
+    expect(params.get('start')).toBe(future);
   });
 });
