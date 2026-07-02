@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { OpenMatch } from '@/lib/api';
+import { OpenMatch, JoinTarget } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
@@ -20,7 +20,7 @@ export interface OpenMatchCardProps {
   token: string;
   busy: boolean;
   addingOpen: boolean;
-  onJoin: (m: OpenMatch) => void;
+  onJoin: (m: OpenMatch, target?: JoinTarget) => void;
   onLeave: (m: OpenMatch) => void;
   onRemovePlayer: (m: OpenMatch, p: PlayerPillData) => void;
   onSetTeams: (m: OpenMatch, teams: Record<string, 1 | 2>, slots?: Record<string, number>) => void;
@@ -32,7 +32,7 @@ export interface OpenMatchCardProps {
   canRecordResult: boolean;
   onOpenChat: (m: OpenMatch) => void;
   showSport?: boolean; // club multi-sport → chip sport près du terrain
-  /** Visiteur non connecté : « Rejoindre » invite à s'inscrire ; actions membres masquées. */
+  /** Visiteur non connecté : taper une place libre invite à s'inscrire ; actions membres masquées. */
   isAnonymous?: boolean;
   onAuthPrompt: (m: OpenMatch) => void;
   /** Ids des joueurs suivis (amis) du viewer : anneau d'accent + ligne de preuve sociale. */
@@ -59,6 +59,10 @@ export function OpenMatchCard({
   });
   // Émeraude = Discuter (action secondaire), distincte de l'accent plein « Rejoindre ».
   const chatTint = tint(ACCENTS.emerald);
+  // Le mini-terrain est LE geste pour rejoindre : cellules libres cliquables pour un viewer
+  // non-inscrit, sur une partie à venir et non complète (l'anonyme est renvoyé vers l'invite).
+  const joinable = !m.viewerIsOrganizer && !m.viewerIsParticipant && !m.full
+    && new Date(m.startTime).getTime() > Date.now();
   return (
     <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
       {/* En-tête : titre pleine largeur (ellipsis, jamais écrasé) + chip place(s) épinglée à droite.
@@ -105,6 +109,7 @@ export function OpenMatchCard({
         onReplace={m.viewerIsOrganizer ? ((p) => { setAddMode({ kind: 'replace', player: p }); if (!addingOpen) onToggleAdd(m); }) : undefined}
         canReplace={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         onAddToTeam={m.viewerIsOrganizer ? ((team, slot) => { setAddMode({ kind: 'add', team, slot }); if (!addingOpen) onToggleAdd(m); }) : undefined}
+        onJoinFree={joinable ? ((team, slot) => (isAnonymous ? onAuthPrompt(m) : onJoin(m, { team, slot }))) : undefined}
         activeTarget={addingOpen && addMode?.kind === 'add' ? { team: addMode.team, slot: addMode.slot } : null}
       />
 
@@ -136,9 +141,7 @@ export function OpenMatchCard({
             <Chip tone="line" icon="check">Vous organisez</Chip>
           ) : m.viewerIsParticipant ? (
             <Btn variant="surface" style={actionBtn} disabled={busy} onClick={() => onLeave(m)}>Quitter</Btn>
-          ) : (
-            <Btn icon="plus" style={actionBtn} disabled={busy || m.full} onClick={() => (isAnonymous ? onAuthPrompt(m) : onJoin(m))}>Rejoindre</Btn>
-          )}
+          ) : null}
         </span>
       </div>
       {m.viewerIsOrganizer && addingOpen && addMode && (

@@ -140,13 +140,65 @@ describe('OpenMatchCard', () => {
         <OpenMatchCard {...makeProps(match, { isAnonymous: true, onAuthPrompt, onJoin, onOpenChat })} />
       </ThemeProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
     expect(onAuthPrompt).toHaveBeenCalledWith(match);
     expect(onJoin).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Discuter/i }));
     expect(onAuthPrompt).toHaveBeenCalledTimes(2);
     expect(onOpenChat).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Ça m'intéresse/i })).not.toBeInTheDocument();
+  });
+
+  it('non-participant : tap sur une place libre rejoint à cette place précise', () => {
+    const match = makeMatch();
+    const onJoin = jest.fn();
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match, { onJoin })} />
+      </ThemeProvider>
+    );
+    // org occupe (éq.1, G) → la 1re cellule libre rendue est (éq.1, D).
+    fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
+    expect(onJoin).toHaveBeenCalledWith(match, { team: 1, slot: 1 });
+  });
+
+  it("le bouton « Rejoindre » de la barre d'actions n'existe plus", () => {
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(makeMatch())} />
+      </ThemeProvider>
+    );
+    // Nom exact : ne matche pas les cellules « Rejoindre l'équipe N ».
+    expect(screen.queryByRole('button', { name: 'Rejoindre' })).not.toBeInTheDocument();
+  });
+
+  it('partie passée ou complète : aucune cellule « Rejoindre »', () => {
+    const past = new Date(Date.now() - 3600e3).toISOString();
+    const { unmount } = render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(makeMatch({ startTime: past, endTime: past }))} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole('button', { name: /Rejoindre/ })).not.toBeInTheDocument();
+    unmount();
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(makeMatch({ full: true, spotsLeft: 0 }))} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole('button', { name: /Rejoindre/ })).not.toBeInTheDocument();
+  });
+
+  it('participant : cellules libres inertes + bouton « Quitter »', () => {
+    const match = makeMatch({ viewerIsParticipant: true });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole('button', { name: /Rejoindre/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Quitter/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Place libre').length).toBeGreaterThan(0);
   });
 
   it('organisateur : feuille d\'actions → « Passer dans l\'équipe 2 » appelle onSetTeams', () => {
