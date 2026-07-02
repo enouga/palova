@@ -32,7 +32,7 @@ jest.mock('../lib/api', () => ({
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // Chargé par OpenMatches pour la preuve sociale (anneau ami).
     listFollowing: jest.fn().mockResolvedValue([]),
-    // Chargé par FriendsQuickRow (monté via PartnerSearch dans le flux d'ajout de joueur).
+    // Chargé par FriendsQuickRow (monté via AddPlayerSheet dans le flux d'ajout de joueur).
     listClubFriends: jest.fn().mockResolvedValue([]),
     // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
@@ -118,9 +118,9 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
     expect(await screen.findByText('Emma Bernard')).toBeInTheDocument();
-    // Bouton « Retirer » toujours visible sur la pastille (plus de mode sélection).
-    const remove = await screen.findByRole('button', { name: /Retirer Emma Bernard/ });
-    fireEvent.click(remove);
+    // Tap sur le joueur → feuille d'actions → « Retirer de la partie ».
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier Emma Bernard' }));
+    fireEvent.click(screen.getByRole('button', { name: /Retirer de la partie/ }));
     await waitFor(() => expect(mocked.removeOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-emma', 'abc'));
   });
 
@@ -133,7 +133,7 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
     expect(await screen.findByText('Emma Bernard')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Retirer Emma Bernard')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Modifier Emma Bernard' })).not.toBeInTheDocument();
   });
 
   it('permet à l organisateur d ajouter un joueur sur une place libre', async () => {
@@ -141,11 +141,10 @@ describe('OpenMatches', () => {
     (mocked.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }]);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    // Un « + » par emplacement libre désormais : on clique le premier (équipe 1).
-    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur/ });
+    // Un « + » par place libre : le premier vise l'équipe 1 → feuille d'ajout.
+    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur à l'équipe/ });
     fireEvent.click(addBtns[0]);
-    fireEvent.focus(screen.getByPlaceholderText(/membres/i));
-    fireEvent.mouseDown(await screen.findByText('New Player'));
+    fireEvent.click(await screen.findByRole('button', { name: /New Player/ }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-new', 'abc'));
   });
 
@@ -153,9 +152,8 @@ describe('OpenMatches', () => {
     mocked.getOpenMatches.mockResolvedValue([match({ viewerIsParticipant: true, viewerIsOrganizer: true, spotsLeft: 2 })] as never);
     (mocked.listClubFriends as jest.Mock).mockResolvedValue([{ id: 'u-ami', firstName: 'Ami', lastName: 'X', avatarUrl: null, level: null, mutual: true }]);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
-    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur/ });
+    const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur à l'équipe/ });
     fireEvent.click(addBtns[0]);
-    fireEvent.focus(screen.getByPlaceholderText(/membres|nom/i));
     fireEvent.click(await screen.findByRole('button', { name: /Ami/ }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-ami', 'abc'));
   });

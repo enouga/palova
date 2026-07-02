@@ -5,7 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import { PartnerSearch } from '@/components/tournament/PartnerSearch';
+import { AddPlayerSheet } from '@/components/match/AddPlayerSheet';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
 import { rangeLabel } from '@/lib/levelMatch';
@@ -52,7 +52,7 @@ export function OpenMatchCard({
 }: OpenMatchCardProps) {
   const { th } = useTheme();
   // Cible de la recherche de joueur : ajouter à une équipe précise, ou remplacer un joueur.
-  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2 } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
+  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2; slot?: number } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
   const friendCount = m.players.filter((p) => friendIds?.has(p.userId)).length;
   // Taille unique pour tous les boutons d'action → bord net, pas de largeurs en escalier.
   const actionBtn = { height: 46, fontSize: 15, padding: '0 18px' } as const;
@@ -107,7 +107,8 @@ export function OpenMatchCard({
         canRemove={(p) => m.viewerIsOrganizer && !p.isOrganizer}
         onReplace={m.viewerIsOrganizer ? ((p) => { setAddMode({ kind: 'replace', player: p }); if (!addingOpen) onToggleAdd(m); }) : undefined}
         canReplace={(p) => m.viewerIsOrganizer && !p.isOrganizer}
-        onAddToTeam={m.viewerIsOrganizer ? ((team) => { setAddMode({ kind: 'add', team }); if (!addingOpen) onToggleAdd(m); }) : undefined}
+        onAddToTeam={m.viewerIsOrganizer ? ((team, slot) => { setAddMode({ kind: 'add', team, slot }); if (!addingOpen) onToggleAdd(m); }) : undefined}
+        activeTarget={addingOpen && addMode?.kind === 'add' ? { team: addMode.team, slot: addMode.slot } : null}
       />
 
       {/* Barre d'actions : secondaires (Discuter / intérêt / résultat) à gauche, action principale à droite.
@@ -154,29 +155,21 @@ export function OpenMatchCard({
           )}
         </span>
       </div>
-      {m.viewerIsOrganizer && addingOpen && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>
-            {addMode?.kind === 'replace'
-              ? `Remplacer ${addMode.player.firstName} ${addMode.player.lastName} par…`
-              : addMode?.kind === 'add'
-                ? `Ajouter un joueur à l'équipe ${addMode.team}`
-                : 'Ajouter un joueur'}
-          </div>
-          <PartnerSearch
-            autoFocus
-            slug={slug} token={token} selected={null}
-            excludeIds={m.players.map((p) => p.userId)}
-            onSelect={(member) => {
-              if (addMode?.kind === 'replace') onReplacePlayer(m, addMode.player, member.id);
-              else onAddPlayer(m, member.id, addMode?.kind === 'add' ? addMode.team : undefined);
-              setAddMode(null);
-            }}
-            onClear={() => {}}
-            disabled={busy}
-          />
-          <button type="button" onClick={() => { setAddMode(null); onCancelAdd(); }} style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
-        </div>
+      {m.viewerIsOrganizer && addingOpen && addMode && (
+        <AddPlayerSheet
+          slug={slug} token={token}
+          team={addMode.kind === 'add' ? addMode.team : addMode.player.team}
+          slot={addMode.kind === 'add' ? addMode.slot : undefined}
+          replaceName={addMode.kind === 'replace' ? `${addMode.player.firstName} ${addMode.player.lastName}` : undefined}
+          excludeIds={m.players.map((p) => p.userId)}
+          busy={busy}
+          onPick={(member) => {
+            if (addMode.kind === 'replace') onReplacePlayer(m, addMode.player, member.id);
+            else onAddPlayer(m, member.id, addMode.team);
+            setAddMode(null); onCancelAdd();
+          }}
+          onClose={() => { setAddMode(null); onCancelAdd(); }}
+        />
       )}
     </div>
   );
