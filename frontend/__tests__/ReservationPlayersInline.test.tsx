@@ -65,4 +65,36 @@ describe('ReservationPlayersInline', () => {
     expect(screen.queryByRole('button', { name: /Ajouter un joueur/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retirer Ines B' })).not.toBeInTheDocument();
   });
+
+  // Chemin padel : MatchTeams (terrain) + feuilles.
+  const padel = {
+    resource: { id: 'res1', name: 'Terrain 1', sport: { key: 'padel', name: 'Padel' }, club: { name: 'Club', slug: 'demo', timezone: 'Europe/Paris' } },
+  };
+
+  it("padel : tap joueur → feuille d'actions → Retirer", async () => {
+    const onChanged = jest.fn();
+    wrap(padel, onChanged);
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier Ines B' }));
+    fireEvent.click(screen.getByRole('button', { name: /Retirer de la partie/ }));
+    await waitFor(() => expect(mocked.removeReservationPlayer).toHaveBeenCalledWith('r1', 'p2', 'abc'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it("padel : l'organisateur n'a pas d'action Retirer dans sa feuille", () => {
+    wrap(padel);
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier Org A' }));
+    expect(screen.queryByRole('button', { name: /Retirer de la partie/ })).not.toBeInTheDocument();
+  });
+
+  it("padel : « + » d'équipe ouvre la feuille d'ajout, ajoute et épingle l'équipe", async () => {
+    mocked.searchClubMembers.mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }] as never);
+    const onChanged = jest.fn();
+    wrap(padel, onChanged);
+    // Org et Ines sont team 1 (défaut) → 2 places libres côté 2.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /New Player/ }));
+    await waitFor(() => expect(mocked.addReservationPlayer).toHaveBeenCalledWith('r1', 'u-new', 'abc'));
+    await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith('r1', { 'u-org': 1, u2: 1, 'u-new': 2 }, 'abc'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
 });

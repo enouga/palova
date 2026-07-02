@@ -7,6 +7,7 @@ import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { AddPlayerPill } from '@/components/player/AddPlayerPill';
 import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
+import { AddPlayerSheet } from '@/components/match/AddPlayerSheet';
 
 const ERR: Record<string, string> = {
   PLAYER_CHANGE_TOO_LATE: 'Trop tard pour modifier les joueurs.',
@@ -31,7 +32,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
 }) {
   const { th } = useTheme();
   // Cible de la recherche : ajouter à une équipe précise, ou remplacer un joueur.
-  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2 } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
+  const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2; slot?: number } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
@@ -100,7 +101,8 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
           canRemove={(p) => canEdit && !p.isOrganizer}
           onReplace={canEdit ? ((p) => setAddMode({ kind: 'replace', player: p })) : undefined}
           canReplace={(p) => canEdit && !p.isOrganizer}
-          onAddToTeam={canEdit ? ((team) => setAddMode({ kind: 'add', team })) : undefined}
+          onAddToTeam={canEdit ? ((team, slot) => setAddMode({ kind: 'add', team, slot })) : undefined}
+          activeTarget={addMode?.kind === 'add' ? { team: addMode.team, slot: addMode.slot } : null}
         />
       ) : (
         <PlayerPills
@@ -121,15 +123,19 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
           ) : undefined}
         />
       )}
-      {canEdit && addMode && (
+      {canEdit && addMode && (isPadel ? (
+        <AddPlayerSheet
+          slug={reservation.resource.club.slug} token={token}
+          team={addMode.kind === 'add' ? addMode.team : addMode.player.team}
+          slot={addMode.kind === 'add' ? addMode.slot : undefined}
+          replaceName={addMode.kind === 'replace' ? `${addMode.player.firstName} ${addMode.player.lastName}` : undefined}
+          excludeIds={participants.map((p) => p.userId)}
+          busy={busy}
+          onPick={(m) => onPickMember(m.id)}
+          onClose={() => setAddMode(null)}
+        />
+      ) : (
         <div style={{ marginTop: 10 }}>
-          {isPadel && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>
-              {addMode.kind === 'replace'
-                ? `Remplacer ${addMode.player.firstName} ${addMode.player.lastName} par…`
-                : `Ajouter un joueur à l'équipe ${addMode.team}`}
-            </div>
-          )}
           <PartnerSearch
             autoFocus
             slug={reservation.resource.club.slug} token={token} selected={null}
@@ -141,7 +147,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
           <button type="button" onClick={() => setAddMode(null)}
             style={{ marginTop: 8, border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 }}>Annuler</button>
         </div>
-      )}
+      ))}
     </div>
   );
 }

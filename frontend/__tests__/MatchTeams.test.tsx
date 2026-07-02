@@ -111,4 +111,15 @@ describe('MatchTeams (mini-terrain)', () => {
       global.ResizeObserver = prev;
     }
   });
+
+  it('busy : quadrants joueurs et « + » désactivés', () => {
+    wrap(<MatchTeams players={players} capacity={4} editable busy onSetTeams={jest.fn()} onAddToTeam={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'Modifier Marc A' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })).toBeDisabled();
+  });
+
+  it('activeTarget : la place libre visée porte data-target', () => {
+    wrap(<MatchTeams players={players} capacity={4} editable onAddToTeam={jest.fn()} activeTarget={{ team: 2, slot: 1 }} />);
+    expect(screen.getByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })).toHaveAttribute('data-target', 'true');
+  });
 });
