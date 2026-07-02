@@ -70,7 +70,7 @@ async function renderCard(dto: MatchDTO, club: CardClub): Promise<Buffer> {
 
   const half = Math.max(1, Math.floor(dto.maxPlayers / 2));
   const byPos = new Map(dto.players.map((p) => [`${p.team}:${p.slot}`, p]));
-  const rowY = (s: number) => (half === 1 ? 320 : 240 + s * 170); // centre du cercle avatar
+  const rowY = (s: number) => (half === 1 ? 320 : 228 + s * 186); // centre du cercle avatar (écart ≥ hauteur pastille+libellés)
   const colX = (team: 1 | 2) => (team === 1 ? 330 : 870);
 
   const parts: string[] = [];
@@ -93,7 +93,7 @@ async function renderCard(dto: MatchDTO, club: CardClub): Promise<Buffer> {
 
   // Équipes : pastille initiales (ou cercle pointillé « Libre ») + prénom + niveau.
   for (const team of [1, 2] as const) {
-    parts.push(`<text x="${colX(team)}" y="172" text-anchor="middle" font-family="${FONT}" font-size="22" font-weight="600" fill="rgba(255,255,255,0.65)">Éq. ${team}</text>`);
+    parts.push(`<text x="${colX(team)}" y="158" text-anchor="middle" font-family="${FONT}" font-size="22" font-weight="600" fill="rgba(255,255,255,0.65)">Éq. ${team}</text>`);
     for (let s = 0; s < half; s++) {
       const cx = colX(team); const cy = rowY(s);
       const p = byPos.get(`${team}:${s}`);
@@ -107,7 +107,7 @@ async function renderCard(dto: MatchDTO, club: CardClub): Promise<Buffer> {
       parts.push(`<circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}" fill="${color}"/>
       <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-family="${FONT}" font-size="40" font-weight="700" fill="${readableTextOn(color)}">${esc(initials)}</text>
       <text x="${cx}" y="${cy + AVATAR / 2 + 36}" text-anchor="middle" font-family="${FONT}" font-size="26" font-weight="600" fill="#ffffff">${esc(clamp(p.firstName, 14))}</text>`);
-      if (p.level) parts.push(`<text x="${cx}" y="${cy + AVATAR / 2 + 66}" text-anchor="middle" font-family="${FONT}" font-size="20" fill="rgba(255,255,255,0.7)">Niv. ${fmtLevel(p.level.level)}</text>`);
+      if (p.level) parts.push(`<text x="${cx}" y="${cy + AVATAR / 2 + 64}" text-anchor="middle" font-family="${FONT}" font-size="20" fill="rgba(255,255,255,0.7)">Niv. ${fmtLevel(p.level.level)}</text>`);
       if (p.avatarUrl) overlays.push({ url: p.avatarUrl, x: cx - AVATAR / 2, y: cy - AVATAR / 2 });
     }
   }

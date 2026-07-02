@@ -3,7 +3,7 @@ import crypto from 'crypto';
 // Version de rendu de la carte OG de partie : à incrémenter quand le VISUEL change,
 // pour invalider le cache disque ET les aperçus WhatsApp (le hash — donc l'URL
 // og:image et l'URL de partage ?s= — change avec).
-export const CARD_RENDER_VERSION = 'v1';
+export const CARD_RENDER_VERSION = 'v2';
 
 // Champs qui influencent le rendu de la carte. Toute évolution du visuel qui consomme
 // un nouveau champ doit l'ajouter ici, sinon le cache servirait des cartes périmées.
