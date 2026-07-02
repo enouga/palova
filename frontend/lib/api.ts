@@ -565,6 +565,9 @@ export const api = {
   getClubLeaderboard: (slug: string, token: string, sport = 'padel') =>
     request<ClubLeaderboard>(`/api/clubs/${encodeURIComponent(slug)}/leaderboard?sport=${encodeURIComponent(sport)}`, {}, token),
 
+  getMyClubMatchStats: (slug: string, token: string, sport = 'padel') =>
+    request<ClubMatchStats>(`/api/clubs/${encodeURIComponent(slug)}/me/match-stats?sport=${encodeURIComponent(sport)}`, {}, token),
+
   // Upload d'avatar en FormData — fetch dédié : request() force Content-Type JSON.
   uploadMyAvatar: async (file: File, token: string): Promise<MyProfile> => {
     const form = new FormData();
@@ -1856,6 +1859,8 @@ export interface ClubLeaderboard {
   entries: LeaderboardEntry[];
   me: LeaderboardMe;
 }
+
+export interface ClubMatchStats { wins: number; losses: number; streak: number; }
 
 export interface ClubMemberSearchResult {
   id: string;
