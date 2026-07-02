@@ -61,6 +61,25 @@ describe('MatchTeams (mini-terrain)', () => {
     expect(screen.getByText('Paul B').closest('[data-player-slot]')).toHaveAttribute('data-player-slot', 'G');
   });
 
+  it('onJoinFree : la place libre devient un bouton « Rejoindre » qui émet (équipe, place)', () => {
+    const onJoinFree = jest.fn();
+    wrap(<MatchTeams players={players} capacity={4} onJoinFree={onJoinFree} />);
+    const cells = screen.getAllByRole('button', { name: /Rejoindre l'équipe/ });
+    expect(cells).toHaveLength(1); // a+b (éq.1) + c (éq.2) → une seule place libre (éq.2, D)
+    expect(screen.queryByText('Place libre')).not.toBeInTheDocument();
+    fireEvent.click(cells[0]);
+    expect(onJoinFree).toHaveBeenCalledWith(2, 1);
+  });
+
+  it("priorité organisateur : editable + onAddToTeam gagne sur onJoinFree", () => {
+    const onAdd = jest.fn(), onJoinFree = jest.fn();
+    wrap(<MatchTeams players={players} capacity={4} editable onAddToTeam={onAdd} onJoinFree={onJoinFree} />);
+    expect(screen.queryByRole('button', { name: /Rejoindre l'équipe/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: "Ajouter un joueur à l'équipe 2" }));
+    expect(onAdd).toHaveBeenCalledWith(2, 1);
+    expect(onJoinFree).not.toHaveBeenCalled();
+  });
+
   it('editable : la feuille propose Remplacer / Retirer pour un non-organisateur', () => {
     const onReplace = jest.fn(), onRemove = jest.fn();
     wrap(<MatchTeams players={players} capacity={4} editable onReplace={onReplace} onRemove={onRemove} />);

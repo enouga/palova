@@ -36,10 +36,12 @@ export const NARROW_WIDTH = 380;
 // joueur de gauche laisse un trou à gauche et le droit reste à droite, même après remontage.
 // En `editable`, un tap sur un joueur ouvre une feuille d'actions (déplacer / remplacer /
 // retirer) ; chaque place libre est un « + » d'ajout ciblé → `onAddToTeam(team, slot)`.
+// Hors editable, si `onJoinFree` est fourni (viewer non-participant), chaque place libre
+// est un bouton « Rejoindre » ciblé → `onJoinFree(team, slot)`.
 export function MatchTeams({
   players, capacity, friendIds, size = 'md', busy = false,
   onRemove, canRemove, onReplace, canReplace, onAddToTeam, editable = false, onSetTeams,
-  activeTarget,
+  onJoinFree, activeTarget,
 }: {
   players: MatchPlayerData[];
   capacity: number;
@@ -52,6 +54,8 @@ export function MatchTeams({
   canReplace?: (player: MatchPlayerData) => boolean;
   /** Tap sur une place libre : côté + emplacement visé (0=G, 1=D). */
   onAddToTeam?: (team: 1 | 2, slot?: number) => void;
+  /** Tap sur une place libre pour SE rajouter (viewer non-participant) — indépendant d'`editable`. */
+  onJoinFree?: (team: 1 | 2, slot: number) => void;
   editable?: boolean;
   /** Réorganisation : maps complètes équipe + place (0=G, 1=D) par userId. */
   onSetTeams?: (teamsByUserId: Record<string, 1 | 2>, slotsByUserId: Record<string, number>) => void;
@@ -243,6 +247,18 @@ export function MatchTeams({
           {badge}
           <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', border: `1.5px dashed ${teamColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: teamColor, fontSize: 17, lineHeight: 1 }}>+</span>
           <span style={{ fontSize: 11.5, fontWeight: 700, color: teamColor }}>Ajouter</span>
+        </button>
+      );
+    }
+    if (onJoinFree) {
+      return (
+        <button type="button" disabled={busy}
+          aria-label={`Rejoindre l'équipe ${side}`}
+          onClick={() => onJoinFree(side, slotIdx)}
+          style={{ ...base, cursor: busy ? 'default' : 'pointer' }}>
+          {badge}
+          <span aria-hidden="true" style={{ width: av, height: av, borderRadius: '50%', border: `1.5px dashed ${teamColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: teamColor, fontSize: 17, lineHeight: 1 }}>+</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: teamColor }}>Rejoindre</span>
         </button>
       );
     }
