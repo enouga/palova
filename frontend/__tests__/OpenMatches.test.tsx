@@ -74,8 +74,22 @@ describe('OpenMatches', () => {
     expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
     expect(screen.getByText('2 places')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
-    await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc'));
+    // org occupe (éq.1, G) → la 1re cellule libre rendue est (éq.1, D).
+    fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
+    await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
+  });
+
+  it('niveau hors fourchette : avertissement, puis « Rejoindre quand même » rejoint à la place tapée', async () => {
+    mocked.getMyRating.mockResolvedValue({ level: 3 } as never);
+    mocked.getOpenMatches.mockResolvedValue([match({ targetLevelMin: 6, targetLevelMax: 8 })] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Rejoindre l'équipe/ }))[0]);
+    expect(await screen.findByText('Niveau hors fourchette')).toBeInTheDocument();
+    expect(mocked.joinOpenMatch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Rejoindre quand même/ }));
+    await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
   });
 
   it('mobile : les cartes restent en 1 colonne ; desktop : grille 2 colonnes', async () => {
@@ -123,12 +137,12 @@ describe('OpenMatches', () => {
     expect(screen.queryByRole('button', { name: /Rejoindre|Quitter/ })).not.toBeInTheDocument();
   });
 
-  it('désactive « Rejoindre » quand la partie est complète', async () => {
+  it('partie complète : chip « Complet », aucune cellule ni bouton « Rejoindre »', async () => {
     mocked.getOpenMatches.mockResolvedValue([match({ full: true, spotsLeft: 0 })] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
     expect(await screen.findByText('Complet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Rejoindre/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Rejoindre/ })).not.toBeInTheDocument();
   });
 
   it('permet à l organisateur de retirer un joueur non-organisateur', async () => {
@@ -240,7 +254,7 @@ describe('OpenMatches', () => {
     await waitFor(() => expect(mocked.markOpenMatchChatRead).toHaveBeenCalledWith('demo', 'm1', 'abc'));
   });
 
-  it('anonyme : affiche la liste, charge sans token, et « Rejoindre » ouvre le prompt d\'auth', async () => {
+  it('anonyme : affiche la liste, charge sans token, et taper une place libre ouvre le prompt d\'auth', async () => {
     document.cookie = 'token=; max-age=0; path=/'; // pas de session
     mocked.getOpenMatches.mockResolvedValue([match()] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
@@ -248,7 +262,7 @@ describe('OpenMatches', () => {
     expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
     await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledWith('demo', undefined));
 
-    fireEvent.click(screen.getByRole('button', { name: /Rejoindre/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(mocked.joinOpenMatch).not.toHaveBeenCalled();
   });

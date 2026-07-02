@@ -32,7 +32,7 @@ export function OpenMatchModals({ club, token, viewerUserId, canModerate, action
           message="Cette partie est hors de ta fourchette de niveau. Rejoindre quand même ?"
           confirmLabel="Rejoindre quand même"
           cancelLabel="Annuler"
-          busy={a.busyId === a.joinWarning.id}
+          busy={a.busyId === a.joinWarning.match.id}
           onConfirm={() => a.confirmJoin(a.joinWarning!)}
           onCancel={() => a.setJoinWarning(null)}
         />

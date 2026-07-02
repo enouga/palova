@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { api, ClubDetail, OpenMatch } from '@/lib/api';
+import { api, ClubDetail, OpenMatch, JoinTarget } from '@/lib/api';
 import { MatchPlayerData } from '@/components/match/MatchTeams';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
 import { inRange } from '@/lib/levelMatch';
@@ -23,6 +23,8 @@ export const JOIN_ERRORS: Record<string, string> = {
   NOT_ALLOWED:           'Action non autorisée.',
   RESERVATION_NOT_FOUND: "Cette partie n'existe plus.",
   TEAM_SLOT_TAKEN:       'Cette place est déjà prise.',
+  TEAM_SIDE_FULL:        'Cette équipe est complète.',
+  TEAM_INVALID:          'Place invalide.',
 };
 
 // Logique d'actions d'une partie ouverte (rejoindre/quitter/équipes/chat/intérêt/résultat)
@@ -34,7 +36,7 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
   const [error, setError] = useState('');
   const [addingId, setAddingId] = useState<string | null>(null);
   const [recordingFor, setRecordingFor] = useState<OpenMatch | null>(null);
-  const [joinWarning, setJoinWarning] = useState<OpenMatch | null>(null);
+  const [joinWarning, setJoinWarning] = useState<{ match: OpenMatch; target?: JoinTarget } | null>(null);
   const [chatting, setChatting] = useState<OpenMatch | null>(null);
   const [authPrompt, setAuthPrompt] = useState<OpenMatch | null>(null);
 
@@ -42,7 +44,12 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
     if (!token) return;
     setBusyId(m.id); setError('');
     try { await fn(); await reload(); }
-    catch (e) { setError(JOIN_ERRORS[(e as Error).message] ?? (e as Error).message); }
+    catch (e) {
+      const code = (e as Error).message;
+      setError(JOIN_ERRORS[code] ?? code);
+      // Place prise entre-temps : recharger pour que la grille reflète l'occupation réelle.
+      if (code === 'TEAM_SLOT_TAKEN') await reload().catch(() => {});
+    }
     finally { setBusyId(null); }
   };
 
@@ -77,11 +84,14 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
       .catch(() => {});
   };
 
-  const join = (m: OpenMatch) => {
-    if (!inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null)) setJoinWarning(m);
-    else act(m, () => api.joinOpenMatch(club.slug, m.id, token!));
+  const join = (m: OpenMatch, target?: JoinTarget) => {
+    if (!inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null)) setJoinWarning({ match: m, target });
+    else act(m, () => api.joinOpenMatch(club.slug, m.id, token!, target));
   };
-  const confirmJoin = (m: OpenMatch) => { setJoinWarning(null); act(m, () => api.joinOpenMatch(club.slug, m.id, token!)); };
+  const confirmJoin = (w: { match: OpenMatch; target?: JoinTarget }) => {
+    setJoinWarning(null);
+    act(w.match, () => api.joinOpenMatch(club.slug, w.match.id, token!, w.target));
+  };
   const leave = (m: OpenMatch) => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!));
   const removePlayer = (m: OpenMatch, p: PlayerPillData) => act(m, () => api.removeOpenMatchPlayer(club.slug, m.id, p.userId, token!));
   const setTeams = (m: OpenMatch, teams: Record<string, 1 | 2>, slots?: Record<string, number>) =>
