@@ -4,6 +4,11 @@ FROM node:22-bookworm
 
 WORKDIR /app
 
+# Polices pour le rendu SVG→PNG des cartes OG de parties (sharp/librsvg) —
+# sans elles le texte des cartes ne se rasterise pas.
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core \
+  && rm -rf /var/lib/apt/lists/*
+
 # Dépendances (on garde les devDeps : typescript + CLI prisma pour le build, ts-node pour le seed).
 COPY package*.json ./
 RUN npm ci
