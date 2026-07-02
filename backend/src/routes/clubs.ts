@@ -296,17 +296,7 @@ router.post('/:slug/open-matches/:id/participants/teams', authMiddleware, async 
   catch (err) { handleError(err, res, next); }
 });
 
-// « Ça m'intéresse » sur une partie ouverte (n'occupe pas de place, débloque le chat).
-router.post('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.setInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
-  catch (err) { handleError(err, res, next); }
-});
-router.delete('/:slug/open-matches/:id/interest', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try { res.json(await openMatchService.removeInterested(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
-  catch (err) { handleError(err, res, next); }
-});
-
-// Chat de la partie ouverte (inscrits + intéressés).
+// Chat de la partie ouverte (tout membre connecté).
 router.get('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchChatService.listMessages(asString(req.params.slug), asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }

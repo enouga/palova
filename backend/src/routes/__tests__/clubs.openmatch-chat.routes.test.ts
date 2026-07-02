@@ -8,8 +8,6 @@ jest.mock('../../services/openMatch.service', () => {
   const listOpenMatches  = jest.fn().mockResolvedValue([]);
   const getOpenMatch     = jest.fn().mockResolvedValue({ id: 'match-1' });
   const joinOpenMatch    = jest.fn().mockResolvedValue({});
-  const setInterested    = jest.fn().mockResolvedValue({ id: 'match-1' });
-  const removeInterested = jest.fn().mockResolvedValue({ id: 'match-1' });
   const setTeams         = jest.fn().mockResolvedValue({ id: 'match-1' });
   return {
     OpenMatchService: jest.fn().mockImplementation(() => ({
@@ -19,8 +17,6 @@ jest.mock('../../services/openMatch.service', () => {
       leaveOpenMatch:      jest.fn().mockResolvedValue({}),
       removeOpenMatchPlayer: jest.fn().mockResolvedValue({}),
       addOpenMatchPlayer:  jest.fn().mockResolvedValue({}),
-      setInterested,
-      removeInterested,
       setTeams,
     })),
   };
@@ -59,8 +55,6 @@ const omInst   = new (OpenMatchService as any)();
 const listOpenMatches = omInst.listOpenMatches as jest.Mock;
 const getOpenMatch     = omInst.getOpenMatch     as jest.Mock;
 const joinOpenMatch    = omInst.joinOpenMatch    as jest.Mock;
-const setInterested    = omInst.setInterested    as jest.Mock;
-const removeInterested = omInst.removeInterested as jest.Mock;
 const setTeams         = omInst.setTeams         as jest.Mock;
 
 const chatInst  = new (OpenMatchChatService as any)();
@@ -82,42 +76,12 @@ beforeEach(() => {
   listOpenMatches.mockResolvedValue([]);
   getOpenMatch.mockResolvedValue({ id: MATCH_ID });
   joinOpenMatch.mockResolvedValue({});
-  setInterested.mockResolvedValue({ id: MATCH_ID });
-  removeInterested.mockResolvedValue({ id: MATCH_ID });
   setTeams.mockResolvedValue({ id: MATCH_ID });
   listMessages.mockResolvedValue([]);
   postMessage.mockResolvedValue(stubMsg);
   deleteMessage.mockResolvedValue({ ...stubMsg, body: '', deleted: true });
   markRead.mockResolvedValue({ count: 0 });
   unreadCount.mockResolvedValue({ count: 0 });
-});
-
-// ─── Interest (ça m'intéresse) ────────────────────────────────────────────────
-
-describe('POST /api/clubs/:slug/open-matches/:id/interest', () => {
-  it('200 — appelle setInterested(slug, id, userId)', async () => {
-    const res = await request(app)
-      .post(`${base}/interest`)
-      .set('Authorization', `Bearer ${token()}`);
-    expect(res.status).toBe(200);
-    expect(setInterested).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1');
-  });
-
-  it('401 sans token', async () => {
-    const res = await request(app).post(`${base}/interest`);
-    expect(res.status).toBe(401);
-    expect(setInterested).not.toHaveBeenCalled();
-  });
-});
-
-describe('DELETE /api/clubs/:slug/open-matches/:id/interest', () => {
-  it('200 — appelle removeInterested(slug, id, userId)', async () => {
-    const res = await request(app)
-      .delete(`${base}/interest`)
-      .set('Authorization', `Bearer ${token()}`);
-    expect(res.status).toBe(200);
-    expect(removeInterested).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1');
-  });
 });
 
 // ─── Teams (réorganisation par l'organisateur) ────────────────────────────────
@@ -225,9 +189,9 @@ describe('Error mapping', () => {
   });
 
   it('MATCH_NOT_JOINABLE → 409', async () => {
-    setInterested.mockRejectedValue(new Error('MATCH_NOT_JOINABLE'));
+    joinOpenMatch.mockRejectedValue(new Error('MATCH_NOT_JOINABLE'));
     const res = await request(app)
-      .post(`${base}/interest`)
+      .post(`${base}/join`)
       .set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('MATCH_NOT_JOINABLE');

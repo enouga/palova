@@ -386,36 +386,6 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
   });
 }
 
-/** Prévient l'organisateur qu'un membre est « intéressé » par sa partie (in-app + push, pas d'email). */
-export async function notifyOpenMatchInterest(reservationId: string, interestedUserId: string): Promise<void> {
-  const resa = await prisma.reservation.findUnique({
-    where: { id: reservationId },
-    include: {
-      resource: { select: { name: true, club: { select: { id: true, slug: true, timezone: true } } } },
-      participants: { include: { user: { select: { firstName: true, lastName: true } } } },
-    },
-  });
-  if (!resa) return;
-  const organizerP = resa.participants.find((p) => p.isOrganizer);
-  if (!organizerP || organizerP.userId === interestedUserId) return;
-
-  const interested = await prisma.user.findUnique({
-    where: { id: interestedUserId },
-    select: { firstName: true, lastName: true },
-  });
-  if (!interested) return;
-
-  const club = resa.resource.club;
-  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
-  const url = clubAppUrl(club.slug, '/parties');
-  await dispatch({
-    userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.interested',
-    title: 'Quelqu’un est intéressé par ta partie',
-    body: `${fullName(interested)} est intéressé par ta partie du ${dateLabel}.`,
-    url, email: null,
-  });
-}
-
 /**
  * Notifie les membres du chat (participants + auteurs de messages) ABSENTS du fil qu'un
  * message a été posté (in-app + push + email). Exclut l'auteur et les connectés au flux SSE.

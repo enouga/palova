@@ -272,10 +272,6 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants/teams`, { method: 'POST', body: JSON.stringify({ teams, slots }) }, token),
   addOpenMatchPlayer: (slug: string, id: string, userId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/participants`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
-  setInterested: (slug: string, id: string, token: string) =>
-    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'POST' }, token),
-  removeInterested: (slug: string, id: string, token: string) =>
-    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/interest`, { method: 'DELETE' }, token),
   markOpenMatchChatRead: (slug: string, id: string, token: string) =>
     request<{ count: number }>(`/api/clubs/${slug}/open-matches/${id}/chat/read`, { method: 'POST' }, token),
   getOpenMatchUnread: (slug: string, token: string) =>
@@ -1208,9 +1204,6 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
-  interestedCount: number;
-  viewerIsInterested: boolean;
-  interested: OpenMatchPlayer[];
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
