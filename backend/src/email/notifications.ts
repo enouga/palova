@@ -417,8 +417,8 @@ export async function notifyOpenMatchInterest(reservationId: string, interestedU
 }
 
 /**
- * Notifie les membres du chat (participants + intéressés) ABSENTS du fil qu'un message
- * a été posté (in-app + push + email). Exclut l'auteur et les connectés au flux SSE.
+ * Notifie les membres du chat (participants + auteurs de messages) ABSENTS du fil qu'un
+ * message a été posté (in-app + push + email). Exclut l'auteur et les connectés au flux SSE.
  * Un email + une notif PAR message (pas de coalescing) → le compteur de non-lus est exact.
  */
 export async function notifyOpenMatchChatMessage(reservationId: string, messageId: string, authorUserId: string): Promise<void> {
@@ -434,12 +434,17 @@ export async function notifyOpenMatchChatMessage(reservationId: string, messageI
   const msg = resa.openMatchMessages[0];
   if (!msg) return;
 
-  const interests = await prisma.openMatchInterest.findMany({ where: { reservationId }, select: { userId: true } });
+  // Destinataires = participants ∪ personnes ayant déjà écrit dans ce chat.
+  const chatters = await prisma.openMatchMessage.findMany({
+    where: { reservationId },
+    distinct: ['userId'],
+    select: { userId: true },
+  });
   const connected = SSEService.getInstance().getMatchUserIds(reservationId);
 
   const recipients = new Set<string>();
   for (const p of resa.participants) recipients.add(p.userId);
-  for (const i of interests) recipients.add(i.userId);
+  for (const c of chatters) recipients.add(c.userId);
   recipients.delete(authorUserId);
   for (const u of connected) recipients.delete(u);
   if (recipients.size === 0) return;

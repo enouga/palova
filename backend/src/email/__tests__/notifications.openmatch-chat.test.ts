@@ -38,8 +38,8 @@ it('notifie les membres du chat sauf l auteur et sauf les connectes au SSE', asy
     ],
   } as any);
 
-  // 'curious' is interested (not a participant)
-  prismaMock.openMatchInterest.findMany.mockResolvedValue([{ userId: 'curious' }] as any);
+  // Auteurs distincts de messages : 'author' (filtré ensuite) + 'curious' (non-participant ayant écrit)
+  prismaMock.openMatchMessage.findMany.mockResolvedValue([{ userId: 'author' }, { userId: 'curious' }] as any);
 
   // 'present' is connected to the SSE feed → excluded
   getMatchUserIdsMock.mockReturnValue(new Set(['present']));
@@ -81,7 +81,7 @@ it('envoie une notif par message meme si une notif non lue existe deja (pas de c
     ],
   } as any);
 
-  prismaMock.openMatchInterest.findMany.mockResolvedValue([] as any);
+  prismaMock.openMatchMessage.findMany.mockResolvedValue([{ userId: 'author' }] as any);
 
   // user.findMany returns the absent recipient
   prismaMock.user.findMany.mockResolvedValue([
@@ -113,7 +113,7 @@ it('ne fait rien si le message est introuvable dans la reservation', async () =>
     participants: [{ userId: 'author' }, { userId: 'absent' }],
     openMatchMessages: [], // message not found
   } as any);
-  prismaMock.openMatchInterest.findMany.mockResolvedValue([] as any);
+  prismaMock.openMatchMessage.findMany.mockResolvedValue([] as any);
 
   await notifyOpenMatchChatMessage('resa1', 'missing-msg', 'author');
   expect(dispatchMock).not.toHaveBeenCalled();
