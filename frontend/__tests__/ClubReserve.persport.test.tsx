@@ -18,8 +18,11 @@ jest.mock('../lib/api', () => ({
     getMyQuotaStatus: jest.fn().mockResolvedValue(null),
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'T', lastName: 'U', email: 't@p.fr', avatarUrl: null }),
     getClubAvailability: jest.fn(),
-    // consommé par ClubNav (badge réservations à venir)
+    // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
+    getMyTournaments: jest.fn().mockResolvedValue([]),
+    getMyEvents: jest.fn().mockResolvedValue([]),
+    getMyLessons: jest.fn().mockResolvedValue([]),
     // consommé par ClubNav (badge non lus de l'onglet Parties — club avec padel)
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // consommés par NotificationBell (intégré dans ClubNav)

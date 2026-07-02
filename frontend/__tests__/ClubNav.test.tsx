@@ -26,8 +26,11 @@ jest.mock('../lib/api', () => ({
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     // consommé par ClubNav (badge Parties)
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
-    // consommé par ClubNav (badge réservations à venir)
+    // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
+    getMyTournaments: jest.fn().mockResolvedValue([]),
+    getMyEvents: jest.fn().mockResolvedValue([]),
+    getMyLessons: jest.fn().mockResolvedValue([]),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
     markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
@@ -153,29 +156,51 @@ describe('ClubNav', () => {
     expect(screen.queryByText('Connexion')).not.toBeInTheDocument();
   });
 
-  it("affiche un badge du nombre de réservations à venir sur l'onglet Mes réservations", async () => {
+  it("affiche un badge du nombre d'éléments à venir (réservations + tournois) sur l'onglet Mes réservations", async () => {
     const { api: mockApi } = require('../lib/api');
     const future = new Date(Date.now() + 86_400_000).toISOString();
     const past = new Date(Date.now() - 86_400_000).toISOString();
     mockApi.getMyReservations.mockResolvedValueOnce([
-      { id: 'r1', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'demo' } } },
-      { id: 'r2', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'demo' } } },
-      { id: 'r3', status: 'CANCELLED', endTime: future, resource: { club: { slug: 'demo' } } }, // annulée → exclue
-      { id: 'r4', status: 'CONFIRMED', endTime: past, resource: { club: { slug: 'demo' } } },   // passée → exclue
-      { id: 'r5', status: 'CONFIRMED', endTime: future, resource: { club: { slug: 'autre' } } }, // autre club → exclue
+      { id: 'r1', status: 'CONFIRMED', startTime: future, endTime: future, resource: { club: { slug: 'demo' } } },
+      { id: 'r2', status: 'CONFIRMED', startTime: future, endTime: future, resource: { club: { slug: 'demo' } } },
+      { id: 'r3', status: 'CANCELLED', startTime: future, endTime: future, resource: { club: { slug: 'demo' } } }, // annulée → exclue
+      { id: 'r4', status: 'CONFIRMED', startTime: past, endTime: past, resource: { club: { slug: 'demo' } } },     // passée → exclue
+      { id: 'r5', status: 'CONFIRMED', startTime: future, endTime: future, resource: { club: { slug: 'autre' } } }, // autre club → exclue
+    ]);
+    mockApi.getMyTournaments.mockResolvedValueOnce([
+      { id: 'tr1', status: 'CONFIRMED', tournament: { status: 'PUBLISHED', startTime: future, endTime: future, club: { slug: 'demo' } } },  // à venir → compté
+      { id: 'tr2', status: 'CONFIRMED', tournament: { status: 'PUBLISHED', startTime: past, endTime: past, club: { slug: 'demo' } } },      // passé → exclu
+      { id: 'tr3', status: 'CANCELLED', tournament: { status: 'PUBLISHED', startTime: future, endTime: future, club: { slug: 'demo' } } },  // annulé → exclu
+      { id: 'tr4', status: 'CONFIRMED', tournament: { status: 'PUBLISHED', startTime: future, endTime: future, club: { slug: 'autre' } } }, // autre club → exclu
     ]);
     document.cookie = 'token=abc; path=/';
     wrap();
-    expect(await screen.findByLabelText('2 réservations à venir')).toBeInTheDocument();
+    // 2 réservations + 1 tournoi à venir sur le club courant
+    expect(await screen.findByLabelText('3 à venir')).toBeInTheDocument();
   });
 
-  it("affiche un badge de non lus sur l'onglet Parties quand count > 0", async () => {
+  it("la pastille « à venir » (Résas) est en accent — même style que l'onglet À venir, pas le rouge notification", async () => {
+    const { api: mockApi } = require('../lib/api');
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    mockApi.getMyReservations.mockResolvedValueOnce([
+      { id: 'r1', status: 'CONFIRMED', startTime: future, endTime: future, resource: { club: { slug: 'demo' } } },
+    ]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const badge = await screen.findByLabelText('1 à venir');
+    // Accent du thème (bleu Palova par défaut), pas le rouge #e5484d des non-lus.
+    expect(badge.style.background).not.toBe('rgb(229, 72, 77)');
+    expect(badge.style.background).toBeTruthy();
+  });
+
+  it("affiche un badge de non lus sur l'onglet Parties quand count > 0 (rouge notification)", async () => {
     const { api: mockApi } = require('../lib/api');
     mockApi.getOpenMatchUnread.mockResolvedValueOnce({ count: 2 });
     document.cookie = 'token=abc; path=/';
     const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
     render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
-    expect(await screen.findByLabelText('2 non lus')).toBeInTheDocument();
+    const badge = await screen.findByLabelText('2 non lus');
+    expect(badge.style.background).toBe('rgb(229, 72, 77)');
   });
 
   it('montre « Parties » sans session si le club a du padel (parties ouvertes publiques)', async () => {

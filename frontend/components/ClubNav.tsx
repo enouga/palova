@@ -11,13 +11,16 @@ import { ProfileMenu } from '@/components/ProfileMenu';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { clubHasPadel } from '@/lib/sport';
+import { buildAgendaList } from '@/lib/calendar';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
 
-// Pastille de compteur rouge posée sur un onglet (non lus Parties, réservations à venir…).
-function CountBadge({ count, label, fontFamily }: { count: number; label: string; fontFamily: string }) {
+// Pastille de compteur posée sur un onglet. Défaut = rouge notification (non lus Parties) ;
+// `bg`/`fg` permettent le style accent (compteur « à venir », même langage que l'onglet
+// À venir de /me/reservations).
+function CountBadge({ count, label, fontFamily, bg = '#e5484d', fg = '#fff' }: { count: number; label: string; fontFamily: string; bg?: string; fg?: string }) {
   return (
-    <span aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: '#e5484d', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
+    <span aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: bg, color: fg, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -54,23 +57,30 @@ export function ClubNav({ club }: { club: ClubDetail }) {
     return () => { alive = false; es.close(); window.removeEventListener('palova:openmatch-unread', onLocal); };
   }, [showPartiesTab, token, club.slug, pathname]);
 
-  // Compteur de réservations terrain À VENIR (status ≠ annulé, fin ≥ maintenant), même
-  // cloisonnement par club que la page /me/reservations (sauf si le club ouvre la vue des autres).
-  // Calculé en effet (jamais au rendu → pas de mismatch d'hydration), rafraîchi à chaque navigation.
-  const [upcomingResas, setUpcomingResas] = useState(0);
+  // Compteur « Mes réservations » À VENIR — identique au compteur de l'onglet « À venir »
+  // de /me/reservations : réservations terrain + inscriptions tournois + events + cours, fusionnés
+  // par buildAgendaList (annulés exclus), même cloisonnement par club (sauf si le club ouvre la
+  // vue des autres). Calculé en effet (jamais au rendu → pas de mismatch d'hydration), rafraîchi
+  // à chaque navigation. Les appels tournois/events/cours sont best-effort (badge dégradé si échec).
+  const [upcomingCount, setUpcomingCount] = useState(0);
   const showResasTab = ready && !!token;
   const showAllResas = !!club.showOtherClubsReservations;
   useEffect(() => {
-    if (!showResasTab || !token) { setUpcomingResas(0); return; }
+    if (!showResasTab || !token) { setUpcomingCount(0); return; }
     let alive = true;
-    api.getMyReservations(token).then((rs) => {
+    Promise.all([
+      api.getMyReservations(token),
+      api.getMyTournaments(token).catch(() => []),
+      api.getMyEvents(token).catch(() => []),
+      api.getMyLessons(token).catch(() => []),
+    ]).then(([reservations, tournaments, events, lessons]) => {
       if (!alive) return;
-      const now = Date.now();
-      setUpcomingResas(rs.filter((r) =>
-        r.status !== 'CANCELLED' &&
-        new Date(r.endTime).getTime() >= now &&
-        (showAllResas || r.resource.club.slug === club.slug),
-      ).length);
+      const fItems   = showAllResas ? reservations : reservations.filter((r) => r.resource.club.slug === club.slug);
+      const fRegs    = showAllResas ? tournaments  : tournaments.filter((r) => r.tournament.club.slug === club.slug);
+      const fEvts    = showAllResas ? events       : events.filter((e) => e.event.club.slug === club.slug);
+      const fLessons = showAllResas ? lessons      : lessons.filter((l) => l.lesson.club.slug === club.slug);
+      const upcoming = buildAgendaList(fItems, fRegs, fEvts, fLessons, new Date()).filter((i) => !i.past);
+      setUpcomingCount(upcoming.length);
     }).catch(() => {});
     return () => { alive = false; };
   }, [showResasTab, token, club.slug, showAllResas, pathname]);
@@ -172,8 +182,11 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 {t.href === '/parties' && partiesUnread > 0 && (
                   <CountBadge count={partiesUnread} label={`${partiesUnread} non lus`} fontFamily={th.fontUI} />
                 )}
-                {t.href === '/me/reservations' && upcomingResas > 0 && (
-                  <CountBadge count={upcomingResas} label={`${upcomingResas} réservations à venir`} fontFamily={th.fontUI} />
+                {t.href === '/me/reservations' && upcomingCount > 0 && (
+                  // Accent comme la pastille de l'onglet « À venir » ; inversé sur l'onglet
+                  // actif (fond déjà accent → la pastille passe en onAccent pour rester lisible).
+                  <CountBadge count={upcomingCount} label={`${upcomingCount} à venir`} fontFamily={th.fontUI}
+                    bg={active ? th.onAccent : th.accent} fg={active ? th.accent : th.onAccent} />
                 )}
               </Link>
             );
