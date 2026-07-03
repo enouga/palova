@@ -4,12 +4,10 @@ import { ACCENTS } from '@/lib/theme';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { deadlineCountdown } from '@/lib/tournament';
 
-// Fin du dégradé du hero : le bleu Palova plonge vers un bleu nuit profond
-// (surtout pas vers le cyan, qui tirait vers le fluo).
-const HERO_NAVY = '#2c4668';
-
+// Dégradé « brume bleue » : hero clair, pastel, texte encre — remplace
+// l'ancien dégradé sombre bleu Palova → bleu nuit (jugé trop lourd).
 /** Dégradé signature des heros (fiches tournoi/event, club-house). */
-export const HERO_GRADIENT = `linear-gradient(115deg, ${ACCENTS.blue}, ${HERO_NAVY})`;
+export const HERO_GRADIENT = `linear-gradient(115deg, #e3edf9, #c8daf0)`;
 
 // Briques partagées par les fiches tournoi et event (et leurs heros).
 
@@ -21,8 +19,8 @@ export function HeroPill({ children, strong, urgent }: { children: React.ReactNo
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontWeight: 700,
       fontSize: 12.5, letterSpacing: 0.3, padding: '5px 11px', borderRadius: 999, whiteSpace: 'nowrap',
-      background: urgent ? ACCENTS.coral : strong ? '#fff' : 'rgba(255,255,255,0.18)',
-      color: strong && !urgent ? '#1d2733' : '#fff',
+      background: urgent ? ACCENTS.coral : strong ? '#fff' : 'rgba(24,21,14,0.06)',
+      color: urgent ? '#fff' : th.text,
     }}>
       {children}
     </span>
@@ -40,29 +38,30 @@ export interface AgendaHeroProps {
   places: { text: string; urgent: boolean };
 }
 
-// Hero immersif : dégradé bleu Palova → bleu nuit, compte à rebours, jauge de
-// remplissage animée, badge places restantes — l'urgence est portée par les
-// badges coral, pas par le fond. `now` null au premier rendu : pas de
-// countdown, jauge à 0 — le remplissage s'anime au mount via la transition CSS.
+// Hero immersif : dégradé « brume bleue » clair (texte encre), compte à
+// rebours, jauge de remplissage animée, badge places restantes — l'urgence
+// est portée par les badges coral, pas par le fond. `now` null au premier
+// rendu : pas de countdown, jauge à 0 — le remplissage s'anime au mount via
+// la transition CSS.
 export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, counter, places }: AgendaHeroProps) {
   const { th } = useTheme();
   const countdown = now ? deadlineCountdown(deadline, now) : null;
 
   return (
     <div style={{ padding: '12px 20px 0' }}>
-      <div data-testid="agenda-hero" style={{ background: HERO_GRADIENT, borderRadius: 18, padding: '24px 22px', color: '#fff' }}>
+      <div data-testid="agenda-hero" style={{ background: HERO_GRADIENT, borderRadius: 18, padding: '24px 22px', color: th.text }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {pills.map((p) => <HeroPill key={p.label} strong={p.strong}>{p.label}</HeroPill>)}
           <span style={{ flex: 1 }} />
-          {countdown && <HeroPill urgent={countdown.urgent}><Icon name="clock" size={13} color="#fff" />{countdown.text}</HeroPill>}
+          {countdown && <HeroPill urgent={countdown.urgent}><Icon name="clock" size={13} color={countdown.urgent ? '#fff' : th.text} />{countdown.text}</HeroPill>}
         </div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -0.6, marginTop: 14, lineHeight: 1.1 }}>{title}</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, opacity: 0.85, marginTop: 5 }}>{subtitle}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, opacity: 0.65, marginTop: 5 }}>{subtitle}</div>
 
         <div style={{ marginTop: 18 }}>
           {ratio != null && (
-            <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
-              <div data-testid="hero-fill" style={{ height: '100%', borderRadius: 999, background: '#fff', width: now ? `${Math.round(ratio * 100)}%` : 0, transition: 'width .8s ease' }} />
+            <div style={{ height: 6, borderRadius: 999, background: 'rgba(24,21,14,0.10)', overflow: 'hidden' }}>
+              <div data-testid="hero-fill" style={{ height: '100%', borderRadius: 999, background: ACCENTS.blue, width: now ? `${Math.round(ratio * 100)}%` : 0, transition: 'width .8s ease' }} />
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: ratio != null ? 9 : 0, flexWrap: 'wrap' }}>
@@ -70,7 +69,7 @@ export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, count
             <span style={{ flex: 1 }} />
             <span style={{
               fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
-              ...(places.urgent ? { background: ACCENTS.coral, borderRadius: 999, padding: '4px 10px' } : { opacity: 0.95 }),
+              ...(places.urgent ? { background: ACCENTS.coral, borderRadius: 999, padding: '4px 10px', color: '#fff' } : { opacity: 0.7 }),
             }}>{places.text}</span>
           </div>
         </div>
