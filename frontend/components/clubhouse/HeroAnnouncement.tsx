@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Announcement } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
-import { HERO_GRADIENT } from '@/components/agenda/AgendaHero';
+import { HERO_GRADIENT, HERO_INK } from '@/components/agenda/AgendaHero';
 
 // Bandeau « À la une » : l'annonce épinglée mise en scène.
 // Fond = imageUrl (voile sombre pour la lisibilité) sinon le dégradé signature.
@@ -41,7 +41,7 @@ export function HeroAnnouncement({ announcement }: { announcement: Announcement 
         aria-label={`Lire l'annonce : ${announcement.title}`}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
-        style={{ ...heroStyle, borderRadius: 18, padding: '26px 22px', color: hasImage ? '#fff' : th.text, cursor: 'pointer' }}
+        style={{ ...heroStyle, borderRadius: 18, padding: '26px 22px', color: hasImage ? '#fff' : HERO_INK, cursor: 'pointer' }}
       >
         <div style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.8 }}>À la une</div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4, marginTop: 6 }}>{announcement.title}</div>
