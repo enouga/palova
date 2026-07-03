@@ -16,6 +16,8 @@ export function HeroAnnouncement({ announcement }: { announcement: Announcement 
   // Neutralise quotes/parenthèses : une URL hostile ne peut pas sortir du url('…') CSS.
   const safeImageUrl = announcement.imageUrl?.replace(/['"\\()]/g, '') ?? null;
 
+  const hasImage = !!safeImageUrl;
+
   const heroStyle: React.CSSProperties = safeImageUrl
     ? {
         backgroundImage: `linear-gradient(rgba(18, 22, 30, 0.55), rgba(18, 22, 30, 0.55)), url('${safeImageUrl}')`,
@@ -26,7 +28,8 @@ export function HeroAnnouncement({ announcement }: { announcement: Announcement 
     : { background: HERO_GRADIENT };
 
   const ctaStyle: React.CSSProperties = {
-    display: 'inline-block', marginTop: 14, background: '#fff', color: '#1d2733',
+    display: 'inline-block', marginTop: 14,
+    background: hasImage ? '#fff' : '#181510', color: hasImage ? '#1d2733' : '#f7f6f0',
     borderRadius: 10, padding: '9px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, textDecoration: 'none',
   };
 
@@ -38,7 +41,7 @@ export function HeroAnnouncement({ announcement }: { announcement: Announcement 
         aria-label={`Lire l'annonce : ${announcement.title}`}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
-        style={{ ...heroStyle, borderRadius: 18, padding: '26px 22px', color: '#fff', cursor: 'pointer' }}
+        style={{ ...heroStyle, borderRadius: 18, padding: '26px 22px', color: hasImage ? '#fff' : th.text, cursor: 'pointer' }}
       >
         <div style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.8 }}>À la une</div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4, marginTop: 6 }}>{announcement.title}</div>
