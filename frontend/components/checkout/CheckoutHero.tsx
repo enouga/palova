@@ -3,6 +3,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { courtFormat } from '@/lib/courtType';
 import { formatHour } from '@/lib/bookingErrors';
+import { HERO_GRADIENT } from '@/components/agenda/AgendaHero';
 
 export interface CheckoutHeroProps {
   slot: { startTime: string; endTime: string; offPeak?: boolean };
@@ -48,7 +49,7 @@ export function CheckoutHero({
         borderRadius: 18,
         padding: '18px',
         color: '#181510',
-        background: 'linear-gradient(115deg, #e3edf9, #c8daf0)',
+        background: HERO_GRADIENT,
         position: 'relative',
         overflow: 'hidden',
       }}
