@@ -30,6 +30,8 @@ jest.mock('../lib/api', () => ({
     markNotificationRead: jest.fn().mockResolvedValue({ ok: true }),
     markAllNotificationsRead: jest.fn().mockResolvedValue({ ok: true }),
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge 💬 Messages du header)
+    getDmUnread: jest.fn().mockResolvedValue({ count: 0 }),
     getOpenMatch: jest.fn(),
   },
 }));
