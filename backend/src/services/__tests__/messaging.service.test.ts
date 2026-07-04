@@ -115,4 +115,149 @@ describe('MessagingService — listConversations / unreadTotal', () => {
       where: { conversationId: 'c1', deletedAt: null, authorId: { not: 'u1' }, createdAt: { gt: new Date('2026-07-01T00:00:00Z') } },
     });
   });
+
+  it('liste triée par lastMessageAt desc (plus récent d\'abord)', async () => {
+    const older = { ...conv('c1', 'u2', 'vieux') };
+    older.conversation = { ...older.conversation, lastMessageAt: new Date('2026-07-01T00:00:00Z') };
+    const newer = { ...conv('c2', 'u3', 'récent') };
+    newer.conversation = { ...newer.conversation, lastMessageAt: new Date('2026-07-04T00:00:00Z') };
+    prismaMock.conversationParticipant.findMany.mockResolvedValue([older, newer] as any);
+    prismaMock.directMessage.count.mockResolvedValue(0);
+    const list = await service.listConversations('u1');
+    expect(list.map((c) => c.id)).toEqual(['c2', 'c1']);
+  });
+});
+
+describe('MessagingService — getOrCreateConversation P2002', () => {
+  let service: MessagingService;
+  beforeEach(() => {
+    service = new MessagingService();
+    mockNotify.mockReset().mockResolvedValue(undefined);
+    prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: null } as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ clubId: 'club-demo' }] as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue({ clubId: 'club-demo' } as any);
+    prismaMock.userBlock.findFirst.mockResolvedValue(null);
+    prismaMock.conversationParticipant.createMany.mockResolvedValue({ count: 2 } as any);
+  });
+
+  it('course P2002 : create échoue, le fallback findUnique renvoie la conversation créée entretemps', async () => {
+    prismaMock.conversation.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'c1', clubId: 'club-demo', lastMessageAt: null } as any);
+    prismaMock.conversation.create.mockRejectedValue({ code: 'P2002' });
+    const conv = await service.getOrCreateConversation('u1', 'u2');
+    expect(conv.id).toBe('c1');
+  });
+
+  it('erreur non-P2002 : create échoue → rejette l\'erreur d\'origine (pas de repli silencieux)', async () => {
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    prismaMock.conversation.create.mockRejectedValue(new Error('boom'));
+    await expect(service.getOrCreateConversation('u1', 'u2')).rejects.toThrow('boom');
+  });
+});
+
+const CONV = {
+  id: 'c1', clubId: 'club-demo', userAId: 'u1', userBId: 'u2',
+  participants: [
+    { userId: 'u1', lastReadAt: null, user: U('u1') },
+    { userId: 'u2', lastReadAt: new Date('2026-07-04T09:00:00Z'), user: U('u2') },
+  ],
+};
+const MSG_ROW = (id: string, authorId: string, body: string, over: Record<string, unknown> = {}) => ({
+  id, body, imageUrl: null, createdAt: new Date('2026-07-04T10:00:00Z'), deletedAt: null,
+  author: U(authorId), reactions: [], ...over,
+});
+
+describe('MessagingService — messages', () => {
+  let service: MessagingService;
+  let broadcast: jest.SpyInstance;
+  beforeEach(() => {
+    service = new MessagingService();
+    mockNotify.mockReset().mockResolvedValue(undefined);
+    broadcast = jest.spyOn(SSEService.getInstance(), 'broadcastConversation').mockImplementation(() => {});
+    prismaMock.conversation.findUnique.mockResolvedValue(CONV as any);
+    prismaMock.userBlock.findFirst.mockResolvedValue(null);
+  });
+  afterEach(() => broadcast.mockRestore());
+
+  it('listMessages : tiers → CONVERSATION_NOT_FOUND', async () => {
+    await expect(service.listMessages('c1', 'intrus')).rejects.toThrow('CONVERSATION_NOT_FOUND');
+  });
+
+  it('listMessages : page chrono + méta (lastReadAt des deux côtés, blocked, hasMore)', async () => {
+    prismaMock.directMessage.findMany.mockResolvedValue([MSG_ROW('m2', 'u2', 'b'), MSG_ROW('m1', 'u1', 'a')] as any);
+    const r = await service.listMessages('c1', 'u1');
+    expect(r.messages.map((m) => m.id)).toEqual(['m1', 'm2']); // ré-ordonné chrono asc
+    expect(r.meta).toEqual({
+      myLastReadAt: null,
+      otherLastReadAt: '2026-07-04T09:00:00.000Z',
+      blocked: false,
+      hasMore: false,
+    });
+  });
+
+  it('listMessages : curseur before + hasMore', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => MSG_ROW(`m${51 - i}`, 'u2', `x${i}`));
+    prismaMock.directMessage.findMany.mockResolvedValue(rows as any);
+    const r = await service.listMessages('c1', 'u1', 'm52');
+    expect(prismaMock.directMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { conversationId: 'c1' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 51,
+      cursor: { id: 'm52' }, skip: 1,
+    }));
+    expect(r.messages).toHaveLength(50);
+    expect(r.meta.hasMore).toBe(true);
+  });
+
+  it('postMessage : crée, met à jour lastMessageAt, broadcast + notifie', async () => {
+    const created = MSG_ROW('m3', 'u1', 'coucou');
+    prismaMock.directMessage.create.mockResolvedValue(created as any);
+    prismaMock.conversation.update.mockResolvedValue({} as any);
+    const dto = await service.postMessage('c1', 'u1', '  coucou  ');
+    expect(prismaMock.directMessage.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: { conversationId: 'c1', authorId: 'u1', body: 'coucou' },
+    }));
+    expect(prismaMock.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' }, data: { lastMessageAt: created.createdAt },
+    });
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_message', message: expect.objectContaining({ id: 'm3' }) });
+    expect(mockNotify).toHaveBeenCalledWith('c1', 'm3', 'u1');
+    expect(dto.body).toBe('coucou');
+  });
+
+  it('postMessage : vide ou > 2000 → VALIDATION_ERROR', async () => {
+    await expect(service.postMessage('c1', 'u1', '   ')).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.postMessage('c1', 'u1', 'x'.repeat(2001))).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('postMessage : paire bloquée → USER_BLOCKED (quel que soit le sens)', async () => {
+    prismaMock.userBlock.findFirst.mockResolvedValue({ id: 'b1' } as any);
+    await expect(service.postMessage('c1', 'u1', 'yo')).rejects.toThrow('USER_BLOCKED');
+  });
+
+  it('postMessage : un échec de notification ne casse pas l\'envoi', async () => {
+    prismaMock.directMessage.create.mockResolvedValue(MSG_ROW('m3', 'u1', 'yo') as any);
+    prismaMock.conversation.update.mockResolvedValue({} as any);
+    mockNotify.mockRejectedValue(new Error('SMTP down'));
+    await expect(service.postMessage('c1', 'u1', 'yo')).resolves.toMatchObject({ id: 'm3' });
+  });
+
+  it('deleteMessage : auteur seul, pierre tombale + broadcast', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u1', 'a'), conversationId: 'c1', authorId: 'u1' } as any);
+    prismaMock.directMessage.update.mockResolvedValue(MSG_ROW('m1', 'u1', 'a', { deletedAt: new Date() }) as any);
+    const dto = await service.deleteMessage('c1', 'u1', 'm1');
+    expect(dto.deleted).toBe(true);
+    expect(dto.body).toBe('');
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_deleted', message: expect.objectContaining({ id: 'm1', deleted: true }) });
+  });
+
+  it('deleteMessage : non-auteur → NOT_ALLOWED ; déjà supprimé → idempotent sans re-broadcast', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u2', 'a'), conversationId: 'c1', authorId: 'u2' } as any);
+    await expect(service.deleteMessage('c1', 'u1', 'm1')).rejects.toThrow('NOT_ALLOWED');
+    prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u1', 'a', { deletedAt: new Date() }), conversationId: 'c1', authorId: 'u1' } as any);
+    const dto = await service.deleteMessage('c1', 'u1', 'm1');
+    expect(dto.deleted).toBe(true);
+    expect(broadcast).not.toHaveBeenCalled();
+  });
 });

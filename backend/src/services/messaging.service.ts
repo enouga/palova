@@ -124,7 +124,8 @@ export class MessagingService {
           data: { ...pair, clubId },
           select: { id: true, clubId: true, lastMessageAt: true },
         });
-      } catch {
+      } catch (err) {
+        if ((err as { code?: string })?.code !== 'P2002') throw err;
         // course P2002 : l'autre l'a créée en même temps
         conv = await prisma.conversation.findUnique({
           where: { userAId_userBId: pair },
@@ -197,11 +198,85 @@ export class MessagingService {
   /** Total global de non-lus (badge 💬 du header). */
   async unreadTotal(meId: string): Promise<{ count: number }> {
     const parts = await prisma.conversationParticipant.findMany({
-      where: { userId: meId },
+      where: { userId: meId, conversation: { lastMessageAt: { not: null } } },
       select: { conversationId: true, lastReadAt: true },
     });
     const counts = await Promise.all(parts.map((p) =>
       prisma.directMessage.count({ where: this.unreadWhere(p.conversationId, meId, p.lastReadAt) })));
     return { count: counts.reduce((s, n) => s + n, 0) };
   }
+
+  /** Fil paginé par curseur (before = id de message), renvoyé en ordre CHRONO. */
+  async listMessages(conversationId: string, meId: string, before?: string | null, limitRaw?: string | number | null):
+    Promise<{ messages: DmMessageDTO[]; meta: DmListMeta }> {
+    const { conv, otherId } = await this.assertParticipant(conversationId, meId);
+    const limit = Math.min(Math.max(Number(limitRaw) || PAGE_DEFAULT, 1), PAGE_MAX);
+    const rows = await prisma.directMessage.findMany({
+      where: { conversationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(before ? { cursor: { id: before }, skip: 1 } : {}),
+      select: MSG_SELECT,
+    });
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit).reverse();
+    const mine = conv.participants.find((p) => p.userId === meId);
+    const theirs = conv.participants.find((p) => p.userId === otherId);
+    return {
+      messages: page.map(toMessageDTO),
+      meta: {
+        myLastReadAt: mine?.lastReadAt?.toISOString() ?? null,
+        otherLastReadAt: theirs?.lastReadAt?.toISOString() ?? null,
+        blocked: await this.pairBlocked(meId, otherId),
+        hasMore,
+      },
+    };
+  }
+
+  /** Poste un message texte : valide, crée, avance lastMessageAt, broadcast, notifie (best-effort). */
+  async postMessage(conversationId: string, meId: string, rawBody: string): Promise<DmMessageDTO> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const body = (rawBody ?? '').trim();
+    if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+    const created = await prisma.directMessage.create({
+      data: { conversationId, authorId: meId, body },
+      select: MSG_SELECT,
+    });
+    return this.finishSend(conversationId, meId, created);
+  }
+
+  /** Fin d'envoi commune texte/photo : lastMessageAt + broadcast + notif best-effort. */
+  private async finishSend(conversationId: string, meId: string, created: MsgRow): Promise<DmMessageDTO> {
+    await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
+    const dto = toMessageDTO(created);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_message', message: dto });
+    try { await notifyDirectMessage(conversationId, created.id, meId); }
+    catch (err) { console.error('[messaging] notification échouée', err); }
+    return dto;
+  }
+
+  /** Supprime un message : AUTEUR SEUL (pas de modération staff en privé). Pierre tombale idempotente. */
+  async deleteMessage(conversationId: string, meId: string, messageId: string): Promise<DmMessageDTO> {
+    await this.assertParticipant(conversationId, meId);
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { ...MSG_SELECT, conversationId: true, authorId: true },
+    });
+    if (!msg || msg.conversationId !== conversationId) throw new Error('MESSAGE_NOT_FOUND');
+    if (msg.authorId !== meId) throw new Error('NOT_ALLOWED');
+    if (msg.deletedAt) return toMessageDTO(msg); // idempotent, pas de re-broadcast
+    if (msg.imageUrl) this.unlinkImage(msg.imageUrl); // best-effort (défini en tâche 8)
+    const updated = await prisma.directMessage.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date(), deletedById: meId },
+      select: MSG_SELECT,
+    });
+    const dto = toMessageDTO(updated);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
+    return dto;
+  }
+
+  /** Stub rempli en tâche 8 (photos). */
+  private unlinkImage(_relPath: string): void { /* no-op avant la tâche 8 */ }
 }
