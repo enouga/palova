@@ -147,7 +147,9 @@ conversationsRouter.get('/:id/messages/:messageId/image', async (req: AuthReques
   catch { return void res.status(401).end(); }
   try {
     const { absPath, mime } = await messagingService.imagePathFor(asString(req.params.id), userId, asString(req.params.messageId));
-    res.sendFile(absPath, { headers: { 'Content-Type': mime, 'Cache-Control': 'private, max-age=31536000, immutable' } });
+    // dotfiles:'allow' — sinon `send` répond « Not Found » dès qu'un segment du chemin ABSOLU
+    // contient un point (ex. dev depuis un worktree sous .claude/) ; imageUrl est déjà validé anti-traversée.
+    res.sendFile(absPath, { dotfiles: 'allow', headers: { 'Content-Type': mime, 'Cache-Control': 'private, max-age=31536000, immutable' } });
   } catch { res.status(404).end(); }
 });
 
