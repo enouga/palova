@@ -1,10 +1,14 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useIsDesktop } from '@/lib/useIsDesktop';
+import { Icon } from '@/components/ui/Icon';
 import { CHAT_EMOJIS } from '@/lib/chatEmojis';
 
 // Composer de message privé : textarea auto-grow, Entrée = envoyer (Maj+Entrée = saut de
-// ligne), 🙂 emojis, 📷 photo avec préview. Throttle « typing » 3 s (fire-and-forget).
+// ligne), 🙂 emojis (desktop seulement — sur mobile le clavier a les siens, et chaque
+// bouton mange la largeur de la textarea), 📷 photo avec préview, envoi = bouton-icône.
+// Throttle « typing » 3 s (fire-and-forget).
 export function MessageComposer({ disabled, onSend, onSendImage, onTyping }: {
   disabled?: boolean;
   onSend: (body: string) => Promise<boolean>; // false = échec → draft restauré
@@ -12,6 +16,7 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping }: {
   onTyping: () => void;
 }) {
   const { th } = useTheme();
+  const isDesktop = useIsDesktop();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -67,11 +72,13 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping }: {
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 18 }}>×</button>
         </div>
       )}
-      <div style={{ display: 'flex', gap: 8, padding: '10px 16px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', alignItems: 'flex-end' }}>
-        <button type="button" aria-label="Emojis" aria-expanded={emojiOpen} disabled={disabled} onClick={() => setEmojiOpen((o) => !o)}
-          style={{ border: `1px solid ${th.line}`, borderRadius: 12, background: emojiOpen ? th.surface : 'transparent', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '9px 12px', color: th.text, opacity: disabled ? 0.5 : 1 }}>
-          🙂
-        </button>
+      <div style={{ display: 'flex', gap: 8, padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', alignItems: 'flex-end' }}>
+        {isDesktop && (
+          <button type="button" aria-label="Emojis" aria-expanded={emojiOpen} disabled={disabled} onClick={() => setEmojiOpen((o) => !o)}
+            style={{ border: `1px solid ${th.line}`, borderRadius: 12, background: emojiOpen ? th.surface : 'transparent', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '9px 12px', color: th.text, opacity: disabled ? 0.5 : 1 }}>
+            🙂
+          </button>
+        )}
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="Choisir une photo"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingImage(f); e.target.value = ''; }} />
         <button type="button" aria-label="Envoyer une photo" disabled={disabled} onClick={() => fileRef.current?.click()}
@@ -88,13 +95,12 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping }: {
           placeholder="Votre message…"
           style={{ flex: 1, minWidth: 0, resize: 'none', border: `1px solid ${th.line}`, borderRadius: 12, padding: '10px 12px',
             fontFamily: th.fontUI, fontSize: 14, background: th.surface, color: th.text, maxHeight: 120, opacity: disabled ? 0.5 : 1 }} />
-        <button type="button" aria-label="Envoyer" onClick={send}
+        <button type="button" aria-label="Envoyer" title="Envoyer" onClick={send}
           disabled={disabled || sending || (!draft.trim() && !pendingImage)}
-          style={{ border: 'none', borderRadius: 12, padding: '10px 16px', background: th.accent, color: th.onAccent,
-            fontFamily: th.fontUI, fontWeight: 700,
+          style={{ border: 'none', borderRadius: 12, padding: '10px 12px', background: th.accent, color: th.onAccent,
             cursor: disabled || sending || (!draft.trim() && !pendingImage) ? 'default' : 'pointer',
             opacity: disabled || sending || (!draft.trim() && !pendingImage) ? 0.5 : 1 }}>
-          Envoyer
+          <Icon name="send" size={18} stroke={2} />
         </button>
       </div>
     </div>
