@@ -8,9 +8,9 @@ import { useTheme } from '@/lib/ThemeProvider';
 
 const GROUP_LABEL: Record<string, string> = {
   inscriptions: 'Inscriptions', organisateur: 'Organisateur', parties: 'Parties ouvertes',
-  matchs: 'Matchs', paiement: 'Paiement',
+  messages: 'Messagerie', matchs: 'Matchs', paiement: 'Paiement',
 };
-const GROUP_ORDER = ['inscriptions', 'organisateur', 'parties', 'matchs', 'paiement'];
+const GROUP_ORDER = ['inscriptions', 'organisateur', 'parties', 'messages', 'matchs', 'paiement'];
 
 export default function AdminEmailsPage() {
   const { th } = useTheme();

@@ -59,7 +59,7 @@ export interface EmailVar { key: string; label: string; sample: string; }
 
 export interface EmailDef {
   type: string;
-  group: 'inscriptions' | 'organisateur' | 'parties' | 'matchs' | 'paiement';
+  group: 'inscriptions' | 'organisateur' | 'parties' | 'messages' | 'matchs' | 'paiement';
   title: string;
   description: string;
   vars: EmailVar[];
@@ -373,6 +373,28 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
       ctaLabel: 'Voir la discussion',
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Club', v.club)],
+  },
+
+  // ------------------------------------------------------------- Messagerie
+  'dm.message': {
+    type: 'dm.message', group: 'messages',
+    title: 'Message privé reçu',
+    description: 'Au destinataire absent quand un message privé arrive (1 email par rafale de messages).',
+    hasCta: true,
+    vars: [
+      { key: 'prenom', label: 'Prénom', sample: 'Marie' },
+      { key: 'auteur', label: 'Auteur du message', sample: 'Éric Nougayrède' },
+      { key: 'message', label: 'Extrait du message', sample: 'On se fait un match samedi ?' },
+      { key: 'club', label: 'Club', sample: 'Padel Arena Paris' },
+      { key: 'lien', label: 'Lien', sample: 'https://club.palova.fr/me/messages' },
+    ],
+    defaults: {
+      subject: 'Nouveau message de {{auteur}}',
+      heading: 'Nouveau message privé 💬',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p style="margin:0 0 12px;">Vous avez reçu un message privé :</p><p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;"><strong>{{auteur}}</strong> : {{message}}</p>',
+      ctaLabel: 'Répondre',
+    },
+    infoRows: (v) => [row('Club', v.club)],
   },
 
   // ---------------------------------------------------------------- Matchs

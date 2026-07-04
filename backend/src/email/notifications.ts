@@ -1306,7 +1306,67 @@ export async function notifyReservationReminder(reservationId: string, window: '
   }
 }
 
-/** Stub Task 6 — remplacé par l'implémentation complète (notif dm.message + email coalescé). */
-export async function notifyDirectMessage(_conversationId: string, _messageId: string, _authorUserId: string): Promise<void> {
-  // no-op jusqu'à la tâche 6
+/**
+ * Notifie le destinataire ABSENT du fil qu'un message privé est arrivé.
+ * In-app + push À CHAQUE message ; EMAIL COALESCÉ par conversation (envoyé seulement
+ * s'il n'existe pas déjà une notif dm.message non lue pour cette conversation).
+ * Les compteurs de non-lus DM viennent de lastReadAt, PAS des notifications.
+ */
+export async function notifyDirectMessage(conversationId: string, messageId: string, authorUserId: string): Promise<void> {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      clubId: true, userAId: true, userBId: true,
+      messages: { where: { id: messageId }, select: { body: true, imageUrl: true, author: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+  const msg = conv?.messages[0];
+  if (!conv || !msg) return;
+
+  const recipientId = conv.userAId === authorUserId ? conv.userBId : conv.userAId;
+  if (SSEService.getInstance().getConversationUserIds(conversationId).has(recipientId)) return;
+
+  const recipient = await prisma.user.findUnique({
+    where: { id: recipientId },
+    select: { id: true, email: true, firstName: true, deletedAt: true },
+  });
+  if (!recipient || recipient.deletedAt) return;
+
+  const authorName = fullName(msg.author);
+  const raw = msg.body || (msg.imageUrl ? '📷 Photo' : '');
+  const snippet = raw.length > 140 ? `${raw.slice(0, 140)}…` : raw;
+  const url = `/me/messages?with=${authorUserId}`;
+
+  // Email coalescé par conversation (5 messages en 2 min = 1 email).
+  const already = await prisma.notification.findFirst({
+    where: { userId: recipientId, type: 'dm.message', readAt: null, data: { path: ['conversationId'], equals: conversationId } },
+    select: { id: true },
+  });
+
+  let email: { to: string; subject: string; html: string; text: string } | null = null;
+  if (!already && conv.clubId && recipient.email) {
+    const club = await prisma.club.findUnique({
+      where: { id: conv.clubId },
+      select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true },
+    });
+    if (club) {
+      const override = await emailTemplates.getOverride(club.id, 'dm.message');
+      const mail = renderClubEmail('dm.message', {
+        prenom: recipient.firstName,
+        auteur: authorName,
+        message: snippet,
+        club: club.name,
+        lien: clubAppUrl(club.slug, `/me/messages?with=${authorUserId}`),
+      }, brandFromClub(club), override);
+      email = { to: recipient.email, subject: mail.subject, html: mail.html, text: mail.text };
+    }
+  }
+
+  await dispatch({
+    userId: recipientId, clubId: conv.clubId, category: 'DIRECT_MESSAGES', type: 'dm.message',
+    title: `Message de ${authorName}`,
+    body: snippet,
+    url, data: { conversationId },
+    email,
+  });
 }
