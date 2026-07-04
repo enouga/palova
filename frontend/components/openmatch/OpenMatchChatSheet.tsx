@@ -7,13 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { colorForSeed } from '@/lib/playerColors';
-
-// Palette d'emojis du chat (curée, sans dépendance). Insérés à la fin du brouillon.
-const CHAT_EMOJIS = [
-  '😀', '😁', '😄', '😅', '😂', '🙂', '😉', '😍', '😎', '🤩',
-  '😘', '😴', '🥵', '😢', '😡', '🤝', '👍', '👎', '👏', '🙌',
-  '💪', '🔥', '🎾', '🏆', '⏰', '📍', '✅', '❌', '❓', '🎉', '🙏', '💯',
-];
+import { CHAT_EMOJIS } from '@/lib/chatEmojis';
 
 export interface OpenMatchChatSheetProps {
   slug: string;

@@ -620,6 +620,48 @@ export const api = {
   listFriendRequests: (token: string) =>
     request<FriendRequests>(`/api/me/friend-requests`, {}, token),
 
+  // --- Messagerie privée ---
+  listConversations: (token: string) => request<ConversationSummary[]>('/api/me/conversations', {}, token),
+  getDmUnread: (token: string) => request<{ count: number }>('/api/me/conversations/unread-count', {}, token),
+  openConversation: (otherUserId: string, token: string, clubSlug?: string | null) =>
+    request<ConversationSummary>('/api/me/conversations', { method: 'POST', body: JSON.stringify({ otherUserId, clubSlug }) }, token),
+  getDmMessages: (conversationId: string, token: string, before?: string | null) =>
+    request<{ messages: DmMessage[]; meta: DmMeta }>(
+      `/api/conversations/${conversationId}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`, {}, token),
+  postDmMessage: (conversationId: string, body: string, token: string) =>
+    request<DmMessage>(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+  deleteDmMessage: (conversationId: string, messageId: string, token: string) =>
+    request<DmMessage>(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' }, token),
+  addDmReaction: (conversationId: string, messageId: string, emoji: string, token: string) =>
+    request<DmReaction[]>(`/api/conversations/${conversationId}/messages/${messageId}/reactions`,
+      { method: 'POST', body: JSON.stringify({ emoji }) }, token),
+  removeDmReaction: (conversationId: string, messageId: string, emoji: string, token: string) =>
+    request<DmReaction[]>(`/api/conversations/${conversationId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`,
+      { method: 'DELETE' }, token),
+  markConversationRead: (conversationId: string, token: string) =>
+    request<{ lastReadAt: string }>(`/api/conversations/${conversationId}/read`, { method: 'POST' }, token),
+  sendTyping: (conversationId: string, token: string) =>
+    request<{ ok: true }>(`/api/conversations/${conversationId}/typing`, { method: 'POST' }, token),
+  /** Upload photo : fetch dédié (FormData — pas de Content-Type JSON), pattern uploadMyAvatar. */
+  uploadDmImage: async (conversationId: string, file: File, caption: string, token: string): Promise<DmMessage> => {
+    const form = new FormData();
+    form.append('image', file);
+    if (caption) form.append('body', caption);
+    const res = await fetch(`${BASE_URL}/api/conversations/${conversationId}/images`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<DmMessage>;
+  },
+  blockUser: (userId: string, token: string) =>
+    request<{ blocked: true }>(`/api/me/blocks/${userId}`, { method: 'POST' }, token),
+  unblockUser: (userId: string, token: string) =>
+    request<{ blocked: false }>(`/api/me/blocks/${userId}`, { method: 'DELETE' }, token),
+  listBlockedUsers: (token: string) => request<DmUserInfo[]>('/api/me/blocks', {}, token),
+
   getMyClubMembership: (slug: string, token: string) =>
     request<MyClubMembership>(`/api/clubs/${slug}/me/membership`, {}, token),
 
@@ -1924,6 +1966,20 @@ export interface FriendRequests {
   sent: Friend[];
 }
 
+// --- Messagerie privée 1-à-1 ---
+export interface DmUserInfo { userId: string; firstName: string; lastName: string; avatarUrl: string | null }
+export interface DmReaction { emoji: string; userIds: string[] }
+export interface DmMessage {
+  id: string; author: DmUserInfo; body: string; imageUrl: string | null;
+  createdAt: string; deleted: boolean; reactions: DmReaction[];
+}
+export interface DmMeta { myLastReadAt: string | null; otherLastReadAt: string | null; blocked: boolean; hasMore: boolean }
+export interface ConversationSummary {
+  id: string; other: DmUserInfo; clubId: string | null; lastMessageAt: string | null;
+  unreadCount: number;
+  lastMessage: { body: string; hasImage: boolean; mine: boolean; deleted: boolean } | null;
+}
+
 export interface MyClubMembership {
   membershipNo: string | null;
   status: 'ACTIVE' | 'BLOCKED';
@@ -2169,4 +2225,14 @@ export function notificationsStreamUrl(token: string): string {
 /** URL du flux SSE du chat d'une partie (token en query : EventSource ne pose pas d'en-tête). */
 export function chatStreamUrl(slug: string, id: string, token: string): string {
   return `${BASE_URL}/api/clubs/${slug}/open-matches/${id}/chat/stream?token=${encodeURIComponent(token)}`;
+}
+
+/** URL du flux SSE d'une conversation privée (token en query : EventSource ne pose pas d'en-tête). */
+export function conversationStreamUrl(conversationId: string, token: string): string {
+  return `${BASE_URL}/api/conversations/${conversationId}/stream?token=${encodeURIComponent(token)}`;
+}
+
+/** URL de la photo d'un message privé (streaming authentifié — les <img> ne posent pas d'Authorization). */
+export function dmImageUrl(conversationId: string, messageId: string, token: string): string {
+  return `${BASE_URL}/api/conversations/${conversationId}/messages/${messageId}/image?token=${encodeURIComponent(token)}`;
 }
