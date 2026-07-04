@@ -19,6 +19,8 @@ import { ProfileCompletion } from '@/components/tournament/ProfileCompletion';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { timelineSteps, waitlistPosition } from '@/lib/tournament';
 import StripePaymentStep from '@/components/StripePaymentStep';
+import { useIsDesktop } from '@/lib/useIsDesktop';
+import { openDm } from '@/lib/messages';
 
 const ERROR_FR: Record<string, string> = {
   TOURNAMENT_NOT_OPEN: 'Les inscriptions ne sont pas ouvertes.',
@@ -48,6 +50,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
   const { th } = useTheme();
   const router = useRouter();
   const { token, ready } = useAuth();
+  const isDesktop = useIsDesktop();
+  // Messagerie 1-à-1 : ouverture d'une conversation depuis la grille des inscrits.
+  const message = (userId: string) => openDm(userId, { isDesktop, navigate: (h) => router.push(h) });
 
   const [t, setT] = useState<TournamentDetail | null>(null);
   const [profile, setProfile] = useState<MyProfile | null>(null);
@@ -261,7 +266,8 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         {/* Liste publique des inscrits */}
         <div style={{ padding: '28px 0 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, marginBottom: 12, padding: '0 20px' }}>Inscrits</div>
-          <TeamsGrid participants={participants} myRegId={myReg?.id} />
+          <TeamsGrid participants={participants} myRegId={myReg?.id}
+            onMessage={token ? message : undefined} viewerUserId={profile?.id ?? null} />
         </div>
       </div>
     </Screen>

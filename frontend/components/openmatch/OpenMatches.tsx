@@ -148,6 +148,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   showSport={multiSport}
                   isAnonymous={false}
                   onAuthPrompt={a.setAuthPrompt}
+                  viewerUserId={viewerUserId || undefined}
                 />
               ))}
             </div>
@@ -194,6 +195,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                   showSport={multiSport}
                   isAnonymous={!token}
                   onAuthPrompt={a.setAuthPrompt}
+                  viewerUserId={viewerUserId || undefined}
                 />
               ))}
             </div>

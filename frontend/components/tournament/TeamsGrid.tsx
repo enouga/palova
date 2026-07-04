@@ -9,7 +9,11 @@ import { LevelChip } from '@/components/player/LevelChip';
 
 // Grille publique des binômes inscrits : cartes avec avatars, section Confirmés
 // puis Liste d'attente (position = ordre d'inscription garanti par le backend).
-export function TeamsGrid({ participants, myRegId }: { participants: TournamentParticipant[] | null; myRegId?: string | null }) {
+// `onMessage`/`viewerUserId` (additifs) : boutons 💬 vers le capitaine/partenaire (≠ viewer).
+export function TeamsGrid({ participants, myRegId, onMessage, viewerUserId }: {
+  participants: TournamentParticipant[] | null; myRegId?: string | null;
+  onMessage?: (userId: string) => void; viewerUserId?: string | null;
+}) {
   const { th } = useTheme();
 
   if (participants === null) {
@@ -34,7 +38,7 @@ export function TeamsGrid({ participants, myRegId }: { participants: TournamentP
               {st === 'CONFIRMED' ? 'Confirmés' : "Liste d'attente"} ({group.length})
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
-              {group.map((r, i) => <TeamCard key={r.id} team={r} index={i} mine={r.id === myRegId} />)}
+              {group.map((r, i) => <TeamCard key={r.id} team={r} index={i} mine={r.id === myRegId} onMessage={onMessage} viewerUserId={viewerUserId} />)}
             </div>
           </div>
         );
@@ -43,11 +47,20 @@ export function TeamsGrid({ participants, myRegId }: { participants: TournamentP
   );
 }
 
-function TeamCard({ team, index, mine }: { team: TournamentParticipant; index: number; mine: boolean }) {
+function TeamCard({ team, index, mine, onMessage, viewerUserId }: {
+  team: TournamentParticipant; index: number; mine: boolean;
+  onMessage?: (userId: string) => void; viewerUserId?: string | null;
+}) {
   const { th } = useTheme();
   const c = colorForSeed(team.id);
   const ring = { borderRadius: '50%', boxShadow: `0 0 0 2px ${mine ? th.bgElev : th.surface}` } as const;
   const badges = (mine ? 1 : 0) + (team.status === 'WAITLISTED' ? 1 : 0);
+  const msgBtn = (userId: string | undefined, firstName: string, lastName: string) =>
+    !!onMessage && !!userId && userId !== viewerUserId ? (
+      <button type="button" aria-label={`Écrire à ${firstName} ${lastName}`} title="Envoyer un message"
+        onClick={() => onMessage(userId)}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: '0 2px' }}>💬</button>
+    ) : null;
   return (
     <div data-testid={`team-${team.id}`} style={{
       background: mine ? `${th.accent}12` : th.surface, borderRadius: 16, padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 13,
@@ -62,9 +75,11 @@ function TeamCard({ team, index, mine }: { team: TournamentParticipant; index: n
         <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, lineHeight: 1.3 }}>
           {team.captain.firstName} {team.captain.lastName}
           <LevelChip level={team.captainLevel} size="xs" />
+          {msgBtn(team.captainUserId, team.captain.firstName, team.captain.lastName)}
           <span style={{ color: th.textFaint, fontWeight: 400 }}> &amp; </span>
           {team.partner.firstName} {team.partner.lastName}
           <LevelChip level={team.partnerLevel} size="xs" />
+          {msgBtn(team.partnerUserId, team.partner.firstName, team.partner.lastName)}
         </div>
         {badges > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>

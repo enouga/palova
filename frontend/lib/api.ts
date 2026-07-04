@@ -1838,6 +1838,9 @@ export interface TournamentParticipant {
   partner: { firstName: string; lastName: string; avatarUrl: string | null };
   captainLevel?: UserLevel | null;
   partnerLevel?: UserLevel | null;
+  // Additifs (messagerie 1-à-1) : cibles du bouton « Envoyer un message ».
+  captainUserId?: string;
+  partnerUserId?: string;
 }
 
 export interface MyTournamentRegistration {
@@ -2059,6 +2062,8 @@ export interface EventParticipant {
   status: RegistrationStatus;
   user: { firstName: string; lastName: string; avatarUrl: string | null };
   level?: UserLevel | null;
+  // Additif (messagerie 1-à-1) : cible du bouton « Envoyer un message ».
+  userId?: string;
 }
 
 export interface MyEventRegistration {

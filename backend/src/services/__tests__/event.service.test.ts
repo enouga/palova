@@ -298,6 +298,8 @@ describe('EventService lectures', () => {
     const out = await service.listParticipants('e1');
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ status: 'CONFIRMED', user: { firstName: 'A', avatarUrl: '/uploads/avatars/a.jpg' } });
+    // userId additif (entrée « Envoyer un message » côté front) — l'e-mail reste absent
+    expect(out[0].userId).toBe('user-a');
     const args = (prismaMock.eventRegistration.findMany.mock.calls[0][0] as any);
     expect(args.select.user.select).toEqual({ firstName: true, lastName: true, avatarUrl: true });
     expect(args.orderBy).toEqual([{ status: 'asc' }, { createdAt: 'asc' }]);
@@ -318,8 +320,8 @@ describe('EventService lectures', () => {
 
     expect(out[0].level).toEqual({ level: 5, tier: expect.any(String), isProvisional: true, reliability: 50 });
     expect(out[1].level).toBeNull();
-    // userId ne doit pas fuiter dans la réponse
-    expect((out[0] as any).userId).toBeUndefined();
+    // userId exposé (additif depuis la messagerie 1-à-1 — bouton « Envoyer un message »)
+    expect(out[0].userId).toBe('user-a');
   });
 
   it('listParticipants AVEC sport : niveaux calculés pour le sport de l event', async () => {

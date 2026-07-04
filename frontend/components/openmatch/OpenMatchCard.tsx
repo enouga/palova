@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { OpenMatch, JoinTarget } from '@/lib/api';
+import { useIsDesktop } from '@/lib/useIsDesktop';
+import { openDm } from '@/lib/messages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
@@ -37,6 +40,8 @@ export interface OpenMatchCardProps {
   onAuthPrompt: (m: OpenMatch) => void;
   /** Ids des joueurs suivis (amis) du viewer : anneau d'accent + ligne de preuve sociale. */
   friendIds?: Set<string>;
+  /** Additif (messagerie) : id du viewer — tap sur un AUTRE joueur du mini-terrain → messagerie. */
+  viewerUserId?: string | null;
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
@@ -44,9 +49,13 @@ export interface OpenMatchCardProps {
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onReplacePlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
-  onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds,
+  onOpenChat, showSport, isAnonymous = false, onAuthPrompt, friendIds, viewerUserId,
 }: OpenMatchCardProps) {
   const { th } = useTheme();
+  const router = useRouter();
+  const isDesktop = useIsDesktop();
+  // Messagerie 1-à-1 : widget ancré en desktop, page /me/messages en mobile.
+  const message = (userId: string) => openDm(userId, { isDesktop, navigate: (h) => router.push(h) });
   // Cible de la recherche de joueur : ajouter à une équipe précise, ou remplacer un joueur.
   const [addMode, setAddMode] = useState<{ kind: 'add'; team: 1 | 2; slot?: number } | { kind: 'replace'; player: MatchPlayerData } | null>(null);
   const friendCount = m.players.filter((p) => friendIds?.has(p.userId)).length;
@@ -111,6 +120,8 @@ export function OpenMatchCard({
         onAddToTeam={m.viewerIsOrganizer ? ((team, slot) => { setAddMode({ kind: 'add', team, slot }); if (!addingOpen) onToggleAdd(m); }) : undefined}
         onJoinFree={joinable ? ((team, slot) => (isAnonymous ? onAuthPrompt(m) : onJoin(m, { team, slot }))) : undefined}
         activeTarget={addingOpen && addMode?.kind === 'add' ? { team: addMode.team, slot: addMode.slot } : null}
+        onPlayerTap={!isAnonymous ? message : undefined}
+        viewerUserId={viewerUserId ?? undefined}
       />
 
       {/* Barre d'actions : secondaires (Discuter / résultat) à gauche, action principale à droite.

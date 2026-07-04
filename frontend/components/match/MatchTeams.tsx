@@ -41,7 +41,7 @@ export const NARROW_WIDTH = 380;
 export function MatchTeams({
   players, capacity, friendIds, size = 'md', busy = false,
   onRemove, canRemove, onReplace, canReplace, onAddToTeam, editable = false, onSetTeams,
-  onJoinFree, activeTarget,
+  onJoinFree, activeTarget, onPlayerTap, viewerUserId,
 }: {
   players: MatchPlayerData[];
   capacity: number;
@@ -61,6 +61,9 @@ export function MatchTeams({
   onSetTeams?: (teamsByUserId: Record<string, 1 | 2>, slotsByUserId: Record<string, number>) => void;
   /** Place visée par la feuille d'ajout ouverte → reste en surbrillance. */
   activeTarget?: { team: 1 | 2; slot?: number } | null;
+  /** Additif (messagerie) : hors `editable`, tap sur la cellule d'un AUTRE joueur → onPlayerTap(userId). */
+  onPlayerTap?: (userId: string) => void;
+  viewerUserId?: string;
 }) {
   const { th } = useTheme();
   const av = size === 'sm' ? 34 : 38;
@@ -213,7 +216,21 @@ export function MatchTeams({
       border: 'none', background: isSelected ? `${teamColor}1c` : 'transparent', borderRadius: 12,
       outline: isSelected ? `2.5px solid ${teamColor}` : 'none', outlineOffset: -2.5,
     };
-    if (!tappable) return <div data-player-slot={SLOT_LABELS[idx]} style={cellStyle}>{inner}</div>;
+    if (!tappable) {
+      // Hors édition : la cellule d'un AUTRE joueur ouvre la messagerie (ne jamais interférer
+      // avec le tap-pour-permuter du mode editable).
+      if (!editable && onPlayerTap && p.userId !== viewerUserId) {
+        return (
+          <button type="button" data-player-slot={SLOT_LABELS[idx]} disabled={busy}
+            aria-label={`Écrire à ${fullName(p)}`} title="Envoyer un message"
+            onClick={() => onPlayerTap(p.userId)}
+            style={{ ...cellStyle, cursor: busy ? 'default' : 'pointer', font: 'inherit' }}>
+            {inner}
+          </button>
+        );
+      }
+      return <div data-player-slot={SLOT_LABELS[idx]} style={cellStyle}>{inner}</div>;
+    }
     return (
       <button type="button" data-player-slot={SLOT_LABELS[idx]} disabled={busy}
         aria-label={`Modifier ${fullName(p)}`} onClick={() => setSelectedId(p.userId)}

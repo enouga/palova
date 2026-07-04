@@ -104,6 +104,7 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
                 onRecordResult={(mm) => a.setRecordingFor(mm)} canRecordResult={club.levelSystemEnabled !== false}
                 onOpenChat={a.openChat}
                 showSport={clubIsMultiSport(club)} isAnonymous={!token} onAuthPrompt={a.setAuthPrompt}
+                viewerUserId={viewerUserId || undefined}
               />
             </div>
           </>

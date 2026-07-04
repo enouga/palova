@@ -9,7 +9,11 @@ import { LevelChip } from '@/components/player/LevelChip';
 
 // Grille publique des inscrits d'un event (inscription individuelle) :
 // section Confirmés puis Liste d'attente (position = ordre d'inscription backend).
-export function ParticipantsGrid({ participants, myRegId }: { participants: EventParticipant[] | null; myRegId?: string | null }) {
+// `onMessage`/`viewerUserId` (additifs) : bouton 💬 sur la carte des AUTRES inscrits.
+export function ParticipantsGrid({ participants, myRegId, onMessage, viewerUserId }: {
+  participants: EventParticipant[] | null; myRegId?: string | null;
+  onMessage?: (userId: string) => void; viewerUserId?: string | null;
+}) {
   const { th } = useTheme();
 
   if (participants === null) {
@@ -34,7 +38,7 @@ export function ParticipantsGrid({ participants, myRegId }: { participants: Even
               {st === 'CONFIRMED' ? 'Confirmés' : "Liste d'attente"} ({group.length})
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-              {group.map((r, i) => <ParticipantCard key={r.id} reg={r} index={i} mine={r.id === myRegId} />)}
+              {group.map((r, i) => <ParticipantCard key={r.id} reg={r} index={i} mine={r.id === myRegId} onMessage={onMessage} viewerUserId={viewerUserId} />)}
             </div>
           </div>
         );
@@ -43,10 +47,14 @@ export function ParticipantsGrid({ participants, myRegId }: { participants: Even
   );
 }
 
-function ParticipantCard({ reg, index, mine }: { reg: EventParticipant; index: number; mine: boolean }) {
+function ParticipantCard({ reg, index, mine, onMessage, viewerUserId }: {
+  reg: EventParticipant; index: number; mine: boolean;
+  onMessage?: (userId: string) => void; viewerUserId?: string | null;
+}) {
   const { th } = useTheme();
   const c = colorForSeed(reg.id);
   const badges = (mine ? 1 : 0) + (reg.status === 'WAITLISTED' ? 1 : 0);
+  const messageable = !!onMessage && !!reg.userId && reg.userId !== viewerUserId;
   return (
     <div data-testid={`participant-${reg.id}`} style={{
       background: mine ? `${th.accent}12` : th.surface, borderRadius: 16, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
@@ -68,6 +76,12 @@ function ParticipantCard({ reg, index, mine }: { reg: EventParticipant; index: n
           </div>
         )}
       </div>
+      {messageable && (
+        <button type="button" aria-label={`Écrire à ${reg.user.firstName} ${reg.user.lastName}`} title="Envoyer un message"
+          onClick={() => onMessage!(reg.userId!)}
+          style={{ flexShrink: 0, border: `1px solid ${th.line}`, background: 'transparent', borderRadius: 999,
+            padding: '4px 8px', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>💬</button>
+      )}
       {reg.status === 'CONFIRMED' && (
         <span aria-label={`Position ${index + 1}`} style={{
           flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
