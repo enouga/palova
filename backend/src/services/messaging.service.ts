@@ -284,4 +284,101 @@ export class MessagingService {
 
   /** Stub rempli en tâche 8 (photos). */
   private unlinkImage(_relPath: string): void { /* no-op avant la tâche 8 */ }
+
+  /** Marque la conversation lue : curseur lastReadAt + notifs dm lues + broadcast dm_read (✓✓ live). */
+  async markRead(conversationId: string, meId: string): Promise<{ lastReadAt: string }> {
+    await this.assertParticipant(conversationId, meId);
+    const now = new Date();
+    const part = await prisma.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: meId } },
+      data: { lastReadAt: now },
+      select: { lastReadAt: true },
+    });
+    await prisma.notification.updateMany({
+      where: { userId: meId, type: 'dm.message', readAt: null, data: { path: ['conversationId'], equals: conversationId } },
+      data: { readAt: now },
+    });
+    const iso = (part.lastReadAt ?? now).toISOString();
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_read', userId: meId, lastReadAt: iso });
+    return { lastReadAt: iso };
+  }
+
+  /** Message vivant de CETTE conversation, sinon MESSAGE_NOT_FOUND. */
+  private async assertLiveMessage(conversationId: string, messageId: string): Promise<void> {
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, deletedAt: true },
+    });
+    if (!msg || msg.conversationId !== conversationId || msg.deletedAt) throw new Error('MESSAGE_NOT_FOUND');
+  }
+
+  private async reactionsOf(messageId: string): Promise<DmReactionDTO[]> {
+    const rows = await prisma.messageReaction.findMany({
+      where: { messageId },
+      orderBy: { createdAt: 'asc' },
+      select: { emoji: true, userId: true },
+    });
+    const byEmoji = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!byEmoji.has(r.emoji)) byEmoji.set(r.emoji, []);
+      byEmoji.get(r.emoji)!.push(r.userId);
+    }
+    return [...byEmoji.entries()].map(([emoji, userIds]) => ({ emoji, userIds }));
+  }
+
+  private async broadcastReactions(conversationId: string, messageId: string): Promise<DmReactionDTO[]> {
+    const reactions = await this.reactionsOf(messageId);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_reaction', messageId, reactions });
+    return reactions;
+  }
+
+  /** Ajoute une réaction (idempotent) et renvoie l'état complet des réactions du message. */
+  async addReaction(conversationId: string, meId: string, messageId: string, emoji: string): Promise<DmReactionDTO[]> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const e = (emoji ?? '').trim();
+    if (!e || e.length > 16) throw new Error('VALIDATION_ERROR');
+    await this.assertLiveMessage(conversationId, messageId);
+    try { await prisma.messageReaction.create({ data: { messageId, userId: meId, emoji: e } }); }
+    catch (err) { if ((err as { code?: string })?.code !== 'P2002') throw err; }
+    return this.broadcastReactions(conversationId, messageId);
+  }
+
+  /** Retire une réaction (idempotent) et renvoie l'état complet. */
+  async removeReaction(conversationId: string, meId: string, messageId: string, emoji: string): Promise<DmReactionDTO[]> {
+    await this.assertParticipant(conversationId, meId);
+    await this.assertLiveMessage(conversationId, messageId);
+    await prisma.messageReaction.deleteMany({ where: { messageId, userId: meId, emoji: (emoji ?? '').trim() } });
+    return this.broadcastReactions(conversationId, messageId);
+  }
+
+  /** « X écrit… » : broadcast éphémère, RIEN en base (le client filtre son propre userId). */
+  async typing(conversationId: string, meId: string): Promise<{ ok: true }> {
+    await this.assertParticipant(conversationId, meId);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_typing', userId: meId });
+    return { ok: true };
+  }
+
+  /** Blocage global : idempotent. Effet = plus d'envoi/réaction dans les deux sens (messagerie seulement). */
+  async block(meId: string, targetUserId: string): Promise<{ blocked: true }> {
+    if (!targetUserId || targetUserId === meId) throw new Error('CANNOT_BLOCK_SELF');
+    try { await prisma.userBlock.create({ data: { blockerId: meId, blockedId: targetUserId } }); }
+    catch (err) { if ((err as { code?: string })?.code !== 'P2002') throw err; }
+    return { blocked: true };
+  }
+
+  async unblock(meId: string, targetUserId: string): Promise<{ blocked: false }> {
+    await prisma.userBlock.deleteMany({ where: { blockerId: meId, blockedId: targetUserId } });
+    return { blocked: false };
+  }
+
+  /** Membres que J'AI bloqués (écran de gestion + déblocage). */
+  async listBlocks(meId: string): Promise<DmUser[]> {
+    const rows = await prisma.userBlock.findMany({
+      where: { blockerId: meId },
+      orderBy: { createdAt: 'desc' },
+      select: { blocked: { select: USER_SELECT } },
+    });
+    return rows.map((r) => toUser(r.blocked));
+  }
 }

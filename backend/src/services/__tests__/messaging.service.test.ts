@@ -287,3 +287,79 @@ describe('MessagingService — messages', () => {
     await expect(service.deleteMessage('c1', 'u1', 'm1')).rejects.toThrow('MESSAGE_NOT_FOUND');
   });
 });
+
+describe('MessagingService — lecture, réactions, frappe, blocages', () => {
+  let service: MessagingService;
+  let broadcast: jest.SpyInstance;
+  beforeEach(() => {
+    service = new MessagingService();
+    broadcast = jest.spyOn(SSEService.getInstance(), 'broadcastConversation').mockImplementation(() => {});
+    prismaMock.conversation.findUnique.mockResolvedValue(CONV as any);
+    prismaMock.userBlock.findFirst.mockResolvedValue(null);
+  });
+  afterEach(() => broadcast.mockRestore());
+
+  it('markRead : pose lastReadAt, marque les notifs dm lues, broadcast dm_read', async () => {
+    prismaMock.conversationParticipant.update.mockResolvedValue({ lastReadAt: new Date('2026-07-04T11:00:00Z') } as any);
+    prismaMock.notification.updateMany.mockResolvedValue({ count: 2 } as any);
+    const r = await service.markRead('c1', 'u1');
+    expect(prismaMock.conversationParticipant.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { conversationId_userId: { conversationId: 'c1', userId: 'u1' } },
+    }));
+    expect(prismaMock.notification.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', type: 'dm.message', readAt: null, data: { path: ['conversationId'], equals: 'c1' } },
+      data: { readAt: expect.any(Date) },
+    });
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_read', userId: 'u1', lastReadAt: '2026-07-04T11:00:00.000Z' });
+    expect(r.lastReadAt).toBe('2026-07-04T11:00:00.000Z');
+  });
+
+  it('addReaction : idempotent (P2002 avalé), broadcast l\'état complet des réactions', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: null } as any);
+    prismaMock.messageReaction.create.mockRejectedValue({ code: 'P2002' });
+    prismaMock.messageReaction.findMany.mockResolvedValue([
+      { emoji: '👍', userId: 'u1' }, { emoji: '👍', userId: 'u2' }, { emoji: '❤️', userId: 'u2' },
+    ] as any);
+    const r = await service.addReaction('c1', 'u1', 'm1', '👍');
+    expect(r).toEqual([{ emoji: '👍', userIds: ['u1', 'u2'] }, { emoji: '❤️', userIds: ['u2'] }]);
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_reaction', messageId: 'm1', reactions: r });
+  });
+
+  it('addReaction : message supprimé ou étranger → MESSAGE_NOT_FOUND ; emoji vide → VALIDATION_ERROR', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: new Date() } as any);
+    await expect(service.addReaction('c1', 'u1', 'm1', '👍')).rejects.toThrow('MESSAGE_NOT_FOUND');
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: null } as any);
+    await expect(service.addReaction('c1', 'u1', 'm1', '')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('removeReaction : deleteMany idempotent + broadcast', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: null } as any);
+    prismaMock.messageReaction.deleteMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.messageReaction.findMany.mockResolvedValue([] as any);
+    const r = await service.removeReaction('c1', 'u1', 'm1', '👍');
+    expect(prismaMock.messageReaction.deleteMany).toHaveBeenCalledWith({ where: { messageId: 'm1', userId: 'u1', emoji: '👍' } });
+    expect(r).toEqual([]);
+  });
+
+  it('typing : broadcast éphémère, rien en base', async () => {
+    await service.typing('c1', 'u1');
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_typing', userId: 'u1' });
+  });
+
+  it('block/unblock : self refusé, create idempotent, unblock deleteMany', async () => {
+    await expect(service.block('u1', 'u1')).rejects.toThrow('CANNOT_BLOCK_SELF');
+    prismaMock.userBlock.create.mockRejectedValue({ code: 'P2002' });
+    await expect(service.block('u1', 'u2')).resolves.toEqual({ blocked: true });
+    prismaMock.userBlock.deleteMany.mockResolvedValue({ count: 1 } as any);
+    await expect(service.unblock('u1', 'u2')).resolves.toEqual({ blocked: false });
+    expect(prismaMock.userBlock.deleteMany).toHaveBeenCalledWith({ where: { blockerId: 'u1', blockedId: 'u2' } });
+  });
+
+  it('listBlocks : renvoie les utilisateurs que J\'AI bloqués', async () => {
+    prismaMock.userBlock.findMany.mockResolvedValue([
+      { blocked: U('u2') }, { blocked: U('u3') },
+    ] as any);
+    const list = await service.listBlocks('u1');
+    expect(list.map((b) => b.userId)).toEqual(['u2', 'u3']);
+  });
+});
