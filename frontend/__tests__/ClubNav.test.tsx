@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ClubNav } from '../components/ClubNav';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -26,6 +26,8 @@ jest.mock('../lib/api', () => ({
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     // consommé par ClubNav (badge Parties)
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (badge 💬 Messages du header)
+    getDmUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
     getMyTournaments: jest.fn().mockResolvedValue([]),
@@ -201,6 +203,32 @@ describe('ClubNav', () => {
     render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
     const badge = await screen.findByLabelText('2 non lus');
     expect(badge.style.background).toBe('rgb(229, 72, 77)');
+  });
+
+  it("affiche l'icône Messages du header avec badge rouge de non-lus quand connecté", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getDmUnread.mockResolvedValueOnce({ count: 4 });
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const link = await screen.findByLabelText('Messages');
+    expect(link).toHaveAttribute('href', '/me/messages');
+    const badge = await screen.findByLabelText('4 messages non lus');
+    expect(badge.style.background).toBe('rgb(229, 72, 77)');
+  });
+
+  it("masque l'icône Messages sans session", () => {
+    wrap();
+    expect(screen.queryByLabelText('Messages')).not.toBeInTheDocument();
+  });
+
+  it("l'event window palova:dm-unread redéclenche le compteur de messages", async () => {
+    const { api: mockApi } = require('../lib/api');
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    await screen.findByLabelText('Messages');
+    const callsBefore = mockApi.getDmUnread.mock.calls.length;
+    act(() => { window.dispatchEvent(new Event('palova:dm-unread')); });
+    await waitFor(() => expect(mockApi.getDmUnread.mock.calls.length).toBeGreaterThan(callsBefore));
   });
 
   it('montre « Parties » sans session si le club a du padel (parties ouvertes publiques)', async () => {

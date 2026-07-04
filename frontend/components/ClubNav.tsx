@@ -57,6 +57,25 @@ export function ClubNav({ club }: { club: ClubDetail }) {
     return () => { alive = false; es.close(); window.removeEventListener('palova:openmatch-unread', onLocal); };
   }, [showPartiesTab, token, club.slug, pathname]);
 
+  // Compteur de messages privés non lus (badge 💬 du header) — route /api/me/* (pas de slug).
+  // Rafraîchi par la cloche SSE (nouvelle notification), l'event window `palova:dm-unread`
+  // (lecture locale d'une conversation) et chaque navigation.
+  const [dmUnread, setDmUnread] = useState(0);
+  const showMessages = ready && !!token;
+  useEffect(() => {
+    if (!showMessages || !token) { setDmUnread(0); return; }
+    let alive = true;
+    const refresh = () => api.getDmUnread(token)
+      .then((r) => { if (alive) setDmUnread(r.count); }).catch(() => {});
+    refresh();
+    const es = new EventSource(notificationsStreamUrl(token));
+    es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
+    es.onerror = () => es.close();
+    const onLocal = () => refresh();
+    window.addEventListener('palova:dm-unread', onLocal);
+    return () => { alive = false; es.close(); window.removeEventListener('palova:dm-unread', onLocal); };
+  }, [showMessages, token, pathname]);
+
   // Compteur « Mes réservations » À VENIR — identique au compteur de l'onglet « À venir »
   // de /me/reservations : réservations terrain + inscriptions tournois + events + cours, fusionnés
   // par buildAgendaList (annulés exclus), même cloisonnement par club (sauf si le club ouvre la
@@ -153,7 +172,23 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           )}
           <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <ThemeToggle /><NotificationBell /><ProfileMenu />
+            <ThemeToggle />
+            {showMessages && (
+              // Icône Messages : même langage que la cloche (rond surface2, badge rouge non-lus).
+              <Link href="/me/messages" aria-label="Messages" title="Messages"
+                style={{ width: 38, height: 38, borderRadius: '50%', position: 'relative', background: th.surface2,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
+                <Icon name="chat" size={19} color={th.text} />
+                {dmUnread > 0 && (
+                  <span aria-label={`${dmUnread} messages non lus`} style={{
+                    position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, padding: '0 4px',
+                    borderRadius: 8, background: '#e5484d', color: '#fff', fontSize: 10, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI,
+                  }}>{dmUnread > 99 ? '99+' : dmUnread}</span>
+                )}
+              </Link>
+            )}
+            <NotificationBell /><ProfileMenu />
           </div>
         </div>
 

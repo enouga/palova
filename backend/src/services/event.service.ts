@@ -328,9 +328,10 @@ export class EventService {
     const sportKey = e.clubSport?.sport.key ?? null;
     const ratingService = new RatingService();
     const levels = sportKey && allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, sportKey) : {};
-    return registrations.map(({ userId, ...r }) => ({
+    // userId exposé (additif) : entrée « Envoyer un message » côté front — jamais l'e-mail.
+    return registrations.map((r) => ({
       ...r,
-      level: levels[userId] ?? null,
+      level: levels[r.userId] ?? null,
     }));
   }
 

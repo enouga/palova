@@ -5,6 +5,7 @@ import { Geist, Geist_Mono, Righteous } from 'next/font/google';
 import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
 import { Footer } from '@/components/Footer';
+import { DmWidgetHost } from '@/components/messages/DmWidgetHost';
 import { api } from '@/lib/api';
 import { CANONICAL_ROOT } from '@/lib/roots';
 
@@ -83,6 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ClubProvider slug={slug}>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <div style={{ flex: '1 0 auto' }}>{children}</div>
+            <DmWidgetHost />
             <Footer />
           </div>
         </ClubProvider>

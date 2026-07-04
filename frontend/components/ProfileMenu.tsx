@@ -154,6 +154,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           <div style={{ paddingTop: 6 }}>
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
             {slug && <MenuItem th={th} icon="users" label="Mes amis" onClick={() => go('/me/friends')} />}
+            {slug && <MenuItem th={th} icon="chat" label="Messages" onClick={() => go('/me/messages')} />}
             {club?.levelSystemEnabled !== false && <MenuItem th={th} icon="trophy" label="Mes matchs" onClick={() => go('/me/matches')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />

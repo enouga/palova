@@ -61,8 +61,8 @@ describe('collectPlaceholders', () => {
 describe('EMAIL_DEFS', () => {
   const entries = Object.entries(EMAIL_DEFS);
 
-  it('contient 17 définitions et la clé == type', () => {
-    expect(entries).toHaveLength(17);
+  it('contient 18 définitions et la clé == type', () => {
+    expect(entries).toHaveLength(18);
     for (const [key, def] of entries) expect(def.type).toBe(key);
   });
 

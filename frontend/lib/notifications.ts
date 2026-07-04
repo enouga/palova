@@ -3,7 +3,7 @@ import type { IconName } from '@/components/ui/Icon';
 import { ACCENTS } from '@/lib/theme';
 
 export type NotifCategory =
-  | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
+  | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'DIRECT_MESSAGES' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
   | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL';
 export type NotifChannel = 'INAPP' | 'PUSH' | 'EMAIL';
 
@@ -13,6 +13,7 @@ export interface CategoryMeta { key: NotifCategory; label: string; desc: string;
 export const CATEGORY_META: CategoryMeta[] = [
   { key: 'MY_GAMES', label: 'Mes parties', desc: "Ajout/retrait, arrivée/départ d’un joueur, statut de mes réservations" },
   { key: 'OPEN_MATCH_CHAT', label: 'Messages de partie', desc: 'Chat des parties ouvertes que vous suivez ou auxquelles vous participez' },
+  { key: 'DIRECT_MESSAGES', label: 'Messages privés', desc: 'Quand un membre vous écrit en privé' },
   { key: 'MY_REGISTRATIONS', label: 'Mes inscriptions', desc: "Tournois, events, cours : confirmation, liste d’attente, annulation" },
   { key: 'MY_MATCHES', label: 'Mes matchs', desc: 'Confirmation de résultat, litige' },
   { key: 'PAYMENTS', label: 'Paiements', desc: 'Remboursements' },
@@ -66,6 +67,7 @@ export function notificationVisual(category: string, type: string): NotifVisual 
     case 'ORGANIZER':         return { icon: 'trophy', accent: ACCENTS.apricot };
     case 'PAYMENTS':          return { icon: 'euro', accent: ACCENTS.emerald };
     case 'MY_MATCHES':        return { icon: 'ball', accent: ACCENTS.blue };
+    case 'DIRECT_MESSAGES':   return { icon: 'chat', accent: ACCENTS.blue };
     case 'CLUB_MESSAGES':     return { icon: 'info', accent: ACCENTS.cyan };
     default:                  return { icon: 'bell', accent: ACCENTS.blue };
   }

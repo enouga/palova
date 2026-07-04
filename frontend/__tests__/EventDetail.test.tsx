@@ -75,6 +75,7 @@ jest.mock('../lib/api', () => ({
     registerEvent: (...a: unknown[]) => registerEvent(...a),
     cancelEventRegistration: jest.fn(),
     getMyEvents: (...a: unknown[]) => getMyEvents(...a),
+    getMyProfile: jest.fn().mockResolvedValue({ id: 'me' }),
     createRegistrationIntent: jest.fn().mockResolvedValue({
       clientSecret: 'cs_test_ev',
       type: 'payment',

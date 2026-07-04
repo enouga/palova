@@ -20,6 +20,7 @@ export interface PlayerPillData {
 // badge « orga », × de retrait optionnel, puis N cases « Place libre » en pointillés.
 export function PlayerPills({
   players, spotsLeft = 0, onRemove, canRemove, busy = false, size = 'md', showOrgaBadge = true, firstSpotSlot, friendIds,
+  onMessage, viewerUserId,
 }: {
   players: PlayerPillData[];
   spotsLeft?: number;
@@ -31,6 +32,9 @@ export function PlayerPills({
   firstSpotSlot?: React.ReactNode;
   /** Ids des joueurs suivis (amis) : anneau d'accent autour de leur avatar. Absent ⇒ markup inchangé. */
   friendIds?: Set<string>;
+  /** Additif (messagerie 1-à-1) : bouton 💬 sur les pastilles des AUTRES joueurs. Absent ⇒ markup inchangé. */
+  onMessage?: (player: PlayerPillData) => void;
+  viewerUserId?: string;
 }) {
   const { th } = useTheme();
   const av = size === 'sm' ? 20 : 22;
@@ -56,6 +60,11 @@ export function PlayerPills({
             <LevelChip level={p.level} size="xs" />
             {showOrgaBadge && p.isOrganizer && (
               <span style={{ fontSize: 10, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3 }}>orga</span>
+            )}
+            {onMessage && p.userId !== viewerUserId && (
+              <button type="button" disabled={busy} aria-label={`Écrire à ${p.firstName}`} title="Envoyer un message"
+                onClick={() => onMessage(p)}
+                style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textMute, fontSize: 13, lineHeight: 1, padding: 0, marginLeft: 2 }}>💬</button>
             )}
             {removable && (
               <button type="button" disabled={busy} aria-label={`Retirer ${p.firstName} ${p.lastName}`} title="Retirer ce joueur"

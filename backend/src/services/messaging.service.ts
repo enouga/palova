@@ -1,0 +1,441 @@
+import fs from 'fs';
+import path from 'path';
+import { prisma } from '../db/prisma';
+import { SSEService } from './sse.service';
+import { notifyDirectMessage } from '../email/notifications';
+import { DM_DIR, EXT_BY_MIME } from '../utils/uploads';
+
+const MAX_BODY = 2000;
+const PAGE_DEFAULT = 50;
+const PAGE_MAX = 100;
+
+export interface DmUser { userId: string; firstName: string; lastName: string; avatarUrl: string | null }
+export interface DmReactionDTO { emoji: string; userIds: string[] }
+export interface DmMessageDTO {
+  id: string; author: DmUser; body: string; imageUrl: string | null;
+  createdAt: string; deleted: boolean; reactions: DmReactionDTO[];
+}
+export interface ConversationSummaryDTO {
+  id: string; other: DmUser; clubId: string | null; lastMessageAt: string | null;
+  unreadCount: number;
+  lastMessage: { body: string; hasImage: boolean; mine: boolean; deleted: boolean } | null;
+}
+export interface DmListMeta { myLastReadAt: string | null; otherLastReadAt: string | null; blocked: boolean; hasMore: boolean }
+
+/** Paire canonique (comme Friendship) : une seule conversation par paire. */
+function canonical(a: string, b: string): { userAId: string; userBId: string } {
+  return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a };
+}
+
+const USER_SELECT = { id: true, firstName: true, lastName: true, avatarUrl: true } as const;
+const MSG_SELECT = {
+  id: true, body: true, imageUrl: true, createdAt: true, deletedAt: true,
+  author: { select: USER_SELECT },
+  reactions: { select: { emoji: true, userId: true } },
+} as const;
+
+type MsgRow = {
+  id: string; body: string; imageUrl: string | null; createdAt: Date; deletedAt: Date | null;
+  author: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
+  reactions: { emoji: string; userId: string }[];
+};
+
+function toUser(u: { id: string; firstName: string; lastName: string; avatarUrl: string | null }): DmUser {
+  return { userId: u.id, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl };
+}
+
+function toMessageDTO(m: MsgRow): DmMessageDTO {
+  const deleted = m.deletedAt != null;
+  const byEmoji = new Map<string, string[]>();
+  if (!deleted) for (const r of m.reactions) {
+    if (!byEmoji.has(r.emoji)) byEmoji.set(r.emoji, []);
+    byEmoji.get(r.emoji)!.push(r.userId);
+  }
+  return {
+    id: m.id,
+    author: toUser(m.author),
+    body: deleted ? '' : m.body,
+    imageUrl: deleted ? null : m.imageUrl,
+    createdAt: m.createdAt.toISOString(),
+    deleted,
+    reactions: [...byEmoji.entries()].map(([emoji, userIds]) => ({ emoji, userIds })),
+  };
+}
+
+export class MessagingService {
+  /** Club ACTIF où les deux sont membres ACTIFS (slug préféré honoré s'il convient), sinon NOT_CO_MEMBERS. */
+  private async sharedActiveClubId(a: string, b: string, preferredSlug?: string | null): Promise<string> {
+    if (preferredSlug) {
+      const club = await prisma.club.findUnique({ where: { slug: preferredSlug }, select: { id: true, status: true } });
+      if (club?.status === 'ACTIVE') {
+        const both = await prisma.clubMembership.count({ where: { clubId: club.id, status: 'ACTIVE', userId: { in: [a, b] } } });
+        if (both === 2) return club.id;
+      }
+    }
+    const mine = await prisma.clubMembership.findMany({ where: { userId: a, status: 'ACTIVE' }, select: { clubId: true } });
+    const shared = mine.length === 0 ? null : await prisma.clubMembership.findFirst({
+      where: { userId: b, status: 'ACTIVE', clubId: { in: mine.map((m) => m.clubId) }, club: { status: 'ACTIVE' } },
+      select: { clubId: true },
+    });
+    if (!shared) throw new Error('NOT_CO_MEMBERS');
+    return shared.clubId;
+  }
+
+  /** Blocage dans un sens OU l'autre → USER_BLOCKED (générique, sens non révélé). */
+  private async assertNotBlocked(a: string, b: string): Promise<void> {
+    if (await this.pairBlocked(a, b)) throw new Error('USER_BLOCKED');
+  }
+
+  private async pairBlocked(a: string, b: string): Promise<boolean> {
+    const block = await prisma.userBlock.findFirst({
+      where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] },
+      select: { id: true },
+    });
+    return !!block;
+  }
+
+  /** Conversation + mes droits ; CONVERSATION_NOT_FOUND pour un tiers (pas de fuite d'existence). */
+  private async assertParticipant(conversationId: string, userId: string) {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true, clubId: true, userAId: true, userBId: true,
+        participants: { select: { userId: true, lastReadAt: true, user: { select: USER_SELECT } } },
+      },
+    });
+    if (!conv || (conv.userAId !== userId && conv.userBId !== userId)) throw new Error('CONVERSATION_NOT_FOUND');
+    const otherId = conv.userAId === userId ? conv.userBId : conv.userAId;
+    return { conv, otherId };
+  }
+
+  /** Variante publique de la garde participant, pour la route SSE (lève si pas d'accès). */
+  async assertParticipantPublic(conversationId: string, userId: string): Promise<void> {
+    await this.assertParticipant(conversationId, userId);
+  }
+
+  /** Get-or-create idempotent par paire canonique. Bloqué ⇒ pas de création (l'existante reste lisible). */
+  async getOrCreateConversation(meId: string, otherUserId: string, clubSlug?: string | null): Promise<ConversationSummaryDTO> {
+    if (!otherUserId || otherUserId === meId) throw new Error('CANNOT_MESSAGE_SELF');
+    const other = await prisma.user.findUnique({ where: { id: otherUserId }, select: { ...USER_SELECT, deletedAt: true } });
+    if (!other || other.deletedAt) throw new Error('CONVERSATION_NOT_FOUND');
+
+    const pair = canonical(meId, otherUserId);
+    let conv = await prisma.conversation.findUnique({
+      where: { userAId_userBId: pair },
+      select: { id: true, clubId: true, lastMessageAt: true },
+    });
+    if (!conv) {
+      const clubId = await this.sharedActiveClubId(meId, otherUserId, clubSlug);
+      await this.assertNotBlocked(meId, otherUserId);
+      try {
+        conv = await prisma.conversation.create({
+          data: { ...pair, clubId },
+          select: { id: true, clubId: true, lastMessageAt: true },
+        });
+      } catch (err) {
+        if ((err as { code?: string })?.code !== 'P2002') throw err;
+        // course P2002 : l'autre l'a créée en même temps
+        conv = await prisma.conversation.findUnique({
+          where: { userAId_userBId: pair },
+          select: { id: true, clubId: true, lastMessageAt: true },
+        });
+        if (!conv) throw new Error('CONVERSATION_NOT_FOUND');
+      }
+    }
+    await prisma.conversationParticipant.createMany({
+      data: [
+        { conversationId: conv.id, userId: pair.userAId },
+        { conversationId: conv.id, userId: pair.userBId },
+      ],
+      skipDuplicates: true,
+    });
+    return {
+      id: conv.id, clubId: conv.clubId,
+      lastMessageAt: conv.lastMessageAt?.toISOString() ?? null,
+      unreadCount: 0, lastMessage: null,
+      other: toUser(other),
+    };
+  }
+
+  private unreadWhere(conversationId: string, meId: string, lastReadAt: Date | null) {
+    return {
+      conversationId, deletedAt: null, authorId: { not: meId },
+      ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+    };
+  }
+
+  /** Boîte de réception : conversations avec ≥ 1 message, tri lastMessageAt desc. */
+  async listConversations(meId: string): Promise<ConversationSummaryDTO[]> {
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { userId: meId, conversation: { lastMessageAt: { not: null } } },
+      select: {
+        userId: true, lastReadAt: true,
+        conversation: {
+          select: {
+            id: true, clubId: true, lastMessageAt: true, userAId: true, userBId: true,
+            participants: { select: { userId: true, lastReadAt: true, user: { select: USER_SELECT } } },
+            messages: {
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1,
+              select: { body: true, imageUrl: true, authorId: true, deletedAt: true },
+            },
+          },
+        },
+      },
+    });
+    const rows = await Promise.all(parts.map(async (p) => {
+      const c = p.conversation;
+      const other = c.participants.find((x) => x.userId !== meId)?.user;
+      const last = c.messages[0] ?? null;
+      const unreadCount = await prisma.directMessage.count({ where: this.unreadWhere(c.id, meId, p.lastReadAt) });
+      return {
+        id: c.id, clubId: c.clubId,
+        lastMessageAt: c.lastMessageAt?.toISOString() ?? null,
+        unreadCount,
+        other: other ? toUser(other) : { userId: '', firstName: 'Utilisateur', lastName: 'supprimé', avatarUrl: null },
+        lastMessage: last ? {
+          body: last.deletedAt ? '' : last.body,
+          hasImage: !last.deletedAt && !!last.imageUrl,
+          mine: last.authorId === meId,
+          deleted: last.deletedAt != null,
+        } : null,
+      };
+    }));
+    return rows.sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? ''));
+  }
+
+  /** Total global de non-lus (badge 💬 du header). */
+  async unreadTotal(meId: string): Promise<{ count: number }> {
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { userId: meId, conversation: { lastMessageAt: { not: null } } },
+      select: { conversationId: true, lastReadAt: true },
+    });
+    const counts = await Promise.all(parts.map((p) =>
+      prisma.directMessage.count({ where: this.unreadWhere(p.conversationId, meId, p.lastReadAt) })));
+    return { count: counts.reduce((s, n) => s + n, 0) };
+  }
+
+  /** Fil paginé par curseur (before = id de message), renvoyé en ordre CHRONO. */
+  async listMessages(conversationId: string, meId: string, before?: string | null, limitRaw?: string | number | null):
+    Promise<{ messages: DmMessageDTO[]; meta: DmListMeta }> {
+    const { conv, otherId } = await this.assertParticipant(conversationId, meId);
+    const limit = Math.min(Math.max(Math.trunc(Number(limitRaw)) || PAGE_DEFAULT, 1), PAGE_MAX);
+    const rows = await prisma.directMessage.findMany({
+      where: { conversationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(before ? { cursor: { id: before }, skip: 1 } : {}),
+      select: MSG_SELECT,
+    });
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit).reverse();
+    const mine = conv.participants.find((p) => p.userId === meId);
+    const theirs = conv.participants.find((p) => p.userId === otherId);
+    return {
+      messages: page.map(toMessageDTO),
+      meta: {
+        myLastReadAt: mine?.lastReadAt?.toISOString() ?? null,
+        otherLastReadAt: theirs?.lastReadAt?.toISOString() ?? null,
+        blocked: await this.pairBlocked(meId, otherId),
+        hasMore,
+      },
+    };
+  }
+
+  /** Poste un message texte : valide, crée, avance lastMessageAt, broadcast, notifie (best-effort). */
+  async postMessage(conversationId: string, meId: string, rawBody: string): Promise<DmMessageDTO> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const body = (rawBody ?? '').trim();
+    if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+    // create + avance de lastMessageAt atomiques : pas de conversation « en retard » si l'update échoue
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.directMessage.create({
+        data: { conversationId, authorId: meId, body },
+        select: MSG_SELECT,
+      });
+      await tx.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: c.createdAt } });
+      return c;
+    });
+    return this.finishSend(conversationId, meId, created);
+  }
+
+  /** Fin d'envoi commune texte/photo : broadcast + notif best-effort (lastMessageAt déjà avancé en transaction). */
+  private async finishSend(conversationId: string, meId: string, created: MsgRow): Promise<DmMessageDTO> {
+    const dto = toMessageDTO(created);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_message', message: dto });
+    try { await notifyDirectMessage(conversationId, created.id, meId); }
+    catch (err) { console.error('[messaging] notification échouée', err); }
+    return dto;
+  }
+
+  /** Poste un message photo (JPEG/PNG/WebP ≤ 5 Mo, légende optionnelle ≤ 2000). */
+  async createImageMessage(conversationId: string, meId: string,
+    file: { buffer: Buffer; mimetype: string }, caption?: string | null): Promise<DmMessageDTO> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const ext = EXT_BY_MIME[file.mimetype];
+    if (!ext) throw new Error('VALIDATION_ERROR');
+    const body = (caption ?? '').trim();
+    if (body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+
+    const relPath = `${conversationId}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+    const absPath = path.join(DM_DIR, relPath);
+    await fs.promises.mkdir(path.dirname(absPath), { recursive: true });
+    await fs.promises.writeFile(absPath, file.buffer);
+
+    let created: MsgRow;
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const c = await tx.directMessage.create({
+          data: { conversationId, authorId: meId, body, imageUrl: relPath },
+          select: MSG_SELECT,
+        });
+        await tx.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: c.createdAt } });
+        return c;
+      });
+    } catch (err) {
+      fs.promises.unlink(absPath).catch(() => {}); // pas de fichier orphelin
+      throw err;
+    }
+    return this.finishSend(conversationId, meId, created);
+  }
+
+  /** Chemin absolu + mime d'une image de message, APRÈS garde participant. Anti-traversée. */
+  async imagePathFor(conversationId: string, meId: string, messageId: string): Promise<{ absPath: string; mime: string }> {
+    await this.assertParticipant(conversationId, meId);
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { conversationId: true, imageUrl: true, deletedAt: true },
+    });
+    if (!msg || msg.conversationId !== conversationId || msg.deletedAt || !msg.imageUrl) throw new Error('MESSAGE_NOT_FOUND');
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(msg.imageUrl)) throw new Error('MESSAGE_NOT_FOUND'); // anti-traversée
+    const ext = msg.imageUrl.split('.').pop()!.toLowerCase();
+    const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
+    return { absPath: path.join(DM_DIR, msg.imageUrl), mime };
+  }
+
+  /** Supprime un message : AUTEUR SEUL (pas de modération staff en privé). Pierre tombale idempotente. */
+  async deleteMessage(conversationId: string, meId: string, messageId: string): Promise<DmMessageDTO> {
+    await this.assertParticipant(conversationId, meId);
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { ...MSG_SELECT, conversationId: true, authorId: true },
+    });
+    if (!msg || msg.conversationId !== conversationId) throw new Error('MESSAGE_NOT_FOUND');
+    if (msg.authorId !== meId) throw new Error('NOT_ALLOWED');
+    if (msg.deletedAt) return toMessageDTO(msg); // idempotent, pas de re-broadcast
+    const updated = await prisma.directMessage.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date(), deletedById: meId },
+      select: MSG_SELECT,
+    });
+    // Unlink APRÈS l'update pierre tombale : le fichier n'est supprimé que si le message l'est.
+    if (msg.imageUrl) this.unlinkImage(msg.imageUrl);
+    const dto = toMessageDTO(updated);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
+    return dto;
+  }
+
+  /** Suppression best-effort du fichier photo (confidentialité) — jamais bloquant. */
+  private unlinkImage(relPath: string): void {
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(relPath)) return;
+    fs.promises.unlink(path.join(DM_DIR, relPath)).catch(() => {});
+  }
+
+  /** Marque la conversation lue : curseur lastReadAt + notifs dm lues + broadcast dm_read (✓✓ live). */
+  async markRead(conversationId: string, meId: string): Promise<{ lastReadAt: string }> {
+    await this.assertParticipant(conversationId, meId);
+    const now = new Date();
+    const part = await prisma.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: meId } },
+      data: { lastReadAt: now },
+      select: { lastReadAt: true },
+    });
+    await prisma.notification.updateMany({
+      where: { userId: meId, type: 'dm.message', readAt: null, data: { path: ['conversationId'], equals: conversationId } },
+      data: { readAt: now },
+    });
+    const iso = (part.lastReadAt ?? now).toISOString();
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_read', userId: meId, lastReadAt: iso });
+    return { lastReadAt: iso };
+  }
+
+  /** Message vivant de CETTE conversation, sinon MESSAGE_NOT_FOUND. */
+  private async assertLiveMessage(conversationId: string, messageId: string): Promise<void> {
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, deletedAt: true },
+    });
+    if (!msg || msg.conversationId !== conversationId || msg.deletedAt) throw new Error('MESSAGE_NOT_FOUND');
+  }
+
+  private async reactionsOf(messageId: string): Promise<DmReactionDTO[]> {
+    const rows = await prisma.messageReaction.findMany({
+      where: { messageId },
+      orderBy: { createdAt: 'asc' },
+      select: { emoji: true, userId: true },
+    });
+    const byEmoji = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!byEmoji.has(r.emoji)) byEmoji.set(r.emoji, []);
+      byEmoji.get(r.emoji)!.push(r.userId);
+    }
+    return [...byEmoji.entries()].map(([emoji, userIds]) => ({ emoji, userIds }));
+  }
+
+  private async broadcastReactions(conversationId: string, messageId: string): Promise<DmReactionDTO[]> {
+    const reactions = await this.reactionsOf(messageId);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_reaction', messageId, reactions });
+    return reactions;
+  }
+
+  /** Ajoute une réaction (idempotent) et renvoie l'état complet des réactions du message. */
+  async addReaction(conversationId: string, meId: string, messageId: string, emoji: string): Promise<DmReactionDTO[]> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const e = (emoji ?? '').trim();
+    if (!e || e.length > 16) throw new Error('VALIDATION_ERROR');
+    await this.assertLiveMessage(conversationId, messageId);
+    try { await prisma.messageReaction.create({ data: { messageId, userId: meId, emoji: e } }); }
+    catch (err) { if ((err as { code?: string })?.code !== 'P2002') throw err; }
+    return this.broadcastReactions(conversationId, messageId);
+  }
+
+  /** Retire une réaction (idempotent) et renvoie l'état complet. */
+  async removeReaction(conversationId: string, meId: string, messageId: string, emoji: string): Promise<DmReactionDTO[]> {
+    await this.assertParticipant(conversationId, meId);
+    await this.assertLiveMessage(conversationId, messageId);
+    await prisma.messageReaction.deleteMany({ where: { messageId, userId: meId, emoji: (emoji ?? '').trim() } });
+    return this.broadcastReactions(conversationId, messageId);
+  }
+
+  /** « X écrit… » : broadcast éphémère, RIEN en base (le client filtre son propre userId). */
+  async typing(conversationId: string, meId: string): Promise<{ ok: true }> {
+    await this.assertParticipant(conversationId, meId);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_typing', userId: meId });
+    return { ok: true };
+  }
+
+  /** Blocage global : idempotent. Effet = plus d'envoi/réaction dans les deux sens (messagerie seulement). */
+  async block(meId: string, targetUserId: string): Promise<{ blocked: true }> {
+    if (!targetUserId || targetUserId === meId) throw new Error('CANNOT_BLOCK_SELF');
+    try { await prisma.userBlock.create({ data: { blockerId: meId, blockedId: targetUserId } }); }
+    catch (err) { if ((err as { code?: string })?.code !== 'P2002') throw err; }
+    return { blocked: true };
+  }
+
+  async unblock(meId: string, targetUserId: string): Promise<{ blocked: false }> {
+    await prisma.userBlock.deleteMany({ where: { blockerId: meId, blockedId: targetUserId } });
+    return { blocked: false };
+  }
+
+  /** Membres que J'AI bloqués (écran de gestion + déblocage). */
+  async listBlocks(meId: string): Promise<DmUser[]> {
+    const rows = await prisma.userBlock.findMany({
+      where: { blockerId: meId },
+      orderBy: { createdAt: 'desc' },
+      select: { blocked: { select: USER_SELECT } },
+    });
+    return rows.map((r) => toUser(r.blocked));
+  }
+}

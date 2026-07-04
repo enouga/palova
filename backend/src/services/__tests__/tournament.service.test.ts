@@ -427,6 +427,9 @@ describe('TournamentService — admin & lectures', () => {
     const res = await service.listParticipants('t1');
     expect(res).toHaveLength(1);
     expect(res[0]).toMatchObject({ status: 'CONFIRMED', captain: { firstName: 'A', avatarUrl: '/uploads/avatars/a.jpg' }, partner: { avatarUrl: null } });
+    // userId additif (entrée « Envoyer un message » côté front)
+    expect(res[0].captainUserId).toBe('cap1');
+    expect(res[0].partnerUserId).toBe('par1');
     const select = (prismaMock.tournamentRegistration.findMany.mock.calls[0][0] as any).select;
     expect(select.captain.select.avatarUrl).toBe(true);
     expect(select.partner.select.avatarUrl).toBe(true);

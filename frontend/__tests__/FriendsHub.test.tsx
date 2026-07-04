@@ -3,6 +3,10 @@ import { FriendsHub } from '@/components/social/FriendsHub';
 
 jest.mock('@/lib/ThemeProvider', () => ({ useTheme: () => ({ th: { accent: '#06c', onAccent:'#fff', surface:'#fff', surface2:'#eee', line:'#ccc', text:'#111', textMute:'#666', fontUI:'sans-serif' } }) }));
 jest.mock('@/lib/useLevelSystem', () => ({ useLevelSystemEnabled: () => true }));
+const push = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+const openDm = jest.fn();
+jest.mock('@/lib/messages', () => ({ openDm: (...a: unknown[]) => openDm(...a) }));
 const listFriendships = jest.fn();
 const listFriendRequests = jest.fn();
 const listFollowing = jest.fn();
@@ -39,6 +43,13 @@ describe('FriendsHub', () => {
   it('onglet Amis = amitiés confirmées', async () => {
     render(<FriendsHub slug="demo" token="t" />);
     expect(await screen.findByText('Léa M')).toBeInTheDocument();
+  });
+
+  it('bouton 💬 « Écrire à » sur une ligne → openDm avec le bon userId', async () => {
+    render(<FriendsHub slug="demo" token="t" />);
+    await screen.findByText('Léa M');
+    fireEvent.click(screen.getByRole('button', { name: 'Écrire à Léa M' }));
+    expect(openDm).toHaveBeenCalledWith('u2', expect.objectContaining({ isDesktop: expect.any(Boolean) }));
   });
 
   it('onglet Demandes affiche les reçues avec Accepter/Refuser', async () => {

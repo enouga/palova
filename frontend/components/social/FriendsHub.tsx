@@ -1,12 +1,16 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ClubMemberSearchResult, Friend, FriendRequests } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Avatar } from '@/components/ui/Avatar';
+import { Icon } from '@/components/ui/Icon';
 import { FollowButton } from '@/components/social/FollowButton';
 import { FriendButton } from '@/components/social/FriendButton';
 import { LevelChip } from '@/components/player/LevelChip';
 import { colorForSeed } from '@/lib/playerColors';
+import { openDm } from '@/lib/messages';
 
 type Tab = 'amis' | 'demandes' | 'following' | 'followers' | 'search';
 
@@ -14,6 +18,8 @@ type Tab = 'amis' | 'demandes' | 'following' | 'followers' | 'search';
 // Abonnements / Abonnés (suivi à sens unique) / Trouver (annuaire). Actions club-scoped via `slug`.
 export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string; token: string; initialTab?: Tab }) {
   const { th } = useTheme();
+  const isDesktop = useIsDesktop();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequests>({ received: [], sent: [] });
@@ -80,6 +86,17 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
     borderRadius: 999, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
   });
 
+  // Bouton 💬 « Envoyer un message » : widget ancré en desktop, page /me/messages en mobile.
+  const message = (userId: string) => openDm(userId, { isDesktop, navigate: (h) => router.push(h) });
+  const msgBtn = (f: { id: string; firstName: string; lastName: string }) => (
+    <button type="button" aria-label={`Écrire à ${f.firstName} ${f.lastName}`} title="Envoyer un message"
+      onClick={() => message(f.id)}
+      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 999,
+        padding: '5px 9px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+      <Icon name="chat" size={15} color={th.textMute} />
+    </button>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -99,6 +116,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
           {requests.received.map((f) => (
             <div key={`rec-${f.id}`} style={rowStyle}>
               {identity(f)}
+              {msgBtn(f)}
               <button type="button" disabled={busyId === f.id} style={btnStyle(true)} onClick={() => respond(f.id, true)}>Accepter</button>
               <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => respond(f.id, false)}>Refuser</button>
             </div>
@@ -109,6 +127,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
           {requests.sent.map((f) => (
             <div key={`sent-${f.id}`} style={rowStyle}>
               {identity(f)}
+              {msgBtn(f)}
               <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => cancelSent(f.id)}>Annuler</button>
             </div>
           ))}
@@ -122,6 +141,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
             : searchResults.map((r) => (
                 <div key={r.id} style={rowStyle}>
                   {identity(r)}
+                  {msgBtn(r)}
                   <FollowButton slug={slug} userId={r.id} token={token} initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
                   <FriendButton slug={slug} userId={r.id} token={token} relation={r.friend ?? { status: 'none', requestable: false }} onChange={reload} />
                 </div>
@@ -136,6 +156,7 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
             : list.map((f) => (
                 <div key={f.id} style={rowStyle}>
                   {identity(f)}
+                  {msgBtn(f)}
                   {tab === 'amis'
                     ? <FriendButton slug={slug} userId={f.id} token={token} relation={{ status: 'friends', requestable: false }} onChange={reload} />
                     : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following' || f.mutual, mutual: f.mutual }} onChange={reload} />}

@@ -358,10 +358,11 @@ export class TournamentService {
     const ratingService = new RatingService();
     const sportKey = t.clubSport?.sport?.key ?? 'padel';
     const levels = allUserIds.length ? await ratingService.getLevelsForUsers(allUserIds, sportKey) : {};
-    return registrations.map(({ captainUserId, partnerUserId, ...r }) => ({
+    // captainUserId/partnerUserId exposés (additif) : entrée « Envoyer un message » côté front.
+    return registrations.map((r) => ({
       ...r,
-      captainLevel: levels[captainUserId] ?? null,
-      partnerLevel: levels[partnerUserId] ?? null,
+      captainLevel: levels[r.captainUserId] ?? null,
+      partnerLevel: levels[r.partnerUserId] ?? null,
     }));
   }
 

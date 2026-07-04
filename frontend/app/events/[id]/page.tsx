@@ -18,6 +18,8 @@ import { AboutCard, RegistrationStatus, LeaveButton } from '@/components/agenda/
 import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
+import { useIsDesktop } from '@/lib/useIsDesktop';
+import { openDm } from '@/lib/messages';
 
 const ERROR_LABEL: Record<string, string> = {
   MEMBERSHIP_REQUIRED: 'Cet event est réservé aux membres du club.',
@@ -44,6 +46,14 @@ export default function EventDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
   // Étape de paiement Stripe en cours (non-null après inscription payante).
   const [payStep, setPayStep] = useState<{ regId: string; mode: 'payment' | 'setup' } | null>(null);
+  // Messagerie 1-à-1 : id du viewer (pour masquer le 💬 sur sa propre carte) + ouverture.
+  const isDesktop = useIsDesktop();
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!token) { setViewerId(null); return; }
+    api.getMyProfile(token).then((p) => setViewerId(p.id)).catch(() => {});
+  }, [token]);
+  const message = (userId: string) => openDm(userId, { isDesktop, navigate: (h) => router.push(h) });
 
   const load = useCallback(() => {
     api.getEvent(id).then(setEvent).catch(() => setNotFound(true));
@@ -211,7 +221,8 @@ export default function EventDetailPage() {
         {/* Liste publique des inscrits */}
         <div style={{ padding: '28px 0 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, marginBottom: 12, padding: '0 20px' }}>Inscrits</div>
-          <ParticipantsGrid participants={participants} myRegId={myReg?.id} />
+          <ParticipantsGrid participants={participants} myRegId={myReg?.id}
+            onMessage={token ? message : undefined} viewerUserId={viewerId} />
         </div>
       </div>
     </Screen>
