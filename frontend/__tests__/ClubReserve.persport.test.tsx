@@ -2,11 +2,12 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ClubReserve } from '../components/ClubReserve';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
   usePathname: () => '/reserver',
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
 }));
-jest.mock('../components/BookingModal', () => ({ __esModule: true, default: () => null }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
   notificationsStreamUrl: () => 'http://x/stream',

@@ -6,7 +6,7 @@ import { ACCENTS } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 import { offerIsActive } from '@/lib/clubhouse';
 import { deadlineCountdown } from '@/lib/tournament';
-import { HERO_GRADIENT } from '@/components/agenda/AgendaHero';
+import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 
 // Révélation au scroll, hydration-safe : false au premier rendu (serveur ET
 // client → pas de mismatch), passe à true au mount via IntersectionObserver.
@@ -76,9 +76,9 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
     <button onClick={() => copy(s)} title="Copier le code"
       style={{
         cursor: 'pointer', alignSelf: 'flex-start',
-        border: `1px dashed ${onGradient ? 'rgba(255,255,255,0.55)' : th.lineStrong}`,
-        background: onGradient ? 'rgba(255,255,255,0.14)' : th.surface2,
-        color: onGradient ? '#fff' : th.text,
+        border: `1px dashed ${onGradient ? 'rgba(24,21,14,0.18)' : th.lineStrong}`,
+        background: onGradient ? 'rgba(24,21,14,0.06)' : th.surface2,
+        color: onGradient ? HERO_INK : th.text,
         borderRadius: 9, padding: '8px 14px', fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 600, letterSpacing: 0.8,
       }}>
       {copiedId === s.id ? 'Copié !' : s.offerCode}
@@ -98,8 +98,8 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
     return (
       <span style={{
         fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', borderRadius: 999, padding: '3px 9px',
-        background: e.urgent ? ACCENTS.coral : onGradient ? 'rgba(255,255,255,0.18)' : th.surface2,
-        color: e.urgent || onGradient ? '#fff' : th.textMute,
+        background: e.urgent ? ACCENTS.coral : onGradient ? 'rgba(24,21,14,0.06)' : th.surface2,
+        color: e.urgent ? '#fff' : onGradient ? HERO_INK : th.textMute,
       }}>
         {e.text}
       </span>
@@ -155,7 +155,7 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
 
       {/* Partenaire à la une */}
       {featured && (
-        <div data-testid="featured-partner" className="po-block po-featured" style={{ background: HERO_GRADIENT, borderRadius: 20, padding: '26px 24px', color: '#fff', marginBottom: 14 }}>
+        <div data-testid="featured-partner" className="po-block po-featured" style={{ background: HERO_GRADIENT, borderRadius: 20, padding: '26px 24px', color: HERO_INK, marginBottom: 14 }}>
           <div className="po-halo" aria-hidden="true" />
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {clickable(featured, (
@@ -171,7 +171,7 @@ export function PartnerOffers({ sponsors, now = null }: { sponsors: Sponsor[]; n
                     <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, opacity: 0.85 }}>{featured.name}</div>
                     <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4, lineHeight: 1.2, marginTop: 4 }}>{featured.offerText}</div>
                   </div>
-                  {featured.linkUrl && <Icon name="chevR" size={20} color="rgba(255,255,255,0.8)" />}
+                  {featured.linkUrl && <Icon name="chevR" size={20} color={HERO_INK_MUTED} />}
                 </div>
               </>
             ), { display: 'block' })}

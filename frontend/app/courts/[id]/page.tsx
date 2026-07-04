@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, TimeSlot, Reservation, SSEEvent, PublicResource } from '@/lib/api';
 import CourtCalendar from '@/components/CourtCalendar';
-import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
 import { useCourtSSE } from '@/lib/useCourtSSE';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -33,7 +32,6 @@ function CourtBooking() {
   const [duration, setDuration]         = useState<number>(90);
   const [slots, setSlots]               = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [showModal, setShowModal]       = useState(false);
   const [confirmed, setConfirmed]       = useState<Reservation | null>(null);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
@@ -82,6 +80,19 @@ function CourtBooking() {
   }, []);
 
   useCourtSSE(resourceId || null, handleSSE);
+
+  // Navigue vers la page checkout dédiée (resource/start/duration canoniques ; price/format/name
+  // en indices d'affichage — ce terrain n'expose pas la clé du sport, cf. PublicResource).
+  const openCheckout = (slot: TimeSlot) => {
+    const q = new URLSearchParams({
+      resource: resourceId, start: slot.startTime, duration: String(duration), price: String(slot.price ?? resource?.price ?? '0'),
+      offpeak: slot.offPeak ? '1' : '0',
+    });
+    const format = resource && typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined;
+    if (format) q.set('format', format);
+    if (resource?.name) q.set('name', resource.name);
+    router.push(`/reserver/confirmer?${q.toString()}`);
+  };
 
   const freeCount = slots.filter((s) => s.available).length;
   const ct = coverageType(resource?.attributes?.coverage);
@@ -155,26 +166,13 @@ function CourtBooking() {
           ) : (
             <CourtCalendar
               slots={slots}
-              onSelectSlot={(slot) => { setSelectedSlot(slot); setShowModal(true); }}
+              onSelectSlot={(slot) => { setSelectedSlot(slot); openCheckout(slot); }}
               selectedSlot={selectedSlot}
               timezone={tz}
             />
           )}
         </div>
       </div>
-
-      {showModal && selectedSlot && (
-        <BookingModal
-          slot={selectedSlot}
-          resourceId={resourceId}
-          price={selectedSlot?.price ?? resource?.price ?? '0'}
-          duration={duration}
-          token={token ?? ''}
-          timezone={tz}
-          onClose={() => { setShowModal(false); setSelectedSlot(null); }}
-          onConfirmed={(reservation) => { setShowModal(false); setConfirmed(reservation); loadSlots(date, duration); }}
-        />
-      )}
     </Screen>
   );
 }

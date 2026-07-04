@@ -7,12 +7,11 @@ import { packageParts } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
-import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
+import { coverageType, courtFormat, SINGLE_COLOR, LIGHTING_BADGE } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
 import { Chip, Placeholder, PillTabs } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
 import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
@@ -57,7 +56,6 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   );
   const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
-  const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   // Résumé d'un règlement par solde prépayé (moyen + restant), affiché sous la bannière de confirmation.
   const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
@@ -151,13 +149,46 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { if (tab === 'book') reloadAll(); }, [tab, reloadAll]);
 
+  // Bannière de confirmation au retour de /reserver/confirmer (?confirmed=1) : affiche le
+  // bandeau existant, rafraîchit soldes/quotas/disponibilités (le créneau réservé doit
+  // disparaître de la grille), puis nettoie le paramètre d'URL (remplace, pas de nouvelle
+  // entrée d'historique — sinon « précédent » ré-affiche la bannière).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('confirmed') === '1') {
+      setConfirmed(true);
+      if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
+      refreshQuota();
+      reloadAll();
+      router.replace('/reserver');
+    }
+  }, [reloadAll, refreshQuota, router, token, club.slug]);
+
   const changeDuration = (clubSportId: string, dur: number) => {
     setDurationBySport((s) => ({ ...s, [clubSportId]: dur }));
     loadSport(clubSportId, dur, date);
   };
 
+  // Construit la query de la page checkout à partir d'un créneau sélectionné — source unique pour
+  // le tap direct sur un créneau ET le lien profond. resource/start/duration sont canoniques ;
+  // price/sport/format/name/offpeak sont des indices d'affichage pour /reserver/confirmer.
+  const checkoutQuery = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string, sportKey?: string, resourceName?: string) => {
+    const q = new URLSearchParams({
+      resource: resourceId, start: slot.startTime, duration: String(duration), price: String(price),
+      offpeak: slot.offPeak ? '1' : '0',
+    });
+    if (sportKey) q.set('sport', sportKey);
+    if (format) q.set('format', format);
+    if (resourceName) q.set('name', resourceName);
+    return q.toString();
+  };
+
+  const openCheckout = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string, sportKey?: string, resourceName?: string) => {
+    router.push(`/reserver/confirmer?${checkoutQuery(resourceId, price, slot, duration, format, sportKey, resourceName)}`);
+  };
+
   // Consomme le lien profond dès que la section du sport du terrain est chargée : créneau
-  // encore libre → pré-ouvre la confirmation (à la durée du sport) ; sinon page normale.
+  // encore libre → navigue vers la confirmation (à la durée du sport) ; sinon page normale.
   useEffect(() => {
     if (!deepSlot || !token) return;
     for (const cs of bookableSports) {
@@ -166,16 +197,16 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
       if (res && slot) {
         // ajoute le sport du créneau ciblé à la sélection courante (sans l'écraser) pour le rendre visible
         setSelectedSportIds((cur) => (cur && cur.includes(cs.id)) ? cur : [...(cur ?? []), cs.id]);
-        setBooking({ resourceId: res.resource.id, price: slot.price, slot, duration: durationBySport[cs.id], format: typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined, sportKey: cs.sport.key, resourceName: res.resource.name });
+        router.replace(`/reserver/confirmer?${checkoutQuery(res.resource.id, slot.price, slot, durationBySport[cs.id], typeof res.resource.attributes?.format === 'string' ? res.resource.attributes.format : undefined, cs.sport.key, res.resource.name)}`);
         setDeepSlot(null);
         return;
       }
     }
-  }, [deepSlot, availBySport, token, bookableSports, durationBySport]);
+  }, [deepSlot, availBySport, token, bookableSports, durationBySport, router]);
 
   const onSlot = (resourceId: string, price: string, slot: TimeSlot, duration: number, format?: string, sportKey?: string, resourceName?: string) => {
     if (!token) { router.push('/login'); return; }
-    setBooking({ resourceId, price, slot, duration, format, sportKey, resourceName });
+    openCheckout(resourceId, price, slot, duration, format, sportKey, resourceName);
   };
 
   return (
@@ -350,41 +381,6 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           ))
         )}
       </div>
-
-      {booking && (
-        <BookingModal
-          slot={booking.slot}
-          resourceId={booking.resourceId}
-          price={booking.price}
-          duration={booking.duration}
-          token={token ?? ''}
-          timezone={club.timezone}
-          slug={club.slug}
-          maxPlayers={playerCount(booking.format)}
-          sportKey={booking.sportKey}
-          format={booking.format}
-          resourceName={booking.resourceName}
-          packages={myPackages}
-          subscriptions={mySubs}
-          quotaStatus={quotaStatus}
-          clubId={club.id}
-          requireOnlinePayment={club.requireOnlinePayment}
-          requireCardFingerprint={club.requireCardFingerprint}
-          hasCardOnFile={hasCardOnFile}
-          stripeActive={club.stripeAccountStatus === 'ACTIVE'}
-          cancellationCutoffHours={club.cancellationCutoffHours}
-          refundOnCancelWithinCutoff={club.refundOnCancelWithinCutoff}
-          onClose={() => setBooking(null)}
-          onConfirmed={(_res, paid) => {
-            setBooking(null);
-            setConfirmed(true);
-            setConfirmedNote(paid?.label ?? null);
-            if (token) { api.getMyClubPackages(club.slug, token).then(setMyPackages).catch(() => {}); }
-            refreshQuota();
-            reloadAll();
-          }}
-        />
-      )}
     </Screen>
   );
 }
