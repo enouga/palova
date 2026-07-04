@@ -14,6 +14,7 @@ import eventsRouter from './routes/events';
 import lessonsRouter from './routes/lessons';
 import platformRouter from './routes/platform';
 import notificationsRouter from './routes/notifications';
+import { meMessagingRouter, conversationsRouter } from './routes/conversations';
 import pushRouter from './routes/push';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
@@ -59,6 +60,8 @@ app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '365d', immutable: tru
 app.use('/api/auth',          authRouter);
 app.use('/api/me',            meRouter);
 app.use('/api/me',            notificationsRouter);
+app.use('/api/me',            meMessagingRouter);
+app.use('/api/conversations', conversationsRouter);
 app.use('/api/sports',        sportsRouter);
 app.use('/api/push',          pushRouter);
 app.use('/api/resources',     resourcesRouter);

@@ -105,6 +105,11 @@ export class MessagingService {
     return { conv, otherId };
   }
 
+  /** Variante publique de la garde participant, pour la route SSE (lève si pas d'accès). */
+  async assertParticipantPublic(conversationId: string, userId: string): Promise<void> {
+    await this.assertParticipant(conversationId, userId);
+  }
+
   /** Get-or-create idempotent par paire canonique. Bloqué ⇒ pas de création (l'existante reste lisible). */
   async getOrCreateConversation(meId: string, otherUserId: string, clubSlug?: string | null): Promise<ConversationSummaryDTO> {
     if (!otherUserId || otherUserId === meId) throw new Error('CANNOT_MESSAGE_SELF');
