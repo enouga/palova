@@ -1,138 +1,110 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { renderCheckout, buildQuery, buildClub, heldReservation, MockClub } from '../test-utils/checkoutHarness';
+import BookingModal from '../components/BookingModal';
 import { ThemeProvider } from '../lib/ThemeProvider';
-import ConfirmerReservationPage from '../app/reserver/confirmer/page';
+import { api, TimeSlot } from '../lib/api';
 
-// Port de BookingModal.test.tsx vers la page /reserver/confirmer (remplace le modal monté
-// via props par une page qui lit resource/start/duration/price/sport/format/name/offpeak
-// en query + charge son contexte joueur (soldes/abonnements/quotas/empreinte) via l'API.
-
-const mockPush = jest.fn();
-const mockReplace = jest.fn();
-const mockBack = jest.fn();
-let mockSearchParams = buildQuery();
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => mockSearchParams,
-  useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
-}));
-
-let mockClubState: { slug: string | null; club: MockClub | null; loading: boolean } = {
-  slug: 'club-demo', club: buildClub(), loading: false,
-};
+let mockClub: { levelSystemEnabled?: boolean } | null = null;
 jest.mock('../lib/ClubProvider', () => ({
-  useClub: () => mockClubState,
+  useClub: () => ({ slug: 'club-demo', club: mockClub, loading: false }),
 }));
 
 jest.mock('../lib/api', () => ({
   api: {
-    holdSlot:              jest.fn(),
-    confirmReservation:    jest.fn(),
-    cancelReservation:     jest.fn(),
-    applyHoldSetup:        jest.fn(),
-    searchClubMembers:     jest.fn(),
-    listClubFriends:       jest.fn().mockResolvedValue([]),
-    getMyRating:           jest.fn().mockResolvedValue(null),
-    getMyProfile:          jest.fn(),
-    getClubPage:           jest.fn().mockResolvedValue({}),
-    getMyClubPackages:     jest.fn().mockResolvedValue([]),
-    getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
-    getMyQuotaStatus:      jest.fn().mockResolvedValue(null),
-    getMyCardStatus:       jest.fn().mockResolvedValue({ hasCardOnFile: false }),
-    createStripeIntent:    jest.fn(),
+    holdSlot:           jest.fn(),
+    confirmReservation: jest.fn(),
+    cancelReservation:  jest.fn(),
+    applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
+    searchClubMembers:  jest.fn(),
+    listClubFriends:    jest.fn().mockResolvedValue([]),
+    getMyRating:        jest.fn().mockResolvedValue(null),
+    getMyProfile:       jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null }),
+    getClubPage:        jest.fn().mockResolvedValue({}),
   },
   assetUrl: (u: string | null) => u,
 }));
 
-import { api } from '../lib/api';
+const mockSlot: TimeSlot = {
+  startTime: '2025-06-15T06:00:00.000Z',
+  endTime:   '2025-06-15T07:00:00.000Z',
+  available: true, price: '25', offPeak: false,
+};
 
-/** Attend la phase « held » — la section Mode de paiement n'est rendue que dans cette phase. */
-async function waitHeld() {
-  return screen.findByText('Mode de paiement');
+function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {
+  return render(
+    <ThemeProvider>
+      <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+        token="jwt-token" onClose={jest.fn()} onConfirmed={jest.fn()} {...overrides} />
+    </ThemeProvider>
+  );
 }
 
-describe('Checkout — page /reserver/confirmer (page unique)', () => {
+describe('BookingModal — page unique', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub(), loading: false };
-    mockSearchParams = buildQuery();
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation());
+    jest.clearAllMocks(); mockClub = null; localStorage.clear();
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
     (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('en dev (StrictMode, double montage) : atteint « held » avec un seul hold, sans auto-annulation', async () => {
     render(
       <StrictMode>
         <ThemeProvider>
-          <ConfirmerReservationPage />
+          <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+            token="jwt-token" onClose={jest.fn()} onConfirmed={jest.fn()} />
         </ThemeProvider>
-      </StrictMode>,
+      </StrictMode>
     );
-    await waitHeld();
+    expect(await screen.findByText(/Créneau bloqué/)).toBeInTheDocument();
     expect(api.holdSlot).toHaveBeenCalledTimes(1);          // un seul hold malgré le double montage
     expect(api.cancelReservation).not.toHaveBeenCalled();    // pas d'auto-annulation
   });
 
   it('bloque le créneau dès l ouverture (sans interaction)', async () => {
-    renderCheckout();
+    renderModal();
     await waitFor(() => expect(api.holdSlot).toHaveBeenCalledWith(
-      { resourceId: 'court-1', startTime: '2025-06-15T06:00:00.000Z', endTime: '2025-06-15T07:00:00.000Z' },
+      { resourceId: 'court-1', startTime: mockSlot.startTime, endTime: mockSlot.endTime },
       'jwt-token',
     ));
-    await waitHeld();
+    expect(await screen.findByText(/Créneau bloqué/)).toBeInTheDocument();
   });
 
-  it('affiche un message d erreur si le hold échoue, et « Retour à la grille » ramène à /reserver', async () => {
+  it('affiche un message d erreur si le hold échoue', async () => {
     (api.holdSlot as jest.Mock).mockRejectedValue(new Error('SLOT_ALREADY_HELD'));
-    renderCheckout();
+    renderModal();
     expect(await screen.findByText(/vient d'être pris/)).toBeInTheDocument();
-    const btn = screen.getByRole('button', { name: /Retour à la grille/ });
-    expect(btn).toBeInTheDocument();
-    fireEvent.click(btn);
-    expect(mockPush).toHaveBeenCalledWith('/reserver');
+    expect(screen.getByRole('button', { name: /Fermer/ })).toBeInTheDocument();
   });
 
-  it('confirme (régler au club) → confirmReservation puis retour à la grille (confirmé)', async () => {
-    renderCheckout();
+  it('confirme (régler au club) → confirmReservation + onConfirmed', async () => {
+    const onConfirmed = jest.fn();
+    renderModal({ onConfirmed });
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/reserver?confirmed=1'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
   });
 
-  it('« Abandonner » annule le hold puis retourne à la grille', async () => {
-    renderCheckout();
-    await waitHeld();
-    fireEvent.click(screen.getByRole('button', { name: /Abandonner/ }));
+  it('fermer annule le hold', async () => {
+    const onClose = jest.fn();
+    renderModal({ onClose });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Abandonner|Fermer|Annuler/ }));
     await waitFor(() => expect(api.cancelReservation).toHaveBeenCalledWith('res-1', 'jwt-token'));
-    expect(mockPush).toHaveBeenCalledWith('/reserver');
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('affiche le bloc conditions d annulation (sans case)', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false }), loading: false };
-    renderCheckout();
+    renderModal({ cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false });
     expect(await screen.findByText(/Conditions d'annulation/)).toBeInTheDocument();
     expect(screen.getByText(/24\s*h avant le début/)).toBeInTheDocument();
   });
 
-  it('reprend le timer depuis createdAt (hold posé il y a 2 min → affiche ~03:xx, jamais 05:00)', async () => {
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ createdAt: new Date(Date.now() - 120_000).toISOString() }));
-    renderCheckout();
-    await waitHeld();
-    const timer = await screen.findByText(/0[23]:\d{2}/);
-    expect(timer.textContent).not.toMatch(/05:00/);
-  });
-
   it('partie ouverte : applyHoldSetup reçoit partnerUserIds + visibility', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
     // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
@@ -148,8 +120,8 @@ describe('Checkout — page /reserver/confirmer (page unique)', () => {
 
   it('padel : applyHoldSetup reçoit teams + slots (organisateur + partenaire, place tapée)', async () => {
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
     // Ajout ciblé : « + » d'une place de l'équipe 1 (la D, l'organisateur occupe la G) → feuille → pick.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
@@ -167,24 +139,23 @@ describe('Checkout — page /reserver/confirmer (page unique)', () => {
   });
 
   it('propose « Partie ouverte » sur un terrain padel multi-joueurs', async () => {
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
-    await waitHeld();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    await screen.findByText(/Créneau bloqué/);
     expect(await screen.findByRole('button', { name: /Partie ouverte/ })).toBeInTheDocument();
   });
 
   it('cache « Partie ouverte » sur un terrain non-padel', async () => {
-    mockSearchParams = buildQuery({ sport: 'tennis' });
-    renderCheckout();
-    await waitHeld();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.queryByRole('button', { name: /Partie ouverte/ })).not.toBeInTheDocument();
   });
 
   it('le timer expiré bascule en erreur', async () => {
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     jest.useFakeTimers();
-    renderCheckout();
+    renderModal();
     // Attendre que le hold résout et que le composant passe en phase 'held'
-    await waitFor(() => expect(screen.getByText('Mode de paiement')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Créneau bloqué/)).toBeInTheDocument());
     // Épuiser les 300 ticks du compte à rebours : chaque setTimeout de 1 s est chaîné,
     // on avance par petits blocs enveloppés dans act() pour que React traite les updates.
     for (let i = 0; i < 301; i++) {
@@ -195,33 +166,32 @@ describe('Checkout — page /reserver/confirmer (page unique)', () => {
   });
 
   it('payer en ligne affiche la part par personne (7,50€ = 30€ / 4)', async () => {
-    // capacityFor('padel', 'double') === 4  →  30 € ÷ 4 = 7,50 €.
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '30' }));
-    mockSearchParams = buildQuery({ sport: 'padel', format: 'double', price: '30' });
-    renderCheckout();
+    // capacityFor('padel', 'double') === 4  →  30 € ÷ 4 = 7,50 €. Le nouveau flux n'a plus de
+    // bouton « Valider le paiement » : la part s'affiche dans l'avenue (et sur le bouton Stripe « Payer »).
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '30' });
+    renderModal({ slot: { ...mockSlot, price: '30' }, slug: 'club-demo', maxPlayers: 4,
+      format: 'double', sportKey: 'padel', price: '30', stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     expect(screen.getByText(/Votre part/)).toBeInTheDocument();
     expect(screen.getAllByText(/7,50/).length).toBeGreaterThan(0);
-    // Laisse l'effet de vérification des CGV (déclenché par cardIntentPath) se résoudre
-    // avant la fin du test, pour éviter un avertissement act() en teardown.
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('ne ré-annule pas la résa après une confirmation réussie au démontage', async () => {
-    const { unmount } = renderCheckout();
+    const onConfirmed = jest.fn();
+    const { unmount } = renderModal({ onConfirmed });
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/reserver?confirmed=1'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
     unmount();
     expect(api.cancelReservation).not.toHaveBeenCalled();
   });
 
   it('partie ouverte, niveau OFF : applyHoldSetup sans targetLevelMin/Max', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ levelSystemEnabled: false }), loading: false };
+    mockClub = { levelSystemEnabled: false };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
@@ -233,11 +203,12 @@ describe('Checkout — page /reserver/confirmer (page unique)', () => {
   });
 
   it('partie ouverte, niveau ON et limite active : applyHoldSetup avec targetLevelMin/Max', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ levelSystemEnabled: true }), loading: false };
+    mockClub = { levelSystemEnabled: true };
     (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
     await screen.findByText('Alice Org');
+    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
     fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
     fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
@@ -249,26 +220,27 @@ describe('Checkout — page /reserver/confirmer (page unique)', () => {
   });
 
   it('empreinte requise MAIS carte déjà sur fichier : confirme direct (pas de CGV, pas d étape Stripe)', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireCardFingerprint: true }), loading: false };
-    (api.getMyCardStatus as jest.Mock).mockResolvedValue({ hasCardOnFile: true });
-    renderCheckout();
+    const onConfirmed = jest.fn();
+    renderModal({ requireCardFingerprint: true, hasCardOnFile: true, onConfirmed });
     const confirmBtn = await screen.findByRole('button', { name: /Confirmer la réservation/ });
     // Pas de réenregistrement de carte → pas de case CGV.
     expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).toBeNull();
     fireEvent.click(confirmBtn);
     // Confirme directement, sans paymentSource (pas d'étape Stripe).
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/reserver?confirmed=1'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
   });
 
   it('partie ouverte sur un terrain padel : le limiteur de niveau s affiche', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ levelSystemEnabled: true }), loading: false };
-    mockSearchParams = buildQuery({ sport: 'padel' });
-    renderCheckout();
+    mockClub = { levelSystemEnabled: true };
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     fireEvent.click(await screen.findByRole('button', { name: /Partie ouverte/ }));
     expect(screen.getByText(/Limiter le niveau/)).toBeInTheDocument();
   });
 
-  // NB : les parties ouvertes sont padel-only (feat/parties-padel-only, sur main) — le bouton
-  // « Partie ouverte » n'apparaît plus hors padel (couvert par « cache « Partie ouverte »… » ci-dessus).
+  // NB : les parties ouvertes sont désormais padel-only (feat/parties-padel-only, sur main).
+  // Les tests « partie ouverte sur non-padel » de la branche niveau sont donc devenus
+  // sans objet — le bouton « Partie ouverte » n'apparaît plus hors padel (couvert par le
+  // test « cache Partie ouverte sur un terrain non-padel » ci-dessus), et le limiteur de
+  // niveau sur partie ouverte padel reste testé plus haut. Retirés à la fusion.
 });

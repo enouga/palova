@@ -1,46 +1,33 @@
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderCheckout, buildQuery, buildClub, heldReservation, MockClub } from '../test-utils/checkoutHarness';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import BookingModal from '../components/BookingModal';
+import { ThemeProvider } from '../lib/ThemeProvider';
+import { api, TimeSlot, MemberPackage } from '../lib/api';
 
-// Port de BookingModal.packages.test.tsx vers la page /reserver/confirmer — les soldes
-// prépayés (packages) ne sont plus passés en prop mais chargés via `api.getMyClubPackages`.
-
-const mockPush = jest.fn();
-const mockReplace = jest.fn();
-const mockBack = jest.fn();
-let mockSearchParams = buildQuery();
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => mockSearchParams,
-  useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
-}));
-
-let mockClubState: { slug: string | null; club: MockClub | null; loading: boolean } = {
-  slug: 'club-demo', club: buildClub(), loading: false,
-};
+let mockClub: { levelSystemEnabled?: boolean } | null = null;
 jest.mock('../lib/ClubProvider', () => ({
-  useClub: () => mockClubState,
+  useClub: () => ({ slug: 'club-demo', club: mockClub, loading: false }),
 }));
 
 jest.mock('../lib/api', () => ({
   api: {
-    holdSlot:              jest.fn(),
-    confirmReservation:    jest.fn(),
-    cancelReservation:     jest.fn(),
-    applyHoldSetup:        jest.fn(),
-    searchClubMembers:     jest.fn(),
-    listClubFriends:       jest.fn().mockResolvedValue([]),
-    getMyRating:           jest.fn().mockResolvedValue(null),
-    getMyProfile:          jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null }),
-    getClubPage:           jest.fn().mockResolvedValue({}),
-    getMyClubPackages:     jest.fn().mockResolvedValue([]),
-    getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
-    getMyQuotaStatus:      jest.fn().mockResolvedValue(null),
-    getMyCardStatus:       jest.fn().mockResolvedValue({ hasCardOnFile: false }),
-    createStripeIntent:    jest.fn(),
+    holdSlot:           jest.fn(),
+    confirmReservation: jest.fn(),
+    cancelReservation:  jest.fn(),
+    applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
+    searchClubMembers:  jest.fn(),
+    getMyRating:        jest.fn().mockResolvedValue(null),
+    getClubPage:        jest.fn().mockResolvedValue({}),
   },
   assetUrl: (u: string | null) => u,
 }));
 
-import { api, MemberPackage } from '../lib/api';
+const mockSlot: TimeSlot = {
+  startTime: '2026-06-15T06:00:00.000Z',
+  endTime:   '2026-06-15T07:00:00.000Z',
+  available: true,
+  price: '25',
+  offPeak: false,
+};
 
 const pkg: MemberPackage = {
   id: 'pkg-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 7,
@@ -54,29 +41,33 @@ const poorWallet: MemberPackage = {
   expiresAt: null, template: { name: 'Porte-monnaie' },
 };
 
-async function waitHeld() {
-  return screen.findByText('Mode de paiement');
-}
-
 function renderWithPackages(packages: MemberPackage[]) {
-  (api.getMyClubPackages as jest.Mock).mockResolvedValue(packages);
-  return renderCheckout();
+  render(
+    <ThemeProvider>
+      <BookingModal
+        slot={mockSlot}
+        resourceId="court-1"
+        price="25"
+        duration={60}
+        token="jwt-token"
+        packages={packages}
+        onClose={jest.fn()}
+        onConfirmed={jest.fn()}
+      />
+    </ThemeProvider>,
+  );
 }
 
-describe('Checkout — paiement par carnet', () => {
+describe('BookingModal — paiement par carnet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClub = null;
     localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub(), loading: false };
-    mockSearchParams = buildQuery();
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation());
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('propose le carnet en phase held et confirme avec paymentSource', async () => {
     renderWithPackages([pkg]);
@@ -94,7 +85,7 @@ describe('Checkout — paiement par carnet', () => {
     renderWithPackages([pkg]);
 
     // Attendre la phase held
-    await waitHeld();
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
 
@@ -124,21 +115,26 @@ describe('Checkout — paiement par carnet', () => {
 
   it('porte-monnaie insuffisant : puce désactivée + mention « solde insuffisant »', async () => {
     renderWithPackages([poorWallet]);
-    await waitHeld();
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.getByRole('button', { name: /Porte-monnaie/ })).toBeDisabled();
     expect(screen.getByText(/solde insuffisant/)).toBeInTheDocument();
   });
 
-  it('confirme avec un carnet → retour à la grille (confirmé)', async () => {
-    renderWithPackages([pkg]);
+  it('confirme avec un carnet → onConfirmed reçoit le résumé du solde restant', async () => {
+    const onConfirmed = jest.fn();
+    render(
+      <ThemeProvider>
+        <BookingModal slot={mockSlot} resourceId="court-1" price="25" duration={60}
+          token="jwt-token" packages={[pkg]} onClose={jest.fn()} onConfirmed={onConfirmed} />
+      </ThemeProvider>,
+    );
     fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
     await waitFor(() => {
-      expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', { paymentSource: { packageId: 'pkg-1' } });
+      expect(onConfirmed).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'res-1' }),
+        { label: 'Payé avec votre carnet · 6 entrées restantes' },
+      );
     });
-    // Le résumé « payé avec votre carnet » n'est plus affiché par la page elle-même
-    // (l'ancien `onConfirmed(reservation, paid)` du modal) — la navigation post-confirmation
-    // est la même pour tous les moyens de paiement (miroir de Checkout.test.tsx).
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/reserver?confirmed=1'));
   });
 });

@@ -2436,40 +2436,6 @@ describe('ReservationService', () => {
   });
 });
 
-describe('holdSlot — idempotence même joueur (refresh)', () => {
-  const svc = new ReservationService();
-  const base = { resourceId: 'r1', userId: 'u1', startTime: new Date('2026-07-03T16:00:00Z'), endTime: new Date('2026-07-03T17:30:00Z') };
-
-  it('même joueur re-hold → renvoie la PENDING existante (pas d’erreur)', async () => {
-    redisMock.set.mockResolvedValue(null); // NX échoue : lock déjà posé…
-    redisMock.get.mockResolvedValue('u1'); // …par u1 lui-même
-    const existing = { id: 'resa-1', status: 'PENDING', createdAt: new Date(), ...base };
-    prismaMock.reservation.findFirst.mockResolvedValue(existing as any);
-
-    const res = await svc.holdSlot(base as any);
-    expect(res).toBe(existing);
-    expect(prismaMock.reservation.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ resourceId: 'r1', userId: 'u1', status: 'PENDING' }),
-    }));
-  });
-
-  it('lock tenu par un AUTRE joueur → SLOT_ALREADY_HELD', async () => {
-    redisMock.set.mockResolvedValue(null);
-    redisMock.get.mockResolvedValue('u2');
-
-    await expect(svc.holdSlot(base as any)).rejects.toThrow('SLOT_ALREADY_HELD');
-    expect(prismaMock.reservation.findFirst).not.toHaveBeenCalled();
-  });
-
-  it('lock à moi mais aucune PENDING valide → SLOT_ALREADY_HELD', async () => {
-    redisMock.set.mockResolvedValue(null);
-    redisMock.get.mockResolvedValue('u1');
-    prismaMock.reservation.findFirst.mockResolvedValue(null as any);
-
-    await expect(svc.holdSlot(base as any)).rejects.toThrow('SLOT_ALREADY_HELD');
-  });
-});
-
 describe('cancelFutureReservationsForUser', () => {
   it('annule chaque résa future (CONFIRMED/PENDING) de l organisateur', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([

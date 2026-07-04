@@ -1,15 +1,17 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { ClubReserve } from '../components/ClubReserve';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
 // Lendemain midi UTC : déterministe (pas de chevauchement de minuit) et dans la fenêtre de résa.
 const start = (() => { const d = new Date(Date.now() + 24 * 3600e3); d.setUTCHours(12, 0, 0, 0); return d.toISOString(); })();
 
-const mockReplace = jest.fn();
-const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   usePathname: () => '/reserver',
-  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+}));
+jest.mock('../components/BookingModal', () => ({
+  __esModule: true,
+  default: ({ resourceId }: { resourceId: string }) => <div data-testid="booking-modal">{resourceId}</div>,
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
@@ -57,23 +59,16 @@ describe('ClubReserve — lien profond', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
     mocked.getClubAvailability.mockResolvedValue(availability as never);
-    mockPush.mockClear();
-    mockReplace.mockClear();
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
-  it('?resource=&start= navigue vers la confirmation quand le créneau est libre', async () => {
+  it('?resource=&start= pré-ouvre la confirmation quand le créneau est libre', async () => {
     window.history.pushState({}, '', `/reserver?resource=court-1&start=${encodeURIComponent(start)}`);
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
-    const url = mockReplace.mock.calls[0][0] as string;
-    expect(url.startsWith('/reserver/confirmer?')).toBe(true);
-    const params = new URLSearchParams(url.split('?')[1]);
-    expect(params.get('resource')).toBe('court-1');
-    expect(params.get('start')).toBe(start);
+    expect(await screen.findByTestId('booking-modal')).toHaveTextContent('court-1');
   });
 
-  it('créneau pris entre-temps → page normale, sans navigation ni erreur', async () => {
+  it('créneau pris entre-temps → page normale, sans modale ni erreur', async () => {
     mocked.getClubAvailability.mockResolvedValue([{
       ...availability[0],
       slots: [{ startTime: start, endTime: start, available: false, price: '25', offPeak: false }],
@@ -81,6 +76,6 @@ describe('ClubReserve — lien profond', () => {
     window.history.pushState({}, '', `/reserver?resource=court-1&start=${encodeURIComponent(start)}`);
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
     expect(await screen.findByText('Terrain 1')).toBeInTheDocument();
-    expect(mockReplace).not.toHaveBeenCalledWith(expect.stringContaining('/reserver/confirmer'));
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
   });
 });

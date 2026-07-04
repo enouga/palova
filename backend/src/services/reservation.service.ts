@@ -233,19 +233,7 @@ export class ReservationService {
     const lockKey = this.lockKey(resourceId, startTime);
 
     const acquired = await redis.set(lockKey, userId, 'EX', HOLD_TTL_SECONDS, 'NX');
-    if (!acquired) {
-      // Idempotence : si CE joueur tient déjà le créneau (refresh de la page de checkout),
-      // on lui rend sa réservation PENDING non expirée au lieu d'une erreur. Un tiers → refus.
-      if ((await redis.get(lockKey)) === userId) {
-        const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
-        const existing = await prisma.reservation.findFirst({
-          where: { resourceId, userId, status: 'PENDING', startTime, endTime, createdAt: { gt: holdExpiryCutoff } },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (existing) return existing;
-      }
-      throw new Error('SLOT_ALREADY_HELD');
-    }
+    if (!acquired) throw new Error('SLOT_ALREADY_HELD');
 
     try {
       const resource = await prisma.resource.findUniqueOrThrow({

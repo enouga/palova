@@ -1,47 +1,25 @@
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderCheckout, buildQuery, buildClub, heldReservation, MockClub } from '../test-utils/checkoutHarness';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import BookingModal from '../components/BookingModal';
+import { ThemeProvider } from '../lib/ThemeProvider';
+import { api, TimeSlot } from '../lib/api';
 
-// Port de BookingModal.payment.test.tsx vers la page /reserver/confirmer — mêmes scénarios
-// (avenues de paiement + CGV/Stripe), adaptés au contexte query + club (au lieu de props).
-
-const mockPush = jest.fn();
-const mockReplace = jest.fn();
-const mockBack = jest.fn();
-// Padel double → capacité 4. Créneau 40 € par défaut (10 €/joueur).
-let mockSearchParams = buildQuery({ price: '40', sport: 'padel', format: 'double' });
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => mockSearchParams,
-  useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
-}));
-
-let mockClubState: { slug: string | null; club: MockClub | null; loading: boolean } = {
-  slug: 'club-demo', club: buildClub(), loading: false,
-};
+let mockClub: { levelSystemEnabled?: boolean } | null = null;
 jest.mock('../lib/ClubProvider', () => ({
-  useClub: () => mockClubState,
+  useClub: () => ({ slug: 'club-demo', club: mockClub, loading: false }),
 }));
 
 jest.mock('../lib/api', () => ({
   api: {
-    holdSlot:              jest.fn(),
-    confirmReservation:    jest.fn(),
-    cancelReservation:     jest.fn(),
-    applyHoldSetup:        jest.fn(),
-    searchClubMembers:     jest.fn(),
-    listClubFriends:       jest.fn().mockResolvedValue([]),
-    getMyRating:           jest.fn().mockResolvedValue(null),
-    getMyProfile:          jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null }),
-    getClubPage:           jest.fn().mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' }),
-    getMyClubPackages:     jest.fn().mockResolvedValue([]),
-    getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
-    getMyQuotaStatus:      jest.fn().mockResolvedValue(null),
-    getMyCardStatus:       jest.fn().mockResolvedValue({ hasCardOnFile: false }),
-    createStripeIntent:    jest.fn(),
+    holdSlot:           jest.fn(),
+    confirmReservation: jest.fn(),
+    cancelReservation:  jest.fn(),
+    applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
+    searchClubMembers:  jest.fn(),
+    getMyRating:        jest.fn().mockResolvedValue(null),
+    getClubPage:        jest.fn().mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' }),
   },
   assetUrl: (u: string | null) => u,
 }));
-
-import { api, MemberPackage } from '../lib/api';
 
 // L'étape Stripe est montée via dynamic() ; on la remplace par un stub qui expose
 // les props reçues (type / amountLabel / cgvAccepted) pour pouvoir les asserter.
@@ -56,63 +34,77 @@ jest.mock('../components/StripePaymentStep', () => ({
   ),
 }));
 
-async function waitHeld() {
-  return screen.findByText('Mode de paiement');
+// Padel double → capacité 4.
+const mockSlot: TimeSlot = {
+  startTime: '2026-06-15T06:00:00.000Z',
+  endTime:   '2026-06-15T07:00:00.000Z',
+  available: true,
+  price: '40',
+  offPeak: false,
+};
+
+function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {
+  render(
+    <ThemeProvider>
+      <BookingModal
+        slot={mockSlot}
+        resourceId="court-1"
+        price="40"
+        duration={60}
+        token="jwt-token"
+        sportKey="padel"
+        format="double"
+        onClose={jest.fn()}
+        onConfirmed={jest.fn()}
+        {...overrides}
+      />
+    </ThemeProvider>,
+  );
 }
 
-// Coche la case CGV (révèle le formulaire Stripe dans le flux « Stripe direct »).
+// Coche la case CGV (révèle le formulaire Stripe dans le nouveau flux « Stripe direct »).
 function acceptCgv() {
   fireEvent.click(screen.getByRole('checkbox', { name: /conditions générales/i }));
 }
 
-describe('Checkout — choix du mode de paiement', () => {
+describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClub = null;
     localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub(), loading: false };
-    mockSearchParams = buildQuery({ price: '40', sport: 'padel', format: 'double' });
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '40' }));
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '40' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('« Régler au club » caché quand le paiement en ligne est imposé', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireOnlinePayment: true, stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ requireOnlinePayment: true, stripeActive: true });
+    // Attendre la phase held (hold automatique au montage)
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.queryByRole('button', { name: /Régler au club/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Payer en ligne/ })).toBeInTheDocument();
-    // Paiement en ligne imposé dès le montage → cardIntentPath actif d'emblée, laisse l'effet
-    // de vérification des CGV se résoudre avant la fin du test (évite un avertissement act()).
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('avenue en ligne masquée quand Stripe inactif et paiement non imposé', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'INACTIVE', requireOnlinePayment: false }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ stripeActive: false, requireOnlinePayment: false });
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.queryByRole('button', { name: /Payer en ligne/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
   });
 
   it('avenue en ligne visible quand Stripe actif (paiement facultatif)', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ stripeActive: true });
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.getByRole('button', { name: /Payer en ligne/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
   });
 
   it('part trop faible < 0,50 € : online affiche « part trop faible » et paie le total', async () => {
     // total 0,40 € → part = 0,10 € < 0,50 € ; capacité padel double = 4 → 0,10 €.
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '0.40' }));
-    mockSearchParams = buildQuery({ price: '0.40', sport: 'padel', format: 'double' });
-    renderCheckout();
+    const tinySlot: TimeSlot = { ...mockSlot, price: '0.40' };
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '0.40' });
+    renderModal({ stripeActive: true, slot: tinySlot, price: '0.40' });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     // L'avenue affiche le message "part trop faible".
     expect(screen.getByText(/trop faible/i)).toBeInTheDocument();
@@ -120,24 +112,20 @@ describe('Checkout — choix du mode de paiement', () => {
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-amount', '0,40€');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('en ligne → étape Stripe directe avec le montant par personne', async () => {
     // 40 € / 4 joueurs (padel double) = 10 € par personne (payShare capturé dans createIntent)
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'payment');
     expect(step).toHaveAttribute('data-amount', '10€');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('en ligne paie toujours la part par personne (10€ = 40€/4), jamais le total', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
     // L'avenue montre la part (10 €), pas le total (40 €).
     expect(screen.getByText(/Votre part/)).toBeInTheDocument();
@@ -145,23 +133,19 @@ describe('Checkout — choix du mode de paiement', () => {
     const step = await screen.findByTestId('stripe-step');
     // amountLabel prouve que createIntent utilisera la part, pas le total.
     expect(step).toHaveAttribute('data-amount', '10€');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('empreinte requise (sans paiement en ligne) → étape Stripe setup', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireCardFingerprint: true, stripeAccountStatus: 'INACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ requireCardFingerprint: true, stripeActive: false });
+    await screen.findByText(/Créneau bloqué/);
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'setup');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('défensif : paiement en ligne imposé mais Stripe inactif → avenue désactivée + note, étape Stripe jamais ouverte', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireOnlinePayment: true, stripeAccountStatus: 'INACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ requireOnlinePayment: true, stripeActive: false });
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.getByText(/momentanément indisponible/i)).toBeInTheDocument();
     const onlineBtn = screen.getByRole('button', { name: /Payer en ligne/ });
     expect(onlineBtn).toBeDisabled();
@@ -169,29 +153,23 @@ describe('Checkout — choix du mode de paiement', () => {
     const confirm = screen.getByRole('button', { name: /Valider le paiement|Confirmer/ });
     expect(confirm).toBeDisabled();
     expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 });
 
-describe('Checkout — acceptation des CGV au paiement en ligne', () => {
+describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClub = null;
     localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub(), loading: false };
-    mockSearchParams = buildQuery({ price: '40', sport: 'padel', format: 'double' });
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '40' }));
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '40' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
     (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('paiement en ligne → case CGV ; l\'étape Stripe n\'apparaît qu\'une fois cochée (cgvAccepted=true)', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
 
     const checkbox = screen.getByRole('checkbox', { name: /conditions générales/i });
@@ -201,13 +179,12 @@ describe('Checkout — acceptation des CGV au paiement en ligne', () => {
     fireEvent.click(checkbox);
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-cgv', 'true');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('« Régler au club » → pas de case CGV, confirmation non bloquée', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ stripeActive: true });
+    // Attendre la phase held
+    await screen.findByText(/Créneau bloqué/);
     // payMode par défaut = 'club' quand le paiement en ligne n'est pas imposé.
     expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
     const confirm = screen.getByRole('button', { name: /Confirmer la réservation/ });
@@ -215,22 +192,14 @@ describe('Checkout — acceptation des CGV au paiement en ligne', () => {
   });
 
   it('carnet prépayé sélectionné → pas de case CGV', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    const pkg: MemberPackage = {
-      id: 'pkg-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 10,
-      amountTotal: null, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00Z',
-      expiresAt: null, template: { name: '10 entrées' },
-    };
-    (api.getMyClubPackages as jest.Mock).mockResolvedValue([pkg]);
-    renderCheckout();
+    renderModal({ stripeActive: true, packages: [{ id: 'pkg-1', kind: 'ENTRIES', creditsRemaining: 10 } as any] });
     fireEvent.click(await screen.findByRole('button', { name: /Carnet — 10 entrées/ }));
     expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
   });
 
   it('getClubPage rejette (PAGE_NOT_FOUND) → case CGV TOUJOURS affichée + note de repli, étape gardée', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
     (api.getClubPage as jest.Mock).mockRejectedValue(new Error('PAGE_NOT_FOUND'));
-    renderCheckout();
+    renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
 
     const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
@@ -241,9 +210,8 @@ describe('Checkout — acceptation des CGV au paiement en ligne', () => {
   });
 
   it('empreinte bancaire (setup intent) → case CGV affichée et requise avant l\'étape', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireCardFingerprint: true, stripeAccountStatus: 'INACTIVE' }), loading: false };
-    renderCheckout();
-    await waitHeld();
+    renderModal({ requireCardFingerprint: true, stripeActive: false });
+    await screen.findByText(/Créneau bloqué/);
     const checkbox = screen.getByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).toBeInTheDocument();
     expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
@@ -253,8 +221,7 @@ describe('Checkout — acceptation des CGV au paiement en ligne', () => {
   });
 
   it('liens CGV / confidentialité = ancres vers les pages publiques (nouvel onglet)', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    renderModal({ stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
 
     const cgvLink = screen.getByRole('link', { name: /conditions générales de vente/i });
@@ -265,80 +232,67 @@ describe('Checkout — acceptation des CGV au paiement en ligne', () => {
     const privacyLink = screen.getByRole('link', { name: /politique de confidentialité/i });
     expect(privacyLink).toHaveAttribute('href', '/confidentialite');
     expect(privacyLink).toHaveAttribute('target', '_blank');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 });
 
-describe('Checkout — CGV pré-cochée si déjà acceptée pour le club (mémoire locale)', () => {
+describe('BookingModal — CGV pré-cochée si déjà acceptée pour le club (mémoire locale)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClub = null;
     localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireOnlinePayment: true, stripeAccountStatus: 'ACTIVE' }), loading: false };
-    mockSearchParams = buildQuery({ price: '40', sport: 'padel', format: 'double' });
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '40' }));
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '40' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
     (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('déjà accepté pour ce club → case pré-cochée et étape Stripe affichée sans clic', async () => {
     localStorage.setItem('palova:cgv-accepted:club-demo', '1');
-    renderCheckout();
+    renderModal({ requireOnlinePayment: true, stripeActive: true, slug: 'club-demo' });
 
     // La case est cochée d'emblée et le formulaire Stripe s'affiche sans interaction.
     const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).toBeChecked();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-cgv', 'true');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('mémoire d\'un AUTRE club n\'affecte pas celui-ci (clé par slug)', async () => {
     localStorage.setItem('palova:cgv-accepted:autre-club', '1');
-    renderCheckout();
+    renderModal({ requireOnlinePayment: true, stripeActive: true, slug: 'club-demo' });
 
     const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).not.toBeChecked();
     expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('cocher la case mémorise l\'acceptation pour ce club', async () => {
-    renderCheckout();
+    renderModal({ requireOnlinePayment: true, stripeActive: true, slug: 'club-demo' });
     const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).not.toBeChecked();
 
     fireEvent.click(checkbox);
     await screen.findByTestId('stripe-step');
     expect(localStorage.getItem('palova:cgv-accepted:club-demo')).toBe('1');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 });
 
-describe('Checkout — gardes paiement renvoyées par le backend (jamais de code brut)', () => {
+describe('BookingModal — gardes paiement renvoyées par le backend (jamais de code brut)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClub = null;
     localStorage.clear();
-    document.cookie = 'token=jwt-token; path=/';
-    mockPush.mockClear(); mockReplace.mockClear(); mockBack.mockClear();
-    mockClubState = { slug: 'club-demo', club: buildClub(), loading: false };
-    mockSearchParams = buildQuery({ price: '40', sport: 'padel', format: 'double' });
-    (api.holdSlot as jest.Mock).mockResolvedValue(heldReservation({ totalPrice: '40' }));
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '40' });
     (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
     (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
     (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
     (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
   });
-  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
   it('donnée club périmée : confirmReservation renvoie CARD_FINGERPRINT_REQUIRED → bascule empreinte (CGV + étape setup), jamais le code brut', async () => {
-    // requireCardFingerprint=false (donnée club périmée), mais le backend (à jour) l'exige.
-    mockClubState = { slug: 'club-demo', club: buildClub({ requireCardFingerprint: false, stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    // requireCardFingerprint=false (prop périmée), mais le backend (à jour) l'exige.
+    renderModal({ stripeActive: true, requireCardFingerprint: false });
     (api.confirmReservation as jest.Mock).mockRejectedValueOnce(new Error('CARD_FINGERPRINT_REQUIRED'));
 
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
@@ -350,12 +304,10 @@ describe('Checkout — gardes paiement renvoyées par le backend (jamais de code
     fireEvent.click(checkbox);
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'setup');
-    await waitFor(() => expect(api.getClubPage).toHaveBeenCalled());
   });
 
   it('autre garde paiement (CGV_NOT_ACCEPTED) → message FR lisible, jamais le code brut', async () => {
-    mockClubState = { slug: 'club-demo', club: buildClub({ stripeAccountStatus: 'ACTIVE' }), loading: false };
-    renderCheckout();
+    renderModal({ stripeActive: true });
     (api.confirmReservation as jest.Mock).mockRejectedValueOnce(new Error('CGV_NOT_ACCEPTED'));
 
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
