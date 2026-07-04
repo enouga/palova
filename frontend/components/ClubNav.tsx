@@ -20,7 +20,7 @@ type Tab = { label: string; short?: string; href: string; icon: IconName; match:
 // À venir de /me/reservations).
 function CountBadge({ count, label, fontFamily, bg = '#e5484d', fg = '#fff' }: { count: number; label: string; fontFamily: string; bg?: string; fg?: string }) {
   return (
-    <span aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: bg, color: fg, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
+    <span className="cn-badge" aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: bg, color: fg, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -117,6 +117,10 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           .cn-tab:not(.is-active) { background: transparent !important; border-color: transparent !important; }
           .cn-tab:has(.cn-lbl-short) .cn-lbl-full { display: none; }
           .cn-tab .cn-lbl-short { display: inline; }
+          /* Compteur (Résas / Parties) en pastille flottante posée sur l'onglet (coin haut-droit,
+             comme les compteurs « À venir / Passées ») : hors flux → l'onglet garde la même taille
+             qu'il y ait un compteur ou non. */
+          .cn-badge { position: absolute; top: 4px; right: 8px; }
         }
       `}</style>
 
@@ -165,7 +169,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 className={`cn-tab${active ? ' is-active' : ''}`}
                 onMouseEnter={() => setHovered(t.label)}
                 onMouseLeave={() => setHovered((h) => (h === t.label ? null : h))}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, whiteSpace: 'nowrap', textDecoration: 'none',
+                style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, whiteSpace: 'nowrap', textDecoration: 'none',
                          boxSizing: 'border-box', padding: '8px 13px', borderRadius: 11,
                          border: `1px solid ${active ? 'transparent' : th.lineStrong}`,
                          fontFamily: th.fontUI, fontSize: 14, fontWeight: 600,
