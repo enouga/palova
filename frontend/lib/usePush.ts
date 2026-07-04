@@ -63,12 +63,18 @@ export function usePush(): { status: PushStatus; subscribe: () => Promise<void>;
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') { setStatus(perm === 'denied' ? 'denied' : 'default'); return; }
       const { publicKey } = await api.getVapidPublicKey();
-      if (!publicKey) return;
+      if (!publicKey) {
+        console.error('[usePush] no VAPID public key from server — push not configured (VAPID_* env vars)');
+        return;
+      }
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
       const json = sub.toJSON();
       await api.savePushSubscription({ endpoint: json.endpoint, keys: json.keys }, token ?? '');
       setStatus('granted');
-    } catch (e) { setStatus('default'); }
+    } catch (e) {
+      console.error('[usePush] subscribe failed:', e);
+      setStatus('default');
+    }
   };
 
   const unsubscribe = async (): Promise<void> => {
@@ -76,7 +82,7 @@ export function usePush(): { status: PushStatus; subscribe: () => Promise<void>;
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (sub) { await sub.unsubscribe(); await api.deletePushSubscription(sub.endpoint, token ?? '').catch(() => {}); }
-    } catch { /* ignore */ }
+    } catch (e) { console.error('[usePush] unsubscribe failed:', e); }
     finally { setStatus('default'); }
   };
 
