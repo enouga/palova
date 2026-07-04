@@ -48,7 +48,9 @@ export function DmWidgetHost() {
     <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end',
       justifyContent: 'flex-end', padding: 24, pointerEvents: 'none' }}>
       <div style={{ background: th.bg, display: 'flex', flexDirection: 'column', pointerEvents: 'auto',
-        width: 'min(380px, 92vw)', height: 'min(520px, 80vh)', borderRadius: 20,
+        // minWidth:0 — item d'un flex row : sans lui, min-width:auto laisse le min-content
+        // du composer gonfler le panneau au-delà des 380px voulus.
+        width: 'min(380px, 92vw)', minWidth: 0, height: 'min(520px, 80vh)', borderRadius: 20,
         boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: `1px solid ${th.line}` }}>
           <Avatar firstName={conv.other.firstName} lastName={conv.other.lastName} avatarUrl={conv.other.avatarUrl}

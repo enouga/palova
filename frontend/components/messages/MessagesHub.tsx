@@ -133,7 +133,7 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
       {isDesktop ? (
         <>
           <div style={{ width: 320, borderRight: `1px solid ${th.line}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{list}</div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {thread ?? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>
@@ -143,7 +143,9 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{selected ? thread : list}</div>
+        // minWidth:0 — sans lui, le min-content du composer (textarea+boutons) remonte via
+        // min-width:auto et pousse tout le fil hors de la carte sur mobile (bulles rognées).
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{selected ? thread : list}</div>
       )}
 
       {blockTarget && (
