@@ -210,7 +210,7 @@ export class MessagingService {
   async listMessages(conversationId: string, meId: string, before?: string | null, limitRaw?: string | number | null):
     Promise<{ messages: DmMessageDTO[]; meta: DmListMeta }> {
     const { conv, otherId } = await this.assertParticipant(conversationId, meId);
-    const limit = Math.min(Math.max(Number(limitRaw) || PAGE_DEFAULT, 1), PAGE_MAX);
+    const limit = Math.min(Math.max(Math.trunc(Number(limitRaw)) || PAGE_DEFAULT, 1), PAGE_MAX);
     const rows = await prisma.directMessage.findMany({
       where: { conversationId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -239,16 +239,20 @@ export class MessagingService {
     await this.assertNotBlocked(meId, otherId);
     const body = (rawBody ?? '').trim();
     if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
-    const created = await prisma.directMessage.create({
-      data: { conversationId, authorId: meId, body },
-      select: MSG_SELECT,
+    // create + avance de lastMessageAt atomiques : pas de conversation « en retard » si l'update échoue
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.directMessage.create({
+        data: { conversationId, authorId: meId, body },
+        select: MSG_SELECT,
+      });
+      await tx.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: c.createdAt } });
+      return c;
     });
     return this.finishSend(conversationId, meId, created);
   }
 
-  /** Fin d'envoi commune texte/photo : lastMessageAt + broadcast + notif best-effort. */
+  /** Fin d'envoi commune texte/photo : broadcast + notif best-effort (lastMessageAt déjà avancé en transaction). */
   private async finishSend(conversationId: string, meId: string, created: MsgRow): Promise<DmMessageDTO> {
-    await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
     const dto = toMessageDTO(created);
     SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_message', message: dto });
     try { await notifyDirectMessage(conversationId, created.id, meId); }
@@ -266,12 +270,13 @@ export class MessagingService {
     if (!msg || msg.conversationId !== conversationId) throw new Error('MESSAGE_NOT_FOUND');
     if (msg.authorId !== meId) throw new Error('NOT_ALLOWED');
     if (msg.deletedAt) return toMessageDTO(msg); // idempotent, pas de re-broadcast
-    if (msg.imageUrl) this.unlinkImage(msg.imageUrl); // best-effort (défini en tâche 8)
     const updated = await prisma.directMessage.update({
       where: { id: messageId },
       data: { deletedAt: new Date(), deletedById: meId },
       select: MSG_SELECT,
     });
+    // ⚠️ Tâche 8 : déplacer l'unlink APRÈS l'update pierre tombale (fichier supprimé seulement si le message l'est).
+    if (msg.imageUrl) this.unlinkImage(msg.imageUrl); // best-effort (défini en tâche 8)
     const dto = toMessageDTO(updated);
     SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
     return dto;

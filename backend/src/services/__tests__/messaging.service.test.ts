@@ -177,6 +177,7 @@ describe('MessagingService — messages', () => {
     broadcast = jest.spyOn(SSEService.getInstance(), 'broadcastConversation').mockImplementation(() => {});
     prismaMock.conversation.findUnique.mockResolvedValue(CONV as any);
     prismaMock.userBlock.findFirst.mockResolvedValue(null);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
   });
   afterEach(() => broadcast.mockRestore());
 
@@ -208,6 +209,21 @@ describe('MessagingService — messages', () => {
     }));
     expect(r.messages).toHaveLength(50);
     expect(r.meta.hasMore).toBe(true);
+  });
+
+  it('listMessages : limit clampé en ENTIER dans [1..100] (défaut 50 si absent/invalide)', async () => {
+    prismaMock.directMessage.findMany.mockResolvedValue([]);
+    const cases: Array<[string, number]> = [
+      ['0', 51],    // 0 falsy → défaut 50 → take 51
+      ['-5', 2],    // clampé à 1 → take 2
+      ['999', 101], // clampé à 100 → take 101
+      ['12.7', 13], // tronqué à 12 → take 13 (jamais de take non-entier)
+      ['abc', 51],  // NaN → défaut 50 → take 51
+    ];
+    for (const [v, take] of cases) {
+      await service.listMessages('c1', 'u1', null, v);
+      expect(prismaMock.directMessage.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take }));
+    }
   });
 
   it('postMessage : crée, met à jour lastMessageAt, broadcast + notifie', async () => {
@@ -259,5 +275,15 @@ describe('MessagingService — messages', () => {
     const dto = await service.deleteMessage('c1', 'u1', 'm1');
     expect(dto.deleted).toBe(true);
     expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  it('deleteMessage : id inconnu → MESSAGE_NOT_FOUND', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue(null);
+    await expect(service.deleteMessage('c1', 'u1', 'mX')).rejects.toThrow('MESSAGE_NOT_FOUND');
+  });
+
+  it('deleteMessage : message d\'une AUTRE conversation → MESSAGE_NOT_FOUND', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u1', 'a'), conversationId: 'cX', authorId: 'u1' } as any);
+    await expect(service.deleteMessage('c1', 'u1', 'm1')).rejects.toThrow('MESSAGE_NOT_FOUND');
   });
 });
