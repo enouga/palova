@@ -18,6 +18,7 @@ describe('routes conversations', () => {
     addReaction: jest.fn(), removeReaction: jest.fn(), markRead: jest.fn(), typing: jest.fn(),
     block: jest.fn(), unblock: jest.fn(), listBlocks: jest.fn(),
     assertParticipantPublic: jest.fn(),
+    createImageMessage: jest.fn(), imagePathFor: jest.fn(),
   }; });
 
   it('GET /api/me/conversations (auth requise)', async () => {
@@ -103,5 +104,33 @@ describe('routes conversations', () => {
     mocks.assertParticipantPublic.mockRejectedValue(new Error('CONVERSATION_NOT_FOUND'));
     const forbidden = await request(app).get(`/api/conversations/c1/stream?token=${token}`);
     expect(forbidden.status).toBe(403);
+  });
+
+  describe('routes conversations — images', () => {
+    it('POST /api/conversations/:id/images : multipart → createImageMessage', async () => {
+      mocks.createImageMessage.mockResolvedValue({ id: 'm1', imageUrl: 'c1/x.jpg' });
+      const res = await request(app).post('/api/conversations/c1/images')
+        .set('Authorization', `Bearer ${token}`)
+        .field('body', 'légende')
+        .attach('image', Buffer.from([0xff, 0xd8, 0xff]), { filename: 'p.jpg', contentType: 'image/jpeg' });
+      expect(res.status).toBe(200);
+      expect(mocks.createImageMessage).toHaveBeenCalledWith('c1', 'u1',
+        expect.objectContaining({ mimetype: 'image/jpeg' }), 'légende');
+    });
+
+    it('POST images : format non supporté → 400', async () => {
+      mocks.createImageMessage.mockRejectedValue(new Error('VALIDATION_ERROR'));
+      const res = await request(app).post('/api/conversations/c1/images')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('image', Buffer.from('x'), { filename: 'x.gif', contentType: 'image/gif' });
+      expect(res.status).toBe(400);
+    });
+
+    it('GET image : token en query + garde participant, 404 sans image', async () => {
+      expect((await request(app).get('/api/conversations/c1/messages/m1/image?token=nope')).status).toBe(401);
+      mocks.imagePathFor.mockRejectedValue(new Error('MESSAGE_NOT_FOUND'));
+      const res = await request(app).get(`/api/conversations/c1/messages/m1/image?token=${token}`);
+      expect(res.status).toBe(404);
+    });
   });
 });

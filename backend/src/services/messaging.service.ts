@@ -1,6 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../db/prisma';
 import { SSEService } from './sse.service';
 import { notifyDirectMessage } from '../email/notifications';
+import { DM_DIR, EXT_BY_MIME } from '../utils/uploads';
 
 const MAX_BODY = 2000;
 const PAGE_DEFAULT = 50;
@@ -265,6 +268,52 @@ export class MessagingService {
     return dto;
   }
 
+  /** Poste un message photo (JPEG/PNG/WebP ≤ 5 Mo, légende optionnelle ≤ 2000). */
+  async createImageMessage(conversationId: string, meId: string,
+    file: { buffer: Buffer; mimetype: string }, caption?: string | null): Promise<DmMessageDTO> {
+    const { otherId } = await this.assertParticipant(conversationId, meId);
+    await this.assertNotBlocked(meId, otherId);
+    const ext = EXT_BY_MIME[file.mimetype];
+    if (!ext) throw new Error('VALIDATION_ERROR');
+    const body = (caption ?? '').trim();
+    if (body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+
+    const relPath = `${conversationId}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+    const absPath = path.join(DM_DIR, relPath);
+    await fs.promises.mkdir(path.dirname(absPath), { recursive: true });
+    await fs.promises.writeFile(absPath, file.buffer);
+
+    let created: MsgRow;
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const c = await tx.directMessage.create({
+          data: { conversationId, authorId: meId, body, imageUrl: relPath },
+          select: MSG_SELECT,
+        });
+        await tx.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: c.createdAt } });
+        return c;
+      });
+    } catch (err) {
+      fs.promises.unlink(absPath).catch(() => {}); // pas de fichier orphelin
+      throw err;
+    }
+    return this.finishSend(conversationId, meId, created);
+  }
+
+  /** Chemin absolu + mime d'une image de message, APRÈS garde participant. Anti-traversée. */
+  async imagePathFor(conversationId: string, meId: string, messageId: string): Promise<{ absPath: string; mime: string }> {
+    await this.assertParticipant(conversationId, meId);
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { conversationId: true, imageUrl: true, deletedAt: true },
+    });
+    if (!msg || msg.conversationId !== conversationId || msg.deletedAt || !msg.imageUrl) throw new Error('MESSAGE_NOT_FOUND');
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(msg.imageUrl)) throw new Error('MESSAGE_NOT_FOUND'); // anti-traversée
+    const ext = msg.imageUrl.split('.').pop()!.toLowerCase();
+    const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
+    return { absPath: path.join(DM_DIR, msg.imageUrl), mime };
+  }
+
   /** Supprime un message : AUTEUR SEUL (pas de modération staff en privé). Pierre tombale idempotente. */
   async deleteMessage(conversationId: string, meId: string, messageId: string): Promise<DmMessageDTO> {
     await this.assertParticipant(conversationId, meId);
@@ -280,15 +329,18 @@ export class MessagingService {
       data: { deletedAt: new Date(), deletedById: meId },
       select: MSG_SELECT,
     });
-    // ⚠️ Tâche 8 : déplacer l'unlink APRÈS l'update pierre tombale (fichier supprimé seulement si le message l'est).
-    if (msg.imageUrl) this.unlinkImage(msg.imageUrl); // best-effort (défini en tâche 8)
+    // Unlink APRÈS l'update pierre tombale : le fichier n'est supprimé que si le message l'est.
+    if (msg.imageUrl) this.unlinkImage(msg.imageUrl);
     const dto = toMessageDTO(updated);
     SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
     return dto;
   }
 
-  /** Stub rempli en tâche 8 (photos). */
-  private unlinkImage(_relPath: string): void { /* no-op avant la tâche 8 */ }
+  /** Suppression best-effort du fichier photo (confidentialité) — jamais bloquant. */
+  private unlinkImage(relPath: string): void {
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(relPath)) return;
+    fs.promises.unlink(path.join(DM_DIR, relPath)).catch(() => {});
+  }
 
   /** Marque la conversation lue : curseur lastReadAt + notifs dm lues + broadcast dm_read (✓✓ live). */
   async markRead(conversationId: string, meId: string): Promise<{ lastReadAt: string }> {

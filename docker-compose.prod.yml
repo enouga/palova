@@ -57,6 +57,8 @@ services:
     volumes:
       # Fichiers uploadés (avatars) — sans volume, perdus à chaque rebuild.
       - backend_uploads:/app/uploads
+      # Photos de messagerie privée (jamais servies statiquement).
+      - backend_uploads_private:/app/uploads-private
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,3 +104,4 @@ volumes:
   caddy_data:
   caddy_config:
   backend_uploads:
+  backend_uploads_private:

@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { MessagingService } from '../services/messaging.service';
 import { SSEService } from '../services/sse.service';
@@ -117,6 +118,37 @@ conversationsRouter.post('/:id/read', authMiddleware, async (req: AuthRequest, r
 conversationsRouter.post('/:id/typing', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await messagingService.typing(asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
+});
+
+const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Message photo : multipart { image, body? } — 5 Mo max, JPEG/PNG/WebP.
+conversationsRouter.post('/:id/images', authMiddleware, (req: AuthRequest, res: Response, next: NextFunction) => {
+  imageUpload.single('image')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      if (!req.file) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+      const caption = typeof (req.body as { body?: unknown })?.body === 'string' ? (req.body as { body: string }).body : '';
+      res.json(await messagingService.createImageMessage(asString(req.params.id), req.user!.id, req.file, caption));
+    } catch (e) { handleError(e, res, next); }
+  });
+});
+
+// Streaming authentifié de la photo (les <img> ne posent pas d'Authorization → token en query).
+conversationsRouter.get('/:id/messages/:messageId/image', async (req: AuthRequest, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  let userId: string;
+  try { userId = (jwt.verify(token, process.env.JWT_SECRET!) as { id: string }).id; }
+  catch { return void res.status(401).end(); }
+  try {
+    const { absPath, mime } = await messagingService.imagePathFor(asString(req.params.id), userId, asString(req.params.messageId));
+    res.sendFile(absPath, { headers: { 'Content-Type': mime, 'Cache-Control': 'private, max-age=31536000, immutable' } });
+  } catch { res.status(404).end(); }
 });
 
 // Flux SSE du fil. EventSource ne pose pas d'en-tête Authorization → token en query + garde.
