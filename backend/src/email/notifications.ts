@@ -1305,3 +1305,8 @@ export async function notifyReservationReminder(reservationId: string, window: '
     });
   }
 }
+
+/** Stub Task 6 — remplacé par l'implémentation complète (notif dm.message + email coalescé). */
+export async function notifyDirectMessage(_conversationId: string, _messageId: string, _authorUserId: string): Promise<void> {
+  // no-op jusqu'à la tâche 6
+}
