@@ -469,6 +469,13 @@ model User {
   followsReceived         Follow[] @relation("FollowsReceived")
   friendshipsA           Friendship[] @relation("FriendshipA")
   friendshipsB           Friendship[] @relation("FriendshipB")
+  conversationsA          Conversation[] @relation("ConversationsAsA")
+  conversationsB          Conversation[] @relation("ConversationsAsB")
+  conversationParticipations ConversationParticipant[]
+  directMessages          DirectMessage[]
+  messageReactions        MessageReaction[]
+  blocksGiven             UserBlock[] @relation("BlocksGiven")
+  blocksReceived          UserBlock[] @relation("BlocksReceived")
 
   @@map("users")
 }
@@ -1197,6 +1204,7 @@ enum NotificationCategory {
   REMINDERS
   OPEN_MATCH_CHAT
   SOCIAL
+  DIRECT_MESSAGES
 }
 
 enum NotificationChannel {
@@ -1354,4 +1362,90 @@ model Friendship {
   @@unique([userAId, userBId])
   @@index([userBId])
   @@map("friendships")
+}
+
+/// Conversation privée 1-à-1, GLOBALE (une seule par paire, tous clubs confondus).
+/// clubId = club de contexte à la création (branding notifs/emails), PAS une frontière d'accès.
+model Conversation {
+  id            String    @id @default(cuid())
+  userAId       String    @map("user_a_id") // paire canonique userAId < userBId (comme Friendship)
+  userBId       String    @map("user_b_id")
+  clubId        String?   @map("club_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastMessageAt DateTime? @map("last_message_at") // tri de la boîte de réception
+
+  userA        User @relation("ConversationsAsA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB        User @relation("ConversationsAsB", fields: [userBId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     DirectMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+  @@map("conversations")
+}
+
+/// État PAR PERSONNE : lastReadAt = curseur de lecture → ✓✓ et compteurs de non-lus exacts.
+model ConversationParticipant {
+  id             String    @id @default(cuid())
+  conversationId String    @map("conversation_id")
+  userId         String    @map("user_id")
+  lastReadAt     DateTime? @map("last_read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+/// Message privé. Soft-delete pierre tombale (pattern OpenMatchMessage). body ≤ 2000 car.
+/// imageUrl = chemin RELATIF dans uploads-private/dm (jamais servi statiquement).
+model DirectMessage {
+  id             String    @id @default(cuid())
+  conversationId String    @map("conversation_id")
+  authorId       String    @map("author_id")
+  body           String
+  imageUrl       String?   @map("image_url")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedById    String?   @map("deleted_by_id")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions    MessageReaction[]
+
+  @@index([conversationId, createdAt])
+  @@map("direct_messages")
+}
+
+/// Réaction emoji (une par emoji et par utilisateur).
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
+}
+
+/// Blocage GLOBAL (comme Follow). Un blocage dans un sens ou l'autre gèle l'envoi des deux côtés.
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("user_blocks")
 }
