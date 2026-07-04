@@ -72,7 +72,10 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
     { key: 'search',    label: 'Trouver' },
   ];
 
-  const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderBottom: `1px solid ${th.line}` };
+  // flexWrap — sur mobile, les actions (💬 + Suivre + bouton ami) replient EN BLOC sous le
+  // nom au lieu de déborder de la carte (les boutons sont tous en white-space: nowrap).
+  const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, rowGap: 6, padding: '8px 4px', borderBottom: `1px solid ${th.line}` };
+  const actionsStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto' };
   const identity = (f: { id: string; firstName: string; lastName: string; avatarUrl?: string | null; level?: Friend['level'] }) => (
     <>
       <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl ?? null} size={36} color={colorForSeed(f.id)} />
@@ -116,9 +119,11 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
           {requests.received.map((f) => (
             <div key={`rec-${f.id}`} style={rowStyle}>
               {identity(f)}
-              {msgBtn(f)}
-              <button type="button" disabled={busyId === f.id} style={btnStyle(true)} onClick={() => respond(f.id, true)}>Accepter</button>
-              <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => respond(f.id, false)}>Refuser</button>
+              <span style={actionsStyle}>
+                {msgBtn(f)}
+                <button type="button" disabled={busyId === f.id} style={btnStyle(true)} onClick={() => respond(f.id, true)}>Accepter</button>
+                <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => respond(f.id, false)}>Refuser</button>
+              </span>
             </div>
           ))}
           {requests.sent.length > 0 && (
@@ -127,8 +132,10 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
           {requests.sent.map((f) => (
             <div key={`sent-${f.id}`} style={rowStyle}>
               {identity(f)}
-              {msgBtn(f)}
-              <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => cancelSent(f.id)}>Annuler</button>
+              <span style={actionsStyle}>
+                {msgBtn(f)}
+                <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => cancelSent(f.id)}>Annuler</button>
+              </span>
             </div>
           ))}
         </div>
@@ -141,9 +148,11 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
             : searchResults.map((r) => (
                 <div key={r.id} style={rowStyle}>
                   {identity(r)}
-                  {msgBtn(r)}
-                  <FollowButton slug={slug} userId={r.id} token={token} initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
-                  <FriendButton slug={slug} userId={r.id} token={token} relation={r.friend ?? { status: 'none', requestable: false }} onChange={reload} />
+                  <span style={actionsStyle}>
+                    {msgBtn(r)}
+                    <FollowButton slug={slug} userId={r.id} token={token} initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
+                    <FriendButton slug={slug} userId={r.id} token={token} relation={r.friend ?? { status: 'none', requestable: false }} onChange={reload} />
+                  </span>
                 </div>
               ))}
         </>
@@ -156,10 +165,12 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
             : list.map((f) => (
                 <div key={f.id} style={rowStyle}>
                   {identity(f)}
-                  {msgBtn(f)}
-                  {tab === 'amis'
-                    ? <FriendButton slug={slug} userId={f.id} token={token} relation={{ status: 'friends', requestable: false }} onChange={reload} />
-                    : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following' || f.mutual, mutual: f.mutual }} onChange={reload} />}
+                  <span style={actionsStyle}>
+                    {msgBtn(f)}
+                    {tab === 'amis'
+                      ? <FriendButton slug={slug} userId={f.id} token={token} relation={{ status: 'friends', requestable: false }} onChange={reload} />
+                      : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following' || f.mutual, mutual: f.mutual }} onChange={reload} />}
+                  </span>
                 </div>
               ));
         })()
