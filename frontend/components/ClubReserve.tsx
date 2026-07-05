@@ -187,23 +187,23 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
         )}
 
         {(myPackages.length > 0 || mySubs.length > 0 || quotaStatus) && (
-          // Soldes, abonnements et quotas : pastilles de MÊME taille partout (Réserver,
-          // Mes réservations, BookingModal). Largeur bornée + colonnes égales 1fr/1fr →
-          // 2 pastilles par ligne (dont pleines & creuses ensemble), jamais de débordement.
-          <div style={{ margin: '14px 20px 0', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(myPackages.length > 0 || mySubs.length > 0) && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {myPackages.map((p) => {
-                  const parts = packageParts(p);
-                  return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} fill />;
-                })}
-                {mySubs.map((s) => (
-                  <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné" fill
-                    value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
-                ))}
-              </div>
-            )}
-            {quotaStatus && <QuotaStatus status={quotaStatus} compact />}
+          // Soldes, abonnements et quotas : UNE rangée défilante pleine largeur — pastilles à
+          // largeur naturelle (jamais tronquées), scrollbar masquée (.sp-scroll-x) + fondu au
+          // bord droit pour signaler le débordement (swipe, même geste que la bande de dates).
+          // Quotas en mode inline : le suffixe de période vit dans chaque jauge.
+          <div style={{ margin: '14px 0 0', position: 'relative' }}>
+            <div data-testid="balances-row" className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '0 20px' }}>
+              {myPackages.map((p) => {
+                const parts = packageParts(p);
+                return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} />;
+              })}
+              {mySubs.map((s) => (
+                <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné"
+                  value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
+              ))}
+              <QuotaStatus status={quotaStatus} inline />
+            </div>
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 28, background: `linear-gradient(90deg, ${th.bg}00, ${th.bg})`, pointerEvents: 'none' }} />
           </div>
         )}
 

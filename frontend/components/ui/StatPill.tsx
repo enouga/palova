@@ -41,7 +41,9 @@ export function StatPill({ icon, accent, label, value, meter, warn, fill, compac
     <span
       data-warn={warn ? '1' : undefined}
       style={{
-        display: fill ? 'flex' : 'inline-flex', width: fill ? '100%' : undefined, minWidth: fill ? 0 : undefined,
+        // Non-fill : largeur naturelle intouchable — dans une rangée en overflow (Réserver),
+        // sans ça la colonne texte (minWidth 0) se compresse et ré-ellipsise la valeur.
+        display: fill ? 'flex' : 'inline-flex', width: fill ? '100%' : undefined, minWidth: fill ? 0 : undefined, flexShrink: fill ? undefined : 0,
         alignItems: 'center', gap: 11,
         background: th.surface, borderRadius: 999, padding: '7px 16px 7px 8px', whiteSpace: 'nowrap',
         boxShadow: `inset 0 0 0 1px ${warn ? `${ACCENTS.coral}55` : th.line}, ${th.shadowSoft}`,
