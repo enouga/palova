@@ -42,3 +42,7 @@ Nouvelle suite `frontend/__tests__/ClubReserve.balances.test.tsx` (mocks calqué
 - la rangée `data-testid="balances-row"` avec classe `sp-scroll-x` est rendue ;
 - la valeur d'abonnement complète « padel · h. creuses » est présente ;
 - « cette semaine » apparaît **deux fois** (une par jauge, inline) — discriminant vs l'ancien mode compact (une occurrence centrée).
+
+## Évolution (même jour) — quotas seuls
+
+Décision user : le porte-monnaie/carnets et la chip « Abonné » sont **retirés de la rangée** — ces informations vivent déjà dans le menu profil (`ProfileMenu` : chip Abonné + soldes prépayés du club courant), pas de doublon sur Réserver. La rangée ne garde que les **jauges heures pleines / heures creuses** (`<QuotaStatus inline />`), condition d'affichage = `quotaStatus` seul. Effet de bord bienvenu : 2 pastilles au lieu de 4 → tout tient sans scroll dès ~600px (le débordement desktop de la v1 disparaît). `myPackages`/`mySubs` restent **chargés** par la page (BookingModal : « payer avec mon solde », couverture abo). Tests mis à jour : quotas seuls dans la rangée, porte-monnaie/Abonné absents du rendu, rangée absente sans quota même avec des soldes.

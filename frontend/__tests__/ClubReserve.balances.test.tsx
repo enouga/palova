@@ -52,7 +52,12 @@ const club = {
   ],
 } as never;
 
-describe('ClubReserve — rangée soldes & quotas défilante', () => {
+// Porte-monnaie + abonnement : jamais affichés sur Réserver (déjà dans le menu profil),
+// mais toujours chargés (BookingModal : « payer avec mon solde », couverture abo).
+const wallet = [{ id: 'p1', kind: 'WALLET', amountRemaining: '130', creditsRemaining: null, expiresAt: null }];
+const subs = [{ id: 's1', sportKeys: ['padel'], offPeakOnly: true }];
+
+describe('ClubReserve — rangée quotas défilante', () => {
   beforeEach(() => {
     document.cookie = 'token=abc; path=/';
     localStorage.clear();
@@ -65,13 +70,9 @@ describe('ClubReserve — rangée soldes & quotas défilante', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; jest.clearAllMocks(); });
 
-  it('rend soldes, abonnement (texte complet) et quotas sur une rangée défilante, suffixe dans chaque jauge', async () => {
-    mocked.getMyClubPackages.mockResolvedValue([
-      { id: 'p1', kind: 'WALLET', amountRemaining: '130', creditsRemaining: null, expiresAt: null },
-    ] as never);
-    mocked.getMyClubSubscriptions.mockResolvedValue([
-      { id: 's1', sportKeys: ['padel'], offPeakOnly: true },
-    ] as never);
+  it('rend les quotas seuls sur la rangée défilante, suffixe dans chaque jauge — pas de porte-monnaie ni d\'Abonné', async () => {
+    mocked.getMyClubPackages.mockResolvedValue(wallet as never);
+    mocked.getMyClubSubscriptions.mockResolvedValue(subs as never);
     mocked.getMyQuotaStatus.mockResolvedValue({
       model: 'WEEKLY',
       peak: { used: 15, limit: 100 },
@@ -80,23 +81,26 @@ describe('ClubReserve — rangée soldes & quotas défilante', () => {
 
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
 
-    // Valeur d'abonnement complète (largeur naturelle, plus de cellule 1fr qui tronque).
-    expect(await screen.findByText('padel · h. creuses')).toBeInTheDocument();
-    expect(screen.getByText('130,00 €')).toBeInTheDocument();
-
-    // Une seule rangée défilante (scrollbar masquée) contenant toutes les pastilles.
-    const row = screen.getByTestId('balances-row');
+    // Une seule rangée défilante (scrollbar masquée) contenant les deux jauges.
+    const row = await screen.findByTestId('balances-row');
     expect(row.classList.contains('sp-scroll-x')).toBe(true);
-    expect(row).toContainElement(screen.getByText('padel · h. creuses'));
     expect(row).toContainElement(screen.getByText('15/100'));
     expect(row).toContainElement(screen.getByText('0/67'));
 
-    // Quotas en mode inline : le suffixe de période vit DANS chaque jauge
-    // (2 occurrences), plus de libellé orphelin centré sous la rangée.
+    // Le suffixe de période vit DANS chaque jauge (2 occurrences), pas de libellé orphelin.
     expect(screen.getAllByText('cette semaine')).toHaveLength(2);
+
+    // Soldes et abonnement : déjà dans le menu profil → pas de doublon sur Réserver.
+    expect(screen.queryByText('130,00 €')).not.toBeInTheDocument();
+    expect(screen.queryByText('padel · h. creuses')).not.toBeInTheDocument();
+    expect(screen.queryByText('Porte-monnaie')).not.toBeInTheDocument();
+    expect(screen.queryByText('Abonné')).not.toBeInTheDocument();
   });
 
-  it("n'affiche pas la rangée sans solde, abonnement ni quota", async () => {
+  it("n'affiche pas la rangée sans quota, même avec porte-monnaie et abonnement", async () => {
+    mocked.getMyClubPackages.mockResolvedValue(wallet as never);
+    mocked.getMyClubSubscriptions.mockResolvedValue(subs as never);
+
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
     await screen.findByText(/Aucun terrain/);
     expect(screen.queryByTestId('balances-row')).not.toBeInTheDocument();

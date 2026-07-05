@@ -3,9 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
-import { packageParts } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
@@ -17,7 +15,6 @@ import DateSelector from '@/components/DateSelector';
 import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
-import { StatPill } from '@/components/ui/StatPill';
 import { SportPicker } from '@/components/reserve/SportPicker';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
@@ -186,21 +183,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.5, margin: '16px 20px 0' }}>{club.description}</p>
         )}
 
-        {(myPackages.length > 0 || mySubs.length > 0 || quotaStatus) && (
-          // Soldes, abonnements et quotas : UNE rangée défilante pleine largeur — pastilles à
-          // largeur naturelle (jamais tronquées), scrollbar masquée (.sp-scroll-x) + fondu au
-          // bord droit pour signaler le débordement (swipe, même geste que la bande de dates).
-          // Quotas en mode inline : le suffixe de période vit dans chaque jauge.
+        {quotaStatus && (
+          // Quotas seuls : porte-monnaie/carnets et abonnement vivent déjà dans le menu profil
+          // (pas de doublon ici — ils restent chargés pour BookingModal : payer avec son solde,
+          // couverture abo). Rangée défilante pleine largeur, pastilles à largeur naturelle,
+          // scrollbar masquée (.sp-scroll-x) + fondu au bord droit signalant le débordement
+          // (swipe, même geste que la bande de dates). Suffixe de période dans chaque jauge.
           <div style={{ margin: '14px 0 0', position: 'relative' }}>
             <div data-testid="balances-row" className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '0 20px' }}>
-              {myPackages.map((p) => {
-                const parts = packageParts(p);
-                return <StatPill key={p.id} icon={parts.icon} accent={ACCENTS.emerald} label={parts.label} value={parts.value} />;
-              })}
-              {mySubs.map((s) => (
-                <StatPill key={s.id} icon="check" accent={th.accent} label="Abonné"
-                  value={`${s.sportKeys.join('/')}${s.offPeakOnly ? ' · h. creuses' : ''}`} />
-              ))}
               <QuotaStatus status={quotaStatus} inline />
             </div>
             <div aria-hidden="true" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 28, background: `linear-gradient(90deg, ${th.bg}00, ${th.bg})`, pointerEvents: 'none' }} />
