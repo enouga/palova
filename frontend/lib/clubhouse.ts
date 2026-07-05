@@ -1,4 +1,4 @@
-import { ClubAvailability, Sponsor, TimeSlot, Tournament } from '@/lib/api';
+import { Announcement, ClubAvailability, Sponsor, TimeSlot, Tournament } from '@/lib/api';
 
 export interface UpcomingSlot {
   resourceId: string;
@@ -33,6 +33,25 @@ export function pickUpcomingSlots(avail: ClubAvailability[], now: Date, max = 3)
 
 // NB : le bloc « Prochains events » du Club-house fusionne désormais tournois +
 // animations via mergeAgenda (lib/events.ts) — l'ancien pickUpcomingTournaments a disparu.
+
+/** Annonce expirée (masquée partout : hero, bento, liste texte). */
+export function announcementExpired(a: Pick<Announcement, 'validUntil'>, now: Date): boolean {
+  return !!a.validUntil && new Date(a.validUntil) <= now;
+}
+
+/** Affiches actives : annonces AVEC image, non expirées, hors hero épinglé, plafond 5. */
+export function activePosters(anns: Announcement[], now: Date, heroId: string | null = null): Announcement[] {
+  return anns
+    .filter((a) => a.imageUrl && a.id !== heroId && !announcementExpired(a, now))
+    .slice(0, 5);
+}
+
+export type PosterLayout = 'single' | 'duo' | 'bento';
+
+/** Forme de la mosaïque selon le nombre d'affiches. */
+export function posterLayout(n: number): PosterLayout {
+  return n <= 1 ? 'single' : n === 2 ? 'duo' : 'bento';
+}
 
 /** L'offre d'un partenaire est-elle affichable ? Texte présent et date de fin non dépassée. */
 export function offerIsActive(s: Pick<Sponsor, 'offerText' | 'offerUntil'>, now: Date): boolean {

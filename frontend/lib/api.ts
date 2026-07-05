@@ -502,6 +502,55 @@ export const api = {
     request<Announcement>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
   adminDeleteAnnouncement: (clubId: string, id: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'DELETE' }, token),
+  /** Upload de l'affiche d'une annonce : fetch dédié (FormData), pattern uploadMyAvatar. */
+  adminUploadAnnouncementImage: async (clubId: string, id: string, file: File, token: string): Promise<Announcement> => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/announcements/${id}/image`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<Announcement>;
+  },
+
+  // --- Club-house v2 : présentation, offres, top du mois ---
+  getClubPresentation: (slug: string) => request<ClubPresentation>(`/api/clubs/${encodeURIComponent(slug)}/presentation`),
+  getClubOffers: (slug: string) => request<PublicOffers>(`/api/clubs/${encodeURIComponent(slug)}/offers`),
+  getClubTopMonth: (slug: string) => request<TopMonthEntry[]>(`/api/clubs/${encodeURIComponent(slug)}/top-month`),
+  createOfferPlanIntent: (slug: string, planId: string, token: string) =>
+    request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
+      `/api/clubs/${encodeURIComponent(slug)}/offers/plans/${planId}/intent`, { method: 'POST' }, token),
+  createOfferPackageIntent: (slug: string, templateId: string, token: string) =>
+    request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
+      `/api/clubs/${encodeURIComponent(slug)}/offers/packages/${templateId}/intent`, { method: 'POST' }, token),
+  confirmOfferPayment: (slug: string, stripePaymentIntentId: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${encodeURIComponent(slug)}/offers/confirm`,
+      { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) }, token),
+  adminGetPresentation: (clubId: string, token: string) =>
+    request<ClubPresentation>(`/api/clubs/${clubId}/admin/presentation`, {}, token),
+  adminUpdatePresentation: (clubId: string, body: Partial<Pick<ClubPresentation, 'presentationText' | 'contactPhone' | 'contactEmail' | 'openingHoursText'>>, token: string) =>
+    request<ClubPresentation>(`/api/clubs/${clubId}/admin/presentation`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  adminUpdateClubPhoto: (clubId: string, id: string, body: { caption?: string | null; sortOrder?: number }, token: string) =>
+    request<ClubPhoto>(`/api/clubs/${clubId}/admin/photos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  adminDeleteClubPhoto: (clubId: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/photos/${id}`, { method: 'DELETE' }, token),
+  /** Upload d'une photo de galerie : fetch dédié (FormData), pattern uploadMyAvatar. */
+  adminAddClubPhoto: async (clubId: string, file: File, caption: string | undefined, token: string): Promise<ClubPhoto> => {
+    const form = new FormData();
+    form.append('photo', file);
+    if (caption) form.append('caption', caption);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/photos`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<ClubPhoto>;
+  },
 
   adminGetSponsors: (clubId: string, token: string) =>
     request<Sponsor[]>(`/api/clubs/${clubId}/admin/sponsors`, {}, token),
@@ -1325,6 +1374,7 @@ export interface ClubAdminDetail {
   status: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1418,6 +1468,7 @@ export type UpdateClubBody = Partial<{
   defaultThemeMode: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
   bookingReleaseMode: BookingReleaseMode;
@@ -1682,17 +1733,46 @@ export type CreatePackageTemplateBody = {
 };
 export type UpdatePackageTemplateBody = Partial<{ name: string; price: number; validityDays: number | null; isActive: boolean }>;
 
+export type AnnouncementKind = 'INFO' | 'OFFER' | 'TOURNAMENT' | 'EVENT';
+
 export interface Announcement {
   id: string;
   title: string;
   body: string;
   linkUrl: string | null;
   imageUrl: string | null;
+  kind: AnnouncementKind;
+  validUntil: string | null;
   isPublished: boolean;
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ClubPhoto { id: string; url: string; caption: string | null; sortOrder: number; }
+
+export interface ClubPresentation {
+  presentationText: string | null;
+  coverImageUrl: string | null;
+  address: string; city: string | null;
+  latitude: number | null; longitude: number | null;
+  contactPhone: string | null; contactEmail: string | null;
+  openingHoursText: string | null;
+  photos: ClubPhoto[];
+}
+
+export interface PublicPlan {
+  id: string; name: string; monthlyPrice: string; commitmentMonths: number;
+  offPeakOnly: boolean; benefit: 'INCLUDED' | 'DISCOUNT'; discountPercent: number | null;
+  dailyCap: number | null; weeklyCap: number | null; sportKeys: string[];
+}
+export interface PublicPackageTemplate {
+  id: string; name: string; kind: 'ENTRIES' | 'WALLET'; price: string;
+  entriesCount: number | null; walletAmount: string | null; validityDays: number | null;
+}
+export interface PublicOffers { plans: PublicPlan[]; packages: PublicPackageTemplate[]; onlinePurchase: boolean; }
+
+export interface TopMonthEntry { userId: string; firstName: string; lastName: string; avatarUrl: string | null; wins: number; }
 
 export interface Sponsor {
   id: string;
@@ -1708,7 +1788,7 @@ export interface Sponsor {
   createdAt: string;
 }
 
-export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string; isPublished: boolean; pinned: boolean; }>;
+export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
 export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
 
 export type ReservationType = 'COURT' | 'COACHING' | 'TOURNAMENT' | 'EVENT';

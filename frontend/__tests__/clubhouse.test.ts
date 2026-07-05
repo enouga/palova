@@ -1,5 +1,5 @@
-import { offerIsActive, pickUpcomingSlots, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
-import { ClubAvailability, Tournament } from '../lib/api';
+import { activePosters, announcementExpired, offerIsActive, pickUpcomingSlots, posterLayout, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
+import { Announcement, ClubAvailability, Tournament } from '../lib/api';
 
 const slot = (startTime: string, available = true) =>
   ({ startTime, endTime: startTime, available, price: '25', offPeak: false });
@@ -59,5 +59,43 @@ describe('offerIsActive', () => {
 describe('todayISO', () => {
   it('formate la date injectée en YYYY-MM-DD (UTC)', () => {
     expect(todayISO(new Date('2026-06-10T15:30:00Z'))).toBe('2026-06-10');
+  });
+});
+
+const ann = (over: Partial<Announcement>): Announcement => ({
+  id: 'a', title: 't', body: 'b', linkUrl: null, imageUrl: null, isPublished: true,
+  pinned: false, kind: 'INFO', validUntil: null, createdAt: '', updatedAt: '', ...over,
+});
+
+describe('activePosters', () => {
+  const now = new Date('2026-07-05T12:00:00Z');
+  it('garde les annonces avec image non expirées, exclut le hero, plafond 5', () => {
+    const list = [
+      ann({ id: 'hero', imageUrl: '/u/h.jpg', pinned: true }),
+      ann({ id: 'ok', imageUrl: '/u/1.jpg' }),
+      ann({ id: 'expired', imageUrl: '/u/2.jpg', validUntil: '2026-07-01T23:59:59.999Z' }),
+      ann({ id: 'noimg' }),
+      ...[3, 4, 5, 6, 7, 8].map((i) => ann({ id: `p${i}`, imageUrl: `/u/${i}.jpg` })),
+    ];
+    const out = activePosters(list, now, 'hero');
+    expect(out.map((a) => a.id)).toEqual(['ok', 'p3', 'p4', 'p5', 'p6']);
+  });
+});
+
+describe('posterLayout', () => {
+  it('single / duo / bento', () => {
+    expect(posterLayout(1)).toBe('single');
+    expect(posterLayout(2)).toBe('duo');
+    expect(posterLayout(3)).toBe('bento');
+    expect(posterLayout(5)).toBe('bento');
+  });
+});
+
+describe('announcementExpired', () => {
+  const now = new Date('2026-07-05T12:00:00Z');
+  it('null = jamais expirée ; date passée = expirée', () => {
+    expect(announcementExpired({ validUntil: null }, now)).toBe(false);
+    expect(announcementExpired({ validUntil: '2026-07-01T23:59:59.999Z' }, now)).toBe(true);
+    expect(announcementExpired({ validUntil: '2026-08-01T23:59:59.999Z' }, now)).toBe(false);
   });
 });
