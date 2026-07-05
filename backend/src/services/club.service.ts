@@ -54,6 +54,29 @@ export function normalizeQuickPaymentMethods(input: unknown): string[] {
   return out;
 }
 
+/** Clés de sections du Club-house configurables par le club (ordre + visibilité). */
+const CLUB_HOUSE_SECTION_KEYS = ['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements', 'sponsors'] as const;
+
+/** Valide/normalise la config des sections du Club-house. null/invalide → DbNull (= ordre
+ *  adaptatif par défaut). Clé inconnue rejetée, doublon ignoré (1re occurrence gagne),
+ *  clés connues manquantes complétées en fin (visibles) → la config stockée est toujours
+ *  complète. Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
+export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (!Array.isArray(input)) return Prisma.DbNull;
+  const allowed = new Set<string>(CLUB_HOUSE_SECTION_KEYS);
+  const seen = new Set<string>();
+  const out: { key: string; visible: boolean }[] = [];
+  for (const e of input) {
+    const key = (e as { key?: unknown } | null)?.key;
+    if (typeof key !== 'string' || !allowed.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, visible: (e as { visible?: unknown }).visible !== false });
+  }
+  if (out.length === 0) return Prisma.DbNull;
+  for (const key of CLUB_HOUSE_SECTION_KEYS) if (!seen.has(key)) out.push({ key, visible: true });
+  return out as unknown as Prisma.InputJsonValue;
+}
+
 /** Transforme un nom en slug URL (minuscules, tirets, sans accents). Miroir : frontend/lib/slug.ts — garder les deux synchronisés. */
 export function slugify(input: string): string {
   return input
@@ -191,6 +214,7 @@ export class ClubService {
         levelSystemEnabled: true,
         cancellationCutoffHours: true,
         refundOnCancelWithinCutoff: true,
+        clubHouseSections: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -258,6 +282,7 @@ export class ClubService {
         requireOnlinePayment: true,
         requireCardFingerprint: true,
         quickPaymentMethods: true,
+        clubHouseSections: true,
         legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
         legalRepresentative: true, legalEmail: true, legalPhone: true,
       },
@@ -282,6 +307,7 @@ export class ClubService {
     requireOnlinePayment?: boolean;
     requireCardFingerprint?: boolean;
     quickPaymentMethods?: string[];
+    clubHouseSections?: unknown;
     legalEntityName?: string;
     legalForm?: string;
     siret?: string;
@@ -341,6 +367,7 @@ export class ClubService {
         ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
         ...(Array.isArray(params.quickPaymentMethods) ? { quickPaymentMethods: normalizeQuickPaymentMethods(params.quickPaymentMethods) } : {}),
+        ...(params.clubHouseSections !== undefined ? { clubHouseSections: normalizeClubHouseSections(params.clubHouseSections) } : {}),
         ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),
         ...(params.legalForm !== undefined ? { legalForm: legal(params.legalForm) } : {}),
         ...(params.siret !== undefined ? { siret: legal(params.siret) } : {}),
