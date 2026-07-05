@@ -269,6 +269,11 @@ model Club {
   // UPCOMING = résas à venir simultanées ; WEEKLY = semaine calendaire lun-dim (fuseau club).
   // Limite null = illimité, 0 = bloqué. Une résa compte en creuses ssi 100 % de ses minutes le sont.
   bookingQuotas    Json?      @map("booking_quotas")
+  // Sections du Club-house : ordre + visibilité choisis par l'admin, appliqués à tous.
+  // Tableau ordonné [{ "key": "matches", "visible": true }, ...] — clés connues :
+  // matches/agenda/posters/top/offers/clubCard/announcements + sponsors (visibilité
+  // seule, position fixe en bas). null = ordre adaptatif par défaut (visiteur/membre).
+  clubHouseSections Json? @map("club_house_sections")
   // Délais (heures avant le début d'une réservation) au-delà desquels le joueur ne
   // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
   playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")

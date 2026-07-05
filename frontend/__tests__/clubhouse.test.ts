@@ -1,5 +1,5 @@
-import { activePosters, announcementExpired, clubPulse, matchSeats, offerIsActive, pickUpcomingSlots, posterLayout, tournamentPlacesLabel, todayISO, UpcomingSlot } from '../lib/clubhouse';
-import { Announcement, ClubAvailability, Tournament } from '../lib/api';
+import { activePosters, announcementExpired, clubPulse, fullSectionSettings, hiddenSectionKeys, matchSeats, offerIsActive, pickUpcomingSlots, posterLayout, resolveSections, SECTION_DEFS, SECTION_KEYS, SPONSORS_DEF, tournamentPlacesLabel, todayISO, UpcomingSlot } from '../lib/clubhouse';
+import { Announcement, ClubAvailability, ClubHouseSectionSetting, Tournament } from '../lib/api';
 
 const slot = (startTime: string, available = true) =>
   ({ startTime, endTime: startTime, available, price: '25', offPeak: false });
@@ -129,5 +129,81 @@ describe('matchSeats', () => {
     expect(matchSeats({ maxPlayers: 4, players: [{}, {}] })).toBe(2);
     expect(matchSeats({ maxPlayers: 4, players: [{}, {}, {}, {}, {}] })).toBe(0);
     expect(matchSeats({ maxPlayers: 12, players: [{}] })).toBe(5);
+  });
+});
+
+describe('resolveSections', () => {
+  it('config null → ordres adaptatifs historiques (membre ≠ visiteur), sponsors visibles', () => {
+    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements']);
+    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'posters', 'offers', 'top', 'announcements']);
+    expect(resolveSections(undefined, false).sponsorsVisible).toBe(true);
+  });
+
+  it('config custom → même ordre pour tous, sections masquées exclues, sponsorsVisible', () => {
+    const config: ClubHouseSectionSetting[] = [
+      { key: 'top', visible: true },
+      { key: 'matches', visible: false },
+      { key: 'agenda', visible: true },
+      { key: 'posters', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'clubCard', visible: true },
+      { key: 'announcements', visible: true },
+      { key: 'sponsors', visible: false },
+    ];
+    const member = resolveSections(config, true);
+    const visitor = resolveSections(config, false);
+    expect(member.order).toEqual(visitor.order);
+    expect(member.order[0]).toBe('top');
+    expect(member.order).not.toContain('matches');
+    expect(member.order).not.toContain('sponsors');
+    expect(member.sponsorsVisible).toBe(false);
+  });
+
+  it('clé connue absente de la config → ajoutée en fin, visible (tolérance versions)', () => {
+    const { order } = resolveSections([{ key: 'announcements', visible: true }], true);
+    expect(order[0]).toBe('announcements');
+    expect(order).toHaveLength(7);
+  });
+
+  it('clé inconnue ignorée', () => {
+    const { order } = resolveSections([{ key: 'hero', visible: true } as never, { key: 'top', visible: true }], true);
+    expect(order[0]).toBe('top');
+    expect(order).not.toContain('hero');
+  });
+});
+
+describe('hiddenSectionKeys', () => {
+  it('null → rien de masqué', () => {
+    expect(hiddenSectionKeys(null).size).toBe(0);
+  });
+
+  it('sections masquées + sponsors ; clés complétées = visibles', () => {
+    const hidden = hiddenSectionKeys([
+      { key: 'top', visible: false },
+      { key: 'sponsors', visible: false },
+    ]);
+    expect(hidden.has('top')).toBe(true);
+    expect(hidden.has('sponsors')).toBe(true);
+    expect(hidden.has('matches')).toBe(false);
+  });
+});
+
+describe('fullSectionSettings / SECTION_DEFS', () => {
+  it('null → 8 entrées visibles, ordre par défaut membre + sponsors en fin', () => {
+    const full = fullSectionSettings(null);
+    expect(full).toHaveLength(8);
+    expect(full[0]).toEqual({ key: 'matches', visible: true });
+    expect(full[7].key).toBe('sponsors');
+    expect(full.every((e) => e.visible)).toBe(true);
+  });
+
+  it('config partielle → complétée sans doublon, 1re occurrence gagne', () => {
+    const full = fullSectionSettings([{ key: 'top', visible: false }, { key: 'top', visible: true }]);
+    expect(full).toHaveLength(8);
+    expect(full[0]).toEqual({ key: 'top', visible: false });
+  });
+
+  it('SECTION_DEFS + sponsors couvrent exactement SECTION_KEYS', () => {
+    expect([...SECTION_DEFS.map((d) => d.key), SPONSORS_DEF.key].sort()).toEqual([...SECTION_KEYS].sort());
   });
 });

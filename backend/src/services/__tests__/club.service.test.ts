@@ -803,3 +803,84 @@ describe('clubTopOfMonth', () => {
     expect(await service.clubTopOfMonth('slug')).toEqual([]);
   });
 });
+
+describe('normalizeClubHouseSections', () => {
+  const { normalizeClubHouseSections } = require('../club.service');
+  const { Prisma } = require('@prisma/client');
+
+  it('garde les entrées valides dans l\'ordre fourni et complète les clés manquantes en fin (visibles)', () => {
+    expect(normalizeClubHouseSections([
+      { key: 'top', visible: false },
+      { key: 'matches', visible: true },
+    ])).toEqual([
+      { key: 'top', visible: false },
+      { key: 'matches', visible: true },
+      { key: 'agenda', visible: true },
+      { key: 'posters', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'clubCard', visible: true },
+      { key: 'announcements', visible: true },
+      { key: 'sponsors', visible: true },
+    ]);
+  });
+
+  it('rejette les clés inconnues et dédoublonne (première occurrence gagne)', () => {
+    const out = normalizeClubHouseSections([
+      { key: 'hero', visible: false },
+      { key: 'matches', visible: false },
+      { key: 'matches', visible: true },
+      'nimporte',
+    ]) as { key: string; visible: boolean }[];
+    expect(out.find((e) => e.key === 'matches')).toEqual({ key: 'matches', visible: false });
+    expect(out.some((e) => e.key === 'hero')).toBe(false);
+    expect(out).toHaveLength(8);
+  });
+
+  it('visible absent ou non-false → true', () => {
+    const out = normalizeClubHouseSections([{ key: 'agenda' }]) as { key: string; visible: boolean }[];
+    expect(out[0]).toEqual({ key: 'agenda', visible: true });
+  });
+
+  it('non-tableau ou rien de valide → DbNull (reset)', () => {
+    expect(normalizeClubHouseSections(null)).toBe(Prisma.DbNull);
+    expect(normalizeClubHouseSections('x')).toBe(Prisma.DbNull);
+    expect(normalizeClubHouseSections([])).toBe(Prisma.DbNull);
+    expect(normalizeClubHouseSections([{ key: 'inconnu', visible: true }])).toBe(Prisma.DbNull);
+  });
+});
+
+describe('ClubService — sections du Club-house', () => {
+  let svc: ClubService;
+  beforeEach(() => { svc = new ClubService(); });
+
+  it('updateClub écrit la config normalisée (complète, clés inconnues rejetées)', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { clubHouseSections: [{ key: 'top', visible: false }, { key: 'nope', visible: true }] } as any);
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.clubHouseSections[0]).toEqual({ key: 'top', visible: false });
+    expect(arg.data.clubHouseSections).toHaveLength(8);
+    expect((arg.data.clubHouseSections as any[]).some((e) => e.key === 'nope')).toBe(false);
+  });
+
+  it('updateClub null → DbNull (retour à l\'ordre adaptatif)', async () => {
+    const { Prisma } = require('@prisma/client');
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { clubHouseSections: null } as any);
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.clubHouseSections).toBe(Prisma.DbNull);
+  });
+
+  it('getClubBySlug expose clubHouseSections', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ status: 'ACTIVE', clubSports: [] } as any);
+    await svc.getClubBySlug('demo');
+    const arg = (prismaMock.club.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.select.clubHouseSections).toBe(true);
+  });
+
+  it('getClubForAdmin expose clubHouseSections', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
+    expect(arg.select.clubHouseSections).toBe(true);
+  });
+});
