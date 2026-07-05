@@ -22,6 +22,8 @@ import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
 import { PresentationService } from '../services/presentation.service';
 import { OfferService } from '../services/offer.service';
+import { ensureActiveMembership } from '../services/membership';
+import { entryFeeCents, MIN_STRIPE_CENTS } from '../services/registrationPayment';
 import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
@@ -83,6 +85,11 @@ const ERROR_STATUS: Record<string, number> = {
   FRIEND_REQUESTS_DISABLED: 409,
   CANNOT_FRIEND_SELF:       400,
   REQUEST_NOT_FOUND:        404,
+  OFFER_NOT_FOUND:          404,
+  AMOUNT_TOO_SMALL:         400,
+  STRIPE_NOT_CONFIGURED:    409,
+  NOT_PAYABLE:              409,
+  UNAUTHORIZED:             403,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -185,6 +192,39 @@ router.get('/:slug/presentation', async (req, res, next) => {
 router.get('/:slug/offers', async (req, res, next) => {
   try { res.json(await offerService.listPublicOffers(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
+});
+
+const offerStripe = new StripeService();
+
+// Achat en ligne d'une formule : PaymentIntent (auth requis, adhésion créée à la volée).
+router.post('/:slug/offers/plans/:id/intent', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const slug = asString(req.params.slug);
+    const { id: clubId } = await ensureActiveMembership(slug, req.user!.id);
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { showOffersPublicly: true, stripeAccountId: true } });
+    if (!club?.showOffersPublicly) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: asString(req.params.id) } });
+    if (!plan || plan.clubId !== clubId || !plan.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
+    const amountCents = entryFeeCents(plan.monthlyPrice);
+    if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
+    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'plan', offerId: plan.id, amountCents });
+    res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/:slug/offers/packages/:id/intent', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const slug = asString(req.params.slug);
+    const { id: clubId } = await ensureActiveMembership(slug, req.user!.id);
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { showOffersPublicly: true, stripeAccountId: true } });
+    if (!club?.showOffersPublicly) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
+    const tpl = await prisma.packageTemplate.findUnique({ where: { id: asString(req.params.id) } });
+    if (!tpl || tpl.clubId !== clubId || !tpl.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
+    const amountCents = entryFeeCents(tpl.price);
+    if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
+    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'package', offerId: tpl.id, amountCents });
+    res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
+  } catch (err) { handleError(err, res, next); }
 });
 
 // Tournois publiés d'un club (à venir).

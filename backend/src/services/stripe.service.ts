@@ -255,6 +255,37 @@ export class StripeService {
     }
   }
 
+  /** PaymentIntent d'achat d'offre (abonnement 1re mensualité ou carnet), metadata pour le webhook. */
+  async createOfferPaymentIntent(params: {
+    clubId: string; userId: string; kind: 'plan' | 'package'; offerId: string; amountCents: number;
+  }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
+    const club = await prisma.club.findUnique({
+      where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!club?.stripeAccountId || club.stripeAccountStatus !== 'ACTIVE') throw new Error('STRIPE_NOT_CONFIGURED');
+    const customer = await this.createOrGetCustomer(params.clubId, params.userId);
+    const pi = await stripe.paymentIntents.create(
+      {
+        amount: params.amountCents, currency: 'eur', customer: customer.stripeCustomerId,
+        payment_method_types: ['card'],
+        metadata: {
+          [params.kind === 'plan' ? 'offerPlanId' : 'offerPackageTemplateId']: params.offerId,
+          offerUserId: params.userId,
+          clubId: params.clubId,
+        },
+      },
+      { stripeAccount: club.stripeAccountId },
+    );
+    if (!pi.client_secret) throw new Error('STRIPE_ERROR');
+    const customerSessionClientSecret = await this.buildCustomerSession(club.stripeAccountId, customer.stripeCustomerId);
+    return { clientSecret: pi.client_secret, customerSessionClientSecret };
+  }
+
+  /** Relit un PaymentIntent sur le compte connecté (vérif statut à la confirmation client). */
+  async retrievePaymentIntent(id: string, stripeAccountId: string) {
+    return stripe.paymentIntents.retrieve(id, {}, { stripeAccount: stripeAccountId });
+  }
+
   async chargeNoShow(params: {
     clubId: string;
     userId: string;

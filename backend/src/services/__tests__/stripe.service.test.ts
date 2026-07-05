@@ -601,6 +601,53 @@ describe('getCardDetails', () => {
   });
 });
 
+describe('createOfferPaymentIntent', () => {
+  it('pose la metadata offerPlanId/offerUserId et la CustomerSession', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_offer_secret' });
+    (stripe.customerSessions.create as jest.Mock).mockResolvedValue({ client_secret: 'cuss_offer' });
+
+    const r = await svc.createOfferPaymentIntent({ clubId: 'c1', userId: 'u1', kind: 'plan', offerId: 'pl1', amountCents: 3900 });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 3900, metadata: { offerPlanId: 'pl1', offerUserId: 'u1', clubId: 'c1' } }),
+      { stripeAccount: 'acct_1' },
+    );
+    expect(r.clientSecret).toBe('pi_offer_secret');
+    expect(r.customerSessionClientSecret).toBe('cuss_offer');
+  });
+
+  it('kind=package → metadata offerPackageTemplateId', async () => {
+    (prisma.clubStripeCustomer.findUnique as jest.Mock).mockResolvedValue({
+      id: 'csc-1', stripeCustomerId: 'cus_1', defaultPaymentMethodId: null,
+    });
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'ACTIVE',
+    });
+    (stripe.paymentIntents.create as jest.Mock).mockResolvedValue({ client_secret: 'pi_offer_secret' });
+
+    await svc.createOfferPaymentIntent({ clubId: 'c1', userId: 'u1', kind: 'package', offerId: 'tp1', amountCents: 9000 });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { offerPackageTemplateId: 'tp1', offerUserId: 'u1', clubId: 'c1' } }),
+      { stripeAccount: 'acct_1' },
+    );
+  });
+
+  it('refuse si Stripe non ACTIVE', async () => {
+    (prisma.club.findUnique as jest.Mock).mockResolvedValue({
+      stripeAccountId: 'acct_1', stripeAccountStatus: 'PENDING',
+    });
+    await expect(svc.createOfferPaymentIntent({ clubId: 'c1', userId: 'u1', kind: 'package', offerId: 'tp1', amountCents: 900 }))
+      .rejects.toThrow('STRIPE_NOT_CONFIGURED');
+  });
+});
+
 describe('detachCard', () => {
   it('détache le PaymentMethod sur le compte connecté', async () => {
     (prisma.club.findUnique as jest.Mock).mockResolvedValue({ stripeAccountId: 'acct_1' });
