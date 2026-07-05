@@ -227,6 +227,15 @@ router.post('/:slug/offers/packages/:id/intent', authMiddleware, async (req: Aut
   } catch (err) { handleError(err, res, next); }
 });
 
+// Confirmation client d'un achat d'offre (le webhook fait le même travail — idempotent).
+router.post('/:slug/offers/confirm', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { stripePaymentIntentId } = req.body ?? {};
+    if (!stripePaymentIntentId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await offerService.confirmFromClient(asString(req.params.slug), req.user!.id, asString(stripePaymentIntentId)));
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Tournois publiés d'un club (à venir).
 router.get('/:slug/tournaments', async (req, res, next) => {
   try { res.json(await tournamentService.listPublicByClubSlug(asString(req.params.slug))); }

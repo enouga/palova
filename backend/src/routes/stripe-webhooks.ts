@@ -4,6 +4,7 @@ import { prisma } from '../db/prisma';
 import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
+import { OfferService, OfferIntentMeta } from '../services/offer.service';
 
 const router = Router();
 
@@ -50,7 +51,15 @@ router.post('/', async (req: Request, res: Response) => {
           id: string;
           metadata: Record<string, string>;
           payment_method: string | null;
+          amount: number;
         };
+
+        if (pi.metadata?.offerPlanId || pi.metadata?.offerPackageTemplateId) {
+          try {
+            await new OfferService().fulfillPaidIntent(pi.metadata as OfferIntentMeta, pi.id, pi.amount);
+          } catch { /* idempotent / OFFER_NOT_FOUND loggué par le catch global — remboursement manuel */ }
+          break;
+        }
 
         if (pi.metadata?.tournamentRegistrationId) {
           try { await new TournamentService().confirmRegistrationPayment(pi.metadata.tournamentRegistrationId, { stripePaymentIntentId: pi.id }); } catch { /* idempotent */ }
