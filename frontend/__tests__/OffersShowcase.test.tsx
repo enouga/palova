@@ -42,6 +42,9 @@ describe('OffersShowcase', () => {
     expect(screen.getByText('Abo Or')).toBeInTheDocument();
     expect(screen.getByText('39,00 €')).toBeInTheDocument();
     expect(screen.getByText('/ mois')).toBeInTheDocument();
+    // Chips de type teintées par carte.
+    expect(screen.getByText('Abonnement')).toBeInTheDocument();
+    expect(screen.getByText('Carnet')).toBeInTheDocument();
     expect(screen.getByText(/Heures creuses/)).toBeInTheDocument();
     expect(screen.getByText('Carnet 10')).toBeInTheDocument();
   });

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { api, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 
@@ -47,21 +48,32 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     ? `1re mensualité · ${euros(target.plan.monthlyPrice)}`
     : target ? euros(target.tpl.price) : '';
 
+  // Chaque carte du rail prend une teinte de la palette (cycle par position) : lavis en
+  // tête, chip de type et CTA assortis — de la couleur sans casser le fond clair.
+  const OFFER_TINTS = [ACCENTS.blue, ACCENTS.apricot, ACCENTS.emerald, ACCENTS.violet, ACCENTS.cyan];
+
   // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
-  const OfferCard = ({ name, price, suffix, lines, onBuy }: {
-    name: string; price: string; suffix: string | null; lines: string[]; onBuy: () => void;
+  const OfferCard = ({ name, price, suffix, lines, kindLabel, tint, onBuy }: {
+    name: string; price: string; suffix: string | null; lines: string[]; kindLabel: string; tint: string; onBuy: () => void;
   }) => (
-    <div style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text }}>{name}</div>
-      <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 27, letterSpacing: -0.5, color: th.text }}>
+    <div className="of-card" style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', overflow: 'hidden' }}>
+      <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, background: `linear-gradient(180deg, ${tint}${th.mode === 'floodlit' ? '26' : '33'}, transparent)`, pointerEvents: 'none' }} />
+      <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: tint }} />
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${tint}26` : `${tint}40`, color: th.mode === 'floodlit' ? tint : th.ink }}>
+          {kindLabel}
+        </span>
+      </div>
+      <div style={{ position: 'relative', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text, marginTop: 6 }}>{name}</div>
+      <div style={{ position: 'relative', fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 27, letterSpacing: -0.5, color: th.text }}>
         <span>{price}</span>{suffix && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute, letterSpacing: 0 }}> {suffix}</span>}
       </div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.55, flex: 1 }}>
+      <div style={{ position: 'relative', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.55, flex: 1 }}>
         {lines.join(' · ')}
       </div>
       {offers.onlinePurchase ? (
         <button onClick={onBuy} style={{
-          marginTop: 10, border: `1.5px solid ${th.accent}`, background: 'transparent', color: th.mode === 'floodlit' ? th.accent : th.ink,
+          marginTop: 10, border: `1.5px solid ${tint}`, background: 'transparent', color: th.mode === 'floodlit' ? tint : th.ink,
           borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, cursor: 'pointer',
         }}>
           Souscrire
@@ -75,13 +87,17 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   return (
     <section>
       <SectionHeader title="Abonnements & offres" />
+      <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
       <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory' }}>
-        {plans.map((p) => (
+        {plans.map((p, i) => (
           <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
+            kindLabel="Abonnement" tint={OFFER_TINTS[i % OFFER_TINTS.length]}
             lines={planBenefits(p)} onBuy={() => buy({ kind: 'plan', plan: p })} />
         ))}
-        {offers.packages.map((t) => (
+        {offers.packages.map((t, i) => (
           <OfferCard key={t.id} name={t.name} price={euros(t.price)} suffix={null}
+            kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
+            tint={OFFER_TINTS[(plans.length + i) % OFFER_TINTS.length]}
             lines={[
               t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`,
               t.validityDays ? `Valable ${t.validityDays} jours` : 'Sans expiration',
