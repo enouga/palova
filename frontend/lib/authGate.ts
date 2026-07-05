@@ -17,3 +17,10 @@ export function isPlatformPublicPath(pathname: string): boolean {
   // `/` = vitrine, `/tournois` = calendrier national public (la fiche /tournois/[id] vit sur l'hôte club).
   return pathname === '/' || pathname === '/tournois' || isPublicPath(pathname);
 }
+
+/** true si le chemin est accessible sans login sur un HÔTE CLUB : la racine `/` est le
+ * Club-house — la VITRINE du club (parties ouvertes, offres, présentation) — visible de
+ * tout visiteur, comme /parties et /club ; les blocs personnels s'y masquent sans session. */
+export function isClubPublicPath(pathname: string): boolean {
+  return pathname === '/' || isPublicPath(pathname);
+}

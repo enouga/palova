@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isPublicPath, isPlatformPublicPath } from './lib/authGate';
+import { isClubPublicPath, isPlatformPublicPath } from './lib/authGate';
 import { clubSlugFromHost } from './lib/host';
 import { ROOT_DOMAINS, rootForHost, CANONICAL_ROOT } from './lib/roots';
 
@@ -61,7 +61,7 @@ export function proxy(request: NextRequest) {
   if (url.pathname === '/clubs' || url.pathname.startsWith('/clubs/')) {
     return NextResponse.redirect(`${url.protocol}//${currentRoot}${portSuffix(host)}${url.pathname}`);
   }
-  if (!token && !isPublicPath(url.pathname)) return redirectToLogin();
+  if (!token && !isClubPublicPath(url.pathname)) return redirectToLogin();
   // Injecte le slug + le chemin complet pour le layout serveur (résolution d'alias → redirection 308).
   const headers = new Headers(request.headers);
   headers.set('x-club-slug', slug);

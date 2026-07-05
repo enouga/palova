@@ -1,4 +1,4 @@
-import { isPublicPath, isPlatformPublicPath } from '../lib/authGate';
+import { isPublicPath, isPlatformPublicPath, isClubPublicPath } from '../lib/authGate';
 
 describe('isPublicPath', () => {
   it('autorise les portes d\'entrée', () => {
@@ -63,7 +63,25 @@ describe('isPlatformPublicPath', () => {
     expect(isPlatformPublicPath('/tournois/abc')).toBe(false);
   });
 
-  it('n\'altère pas isPublicPath : `/` reste privé pour l\'hôte club', () => {
+  it('n\'altère pas isPublicPath : `/` n\'y est pas (la racine club passe par isClubPublicPath)', () => {
     expect(isPublicPath('/')).toBe(false);
+  });
+});
+
+describe('isClubPublicPath', () => {
+  it('ouvre la racine `/` — le Club-house est la vitrine publique du club', () => {
+    expect(isClubPublicPath('/')).toBe(true);
+  });
+
+  it('hérite des chemins publics communs (/parties, /club, légales…)', () => {
+    expect(isClubPublicPath('/parties')).toBe(true);
+    expect(isClubPublicPath('/club')).toBe(true);
+    expect(isClubPublicPath('/login')).toBe(true);
+  });
+
+  it('garde les chemins privés verrouillés', () => {
+    expect(isClubPublicPath('/reserver')).toBe(false);
+    expect(isClubPublicPath('/me/reservations')).toBe(false);
+    expect(isClubPublicPath('/admin')).toBe(false);
   });
 });
