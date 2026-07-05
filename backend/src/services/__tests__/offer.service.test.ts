@@ -20,6 +20,9 @@ describe('OfferService.listPublicOffers', () => {
     expect(r.packages).toHaveLength(1);
     expect(r.onlinePurchase).toBe(true);
     expect(prismaMock.subscriptionPlan.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId: 'c1', isActive: true } }));
+    expect(prismaMock.packageTemplate.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ sportKeys: true }),
+    }));
   });
 
   it('club suspendu → CLUB_NOT_FOUND', async () => {
