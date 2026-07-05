@@ -11,13 +11,12 @@ import { ClubNav } from '@/components/ClubNav';
 import { TournamentHero, MetaCards } from '@/components/tournament/TournamentHero';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { AboutCard } from '@/components/agenda/RegistrationUI';
-import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { TeamsGrid } from '@/components/tournament/TeamsGrid';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { MyRegistrationCard } from '@/components/tournament/MyRegistrationCard';
 import { ProfileCompletion } from '@/components/tournament/ProfileCompletion';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
-import { timelineSteps, waitlistPosition } from '@/lib/tournament';
+import { waitlistPosition } from '@/lib/tournament';
 import StripePaymentStep from '@/components/StripePaymentStep';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { openDm } from '@/lib/messages';
@@ -180,7 +179,6 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
         <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)} />
         <MetaCards t={t} />
         <ShareActions item={t} uidPrefix="tournament" />
-        {now && <TournamentTimeline steps={timelineSteps(t, now)} tz={t.club.timezone} />}
 
         {t.description && <AboutCard text={t.description} />}
 

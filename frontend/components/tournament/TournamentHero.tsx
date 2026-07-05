@@ -1,7 +1,6 @@
 'use client';
 import { TournamentDetail } from '@/lib/api';
-import { tournamentPlacesLabel } from '@/lib/clubhouse';
-import { fillRatio, formatDateTime, formatDateTimeRange } from '@/lib/tournament';
+import { fillRatio, formatDateShortTimeRange, formatDateTimeShort, heroPlacesLabel } from '@/lib/tournament';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
@@ -26,7 +25,7 @@ export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDe
         (t.maxTeams != null ? `${t.confirmedCount}/${t.maxTeams} binômes` : `${t.confirmedCount} binôme${t.confirmedCount > 1 ? 's' : ''}`)
         + (t.waitlistCount > 0 ? ` · ${t.waitlistCount} en attente` : '')
       }
-      places={tournamentPlacesLabel(t)}
+      places={heroPlacesLabel(t.confirmedCount, t.maxTeams)}
     />
   );
 }
@@ -35,9 +34,9 @@ export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDe
 export function MetaCards({ t }: { t: TournamentDetail }) {
   const tz = t.club.timezone;
   const cards: MetaCard[] = [
-    { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateTimeRange(t.startTime, t.endTime, tz) },
-    { icon: 'clock', label: 'Clôture des inscriptions', value: formatDateTime(t.registrationDeadline, tz) },
-    ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € par binôme` } as MetaCard] : []),
+    { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(t.startTime, t.endTime, tz) },
+    { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(t.registrationDeadline, tz) },
+    ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € / binôme` } as MetaCard] : []),
   ];
   return <MetaCardsRow cards={cards} />;
 }

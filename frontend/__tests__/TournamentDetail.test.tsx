@@ -15,9 +15,6 @@ jest.mock('../components/tournament/TournamentHero', () => ({
 jest.mock('../components/tournament/TeamsGrid', () => ({
   TeamsGrid: () => <div data-testid="teams-grid" />,
 }));
-jest.mock('../components/tournament/TournamentTimeline', () => ({
-  TournamentTimeline: () => null,
-}));
 jest.mock('../components/tournament/ShareActions', () => ({
   ShareActions: () => null,
 }));
@@ -60,7 +57,6 @@ jest.mock('../components/StripePaymentStep', () => ({
 
 // lib helpers purs (tournoi)
 jest.mock('../lib/tournament', () => ({
-  timelineSteps: () => [],
   waitlistPosition: () => null,
 }));
 

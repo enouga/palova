@@ -48,10 +48,18 @@ describe('TournamentHero', () => {
     expect(screen.getByText('Plus que 6 h')).toBeInTheDocument();
   });
 
-  it('sans capacité → pas de jauge, compteur simple', () => {
+  it('sans capacité → pas de jauge, compteur simple, pas de badge places', () => {
     wrap(<TournamentHero t={tournament({ maxTeams: null })} now={NOW} />);
     expect(screen.queryByTestId('hero-fill')).not.toBeInTheDocument();
     expect(screen.getByText('7 binômes')).toBeInTheDocument();
+    expect(screen.queryByText('7 binômes inscrits')).not.toBeInTheDocument();
+  });
+
+  it('complet → badge court « Complet », compteur avec attente', () => {
+    wrap(<TournamentHero t={tournament({ confirmedCount: 12, waitlistCount: 3 })} now={NOW} />);
+    expect(screen.getByText('Complet')).toBeInTheDocument();
+    expect(screen.queryByText(/liste d'attente/)).not.toBeInTheDocument();
+    expect(screen.getByText('12/12 binômes · 3 en attente')).toBeInTheDocument();
   });
 
   it('Messieurs ouvert aux femmes → pill « Ouvert aux femmes »', () => {
@@ -72,15 +80,22 @@ describe('TournamentHero', () => {
 });
 
 describe('MetaCards', () => {
-  it('début, clôture et prix dans le fuseau du club', () => {
+  it('début, clôture (formats courts) et prix dans le fuseau du club', () => {
     wrap(<MetaCards t={tournament()} />);
-    expect(screen.getByText('jeudi 9 juillet à 14h01')).toBeInTheDocument();
-    expect(screen.getByText('samedi 4 juillet à 14h01')).toBeInTheDocument();
-    expect(screen.getByText('40 € par binôme')).toBeInTheDocument();
+    expect(screen.getByText('jeu. 9 juil. · 14h01')).toBeInTheDocument();
+    expect(screen.getByText('Clôture')).toBeInTheDocument();
+    expect(screen.queryByText('Clôture des inscriptions')).not.toBeInTheDocument();
+    expect(screen.getByText('sam. 4 juil. · 14h01')).toBeInTheDocument();
+    expect(screen.getByText('40 € / binôme')).toBeInTheDocument();
+  });
+
+  it('avec heure de fin → plage compacte sur un jour', () => {
+    wrap(<MetaCards t={tournament({ endTime: '2026-07-09T16:00:00Z' })} />);
+    expect(screen.getByText('jeu. 9 juil. · 14h01 → 18h00')).toBeInTheDocument();
   });
 
   it('pas de carte prix sans entryFee', () => {
     wrap(<MetaCards t={tournament({ entryFee: null })} />);
-    expect(screen.queryByText(/par binôme/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/€ \/ binôme/)).not.toBeInTheDocument();
   });
 });
