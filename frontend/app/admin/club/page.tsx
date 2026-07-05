@@ -6,6 +6,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ClubHouseSectionsCard } from '@/components/admin/ClubHouseSectionsCard';
 
 const MAX_PHOTOS = 12;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -185,6 +186,8 @@ export default function AdminClubPage() {
           {uploading && <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 6 }}>Envoi…</div>}
         </div>
       </div>
+
+      {token && clubId && <ClubHouseSectionsCard clubId={clubId} token={token} />}
 
       {confirmDelete && (
         <ConfirmDialog

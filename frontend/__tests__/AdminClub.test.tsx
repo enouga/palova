@@ -15,6 +15,8 @@ jest.mock('@/lib/api', () => ({
     adminAddClubPhoto: jest.fn(),
     adminUpdateClubPhoto: jest.fn(),
     adminDeleteClubPhoto: jest.fn().mockResolvedValue({ ok: true }),
+    adminGetClub: jest.fn().mockResolvedValue({ clubHouseSections: null }),
+    adminUpdateClub: jest.fn().mockResolvedValue({}),
   },
 }));
 import { api } from '@/lib/api';
@@ -22,6 +24,8 @@ import { api } from '@/lib/api';
 const wrap = () => render(<ThemeProvider><AdminClubPage /></ThemeProvider>);
 
 describe('/admin/club', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
   it('charge la présentation et enregistre les modifications', async () => {
     wrap();
     await waitFor(() => expect(screen.getByDisplayValue('Texte')).toBeInTheDocument());
@@ -36,5 +40,37 @@ describe('/admin/club', () => {
     wrap();
     await waitFor(() => expect(screen.getByText(/1\/12/)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Supprimer/i })).toBeInTheDocument();
+  });
+
+  it('carte Sections : lignes + Partenaires ; masquer une section → PATCH liste complète', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    expect(screen.getByText('Ça joue bientôt')).toBeInTheDocument();
+    expect(screen.getByText('Partenaires')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Afficher Top du mois'));
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
+    const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
+    expect(body.clubHouseSections).toHaveLength(8);
+    expect(body.clubHouseSections.find((s: { key: string }) => s.key === 'top')).toEqual({ key: 'top', visible: false });
+  });
+
+  it('carte Sections : ↓ sur la première ligne → ordre permuté dans le PATCH', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Descendre Ça joue bientôt'));
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
+    const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
+    expect(body.clubHouseSections[0].key).toBe('agenda');
+    expect(body.clubHouseSections[1].key).toBe('matches');
+  });
+
+  it('carte Sections : config personnalisée → Réinitialiser → ConfirmDialog → PATCH null', async () => {
+    (api.adminGetClub as jest.Mock).mockResolvedValueOnce({ clubHouseSections: [{ key: 'top', visible: false }] });
+    wrap();
+    await waitFor(() => expect(screen.getByText('Réinitialiser l’ordre par défaut')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Réinitialiser l’ordre par défaut'));
+    fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser' }));
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseSections: null }, 't'));
+    await waitFor(() => expect(screen.queryByText('Réinitialiser l’ordre par défaut')).not.toBeInTheDocument());
   });
 });
