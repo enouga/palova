@@ -21,6 +21,7 @@ import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
 import { PresentationService } from '../services/presentation.service';
+import { OfferService } from '../services/offer.service';
 import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
@@ -48,6 +49,7 @@ const paymentHistoryService = new PaymentHistoryService();
 const followService = new FollowService();
 const friendshipService = new FriendshipService();
 const presentationService = new PresentationService();
+const offerService = new OfferService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -176,6 +178,12 @@ router.get('/:slug/sponsors', async (req, res, next) => {
 // Présentation publique du club (page « Le club » + teaser Club-house).
 router.get('/:slug/presentation', async (req, res, next) => {
   try { res.json(await presentationService.getPublic(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Formules du club (abonnements + carnets) — vide si le club n'a pas opté.
+router.get('/:slug/offers', async (req, res, next) => {
+  try { res.json(await offerService.listPublicOffers(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
 });
 
