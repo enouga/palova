@@ -18,9 +18,9 @@ export class PackageService {
 
   async createTemplate(clubId: string, body: {
     kind?: string; name?: string; price?: number;
-    entriesCount?: number; walletAmount?: number; validityDays?: number | null;
+    entriesCount?: number; walletAmount?: number; validityDays?: number | null; sportKeys?: string[];
   }) {
-    const { kind, name, price, entriesCount, walletAmount, validityDays } = body;
+    const { kind, name, price, entriesCount, walletAmount, validityDays, sportKeys } = body;
     if (kind !== 'ENTRIES' && kind !== 'WALLET')                          throw new Error('VALIDATION_ERROR');
     if (!name?.trim())                                                    throw new Error('VALIDATION_ERROR');
     if (typeof price !== 'number' || isNaN(price) || price <= 0)          throw new Error('VALIDATION_ERROR');
@@ -30,6 +30,14 @@ export class PackageService {
                                                                           throw new Error('VALIDATION_ERROR');
     if (validityDays != null && (!Number.isInteger(validityDays) || validityDays <= 0))
                                                                           throw new Error('VALIDATION_ERROR');
+    if (sportKeys !== undefined) {
+      if (!Array.isArray(sportKeys))                                     throw new Error('VALIDATION_ERROR');
+      if (sportKeys.length > 0) {
+        const known = await prisma.sport.findMany({ where: { key: { in: sportKeys } }, select: { key: true } });
+        const knownKeys = new Set(known.map(s => s.key));
+        if (!sportKeys.every(k => knownKeys.has(k)))                     throw new Error('VALIDATION_ERROR');
+      }
+    }
 
     return prisma.packageTemplate.create({
       data: {
@@ -40,6 +48,7 @@ export class PackageService {
         entriesCount: kind === 'ENTRIES' ? (entriesCount as number) : null,
         walletAmount: kind === 'WALLET' ? new Prisma.Decimal(walletAmount as number) : null,
         validityDays: validityDays ?? null,
+        sportKeys: sportKeys ?? [],
       },
     });
   }
