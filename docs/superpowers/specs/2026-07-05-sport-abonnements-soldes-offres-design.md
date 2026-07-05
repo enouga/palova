@@ -27,17 +27,18 @@ model PackageTemplate {
   signifie « tous sports » (comportement actuel, aucun chip affiché). Ça évite de forcer chaque
   club à retagger ses offres existantes après la migration.
 - `MemberPackage` ne gagne **pas** de colonne : il joint déjà `template: { select: { name: true } }`
-  à 3 endroits (`listMyPackagesBySlug`, `listMemberPackages`, `listActiveByClub`) — on ajoute
-  `sportKeys: true` au même select. Lecture live depuis le template (pas un snapshot), comme le
-  nom déjà aujourd'hui.
+  dans `listMyPackagesBySlug` (seule méthode qui alimente les surfaces visées — ProfileMenu +
+  WalletSection passent toutes les deux par `getMyClubPackages`) — on ajoute `sportKeys: true` à ce
+  select. Lecture live depuis le template (pas un snapshot), comme le nom déjà aujourd'hui.
+  `listMemberPackages` (fiche joueur admin) et `listActiveByClub` (caisse) ne sont **pas** touchés :
+  ils alimentent des surfaces hors périmètre (cf. Hors périmètre).
 
 ## Backend
 
 - `PackageService.createTemplate` / `updateTemplate` : acceptent `sportKeys?: string[]`, validés
   contre la table `Sport` (même contrôle que `subscription.service.ts` — existence de la clé
   uniquement, pas besoin que le club ait activé ce sport). Défaut `[]`.
-- `PackageService.listMyPackagesBySlug` / `listMemberPackages` / `listActiveByClub` : `sportKeys: true`
-  ajouté au select `template`.
+- `PackageService.listMyPackagesBySlug` : `sportKeys: true` ajouté au select `template`.
 - `OfferService.listPublicOffers` : `sportKeys: true` ajouté au select `packageTemplate` (vitrine
   Club-house).
 
