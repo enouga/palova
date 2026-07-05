@@ -28,7 +28,7 @@ export default function ClubPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: th.bg }}>
-      <ClubNav />
+      <ClubNav club={club} />
       {pres?.coverImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={assetUrl(pres.coverImageUrl) ?? ''} alt="" style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block' }} />

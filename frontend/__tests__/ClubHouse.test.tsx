@@ -1,6 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { ClubHouse } from '../components/ClubHouse';
 import { ThemeProvider } from '../lib/ThemeProvider';
+
+let mockAuth: { token: string | null; clubId: string | null; ready: boolean } = { token: null, clubId: null, ready: true };
+jest.mock('../lib/useAuth', () => ({ useAuth: () => mockAuth }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+
+// Stub des sections pour tester l'ORDRE sans leur logique interne :
+jest.mock('../components/clubhouse/PosterMosaic', () => ({ PosterMosaic: () => <div data-testid="sec-posters" /> }));
+jest.mock('../components/clubhouse/OpenMatchesRail', () => ({ OpenMatchesRail: () => <div data-testid="sec-matches" /> }));
+jest.mock('../components/clubhouse/OffersShowcase', () => ({ OffersShowcase: () => <div data-testid="sec-offers" /> }));
+jest.mock('../components/clubhouse/TopOfMonth', () => ({ TopOfMonth: () => <div data-testid="sec-top" /> }));
+jest.mock('../components/clubhouse/ClubPresentationCard', () => ({ ClubPresentationCard: () => <div data-testid="sec-club" /> }));
+jest.mock('../components/clubhouse/SponsorMarquee', () => ({ SponsorMarquee: () => <div data-testid="sec-sponsors" /> }));
 
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
@@ -11,6 +23,11 @@ jest.mock('../lib/api', () => ({
     getClubEvents: jest.fn().mockResolvedValue([]),
     getClubAvailability: jest.fn().mockResolvedValue([]),
     getMyReservations: jest.fn().mockResolvedValue([]),
+    getOpenMatches: jest.fn().mockResolvedValue([]),
+    getClubPresentation: jest.fn().mockResolvedValue(null),
+    getClubOffers: jest.fn().mockResolvedValue(null),
+    getClubTopMonth: jest.fn().mockResolvedValue([]),
+    getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
     cancelReservation: jest.fn(),
   },
 }));
@@ -27,14 +44,43 @@ const wrap = () => render(<ThemeProvider><ClubHouse club={club} /></ThemeProvide
 const pinned = { id: 'a1', title: 'Tournoi interne', body: 'Lots !', linkUrl: null, imageUrl: null, isPublished: true, pinned: true, createdAt: '2026-06-09', updatedAt: '' };
 const regular = { id: 'a2', title: 'Créneaux du matin', body: 'Dès 8h.', linkUrl: null, imageUrl: null, isPublished: true, pinned: false, createdAt: '2026-06-08', updatedAt: '' };
 
+/** Fixtures des sections v2 : tout est présent pour tester l'ordre. */
+const fullSections = () => {
+  mocked.getClubPresentation.mockResolvedValue({
+    presentationText: 'Bienvenue', coverImageUrl: null, address: '1 rue', city: null,
+    latitude: null, longitude: null, contactPhone: null, contactEmail: null, openingHoursText: null, photos: [],
+  } as never);
+  mocked.getOpenMatches.mockResolvedValue([{
+    id: 'm1', resourceName: 'T1', startTime: new Date(Date.now() + 3600e3).toISOString(), endTime: new Date(Date.now() + 2 * 3600e3).toISOString(),
+    maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false, players: [], lastMessageAt: null, unreadCount: 0,
+  }] as never);
+  mocked.getClubOffers.mockResolvedValue({
+    plans: [{ id: 'pl1', name: 'Or', monthlyPrice: '39', commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null, sportKeys: ['padel'] }],
+    packages: [], onlinePurchase: false,
+  } as never);
+  mocked.getClubTopMonth.mockResolvedValue([
+    { userId: 'u1', firstName: 'A', lastName: 'B', avatarUrl: null, wins: 5 },
+    { userId: 'u2', firstName: 'C', lastName: 'D', avatarUrl: null, wins: 3 },
+    { userId: 'u3', firstName: 'E', lastName: 'F', avatarUrl: null, wins: 1 },
+  ] as never);
+  mocked.getClubSponsors.mockResolvedValue([{ id: 's1', name: 'Head', logoUrl: '/l.png', linkUrl: null, offerText: null, offerCode: null, offerUntil: null, pinned: false, sortOrder: 0, isActive: true, createdAt: '' }] as never);
+};
+
 describe('ClubHouse', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuth = { token: null, clubId: null, ready: true };
     mocked.getClubAnnouncements.mockResolvedValue([]);
     mocked.getClubSponsors.mockResolvedValue([]);
     mocked.getClubTournaments.mockResolvedValue([]);
     mocked.getClubEvents.mockResolvedValue([]);
     mocked.getClubAvailability.mockResolvedValue([]);
+    mocked.getMyReservations.mockResolvedValue([]);
+    mocked.getOpenMatches.mockResolvedValue([]);
+    mocked.getClubPresentation.mockResolvedValue(null as never);
+    mocked.getClubOffers.mockResolvedValue(null as never);
+    mocked.getClubTopMonth.mockResolvedValue([]);
+    mocked.getMyClubSubscriptions.mockResolvedValue([]);
   });
 
   it('annonce épinglée → hero « À la une », sans doublon dans la liste', async () => {
@@ -50,6 +96,17 @@ describe('ClubHouse', () => {
     wrap();
     expect(await screen.findByText('Créneaux du matin')).toBeInTheDocument();
     expect(screen.queryByText('À la une')).not.toBeInTheDocument();
+  });
+
+  it('annonce expirée → masquée partout ; annonce à image → bento, pas la liste', async () => {
+    const expired = { ...regular, id: 'a3', title: 'Expirée', validUntil: '2020-01-01T23:59:59.999Z' };
+    const withImage = { ...regular, id: 'a4', title: 'Affiche', imageUrl: '/uploads/announcements/x.jpg' };
+    mocked.getClubAnnouncements.mockResolvedValue([regular, expired, withImage] as never);
+    wrap();
+    expect(await screen.findByText('Créneaux du matin')).toBeInTheDocument();
+    expect(screen.queryByText('Expirée')).not.toBeInTheDocument();
+    expect(screen.queryByText('Affiche')).not.toBeInTheDocument(); // vit dans la bento (stub)
+    expect(screen.getByTestId('sec-posters')).toBeInTheDocument();
   });
 
   it('créneau libre à venir → bloc « Prochains créneaux libres » avec lien profond', async () => {
@@ -91,5 +148,33 @@ describe('ClubHouse', () => {
     wrap();
     expect(await screen.findByText('Mêlée du vendredi')).toBeInTheDocument();
     expect(screen.getByText('Mêlée du vendredi').closest('a')).toHaveAttribute('href', '/events/e1');
+  });
+
+  it('visiteur : Le club avant les parties, offres avant top, partenaires en dernier', async () => {
+    fullSections();
+    wrap();
+    await waitFor(() => expect(screen.getByTestId('sec-club')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
+    const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids.indexOf('sec-club')).toBeLessThan(ids.indexOf('sec-matches'));
+    expect(ids.indexOf('sec-offers')).toBeLessThan(ids.indexOf('sec-top'));
+    expect(ids.indexOf('sec-sponsors')).toBe(ids.length - 1);
+  });
+
+  it('membre : Le club redescend sous le top, top avant offres', async () => {
+    mockAuth = { token: 't', clubId: null, ready: true };
+    fullSections();
+    wrap();
+    await waitFor(() => expect(screen.getByTestId('sec-club')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
+    const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids.indexOf('sec-matches')).toBeLessThan(ids.indexOf('sec-club'));
+    expect(ids.indexOf('sec-top')).toBeLessThan(ids.indexOf('sec-offers'));
+  });
+
+  it('anonyme : les parties ouvertes se chargent sans token', async () => {
+    fullSections();
+    wrap();
+    await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledWith('demo', undefined));
   });
 });
