@@ -7,7 +7,9 @@ jest.mock('next/dynamic', () => () => {
   const Stub = () => <div data-testid="stripe-step" />;
   return Stub;
 });
-jest.mock('@/lib/ClubProvider', () => ({ useClub: () => ({ club: null, slug: 'padel-arena' }) }));
+let clubCtx: { club: { clubSports?: { sport: { key: string; name: string } }[] } | null; slug: string } =
+  { club: null, slug: 'padel-arena' };
+jest.mock('@/lib/ClubProvider', () => ({ useClub: () => clubCtx }));
 jest.mock('@/lib/api', () => ({
   ...jest.requireActual('@/lib/api'),
   api: {
@@ -37,6 +39,8 @@ const wrap = (over: { offers?: PublicOffers; token?: string | null; hasSub?: boo
   );
 
 describe('OffersShowcase', () => {
+  beforeEach(() => { clubCtx = { club: null, slug: 'padel-arena' }; });
+
   it('cartes plan + carnet avec prix et avantages', () => {
     wrap({});
     expect(screen.getByText('Abo Or')).toBeInTheDocument();
@@ -118,5 +122,20 @@ describe('OffersShowcase', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Souscrire/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('club multi-sport : le sport apparaît sur la carte et dans la modale', () => {
+    clubCtx = {
+      slug: 'padel-arena',
+      club: { clubSports: [{ sport: { key: 'padel', name: 'Padel' } }, { sport: { key: 'tennis', name: 'Tennis' } }] },
+    };
+    wrap({ offers: { ...offers, packages: [{ ...offers.packages[0], sportKeys: ['tennis'] }] } });
+    // Sur la carte, les lignes d'avantages sont jointes en une seule chaîne (`lines.join(' · ')`) —
+    // la ligne sport est en tête, d'où le match par regex plutôt qu'un texte exact.
+    expect(screen.getByText(/^Padel ·/)).toBeInTheDocument(); // carte abonnement
+    expect(screen.getByText(/^Tennis ·/)).toBeInTheDocument(); // carte carnet
+    // Dans la modale, chaque avantage est un <li> séparé — la ligne sport y est un texte exact isolé.
+    fireEvent.click(screen.getAllByRole('button', { name: /Souscrire/i })[0]);
+    expect(within(screen.getByRole('dialog')).getByText('Padel')).toBeInTheDocument();
   });
 });

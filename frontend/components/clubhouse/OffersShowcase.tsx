@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { api, assetUrl, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
+import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
+import { clubIsMultiSport, sportNames } from '@/lib/sportBadge';
 import { ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
@@ -15,7 +16,8 @@ const euros = (v: string) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 type Target = { kind: 'plan'; plan: PublicPlan } | { kind: 'package'; tpl: PublicPackageTemplate };
 type Stage = 'details' | 'payment' | 'done';
 
-const planBenefits = (p: PublicPlan): string[] => [
+const planBenefits = (p: PublicPlan, club: ClubDetail | null): string[] => [
+  ...(clubIsMultiSport(club) && p.sportKeys.length > 0 ? [sportNames(club, p.sportKeys).join(', ')] : []),
   p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
   p.benefit === 'INCLUDED' ? 'Réservations incluses' : `−${p.discountPercent ?? 0} % sur les réservations`,
   ...(p.dailyCap ? [`${p.dailyCap} résa/jour max`] : []),
@@ -23,7 +25,8 @@ const planBenefits = (p: PublicPlan): string[] => [
   `Engagement ${p.commitmentMonths} mois`,
 ];
 
-const packageBenefits = (t: PublicPackageTemplate): string[] => [
+const packageBenefits = (t: PublicPackageTemplate, club: ClubDetail | null): string[] => [
+  ...(clubIsMultiSport(club) && t.sportKeys.length > 0 ? [sportNames(club, t.sportKeys).join(', ')] : []),
   t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`,
   t.validityDays ? `Valable ${t.validityDays} jours` : 'Sans expiration',
 ];
@@ -39,7 +42,7 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   onPurchased: () => void;
 }) {
   const { th } = useTheme();
-  const { slug } = useClub();
+  const { slug, club } = useClub();
   const [target, setTarget] = useState<Target | null>(null);
   const [stage, setStage] = useState<Stage>('details');
 
@@ -85,7 +88,7 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   const targetKindLabel = target?.kind === 'plan' ? 'Abonnement' : target?.kind === 'package' ? (target.tpl.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie') : '';
   const targetDescription = target?.kind === 'plan' ? target.plan.description : target?.kind === 'package' ? target.tpl.description : null;
   const targetImageUrl = target?.kind === 'plan' ? target.plan.imageUrl : target?.kind === 'package' ? target.tpl.imageUrl : null;
-  const targetLines = target?.kind === 'plan' ? planBenefits(target.plan) : target?.kind === 'package' ? packageBenefits(target.tpl) : [];
+  const targetLines = target?.kind === 'plan' ? planBenefits(target.plan, club) : target?.kind === 'package' ? packageBenefits(target.tpl, club) : [];
   const targetPrice = target?.kind === 'plan' ? `${euros(target.plan.monthlyPrice)} / mois` : target ? euros(target.tpl.price) : '';
   const amountLabel = target?.kind === 'plan'
     ? `1re mensualité · ${euros(target.plan.monthlyPrice)}`
@@ -104,13 +107,13 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
         {plans.map((p, i) => (
           <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
             kindLabel="Abonnement" tint={OFFER_TINTS[i % OFFER_TINTS.length]}
-            lines={planBenefits(p)} onOpen={() => openDetails({ kind: 'plan', plan: p })} />
+            lines={planBenefits(p, club)} onOpen={() => openDetails({ kind: 'plan', plan: p })} />
         ))}
         {offers.packages.map((t, i) => (
           <OfferCard key={t.id} name={t.name} price={euros(t.price)} suffix={null}
             kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
             tint={OFFER_TINTS[(plans.length + i) % OFFER_TINTS.length]}
-            lines={packageBenefits(t)}
+            lines={packageBenefits(t, club)}
             onOpen={() => openDetails({ kind: 'package', tpl: t })} />
         ))}
       </div>
