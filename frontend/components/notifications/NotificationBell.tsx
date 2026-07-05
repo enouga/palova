@@ -87,11 +87,17 @@ export function NotificationBell() {
             }}>{unread > 99 ? '99+' : unread}</span>
           )}
         </span>
-        {unread > 0 && (
-          <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-            Tout marquer comme lu
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {unread > 0 && (
+            <button onClick={markAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              Tout marquer comme lu
+            </button>
+          )}
+          <button type="button" onClick={() => setOpen(false)} aria-label="Fermer"
+            style={{ flex: '0 0 auto', background: th.surface2, border: 'none', borderRadius: 10, padding: 6, cursor: 'pointer', lineHeight: 0 }}>
+            <Icon name="x" size={15} color={th.textMute} />
           </button>
-        )}
+        </span>
       </div>
 
       <div style={{ maxHeight: 380, overflowY: 'auto' }}>
