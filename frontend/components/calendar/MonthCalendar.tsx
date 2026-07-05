@@ -50,7 +50,7 @@ export function MonthCalendar({
 
       <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '6px 16px', marginTop: 10, fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ minWidth: 15, height: 11, borderRadius: 4, background: resaColor }} />Réservation
+          <span style={{ width: 12, height: 12, borderRadius: 999, background: resaColor }} />Réservation
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 16, height: RIBBON_H, borderRadius: RIBBON_H / 2, background: tournamentColor }} />Tournoi
@@ -72,8 +72,8 @@ export function MonthCalendar({
           const tournament = entries.find((e) => e.kind === 'tournament');
           const event = entries.find((e) => e.kind === 'event');
           const barCount = (tournament ? 1 : 0) + (event ? 1 : 0);
-          // Le pavé-compteur se pose au-dessus des rubans (0, 1 ou 2 empilés).
-          const chipBottom = barCount >= 2 ? 25 : barCount === 1 ? 16 : 6;
+          // La pastille-compteur se pose au-dessus des rubans (0, 1 ou 2 empilés).
+          const chipBottom = barCount >= 2 ? 26 : barCount === 1 ? 17 : 6;
           const isToday = cell.key === todayKey;
           const isSelected = cell.key === selected;
           const dim = !cell.inMonth;
@@ -113,7 +113,7 @@ export function MonthCalendar({
               aria-pressed={isSelected} aria-label={`Jour ${cell.key}`}
               onClick={() => onSelect(cell.key)}
               style={{
-                position: 'relative', minHeight: 58, borderRadius: 12, border: 'none', cursor: 'pointer',
+                position: 'relative', minHeight: 68, borderRadius: 12, border: 'none', cursor: 'pointer',
                 padding: '7px 6px 12px', textAlign: 'left', verticalAlign: 'top',
                 background: isSelected ? th.ink : dim ? 'transparent' : th.surface,
                 boxShadow: isSelected ? 'none' : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
@@ -131,11 +131,12 @@ export function MonthCalendar({
               {reservations.length > 0 && (
                 <span data-marker="reservation"
                   style={{
-                    position: 'absolute', right: 6, bottom: chipBottom,
+                    position: 'absolute', right: 4, bottom: chipBottom,
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    minWidth: 17, height: 16, padding: '0 5px', borderRadius: 7,
+                    minWidth: 26, height: 26, padding: '0 8px', borderRadius: 999,
                     background: resaColor, color: inkOn(resaColor),
-                    fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, lineHeight: 1,
+                    fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, lineHeight: 1,
+                    boxShadow: `0 0 0 1.5px ${knobRing}`,
                     opacity: reservations.every((e) => e.past) ? 0.4 : 1,
                   }}>
                   {reservations.length}

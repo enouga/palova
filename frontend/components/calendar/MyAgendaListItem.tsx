@@ -60,7 +60,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
 
   const title = { fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text } as const;
   const subtitle = { fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 } as const;
-  const metaRow = { display: 'flex', alignItems: 'center', gap: 12, marginTop: 9, fontFamily: th.fontUI, fontSize: 13, color: th.textMute } as const;
+  const metaRow = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 9, fontFamily: th.fontUI, fontSize: 13, color: th.textMute } as const;
   const headRow = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } as const;
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
   const goHint = (
@@ -83,7 +83,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
         </div>
         <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>
         <div style={metaRow}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(r.startTime, tz)} · {fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
           <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
           {isForeign ? goHint : (!item.past && (
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -137,7 +137,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
         {sportName && <div style={subtitle}>{sportName}</div>}
         <div style={metaRow}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Icon name="clock" size={14} color={th.textMute} />{fmtHour(res.startTime, tz)}–{fmtHour(res.endTime, tz)}
+            <Icon name="calendar" size={14} color={th.textMute} />{fmtDate(res.startTime, tz)} · {fmtHour(res.startTime, tz)}–{fmtHour(res.endTime, tz)}
           </span>
           <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
         </div>
@@ -179,10 +179,6 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   const inner = (
     <>
       <div style={{ width: 4, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
-      <div style={{ width: 52, flexShrink: 0, textAlign: 'center', borderRight: `1px solid ${th.line}`, paddingRight: 12, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, lineHeight: 1, color: th.text }}>{new Intl.DateTimeFormat('fr-FR', { day: 'numeric', timeZone: tz }).format(new Date(item.start))}</span>
-        <span style={{ fontFamily: th.fontUI, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginTop: 3 }}>{new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: tz }).format(new Date(item.start)).replace('.', '')}</span>
-      </div>
       <div style={{ flex: 1, minWidth: 0 }}>{body}</div>
     </>
   );
