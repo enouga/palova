@@ -10,3 +10,12 @@ export function setSpansMultipleSports(sportKeys: (string | null | undefined)[])
   const distinct = new Set(sportKeys.filter((k): k is string => !!k));
   return distinct.size > 1;
 }
+
+/** Résout des clés sport en noms affichables via les sports actifs du club — repli sur la clé
+ *  brute si introuvable (sport désactivé entre-temps, catalogue non chargé, etc.). */
+export function sportNames(
+  club: { clubSports?: { sport: { key: string; name: string } }[] } | null | undefined,
+  keys: string[],
+): string[] {
+  return keys.map((k) => club?.clubSports?.find((cs) => cs.sport.key === k)?.sport.name ?? k);
+}
