@@ -29,7 +29,7 @@ export class OfferService {
       prisma.packageTemplate.findMany({
         where: { clubId: club.id, isActive: true },
         orderBy: { price: 'asc' },
-        select: { id: true, name: true, kind: true, price: true, entriesCount: true, walletAmount: true, validityDays: true },
+        select: { id: true, name: true, kind: true, price: true, entriesCount: true, walletAmount: true, validityDays: true, sportKeys: true },
       }),
     ]);
     const onlinePurchase = !!club.stripeAccountId && club.stripeAccountStatus === 'ACTIVE';

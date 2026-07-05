@@ -52,6 +52,30 @@ describe('PackageService — offres (templates)', () => {
     expect(data).not.toHaveProperty('kind');
     expect(data).not.toHaveProperty('entriesCount');
   });
+
+  it('crée une offre avec sportKeys validés', async () => {
+    prismaMock.sport.findMany.mockResolvedValue([{ key: 'padel' }, { key: 'tennis' }] as any);
+    prismaMock.packageTemplate.create.mockResolvedValue({ id: 'tpl-4' } as any);
+    await service.createTemplate('club-1', { kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10, sportKeys: ['padel'] });
+    expect(prismaMock.packageTemplate.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sportKeys: ['padel'] }),
+    }));
+  });
+
+  it('sportKeys absent → tableau vide par défaut (générique, tous sports)', async () => {
+    prismaMock.packageTemplate.create.mockResolvedValue({ id: 'tpl-5' } as any);
+    await service.createTemplate('club-1', { kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10 });
+    expect(prismaMock.packageTemplate.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sportKeys: [] }),
+    }));
+    expect(prismaMock.sport.findMany).not.toHaveBeenCalled(); // pas de validation si absent
+  });
+
+  it('refuse un sportKeys avec une clé inconnue', async () => {
+    prismaMock.sport.findMany.mockResolvedValue([{ key: 'padel' }] as any);
+    await expect(service.createTemplate('club-1', { kind: 'ENTRIES', name: 'x', price: 200, entriesCount: 10, sportKeys: ['squash'] }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
 });
 
 describe('PackageService — nextReceiptNo', () => {
@@ -175,6 +199,14 @@ describe('PackageService — consommation & soldes', () => {
   it('listMyPackagesBySlug refuse un club inconnu ou suspendu', async () => {
     prismaMock.club.findUnique.mockResolvedValue(null as any);
     await expect(service.listMyPackagesBySlug('ghost', 'user-1')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('listMyPackagesBySlug sélectionne sportKeys du template', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE' } as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+    await service.listMyPackagesBySlug('padel-arena', 'user-1');
+    const arg = prismaMock.memberPackage.findMany.mock.calls[0][0] as any;
+    expect(arg.include.template.select).toEqual({ name: true, sportKeys: true });
   });
 });
 
