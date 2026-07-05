@@ -6,8 +6,8 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEventDetail, EventParticipant, MyEventRegistration } from '@/lib/api';
 import StripePaymentStep from '@/components/StripePaymentStep';
-import { eventPlacesLabel, KIND_LABEL } from '@/lib/events';
-import { fillRatio, formatDateTime, formatDateTimeRange, timelineSteps, waitlistPosition } from '@/lib/tournament';
+import { KIND_LABEL } from '@/lib/events';
+import { fillRatio, formatDateShortTimeRange, formatDateTimeShort, heroPlacesLabel, waitlistPosition } from '@/lib/tournament';
 import { Screen } from '@/components/ui/Screen';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -15,7 +15,6 @@ import { ClubNav } from '@/components/ClubNav';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { AboutCard, RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
-import { TournamentTimeline } from '@/components/tournament/TournamentTimeline';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -113,16 +112,16 @@ export default function EventDetailPage() {
   const tz = event.club.timezone;
   const deadlinePassed = new Date(event.registrationDeadline) <= new Date();
   const full = event.capacity != null && event.confirmedCount >= event.capacity;
-  const places = eventPlacesLabel(event);
+  const places = heroPlacesLabel(event.confirmedCount, event.capacity);
   const myWaitlistPos = myReg && participants ? waitlistPosition(participants, myReg.id) : null;
 
   const metaCards: MetaCard[] = [
-    { icon: 'calendar', label: event.endTime ? 'Horaire' : 'Début', value: formatDateTimeRange(event.startTime, event.endTime, tz) },
-    { icon: 'clock', label: 'Clôture des inscriptions', value: formatDateTime(event.registrationDeadline, tz) },
+    { icon: 'calendar', label: event.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(event.startTime, event.endTime, tz) },
+    { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(event.registrationDeadline, tz) },
     ...(event.price != null && Number(event.price) > 0 ? [{
       icon: 'euro',
       label: 'Prix',
-      value: `${Number(event.price)} € — ${event.requirePrepayment ? 'à régler en ligne' : 'règlement au club'}`,
+      value: `${Number(event.price)} € · ${event.requirePrepayment ? 'en ligne' : 'au club'}`,
     } as MetaCard] : []),
   ];
 
@@ -156,7 +155,6 @@ export default function EventDetailPage() {
         />
         <MetaCardsRow cards={metaCards} />
         <ShareActions item={event} uidPrefix="event" />
-        {now && <TournamentTimeline steps={timelineSteps(event, now)} tz={tz} />}
 
         {event.description && <AboutCard text={event.description} />}
 

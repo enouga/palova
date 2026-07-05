@@ -37,7 +37,6 @@ jest.mock('../components/agenda/RegistrationUI', () => ({
     <button onClick={onClick}>{label}</button>
   ),
 }));
-jest.mock('../components/tournament/TournamentTimeline', () => ({ TournamentTimeline: () => null }));
 jest.mock('../components/tournament/ShareActions', () => ({ ShareActions: () => null }));
 jest.mock('../components/event/ParticipantsGrid', () => ({ ParticipantsGrid: () => null }));
 
@@ -51,14 +50,13 @@ jest.mock('../components/StripePaymentStep', () => ({
 
 // Lib helpers purs
 jest.mock('../lib/events', () => ({
-  eventPlacesLabel: () => 'places libres',
   KIND_LABEL: { MELEE: 'Mêlée', STAGE: 'Stage', SOIREE: 'Soirée', INITIATION: 'Initiation', AUTRE: 'Autre' },
 }));
 jest.mock('../lib/tournament', () => ({
   fillRatio: () => 0.25,
-  formatDateTime: () => '25/07/2030 23:59',
-  formatDateTimeRange: () => '01/08/2030',
-  timelineSteps: () => [],
+  formatDateShortTimeRange: () => '01/08/2030',
+  formatDateTimeShort: () => '25/07/2030 23:59',
+  heroPlacesLabel: () => ({ text: 'places libres', urgent: false }),
   waitlistPosition: () => null,
 }));
 
