@@ -43,7 +43,21 @@ describe('/admin/announcements — annonces enrichies', () => {
     await waitFor(() => expect(mocked.adminUploadAnnouncementImage).toHaveBeenCalledWith('c1', 'a-new', file, 't'));
   });
 
-  it('tableau : colonne Type + pastille affiche si imageUrl', async () => {
+  it('liste : chaque annonce expose ses actions Modifier/Supprimer + statut + type/date', async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([
+      { id: 'a1', title: 'Épinglée avec un très long titre qui déborde largement', body: 'Un corps de texte lui aussi très long pour vérifier que rien ne pousse les actions hors de la ligne.', linkUrl: null, imageUrl: '/uploads/announcements/a.jpg', kind: 'INFO', validUntil: null, isPublished: true, pinned: true, createdAt: '2026-07-05', updatedAt: '' },
+      { id: 'a2', title: 'Brouillon', body: '', linkUrl: null, imageUrl: null, kind: 'EVENT', validUntil: null, isPublished: false, pinned: false, createdAt: '2026-06-30', updatedAt: '' },
+    ] as never);
+    wrap();
+    await screen.findByText('Brouillon', { selector: 'span' });
+    // Une paire d'actions PAR annonce (l'ancienne table les cachait derrière un scroll horizontal).
+    expect(screen.getAllByRole('button', { name: 'Modifier' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Supprimer' })).toHaveLength(2);
+    expect(screen.getByText('Épinglée', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/créée le 05\/07\/2026/)).toBeInTheDocument();
+  });
+
+  it('liste : type + pastille affiche si imageUrl', async () => {
     mocked.adminGetAnnouncements.mockResolvedValue([
       { id: 'a1', title: 'Avec affiche', body: '', linkUrl: null, imageUrl: '/uploads/announcements/a.jpg', kind: 'OFFER', validUntil: null, isPublished: true, pinned: false, createdAt: '2026-07-01', updatedAt: '' },
     ] as never);

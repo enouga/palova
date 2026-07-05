@@ -150,44 +150,38 @@ export default function AdminAnnouncementsPage() {
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
       ) : (
-        <div style={{ overflowX: 'auto', borderRadius: 18, background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['Annonce', 'Type', 'Statut', 'Créée le', ''].map((h, i) => (
-                  <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 && <tr><td colSpan={5} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 16px' }}>Aucune annonce pour l'instant.</td></tr>}
-              {items.map((a) => (
-                <tr key={a.id} style={{ borderBottom: `1px solid ${th.line}` }}>
-                  <td style={{ ...cell, maxWidth: 360 }}>
-                    <div style={{ fontWeight: 600, marginBottom: a.body ? 3 : 0 }}>{a.title}</div>
-                    {a.body && <div style={{ color: th.textMute, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.body}</div>}
-                  </td>
-                  <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                    {KIND_LABEL[a.kind ?? 'INFO']}{a.imageUrl && <span title="Affiche" aria-label="Affiche" style={{ marginLeft: 6 }}>🖼</span>}
-                  </td>
-                  <td style={cell}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {a.pinned && <Chip tone="accent" icon="pin">Épinglée</Chip>}
-                      {!a.isPublished && <Chip tone="line">Brouillon</Chip>}
-                      {a.isPublished && !a.pinned && <Chip tone="mute">Publiée</Chip>}
-                    </div>
-                  </td>
-                  <td style={{ ...cell, color: th.textMute, whiteSpace: 'nowrap' }}>{new Date(a.createdAt).toLocaleDateString('fr-FR')}</td>
-                  <td style={cell}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => startEdit(a)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Modifier</button>
-                      <button onClick={() => remove(a)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        // Liste (pas une table) : les actions restent toujours visibles quelle que soit la
+        // largeur — l'ancienne table débordait du conteneur 720px et cachait Modifier/Supprimer
+        // derrière un scroll horizontal.
+        <div style={{ borderRadius: 18, background: th.surface, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+          {items.length === 0 && (
+            <div style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 16px' }}>Aucune annonce pour l'instant.</div>
+          )}
+          {items.map((a, i) => (
+            <div key={a.id} style={{
+              display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 16px',
+              padding: '13px 16px', borderTop: i > 0 ? `1px solid ${th.line}` : 'none',
+            }}>
+              <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+                {a.body && <div style={{ fontFamily: th.fontUI, color: th.textMute, fontSize: 13, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.body}</div>}
+                <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{KIND_LABEL[a.kind ?? 'INFO']}</span>
+                  {a.imageUrl && <span title="Affiche" aria-label="Affiche">🖼</span>}
+                  <span>· créée le {new Date(a.createdAt).toLocaleDateString('fr-FR')}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {a.pinned && <Chip tone="accent" icon="pin">Épinglée</Chip>}
+                {!a.isPublished && <Chip tone="line">Brouillon</Chip>}
+                {a.isPublished && !a.pinned && <Chip tone="mute">Publiée</Chip>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+                <button onClick={() => startEdit(a)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Modifier</button>
+                <button onClick={() => remove(a)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
