@@ -6,7 +6,7 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -28,6 +28,7 @@ import { BroadcastService } from '../services/broadcast.service';
 import { RatingService } from '../services/rating.service';
 import { SubscriptionService } from '../services/subscription.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
+import { PresentationService } from '../services/presentation.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -49,6 +50,7 @@ const broadcastService = new BroadcastService();
 const ratingService = new RatingService();
 const subscriptionService = new SubscriptionService();
 const emailTemplateService = new EmailTemplateService();
+const presentationService = new PresentationService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -105,6 +107,8 @@ const ERROR_STATUS: Record<string, number> = {
   PLAN_NOT_FOUND:         404,
   SUBSCRIPTION_NOT_FOUND: 404,
   EMAIL_TYPE_UNKNOWN:     404,
+  PHOTO_LIMIT_REACHED:    409,
+  PHOTO_NOT_FOUND:        404,
 };
 
 function asString(v: unknown): string {
@@ -1146,6 +1150,42 @@ router.post('/emails/:type/test', requireClubMember('ADMIN'), async (req: ClubSc
     }, me.email);
     res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
+});
+
+// --- Page club (présentation + galerie) — réservé ADMIN/OWNER ---
+const clubPhotoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+router.get('/presentation', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await presentationService.getAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/presentation', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await presentationService.updateText(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/photos', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  clubPhotoUpload.single('photo')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      ensureUploadDirs();
+      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
+      await fs.promises.writeFile(path.join(CLUB_PHOTOS_DIR, filename), file.buffer);
+      const photo = await presentationService.addPhoto(req.membership!.clubId, `/uploads/club-photos/${filename}`, req.body?.caption);
+      res.status(201).json(photo);
+    } catch (e) { handleError(e, res, next); }
+  });
+});
+router.patch('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await presentationService.updatePhoto(req.membership!.clubId, asString(req.params.id), req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { await presentationService.removePhoto(req.membership!.clubId, asString(req.params.id)); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 
 export default router;

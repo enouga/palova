@@ -20,6 +20,7 @@ import { FriendshipService } from '../services/friendship.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
+import { PresentationService } from '../services/presentation.service';
 import { PaymentHistoryService } from '../services/paymentHistory.service';
 import { SSEService } from '../services/sse.service';
 import { iconService } from '../services/icon.service';
@@ -46,6 +47,7 @@ const paymentMethodService = new PaymentMethodService();
 const paymentHistoryService = new PaymentHistoryService();
 const followService = new FollowService();
 const friendshipService = new FriendshipService();
+const presentationService = new PresentationService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -168,6 +170,12 @@ router.get('/:slug/announcements', async (req, res, next) => {
 // Sponsors actifs d'un club (affichage public).
 router.get('/:slug/sponsors', async (req, res, next) => {
   try { res.json(await sponsorService.listPublic(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// Présentation publique du club (page « Le club » + teaser Club-house).
+router.get('/:slug/presentation', async (req, res, next) => {
+  try { res.json(await presentationService.getPublic(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
 });
 
