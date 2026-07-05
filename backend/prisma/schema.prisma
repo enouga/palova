@@ -191,6 +191,14 @@ enum EnrollmentMode {
   PER_SESSION
 }
 
+/// Type d'une annonce : info simple, offre commerciale, affiche tournoi, événement.
+enum AnnouncementKind {
+  INFO
+  OFFER
+  TOURNAMENT
+  EVENT
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -958,6 +966,8 @@ model Announcement {
   body        String
   linkUrl     String?  @map("link_url")
   imageUrl    String?  @map("image_url")
+  kind        AnnouncementKind @default(INFO)
+  validUntil  DateTime?        @map("valid_until") /// fin d'affichage (fin de journée UTC) ; null = sans limite
   isPublished Boolean  @default(true) @map("is_published")
   pinned      Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
