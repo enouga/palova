@@ -9,6 +9,7 @@ import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { useClub } from '@/lib/ClubProvider';
 import { platformUrl, clubUrl } from '@/lib/clubUrl';
 import { packageLabel, isUsable } from '@/lib/packages';
+import { clubIsMultiSport, sportNames } from '@/lib/sportBadge';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
@@ -135,7 +136,11 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             <div style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 10 }}>
               <div style={sectionTitle}>Mes soldes</div>
               <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
-                {soldes.map((p) => <span key={p.id}>{packageLabel(p)}</span>)}
+                {soldes.map((p) => {
+                  const sport = clubIsMultiSport(club) && p.template.sportKeys.length > 0
+                    ? ` · ${sportNames(club, p.template.sportKeys).join(', ')}` : '';
+                  return <span key={p.id}>{packageLabel(p)}{sport}</span>;
+                })}
               </div>
             </div>
           )}
@@ -145,7 +150,11 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             <div style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 10 }}>
               <div style={sectionTitle}>Mes abonnements</div>
               <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
-                {subs.map((s) => <span key={s.id}>{s.plan.name}</span>)}
+                {subs.map((s) => {
+                  const sport = clubIsMultiSport(club) && s.sportKeys.length > 0
+                    ? ` · ${sportNames(club, s.sportKeys).join(', ')}` : '';
+                  return <span key={s.id}>{s.plan.name}{sport}</span>;
+                })}
               </div>
             </div>
           )}

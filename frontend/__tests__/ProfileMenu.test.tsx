@@ -8,7 +8,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Contexte club contrôlable : slug null = hôte plateforme, sinon hôte club.
-let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string } | null; loading: boolean } =
+let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; clubSports?: { id: string; sport: { key: string; name: string } }[] } | null; loading: boolean } =
   { slug: null, club: null, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => clubCtx }));
 
@@ -117,14 +117,35 @@ describe('ProfileMenu', () => {
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
     api.getMyClubMembership.mockResolvedValue({ membershipNo: 'LIC42', status: 'ACTIVE', isSubscriber: true });
     api.getMyClubPackages.mockResolvedValue([
-      { id: 'p1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 7, amountTotal: null, amountRemaining: null, purchasedAt: '2026-01-01', expiresAt: null, template: { name: 'Carnet 10' } },
-      { id: 'p2', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 0, amountTotal: null, amountRemaining: null, purchasedAt: '2026-01-01', expiresAt: null, template: { name: 'Carnet épuisé' } },
+      { id: 'p1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 7, amountTotal: null, amountRemaining: null, purchasedAt: '2026-01-01', expiresAt: null, template: { name: 'Carnet 10', sportKeys: [] } },
+      { id: 'p2', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 0, amountTotal: null, amountRemaining: null, purchasedAt: '2026-01-01', expiresAt: null, template: { name: 'Carnet épuisé', sportKeys: [] } },
     ]);
     wrap();
     openMenu();
     expect(await screen.findByText('Abonné')).toBeInTheDocument();
     expect(screen.getByText('Carnet — 7 entrées')).toBeInTheDocument();
     expect(screen.queryByText(/Carnet — 0 entrée/)).not.toBeInTheDocument(); // solde épuisé masqué
+  });
+
+  it('club multi-sport : le sport apparaît à côté des soldes et abonnements', async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = {
+      slug: 'demo', loading: false,
+      club: { id: 'c1', slug: 'demo', name: 'Club Démo', clubSports: [
+        { id: 'cs1', sport: { key: 'padel', name: 'Padel' } },
+        { id: 'cs2', sport: { key: 'tennis', name: 'Tennis' } },
+      ] },
+    };
+    api.getMyClubPackages.mockResolvedValue([
+      { id: 'p1', kind: 'WALLET', creditsTotal: null, creditsRemaining: null, amountTotal: '100', amountRemaining: '90', purchasedAt: '2026-01-01', expiresAt: null, template: { name: 'Avoir', sportKeys: ['tennis'] } },
+    ]);
+    api.getMyClubSubscriptions.mockResolvedValue([
+      { id: 's1', planId: 'pl1', status: 'ACTIVE', startedAt: '2026-01-01', expiresAt: '2027-01-01', monthlyPriceSnapshot: '30', sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null, plan: { name: 'Abonnement Padel' } },
+    ]);
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Porte-monnaie — 90,00 € · Tennis')).toBeInTheDocument();
+    expect(screen.getByText('Abonnement Padel · Padel')).toBeInTheDocument();
   });
 
   it("hôte plateforme : pas de section soldes ni d'appel membership", async () => {
