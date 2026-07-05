@@ -23,6 +23,7 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
   const [results, setResults] = useState<ClubMemberSearchResult[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState(false);
 
   useEffect(() => {
     api.listClubFriends(slug, token).then(setFriends).catch(() => setFriends([]));
@@ -30,9 +31,11 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
 
   const query = q.trim();
   useEffect(() => {
-    if (!query) { setResults([]); return; }
+    if (!query) { setResults([]); setSearchError(false); return; }
     const handle = setTimeout(() => {
-      api.searchClubMembers(slug, query, token).then(setResults).catch(() => setResults([]));
+      api.searchClubMembers(slug, query, token)
+        .then((r) => { setResults(r); setSearchError(false); })
+        .catch(() => { setResults([]); setSearchError(true); });
     }, 250);
     return () => clearTimeout(handle);
   }, [query, slug, token]);
@@ -73,8 +76,10 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
             </div>
           )}
           {rows.length === 0 && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '12px 4px' }}>
-              {query ? 'Aucun membre trouvé.' : 'Tapez un nom pour trouver un membre.'}
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: query && searchError ? '#e5484d' : th.textMute, padding: '12px 4px' }}>
+              {query
+                ? (searchError ? 'Recherche indisponible, réessayez.' : 'Aucun membre trouvé.')
+                : 'Tapez un nom pour trouver un membre.'}
             </div>
           )}
           {rows.map((r) => (

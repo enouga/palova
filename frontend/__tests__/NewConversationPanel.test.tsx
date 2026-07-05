@@ -85,3 +85,23 @@ it('échec de openConversation affiche une erreur et laisse le panneau ouvert', 
   expect(onOpened).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
 });
+
+it('échec de la recherche affiche un message d\'erreur (pas une liste vide silencieuse)', async () => {
+  apiMock.searchClubMembers.mockRejectedValue(new Error('backend down'));
+  renderPanel();
+  await screen.findByText('Léa M');
+  fireEvent.change(screen.getByPlaceholderText('Rechercher un membre…'), { target: { value: 'zzz' } });
+  expect(await screen.findByText('Recherche indisponible, réessayez.')).toBeInTheDocument();
+  expect(screen.queryByText('Aucun membre trouvé.')).not.toBeInTheDocument();
+});
+
+it('une recherche qui réussit après un échec efface le message d\'erreur', async () => {
+  apiMock.searchClubMembers.mockRejectedValueOnce(new Error('down'));
+  renderPanel();
+  await screen.findByText('Léa M');
+  fireEvent.change(screen.getByPlaceholderText('Rechercher un membre…'), { target: { value: 'to' } });
+  await screen.findByText('Recherche indisponible, réessayez.');
+  fireEvent.change(screen.getByPlaceholderText('Rechercher un membre…'), { target: { value: 'tom' } });
+  expect(await screen.findByText('Tom B')).toBeInTheDocument();
+  expect(screen.queryByText('Recherche indisponible, réessayez.')).not.toBeInTheDocument();
+});
