@@ -1,6 +1,6 @@
 import {
-  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatDateShortTimeRange, formatHourRange,
-  icsFilename, timelineSteps, waitlistPosition,
+  buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatDateShortTimeRange, formatDateTimeShort, formatHourRange,
+  heroPlacesLabel, icsFilename, timelineSteps, waitlistPosition,
 } from '../lib/tournament';
 import { TournamentParticipant } from '../lib/api';
 
@@ -153,6 +153,9 @@ describe('formatDateShortTimeRange', () => {
     expect(formatDateShortTimeRange('2026-07-09T21:30:00.000Z', '2026-07-09T22:30:00.000Z', tz))
       .toBe('jeu. 9 juil. 23h30 → ven. 10 juil. 00h30');
   });
+  it('sans fin → date courte + heure', () => {
+    expect(formatDateShortTimeRange('2026-07-09T12:01:00.000Z', null, tz)).toBe('jeu. 9 juil. · 14h01');
+  });
 });
 
 describe('formatHourRange', () => {
@@ -162,5 +165,28 @@ describe('formatHourRange', () => {
   });
   it('avec fin → plage d’heures', () => {
     expect(formatHourRange('2026-07-09T12:01:00.000Z', '2026-07-09T16:00:00.000Z', tz)).toBe('14h01 → 18h00');
+  });
+});
+
+describe('formatDateTimeShort', () => {
+  it('date courte + heure dans le fuseau du club', () => {
+    expect(formatDateTimeShort('2026-07-09T12:01:00.000Z', 'Europe/Paris')).toBe('jeu. 9 juil. · 14h01');
+  });
+});
+
+describe('heroPlacesLabel', () => {
+  it('null sans capacité (le compteur du hero suffit)', () => {
+    expect(heroPlacesLabel(7, null)).toBeNull();
+  });
+  it('plein ou surbooké → « Complet » court, jamais « liste d\'attente possible »', () => {
+    expect(heroPlacesLabel(12, 12)).toEqual({ text: 'Complet', urgent: false });
+    expect(heroPlacesLabel(14, 12)).toEqual({ text: 'Complet', urgent: false });
+  });
+  it('≤ 5 places restantes → urgent, singulier/pluriel', () => {
+    expect(heroPlacesLabel(10, 12)).toEqual({ text: 'Plus que 2 places', urgent: true });
+    expect(heroPlacesLabel(11, 12)).toEqual({ text: 'Plus que 1 place', urgent: true });
+  });
+  it('> 5 places restantes → libellé neutre', () => {
+    expect(heroPlacesLabel(4, 12)).toEqual({ text: '8 places restantes', urgent: false });
   });
 });

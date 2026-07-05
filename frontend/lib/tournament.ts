@@ -27,6 +27,11 @@ function formatHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
+/** Date courte + heure dans le fuseau du club, ex. « jeu. 9 juil. · 14h01 ». */
+export function formatDateTimeShort(iso: string, tz: string): string {
+  return `${formatDateShort(iso, tz)} · ${formatHour(iso, tz)}`;
+}
+
 /** Clé année-mois-jour dans le fuseau du club (pour détecter le même jour). */
 function dayKey(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: tz }).format(new Date(iso));
@@ -53,7 +58,8 @@ export function formatDateTimeRange(startIso: string, endIso: string | null | un
  *  - jours différents → « jeu. 9 juil. 14h01 → ven. 10 juil. 18h00 »
  * Le « même jour » est calculé dans le fuseau du club, jamais en heure locale du navigateur.
  */
-export function formatDateShortTimeRange(startIso: string, endIso: string, tz: string): string {
+export function formatDateShortTimeRange(startIso: string, endIso: string | null | undefined, tz: string): string {
+  if (!endIso) return formatDateTimeShort(startIso, tz);
   if (dayKey(startIso, tz) === dayKey(endIso, tz)) {
     return `${formatDateShort(startIso, tz)} · ${formatHour(startIso, tz)} → ${formatHour(endIso, tz)}`;
   }
@@ -81,6 +87,21 @@ export function deadlineCountdown(deadlineIso: string, now: Date): { text: strin
 export function fillRatio(t: Pick<Tournament, 'confirmedCount' | 'maxTeams'>): number | null {
   if (t.maxTeams == null || t.maxTeams <= 0) return null;
   return Math.min(1, Math.max(0, t.confirmedCount / t.maxTeams));
+}
+
+/**
+ * Badge places du hero des fiches tournoi/event — version courte, zéro doublon
+ * avec le compteur affiché à côté (« 8/8 binômes · 3 en attente »).
+ * null = badge masqué (sans capacité, le compteur suffit).
+ * Les listes (AgendaCard, club-house, calendrier national) gardent
+ * tournamentPlacesLabel/eventPlacesLabel, plus verbeux — là-bas il n'y a pas de compteur.
+ */
+export function heroPlacesLabel(confirmed: number, capacity: number | null): { text: string; urgent: boolean } | null {
+  if (capacity == null) return null;
+  const left = capacity - confirmed;
+  if (left <= 0) return { text: 'Complet', urgent: false };
+  if (left <= 5) return { text: `Plus que ${left} place${left > 1 ? 's' : ''}`, urgent: true };
+  return { text: `${left} places restantes`, urgent: false };
 }
 
 /**
