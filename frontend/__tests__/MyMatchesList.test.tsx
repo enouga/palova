@@ -31,10 +31,14 @@ const base = {
 };
 const matches = [base];
 
-it('affiche score, partenaire, adversaires, club et terrain', async () => {
+it('affiche le tableau de score, partenaire, adversaires, club et terrain', async () => {
   const onChanged = jest.fn();
   renderWithTheme(<MyMatchesList matches={matches as any} token="t" onChanged={onChanged} />);
-  expect(screen.getByText('6-4 / 6-3')).toBeInTheDocument();
+  // Tableau de score : ma ligne (équipe 2) → 4 et 3 ; adversaires (équipe 1) → 6 et 6.
+  expect(screen.getByText('Vous')).toBeInTheDocument();
+  expect(screen.getAllByText('6')).toHaveLength(2);
+  expect(screen.getByText('4')).toBeInTheDocument();
+  expect(screen.getByText('3')).toBeInTheDocument();
   expect(screen.getByText(/Marie Durand/)).toBeInTheDocument();
   expect(screen.getByText(/Paul Roy/)).toBeInTheDocument();
   expect(screen.getByText(/Lea Martin/)).toBeInTheDocument();

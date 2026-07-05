@@ -17,6 +17,8 @@ jest.mock('../lib/api', () => ({
     getMyClubs:       jest.fn().mockResolvedValue([]),
     getMyRating:      jest.fn().mockResolvedValue(null),
     getOpenMatches:   jest.fn(),
+    // Vue « Mes matchs » (résultats) intégrée à /parties.
+    getMyMatches:     jest.fn().mockResolvedValue([]),
     joinOpenMatch:    jest.fn().mockResolvedValue({ id: 'm1' }),
     leaveOpenMatch:   jest.fn().mockResolvedValue({ id: 'm1' }),
     removeOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),
@@ -226,7 +228,7 @@ describe('OpenMatches', () => {
     expect(screen.getByText('Court B')).toBeInTheDocument();
   });
 
-  it('club OFF : pas d onglet « Classement » ni reco « Pour toi »', async () => {
+  it('club OFF : pas d onglet « Stats » ni reco « Pour toi »', async () => {
     const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
     mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
     mocked.getOpenMatches.mockResolvedValue([
@@ -236,7 +238,7 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={clubOff} /></ThemeProvider>);
 
     expect(await screen.findByText('Court A')).toBeInTheDocument();
-    expect(screen.queryByText('Classement')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stats')).not.toBeInTheDocument();
     expect(screen.queryByText(/Pour toi/i)).not.toBeInTheDocument();
   });
 
@@ -267,5 +269,45 @@ describe('OpenMatches', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(mocked.joinOpenMatch).not.toHaveBeenCalled();
+  });
+
+  const myMatch = {
+    matchId: 'mm1', reservationId: 'r1', status: 'PENDING',
+    sets: [[6, 4]] as [number, number][],
+    playedAt: '2026-06-20T16:30:00Z', winningTeam: 1, myTeam: 2,
+    myConfirmation: 'PENDING', ratingAfter: null, needsMyConfirmation: false, commentCount: 0,
+    club: { name: 'Club Démo' }, sport: { name: 'Padel' }, resource: { name: 'Terrain 1' },
+    players: [
+      { userId: 'u1', team: 2, firstName: 'Eric', lastName: 'Nougayrede', isMe: true },
+      { userId: 'u2', team: 2, firstName: 'Marie', lastName: 'Durand', isMe: false },
+      { userId: 'u3', team: 1, firstName: 'Paul', lastName: 'Roy', isMe: false },
+      { userId: 'u4', team: 1, firstName: 'Lea', lastName: 'Martin', isMe: false },
+    ],
+  };
+
+  it('vue « Mes matchs » : le Segmented bascule sur mes résultats', async () => {
+    mocked.getOpenMatches.mockResolvedValue([] as never);
+    (mocked.getMyMatches as jest.Mock).mockResolvedValue([myMatch]);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mes matchs' }));
+    await waitFor(() => expect(mocked.getMyMatches).toHaveBeenCalledWith('abc'));
+    expect(await screen.findByText('Vous')).toBeInTheDocument();
+    expect(screen.getByText(/Marie Durand/)).toBeInTheDocument();
+    expect(screen.getByText('En attente de confirmation')).toBeInTheDocument();
+  });
+
+  it('deeplink ?vue=matchs : arrive directement sur la vue « Mes matchs »', async () => {
+    window.history.replaceState(null, '', '/parties?vue=matchs');
+    try {
+      mocked.getOpenMatches.mockResolvedValue([] as never);
+      (mocked.getMyMatches as jest.Mock).mockResolvedValue([myMatch]);
+      render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+      expect(await screen.findByRole('heading', { name: 'Mes matchs' })).toBeInTheDocument();
+      await waitFor(() => expect(mocked.getMyMatches).toHaveBeenCalledWith('abc'));
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
   });
 });

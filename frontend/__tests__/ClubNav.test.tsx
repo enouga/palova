@@ -28,6 +28,8 @@ jest.mock('../lib/api', () => ({
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // consommé par ClubNav (badge 💬 Messages du header)
     getDmUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (pastille « parties ouvertes » de l'onglet Parties)
+    getOpenMatches: jest.fn().mockResolvedValue([]),
     // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
     getMyTournaments: jest.fn().mockResolvedValue([]),
@@ -229,6 +231,30 @@ describe('ClubNav', () => {
     const callsBefore = mockApi.getDmUnread.mock.calls.length;
     act(() => { window.dispatchEvent(new Event('palova:dm-unread')); });
     await waitFor(() => expect(mockApi.getDmUnread.mock.calls.length).toBeGreaterThan(callsBefore));
+  });
+
+  it("affiche le nombre de parties ouvertes sur l'onglet Parties (pastille accent) quand aucun message non lu", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getOpenMatchUnread.mockResolvedValueOnce({ count: 0 });
+    mockApi.getOpenMatches.mockResolvedValueOnce([{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }]);
+    document.cookie = 'token=abc; path=/';
+    const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
+    render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
+    const badge = await screen.findByLabelText('3 parties ouvertes');
+    expect(badge.textContent).toBe('3');
+    // Pastille accent (bleu Palova par défaut), pas le rouge #e5484d des non-lus.
+    expect(badge.style.background).not.toBe('rgb(229, 72, 77)');
+  });
+
+  it('le badge de non lus a priorité sur le compteur de parties ouvertes', async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getOpenMatchUnread.mockResolvedValueOnce({ count: 1 });
+    mockApi.getOpenMatches.mockResolvedValueOnce([{ id: 'm1' }, { id: 'm2' }]);
+    document.cookie = 'token=abc; path=/';
+    const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
+    render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
+    expect(await screen.findByLabelText('1 non lus')).toBeInTheDocument();
+    expect(screen.queryByLabelText('2 parties ouvertes')).toBeNull();
   });
 
   it('montre « Parties » sans session si le club a du padel (parties ouvertes publiques)', async () => {

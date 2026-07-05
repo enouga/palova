@@ -1,19 +1,51 @@
 'use client';
 import { useState } from 'react';
-import { api, MyMatch } from '@/lib/api';
+import { api, MyMatch, MyMatchPlayer } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
-import { scoreLine, splitTeams } from '@/lib/match';
+import { ACCENTS, Theme } from '@/lib/theme';
+import { splitTeams } from '@/lib/match';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { MatchDiscussion } from '@/components/match/MatchDiscussion';
 
-function PlayerChip({ p }: { p: { userId: string; firstName: string; lastName: string } }) {
+/** Une ligne du tableau de score : avatars + noms de l'équipe, puis ses jeux par set (gras = set gagné). */
+function ScoreboardRow({ players, side, sets, th }: {
+  players: MyMatchPlayer[]; side: number; sets: [number, number][]; th: Theme;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={22} color={colorForSeed(p.userId)} />
-      <span>{p.firstName} {p.lastName}</span>
-    </span>
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+          {players.map((p, i) => (
+            <span key={p.userId} style={{ marginLeft: i > 0 ? -7 : 0, borderRadius: '50%', boxShadow: `0 0 0 2px ${th.surface}`, lineHeight: 0 }}>
+              <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={26} color={colorForSeed(p.userId)} />
+            </span>
+          ))}
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {players.map((p) => (
+            <span key={p.userId} style={{
+              fontFamily: th.fontUI, fontSize: 13, fontWeight: p.isMe ? 800 : 600, color: th.text,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35,
+            }}>
+              {p.isMe ? 'Vous' : `${p.firstName} ${p.lastName}`}
+            </span>
+          ))}
+        </span>
+      </div>
+      {sets.map(([a, b], i) => {
+        const mine = side === 1 ? a : b;
+        const won = side === 1 ? a > b : b > a;
+        return (
+          <span key={i} style={{
+            textAlign: 'center', fontFamily: th.fontUI, fontSize: 18, lineHeight: 1,
+            fontWeight: won ? 800 : 600, color: won ? th.text : th.textFaint, fontVariantNumeric: 'tabular-nums',
+          }}>
+            {mine}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -57,33 +89,37 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
     <ul className="space-y-2">
       {matches.map((m) => {
         const { partners, opponents } = splitTeams(m.players ?? [], m.myTeam);
+        const me = (m.players ?? []).find((p) => p.isMe);
+        const myRow = me ? [me, ...partners] : partners;
+        const otherTeam = m.myTeam === 1 ? 2 : 1;
         const result = resultLabel(m);
         const resultColor = result.tone === 'win' ? ACCENTS.emerald : result.tone === 'loss' ? ACCENTS.coral : th.textMute;
         const hasThread = m.status === 'DISPUTED' || m.commentCount > 0;
         return (
-          <li key={m.matchId} className="rounded-xl border p-3" style={{ borderColor: 'rgba(0,0,0,0.1)' }}>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">{scoreLine(m.sets)}</span>
-              <span className="text-xs font-semibold" style={{ color: resultColor }}>{result.text}</span>
+          <li key={m.matchId} style={{ border: `1px solid ${th.line}`, background: th.surface, borderRadius: 14, padding: 14 }}>
+            <div className="flex items-center justify-between gap-2">
+              <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>
+                {formatDateTime(m.playedAt)} · {m.sport.name}
+              </span>
+              <span style={{
+                flexShrink: 0, padding: '3px 10px', borderRadius: 999, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
+                color: result.tone === 'muted' ? th.textMute : resultColor,
+                background: result.tone === 'muted' ? th.surface2 : `${resultColor}1A`,
+              }}>{result.text}</span>
             </div>
 
-            <div className="mt-2 space-y-1 text-sm">
-              {partners.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="opacity-50">Avec</span>
-                  {partners.map((p) => <PlayerChip key={p.userId} p={p} />)}
-                </div>
-              )}
-              {opponents.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="opacity-50">Contre</span>
-                  {opponents.map((p) => <PlayerChip key={p.userId} p={p} />)}
-                </div>
-              )}
+            <div style={{
+              display: 'grid', gridTemplateColumns: `minmax(0, 1fr) repeat(${m.sets.length}, 32px)`,
+              alignItems: 'center', rowGap: 10, marginTop: 12,
+            }}>
+              <ScoreboardRow players={myRow} side={m.myTeam} sets={m.sets} th={th} />
+              <span aria-hidden="true" style={{ gridColumn: '1 / -1', height: 1, background: th.line }} />
+              <ScoreboardRow players={opponents} side={otherTeam} sets={m.sets} th={th} />
             </div>
 
-            <div className="mt-2 text-xs opacity-60">{formatDateTime(m.playedAt)} · {m.sport.name}</div>
-            <div className="text-xs opacity-60">{m.club.name}{m.resource ? ` · ${m.resource.name}` : ''}</div>
+            <div className="mt-3" style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>
+              {m.club.name}{m.resource ? ` · ${m.resource.name}` : ''}
+            </div>
 
             {m.needsMyConfirmation && disputingId !== m.matchId && (
               <div className="mt-2 flex gap-2">

@@ -41,13 +41,21 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const [logoFailed, setLogoFailed] = useState(false);
   const showClubLogo = !!club.logoUrl && !logoFailed;
 
+  // Deux compteurs sur l'onglet Parties : messages non lus (pastille rouge, priorité) et
+  // nombre de parties ouvertes à venir (pastille accent, même langage que « À venir » de Résas).
   const [partiesUnread, setPartiesUnread] = useState(0);
+  const [openPartiesCount, setOpenPartiesCount] = useState(0);
   const showPartiesTab = ready && !!token && clubHasPadel(club);
   useEffect(() => {
-    if (!showPartiesTab || !token) { setPartiesUnread(0); return; }
+    if (!showPartiesTab || !token) { setPartiesUnread(0); setOpenPartiesCount(0); return; }
     let alive = true;
-    const refresh = () => api.getOpenMatchUnread(club.slug, token)
-      .then((r) => { if (alive) setPartiesUnread(r.count); }).catch(() => {});
+    const refresh = () => {
+      api.getOpenMatchUnread(club.slug, token)
+        .then((r) => { if (alive) setPartiesUnread(r.count); }).catch(() => {});
+      // listOpenMatches ne renvoie que les parties à venir (startTime > now) → même total que /parties.
+      api.getOpenMatches(club.slug, token)
+        .then((list) => { if (alive) setOpenPartiesCount(list.length); }).catch(() => {});
+    };
     refresh();
     const es = new EventSource(notificationsStreamUrl(token));
     es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
@@ -220,6 +228,12 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 )}
                 {t.href === '/parties' && partiesUnread > 0 && (
                   <CountBadge count={partiesUnread} label={`${partiesUnread} non lus`} fontFamily={th.fontUI} />
+                )}
+                {t.href === '/parties' && partiesUnread === 0 && openPartiesCount > 0 && (
+                  // Aucun message non lu : on montre le nombre de parties ouvertes (pastille accent,
+                  // inversée sur l'onglet actif pour rester lisible — comme la pastille « À venir »).
+                  <CountBadge count={openPartiesCount} label={`${openPartiesCount} parties ouvertes`} fontFamily={th.fontUI}
+                    bg={active ? th.onAccent : th.accent} fg={active ? th.accent : th.onAccent} />
                 )}
                 {t.href === '/me/reservations' && upcomingCount > 0 && (
                   // Accent comme la pastille de l'onglet « À venir » ; inversé sur l'onglet

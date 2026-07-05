@@ -8,7 +8,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Contexte club contrôlable : slug null = hôte plateforme, sinon hôte club.
-let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; levelSystemEnabled?: boolean } | null; loading: boolean } =
+let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; levelSystemEnabled?: boolean; clubSports?: { sport: { key: string } }[] } | null; loading: boolean } =
   { slug: null, club: null, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => clubCtx }));
 
@@ -74,12 +74,18 @@ describe('Page Mes matchs à confirmer', () => {
     expect(await screen.findByText(/Aucun match enregistré/)).toBeInTheDocument();
   });
 
-  it('rend les matchs renvoyés par api.getMyMatches', async () => {
+  it('rend les matchs en tableau de score (jeux par équipe et par set)', async () => {
     api.getMyMatches.mockResolvedValue([match]);
     wrap();
-    expect(await screen.findByText('6-4 / 6-3')).toBeInTheDocument();
+    // Ma ligne (« Vous » + partenaire) : jeux de l'équipe 2 → 4 puis 3 ; adversaires (équipe 1) → 6 et 6.
+    expect(await screen.findByText('Vous')).toBeInTheDocument();
+    expect(screen.getAllByText('6')).toHaveLength(2);
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText(/Marie Durand/)).toBeInTheDocument();
     expect(screen.getByText(/Paul Roy/)).toBeInTheDocument();
+    expect(screen.getByText(/Lea Martin/)).toBeInTheDocument();
+    expect(screen.getByText('En attente de confirmation')).toBeInTheDocument();
     expect(screen.getByText(/Padel Arena Paris/)).toBeInTheDocument();
     expect(screen.getByText(/Court 2/)).toBeInTheDocument();
     expect(api.getMyMatches).toHaveBeenCalledWith('abc');
@@ -95,5 +101,11 @@ describe('Page Mes matchs à confirmer', () => {
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
     wrap();
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/me/reservations'));
+  });
+
+  it('hôte club avec padel : alias vers la vue « Mes matchs » de /parties', async () => {
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', clubSports: [{ sport: { key: 'padel' } }] }, loading: false };
+    wrap();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/parties?vue=matchs'));
   });
 });

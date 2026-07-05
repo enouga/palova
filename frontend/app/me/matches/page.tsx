@@ -5,6 +5,7 @@ import { api, MyMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
+import { clubHasPadel } from '@/lib/sport';
 import { Screen } from '@/components/ui/Screen';
 import { BackButton, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -32,6 +33,12 @@ export default function MyMatchesPage() {
   // Club sans niveau (ex. arrivée via un vieux lien de notif) : pas de page orpheline,
   // on rebascule vers la page réservations comme l'onglet « Matchs » indisponible le fait.
   useEffect(() => { if (slug && club && !levelEnabled) router.replace('/me/reservations'); }, [slug, club, levelEnabled, router]);
+
+  // « Mes matchs » vit désormais dans l'espace Parties : sur un hôte club padel, cette page
+  // n'est qu'un alias (vieux liens de notifs / emails) qui rebascule vers la vue dédiée.
+  useEffect(() => {
+    if (slug && club && levelEnabled && clubHasPadel(club)) router.replace('/parties?vue=matchs');
+  }, [slug, club, levelEnabled, router]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);

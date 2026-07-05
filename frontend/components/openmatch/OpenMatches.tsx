@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { api, ClubDetail, OpenMatch, notificationsStreamUrl } from '@/lib/api';
+import { api, ClubDetail, OpenMatch, MyMatch, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
+import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { inRange } from '@/lib/levelMatch';
@@ -34,7 +35,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [loading, setLoading] = useState(true);
   const [myLevel, setMyLevel] = useState<number | null>(null);
   const [filterMyLevel, setFilterMyLevel] = useState(false);
-  const [view, setView] = useState<'parties' | 'classement'>('parties');
+  const [view, setView] = useState<'parties' | 'matchs' | 'classement'>('parties');
+  // Mes matchs (résultats) : chargés à la 1re ouverture de la vue. null = pas encore chargé.
+  const [myMatches, setMyMatches] = useState<MyMatch[] | null>(null);
   const [viewerUserId, setViewerUserId] = useState('');
   const [canModerate, setCanModerate] = useState(false);
   const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
@@ -47,6 +50,20 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   }, [club.slug, token]);
 
   useEffect(() => { if (ready) load(); }, [ready, load]);
+
+  // Deeplink ?vue=matchs (menu profil, redirection de /me/matches, notifications).
+  // L'event window couvre le cas « déjà sur /parties » : router.push ne remonte pas le composant.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('vue') === 'matchs') setView('matchs');
+    const onVue = (e: Event) => { if ((e as CustomEvent).detail === 'matchs') setView('matchs'); };
+    window.addEventListener('palova:parties-vue', onVue);
+    return () => window.removeEventListener('palova:parties-vue', onVue);
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'matchs' || !token) return;
+    api.getMyMatches(token).then(setMyMatches).catch(() => setMyMatches([]));
+  }, [view, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -99,14 +116,18 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         <ClubNav club={club} />
         {levelEnabled && token && (
           <div style={{ padding: '16px 20px 0' }}>
-            <Segmented<'parties' | 'classement'>
+            <Segmented<'parties' | 'matchs' | 'classement'>
               value={view}
               onChange={setView}
-              options={[{ value: 'parties', label: 'Parties' }, { value: 'classement', label: 'Classement' }]}
+              options={[
+                { value: 'parties', label: 'Parties' },
+                { value: 'matchs', label: 'Mes matchs' },
+                { value: 'classement', label: 'Stats' },
+              ]}
             />
           </div>
         )}
-        {!levelEnabled || view === 'parties' ? (
+        {!levelEnabled || !token || view === 'parties' ? (
           <>
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
@@ -202,8 +223,28 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           )}
         </div>
           </>
+        ) : view === 'matchs' ? (
+          <>
+            <div style={{ padding: '18px 20px 0' }}>
+              <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Mes matchs</h1>
+              <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
+                Vos résultats enregistrés : confirmez ou contestez ceux en attente.
+              </p>
+            </div>
+            <div style={{ padding: '14px 20px 0' }}>
+              {myMatches === null ? (
+                <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+              ) : (
+                <MyMatchesList
+                  matches={myMatches}
+                  token={token}
+                  onChanged={() => api.getMyMatches(token).then(setMyMatches).catch(() => {})}
+                />
+              )}
+            </div>
+          </>
         ) : (
-          <Leaderboard club={club} viewerUserId={null} />
+          <Leaderboard club={club} viewerUserId={viewerUserId || null} />
         )}
       </div>
       <OpenMatchModals club={club} token={token} viewerUserId={viewerUserId} canModerate={canModerate} actions={a} reload={load} authNextPath="/parties" />

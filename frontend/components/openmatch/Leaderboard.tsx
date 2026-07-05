@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { api, ClubDetail, ClubLeaderboard } from '@/lib/api';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { api, ClubDetail, ClubLeaderboard, MyMatch, MyRating, RatingPoint } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
-import { ResultStats } from '@/components/player/ResultStats';
+import { computePlayerStats } from '@/lib/playerStats';
+import { StatsPanel } from '@/components/player/StatsPanel';
 
 // Classement des joueurs du club par niveau. Content-only (pas de Screen/ClubNav) :
 // rendu dans l'onglet « Classement » d'OpenMatches.
@@ -15,6 +16,10 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   const [data, setData] = useState<ClubLeaderboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [optingIn, setOptingIn] = useState(false);
+  // Données du panneau stats (best-effort : le classement s'affiche même si elles échouent).
+  const [rating, setRating] = useState<MyRating | null>(null);
+  const [myMatches, setMyMatches] = useState<MyMatch[]>([]);
+  const [history, setHistory] = useState<RatingPoint[]>([]);
 
   // Liste des sports proposés par le club (key + name)
   const clubSportsList = club.clubSports?.map((cs) => ({ key: cs.sport.key, name: cs.sport.name })) ?? [];
@@ -46,7 +51,18 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   const load = useCallback(async () => {
     if (!token) { setData(null); setLoading(false); return; }
     setLoading(true);
-    try { setData(await api.getClubLeaderboard(club.slug, token, lbSport)); }
+    try {
+      const [lb, myRating, matches, ratingHistory] = await Promise.all([
+        api.getClubLeaderboard(club.slug, token, lbSport),
+        api.getMyRating(token, lbSport).catch(() => null),
+        api.getMyMatches(token).catch(() => [] as MyMatch[]),
+        api.getRatingHistory(token, lbSport).catch(() => [] as RatingPoint[]),
+      ]);
+      setData(lb);
+      setRating(myRating);
+      setMyMatches(matches);
+      setHistory(ratingHistory);
+    }
     catch { setData(null); }
     finally { setLoading(false); }
   }, [club.slug, token, lbSport]);
@@ -56,6 +72,10 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
     if (!ready || !sportInitialized) return;
     load();
   }, [ready, load, sportInitialized]);
+
+  // Stats de jeu dérivées de l'historique de matchs, filtrées sur le sport affiché.
+  const sportName = clubSportsList.find((s) => s.key === lbSport)?.name;
+  const stats = useMemo(() => computePlayerStats(myMatches, sportName), [myMatches, sportName]);
 
   const optIn = async () => {
     if (!token) return;
@@ -76,7 +96,6 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   }
 
   const { entries, me } = data;
-
   return (
     <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Sélecteur de sport (masqué si un seul sport) */}
@@ -102,29 +121,16 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
         </select>
       )}
 
-      {/* Panneau « moi » */}
-      <div style={{ ...card, background: th.accent, color: th.onAccent, boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {me.ranked ? (
-          <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15 }}>
-            Vous êtes {me.rank}<sup>e</sup> sur {entries.length} · niveau {me.level!.toFixed(1)}
-          </span>
-        ) : me.optedIn && me.matchesToGo > 0 ? (
-          <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5 }}>
-            Encore {me.matchesToGo} match{me.matchesToGo > 1 ? 's' : ''} pour être classé.
-          </span>
-        ) : !me.optedIn ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5 }}>Vous n&apos;apparaissez pas dans le classement.</span>
-            <button onClick={optIn} disabled={optingIn}
-              style={{ alignSelf: 'flex-start', background: th.onAccent, color: th.accent, border: 'none', borderRadius: 999, padding: '8px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', opacity: optingIn ? 0.6 : 1 }}>
-              Apparaître dans le classement
-            </button>
-          </div>
-        ) : (
-          <span style={{ fontFamily: th.fontUI, fontWeight: 600, fontSize: 14.5 }}>Vous figurez au classement dès qu&apos;il y aura des joueurs classés.</span>
-        )}
-        <ResultStats tone="onAccent" wins={me.wins ?? 0} losses={me.losses ?? 0} streak={me.streak ?? 0} />
-      </div>
+      {/* Panneau « moi » : hero niveau + KPI + détails de jeu */}
+      <StatsPanel
+        me={me}
+        totalRanked={entries.length}
+        rating={rating}
+        stats={stats}
+        history={history}
+        onOptIn={optIn}
+        optingIn={optingIn}
+      />
 
       {/* Liste */}
       {entries.length === 0 ? (

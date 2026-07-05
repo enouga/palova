@@ -15,11 +15,17 @@ const clubSingle = { slug: 'padel-arena', name: 'Padel Arena', clubSports: [club
 const updateMyProfile = jest.fn();
 const getClubLeaderboard = jest.fn();
 const getMyProfile = jest.fn();
+const getMyRating = jest.fn();
+const getMyMatches = jest.fn();
+const getRatingHistory = jest.fn();
 jest.mock('@/lib/api', () => ({
   api: {
     getClubLeaderboard: (...a: any[]) => getClubLeaderboard(...a),
     updateMyProfile: (...a: any[]) => updateMyProfile(...a),
     getMyProfile: (...a: any[]) => getMyProfile(...a),
+    getMyRating: (...a: any[]) => getMyRating(...a),
+    getMyMatches: (...a: any[]) => getMyMatches(...a),
+    getRatingHistory: (...a: any[]) => getRatingHistory(...a),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -41,6 +47,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   // Défaut : pas de sport préféré (évite des erreurs dans les tests qui ne le testent pas)
   getMyProfile.mockResolvedValue({ preferredSport: null });
+  getMyRating.mockResolvedValue(null);
+  getMyMatches.mockResolvedValue([]);
+  getRatingHistory.mockResolvedValue([]);
 });
 
 it('affiche les lignes classées dans l ordre', async () => {
@@ -111,23 +120,27 @@ it("selecteur masque si le club n'a qu'un seul sport", async () => {
   expect(screen.queryByRole('combobox')).toBeNull();
 });
 
-it('bandeau moi : rangée de stats V/D quand il y a des matchs', async () => {
+it('panneau moi : hero niveau + tuiles KPI quand il y a des matchs', async () => {
   getClubLeaderboard.mockResolvedValue(payload({
     me: { optedIn: true, ranked: true, rank: 3, level: 5.2, matchesPlayed: 40, matchesToGo: 0, wins: 18, losses: 7, streak: 3 },
   }));
   wrap(<Leaderboard club={club} viewerUserId="u1" />);
-  await screen.findByText(/25 matchs/i);
-  expect(screen.getByText(/72\s*% de victoires/i)).toBeInTheDocument();
-  expect(screen.getByText(/18 V/)).toBeInTheDocument();
-  expect(screen.getByText(/3 victoires d'affilée/i)).toBeInTheDocument();
+  await screen.findByText(/Votre niveau/i);
+  expect(screen.getByText('5.2')).toBeInTheDocument();
+  expect(screen.getByText(/sur 2 au classement du club/i)).toBeInTheDocument();
+  // Tuiles KPI : Matchs / Victoires / Série
+  expect(screen.getByText('25')).toBeInTheDocument();
+  expect(screen.getByText('72 %')).toBeInTheDocument();
+  expect(screen.getByText('18 V · 7 D')).toBeInTheDocument();
+  expect(screen.getByText('3 V')).toBeInTheDocument();
 });
 
-it('bandeau moi : série de défaites → pastille "défaites"', async () => {
+it('panneau moi : série de défaites → tuile Série en défaites', async () => {
   getClubLeaderboard.mockResolvedValue(payload({
     me: { optedIn: true, ranked: true, rank: 4, level: 4.8, matchesPlayed: 30, matchesToGo: 0, wins: 10, losses: 12, streak: -2 },
   }));
   wrap(<Leaderboard club={club} viewerUserId="u1" />);
-  await screen.findByText(/2 défaites d'affilée/i);
+  await screen.findByText('2 D');
 });
 
 it('bandeau moi : pas de rangée de stats sans match décidé', async () => {

@@ -18,7 +18,6 @@ import { buildCalendarEntries, entriesByDay, buildAgendaList, agendaEntrySportKe
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
-import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { canRecordResult } from '@/lib/match';
 
@@ -41,7 +40,7 @@ export default function MyReservationsPage() {
   const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
   const [evts, setEvts]       = useState<MyEventRegistration[]>([]);
   const [lessons, setLessons] = useState<MyLessonEnrollment[]>([]);
-  const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar' | 'matches'>('calendar');
+  const [tab, setTab]         = useState<'upcoming' | 'past' | 'calendar'>('calendar');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
@@ -63,10 +62,6 @@ export default function MyReservationsPage() {
     if (!token || !slug) { setQuotaStatus(null); return; }
     api.getMyQuotaStatus(slug, token).then(setQuotaStatus).catch(() => setQuotaStatus(null));
   }, [token, slug]);
-
-  // Si le club a désactivé le système de niveau, l'onglet « Matchs » n'existe pas :
-  // on rebascule sur l'onglet par défaut pour ne pas afficher une vue vide.
-  useEffect(() => { if (!levelEnabled && tab === 'matches') setTab('calendar'); }, [levelEnabled, tab]);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
@@ -178,12 +173,11 @@ export default function MyReservationsPage() {
         )}
 
         <div style={{ padding: '16px 20px 0' }}>
-          <Segmented<'upcoming' | 'past' | 'calendar' | 'matches'> value={tab} onChange={setTab}
+          <Segmented<'upcoming' | 'past' | 'calendar'> value={tab} onChange={setTab}
             options={[
               { value: 'calendar', label: 'Calendrier', icon: 'calendar' },
               { value: 'upcoming', label: 'À venir', icon: 'clock', count: upcoming.length },
               { value: 'past', label: 'Passées', icon: 'check', count: past.length },
-              ...(levelEnabled ? [{ value: 'matches' as const, label: 'Matchs', icon: 'trophy' as const }] : []),
             ]} />
         </div>
 
@@ -218,14 +212,6 @@ export default function MyReservationsPage() {
                 />
               </>
             )}
-          </div>
-        ) : levelEnabled && tab === 'matches' ? (
-          <div style={{ padding: '18px 20px 0' }}>
-            <MyMatchesList
-              matches={matches}
-              token={token!}
-              onChanged={() => { if (token) api.getMyMatches(token).then(setMatches).catch(() => {}); }}
-            />
           </div>
         ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13, padding: '18px 20px 0' }}>
