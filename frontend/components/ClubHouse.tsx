@@ -12,7 +12,6 @@ import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ClubHouseHero } from '@/components/clubhouse/ClubHouseHero';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
-import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { PosterMosaic } from '@/components/clubhouse/PosterMosaic';
@@ -137,14 +136,8 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         <ClubPresentationCard presentation={presentation} clubName={club.name} />
       </div>
     ),
-    actionGrid: (slots.length > 0 || nextEvents.length > 0) && (
-      <>
-        <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:600px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
-        <div className="ch-grid">
-          <SlotsAlaUne slots={slots} timezone={club.timezone} />
-          <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
-        </div>
-      </>
+    events: nextEvents.length > 0 && (
+      <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
     ),
     matches: upcomingMatches.length > 0 && <OpenMatchesShowcase matches={upcomingMatches.slice(0, 6)} timezone={club.timezone} />,
     myReservations: next.length > 0 && (
@@ -194,10 +187,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     ),
   };
 
-  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, créneaux).
+  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, events).
   const order = token
-    ? ['matches', 'actionGrid', 'myReservations', 'posters', 'top', 'offers', 'clubCard', 'announcements']
-    : ['matches', 'clubCard', 'actionGrid', 'posters', 'offers', 'top', 'announcements'];
+    ? ['matches', 'events', 'myReservations', 'posters', 'top', 'offers', 'clubCard', 'announcements']
+    : ['matches', 'clubCard', 'events', 'posters', 'offers', 'top', 'announcements'];
 
   return (
     <>
