@@ -1,11 +1,11 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubEvent, ClubAvailability, OpenMatch, ClubPresentation, PublicOffers, TopMonthEntry } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { effectiveDurations, defaultDuration } from '@/lib/duration';
-import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExpired, clubPulse } from '@/lib/clubhouse';
+import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExpired, clubPulse, resolveSections, hiddenSectionKeys } from '@/lib/clubhouse';
 import { mergeAgenda } from '@/lib/events';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip } from '@/components/ui/atoms';
@@ -58,6 +58,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     return () => { clearTimeout(t); clearInterval(h); };
   }, []);
 
+  // Sections masquées par la config admin : leurs fetchs sont sautés (annonces et dispo
+  // restent inconditionnels — le hero et sa chip « Prochain créneau » en dépendent).
+  const hidden = useMemo(() => hiddenSectionKeys(club.clubHouseSections), [club.clubHouseSections]);
+
   const duration = defaultDuration(Array.from(new Set(
     club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
   )).sort((a, b) => a - b));
@@ -71,16 +75,34 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   }, [token, club.slug]);
 
   useEffect(() => { api.getClubAnnouncements(club.slug).then(setAnn).catch(() => setAnn([])); }, [club.slug]);
-  useEffect(() => { api.getClubSponsors(club.slug).then(setSpons).catch(() => setSpons([])); }, [club.slug]);
-  useEffect(() => { api.getClubTournaments(club.slug).then(setTournaments).catch(() => setTournaments([])); }, [club.slug]);
-  useEffect(() => { api.getClubEvents(club.slug).then(setEvents).catch(() => setEvents([])); }, [club.slug]);
-  useEffect(() => { api.getClubPresentation(club.slug).then(setPresentation).catch(() => setPresentation(null)); }, [club.slug]);
-  useEffect(() => { api.getClubOffers(club.slug).then(setOffers).catch(() => setOffers(null)); }, [club.slug]);
-  useEffect(() => { api.getClubTopMonth(club.slug).then(setTopMonth).catch(() => setTopMonth([])); }, [club.slug]);
   useEffect(() => {
-    if (!token) { setHasSub(false); return; }
+    if (hidden.has('sponsors')) return;
+    api.getClubSponsors(club.slug).then(setSpons).catch(() => setSpons([]));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (hidden.has('agenda')) return;
+    api.getClubTournaments(club.slug).then(setTournaments).catch(() => setTournaments([]));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (hidden.has('agenda')) return;
+    api.getClubEvents(club.slug).then(setEvents).catch(() => setEvents([]));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (hidden.has('clubCard')) return;
+    api.getClubPresentation(club.slug).then(setPresentation).catch(() => setPresentation(null));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (hidden.has('offers')) return;
+    api.getClubOffers(club.slug).then(setOffers).catch(() => setOffers(null));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (hidden.has('top')) return;
+    api.getClubTopMonth(club.slug).then(setTopMonth).catch(() => setTopMonth([]));
+  }, [club.slug, hidden]);
+  useEffect(() => {
+    if (!token || hidden.has('offers')) { setHasSub(false); return; }
     api.getMyClubSubscriptions(club.slug, token).then((subs) => setHasSub(subs.length > 0)).catch(() => setHasSub(false));
-  }, [club.slug, token]);
+  }, [club.slug, token, hidden]);
   // Prochains créneaux libres : on avance jour par jour (jusqu'à 7 j) et on s'arrête
   // dès qu'on a au moins 3 créneaux à venir → le bloc ne disparaît plus le soir.
   useEffect(() => {
@@ -97,12 +119,12 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     })();
     return () => { cancelled = true; };
   }, [club.slug, duration]);
-  useEffect(() => { if (ready && token) loadNext(); }, [ready, token, loadNext]);
+  useEffect(() => { if (ready && token && !hidden.has('agenda')) loadNext(); }, [ready, token, loadNext, hidden]);
   // Parties ouvertes visibles de tous : token facultatif (flags viewer à false en anonyme).
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || hidden.has('matches')) return;
     api.getOpenMatches(club.slug, token ?? undefined).then(setOpenMatches).catch(() => setOpenMatches([]));
-  }, [club.slug, token, ready]);
+  }, [club.slug, token, ready, hidden]);
 
   const cancel = async (r: MyReservation) => {
     if (!token) return;
@@ -179,10 +201,8 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     ),
   };
 
-  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, agenda).
-  const order = token
-    ? ['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements']
-    : ['matches', 'clubCard', 'agenda', 'posters', 'offers', 'top', 'announcements'];
+  // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
+  const { order, sponsorsVisible } = resolveSections(club.clubHouseSections, !!token);
 
   return (
     <>
@@ -194,7 +214,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
       {order.map((k) => wrap(k, sections[k]))}
 
-      <SponsorMarquee sponsors={spons} now={clock} />
+      {sponsorsVisible && <SponsorMarquee sponsors={spons} now={clock} />}
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>

@@ -40,6 +40,9 @@ const club = {
   clubSports: [{ id: 'cs1', durationsMin: [90], sport: { defaultDurationsMin: [90] }, resources: [] }],
 } as never;
 const wrap = () => render(<ThemeProvider><ClubHouse club={club} /></ThemeProvider>);
+const clubWith = (sections: unknown) =>
+  ({ ...(club as unknown as Record<string, unknown>), clubHouseSections: sections }) as never;
+const wrapWith = (c: never) => render(<ThemeProvider><ClubHouse club={c} /></ThemeProvider>);
 
 const pinned = { id: 'a1', title: 'Tournoi interne', body: 'Lots !', linkUrl: null, imageUrl: null, isPublished: true, pinned: true, createdAt: '2026-06-09', updatedAt: '' };
 const regular = { id: 'a2', title: 'Créneaux du matin', body: 'Dès 8h.', linkUrl: null, imageUrl: null, isPublished: true, pinned: false, createdAt: '2026-06-08', updatedAt: '' };
@@ -194,5 +197,33 @@ describe('ClubHouse', () => {
     fullSections();
     wrap();
     await waitFor(() => expect(mocked.getOpenMatches).toHaveBeenCalledWith('demo', undefined));
+  });
+
+  it('config custom : ordre appliqué, section masquée absente et fetch sauté', async () => {
+    fullSections();
+    wrapWith(clubWith([
+      { key: 'top', visible: true },
+      { key: 'clubCard', visible: true },
+      { key: 'matches', visible: false },
+      { key: 'agenda', visible: true },
+      { key: 'posters', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'announcements', visible: true },
+      { key: 'sponsors', visible: true },
+    ]));
+    await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('sec-club')).toBeInTheDocument());
+    const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids.indexOf('sec-top')).toBeLessThan(ids.indexOf('sec-club'));
+    expect(screen.queryByTestId('sec-matches')).not.toBeInTheDocument();
+    expect(mocked.getOpenMatches).not.toHaveBeenCalled();
+  });
+
+  it('sponsors masqués : rivière absente, fetch sponsors sauté ; clés manquantes complétées visibles', async () => {
+    fullSections();
+    wrapWith(clubWith([{ key: 'sponsors', visible: false }]));
+    await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
+    expect(screen.queryByTestId('sec-sponsors')).not.toBeInTheDocument();
+    expect(mocked.getClubSponsors).not.toHaveBeenCalled();
   });
 });
