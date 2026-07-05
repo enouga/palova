@@ -8,7 +8,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 
 // Stub des sections pour tester l'ORDRE sans leur logique interne :
 jest.mock('../components/clubhouse/PosterMosaic', () => ({ PosterMosaic: () => <div data-testid="sec-posters" /> }));
-jest.mock('../components/clubhouse/OpenMatchesRail', () => ({ OpenMatchesRail: () => <div data-testid="sec-matches" /> }));
+jest.mock('../components/clubhouse/OpenMatchesShowcase', () => ({ OpenMatchesShowcase: () => <div data-testid="sec-matches" /> }));
 jest.mock('../components/clubhouse/OffersShowcase', () => ({ OffersShowcase: () => <div data-testid="sec-offers" /> }));
 jest.mock('../components/clubhouse/TopOfMonth', () => ({ TopOfMonth: () => <div data-testid="sec-top" /> }));
 jest.mock('../components/clubhouse/ClubPresentationCard', () => ({ ClubPresentationCard: () => <div data-testid="sec-club" /> }));
@@ -83,19 +83,20 @@ describe('ClubHouse', () => {
     mocked.getMyClubSubscriptions.mockResolvedValue([]);
   });
 
-  it('annonce épinglée → hero « À la une », sans doublon dans la liste', async () => {
+  it('annonce épinglée → son titre dans le hero, sans doublon dans la liste', async () => {
     mocked.getClubAnnouncements.mockResolvedValue([pinned, regular] as never);
     wrap();
-    expect(await screen.findByText('À la une')).toBeInTheDocument();
+    expect(await screen.findByText('Tournoi interne')).toBeInTheDocument();
+    expect(screen.getByTestId('clubhouse-hero')).toHaveTextContent('Tournoi interne');
     expect(screen.getAllByText('Tournoi interne')).toHaveLength(1);
     expect(screen.getByText('Créneaux du matin')).toBeInTheDocument();
   });
 
-  it('pas d annonce épinglée → pas de hero, annonces en liste', async () => {
+  it('pas d annonce épinglée → hero avec accroche générique, annonces en liste', async () => {
     mocked.getClubAnnouncements.mockResolvedValue([regular] as never);
     wrap();
     expect(await screen.findByText('Créneaux du matin')).toBeInTheDocument();
-    expect(screen.queryByText('À la une')).not.toBeInTheDocument();
+    expect(screen.getByTestId('clubhouse-hero')).toHaveTextContent('Réservez, jouez, retrouvez-vous.');
   });
 
   it('annonce expirée → masquée partout ; annonce à image → bento, pas la liste', async () => {
@@ -150,18 +151,19 @@ describe('ClubHouse', () => {
     expect(screen.getByText('Mêlée du vendredi').closest('a')).toHaveAttribute('href', '/events/e1');
   });
 
-  it('visiteur : Le club avant les parties, offres avant top, partenaires en dernier', async () => {
+  it('visiteur : parties en tête, puis Le club ; offres avant top, partenaires en dernier', async () => {
     fullSections();
     wrap();
     await waitFor(() => expect(screen.getByTestId('sec-club')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
     const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
-    expect(ids.indexOf('sec-club')).toBeLessThan(ids.indexOf('sec-matches'));
+    expect(ids.indexOf('sec-matches')).toBe(0);
+    expect(ids.indexOf('sec-matches')).toBeLessThan(ids.indexOf('sec-club'));
     expect(ids.indexOf('sec-offers')).toBeLessThan(ids.indexOf('sec-top'));
     expect(ids.indexOf('sec-sponsors')).toBe(ids.length - 1);
   });
 
-  it('membre : Le club redescend sous le top, top avant offres', async () => {
+  it('membre : parties en tête, Le club sous le top, top avant offres', async () => {
     mockAuth = { token: 't', clubId: null, ready: true };
     fullSections();
     wrap();

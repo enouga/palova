@@ -5,17 +5,18 @@ import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, Club
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { effectiveDurations, defaultDuration } from '@/lib/duration';
-import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExpired } from '@/lib/clubhouse';
+import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExpired, clubPulse } from '@/lib/clubhouse';
 import { mergeAgenda } from '@/lib/events';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import { HeroAnnouncement } from '@/components/clubhouse/HeroAnnouncement';
+import { ClubHouseHero } from '@/components/clubhouse/ClubHouseHero';
+import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 import { SlotsAlaUne } from '@/components/clubhouse/SlotsAlaUne';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { PosterMosaic } from '@/components/clubhouse/PosterMosaic';
-import { OpenMatchesRail } from '@/components/clubhouse/OpenMatchesRail';
+import { OpenMatchesShowcase } from '@/components/clubhouse/OpenMatchesShowcase';
 import { OffersShowcase } from '@/components/clubhouse/OffersShowcase';
 import { TopOfMonth } from '@/components/clubhouse/TopOfMonth';
 import { ClubPresentationCard } from '@/components/clubhouse/ClubPresentationCard';
@@ -112,10 +113,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     finally { setCancelling(false); }
   };
 
-  const sectionTitle = (t: string) => (
-    <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{t}</div>
-  );
-
   const now = new Date();
   // Hero : l'annonce épinglée la plus récente (l'API renvoie épinglées d'abord), non expirée.
   const hero = ann.length > 0 && ann[0].pinned && !announcementExpired(ann[0], now) ? ann[0] : null;
@@ -131,10 +128,15 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const empty = !hero && slots.length === 0 && nextEvents.length === 0 && restAnn.length === 0 && spons.length === 0
     && next.length === 0 && upcomingMatches.length === 0 && posters.length === 0 && !showClubCard && !showOffers && topMonth.length < 3;
 
-  const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '22px 20px 0' }}>{node}</div>;
+  const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '30px 20px 0' }}>{node}</div>;
 
   const sections: Record<string, React.ReactNode> = {
-    clubCard: showClubCard && presentation && <ClubPresentationCard presentation={presentation} clubName={club.name} />,
+    clubCard: showClubCard && presentation && (
+      <div>
+        <SectionHeader title="Le club" action={{ label: 'Découvrir →', href: '/club' }} />
+        <ClubPresentationCard presentation={presentation} clubName={club.name} />
+      </div>
+    ),
     actionGrid: (slots.length > 0 || nextEvents.length > 0) && (
       <>
         <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:600px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
@@ -144,13 +146,13 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         </div>
       </>
     ),
-    matches: upcomingMatches.length > 0 && <OpenMatchesRail matches={upcomingMatches.slice(0, 3)} timezone={club.timezone} />,
+    matches: upcomingMatches.length > 0 && <OpenMatchesShowcase matches={upcomingMatches.slice(0, 6)} timezone={club.timezone} />,
     myReservations: next.length > 0 && (
       <div>
-        {sectionTitle('Vos prochaines réservations')}
+        <SectionHeader title="Vos prochaines réservations" action={{ label: 'Tout voir →', href: '/me/reservations' }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {next.map((r) => (
-            <button key={r.id} onClick={() => setConfirmCancel(r)} style={{ border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', background: th.surface, borderRadius: 14, padding: '12px 14px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', alignItems: 'center', gap: 11 }}>
+            <button key={r.id} onClick={() => setConfirmCancel(r)} style={{ ...cardStyle(th), border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 11 }}>
               <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: th.mode === 'floodlit' ? `${th.accent}24` : `${th.accent}40` }}>
                 <Icon name="ticket" size={17} color={th.mode === 'floodlit' ? th.accent : th.ink} />
               </span>
@@ -175,10 +177,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     top: topMonth.length >= 3 && <TopOfMonth entries={topMonth} />,
     announcements: restAnn.length > 0 && (
       <div>
-        {sectionTitle('Annonces')}
+        <SectionHeader title="Annonces" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {restAnn.map((a) => (
-            <div key={a.id} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+            <div key={a.id} style={{ ...cardStyle(th), borderRadius: 16, padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {a.pinned && <Chip tone="accent">Épinglé</Chip>}
                 <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{a.title}</span>
@@ -192,14 +194,18 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     ),
   };
 
-  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (créneaux, parties).
+  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, créneaux).
   const order = token
-    ? ['actionGrid', 'matches', 'myReservations', 'posters', 'top', 'offers', 'clubCard', 'announcements']
-    : ['clubCard', 'actionGrid', 'matches', 'posters', 'offers', 'top', 'announcements'];
+    ? ['matches', 'actionGrid', 'myReservations', 'posters', 'top', 'offers', 'clubCard', 'announcements']
+    : ['matches', 'clubCard', 'actionGrid', 'posters', 'offers', 'top', 'announcements'];
 
   return (
     <>
-      {hero && <HeroAnnouncement announcement={hero} />}
+      <ClubHouseHero
+        clubName={club.name}
+        announcement={hero}
+        pulse={clubPulse({ slots, matchCount: upcomingMatches.length, nextEventStart: nextEvents[0]?.startTime ?? null, now: clock, timezone: club.timezone })}
+      />
 
       {order.map((k) => wrap(k, sections[k]))}
 
