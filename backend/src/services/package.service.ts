@@ -1,6 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import { Prisma, PackageKind, PaymentMethod, VoucherStatus } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
+import { OFFERS_DIR } from '../utils/uploads';
 
 /** Méthodes acceptées pour encaisser la VENTE d'une offre (pas de prépayé sur prépayé). */
 const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
@@ -8,6 +11,13 @@ const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
 /** Méthodes qui représentent un vrai flux d'argent (miroir de accounting.service.ts). */
 const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
 const isMoney = (m: string) => MONEY_METHODS.includes(m);
+
+/** Supprime le fichier d'image uploadé d'une offre (best-effort, jamais bloquant). */
+function deleteUploadedOfferImage(imageUrl: string | null | undefined): void {
+  if (imageUrl?.startsWith('/uploads/offers/')) {
+    fs.promises.unlink(path.join(OFFERS_DIR, path.basename(imageUrl))).catch(() => {});
+  }
+}
 
 export class PackageService {
   // --- Offres (templates) ---
@@ -17,10 +27,10 @@ export class PackageService {
   }
 
   async createTemplate(clubId: string, body: {
-    kind?: string; name?: string; price?: number;
+    kind?: string; name?: string; description?: string | null; price?: number;
     entriesCount?: number; walletAmount?: number; validityDays?: number | null; sportKeys?: string[];
   }) {
-    const { kind, name, price, entriesCount, walletAmount, validityDays, sportKeys } = body;
+    const { kind, name, description, price, entriesCount, walletAmount, validityDays, sportKeys } = body;
     if (kind !== 'ENTRIES' && kind !== 'WALLET')                          throw new Error('VALIDATION_ERROR');
     if (!name?.trim())                                                    throw new Error('VALIDATION_ERROR');
     if (typeof price !== 'number' || isNaN(price) || price <= 0)          throw new Error('VALIDATION_ERROR');
@@ -44,6 +54,7 @@ export class PackageService {
         clubId,
         kind: kind as PackageKind,
         name: name.trim(),
+        description: description?.trim() || null,
         price: new Prisma.Decimal(price),
         entriesCount: kind === 'ENTRIES' ? (entriesCount as number) : null,
         walletAmount: kind === 'WALLET' ? new Prisma.Decimal(walletAmount as number) : null,
@@ -55,7 +66,7 @@ export class PackageService {
 
   /** kind/entriesCount/walletAmount sont immuables (des soldes vendus y réfèrent). */
   async updateTemplate(id: string, clubId: string, body: {
-    name?: string; price?: number; validityDays?: number | null; isActive?: boolean;
+    name?: string; description?: string | null; imageUrl?: string | null; price?: number; validityDays?: number | null; isActive?: boolean;
   }) {
     const tpl = await prisma.packageTemplate.findUnique({ where: { id } });
     if (!tpl || tpl.clubId !== clubId) throw new Error('TEMPLATE_NOT_FOUND');
@@ -64,6 +75,12 @@ export class PackageService {
     if (body.name !== undefined) {
       if (!body.name.trim()) throw new Error('VALIDATION_ERROR');
       data.name = body.name.trim();
+    }
+    if (body.description !== undefined) data.description = body.description?.trim() || null;
+    if (body.imageUrl !== undefined) {
+      const next = body.imageUrl?.trim() || null;
+      if (next !== tpl.imageUrl) deleteUploadedOfferImage(tpl.imageUrl);
+      data.imageUrl = next;
     }
     if (body.price !== undefined) {
       if (typeof body.price !== 'number' || isNaN(body.price) || body.price <= 0) throw new Error('VALIDATION_ERROR');
@@ -76,6 +93,14 @@ export class PackageService {
     if (body.isActive !== undefined) data.isActive = body.isActive;
 
     return prisma.packageTemplate.update({ where: { id }, data });
+  }
+
+  /** Pose l'URL du fichier uploadé sur l'offre (supprime l'ancien fichier). */
+  async setImage(id: string, clubId: string, imageUrl: string) {
+    const tpl = await prisma.packageTemplate.findUnique({ where: { id } });
+    if (!tpl || tpl.clubId !== clubId) throw new Error('TEMPLATE_NOT_FOUND');
+    deleteUploadedOfferImage(tpl.imageUrl);
+    return prisma.packageTemplate.update({ where: { id }, data: { imageUrl } });
   }
 
   // --- Vente en caisse ---

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import '../../__mocks__/prisma';
 import { Prisma } from '@prisma/client';
 import { prismaMock } from '../../__mocks__/prisma';
@@ -44,13 +45,65 @@ describe('PackageService — offres (templates)', () => {
       .rejects.toThrow('TEMPLATE_NOT_FOUND');
   });
 
-  it('updateTemplate ne modifie que name/price/validityDays/isActive', async () => {
+  it('updateTemplate ne modifie que name/description/price/validityDays/isActive', async () => {
     prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1' } as any);
     prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1' } as any);
     await service.updateTemplate('tpl-1', 'club-1', { name: 'Nouveau nom', isActive: false });
     const data = prismaMock.packageTemplate.update.mock.calls[0][0].data as Record<string, unknown>;
     expect(data).not.toHaveProperty('kind');
     expect(data).not.toHaveProperty('entriesCount');
+  });
+
+  it('crée une offre avec description complète (trim), null si absente', async () => {
+    prismaMock.packageTemplate.create.mockResolvedValue({ id: 'tpl-3' } as any);
+    await service.createTemplate('club-1', { kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10, description: '  Valable 1 an, non cessible.  ' });
+    expect(prismaMock.packageTemplate.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: 'Valable 1 an, non cessible.' }),
+    }));
+    await service.createTemplate('club-1', { kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10 });
+    expect(prismaMock.packageTemplate.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: null }),
+    }));
+  });
+
+  it('updateTemplate met à jour la description (efface si chaîne vide)', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1' } as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1' } as any);
+    await service.updateTemplate('tpl-1', 'club-1', { description: 'Nouvelle description' });
+    expect(prismaMock.packageTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: 'Nouvelle description' }),
+    }));
+    await service.updateTemplate('tpl-1', 'club-1', { description: '   ' });
+    expect(prismaMock.packageTemplate.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: null }),
+    }));
+  });
+
+  it('setImage pose la nouvelle URL et supprime l’ancien fichier uploadé', async () => {
+    const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1', imageUrl: '/uploads/offers/tpl-1-111.jpg' } as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1', imageUrl: '/uploads/offers/tpl-1-222.jpg' } as any);
+    await service.setImage('tpl-1', 'club-1', '/uploads/offers/tpl-1-222.jpg');
+    expect(unlink).toHaveBeenCalledWith(expect.stringContaining('tpl-1-111.jpg'));
+    expect(prismaMock.packageTemplate.update).toHaveBeenCalledWith({ where: { id: 'tpl-1' }, data: { imageUrl: '/uploads/offers/tpl-1-222.jpg' } });
+    unlink.mockRestore();
+  });
+
+  it('setImage refuse une offre d’un autre club', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'autre' } as any);
+    await expect(service.setImage('tpl-1', 'club-1', '/uploads/offers/x.jpg')).rejects.toThrow('TEMPLATE_NOT_FOUND');
+  });
+
+  it('updateTemplate avec imageUrl:null supprime le fichier existant', async () => {
+    const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1', imageUrl: '/uploads/offers/tpl-1-111.jpg' } as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1' } as any);
+    await service.updateTemplate('tpl-1', 'club-1', { imageUrl: null });
+    expect(unlink).toHaveBeenCalledWith(expect.stringContaining('tpl-1-111.jpg'));
+    expect(prismaMock.packageTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ imageUrl: null }),
+    }));
+    unlink.mockRestore();
   });
 
   it('crée une offre avec sportKeys validés', async () => {

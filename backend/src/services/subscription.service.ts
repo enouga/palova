@@ -1,12 +1,22 @@
+import fs from 'fs';
+import path from 'path';
 import { Prisma, PaymentMethod, SubscriptionBenefit } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { PackageService } from './package.service';
+import { OFFERS_DIR } from '../utils/uploads';
 
 /** Méthodes acceptées pour encaisser la VENTE d'un abonnement (1re mensualité). */
 const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
 
+/** Supprime le fichier d'image uploadé d'un plan (best-effort, jamais bloquant). */
+function deleteUploadedPlanImage(imageUrl: string | null | undefined): void {
+  if (imageUrl?.startsWith('/uploads/offers/')) {
+    fs.promises.unlink(path.join(OFFERS_DIR, path.basename(imageUrl))).catch(() => {});
+  }
+}
+
 type PlanBody = {
-  name?: string; sportKeys?: string[]; monthlyPrice?: number; commitmentMonths?: number;
+  name?: string; description?: string | null; imageUrl?: string | null; sportKeys?: string[]; monthlyPrice?: number; commitmentMonths?: number;
   offPeakOnly?: boolean; benefit?: string; discountPercent?: number | null;
   dailyCap?: number | null; weeklyCap?: number | null;
 };
@@ -40,6 +50,7 @@ export class SubscriptionService {
       data: {
         clubId,
         name: body.name!.trim(),
+        description: body.description?.trim() || null,
         sportKeys: body.sportKeys!,
         monthlyPrice: new Prisma.Decimal(body.monthlyPrice!),
         commitmentMonths: body.commitmentMonths!,
@@ -71,6 +82,12 @@ export class SubscriptionService {
 
     const data: Prisma.SubscriptionPlanUpdateInput = {};
     if (body.name !== undefined)             data.name = body.name.trim();
+    if (body.description !== undefined)      data.description = body.description?.trim() || null;
+    if (body.imageUrl !== undefined) {
+      const next = body.imageUrl?.trim() || null;
+      if (next !== existing.imageUrl) deleteUploadedPlanImage(existing.imageUrl);
+      data.imageUrl = next;
+    }
     if (body.sportKeys !== undefined)        data.sportKeys = body.sportKeys;
     if (body.monthlyPrice !== undefined)     data.monthlyPrice = new Prisma.Decimal(body.monthlyPrice);
     if (body.commitmentMonths !== undefined) data.commitmentMonths = body.commitmentMonths;
@@ -84,6 +101,14 @@ export class SubscriptionService {
     if (body.isActive !== undefined)         data.isActive = body.isActive;
 
     return prisma.subscriptionPlan.update({ where: { id }, data });
+  }
+
+  /** Pose l'URL du fichier uploadé sur le plan (supprime l'ancien fichier). */
+  async setImage(id: string, clubId: string, imageUrl: string) {
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
+    if (!plan || plan.clubId !== clubId) throw new Error('PLAN_NOT_FOUND');
+    deleteUploadedPlanImage(plan.imageUrl);
+    return prisma.subscriptionPlan.update({ where: { id }, data: { imageUrl } });
   }
 
   async sellSubscription(clubId: string, userId: string, body: {

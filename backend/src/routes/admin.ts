@@ -6,7 +6,7 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, OFFERS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -779,6 +779,30 @@ router.patch('/packages/templates/:id', async (req: ClubScopedRequest, res: Resp
   try { res.json(await packageService.updateTemplate(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
 
+const offerImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Affiche d'une offre prépayée : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
+router.post('/packages/templates/:id/image', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  offerImageUpload.single('image')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      ensureUploadDirs();
+      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
+      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), file.buffer);
+      const tpl = await packageService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/offers/${filename}`);
+      res.json(tpl);
+    } catch (e) { handleError(e, res, next); }
+  });
+});
+
 // Soldes actifs du club (pour les boutons d'encaissement rapide par joueur).
 router.get('/packages/active', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.listActiveByClub(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
@@ -793,6 +817,28 @@ router.post('/subscription-plans', async (req: ClubScopedRequest, res: Response,
 });
 router.patch('/subscription-plans/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.updatePlan(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+
+// Affiche d'un abonnement : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
+router.post('/subscription-plans/:id/image', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  offerImageUpload.single('image')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      ensureUploadDirs();
+      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
+      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), file.buffer);
+      const plan = await subscriptionService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/offers/${filename}`);
+      res.json(plan);
+    } catch (e) { handleError(e, res, next); }
+  });
 });
 
 // Vente / liste des abonnements d'un membre

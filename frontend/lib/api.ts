@@ -419,6 +419,19 @@ export const api = {
     request<SubscriptionPlan>(`/api/clubs/${clubId}/admin/subscription-plans`, { method: 'POST', body: JSON.stringify(body) }, token),
   adminUpdateSubscriptionPlan: (clubId: string, id: string, body: UpdateSubscriptionPlanBody, token: string) =>
     request<SubscriptionPlan>(`/api/clubs/${clubId}/admin/subscription-plans/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  /** Upload de l'affiche d'un abonnement : fetch dédié (FormData), pattern uploadMyAvatar. */
+  adminUploadSubscriptionPlanImage: async (clubId: string, id: string, file: File, token: string): Promise<SubscriptionPlan> => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/subscription-plans/${id}/image`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<SubscriptionPlan>;
+  },
   adminGetMemberSubscriptions: (clubId: string, userId: string, token: string) =>
     request<Subscription[]>(`/api/clubs/${clubId}/admin/members/${userId}/subscriptions`, {}, token),
   adminSellSubscription: (clubId: string, userId: string, body: SellSubscriptionBody, token: string) =>
@@ -433,6 +446,20 @@ export const api = {
 
   adminUpdatePackageTemplate: (clubId: string, id: string, body: UpdatePackageTemplateBody, token: string) =>
     request<PackageTemplate>(`/api/clubs/${clubId}/admin/packages/templates/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+
+  /** Upload de l'affiche d'une offre prépayée : fetch dédié (FormData), pattern uploadMyAvatar. */
+  adminUploadPackageTemplateImage: async (clubId: string, id: string, file: File, token: string): Promise<PackageTemplate> => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/packages/templates/${id}/image`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<PackageTemplate>;
+  },
 
   adminGetMemberPackages: (clubId: string, userId: string, token: string) =>
     request<MemberPackage[]>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, {}, token),
@@ -1601,6 +1628,8 @@ export type SubscriptionStatus = 'ACTIVE' | 'CANCELLED';
 export interface SubscriptionPlan {
   id: string;
   name: string;
+  description: string | null;
+  imageUrl: string | null;
   sportKeys: string[];
   monthlyPrice: string;        // Decimal sérialisé
   commitmentMonths: number;
@@ -1630,11 +1659,11 @@ export interface Subscription {
 }
 
 export type CreateSubscriptionPlanBody = {
-  name: string; sportKeys: string[]; monthlyPrice: number; commitmentMonths: number;
+  name: string; description?: string | null; sportKeys: string[]; monthlyPrice: number; commitmentMonths: number;
   offPeakOnly?: boolean; benefit: SubscriptionBenefit; discountPercent?: number | null;
   dailyCap?: number | null; weeklyCap?: number | null;
 };
-export type UpdateSubscriptionPlanBody = Partial<CreateSubscriptionPlanBody & { isActive: boolean }>;
+export type UpdateSubscriptionPlanBody = Partial<CreateSubscriptionPlanBody & { isActive: boolean; imageUrl: string | null }>;
 export interface SellSubscriptionBody {
   planId: string; method?: PaymentMethod; payerName?: string; voucherRef?: string; voucherIssuer?: string;
 }
@@ -1643,6 +1672,9 @@ export interface PackageTemplate {
   id: string;
   kind: PackageKind;
   name: string;
+  sportKeys: string[];
+  description: string | null;
+  imageUrl: string | null;
   price: string;
   entriesCount: number | null;
   walletAmount: string | null;
@@ -1660,7 +1692,7 @@ export interface MemberPackage {
   amountRemaining: string | null;
   purchasedAt: string;
   expiresAt: string | null;
-  template: { name: string };
+  template: { name: string; sportKeys: string[] };
 }
 
 /** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
@@ -1728,10 +1760,10 @@ export interface SellPackageBody {
 }
 
 export type CreatePackageTemplateBody = {
-  kind: PackageKind; name: string; price: number;
-  entriesCount?: number; walletAmount?: number; validityDays?: number | null;
+  kind: PackageKind; name: string; description?: string | null; price: number;
+  entriesCount?: number; walletAmount?: number; validityDays?: number | null; sportKeys?: string[];
 };
-export type UpdatePackageTemplateBody = Partial<{ name: string; price: number; validityDays: number | null; isActive: boolean }>;
+export type UpdatePackageTemplateBody = Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; validityDays: number | null; isActive: boolean }>;
 
 export type AnnouncementKind = 'INFO' | 'OFFER' | 'TOURNAMENT' | 'EVENT';
 
@@ -1762,12 +1794,12 @@ export interface ClubPresentation {
 }
 
 export interface PublicPlan {
-  id: string; name: string; monthlyPrice: string; commitmentMonths: number;
+  id: string; name: string; description: string | null; imageUrl: string | null; monthlyPrice: string; commitmentMonths: number;
   offPeakOnly: boolean; benefit: 'INCLUDED' | 'DISCOUNT'; discountPercent: number | null;
   dailyCap: number | null; weeklyCap: number | null; sportKeys: string[];
 }
 export interface PublicPackageTemplate {
-  id: string; name: string; kind: 'ENTRIES' | 'WALLET'; price: string;
+  id: string; name: string; sportKeys: string[]; description: string | null; imageUrl: string | null; kind: 'ENTRIES' | 'WALLET'; price: string;
   entriesCount: number | null; walletAmount: string | null; validityDays: number | null;
 }
 export interface PublicOffers { plans: PublicPlan[]; packages: PublicPackageTemplate[]; onlinePurchase: boolean; }
@@ -1788,7 +1820,7 @@ export interface Sponsor {
   createdAt: string;
 }
 
-export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
+export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string | null; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
 export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
 
 export type ReservationType = 'COURT' | 'COACHING' | 'TOURNAMENT' | 'EVENT';

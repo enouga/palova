@@ -874,6 +874,8 @@ model PackageTemplate {
   clubId       String      @map("club_id")
   kind         PackageKind
   name         String
+  description  String?                                              // texte complet affiché aux joueurs (club-house)
+  imageUrl     String?     @map("image_url")                        // affiche uploadée, affichée avec la description
   price        Decimal     @db.Decimal(10, 2)                       // prix de vente
   entriesCount Int?        @map("entries_count")                    // si ENTRIES
   walletAmount Decimal?    @map("wallet_amount") @db.Decimal(10, 2) // si WALLET : montant crédité
@@ -919,6 +921,8 @@ model SubscriptionPlan {
   id               String              @id @default(cuid())
   clubId           String              @map("club_id")
   name             String
+  description      String?                                       // texte complet affiché aux joueurs (club-house)
+  imageUrl         String?             @map("image_url")         // affiche uploadée, affichée avec la description
   sportKeys        String[]            @map("sport_keys")        // clés Sport couvertes (['padel'])
   monthlyPrice     Decimal             @map("monthly_price") @db.Decimal(10, 2)
   commitmentMonths Int                 @map("commitment_months")

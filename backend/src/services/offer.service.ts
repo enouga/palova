@@ -24,12 +24,12 @@ export class OfferService {
       prisma.subscriptionPlan.findMany({
         where: { clubId: club.id, isActive: true },
         orderBy: { monthlyPrice: 'asc' },
-        select: { id: true, name: true, monthlyPrice: true, commitmentMonths: true, offPeakOnly: true, benefit: true, discountPercent: true, dailyCap: true, weeklyCap: true, sportKeys: true },
+        select: { id: true, name: true, description: true, imageUrl: true, monthlyPrice: true, commitmentMonths: true, offPeakOnly: true, benefit: true, discountPercent: true, dailyCap: true, weeklyCap: true, sportKeys: true },
       }),
       prisma.packageTemplate.findMany({
         where: { clubId: club.id, isActive: true },
         orderBy: { price: 'asc' },
-        select: { id: true, name: true, kind: true, price: true, entriesCount: true, walletAmount: true, validityDays: true, sportKeys: true },
+        select: { id: true, name: true, description: true, imageUrl: true, kind: true, price: true, entriesCount: true, walletAmount: true, validityDays: true, sportKeys: true },
       }),
     ]);
     const onlinePurchase = !!club.stripeAccountId && club.stripeAccountStatus === 'ACTIVE';

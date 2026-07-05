@@ -1,3 +1,4 @@
+import fs from 'fs';
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { AnnouncementService } from '../announcement.service';
@@ -44,6 +45,27 @@ describe('AnnouncementService', () => {
       await expect(service.create('club-1', { title: 't', body: 'b', validUntil: 'pas-une-date' }))
         .rejects.toThrow('VALIDATION_ERROR');
     });
+    it('update supprime le fichier uploadé quand imageUrl est explicitement retirée', async () => {
+      const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+      prismaMock.announcement.findUnique.mockResolvedValue({ clubId: 'club-1', imageUrl: '/uploads/announcements/a.jpg' } as any);
+      prismaMock.announcement.update.mockResolvedValue({ id: 'a1' } as any);
+      await service.update('a1', 'club-1', { imageUrl: null });
+      expect(unlink).toHaveBeenCalledWith(expect.stringContaining('a.jpg'));
+      expect(prismaMock.announcement.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ imageUrl: null }),
+      }));
+      unlink.mockRestore();
+    });
+
+    it('update sans clé imageUrl ne touche pas au fichier existant', async () => {
+      const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+      prismaMock.announcement.findUnique.mockResolvedValue({ clubId: 'club-1', imageUrl: '/uploads/announcements/a.jpg' } as any);
+      prismaMock.announcement.update.mockResolvedValue({ id: 'a1' } as any);
+      await service.update('a1', 'club-1', { title: 'nouveau titre' });
+      expect(unlink).not.toHaveBeenCalled();
+      unlink.mockRestore();
+    });
+
     it('update efface validUntil quand null explicite', async () => {
       prismaMock.announcement.findUnique.mockResolvedValue({ clubId: 'club-1' } as any);
       prismaMock.announcement.update.mockResolvedValue({ id: 'a1' } as any);

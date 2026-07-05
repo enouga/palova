@@ -1,12 +1,155 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
-import { api, PackageTemplate, PackageKind, SubscriptionPlan, SubscriptionBenefit } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { api, PackageTemplate, PackageKind, SubscriptionPlan, SubscriptionBenefit, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 
 const euro = (s: string | number) => `${Number(s).toFixed(2).replace('.', ',')} €`;
+
+/**
+ * Description complète + affiche d'une offre : preview (texte + image, « Modifier » en
+ * bas) → édition unique (texte + image) → UN SEUL « Enregistrer » qui valide les deux à
+ * la fois (description et changement/retrait d'image).
+ */
+function OfferEditor({ description, imageUrl, busy, onSave }: {
+  description: string | null;
+  imageUrl: string | null;
+  busy: boolean;
+  onSave: (description: string, removeImage: boolean, newImageFile: File | null) => Promise<void>;
+}) {
+  const { th } = useTheme();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(description ?? '');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => { setDraft(description ?? ''); }, [description]);
+
+  useEffect(() => {
+    if (!pendingFile || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(pendingFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingFile]);
+
+  const linkBtn = { border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.accent } as const;
+  const miniBtn = { border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 8, padding: '5px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.text } as const;
+
+  const startEdit = () => {
+    setDraft(description ?? '');
+    setPendingFile(null);
+    setImageRemoved(false);
+    if (fileRef.current) fileRef.current.value = '';
+    setEditing(true);
+  };
+  const cancel = () => {
+    setEditing(false);
+    setPendingFile(null);
+    setImageRemoved(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const save = async () => {
+    await onSave(draft, imageRemoved, pendingFile);
+    setEditing(false);
+    setPendingFile(null);
+    setImageRemoved(false);
+  };
+
+  const editingImage = previewUrl ?? (!imageRemoved && imageUrl ? assetUrl(imageUrl) : null);
+  const shownImage = editing ? editingImage : (imageUrl ? assetUrl(imageUrl) : null);
+
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: description ? th.textMute : th.textFaint, whiteSpace: 'pre-wrap' }}>
+          {description || 'Aucune description complète — les joueurs ne verront que les caractéristiques ci-dessus.'}
+        </div>
+        {shownImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={shownImage} alt="Affiche de l'offre" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 300, maxHeight: 500, borderRadius: 8 }} />
+        )}
+        <button type="button" onClick={startEdit} style={linkBtn}>Modifier</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={4}
+        placeholder="Description complète de l'offre, affichée aux joueurs dans la modale de souscription…"
+        style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, lineHeight: 1.5, resize: 'vertical' }} />
+
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+        onChange={(e) => { const f = e.target.files?.[0] ?? null; setPendingFile(f); if (f) setImageRemoved(false); }} />
+      {editingImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={editingImage} alt="Affiche de l'offre" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 300, maxHeight: 500, borderRadius: 8 }} />
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} style={miniBtn}>
+          {editingImage ? "Changer l'image" : 'Ajouter une image'}
+        </button>
+        {editingImage && (
+          <button type="button" disabled={busy} onClick={() => { setPendingFile(null); setImageRemoved(true); if (fileRef.current) fileRef.current.value = ''; }} style={{ ...miniBtn, color: '#ff7a4d' }}>
+            Retirer l'image
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" disabled={busy} onClick={save}
+          style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700 }}>
+          Enregistrer
+        </button>
+        <button type="button" disabled={busy} onClick={cancel} style={miniBtn}>
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Image en attente de création (aperçu local, rien n'est uploadé tant que l'offre n'existe pas). */
+function PendingImagePicker({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+  const { th } = useTheme();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const miniBtn = { border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 8, padding: '5px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.text } as const;
+
+  useEffect(() => {
+    if (!file || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={previewUrl} alt="Aperçu" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 300, maxHeight: 500, borderRadius: 8 }} />
+      ) : file ? (
+        <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.text, fontWeight: 600 }}>{file.name}</span>
+      ) : null}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" onClick={() => fileRef.current?.click()} style={miniBtn}>
+          {file ? "Changer l'image" : 'Ajouter une image'}
+        </button>
+        {file && (
+          <button type="button" onClick={() => { onChange(null); if (fileRef.current) fileRef.current.value = ''; }} style={{ ...miniBtn, color: '#ff7a4d' }}>
+            Retirer
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPackagesPage() {
   const { th } = useTheme();
@@ -21,6 +164,8 @@ export default function AdminPackagesPage() {
 
   const [kind, setKind]           = useState<PackageKind>('ENTRIES');
   const [name, setName]           = useState('');
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [price, setPrice]         = useState('');
   const [entries, setEntries]     = useState('10');
   const [walletAmount, setWallet] = useState('');
@@ -29,6 +174,8 @@ export default function AdminPackagesPage() {
   // abonnements
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [pName, setPName] = useState('');
+  const [pDescription, setPDescription] = useState('');
+  const [pImageFile, setPImageFile] = useState<File | null>(null);
   const [pSports, setPSports] = useState<string[]>(['padel']);
   const [pPrice, setPPrice] = useState('');
   const [pMonths, setPMonths] = useState('12');
@@ -61,14 +208,19 @@ export default function AdminPackagesPage() {
     setBusy(true);
     try {
       setError(null);
-      await api.adminCreatePackageTemplate(clubId, {
-        kind, name: name.trim(), price: Number(price),
+      const created = await api.adminCreatePackageTemplate(clubId, {
+        kind, name: name.trim(), description: description.trim() || undefined, price: Number(price),
         entriesCount: kind === 'ENTRIES' ? Number(entries) : undefined,
         walletAmount: kind === 'WALLET' ? Number(walletAmount) : undefined,
         validityDays: validity ? Number(validity) : null,
       }, token);
-      setName(''); setPrice(''); setWallet('');
+      const pendingImage = imageFile;
+      setName(''); setDescription(''); setPrice(''); setWallet(''); setImageFile(null);
       await load();
+      if (pendingImage) {
+        try { await api.adminUploadPackageTemplateImage(clubId, created.id, pendingImage, token); await load(); }
+        catch (e) { setError(`Offre créée, mais l'image n'a pas pu être envoyée (${(e as Error).message}). Ajoutez-la depuis la liste ci-dessous.`); }
+      }
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -78,6 +230,22 @@ export default function AdminPackagesPage() {
     setBusy(true);
     try { setError(null); await api.adminUpdatePackageTemplate(clubId, t.id, { isActive: !t.isActive }, token); await load(); }
     catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  /** Un seul point d'enregistrement pour la description ET l'image d'une offre. */
+  const saveTemplateEdits = async (t: PackageTemplate, descriptionValue: string, removeImage: boolean, newImageFile: File | null) => {
+    if (!token || !clubId) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminUpdatePackageTemplate(clubId, t.id, {
+        description: descriptionValue.trim() || null,
+        ...(removeImage && !newImageFile ? { imageUrl: null } : {}),
+      }, token);
+      if (newImageFile) await api.adminUploadPackageTemplateImage(clubId, t.id, newImageFile, token);
+      await load();
+    } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
 
@@ -91,15 +259,20 @@ export default function AdminPackagesPage() {
     setBusy(true);
     try {
       setError(null);
-      await api.adminCreateSubscriptionPlan(clubId, {
-        name: pName.trim(), sportKeys: pSports, monthlyPrice: Number(pPrice), commitmentMonths: Number(pMonths),
+      const created = await api.adminCreateSubscriptionPlan(clubId, {
+        name: pName.trim(), description: pDescription.trim() || undefined, sportKeys: pSports, monthlyPrice: Number(pPrice), commitmentMonths: Number(pMonths),
         offPeakOnly: pOffPeak, benefit: pBenefit,
         discountPercent: pBenefit === 'DISCOUNT' ? Number(pDiscount) : null,
         dailyCap: pDailyCap ? Number(pDailyCap) : null,
         weeklyCap: pWeeklyCap ? Number(pWeeklyCap) : null,
       }, token);
-      setPName(''); setPPrice('');
+      const pendingImage = pImageFile;
+      setPName(''); setPDescription(''); setPPrice(''); setPImageFile(null);
       await load();
+      if (pendingImage) {
+        try { await api.adminUploadSubscriptionPlanImage(clubId, created.id, pendingImage, token); await load(); }
+        catch (e) { setError(`Abonnement créé, mais l'image n'a pas pu être envoyée (${(e as Error).message}). Ajoutez-la depuis la liste ci-dessous.`); }
+      }
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -109,6 +282,22 @@ export default function AdminPackagesPage() {
     setBusy(true);
     try { setError(null); await api.adminUpdateSubscriptionPlan(clubId, p.id, { isActive: !p.isActive }, token); await load(); }
     catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  /** Un seul point d'enregistrement pour la description ET l'image d'un abonnement. */
+  const savePlanEdits = async (p: SubscriptionPlan, descriptionValue: string, removeImage: boolean, newImageFile: File | null) => {
+    if (!token || !clubId) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminUpdateSubscriptionPlan(clubId, p.id, {
+        description: descriptionValue.trim() || null,
+        ...(removeImage && !newImageFile ? { imageUrl: null } : {}),
+      }, token);
+      if (newImageFile) await api.adminUploadSubscriptionPlanImage(clubId, p.id, newImageFile, token);
+      await load();
+    } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
 
@@ -131,6 +320,12 @@ export default function AdminPackagesPage() {
             </button>
           ))}
         </div>
+        <PendingImagePicker file={imageFile} onChange={setImageFile} />
+        <label style={{ ...label, marginBottom: 10 }}>Description complète (affichée aux joueurs)
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
+            placeholder="Ex. Valable dans tous les créneaux du club, cessible en famille, sans engagement…"
+            style={{ ...input, height: 'auto', resize: 'vertical', lineHeight: 1.5 }} />
+        </label>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ ...label, flex: 1, minWidth: 180 }}>Nom
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'ENTRIES' ? 'Ex. 10 entrées' : 'Ex. Avoir 200 €'} style={input} />
@@ -162,19 +357,23 @@ export default function AdminPackagesPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {templates.map((t) => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: th.surface, borderRadius: 14, padding: '13px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: t.isActive ? 1 : 0.55 }}>
-              <div style={{ flex: 1 }}>
+            <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 10, background: th.surface, borderRadius: 14, padding: '13px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: t.isActive ? 1 : 0.55 }}>
+              <div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text }}>{t.name}</div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
                   {t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euro(t.walletAmount ?? 0)} crédités`}
                   {' · '}{euro(t.price)}
                   {t.validityDays ? ` · valable ${t.validityDays} j` : ' · sans expiration'}
                 </div>
+                <OfferEditor description={t.description} imageUrl={t.imageUrl} busy={busy}
+                  onSave={(d, r, f) => saveTemplateEdits(t, d, r, f)} />
               </div>
-              <button type="button" onClick={() => toggleActive(t)} disabled={busy}
-                style={{ border: `1px solid ${th.line}`, background: 'transparent', color: t.isActive ? '#ff7a4d' : th.text, borderRadius: 9, padding: '7px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-                {t.isActive ? 'Désactiver' : 'Réactiver'}
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => toggleActive(t)} disabled={busy}
+                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: t.isActive ? '#ff7a4d' : th.text, borderRadius: 9, padding: '7px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                  {t.isActive ? 'Désactiver' : 'Réactiver'}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -193,6 +392,12 @@ export default function AdminPackagesPage() {
             </button>
           ))}
         </div>
+        <PendingImagePicker file={pImageFile} onChange={setPImageFile} />
+        <label style={{ ...label, marginBottom: 10 }}>Description complète (affichée aux joueurs)
+          <textarea value={pDescription} onChange={(e) => setPDescription(e.target.value)} rows={3}
+            placeholder="Ex. Accès illimité aux heures creuses, résiliable après la période d'engagement…"
+            style={{ ...input, height: 'auto', resize: 'vertical', lineHeight: 1.5 }} />
+        </label>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ ...label, flex: 1, minWidth: 180 }}>Nom
             <input type="text" value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Ex. Abonnement Padel — heures creuses" style={input} />
@@ -232,8 +437,8 @@ export default function AdminPackagesPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {plans.map((p) => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: th.surface, borderRadius: 14, padding: '13px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: p.isActive ? 1 : 0.55 }}>
-              <div style={{ flex: 1 }}>
+            <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 10, background: th.surface, borderRadius: 14, padding: '13px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: p.isActive ? 1 : 0.55 }}>
+              <div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text }}>{p.name}</div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
                   {p.sportKeys.join(', ')} · {euro(p.monthlyPrice)}/mois · {p.commitmentMonths} mois
@@ -241,11 +446,15 @@ export default function AdminPackagesPage() {
                   {' · '}{p.benefit === 'INCLUDED' ? 'inclus' : `−${p.discountPercent} %`}
                   {(p.dailyCap || p.weeklyCap) ? ` · max ${p.dailyCap ?? '∞'}/j, ${p.weeklyCap ?? '∞'}/sem` : ''}
                 </div>
+                <OfferEditor description={p.description} imageUrl={p.imageUrl} busy={busy}
+                  onSave={(d, r, f) => savePlanEdits(p, d, r, f)} />
               </div>
-              <button type="button" onClick={() => togglePlanActive(p)} disabled={busy}
-                style={{ border: `1px solid ${th.line}`, background: 'transparent', color: p.isActive ? '#ff7a4d' : th.text, borderRadius: 9, padding: '7px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-                {p.isActive ? 'Désactiver' : 'Réactiver'}
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => togglePlanActive(p)} disabled={busy}
+                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: p.isActive ? '#ff7a4d' : th.text, borderRadius: 9, padding: '7px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                  {p.isActive ? 'Désactiver' : 'Réactiver'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

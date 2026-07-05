@@ -58,8 +58,11 @@ export class AnnouncementService {
   }
 
   async update(id: string, clubId: string, data: AnnouncementInput) {
-    const found = await prisma.announcement.findUnique({ where: { id }, select: { clubId: true } });
+    const found = await prisma.announcement.findUnique({ where: { id }, select: { clubId: true, imageUrl: true } });
     if (!found || found.clubId !== clubId) throw new Error('ANNOUNCEMENT_NOT_FOUND');
+    if (data.imageUrl !== undefined && (data.imageUrl?.trim() || null) !== found.imageUrl) {
+      deleteUploadedImage(found.imageUrl);
+    }
     return prisma.announcement.update({
       where: { id },
       data: {

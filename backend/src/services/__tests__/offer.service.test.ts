@@ -19,9 +19,12 @@ describe('OfferService.listPublicOffers', () => {
     expect(r.plans).toHaveLength(1);
     expect(r.packages).toHaveLength(1);
     expect(r.onlinePurchase).toBe(true);
-    expect(prismaMock.subscriptionPlan.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId: 'c1', isActive: true } }));
+    expect(prismaMock.subscriptionPlan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { clubId: 'c1', isActive: true },
+      select: expect.objectContaining({ description: true, imageUrl: true }),
+    }));
     expect(prismaMock.packageTemplate.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      select: expect.objectContaining({ sportKeys: true }),
+      select: expect.objectContaining({ description: true, imageUrl: true, sportKeys: true }),
     }));
   });
 

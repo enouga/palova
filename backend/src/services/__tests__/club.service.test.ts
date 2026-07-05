@@ -782,6 +782,19 @@ describe('clubTopOfMonth', () => {
     }));
   });
 
+  it('renvoie jusqu\'à 10 joueurs classés (pas seulement le podium)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
+    const mk = (userId: string, wins: number) =>
+      Array.from({ length: wins }, () => ({ userId, team: 1, match: { winningTeam: 1 }, user: { firstName: userId, lastName: 'X', avatarUrl: null } }));
+    // 12 joueurs avec au moins 1 victoire chacun, décroissant.
+    const rows = Array.from({ length: 12 }, (_, i) => mk(`u${i}`, 12 - i)).flat();
+    prismaMock.matchPlayer.findMany.mockResolvedValue(rows as any);
+    const top = await service.clubTopOfMonth('slug');
+    expect(top).toHaveLength(10);
+    expect(top[0].userId).toBe('u0');
+    expect(top[9].userId).toBe('u9');
+  });
+
   it('moins de 3 joueurs avec une victoire → liste vide (section masquée)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
     prismaMock.matchPlayer.findMany.mockResolvedValue([

@@ -209,8 +209,9 @@ export class ClubService {
     return club;
   }
 
-  /** Top 3 du mois : joueurs du club par victoires sur matchs CONFIRMED du mois calendaire
-   *  courant (fuseau club). Vide si moins de 3 joueurs ont au moins 1 victoire. */
+  /** Top du mois (podium 3 + classement jusqu'à la 10e place) : joueurs du club par victoires
+   *  sur matchs CONFIRMED du mois calendaire courant (fuseau club). Vide si moins de 3 joueurs
+   *  ont au moins 1 victoire. */
   async clubTopOfMonth(slug: string) {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true, timezone: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
@@ -235,7 +236,7 @@ export class ClubService {
       cur.wins += 1;
       byUser.set(r.userId, cur);
     }
-    const top = [...byUser.values()].sort((a, b) => b.wins - a.wins).slice(0, 3);
+    const top = [...byUser.values()].sort((a, b) => b.wins - a.wins).slice(0, 10);
     return top.length >= 3 ? top : [];
   }
 

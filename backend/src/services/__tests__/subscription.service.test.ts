@@ -1,3 +1,4 @@
+import fs from 'fs';
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { SubscriptionService } from '../subscription.service';
@@ -46,6 +47,21 @@ describe('SubscriptionService — createPlan', () => {
     await expect(service.createPlan('club-1', { ...base, commitmentMonths: 0 })).rejects.toThrow('VALIDATION_ERROR');
     await expect(service.createPlan('club-1', { ...base, dailyCap: 0 })).rejects.toThrow('VALIDATION_ERROR');
   });
+
+  it('stocke la description complète (trim), null si absente', async () => {
+    prismaMock.subscriptionPlan.create.mockResolvedValue({ id: 'plan-2' } as any);
+    await service.createPlan('club-1', {
+      name: 'Abo Padel', sportKeys: ['padel'], monthlyPrice: 69, commitmentMonths: 12, benefit: 'INCLUDED',
+      description: '  Accès illimité en heures creuses.  ',
+    });
+    expect(prismaMock.subscriptionPlan.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: 'Accès illimité en heures creuses.' }),
+    }));
+    await service.createPlan('club-1', { name: 'x', sportKeys: ['padel'], monthlyPrice: 69, commitmentMonths: 12, benefit: 'INCLUDED' });
+    expect(prismaMock.subscriptionPlan.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: null }),
+    }));
+  });
 });
 
 describe('SubscriptionService — updatePlan', () => {
@@ -70,6 +86,53 @@ describe('SubscriptionService — updatePlan', () => {
     const data = prismaMock.subscriptionPlan.update.mock.calls[0][0].data as any;
     expect(Number(data.monthlyPrice)).toBe(75);
     expect(data.isActive).toBe(false);
+  });
+
+  it('met à jour la description (efface si chaîne vide)', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-1', clubId: 'club-1', name: 'Abo', sportKeys: ['padel'], monthlyPrice: 69,
+      commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+    } as any);
+    prismaMock.subscriptionPlan.update.mockResolvedValue({ id: 'plan-1' } as any);
+    await service.updatePlan('plan-1', 'club-1', { description: 'Nouveau texte' });
+    expect(prismaMock.subscriptionPlan.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: 'Nouveau texte' }),
+    }));
+    await service.updatePlan('plan-1', 'club-1', { description: '   ' });
+    expect(prismaMock.subscriptionPlan.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ description: null }),
+    }));
+  });
+
+  it('updatePlan avec imageUrl:null supprime le fichier existant', async () => {
+    const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-1', clubId: 'club-1', name: 'Abo', sportKeys: ['padel'], monthlyPrice: 69,
+      commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+      imageUrl: '/uploads/offers/plan-1-111.jpg',
+    } as any);
+    prismaMock.subscriptionPlan.update.mockResolvedValue({ id: 'plan-1' } as any);
+    await service.updatePlan('plan-1', 'club-1', { imageUrl: null });
+    expect(unlink).toHaveBeenCalledWith(expect.stringContaining('plan-1-111.jpg'));
+    expect(prismaMock.subscriptionPlan.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ imageUrl: null }),
+    }));
+    unlink.mockRestore();
+  });
+
+  it('setImage pose la nouvelle URL et supprime l’ancien fichier uploadé', async () => {
+    const unlink = jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-1', clubId: 'club-1', imageUrl: '/uploads/offers/plan-1-111.jpg' } as any);
+    prismaMock.subscriptionPlan.update.mockResolvedValue({ id: 'plan-1', imageUrl: '/uploads/offers/plan-1-222.jpg' } as any);
+    await service.setImage('plan-1', 'club-1', '/uploads/offers/plan-1-222.jpg');
+    expect(unlink).toHaveBeenCalledWith(expect.stringContaining('plan-1-111.jpg'));
+    expect(prismaMock.subscriptionPlan.update).toHaveBeenCalledWith({ where: { id: 'plan-1' }, data: { imageUrl: '/uploads/offers/plan-1-222.jpg' } });
+    unlink.mockRestore();
+  });
+
+  it('setImage refuse un plan d’un autre club', async () => {
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-1', clubId: 'autre' } as any);
+    await expect(service.setImage('plan-1', 'club-1', '/uploads/offers/x.jpg')).rejects.toThrow('PLAN_NOT_FOUND');
   });
 });
 

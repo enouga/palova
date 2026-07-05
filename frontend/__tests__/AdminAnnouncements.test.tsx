@@ -19,6 +19,8 @@ const mocked = api as jest.Mocked<typeof api>;
 
 const wrap = () => render(<ThemeProvider><AdminAnnouncementsPage /></ThemeProvider>);
 
+beforeAll(() => { window.scrollTo = jest.fn(); });
+
 describe('/admin/announcements — annonces enrichies', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -66,5 +68,75 @@ describe('/admin/announcements — annonces enrichies', () => {
     // « Offre » apparaît dans le select du formulaire ET dans la colonne Type du tableau.
     expect(screen.getAllByText('Offre').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByLabelText('Affiche')).toBeInTheDocument();
+  });
+
+  it("champ affiche : boutons Ajouter → Changer/Retirer selon l'état", async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([] as never);
+    wrap();
+    await waitFor(() => expect(mocked.adminGetAnnouncements).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: 'Ajouter une image' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Retirer l'image" })).not.toBeInTheDocument();
+
+    const file = new File(['x'], 'affiche.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText(/Affiche \(image\)/i), { target: { files: [file] } });
+
+    expect(screen.getByRole('button', { name: "Changer l'image" })).toBeInTheDocument();
+    expect(screen.getByText('affiche.jpg')).toBeInTheDocument(); // repli sans createObjectURL (jsdom)
+
+    fireEvent.click(screen.getByRole('button', { name: "Retirer l'image" }));
+    expect(screen.getByRole('button', { name: 'Ajouter une image' })).toBeInTheDocument();
+    expect(screen.queryByText('affiche.jpg')).not.toBeInTheDocument();
+  });
+
+  it("modifier : « Retirer l'image » envoie imageUrl null", async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([
+      { id: 'a1', title: 'Avec affiche', body: 'corps', linkUrl: null, imageUrl: '/uploads/announcements/a.jpg', kind: 'INFO', validUntil: null, isPublished: true, pinned: false, createdAt: '2026-07-01', updatedAt: '' },
+    ] as never);
+    mocked.adminUpdateAnnouncement.mockResolvedValue({ id: 'a1' } as never);
+    wrap();
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+    fireEvent.click(screen.getByRole('button', { name: "Retirer l'image" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateAnnouncement).toHaveBeenCalledWith(
+      'c1', 'a1', expect.objectContaining({ imageUrl: null }), 't',
+    ));
+    expect(mocked.adminUploadAnnouncementImage).not.toHaveBeenCalled();
+  });
+
+  it('Publier sans contenu → message clair, aucun appel de création', async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([] as never);
+    wrap();
+    await waitFor(() => expect(mocked.adminGetAnnouncements).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText("Titre de l'annonce"), { target: { value: 'Titre seul' } });
+    fireEvent.click(screen.getByRole('button', { name: /Publier/i }));
+
+    expect(await screen.findByText(/titre et le contenu sont obligatoires/i)).toBeInTheDocument();
+    expect(mocked.adminCreateAnnouncement).not.toHaveBeenCalled();
+  });
+
+  it("création : échec de l'upload d'affiche → le retry met à jour (pas de doublon)", async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([] as never);
+    mocked.adminCreateAnnouncement.mockResolvedValue({ id: 'a-new' } as never);
+    mocked.adminUpdateAnnouncement.mockResolvedValue({ id: 'a-new' } as never);
+    mocked.adminUploadAnnouncementImage.mockResolvedValue({ id: 'a-new' } as never);
+    mocked.adminUploadAnnouncementImage.mockRejectedValueOnce(new Error('réseau') as never);
+    wrap();
+    await waitFor(() => expect(mocked.adminGetAnnouncements).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText("Titre de l'annonce"), { target: { value: 'Open' } });
+    fireEvent.change(screen.getByPlaceholderText("Détail de l'annonce…"), { target: { value: 'Corps' } });
+    const file = new File(['x'], 'affiche.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText(/Affiche \(image\)/i), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: /Publier/i }));
+
+    expect(await screen.findByText(/l'envoi de l'image a échoué/i)).toBeInTheDocument();
+
+    // Le formulaire est passé en mode édition : le retry est un update, pas un 2e create.
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateAnnouncement).toHaveBeenCalledWith('c1', 'a-new', expect.anything(), 't'));
+    expect(mocked.adminCreateAnnouncement).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocked.adminUploadAnnouncementImage).toHaveBeenLastCalledWith('c1', 'a-new', file, 't'));
   });
 });
