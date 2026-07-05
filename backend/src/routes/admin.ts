@@ -6,7 +6,7 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -522,6 +522,30 @@ router.patch('/announcements/:id', async (req: ClubScopedRequest, res: Response,
 });
 router.delete('/announcements/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await announcementService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+const announcementImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Image d'une annonce : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
+router.post('/announcements/:id/image', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  announcementImageUpload.single('image')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      ensureUploadDirs();
+      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
+      await fs.promises.writeFile(path.join(ANNOUNCEMENTS_DIR, filename), file.buffer);
+      const ann = await announcementService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/announcements/${filename}`);
+      res.json(ann);
+    } catch (e) { handleError(e, res, next); }
+  });
 });
 
 // --- Sponsors ---

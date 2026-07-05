@@ -10,6 +10,8 @@ export const SPONSORS_DIR = path.join(UPLOADS_DIR, 'sponsors'); // logos de part
 export const LOGOS_DIR = path.join(UPLOADS_DIR, 'logos'); // logos de clubs uploadés
 export const COVERS_DIR = path.join(UPLOADS_DIR, 'covers'); // couvertures de clubs uploadées
 export const OGCARDS_DIR = path.join(UPLOADS_DIR, 'ogcards'); // cache des cartes OG de parties
+export const ANNOUNCEMENTS_DIR = path.join(UPLOADS_DIR, 'announcements'); // affiches d'annonces
+export const CLUB_PHOTOS_DIR = path.join(UPLOADS_DIR, 'club-photos'); // galerie de présentation des clubs
 
 // Racine des fichiers PRIVÉS (photos de messagerie) — JAMAIS servie statiquement :
 // streaming via une route authentifiée uniquement. Volume Docker dédié en prod.
@@ -23,6 +25,8 @@ export function ensureUploadDirs(): void {
   fs.mkdirSync(LOGOS_DIR, { recursive: true });
   fs.mkdirSync(COVERS_DIR, { recursive: true });
   fs.mkdirSync(OGCARDS_DIR, { recursive: true });
+  fs.mkdirSync(ANNOUNCEMENTS_DIR, { recursive: true });
+  fs.mkdirSync(CLUB_PHOTOS_DIR, { recursive: true });
   fs.mkdirSync(DM_DIR, { recursive: true });
 }
 
