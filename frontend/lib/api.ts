@@ -1099,6 +1099,11 @@ export interface ClubSummary {
 
 export type BookingReleaseMode = 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
 
+// Sections du Club-house configurables par le club (ordre + visibilité).
+// 'sponsors' = visibilité seule (position fixe en bas de page).
+export type ClubHouseSectionKey = 'matches' | 'agenda' | 'posters' | 'top' | 'offers' | 'clubCard' | 'announcements' | 'sponsors';
+export interface ClubHouseSectionSetting { key: ClubHouseSectionKey; visible: boolean; }
+
 export interface ClubDetail {
   id: string;
   slug: string;
@@ -1127,6 +1132,7 @@ export interface ClubDetail {
   levelSystemEnabled: boolean;
   cancellationCutoffHours: number;
   refundOnCancelWithinCutoff: boolean;
+  clubHouseSections?: ClubHouseSectionSetting[] | null; // null/absent = ordre adaptatif par défaut
   clubSports: ClubSportPublic[];
 }
 
@@ -1391,6 +1397,7 @@ export interface ClubAdminDetail {
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
+  clubHouseSections?: ClubHouseSectionSetting[] | null;
   levelSystemEnabled: boolean;
   legalEntityName: string | null;
   legalForm: string | null;
@@ -1483,6 +1490,7 @@ export type UpdateClubBody = Partial<{
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
+  clubHouseSections: ClubHouseSectionSetting[] | null;
   levelSystemEnabled: boolean;
   legalEntityName: string;
   legalForm: string;
