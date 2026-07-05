@@ -114,27 +114,6 @@ export function waitlistPosition(participants: { id: string; status: string }[],
   return idx >= 0 ? idx + 1 : null;
 }
 
-export interface TimelineStep {
-  key: 'open' | 'deadline' | 'start';
-  label: string;
-  dateIso: string | null;
-  state: 'done' | 'current' | 'upcoming';
-}
-
-/**
- * Stepper du tournoi : Inscriptions ouvertes → Clôture → Début.
- * La prochaine échéance est « current », celles passées sont « done ».
- */
-export function timelineSteps(t: Pick<Tournament, 'registrationDeadline' | 'startTime'>, now: Date): TimelineStep[] {
-  const closed = now.getTime() >= new Date(t.registrationDeadline).getTime();
-  const started = now.getTime() >= new Date(t.startTime).getTime();
-  return [
-    { key: 'open', label: 'Inscriptions ouvertes', dateIso: null, state: 'done' },
-    { key: 'deadline', label: 'Clôture des inscriptions', dateIso: t.registrationDeadline, state: closed ? 'done' : 'current' },
-    { key: 'start', label: 'Début du tournoi', dateIso: t.startTime, state: started ? 'done' : closed ? 'current' : 'upcoming' },
-  ];
-}
-
 // --- iCalendar (.ics) ---
 
 /** Échappement RFC 5545 d'une valeur texte (\, ; , et retours ligne). */

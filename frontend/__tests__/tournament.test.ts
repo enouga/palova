@@ -1,6 +1,6 @@
 import {
   buildAgendaICS, deadlineCountdown, fillRatio, formatDateTime, formatDateTimeRange, formatDateShortTimeRange, formatDateTimeShort, formatHourRange,
-  heroPlacesLabel, icsFilename, timelineSteps, waitlistPosition,
+  heroPlacesLabel, icsFilename, waitlistPosition,
 } from '../lib/tournament';
 import { TournamentParticipant } from '../lib/api';
 
@@ -48,19 +48,6 @@ describe('waitlistPosition', () => {
   it('null pour un confirmé ou un inconnu', () => {
     expect(waitlistPosition(list, 'r1')).toBeNull();
     expect(waitlistPosition(list, 'zz')).toBeNull();
-  });
-});
-
-describe('timelineSteps', () => {
-  const t = { registrationDeadline: '2026-06-12T12:00:00Z', startTime: '2026-06-15T08:00:00Z' };
-  it('inscriptions ouvertes → clôture courante', () => {
-    expect(timelineSteps(t, NOW).map((s) => s.state)).toEqual(['done', 'current', 'upcoming']);
-  });
-  it('entre clôture et début → début courant', () => {
-    expect(timelineSteps(t, new Date('2026-06-13T12:00:00Z')).map((s) => s.state)).toEqual(['done', 'done', 'current']);
-  });
-  it('tournoi commencé → tout fait', () => {
-    expect(timelineSteps(t, new Date('2026-06-15T09:00:00Z')).map((s) => s.state)).toEqual(['done', 'done', 'done']);
   });
 });
 
