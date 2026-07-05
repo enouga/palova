@@ -40,7 +40,7 @@ export interface AgendaHeroProps {
   now: Date | null;            // null avant le mount (hydration-safe)
   ratio: number | null;        // remplissage 0..1, null = pas de jauge
   counter: string;             // « 7/12 binômes » / « 9/16 inscrits »
-  places: { text: string; urgent: boolean };
+  places: { text: string; urgent: boolean } | null;  // null = badge masqué
 }
 
 // Hero immersif : dégradé « brume bleue » clair (texte encre), compte à
@@ -72,10 +72,12 @@ export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, count
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: ratio != null ? 9 : 0, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{counter}</span>
             <span style={{ flex: 1 }} />
-            <span style={{
-              fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
-              ...(places.urgent ? { background: ACCENTS.coral, borderRadius: 999, padding: '4px 10px', color: '#fff' } : { opacity: 0.7 }),
-            }}>{places.text}</span>
+            {places && (
+              <span style={{
+                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
+                ...(places.urgent ? { background: ACCENTS.coral, borderRadius: 999, padding: '4px 10px', color: '#fff' } : { opacity: 0.7 }),
+              }}>{places.text}</span>
+            )}
           </div>
         </div>
       </div>
@@ -90,16 +92,18 @@ export interface MetaCard {
 }
 
 // Rangée de cartes méta icônées sous le hero (début, clôture, prix…).
+// 3 tiers égaux sans scroll horizontal : sur mobile ~110 px par carte (les
+// valeurs — formats courts — wrappent sur 2-3 lignes), sur desktop ~255 px.
 export function MetaCardsRow({ cards }: { cards: MetaCard[] }) {
   const { th } = useTheme();
   return (
-    <div style={{ display: 'flex', gap: 8, padding: '10px 20px 0', overflowX: 'auto' }}>
+    <div style={{ display: 'flex', gap: 6, padding: '10px 20px 0' }}>
       {cards.map((c) => (
-        <div key={c.label} style={{ flex: '1 0 140px', minWidth: 140, background: th.surface, borderRadius: 14, padding: '11px 13px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint }}>
-            <Icon name={c.icon} size={13} color={th.textFaint} />{c.label}
+        <div key={c.label} style={{ flex: '1 1 0', minWidth: 0, background: th.surface, borderRadius: 14, padding: '10px 11px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint }}>
+            <Icon name={c.icon} size={12} color={th.textFaint} style={{ flexShrink: 0 }} />{c.label}
           </div>
-          <div style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text, marginTop: 5, lineHeight: 1.35 }}>{c.value}</div>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text, marginTop: 5, lineHeight: 1.35 }}>{c.value}</div>
         </div>
       ))}
     </div>
