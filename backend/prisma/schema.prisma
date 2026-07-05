@@ -241,6 +241,12 @@ model Club {
   departmentCode            String?  @map("department_code")
   listTournamentsNationally Boolean  @default(false) @map("list_tournaments_nationally")
   description      String?
+  presentationText String?  @map("presentation_text")   // présentation longue (page « Le club »)
+  contactPhone     String?  @map("contact_phone")
+  contactEmail     String?  @map("contact_email")
+  openingHoursText String?  @map("opening_hours_text")  // texte libre, ex. « Lun-Ven 8h-22h »
+  // Opt-in : afficher les formules (abonnements + carnets) sur le Club-house public.
+  showOffersPublicly Boolean @default(false) @map("show_offers_publicly")
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
   coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
@@ -319,6 +325,7 @@ model Club {
   ratingAdjustments PlayerRatingAdjustment[]
   subscriptionPlans SubscriptionPlan[]
   subscriptions     Subscription[]
+  photos            ClubPhoto[]
 
   @@map("clubs")
 }
@@ -977,6 +984,21 @@ model Announcement {
 
   @@index([clubId])
   @@map("announcements")
+}
+
+/// Photo de la galerie de présentation d'un club (page « Le club », max 12 côté service).
+model ClubPhoto {
+  id        String   @id @default(cuid())
+  clubId    String   @map("club_id")
+  url       String
+  caption   String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@map("club_photos")
 }
 
 /// Sponsor/partenaire affiché sur la page d'accueil d'un club.
