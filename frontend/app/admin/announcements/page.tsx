@@ -1,12 +1,14 @@
 'use client';
 import { useState, useEffect, useCallback, CSSProperties } from 'react';
-import { api, Announcement, AnnouncementBody } from '@/lib/api';
+import { api, Announcement, AnnouncementBody, AnnouncementKind, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn, Chip } from '@/components/ui/atoms';
 
-const EMPTY = { title: '', body: '', linkUrl: '', imageUrl: '', pinned: false, isPublished: true };
+const EMPTY = { title: '', body: '', linkUrl: '', kind: 'INFO' as AnnouncementKind, validUntil: '', pinned: false, isPublished: true };
+
+const KIND_LABEL: Record<AnnouncementKind, string> = { INFO: 'Info', OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
 
 export default function AdminAnnouncementsPage() {
   const { th } = useTheme();
@@ -15,6 +17,7 @@ export default function AdminAnnouncementsPage() {
   const clubId = club?.id;
   const [items, setItems]     = useState<Announcement[]>([]);
   const [form, setForm]       = useState(EMPTY);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [editId, setEditId]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -35,7 +38,7 @@ export default function AdminAnnouncementsPage() {
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
-  const resetForm = () => { setForm(EMPTY); setEditId(null); };
+  const resetForm = () => { setForm(EMPTY); setEditId(null); setImageFile(null); };
 
   const submit = async () => {
     if (!token || !clubId || !form.title.trim() || !form.body.trim()) return;
@@ -44,14 +47,17 @@ export default function AdminAnnouncementsPage() {
       title: form.title.trim(),
       body: form.body.trim(),
       linkUrl: form.linkUrl.trim() || undefined,
-      imageUrl: form.imageUrl.trim() || undefined,
+      kind: form.kind,
+      validUntil: form.validUntil || null,
       pinned: form.pinned,
       isPublished: form.isPublished,
     };
     try {
       setError(null);
-      if (editId) await api.adminUpdateAnnouncement(clubId, editId, body, token);
-      else await api.adminCreateAnnouncement(clubId, body, token);
+      const saved = editId
+        ? await api.adminUpdateAnnouncement(clubId, editId, body, token)
+        : await api.adminCreateAnnouncement(clubId, body, token);
+      if (imageFile) await api.adminUploadAnnouncementImage(clubId, saved.id, imageFile, token);
       resetForm();
       await load();
     } catch (e) { setError((e as Error).message); }
@@ -60,8 +66,10 @@ export default function AdminAnnouncementsPage() {
 
   const startEdit = (a: Announcement) => {
     setEditId(a.id);
+    setImageFile(null);
     setForm({
-      title: a.title, body: a.body, linkUrl: a.linkUrl ?? '', imageUrl: a.imageUrl ?? '',
+      title: a.title, body: a.body, linkUrl: a.linkUrl ?? '',
+      kind: a.kind ?? 'INFO', validUntil: a.validUntil ? a.validUntil.slice(0, 10) : '',
       pinned: a.pinned, isPublished: a.isPublished,
     });
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -93,13 +101,33 @@ export default function AdminAnnouncementsPage() {
               style={{ ...inputStyle, height: 'auto', padding: '12px 14px', resize: 'vertical', lineHeight: 1.5 }} />
           </label>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <label style={{ ...labelStyle, flex: 1, minWidth: 160 }}>
+              Type
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as AnnouncementKind })} style={{ ...inputStyle, cursor: 'pointer' }}>
+                {(Object.keys(KIND_LABEL) as AnnouncementKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+              </select>
+            </label>
+            <label style={{ ...labelStyle, flex: 1, minWidth: 160 }}>
+              Afficher jusqu'au
+              <input value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} type="date" style={inputStyle} />
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <label style={{ ...labelStyle, flex: 1, minWidth: 220 }}>
               Lien (optionnel)
               <input value={form.linkUrl} onChange={(e) => setForm({ ...form, linkUrl: e.target.value })} placeholder="https://…" type="url" style={inputStyle} />
             </label>
             <label style={{ ...labelStyle, flex: 1, minWidth: 220 }}>
-              Image (optionnel)
-              <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://…/image.jpg" type="url" style={inputStyle} />
+              Affiche (image)
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }} />
+              {editId && !imageFile && (() => {
+                const current = items.find((i) => i.id === editId)?.imageUrl;
+                return current
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={assetUrl(current) ?? ''} alt="Affiche actuelle" style={{ width: 120, height: 68, objectFit: 'cover', borderRadius: 8, marginTop: 4 }} />
+                  : null;
+              })()}
             </label>
           </div>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 2 }}>
@@ -126,18 +154,21 @@ export default function AdminAnnouncementsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['Annonce', 'Statut', 'Créée le', ''].map((h, i) => (
+                {['Annonce', 'Type', 'Statut', 'Créée le', ''].map((h, i) => (
                   <th key={i} style={{ padding: '12px 16px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 && <tr><td colSpan={4} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 16px' }}>Aucune annonce pour l'instant.</td></tr>}
+              {items.length === 0 && <tr><td colSpan={5} style={{ ...cell, textAlign: 'center', color: th.textFaint, padding: '28px 16px' }}>Aucune annonce pour l'instant.</td></tr>}
               {items.map((a) => (
                 <tr key={a.id} style={{ borderBottom: `1px solid ${th.line}` }}>
                   <td style={{ ...cell, maxWidth: 360 }}>
                     <div style={{ fontWeight: 600, marginBottom: a.body ? 3 : 0 }}>{a.title}</div>
                     {a.body && <div style={{ color: th.textMute, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.body}</div>}
+                  </td>
+                  <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                    {KIND_LABEL[a.kind ?? 'INFO']}{a.imageUrl && <span title="Affiche" aria-label="Affiche" style={{ marginLeft: 6 }}>🖼</span>}
                   </td>
                   <td style={cell}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

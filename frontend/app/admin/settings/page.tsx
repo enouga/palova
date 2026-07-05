@@ -126,6 +126,7 @@ export default function AdminSettingsPage() {
         accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
         listedInDirectory: club.listedInDirectory,
         listTournamentsNationally: club.listTournamentsNationally,
+        showOffersPublicly: club.showOffersPublicly,
         levelSystemEnabled: club.levelSystemEnabled,
         publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
         bookingReleaseMode: club.bookingReleaseMode,
@@ -253,6 +254,10 @@ export default function AdminSettingsPage() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginTop: 12 }}>
           <input type="checkbox" checked={club.listTournamentsNationally} onChange={(e) => set('listTournamentsNationally', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
           <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Publier mes tournois dans le calendrier national Palova</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginTop: 12 }}>
+          <input type="checkbox" checked={club.showOffersPublicly} onChange={(e) => set('showOffersPublicly', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher mes formules (abonnements &amp; carnets) sur le Club-house</span>
         </label>
       </div>
 

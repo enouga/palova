@@ -110,6 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Communauté', color: '#2bb6a3', items: [
       { href: '/admin/members',       label: 'Membres',     icon: 'users' },
       { href: '/admin/announcements', label: 'Annonces',    icon: 'bell' },
+      { href: '/admin/club',          label: 'Page club',   icon: 'home' },
       { href: '/admin/broadcast',     label: 'Messages',    icon: 'mail' },
       { href: '/admin/emails',        label: 'Emails',      icon: 'mail' },
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
