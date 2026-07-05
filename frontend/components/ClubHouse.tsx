@@ -138,8 +138,9 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   // Hero : l'annonce épinglée la plus récente (l'API renvoie épinglées d'abord), non expirée.
   const hero = ann.length > 0 && ann[0].pinned && !announcementExpired(ann[0], now) ? ann[0] : null;
   // Les annonces AVEC image vivent dans la bento « À l'affiche » ; la liste texte garde les autres.
-  const posters = activePosters(ann, now, hero?.id ?? null);
-  const restAnn = ann.filter((a) => a !== hero && !posters.includes(a) && !announcementExpired(a, now) && !a.imageUrl);
+  // Section masquée → dérivation vidée (comme les fetchs sautés, elle ne pèse plus dans `empty`).
+  const posters = hidden.has('posters') ? [] : activePosters(ann, now, hero?.id ?? null);
+  const restAnn = hidden.has('announcements') ? [] : ann.filter((a) => a !== hero && !posters.includes(a) && !announcementExpired(a, now) && !a.imageUrl);
   const slots = pickUpcomingSlots(avail, now);
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);

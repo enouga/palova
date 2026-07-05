@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { ClubHouse } from '../components/ClubHouse';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -225,5 +225,23 @@ describe('ClubHouse', () => {
     await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
     expect(screen.queryByTestId('sec-sponsors')).not.toBeInTheDocument();
     expect(mocked.getClubSponsors).not.toHaveBeenCalled();
+  });
+
+  it('posters et annonces masqués, rien d autre → fallback « Pas d\'informations »', async () => {
+    mocked.getClubAnnouncements.mockResolvedValue([
+      regular,
+      { ...regular, id: 'a9', title: 'Affiche', imageUrl: '/uploads/announcements/x.jpg' },
+    ] as never);
+    // act async : les fetchs mockés se résolvent AVANT l'assertion (sinon le fallback
+    // transitoire du premier rendu — ann encore vide — rend le test toujours vert).
+    await act(async () => {
+      wrapWith(clubWith([
+        { key: 'posters', visible: false },
+        { key: 'announcements', visible: false },
+      ]));
+    });
+    expect(screen.getByText(/Pas d'informations pour le moment/)).toBeInTheDocument();
+    expect(screen.queryByTestId('sec-posters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Créneaux du matin')).not.toBeInTheDocument();
   });
 });
