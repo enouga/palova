@@ -4,8 +4,8 @@ import dynamic from 'next/dynamic';
 import { api, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
-import { Icon } from '@/components/ui/Icon';
 import { Btn } from '@/components/ui/atoms';
+import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -47,40 +47,46 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     ? `1re mensualité · ${euros(target.plan.monthlyPrice)}`
     : target ? euros(target.tpl.price) : '';
 
-  const cardStyle = { background: th.surface2, borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column' as const, gap: 8 };
+  // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
+  const OfferCard = ({ name, price, suffix, lines, onBuy }: {
+    name: string; price: string; suffix: string | null; lines: string[]; onBuy: () => void;
+  }) => (
+    <div style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text }}>{name}</div>
+      <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 27, letterSpacing: -0.5, color: th.text }}>
+        <span>{price}</span>{suffix && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute, letterSpacing: 0 }}> {suffix}</span>}
+      </div>
+      <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.55, flex: 1 }}>
+        {lines.join(' · ')}
+      </div>
+      {offers.onlinePurchase ? (
+        <button onClick={onBuy} style={{
+          marginTop: 10, border: `1.5px solid ${th.accent}`, background: 'transparent', color: th.mode === 'floodlit' ? th.accent : th.ink,
+          borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          Souscrire
+        </button>
+      ) : (
+        <span style={{ marginTop: 10, fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>Renseignez-vous à l&rsquo;accueil du club</span>
+      )}
+    </div>
+  );
 
   return (
-    <section style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-        <Icon name="wallet" size={15} color={th.accent} />
-        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 12.5, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Abonnements &amp; offres</span>
-      </div>
-      <style>{`.of-grid{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:600px){.of-grid{grid-template-columns:1fr 1fr}}`}</style>
-      <div className="of-grid">
+    <section>
+      <SectionHeader title="Abonnements & offres" />
+      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory' }}>
         {plans.map((p) => (
-          <div key={p.id} style={cardStyle}>
-            <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>{p.name}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 800, color: th.accent }}>{euros(p.monthlyPrice)} / mois</div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.7 }}>
-              {planBenefits(p).map((b) => <li key={b}>{b}</li>)}
-            </ul>
-            {offers.onlinePurchase
-              ? <Btn onClick={() => buy({ kind: 'plan', plan: p })}>Souscrire</Btn>
-              : <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>Renseignez-vous à l&rsquo;accueil du club</span>}
-          </div>
+          <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
+            lines={planBenefits(p)} onBuy={() => buy({ kind: 'plan', plan: p })} />
         ))}
         {offers.packages.map((t) => (
-          <div key={t.id} style={cardStyle}>
-            <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>{t.name}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 800, color: th.accent }}>{euros(t.price)}</div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.7 }}>
-              <li>{t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`}</li>
-              {t.validityDays ? <li>Valable {t.validityDays} jours</li> : <li>Sans expiration</li>}
-            </ul>
-            {offers.onlinePurchase
-              ? <Btn onClick={() => buy({ kind: 'package', tpl: t })}>Souscrire</Btn>
-              : <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>Renseignez-vous à l&rsquo;accueil du club</span>}
-          </div>
+          <OfferCard key={t.id} name={t.name} price={euros(t.price)} suffix={null}
+            lines={[
+              t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`,
+              t.validityDays ? `Valable ${t.validityDays} jours` : 'Sans expiration',
+            ]}
+            onBuy={() => buy({ kind: 'package', tpl: t })} />
         ))}
       </div>
 

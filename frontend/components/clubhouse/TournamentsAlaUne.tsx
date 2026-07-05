@@ -6,6 +6,7 @@ import { deadlineCountdown, fillRatio, formatHourRange } from '@/lib/tournament'
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
+import { cardStyle } from '@/components/clubhouse/SectionHeader';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
@@ -20,9 +21,12 @@ export function TournamentsAlaUne({ items, timezone, now = null, multiSport = fa
   const { th } = useTheme();
   if (items.length === 0) return null;
   return (
-    <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 12.5, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="trophy" size={14} color={th.textMute} />Prochains events
+    <div style={{ ...cardStyle(th), padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+        <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 9, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: th.mode === 'floodlit' ? `${ACCENTS.apricot}26` : `${ACCENTS.apricot}40` }}>
+          <Icon name="trophy" size={15} color={th.mode === 'floodlit' ? ACCENTS.apricot : th.ink} />
+        </span>
+        <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 14, color: th.text }}>Prochains events</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {items.filter((item) => item.source !== 'lesson').map((item) => {
@@ -39,7 +43,7 @@ export function TournamentsAlaUne({ items, timezone, now = null, multiSport = fa
             ? fillRatio(item.tournament)
             : fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity });
           return (
-            <Link key={`${item.source}-${id}`} href={href} aria-label={name} style={{ textDecoration: 'none', background: th.surface2, borderRadius: 10, padding: '9px 12px', display: 'block' }}>
+            <Link key={`${item.source}-${id}`} href={href} aria-label={name} style={{ textDecoration: 'none', background: th.surface2, borderRadius: 12, padding: '10px 12px', display: 'block' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text }}>{name}</span>
                 {countdown && (

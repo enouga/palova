@@ -13,11 +13,11 @@ describe('TopOfMonth', () => {
     { userId: 'u3', firstName: 'Cléo', lastName: 'M', avatarUrl: null, wins: 1 },
   ];
 
-  it('podium 3 joueurs avec victoires', () => {
+  it('podium 3 joueurs avec victoires (1er au centre visuellement, ordre DOM 1-2-3)', () => {
     wrap(top);
     expect(screen.getByText('Bob K')).toBeInTheDocument();
-    expect(screen.getByText(/5 victoires/)).toBeInTheDocument();
-    expect(screen.getByText(/1 victoire$/)).toBeInTheDocument();
+    expect(screen.getByLabelText('5 victoires')).toBeInTheDocument();
+    expect(screen.getByLabelText('1 victoire')).toBeInTheDocument();
   });
 
   it('rien si moins de 3 entrées', () => {

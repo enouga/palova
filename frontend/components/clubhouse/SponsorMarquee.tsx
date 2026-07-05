@@ -5,7 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { offerIsActive } from '@/lib/clubhouse';
 import { deadlineCountdown } from '@/lib/tournament';
 import { ACCENTS } from '@/lib/theme';
-import { Icon } from '@/components/ui/Icon';
+import { SectionHeader } from '@/components/clubhouse/SectionHeader';
 
 // Rivière des partenaires : cartes riches défilantes (logo + nom + offre + code),
 // boucle CSS pure avec pause au survol ; statique si ≤ 2 sponsors ou reduced-motion.
@@ -58,9 +58,8 @@ export function SponsorMarquee({ sponsors, now = null }: { sponsors: Sponsor[]; 
 
   return (
     <section style={{ padding: '26px 0 8px' }}>
-      <div style={{ padding: '0 20px', display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-        <Icon name="share" size={15} color={th.textMute} />
-        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 12.5, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Nos partenaires</span>
+      <div style={{ padding: '0 20px' }}>
+        <SectionHeader title="Nos partenaires" />
       </div>
       <style>{`
         .sp-marquee { overflow: hidden; position: relative; }

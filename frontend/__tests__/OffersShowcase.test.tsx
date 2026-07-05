@@ -40,7 +40,8 @@ describe('OffersShowcase', () => {
   it('cartes plan + carnet avec prix et avantages', () => {
     wrap({});
     expect(screen.getByText('Abo Or')).toBeInTheDocument();
-    expect(screen.getByText(/39,00 € \/ mois/)).toBeInTheDocument();
+    expect(screen.getByText('39,00 €')).toBeInTheDocument();
+    expect(screen.getByText('/ mois')).toBeInTheDocument();
     expect(screen.getByText(/Heures creuses/)).toBeInTheDocument();
     expect(screen.getByText('Carnet 10')).toBeInTheDocument();
   });

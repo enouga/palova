@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Announcement, AnnouncementKind, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { posterLayout } from '@/lib/clubhouse';
-import { Icon } from '@/components/ui/Icon';
+import { SectionHeader } from '@/components/clubhouse/SectionHeader';
 
 const KIND_LABEL: Partial<Record<AnnouncementKind, string>> = {
   OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event',
@@ -45,9 +45,7 @@ export function PosterMosaic({ posters }: { posters: Announcement[] }) {
 
   return (
     <section>
-      <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 7 }}>
-        <Icon name="bolt" size={15} color={th.accentWarm} /> À l&apos;affiche
-      </div>
+      <SectionHeader title="À l'affiche" />
       <div data-testid="poster-grid" data-layout={layout} style={{
         display: 'grid', gap: 8,
         gridTemplateColumns: layout === 'single' ? '1fr' : layout === 'duo' ? '1fr 1fr' : '1.6fr 1fr',
