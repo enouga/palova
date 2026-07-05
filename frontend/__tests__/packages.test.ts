@@ -4,13 +4,13 @@ import type { MemberPackage, ActiveMemberPackage } from '@/lib/api';
 const entries = (remaining: number, expiresAt: string | null = null): MemberPackage => ({
   id: 'p1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: remaining,
   amountTotal: null, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00Z',
-  expiresAt, template: { name: '10 entrées' },
+  expiresAt, template: { name: '10 entrées', sportKeys: [] },
 });
 
 const wallet = (remaining: string): MemberPackage => ({
   id: 'p2', kind: 'WALLET', creditsTotal: null, creditsRemaining: null,
   amountTotal: '200.00', amountRemaining: remaining, purchasedAt: '2026-06-01T00:00:00Z',
-  expiresAt: null, template: { name: 'Avoir 200 €' },
+  expiresAt: null, template: { name: 'Avoir 200 €', sportKeys: [] },
 });
 
 describe('packageLabel', () => {
@@ -89,12 +89,12 @@ describe('prepaidHint', () => {
 const mkWallet = (over: Partial<MemberPackage> = {}): MemberPackage => ({
   id: 'pk-w', kind: 'WALLET', creditsTotal: null, creditsRemaining: null,
   amountTotal: '130.00', amountRemaining: '130.00', purchasedAt: '', expiresAt: null,
-  template: { name: 'Porte-monnaie' }, ...over,
+  template: { name: 'Porte-monnaie', sportKeys: [] }, ...over,
 } as MemberPackage);
 const mkCarnet = (over: Partial<MemberPackage> = {}): MemberPackage => ({
   id: 'pk-c', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 5,
   amountTotal: null, amountRemaining: null, purchasedAt: '', expiresAt: null,
-  template: { name: 'Carnet' }, ...over,
+  template: { name: 'Carnet', sportKeys: [] }, ...over,
 } as MemberPackage);
 
 describe('pickPackageFor', () => {

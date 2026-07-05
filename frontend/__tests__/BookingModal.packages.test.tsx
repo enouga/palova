@@ -32,13 +32,13 @@ const mockSlot: TimeSlot = {
 const pkg: MemberPackage = {
   id: 'pkg-1', kind: 'ENTRIES', creditsTotal: 10, creditsRemaining: 7,
   amountTotal: null, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00Z',
-  expiresAt: null, template: { name: '10 entrées' },
+  expiresAt: null, template: { name: '10 entrées', sportKeys: [] },
 };
 
 const poorWallet: MemberPackage = {
   id: 'w-1', kind: 'WALLET', creditsTotal: null, creditsRemaining: null,
   amountTotal: '10.00', amountRemaining: '10.00', purchasedAt: '2026-06-01T00:00:00Z',
-  expiresAt: null, template: { name: 'Porte-monnaie' },
+  expiresAt: null, template: { name: 'Porte-monnaie', sportKeys: [] },
 };
 
 function renderWithPackages(packages: MemberPackage[]) {

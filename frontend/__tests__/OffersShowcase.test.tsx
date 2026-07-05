@@ -19,7 +19,7 @@ jest.mock('@/lib/api', () => ({
 
 const offers: PublicOffers = {
   plans: [{ id: 'pl1', name: 'Abo Or', description: 'Accès illimité aux heures creuses, résiliable après 12 mois.', imageUrl: null, monthlyPrice: '39.00', commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: 1, weeklyCap: null, sportKeys: ['padel'] }],
-  packages: [{ id: 'tp1', name: 'Carnet 10', description: null, imageUrl: null, kind: 'ENTRIES', price: '90.00', entriesCount: 10, walletAmount: null, validityDays: 365 }],
+  packages: [{ id: 'tp1', name: 'Carnet 10', sportKeys: [], description: null, imageUrl: null, kind: 'ENTRIES', price: '90.00', entriesCount: 10, walletAmount: null, validityDays: 365 }],
   onlinePurchase: true,
 };
 
