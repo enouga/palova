@@ -9,10 +9,10 @@ import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExp
 import { mergeAgenda } from '@/lib/events';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip } from '@/components/ui/atoms';
-import { Icon } from '@/components/ui/Icon';
 import { ClubHouseHero } from '@/components/clubhouse/ClubHouseHero';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
+import { MyReservationsCard } from '@/components/clubhouse/MyReservationsCard';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { PosterMosaic } from '@/components/clubhouse/PosterMosaic';
 import { OpenMatchesShowcase } from '@/components/clubhouse/OpenMatchesShowcase';
@@ -136,27 +136,19 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         <ClubPresentationCard presentation={presentation} clubName={club.name} />
       </div>
     ),
-    events: nextEvents.length > 0 && (
-      <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
+    // Prochains events + Vos réservations côte à côte (≥ 700px) — cartes sœurs, même langage.
+    agenda: (nextEvents.length > 0 || next.length > 0) && (
+      <>
+        <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}@media(min-width:700px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
+        <div className={nextEvents.length > 0 && next.length > 0 ? 'ch-grid' : undefined}>
+          {nextEvents.length > 0 && (
+            <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
+          )}
+          {next.length > 0 && <MyReservationsCard reservations={next} onManage={setConfirmCancel} />}
+        </div>
+      </>
     ),
     matches: upcomingMatches.length > 0 && <OpenMatchesShowcase matches={upcomingMatches.slice(0, 6)} timezone={club.timezone} />,
-    myReservations: next.length > 0 && (
-      <div>
-        <SectionHeader title="Vos prochaines réservations" action={{ label: 'Tout voir →', href: '/me/reservations' }} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {next.map((r) => (
-            <button key={r.id} onClick={() => setConfirmCancel(r)} style={{ ...cardStyle(th), border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 11 }}>
-              <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: th.mode === 'floodlit' ? `${th.accent}24` : `${th.accent}40` }}>
-                <Icon name="ticket" size={17} color={th.mode === 'floodlit' ? th.accent : th.ink} />
-              </span>
-              <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{r.resource.name} · {formatDateTime(r.startTime, r.resource.club.timezone)}</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}>Gérer</span>
-              <Icon name="arrowR" size={15} color={th.textMute} />
-            </button>
-          ))}
-        </div>
-      </div>
-    ),
     posters: posters.length > 0 && <PosterMosaic posters={posters} />,
     offers: showOffers && offers && (
       <OffersShowcase
@@ -187,10 +179,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     ),
   };
 
-  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, events).
+  // Visiteur : découverte d'abord (Le club, offres) ; membre : action d'abord (parties, agenda).
   const order = token
-    ? ['matches', 'events', 'myReservations', 'posters', 'top', 'offers', 'clubCard', 'announcements']
-    : ['matches', 'clubCard', 'events', 'posters', 'offers', 'top', 'announcements'];
+    ? ['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements']
+    : ['matches', 'clubCard', 'agenda', 'posters', 'offers', 'top', 'announcements'];
 
   return (
     <>

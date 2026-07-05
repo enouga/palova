@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ClubHouse } from '../components/ClubHouse';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -173,6 +173,21 @@ describe('ClubHouse', () => {
     const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
     expect(ids.indexOf('sec-matches')).toBeLessThan(ids.indexOf('sec-club'));
     expect(ids.indexOf('sec-top')).toBeLessThan(ids.indexOf('sec-offers'));
+  });
+
+  it('membre : carte « Vos réservations » (tuile-date, Tout voir), clic sur une ligne → dialog d annulation', async () => {
+    mockAuth = { token: 't', clubId: null, ready: true };
+    mocked.getMyReservations.mockResolvedValue([{
+      id: 'r1', status: 'CONFIRMED',
+      startTime: new Date(Date.now() + 24 * 3600e3).toISOString(),
+      endTime: new Date(Date.now() + 25.5 * 3600e3).toISOString(),
+      resource: { name: 'Padel int 1', club: { slug: 'demo', name: 'Club Démo', timezone: 'Europe/Paris' } },
+    }] as never);
+    wrap();
+    expect(await screen.findByText('Vos réservations')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tout voir →' })).toHaveAttribute('href', '/me/reservations');
+    fireEvent.click(screen.getByRole('button', { name: /Gérer la réservation Padel int 1/ }));
+    expect(screen.getByText('Annuler la réservation ?')).toBeInTheDocument();
   });
 
   it('anonyme : les parties ouvertes se chargent sans token', async () => {
