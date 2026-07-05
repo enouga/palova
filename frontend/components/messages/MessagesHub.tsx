@@ -5,9 +5,11 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Icon } from '@/components/ui/Icon';
 import { colorForSeed } from '@/lib/playerColors';
 import { ConversationList } from './ConversationList';
 import { MessageThread } from './MessageThread';
+import { NewConversationPanel } from './NewConversationPanel';
 
 // QG de la messagerie (/me/messages) : split view desktop (liste ~320px + fil),
 // liste → fil plein écran en mobile. Deeplink initialWith = get-or-create + ouverture.
@@ -27,6 +29,7 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [blocked, setBlocked] = useState<DmUserInfo[]>([]);
   const [now, setNow] = useState<Date | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => { setNow(new Date()); }, []);
 
@@ -116,10 +119,18 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: `1px solid ${th.line}` }}>
         <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>Conversations</span>
-        <button type="button" aria-label="Membres bloqués" title="Membres bloqués" onClick={openBlocked}
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 12.5 }}>
-          Bloqués
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {clubSlug && (
+            <button type="button" aria-label="Nouvelle conversation" title="Nouvelle conversation" onClick={() => setNewOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+              <Icon name="plus" size={13} color={th.accent} />Nouveau
+            </button>
+          )}
+          <button type="button" aria-label="Membres bloqués" title="Membres bloqués" onClick={openBlocked}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 12.5 }}>
+            Bloqués
+          </button>
+        </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }}>
         <ConversationList conversations={conversations} selectedId={selected?.id ?? null} now={now} onSelect={setSelected} />
@@ -148,6 +159,11 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{selected ? thread : list}</div>
       )}
 
+      {newOpen && clubSlug && (
+        <NewConversationPanel slug={clubSlug} token={token} viewerUserId={viewerUserId}
+          onClose={() => setNewOpen(false)}
+          onOpened={(c) => { setSelected(c); reload(); setNewOpen(false); }} />
+      )}
       {blockTarget && (
         <ConfirmDialog
           title="Bloquer ce membre"

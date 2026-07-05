@@ -29,6 +29,8 @@ jest.mock('@/lib/api', () => ({
     unblockUser: jest.fn().mockResolvedValue({ blocked: false }),
     postDmMessage: jest.fn(), uploadDmImage: jest.fn(), sendTyping: jest.fn().mockResolvedValue({ ok: true }),
     addDmReaction: jest.fn(), removeDmReaction: jest.fn(), deleteDmMessage: jest.fn(),
+    listClubFriends: jest.fn().mockResolvedValue([]),
+    searchClubMembers: jest.fn().mockResolvedValue([]),
   },
 }));
 const apiMock = jest.requireMock('@/lib/api').api;
@@ -77,4 +79,26 @@ it('« Membres bloqués » liste et débloque', async () => {
   expect(await screen.findByText('Paul R')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /débloquer/i }));
   await waitFor(() => expect(apiMock.unblockUser).toHaveBeenCalledWith('u9', 't'));
+});
+
+it('bouton « Nouveau » ouvre le panneau, sélectionner un membre ouvre son fil et ferme le panneau', async () => {
+  apiMock.searchClubMembers.mockResolvedValue([{ id: 'u5', firstName: 'Nina', lastName: 'K' }]);
+  apiMock.openConversation.mockResolvedValue({
+    id: 'c2', other: { userId: 'u5', firstName: 'Nina', lastName: 'K', avatarUrl: null },
+    clubId: 'club-demo', lastMessageAt: null, unreadCount: 0, lastMessage: null,
+  });
+  renderHub();
+  await screen.findByText('Marie Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Nouvelle conversation' }));
+  fireEvent.change(await screen.findByPlaceholderText('Rechercher un membre…'), { target: { value: 'nina' } });
+  fireEvent.click(await screen.findByText('Nina K'));
+  await waitFor(() => expect(apiMock.openConversation).toHaveBeenCalledWith('u5', 't', 'demo'));
+  expect(screen.queryByRole('dialog', { name: 'Nouvelle conversation' })).not.toBeInTheDocument();
+  await waitFor(() => expect(apiMock.getDmMessages).toHaveBeenCalledWith('c2', 't'));
+});
+
+it('sans clubSlug, le bouton « Nouveau » est masqué', async () => {
+  renderHub({ clubSlug: null });
+  await screen.findByText('Marie Dupont');
+  expect(screen.queryByRole('button', { name: 'Nouvelle conversation' })).not.toBeInTheDocument();
 });
