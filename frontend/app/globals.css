@@ -70,6 +70,8 @@ body {
 .sp-scroll-x { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .sp-scroll-x::-webkit-scrollbar { display: none; }
 @keyframes sp-pop { 0% { transform: scale(0); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+/* Tiroir de facettes (Events) : apparition douce au changement de source */
+@keyframes sp-rise { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Retour visuel discret sur les boutons : léger relèvement au survol,
    enfoncement au clic. Transform/filter uniquement → n'écrase pas les

@@ -1,4 +1,4 @@
-import { mergeAgenda, filterAgenda, eventPlacesLabel, KIND_LABEL, agendaFacets, applyAgendaFilters, emptyFilterState } from '@/lib/events';
+import { mergeAgenda, filterAgenda, eventPlacesLabel, KIND_LABEL, agendaFacets, applyAgendaFilters, emptyFilterState, whenWindow, agendaCounts, EventFilterState } from '@/lib/events';
 import type { Tournament, ClubEvent, LessonSummary } from '@/lib/api';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
@@ -197,5 +197,109 @@ describe('agendaFacets : resistance aux cours', () => {
   it('ne crashe pas sur un item de source lesson', () => {
     const lessonItem = { source: 'lesson' as const, startTime: '2026-07-01T17:00:00.000Z', endTime: '2026-07-01T18:00:00.000Z', lesson: lesson() };
     expect(() => agendaFacets([lessonItem] as any)).not.toThrow();
+  });
+});
+
+// ---- Fenêtre « Quand » ----
+
+describe('whenWindow', () => {
+  const jeudi = new Date(2026, 5, 11, 14, 0); // jeudi 11 juin 2026, heure locale
+
+  it('weekend = samedi 00:00 → dimanche 23:59', () => {
+    const w = whenWindow('weekend', jeudi);
+    expect([w.from.getDay(), w.from.getDate()]).toEqual([6, 13]);
+    expect([w.to.getDay(), w.to.getDate(), w.to.getHours()]).toEqual([0, 14, 23]);
+  });
+
+  it('un dimanche en cours = ce jour seul', () => {
+    const dimanche = new Date(2026, 5, 14, 10, 0);
+    const w = whenWindow('weekend', dimanche);
+    expect(w.from.getDate()).toBe(14);
+    expect(w.to.getDate()).toBe(14);
+  });
+
+  it('thisMonth va de maintenant au dernier jour du mois', () => {
+    const w = whenWindow('thisMonth', jeudi);
+    expect(w.from).toBe(jeudi);
+    expect([w.to.getMonth(), w.to.getDate()]).toEqual([5, 30]);
+  });
+
+  it('days30 = maintenant + 30 jours', () => {
+    const w = whenWindow('days30', jeudi);
+    expect(w.to.getTime() - jeudi.getTime()).toBe(30 * 86_400_000);
+  });
+});
+
+describe('applyAgendaFilters : fenêtre « quand »', () => {
+  const nowLocal = new Date(2026, 5, 11, 14, 0); // jeudi 11 juin
+  const tWeekend = tournoi({ id: 'tw', startTime: '2026-06-13T10:00:00.000Z' }); // samedi
+  const tLoin = tournoi({ id: 'tl', startTime: '2026-07-20T10:00:00.000Z' });    // au-delà de 30 j
+  const items = mergeAgenda([tWeekend, tLoin], [], [], NOW);
+  const ids = (xs: typeof items) => xs.map((i) => (i.source === 'tournament' ? i.tournament.id : '')).sort();
+
+  it('weekend ne garde que les items du week-end à venir', () => {
+    const out = applyAgendaFilters(items, { ...emptyFilterState(), when: 'weekend' }, nowLocal);
+    expect(ids(out)).toEqual(['tw']);
+  });
+
+  it('days30 exclut les items au-delà de la fenêtre', () => {
+    const out = applyAgendaFilters(items, { ...emptyFilterState(), when: 'days30' }, nowLocal);
+    expect(ids(out)).toEqual(['tw']);
+  });
+
+  it('sans `now`, la fenêtre est ignorée (hydration-safe)', () => {
+    expect(applyAgendaFilters(items, { ...emptyFilterState(), when: 'weekend' })).toHaveLength(2);
+  });
+});
+
+// ---- Compteurs de facettes ----
+
+describe('agendaCounts', () => {
+  const items = mergeAgenda(
+    [
+      tournoi({ id: 't1', category: 'P500', gender: 'MIXED', startTime: '2026-06-20T08:00:00.000Z' }),
+      tournoi({ id: 't2', category: 'P100', gender: 'MEN', startTime: '2026-06-21T08:00:00.000Z' }),
+      tournoi({ id: 't3', category: 'P500', gender: 'MEN', startTime: '2026-06-22T08:00:00.000Z' }),
+    ],
+    [
+      anim({ id: 'e1', kind: 'SOIREE', memberOnly: false, startTime: '2026-06-16T18:00:00.000Z' }),
+      anim({ id: 'e2', kind: 'MELEE', memberOnly: true, startTime: '2026-06-17T18:00:00.000Z' }),
+    ],
+    [lesson()],
+    NOW,
+  );
+  const facets = agendaFacets(items);
+
+  it('sources = compte brut par source', () => {
+    const c = agendaCounts(items, emptyFilterState(), null, facets);
+    expect(c.sources).toEqual({ tout: 6, competitions: 3, animations: 2, cours: 1 });
+  });
+
+  it('une facette ne se compte jamais elle-même', () => {
+    // P500 sélectionné : P100 garde son compteur (évalué sous les AUTRES dimensions).
+    const state = { ...emptyFilterState(), categories: new Set(['P500']) };
+    const c = agendaCounts(items, state, null, facets);
+    expect(c.categories).toEqual([{ value: 'P100', count: 1 }, { value: 'P500', count: 2 }]);
+  });
+
+  it('les autres dimensions contraignent le compteur', () => {
+    // Genre MEN sélectionné : P500 ne compte plus que son tournoi MEN.
+    const state: EventFilterState = { ...emptyFilterState(), genders: new Set(['MEN']) };
+    const c = agendaCounts(items, state, null, facets);
+    expect(c.categories).toEqual([{ value: 'P100', count: 1 }, { value: 'P500', count: 1 }]);
+  });
+
+  it('kinds et memberOnly ne comptent que les animations', () => {
+    const c = agendaCounts(items, emptyFilterState(), null, facets);
+    expect(c.kinds).toEqual([{ value: 'MELEE', count: 1 }, { value: 'SOIREE', count: 1 }]);
+    expect(c.memberOnly).toBe(1);
+  });
+
+  it('« quand » est compté sous source + facettes', () => {
+    const nowLocal = new Date(2026, 5, 11, 14, 0); // jeudi 11 juin → week-end = 13-14
+    const state = { ...emptyFilterState(), source: 'animations' as const };
+    const c = agendaCounts(items, state, nowLocal, facets);
+    expect(c.when.weekend).toBe(0);   // les 2 animations sont les 16-17/06
+    expect(c.when.thisMonth).toBe(2);
   });
 });

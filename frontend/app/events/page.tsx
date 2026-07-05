@@ -4,7 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, ClubEvent, TournamentGender, ClubEventKind, LessonSummary } from '@/lib/api';
-import { mergeAgenda, applyAgendaFilters, agendaFacets, eventPlacesLabel, AgendaFilter, KIND_LABEL } from '@/lib/events';
+import {
+  mergeAgenda, applyAgendaFilters, agendaFacets, agendaCounts, emptyFilterState,
+  eventPlacesLabel, EventFilterState, GENDER_LABEL, KIND_LABEL,
+} from '@/lib/events';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
@@ -14,45 +17,38 @@ import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
-import { Pill, PillTabs } from '@/components/ui/atoms';
-
-const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
-const FILTERS: { key: AgendaFilter; label: string }[] = [
-  { key: 'tout', label: 'Tout' }, { key: 'competitions', label: 'Compétitions' }, { key: 'animations', label: 'Animations' }, { key: 'cours', label: 'Cours' },
-];
+import { EventsFilterBar } from '@/components/events/EventsFilterBar';
 
 export default function EventsPage() {
   const { club, loading } = useClub();
   const { th } = useTheme();
   const router = useRouter();
-  const [filter, setFilter] = useState<AgendaFilter>('tout');
-  // Facettes secondaires (multi-sélection) ; réinitialisées au changement de source.
-  const [categories, setCategories] = useState<Set<string>>(new Set());
-  const [genders, setGenders] = useState<Set<TournamentGender>>(new Set());
-  const [kinds, setKinds] = useState<Set<ClubEventKind>>(new Set());
-  const [memberOnly, setMemberOnly] = useState(false);
+  // État de filtre unifié : source + facettes multi-sélection + fenêtre « Quand ».
+  const [fstate, setFstate] = useState<EventFilterState>(emptyFilterState);
   const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
   const [events, setEvents] = useState<ClubEvent[] | null>(null);
   const [lessons, setLessons] = useState<LessonSummary[]>([]);
-  // Horloge unique : null au premier rendu (hydration-safe), pour countdowns et jauges.
+  // Horloge unique : null au premier rendu (hydration-safe), pour countdowns, jauges et « Quand ».
   const [now, setNow] = useState<Date | null>(null);
 
-  const clearFacets = () => { setCategories(new Set()); setGenders(new Set()); setKinds(new Set()); setMemberOnly(false); };
-  const selectSource = (s: AgendaFilter) => { setFilter(s); clearFacets(); };
   // Synchro URL : on n'écrit qu'après avoir lu l'état initial (évite d'effacer les params au montage).
   const urlReady = useRef(false);
 
   // État initial lu via window.location (convention du projet — pas de useSearchParams/Suspense) :
-  // source ?filtre= + facettes ?cat=&genre=&type=&membres=, séparées par des virgules.
+  // source ?filtre= + facettes ?cat=&genre=&type=&membres=&quand=, séparées par des virgules.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
+    const next = emptyFilterState();
     const initial = q.get('filtre');
-    if (initial === 'competitions' || initial === 'animations' || initial === 'tout' || initial === 'cours') setFilter(initial);
+    if (initial === 'competitions' || initial === 'animations' || initial === 'tout' || initial === 'cours') next.source = initial;
     const split = (k: string) => (q.get(k) ? q.get(k)!.split(',').filter(Boolean) : []);
-    const cats = split('cat'); if (cats.length) setCategories(new Set(cats));
-    const gen = split('genre') as TournamentGender[]; if (gen.length) setGenders(new Set(gen));
-    const ty = split('type') as ClubEventKind[]; if (ty.length) setKinds(new Set(ty));
-    if (q.get('membres') === '1') setMemberOnly(true);
+    next.categories = new Set(split('cat'));
+    next.genders = new Set(split('genre') as TournamentGender[]);
+    next.kinds = new Set(split('type') as ClubEventKind[]);
+    next.memberOnly = q.get('membres') === '1';
+    const quand = q.get('quand');
+    if (quand === 'weekend' || quand === 'thisMonth' || quand === 'days30') next.when = quand;
+    setFstate(next);
     urlReady.current = true;
   }, []);
 
@@ -60,14 +56,15 @@ export default function EventsPage() {
   useEffect(() => {
     if (!urlReady.current) return;
     const q = new URLSearchParams();
-    if (filter !== 'tout') q.set('filtre', filter);
-    if (categories.size) q.set('cat', [...categories].join(','));
-    if (genders.size) q.set('genre', [...genders].join(','));
-    if (kinds.size) q.set('type', [...kinds].join(','));
-    if (memberOnly) q.set('membres', '1');
+    if (fstate.source !== 'tout') q.set('filtre', fstate.source);
+    if (fstate.categories.size) q.set('cat', [...fstate.categories].join(','));
+    if (fstate.genders.size) q.set('genre', [...fstate.genders].join(','));
+    if (fstate.kinds.size) q.set('type', [...fstate.kinds].join(','));
+    if (fstate.memberOnly) q.set('membres', '1');
+    if (fstate.when) q.set('quand', fstate.when);
     const qs = q.toString();
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-  }, [filter, categories, genders, kinds, memberOnly]);
+  }, [fstate]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -83,17 +80,21 @@ export default function EventsPage() {
     api.getClubLessons(club.slug).then(setLessons).catch(() => setLessons([]));
   }, [club?.slug]);
 
-  // Agenda complet (toutes sources) pour dériver les facettes présentes ; puis filtrage.
+  // Agenda complet (toutes sources) pour dériver facettes et compteurs ; puis filtrage.
   const allItems = useMemo(
     () => (tournaments && events ? mergeAgenda(tournaments, events, lessons, new Date()) : null),
     [tournaments, events, lessons],
   );
   const facets = useMemo(() => (allItems ? agendaFacets(allItems) : null), [allItems]);
-  const items = useMemo(
-    () => (allItems ? applyAgendaFilters(allItems, { source: filter, categories, genders, kinds, memberOnly }) : null),
-    [allItems, filter, categories, genders, kinds, memberOnly],
+  const counts = useMemo(
+    () => (allItems && facets ? agendaCounts(allItems, fstate, now, facets) : null),
+    [allItems, facets, fstate, now],
   );
-  const hasSecondary = (categories.size + genders.size + kinds.size) > 0 || memberOnly;
+  const items = useMemo(
+    () => (allItems ? applyAgendaFilters(allItems, fstate, now ?? undefined) : null),
+    [allItems, fstate, now],
+  );
+  const hasActive = fstate.when != null || fstate.categories.size > 0 || fstate.genders.size > 0 || fstate.kinds.size > 0 || fstate.memberOnly;
 
   if (loading || !club) {
     return <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>Chargement…</div>;
@@ -101,18 +102,6 @@ export default function EventsPage() {
 
   // Badge sport sur les cartes uniquement si le club propose plusieurs sports.
   const multiSport = clubIsMultiSport(club);
-
-  // Toggle générique d'une valeur dans un Set d'état (immutable pour déclencher le rendu).
-  function toggle<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) {
-    setter((prev) => { const next = new Set(prev); if (next.has(value)) next.delete(value); else next.add(value); return next; });
-  }
-
-  const showCategories = (filter === 'tout' || filter === 'competitions') && (facets?.categories.length ?? 0) > 0;
-  const showGenders = filter === 'competitions' && (facets?.genders.length ?? 0) > 0;
-  const showKinds = (filter === 'tout' || filter === 'animations') && (facets?.kinds.length ?? 0) > 0;
-  const showMemberOnly = filter === 'animations' && !!facets?.hasMemberOnly;
-  const showSecondaryRow = showCategories || showGenders || showKinds || showMemberOnly;
-  const sep = <span style={{ width: 1, alignSelf: 'stretch', background: th.line, margin: '0 4px' }} />;
 
   return (
     <Screen>
@@ -123,39 +112,38 @@ export default function EventsPage() {
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Events</div>
         </div>
 
-        <div style={{ padding: '16px 20px 0' }}>
-          <PillTabs<AgendaFilter>
-            options={FILTERS.map((f) => ({ value: f.key, label: f.label }))}
-            value={filter}
-            onChange={selectSource}
-          />
-        </div>
-
-        {showSecondaryRow && (
-          <div style={{ padding: '12px 20px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-            {showCategories && facets!.categories.map((c) => (
-              <Pill key={`cat-${c}`} size="sm" activeBg={th.text} label={c} active={categories.has(c)} onClick={() => toggle(setCategories, c)} />
-            ))}
-            {showGenders && (showCategories ? sep : null)}
-            {showGenders && facets!.genders.map((g) => (
-              <Pill key={`gen-${g}`} size="sm" activeBg={th.text} label={GENDER_LABEL[g]} active={genders.has(g)} onClick={() => toggle(setGenders, g)} />
-            ))}
-            {showKinds && (showCategories ? sep : null)}
-            {showKinds && facets!.kinds.map((k) => (
-              <Pill key={`kind-${k}`} size="sm" activeBg={th.text} label={KIND_LABEL[k]} active={kinds.has(k)} onClick={() => toggle(setKinds, k)} />
-            ))}
-            {showMemberOnly && (
-              <Pill size="sm" activeBg={th.text} label="Membres" active={memberOnly} onClick={() => setMemberOnly((v) => !v)} />
-            )}
-            {hasSecondary && (
-              <button onClick={clearFacets} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint, padding: '5px 8px' }}>Effacer</button>
-            )}
+        {facets && counts && (
+          <div style={{ padding: '16px 20px 0' }}>
+            <EventsFilterBar
+              state={fstate}
+              onChange={setFstate}
+              facets={facets}
+              counts={counts}
+              resultCount={items?.length ?? null}
+            />
           </div>
         )}
 
         <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {items === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-          {items?.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Rien de prévu pour le moment.</div>}
+          {items?.length === 0 && (
+            hasActive ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10, fontFamily: th.fontUI, color: th.textMute }}>
+                Aucun event ne correspond à vos filtres.
+                <button
+                  onClick={() => setFstate({ ...fstate, categories: new Set(), genders: new Set(), kinds: new Set(), memberOnly: false, when: null })}
+                  style={{
+                    border: 'none', cursor: 'pointer', borderRadius: 999, padding: '7px 15px',
+                    background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee',
+                    fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600,
+                  }}>
+                  Effacer les filtres
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Rien de prévu pour le moment.</div>
+            )
+          )}
           {items?.map((item) => {
             if (item.source === 'tournament') {
               return (
