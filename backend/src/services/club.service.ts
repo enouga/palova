@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
 import { OffPeakHours } from './pricing';
@@ -206,6 +207,36 @@ export class ClubService {
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
     for (const cs of club.clubSports) cs.resources.sort(bySortOrder); // ordre manuel
     return club;
+  }
+
+  /** Top 3 du mois : joueurs du club par victoires sur matchs CONFIRMED du mois calendaire
+   *  courant (fuseau club). Vide si moins de 3 joueurs ont au moins 1 victoire. */
+  async clubTopOfMonth(slug: string) {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true, timezone: true } });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
+    const monthStart = DateTime.now().setZone(club.timezone).startOf('month');
+    const rows = await prisma.matchPlayer.findMany({
+      where: {
+        match: {
+          clubId: club.id, status: 'CONFIRMED', winningTeam: { not: null },
+          playedAt: { gte: monthStart.toJSDate(), lt: monthStart.plus({ months: 1 }).toJSDate() },
+        },
+      },
+      select: {
+        userId: true, team: true,
+        match: { select: { winningTeam: true } },
+        user: { select: { firstName: true, lastName: true, avatarUrl: true } },
+      },
+    });
+    const byUser = new Map<string, { userId: string; firstName: string; lastName: string; avatarUrl: string | null; wins: number }>();
+    for (const r of rows) {
+      if (r.match.winningTeam !== r.team) continue;
+      const cur = byUser.get(r.userId) ?? { userId: r.userId, firstName: r.user.firstName, lastName: r.user.lastName, avatarUrl: r.user.avatarUrl, wins: 0 };
+      cur.wins += 1;
+      byUser.set(r.userId, cur);
+    }
+    const top = [...byUser.values()].sort((a, b) => b.wins - a.wins).slice(0, 3);
+    return top.length >= 3 ? top : [];
   }
 
   /** Détail d'un club pour le back-office (préremplissage des réglages). */

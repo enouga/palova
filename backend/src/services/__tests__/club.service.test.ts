@@ -755,3 +755,38 @@ describe('ClubService — géocodage create/update', () => {
     expect(geocodeMock).not.toHaveBeenCalled();
   });
 });
+
+describe('clubTopOfMonth', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('agrège les victoires du mois courant et renvoie le top 3', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
+    const mk = (userId: string, team: number, winningTeam: number, name: string) => ({
+      userId, team, match: { winningTeam },
+      user: { firstName: name, lastName: 'X', avatarUrl: null },
+    });
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      mk('u1', 1, 1, 'Ana'), mk('u1', 1, 1, 'Ana'), mk('u1', 2, 1, 'Ana'), // 2 victoires
+      mk('u2', 1, 1, 'Bob'), mk('u2', 2, 2, 'Bob'), mk('u2', 1, 1, 'Bob'), // 3 victoires
+      mk('u3', 2, 2, 'Cléo'),                                              // 1 victoire
+      mk('u4', 1, 2, 'Dan'),                                               // 0 victoire
+    ] as any);
+    const top = await service.clubTopOfMonth('slug');
+    expect(top.map((t) => [t.userId, t.wins])).toEqual([['u2', 3], ['u1', 2], ['u3', 1]]);
+    // fenêtre mensuelle passée au filtre playedAt
+    expect(prismaMock.matchPlayer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        match: expect.objectContaining({ clubId: 'c1', status: 'CONFIRMED', playedAt: expect.objectContaining({ gte: expect.any(Date), lt: expect.any(Date) }) }),
+      }),
+    }));
+  });
+
+  it('moins de 3 joueurs avec une victoire → liste vide (section masquée)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      { userId: 'u1', team: 1, match: { winningTeam: 1 }, user: { firstName: 'A', lastName: 'B', avatarUrl: null } },
+    ] as any);
+    expect(await service.clubTopOfMonth('slug')).toEqual([]);
+  });
+});

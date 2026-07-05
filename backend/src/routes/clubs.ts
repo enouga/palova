@@ -182,6 +182,12 @@ router.get('/:slug/sponsors', async (req, res, next) => {
   catch (err) { handleError(err, res, next); }
 });
 
+// Top du mois : podium 3 joueurs par victoires (public, vide si < 3 joueurs).
+router.get('/:slug/top-month', async (req, res, next) => {
+  try { res.json(await clubService.clubTopOfMonth(asString(req.params.slug))); }
+  catch (err) { handleError(err, res, next); }
+});
+
 // Présentation publique du club (page « Le club » + teaser Club-house).
 router.get('/:slug/presentation', async (req, res, next) => {
   try { res.json(await presentationService.getPublic(asString(req.params.slug))); }
