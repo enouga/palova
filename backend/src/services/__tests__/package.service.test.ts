@@ -200,6 +200,14 @@ describe('PackageService — consommation & soldes', () => {
     prismaMock.club.findUnique.mockResolvedValue(null as any);
     await expect(service.listMyPackagesBySlug('ghost', 'user-1')).rejects.toThrow('CLUB_NOT_FOUND');
   });
+
+  it('listMyPackagesBySlug sélectionne sportKeys du template', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', status: 'ACTIVE' } as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+    await service.listMyPackagesBySlug('padel-arena', 'user-1');
+    const arg = prismaMock.memberPackage.findMany.mock.calls[0][0] as any;
+    expect(arg.include.template.select).toEqual({ name: true, sportKeys: true });
+  });
 });
 
 describe('PackageService — caisse du jour & vouchers', () => {

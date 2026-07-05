@@ -196,7 +196,7 @@ export class PackageService {
         ],
       },
       orderBy: { purchasedAt: 'asc' },
-      include: { template: { select: { name: true } } },
+      include: { template: { select: { name: true, sportKeys: true } } },
     });
   }
 
