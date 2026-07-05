@@ -877,6 +877,7 @@ model PackageTemplate {
   price        Decimal     @db.Decimal(10, 2)                       // prix de vente
   entriesCount Int?        @map("entries_count")                    // si ENTRIES
   walletAmount Decimal?    @map("wallet_amount") @db.Decimal(10, 2) // si WALLET : montant crédité
+  sportKeys    String[]    @default([]) @map("sport_keys")          // optionnel : [] = tous sports (affichage seulement, pas de gate fonctionnel)
   validityDays Int?        @map("validity_days")                    // null = sans expiration
   isActive     Boolean     @default(true) @map("is_active")
   createdAt    DateTime    @default(now()) @map("created_at")
