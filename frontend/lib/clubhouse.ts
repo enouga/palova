@@ -59,6 +59,34 @@ export function offerIsActive(s: Pick<Sponsor, 'offerText' | 'offerUntil'>, now:
   return s.offerUntil == null || new Date(s.offerUntil) > now;
 }
 
+export interface PulseChip { kind: 'slot' | 'matches' | 'event'; label: string; }
+
+/** Jour + heure courte au fuseau du club (« dim. 20h00 »). */
+function pulseWhen(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz })
+    .format(new Date(iso)).replace(':', 'h');
+}
+
+/** Rangée « pouls du club » du hero — une chip par donnée existante ; now null (avant mount) → []. */
+export function clubPulse({ slots, matchCount, nextEventStart, now, timezone }: {
+  slots: UpcomingSlot[]; matchCount: number; nextEventStart: string | null; now: Date | null; timezone: string;
+}): PulseChip[] {
+  if (!now) return [];
+  const chips: PulseChip[] = [];
+  if (slots.length > 0) chips.push({ kind: 'slot', label: `Prochain créneau ${pulseWhen(slots[0].slot.startTime, timezone)}` });
+  if (matchCount > 0) chips.push({ kind: 'matches', label: matchCount === 1 ? '1 partie cherche des joueurs' : `${matchCount} parties cherchent des joueurs` });
+  if (nextEventStart) {
+    const days = Math.ceil((new Date(nextEventStart).getTime() - now.getTime()) / 86_400_000);
+    chips.push({ kind: 'event', label: days <= 0 ? "Prochain event aujourd'hui" : `Prochain event J-${days}` });
+  }
+  return chips;
+}
+
+/** Sièges vides à dessiner sur une carte partie (capacité bornée à 6 pour l'affichage). */
+export function matchSeats(m: { maxPlayers: number; players: unknown[] }): number {
+  return Math.max(0, Math.min(6, m.maxPlayers) - m.players.length);
+}
+
 /** Libellé des places d'un tournoi — urgent (rouge) quand il reste ≤ 5 places. */
 export function tournamentPlacesLabel(t: Tournament): { text: string; urgent: boolean } {
   if (t.maxTeams != null) {

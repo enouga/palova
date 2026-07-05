@@ -1,4 +1,4 @@
-import { activePosters, announcementExpired, offerIsActive, pickUpcomingSlots, posterLayout, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
+import { activePosters, announcementExpired, clubPulse, matchSeats, offerIsActive, pickUpcomingSlots, posterLayout, tournamentPlacesLabel, todayISO, UpcomingSlot } from '../lib/clubhouse';
 import { Announcement, ClubAvailability, Tournament } from '../lib/api';
 
 const slot = (startTime: string, available = true) =>
@@ -97,5 +97,37 @@ describe('announcementExpired', () => {
     expect(announcementExpired({ validUntil: null }, now)).toBe(false);
     expect(announcementExpired({ validUntil: '2026-07-01T23:59:59.999Z' }, now)).toBe(true);
     expect(announcementExpired({ validUntil: '2026-08-01T23:59:59.999Z' }, now)).toBe(false);
+  });
+});
+
+describe('clubPulse', () => {
+  const now = new Date('2026-07-05T10:00:00.000Z');
+  const upSlot: UpcomingSlot = { resourceId: 'r1', resourceName: 'Padel 1', slot: slot('2026-07-05T18:00:00.000Z') as never };
+
+  it('émet une chip par donnée présente (créneau, parties, event)', () => {
+    const chips = clubPulse({ slots: [upSlot], matchCount: 3, nextEventStart: '2026-07-09T10:00:00.000Z', now, timezone: 'Europe/Paris' });
+    expect(chips.map((c) => c.kind)).toEqual(['slot', 'matches', 'event']);
+    expect(chips[0].label).toMatch(/^Prochain créneau/);
+    expect(chips[1].label).toBe('3 parties cherchent des joueurs');
+    expect(chips[2].label).toBe('Prochain event J-4');
+  });
+
+  it("singulier pour 1 partie, event du jour = « aujourd'hui »", () => {
+    const chips = clubPulse({ slots: [], matchCount: 1, nextEventStart: '2026-07-05T08:00:00.000Z', now, timezone: 'Europe/Paris' });
+    expect(chips[0].label).toBe('1 partie cherche des joueurs');
+    expect(chips[1].label).toBe("Prochain event aujourd'hui");
+  });
+
+  it('now null (hydration) ou aucune donnée → []', () => {
+    expect(clubPulse({ slots: [upSlot], matchCount: 2, nextEventStart: null, now: null, timezone: 'Europe/Paris' })).toEqual([]);
+    expect(clubPulse({ slots: [], matchCount: 0, nextEventStart: null, now, timezone: 'Europe/Paris' })).toEqual([]);
+  });
+});
+
+describe('matchSeats', () => {
+  it('sièges vides = maxPlayers - inscrits, borné à 0 et capé à 6 de capacité', () => {
+    expect(matchSeats({ maxPlayers: 4, players: [{}, {}] })).toBe(2);
+    expect(matchSeats({ maxPlayers: 4, players: [{}, {}, {}, {}, {}] })).toBe(0);
+    expect(matchSeats({ maxPlayers: 12, players: [{}] })).toBe(5);
   });
 });
