@@ -884,3 +884,107 @@ describe('ClubService — sections du Club-house', () => {
     expect(arg.select.clubHouseSections).toBe(true);
   });
 });
+
+describe('ClubService — listMembers (rôle staff)', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('expose staffRole depuis club_members (null pour un membre simple), en 1 requête', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { id: 'm1', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-01'),
+        user: { id: 'u1', firstName: 'Olivia', lastName: 'Gerante', email: 'o@x.fr', phone: null } },
+      { id: 'm2', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-02'),
+        user: { id: 'u2', firstName: 'Paul', lastName: 'Martin', email: 'p@x.fr', phone: null } },
+    ] as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([{ userId: 'u1', role: 'OWNER' }] as any);
+
+    const rows = await service.listMembers('club-demo');
+
+    expect(rows[0].staffRole).toBe('OWNER');
+    expect(rows[1].staffRole).toBeNull();
+    // une seule requête staff pour tout le club (pas de N+1)
+    expect(prismaMock.clubMember.findMany).toHaveBeenCalledWith({ where: { clubId: 'club-demo' }, select: { userId: true, role: true } });
+  });
+});
+
+describe('ClubService — setMemberStaffRole', () => {
+  let service: ClubService;
+  beforeEach(() => {
+    service = new ClubService();
+    // Par défaut : la cible est dans le fichier-membres, sans rôle staff actuel.
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb1' } as any);
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    prismaMock.clubMember.upsert.mockResolvedValue({} as any);
+    prismaMock.clubMember.deleteMany.mockResolvedValue({ count: 1 } as any);
+  });
+
+  it('promeut un membre en STAFF (upsert)', async () => {
+    const r = await service.setMemberStaffRole('club-demo', 'actor', 'u9', 'STAFF');
+    expect(r).toEqual({ userId: 'u9', staffRole: 'STAFF' });
+    expect(prismaMock.clubMember.upsert).toHaveBeenCalledWith({
+      where: { userId_clubId: { userId: 'u9', clubId: 'club-demo' } },
+      update: { role: 'STAFF' },
+      create: { userId: 'u9', clubId: 'club-demo', role: 'STAFF' },
+    });
+  });
+
+  it('promeut un membre en ADMIN (upsert, y compris depuis STAFF)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'STAFF' } as any);
+    const r = await service.setMemberStaffRole('club-demo', 'actor', 'u9', 'ADMIN');
+    expect(r).toEqual({ userId: 'u9', staffRole: 'ADMIN' });
+    expect(prismaMock.clubMember.upsert).toHaveBeenCalledWith({
+      where: { userId_clubId: { userId: 'u9', clubId: 'club-demo' } },
+      update: { role: 'ADMIN' },
+      create: { userId: 'u9', clubId: 'club-demo', role: 'ADMIN' },
+    });
+  });
+
+  it('révoque (role null) via deleteMany non-OWNER — idempotent (0 ligne = OK)', async () => {
+    prismaMock.clubMember.deleteMany.mockResolvedValue({ count: 0 } as any);
+    const r = await service.setMemberStaffRole('club-demo', 'actor', 'u9', null);
+    expect(r).toEqual({ userId: 'u9', staffRole: null });
+    expect(prismaMock.clubMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u9', clubId: 'club-demo', role: { not: 'OWNER' } },
+    });
+    expect(prismaMock.clubMember.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse un rôle invalide (VALIDATION_ERROR), y compris OWNER et undefined', async () => {
+    await expect(service.setMemberStaffRole('club-demo', 'actor', 'u9', 'SUPER' as any)).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.setMemberStaffRole('club-demo', 'actor', 'u9', 'OWNER' as any)).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.setMemberStaffRole('club-demo', 'actor', 'u9', undefined as any)).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('refuse de modifier son propre rôle (CANNOT_CHANGE_SELF)', async () => {
+    await expect(service.setMemberStaffRole('club-demo', 'u9', 'u9', 'ADMIN')).rejects.toThrow('CANNOT_CHANGE_SELF');
+    expect(prismaMock.clubMember.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse une cible hors fichier-membres (MEMBER_NOT_FOUND)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(service.setMemberStaffRole('club-demo', 'actor', 'u9', 'STAFF')).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
+  it('refuse de toucher un OWNER (CANNOT_CHANGE_OWNER)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'OWNER' } as any);
+    await expect(service.setMemberStaffRole('club-demo', 'actor', 'u9', 'STAFF')).rejects.toThrow('CANNOT_CHANGE_OWNER');
+    expect(prismaMock.clubMember.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.clubMember.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ClubService — removeMember (révocation du rôle staff)', () => {
+  it('supprime aussi la ligne ClubMember non-OWNER du user retiré', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'club-demo', userId: 'u9' } as any);
+    prismaMock.clubMembership.delete.mockResolvedValue({} as any);
+    prismaMock.clubMember.deleteMany.mockResolvedValue({ count: 1 } as any);
+
+    await new ClubService().removeMember('club-demo', 'mb1');
+
+    expect(prismaMock.clubMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u9', clubId: 'club-demo', role: { not: 'OWNER' } },
+    });
+    // Les deux suppressions partent dans une même transaction (pas d'état partiel).
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+  });
+});

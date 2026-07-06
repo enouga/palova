@@ -383,18 +383,24 @@ export class ClubService {
   // --- Membres (fichier-membres du club ; être membre non bloqué = pouvoir réserver) ---
 
   async listMembers(clubId: string) {
-    const members = await prisma.clubMembership.findMany({
-      where: { clubId },
-      orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
-      select: {
-        id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-      },
-    });
+    const [members, staff] = await Promise.all([
+      prisma.clubMembership.findMany({
+        where: { clubId },
+        orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+        select: {
+          id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
+          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        },
+      }),
+      // rôle back-office (table ClubMember) mappé par userId — une requête pour tout le club
+      prisma.clubMember.findMany({ where: { clubId }, select: { userId: true, role: true } }),
+    ]);
+    const roleByUser = new Map(staff.map((s) => [s.userId, s.role]));
     return members.map((m) => ({
       id: m.id, userId: m.user.id,
       firstName: m.user.firstName, lastName: m.user.lastName, email: m.user.email, phone: m.user.phone,
       isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, status: m.status, note: m.note, watch: m.watch, since: m.createdAt,
+      staffRole: roleByUser.get(m.user.id) ?? null,
     }));
   }
 
@@ -403,6 +409,36 @@ export class ClubService {
     const res = await prisma.clubMembership.updateMany({ where: { clubId, userId }, data: { watch } });
     if (res.count === 0) throw new Error('MEMBER_NOT_FOUND');
     return { userId, watch };
+  }
+
+  /**
+   * Rôle back-office d'un membre (table ClubMember). Attribuable : ADMIN | STAFF ;
+   * null = révocation (idempotente). Le OWNER est intouchable, et on ne se modifie
+   * jamais soi-même (évite de se retirer l'accès par accident).
+   */
+  async setMemberStaffRole(clubId: string, actorUserId: string, targetUserId: string, role: 'ADMIN' | 'STAFF' | null) {
+    if (role !== null && role !== 'ADMIN' && role !== 'STAFF') throw new Error('VALIDATION_ERROR');
+    if (targetUserId === actorUserId) throw new Error('CANNOT_CHANGE_SELF');
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: targetUserId, clubId } }, select: { id: true },
+    });
+    if (!membership) throw new Error('MEMBER_NOT_FOUND');
+    const current = await prisma.clubMember.findUnique({
+      where: { userId_clubId: { userId: targetUserId, clubId } }, select: { role: true },
+    });
+    if (current?.role === 'OWNER') throw new Error('CANNOT_CHANGE_OWNER');
+    if (role === null) {
+      // `not: 'OWNER'` = défense en profondeur derrière la garde ci-dessus
+      await prisma.clubMember.deleteMany({ where: { userId: targetUserId, clubId, role: { not: 'OWNER' } } });
+    } else {
+      // Lu-puis-écrit sans transaction : rien ne promeut en OWNER à l'exécution (créé uniquement à la création du club).
+      await prisma.clubMember.upsert({
+        where: { userId_clubId: { userId: targetUserId, clubId } },
+        update: { role },
+        create: { userId: targetUserId, clubId, role },
+      });
+    }
+    return { userId: targetUserId, staffRole: role };
   }
 
   /** Adhésion idempotente d'un user à un club (ACTIVE si absente ; garde le statut existant, BLOCKED inclus). */
@@ -481,9 +517,14 @@ export class ClubService {
   }
 
   async removeMember(clubId: string, membershipId: string) {
-    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true } });
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
-    await prisma.clubMembership.delete({ where: { id: membershipId } });
+    // Retiré du fichier-membres = plus d'accès au back-office (le rôle OWNER, lui, survit) —
+    // atomique : pas d'état partiel « hors du club mais encore staff ».
+    await prisma.$transaction([
+      prisma.clubMembership.delete({ where: { id: membershipId } }),
+      prisma.clubMember.deleteMany({ where: { userId: m.userId, clubId, role: { not: 'OWNER' } } }),
+    ]);
   }
 
   /** Recherche de membres actifs par nom/prénom (pour choisir un coéquipier) ; requête vide = liste de parcours (≤20). Réservé aux membres actifs du club. */
