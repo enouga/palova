@@ -133,6 +133,26 @@ describe('OnboardingWizard', () => {
     expect(screen.getByText(/2 pistes · dès 25 €/)).toBeInTheDocument();
   });
 
+  it('rouvert sur un club déjà configuré : tout est pré-rempli (déjà N pistes, presets pressés)', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([
+      { id: 'r1', name: 'Piste 1', clubSport: padelCs, price: '25', isActive: true, attributes: {} },
+      { id: 'r2', name: 'Piste 2', clubSport: padelCs, price: '25', isActive: true, attributes: {} },
+    ]);
+    wrap();
+    await screen.findByText(/Donnez un visage/);
+    // l'aperçu reflète l'existant dès l'ouverture
+    expect(screen.getByText(/2 pistes · dès 25 €/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Passer cette étape'));            // → sports
+    await screen.findByText(/Que joue-t-on/);
+    fireEvent.click(screen.getByText('Passer cette étape'));            // → terrains
+    await screen.findByText(/Vos terrains,/);
+    expect(screen.getByText(/déjà 2 pistes/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Passer cette étape'));            // → règles
+    await screen.findByText(/Deux règles,/);
+    // les valeurs par défaut du club (7/14, jusqu'au début) correspondent aux presets 0
+    expect(screen.getByText('7 jours').closest('button')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('échec de chargement → message, pas de crash', async () => {
     (api.adminGetClub as jest.Mock).mockRejectedValue(new Error('boom'));
     wrap();
