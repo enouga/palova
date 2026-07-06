@@ -52,6 +52,17 @@ describe('StepRules', () => {
     expect(advance).toHaveBeenCalled();
   });
 
+  it('valeurs custom (aucun preset correspondant) : rien de présélectionné, Continuer avance sans écraser', async () => {
+    const custom = { ...club, publicBookingDays: 10, memberBookingDays: 20, cancellationCutoffHours: 6 } as unknown as ClubAdminDetail;
+    const advance = jest.fn();
+    wrap(<StepRules club={custom} clubId="c1" token="t" onPatched={jest.fn()} advance={advance} />);
+    ['7 jours', '14 jours', '30 jours'].forEach((l) =>
+      expect(screen.getByText(l).closest('button')).toHaveAttribute('aria-pressed', 'false'));
+    fireEvent.click(screen.getByText('Continuer →'));
+    await waitFor(() => expect(advance).toHaveBeenCalled());
+    expect(api.adminUpdateClub).not.toHaveBeenCalled();
+  });
+
   it('échec API du save des règles → message, pas d’avance', async () => {
     (api.adminUpdateClub as jest.Mock).mockRejectedValue(new Error('boom'));
     const advance = jest.fn();
