@@ -19,7 +19,6 @@ const url = '/api/clubs/club-demo/admin/onboarding-status';
 
 beforeEach(() => {
   prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'ADMIN' } as any);
-  prismaMock.user.findUnique.mockResolvedValue({ email: 'owner@x.fr' } as any);
   getStatusImpl = jest.fn().mockResolvedValue({
     hasLogo: true, sportsCount: 1, resourcesCount: 4,
     hasPresentation: false, stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
