@@ -105,21 +105,22 @@ export function OnboardingWizard() {
 
   return (
     <div style={{ minHeight: '100vh', background: `linear-gradient(160deg, ${WIZ.bg} 0%, ${WIZ.bg2} 100%)`, display: 'flex', flexDirection: 'column' }}>
-      <style>{`@keyframes ob-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }`}</style>
+      <style>{`@keyframes ob-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+        @media (max-width: 559px) { .ob-pip { display: none; } }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 26px', gap: 12 }}>
         <Logotype size={20} color="#fff" />
         {!finished && (
           <div style={{ display: 'flex', gap: 7, alignItems: 'center' }} aria-label={`Étape ${stepIdx + 1} sur ${STEP_ORDER.length}`}>
             {STEP_ORDER.map((k, i) => (
-              <span key={k} style={{ width: 34, height: 4, borderRadius: 2, background: i <= stepIdx ? club.accentColor : WIZ.line }} />
+              <span key={k} className="ob-pip" style={{ width: 34, height: 4, borderRadius: 2, background: i <= stepIdx ? club.accentColor : WIZ.line }} />
             ))}
             <span style={{ color: WIZ.faint, fontFamily: th.fontUI, fontSize: 11.5, marginLeft: 6 }}>{stepIdx + 1}/{STEP_ORDER.length}</span>
           </div>
         )}
         {!finished ? (
           <button type="button" onClick={() => router.push('/admin')}
-            style={{ background: 'transparent', border: 'none', color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            style={{ background: 'transparent', border: 'none', color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, whiteSpace: 'nowrap' }}>
             Configurer plus tard →
           </button>
         ) : <span />}
