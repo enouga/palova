@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { StartChecklist } from '@/components/admin/StartChecklist';
 
 function StatCard({ label, value, unit, hint, icon, big }: { label: string; value: string | number; unit?: string; hint?: string; icon: IconName; big?: boolean }) {
   const { th } = useTheme();
@@ -69,6 +70,8 @@ export default function AdminDashboard() {
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 24px' }}>
         {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
       </p>
+
+      {clubId && token && <StartChecklist clubId={clubId} token={token} />}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
         <StatCard label="Réservations du jour" value={confirmed} icon="ticket" big hint={`${pending} en attente`} />
