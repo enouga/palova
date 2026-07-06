@@ -27,7 +27,7 @@ describe('LivePhonePreview', () => {
         { key: 'tennis', name: 'Tennis', icon: null, noun: 'court', courtCount: 0, minPrice: null },
       ],
     }} />);
-    expect(screen.getByText(/Padel/)).toBeInTheDocument();
+    expect(screen.getByText('🎾 Padel')).toBeInTheDocument();
     expect(screen.getByText(/4 pistes · dès 25 €/)).toBeInTheDocument();
     // le sport sans terrain n'apparaît pas dans la section terrains
     expect(screen.queryByText(/0 court/)).not.toBeInTheDocument();

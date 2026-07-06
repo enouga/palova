@@ -57,9 +57,8 @@ export function LivePhonePreview({ preview }: { preview: PreviewState }) {
             {preview.sports.length === 0 ? hint('apparaîtront à l’étape 2…') : (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
                 {preview.sports.map((s) => (
-                  <span key={s.key} aria-label={s.icon ? s.name : undefined} title={s.icon ? s.name : undefined}
-                    style={{ background: accent, color: inkOn(accent), borderRadius: 12, padding: '3px 9px', fontSize: 9.5, fontWeight: 700 }}>
-                    {s.icon ? s.icon : s.name}
+                  <span key={s.key} style={{ background: accent, color: inkOn(accent), borderRadius: 12, padding: '3px 9px', fontSize: 9.5, fontWeight: 700 }}>
+                    {s.icon ? `${s.icon} ` : ''}{s.name}
                   </span>
                 ))}
               </div>
@@ -69,8 +68,8 @@ export function LivePhonePreview({ preview }: { preview: PreviewState }) {
             {withCourts.length === 0 ? hint('étape 3…') : (
               <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {withCourts.map((s) => (
-                  <div key={s.key} title={s.icon ? s.name : undefined} style={{ fontSize: 9.5, color: '#333' }}>
-                    {s.icon ? `${s.icon} · ` : `${s.name} · `}{s.courtCount} {plural(s.noun, s.courtCount)}{s.minPrice != null ? ` · dès ${s.minPrice} €` : ''}
+                  <div key={s.key} style={{ fontSize: 9.5, color: '#333' }}>
+                    {s.icon ? `${s.icon} ` : ''}{s.name} · {s.courtCount} {plural(s.noun, s.courtCount)}{s.minPrice != null ? ` · dès ${s.minPrice} €` : ''}
                   </div>
                 ))}
               </div>
