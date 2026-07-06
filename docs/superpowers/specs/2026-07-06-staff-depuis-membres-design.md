@@ -56,11 +56,16 @@ Gardes du service, dans l'ordre :
 - Un membre `BLOCKED` peut recevoir/perdre un rôle (pas de couplage statut ↔ rôle) ; le
   blocage coupe la réservation, pas le back-office — comportement existant, inchangé.
 
-**3. Effet de bord assumé sur `removeMember`** (« Suppr. » du fichier-membres) : supprime
-aussi la ligne `ClubMember` **non-OWNER** du même user
-(`clubMember.deleteMany({ where: { userId, clubId, role: { not: 'OWNER' } } })`) — sinon un
-membre retiré du club garderait l'accès au back-office. Le `findUnique` existant du
-`removeMember` récupère désormais aussi `userId`.
+**3. `removeMember` refuse de retirer un détenteur de rôle staff** (« Suppr. » du
+fichier-membres) : si le user cible détient une ligne `ClubMember` (OWNER/ADMIN/STAFF),
+la suppression échoue avec **`MEMBER_IS_STAFF` (409)** — il faut d'abord révoquer son rôle
+via la route staff-role (réservée ADMIN+). Vérification faite **dans une transaction
+interactive** avec le `delete` (aucune promotion concurrente ne peut laisser un membre
+retiré avec accès back-office). Décision prise en revue (2026-07-06) : elle remplace la
+première approche « la suppression révoque aussi le rôle », qui aurait permis à un STAFF
+(la route DELETE est au rang STAFF) de démettre un ADMIN en le retirant du fichier.
+Le `findUnique` existant du `removeMember` récupère désormais aussi `userId`.
+Message front mappé : « Ce membre a un rôle staff : retirez d'abord son rôle… ».
 
 ### Frontend
 
@@ -91,7 +96,8 @@ Effet immédiat pour le promu : `getMyClubs` étant dérivé de `ClubMember`, le
 - **`club.service.test.ts`** : `listMembers` expose `staffRole` (OWNER/ADMIN/null) ;
   `setMemberStaffRole` — upsert ADMIN, upsert STAFF, révocation idempotente, refus
   `CANNOT_CHANGE_OWNER`, refus `CANNOT_CHANGE_SELF`, refus `MEMBER_NOT_FOUND`, refus
-  `VALIDATION_ERROR` ; `removeMember` supprime la ligne `ClubMember` non-OWNER.
+  `VALIDATION_ERROR` ; `removeMember` refuse un détenteur de rôle staff (`MEMBER_IS_STAFF`)
+  et retire un membre simple.
 - **Route admin** (test de routes) : 403 pour un viewer STAFF, 200 pour ADMIN, mapping
   des codes d'erreur.
 - **`AdminMembers.test.tsx`** : badge « Admin » affiché ; bouton « Rôle… » présent pour un
@@ -105,4 +111,5 @@ Effet immédiat pour le promu : `getMyClubs` étant dérivé de `ClubMember`, le
 - Permissions fines par rôle (le STAFF garde l'accès quasi complet au back-office — Lot 2
   documenté dans `routes/admin.ts`, inchangé).
 - Notification (email ou in-app) au membre promu/révoqué.
-- Révocation du rôle staff au **blocage** d'un membre (seul « Suppr. » révoque).
+- Révocation du rôle staff au **blocage** d'un membre (bloquer coupe la réservation,
+  pas le back-office ; la révocation passe toujours par « Rôle… »).

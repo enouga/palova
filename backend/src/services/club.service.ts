@@ -519,12 +519,17 @@ export class ClubService {
   async removeMember(clubId: string, membershipId: string) {
     const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
-    // Retiré du fichier-membres = plus d'accès au back-office (le rôle OWNER, lui, survit) —
-    // atomique : pas d'état partiel « hors du club mais encore staff ».
-    await prisma.$transaction([
-      prisma.clubMembership.delete({ where: { id: membershipId } }),
-      prisma.clubMember.deleteMany({ where: { userId: m.userId, clubId, role: { not: 'OWNER' } } }),
-    ]);
+    // Un membre qui détient un rôle staff (OWNER/ADMIN/STAFF) ne peut pas être retiré du fichier :
+    // il faut d'abord révoquer son rôle (route staff-role, réservée ADMIN+). Check + delete dans une
+    // transaction (Read Committed) : une promotion strictement concurrente peut passer entre les deux —
+    // résiduel accepté (récupérable en ré-ajoutant le membre puis révoquant son rôle).
+    await prisma.$transaction(async (tx) => {
+      const staff = await tx.clubMember.findUnique({
+        where: { userId_clubId: { userId: m.userId, clubId } }, select: { role: true },
+      });
+      if (staff) throw new Error('MEMBER_IS_STAFF');
+      await tx.clubMembership.delete({ where: { id: membershipId } });
+    });
   }
 
   /** Recherche de membres actifs par nom/prénom (pour choisir un coéquipier) ; requête vide = liste de parcours (≤20). Réservé aux membres actifs du club. */

@@ -973,18 +973,26 @@ describe('ClubService — setMemberStaffRole', () => {
   });
 });
 
-describe('ClubService — removeMember (révocation du rôle staff)', () => {
-  it('supprime aussi la ligne ClubMember non-OWNER du user retiré', async () => {
+describe('ClubService — removeMember (membre détenant un rôle staff)', () => {
+  beforeEach(() => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'club-demo', userId: 'u9' } as any);
+    // $transaction interactif : exécute le callback avec le mock comme tx
+    prismaMock.$transaction.mockImplementation(((cb: any) => cb(prismaMock)) as any);
+  });
+
+  it('refuse de retirer un membre qui détient un rôle staff (MEMBER_IS_STAFF)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'ADMIN' } as any);
+    await expect(new ClubService().removeMember('club-demo', 'mb1')).rejects.toThrow('MEMBER_IS_STAFF');
+    expect(prismaMock.clubMembership.delete).not.toHaveBeenCalled();
+  });
+
+  it('retire un membre simple (aucune ligne ClubMember)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
     prismaMock.clubMembership.delete.mockResolvedValue({} as any);
-    prismaMock.clubMember.deleteMany.mockResolvedValue({ count: 1 } as any);
-
     await new ClubService().removeMember('club-demo', 'mb1');
-
-    expect(prismaMock.clubMember.deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'u9', clubId: 'club-demo', role: { not: 'OWNER' } },
+    expect(prismaMock.clubMember.findUnique).toHaveBeenCalledWith({
+      where: { userId_clubId: { userId: 'u9', clubId: 'club-demo' } }, select: { role: true },
     });
-    // Les deux suppressions partent dans une même transaction (pas d'état partiel).
-    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(prismaMock.clubMembership.delete).toHaveBeenCalledWith({ where: { id: 'mb1' } });
   });
 });
