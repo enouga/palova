@@ -38,7 +38,7 @@ export default function NewClubPage() {
         try { await api.adminAddSport(club.id, sportId, auth.token); } catch { /* sport activable plus tard */ }
       }
       setSession(auth.token, club.id);
-      window.location.assign(clubUrl(club.slug, '/admin'));
+      window.location.assign(clubUrl(club.slug, '/admin/onboarding'));
     } catch (err) {
       const msg = (err as Error).message;
       throw new Error(

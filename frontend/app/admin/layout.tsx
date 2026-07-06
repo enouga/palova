@@ -85,6 +85,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  // Le wizard d'onboarding est plein écran : pas de chrome admin (la garde ci-dessus s'applique déjà).
+  if (pathname === '/admin/onboarding') return <>{children}</>;
+
   // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
   // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).
   type NavItem = { href: string; label: string; icon: IconName };
