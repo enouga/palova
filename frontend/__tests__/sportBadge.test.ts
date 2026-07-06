@@ -1,4 +1,4 @@
-import { clubIsMultiSport, setSpansMultipleSports, sportNames } from '@/lib/sportBadge';
+import { clubIsMultiSport, setSpansMultipleSports, sportNames, sportTag } from '@/lib/sportBadge';
 
 describe('sportBadge', () => {
   it('clubIsMultiSport : ≥2 sports => true', () => {
@@ -25,5 +25,15 @@ describe('sportBadge', () => {
     expect(sportNames(null, ['padel'])).toEqual(['padel']);
     expect(sportNames({}, ['padel'])).toEqual(['padel']); // clubSports absent → pas de crash
     expect(sportNames(club, [])).toEqual([]);
+  });
+
+  it('sportTag : null si mono-sport ou sans clés, sinon les noms joints', () => {
+    const multiSport = { clubSports: [{ id: 'a', sport: { key: 'padel', name: 'Padel' } }, { id: 'b', sport: { key: 'tennis', name: 'Tennis' } }] };
+    const monoSport = { clubSports: [{ id: 'a', sport: { key: 'padel', name: 'Padel' } }] };
+    expect(sportTag(multiSport, ['padel'])).toBe('Padel');
+    expect(sportTag(multiSport, ['padel', 'tennis'])).toBe('Padel, Tennis');
+    expect(sportTag(multiSport, [])).toBeNull();
+    expect(sportTag(monoSport, ['padel'])).toBeNull();
+    expect(sportTag(null, ['padel'])).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
 import type { MemberPackage, Subscription } from '@/lib/api';
 import { packageLabel, isUsable } from '@/lib/packages';
-import { clubIsMultiSport, sportNames } from '@/lib/sportBadge';
+import { sportTag } from '@/lib/sportBadge';
 import { Icon } from '@/components/ui/Icon';
 import { AccountEmpty } from './AccountEmpty';
 
@@ -13,7 +13,6 @@ interface Props { packages: MemberPackage[]; subscriptions: Subscription[]; }
 export function WalletSection({ packages, subscriptions }: Props) {
   const { th } = useTheme();
   const { club } = useClub();
-  const multiSport = clubIsMultiSport(club);
 
   if (packages.length === 0 && subscriptions.length === 0) {
     return <AccountEmpty icon="wallet" title="Aucun abonnement ni solde prépayé"
@@ -36,12 +35,12 @@ export function WalletSection({ packages, subscriptions }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {subscriptions.map((s) => {
-        const sport = multiSport && s.sportKeys.length > 0 ? ` · ${sportNames(club, s.sportKeys).join(', ')}` : '';
+        const tag = sportTag(club, s.sportKeys);
         return (
           <div key={s.id} style={row}>
             <span aria-hidden="true" style={tile(true)}><Icon name="check" size={18} color={th.onAccent} /></span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: 1 }}>
-              <span style={name}>{s.plan.name}{sport}</span>
+              <span style={name}>{s.plan.name}{tag ? ` · ${tag}` : ''}</span>
               <span style={meta}>{s.benefit === 'INCLUDED' ? 'Inclus' : `-${s.discountPercent ?? 0}%`}</span>
             </div>
             <span style={{ ...meta, flexShrink: 0 }}>jusqu’au {new Date(s.expiresAt).toLocaleDateString('fr-FR')}</span>
@@ -51,13 +50,13 @@ export function WalletSection({ packages, subscriptions }: Props) {
 
       {packages.map((p) => {
         const usable = isUsable(p);
-        const sport = multiSport && p.template.sportKeys.length > 0 ? ` · ${sportNames(club, p.template.sportKeys).join(', ')}` : '';
+        const tag = sportTag(club, p.template.sportKeys);
         return (
           <div key={p.id} style={row}>
             <span aria-hidden="true" style={tile(false)}>
               <Icon name={p.kind === 'ENTRIES' ? 'ticket' : 'wallet'} size={18} color={usable ? th.textMute : th.textFaint} />
             </span>
-            <span style={{ ...name, flex: 1, minWidth: 0, color: usable ? th.text : th.textFaint }}>{packageLabel(p)}{sport}</span>
+            <span style={{ ...name, flex: 1, minWidth: 0, color: usable ? th.text : th.textFaint }}>{packageLabel(p)}{tag ? ` · ${tag}` : ''}</span>
             {!usable && <span style={{ ...meta, flexShrink: 0 }}>expiré / épuisé</span>}
           </div>
         );

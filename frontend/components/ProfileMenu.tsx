@@ -9,7 +9,7 @@ import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { useClub } from '@/lib/ClubProvider';
 import { platformUrl, clubUrl } from '@/lib/clubUrl';
 import { packageLabel, isUsable } from '@/lib/packages';
-import { clubIsMultiSport, sportNames } from '@/lib/sportBadge';
+import { sportTag } from '@/lib/sportBadge';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
@@ -137,9 +137,8 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
               <div style={sectionTitle}>Mes soldes</div>
               <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
                 {soldes.map((p) => {
-                  const sport = clubIsMultiSport(club) && p.template.sportKeys.length > 0
-                    ? ` · ${sportNames(club, p.template.sportKeys).join(', ')}` : '';
-                  return <span key={p.id}>{packageLabel(p)}{sport}</span>;
+                  const tag = sportTag(club, p.template.sportKeys);
+                  return <span key={p.id}>{packageLabel(p)}{tag ? ` · ${tag}` : ''}</span>;
                 })}
               </div>
             </div>
@@ -151,9 +150,8 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
               <div style={sectionTitle}>Mes abonnements</div>
               <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
                 {subs.map((s) => {
-                  const sport = clubIsMultiSport(club) && s.sportKeys.length > 0
-                    ? ` · ${sportNames(club, s.sportKeys).join(', ')}` : '';
-                  return <span key={s.id}>{s.plan.name}{sport}</span>;
+                  const tag = sportTag(club, s.sportKeys);
+                  return <span key={s.id}>{s.plan.name}{tag ? ` · ${tag}` : ''}</span>;
                 })}
               </div>
             </div>

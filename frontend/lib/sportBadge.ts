@@ -19,3 +19,14 @@ export function sportNames(
 ): string[] {
   return keys.map((k) => club?.clubSports?.find((cs) => cs.sport.key === k)?.sport.name ?? k);
 }
+
+/** Tag sport à afficher pour un élément (offre/solde), ou `null` si non pertinent
+ *  (club mono-sport, ou élément non tagué). Centralise le garde `clubIsMultiSport` +
+ *  la résolution des noms, répété dans ProfileMenu/WalletSection/OffersShowcase. */
+export function sportTag(
+  club: { clubSports?: { id: string; sport: { key: string; name: string } }[] } | null | undefined,
+  keys: string[],
+): string | null {
+  if (!clubIsMultiSport(club) || keys.length === 0) return null;
+  return sportNames(club, keys).join(', ');
+}

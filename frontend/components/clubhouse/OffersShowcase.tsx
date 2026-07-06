@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
-import { clubIsMultiSport, sportNames } from '@/lib/sportBadge';
+import { sportTag } from '@/lib/sportBadge';
 import { ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
@@ -16,20 +16,26 @@ const euros = (v: string) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 type Target = { kind: 'plan'; plan: PublicPlan } | { kind: 'package'; tpl: PublicPackageTemplate };
 type Stage = 'details' | 'payment' | 'done';
 
-const planBenefits = (p: PublicPlan, club: ClubDetail | null): string[] => [
-  ...(clubIsMultiSport(club) && p.sportKeys.length > 0 ? [sportNames(club, p.sportKeys).join(', ')] : []),
-  p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
-  p.benefit === 'INCLUDED' ? 'Réservations incluses' : `−${p.discountPercent ?? 0} % sur les réservations`,
-  ...(p.dailyCap ? [`${p.dailyCap} résa/jour max`] : []),
-  ...(p.weeklyCap ? [`${p.weeklyCap} résa/sem. max`] : []),
-  `Engagement ${p.commitmentMonths} mois`,
-];
+const planBenefits = (p: PublicPlan, club: ClubDetail | null): string[] => {
+  const tag = sportTag(club, p.sportKeys);
+  return [
+    ...(tag ? [tag] : []),
+    p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
+    p.benefit === 'INCLUDED' ? 'Réservations incluses' : `−${p.discountPercent ?? 0} % sur les réservations`,
+    ...(p.dailyCap ? [`${p.dailyCap} résa/jour max`] : []),
+    ...(p.weeklyCap ? [`${p.weeklyCap} résa/sem. max`] : []),
+    `Engagement ${p.commitmentMonths} mois`,
+  ];
+};
 
-const packageBenefits = (t: PublicPackageTemplate, club: ClubDetail | null): string[] => [
-  ...(clubIsMultiSport(club) && t.sportKeys.length > 0 ? [sportNames(club, t.sportKeys).join(', ')] : []),
-  t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`,
-  t.validityDays ? `Valable ${t.validityDays} jours` : 'Sans expiration',
-];
+const packageBenefits = (t: PublicPackageTemplate, club: ClubDetail | null): string[] => {
+  const tag = sportTag(club, t.sportKeys);
+  return [
+    ...(tag ? [tag] : []),
+    t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euros(t.walletAmount ?? '0')} crédités`,
+    t.validityDays ? `Valable ${t.validityDays} jours` : 'Sans expiration',
+  ];
+};
 
 // Vitrine des formules : cartes abonnements + carnets. Le bouton « Souscrire » ouvre une
 // modale de détail (description complète + caractéristiques) ; le paiement en ligne n'y est
