@@ -488,6 +488,9 @@ export const api = {
   adminSetMemberWatch: (clubId: string, userId: string, watch: boolean, token: string) =>
     request<{ userId: string; watch: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/watch`, { method: 'PATCH', body: JSON.stringify({ watch }) }, token),
 
+  adminSetMemberStaffRole: (clubId: string, userId: string, role: 'ADMIN' | 'STAFF' | null, token: string) =>
+    request<{ userId: string; staffRole: 'ADMIN' | 'STAFF' | null }>(`/api/clubs/${clubId}/admin/members/${userId}/staff-role`, { method: 'PATCH', body: JSON.stringify({ role }) }, token),
+
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -1181,6 +1184,7 @@ export interface Member {
   status: 'ACTIVE' | 'BLOCKED';
   note: string | null;
   watch?: boolean;     // drapeau « à surveiller »
+  staffRole?: 'OWNER' | 'ADMIN' | 'STAFF' | null; // rôle back-office (table ClubMember), null = membre simple
   since?: string;
 }
 

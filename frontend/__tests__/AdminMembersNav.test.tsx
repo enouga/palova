@@ -11,6 +11,9 @@ jest.mock('../lib/api', () => ({
     adminGetMembers: jest.fn().mockResolvedValue([
       { id: 'm1', userId: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@d.fr', phone: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: true },
     ]),
+    getMyClubs: jest.fn().mockResolvedValue([]),
+    getMyProfile: jest.fn().mockResolvedValue({ id: 'viewer' }),
+    adminSetMemberStaffRole: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));

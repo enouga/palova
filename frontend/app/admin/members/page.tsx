@@ -7,9 +7,17 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StaffRoleMenu, StaffRole } from '@/components/admin/StaffRoleMenu';
 
 // minuscules + suppression des accents, pour une recherche tolérante (« benoit » trouve « Benoît »)
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const STAFF_LABEL: Record<'OWNER' | 'ADMIN' | 'STAFF', string> = { OWNER: 'Gérant', ADMIN: 'Admin', STAFF: 'Staff' };
+const STAFF_ERRORS: Record<string, string> = {
+  CANNOT_CHANGE_OWNER: 'Le rôle du gérant ne peut pas être modifié.',
+  CANNOT_CHANGE_SELF:  'Vous ne pouvez pas modifier votre propre rôle.',
+  MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bouton « Rôle… ») avant de le supprimer.',
+};
 
 export default function AdminMembersPage() {
   const { th } = useTheme();
@@ -39,6 +47,23 @@ export default function AdminMembersPage() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string | null>(null); // message après création
   const [confirmRemove, setConfirmRemove] = useState<Member | null>(null);
+
+  // Gestion du staff : réservée aux viewers OWNER/ADMIN ; jamais sur sa propre ligne.
+  const [viewer, setViewer] = useState<{ userId: string; role: 'OWNER' | 'ADMIN' | 'STAFF' } | null>(null);
+  // Menu « Rôle… » ouvert : userId + rect du déclencheur (le menu est position:fixed).
+  const [roleMenuFor, setRoleMenuFor] = useState<{ userId: string; anchor: { top: number; bottom: number; right: number } } | null>(null);
+
+  useEffect(() => {
+    if (!ready || !token || !clubId) return;
+    Promise.all([api.getMyClubs(token), api.getMyProfile(token)])
+      .then(([clubs, me]) => {
+        const mine = clubs.find((c) => c.clubId === clubId);
+        setViewer(mine ? { userId: me.id, role: mine.role } : null);
+      })
+      .catch(() => setViewer(null)); // échec = pas d'action staff (les badges restent)
+  }, [ready, token, clubId]);
+
+  const canManageStaff = viewer !== null && (viewer.role === 'OWNER' || viewer.role === 'ADMIN');
 
   const cell: CSSProperties = { padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 13.5 };
@@ -80,7 +105,21 @@ export default function AdminMembersPage() {
   const remove = async (m: Member) => {
     if (!token || !clubId) return;
     try { setError(null); await api.adminRemoveMember(clubId, m.id, token); setConfirmRemove(null); await load(); }
-    catch (e) { setError((e as Error).message); }
+    catch (e) { const msg = (e as Error).message; setError(STAFF_ERRORS[msg] ?? msg); setConfirmRemove(null); }
+  };
+
+  const setRole = async (m: Member, role: StaffRole) => {
+    if (!token || !clubId) return;
+    setRoleMenuFor(null);
+    if ((m.staffRole ?? null) === role) return;
+    try {
+      setError(null);
+      await api.adminSetMemberStaffRole(clubId, m.userId, role, token);
+      await load();
+    } catch (e) {
+      const msg = (e as Error).message;
+      setError(STAFF_ERRORS[msg] ?? msg);
+    }
   };
 
   const addByEmail = async () => {
@@ -176,7 +215,7 @@ export default function AdminMembersPage() {
                     tabIndex={0}
                     aria-label={`Voir le passif de ${m.firstName} ${m.lastName}`}
                     onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/admin/members/${m.userId}`); }}
-                  >{m.firstName} {m.lastName}{m.watch ? <span title="À surveiller" style={{ marginLeft: 6 }}>👁</span> : null}</td>
+                  >{m.firstName} {m.lastName}{m.watch ? <span title="À surveiller" style={{ marginLeft: 6 }}>👁</span> : null}{m.staffRole ? <span style={{ marginLeft: 8 }}><Chip tone="accent">{STAFF_LABEL[m.staffRole]}</Chip></span> : null}</td>
                   <td style={{ ...cell, color: th.textMute }}>{m.email}</td>
                   <td style={cell}><input value={m.phone ?? ''} onChange={(e) => editField(m.id, 'phone', e.target.value)} placeholder="—" style={{ ...input, width: 110 }} /></td>
                   <td style={cell}><input value={m.membershipNo ?? ''} onChange={(e) => editField(m.id, 'membershipNo', e.target.value)} placeholder="—" style={{ ...input, width: 100 }} /></td>
@@ -191,6 +230,28 @@ export default function AdminMembersPage() {
                     <div style={{ display: 'flex', gap: 6, whiteSpace: 'nowrap' }}>
                       <button onClick={() => save(m)} style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, background: th.accent, color: th.onAccent }}>Enregistrer</button>
                       <button onClick={() => toggleBlocked(m)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}>{m.status === 'BLOCKED' ? 'Débloquer' : 'Bloquer'}</button>
+                      {canManageStaff && viewer && m.staffRole !== 'OWNER' && m.userId !== viewer.userId && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              const r = e.currentTarget.getBoundingClientRect();
+                              setRoleMenuFor(roleMenuFor?.userId === m.userId ? null : { userId: m.userId, anchor: { top: r.top, bottom: r.bottom, right: r.right } });
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            aria-haspopup="menu" aria-expanded={roleMenuFor?.userId === m.userId}
+                            aria-label={`Rôle staff de ${m.firstName} ${m.lastName}`}
+                            style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}
+                          >Rôle…</button>
+                          {roleMenuFor?.userId === m.userId && (
+                            <StaffRoleMenu
+                              current={(m.staffRole ?? null) as StaffRole}
+                              anchor={roleMenuFor.anchor}
+                              onPick={(r) => setRole(m, r)}
+                              onClose={() => setRoleMenuFor(null)}
+                            />
+                          )}
+                        </>
+                      )}
                       <button onClick={() => setConfirmRemove(m)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Suppr.</button>
                     </div>
                   </td>
