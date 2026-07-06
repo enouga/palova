@@ -49,6 +49,11 @@ describe('OnboardingService.getStatus', () => {
     expect(prismaMock.resource.count).toHaveBeenCalledWith({ where: { clubId: 'c1', isActive: true } });
     expect(prismaMock.packageTemplate.count).toHaveBeenCalledWith({ where: { clubId: 'c1', isActive: true } });
     expect(prismaMock.subscriptionPlan.count).toHaveBeenCalledWith({ where: { clubId: 'c1', isActive: true } });
+    expect(prismaMock.club.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'c1' } }));
+    expect(prismaMock.clubSport.count).toHaveBeenCalledWith({ where: { clubId: 'c1' } });
+    expect(prismaMock.clubPhoto.count).toHaveBeenCalledWith({ where: { clubId: 'c1' } });
+    expect(prismaMock.tournament.count).toHaveBeenCalledWith({ where: { clubId: 'c1' } });
+    expect(prismaMock.clubEvent.count).toHaveBeenCalledWith({ where: { clubId: 'c1' } });
   });
 
   it('presentationText non vide suffit sans photo', async () => {
