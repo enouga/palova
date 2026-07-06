@@ -5,17 +5,20 @@ import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
 import { finishAuth } from '@/lib/postAuth';
-import { Screen } from '@/components/ui/Screen';
-import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { Btn, Field } from '@/components/ui/atoms';
 import { VerifyCodeForm } from '@/components/VerifyCodeForm';
+
+// Préremplissage du compte seedé en dev/test uniquement — jamais en production.
+const DEV_PREFILL = process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
   const router = useRouter();
   const { th } = useTheme();
   const { slug } = useClub();
   const nextPath = () => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') || undefined : undefined);
-  const [email, setEmail] = useState('test@palova.fr');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState(DEV_PREFILL ? 'test@palova.fr' : '');
+  const [password, setPassword] = useState(DEV_PREFILL ? 'password123' : '');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verify, setVerify] = useState<{ email: string; devCode?: string } | null>(null);
@@ -50,61 +53,43 @@ export default function LoginPage() {
   }
 
   return (
-    <Screen>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '0 24px 40px' }}>
-        {/* header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 28 }}>
-          <Logotype size={26} />
-          <ThemeToggle />
+    <AuthShell
+      title={verify ? undefined : 'Bon retour.'}
+      subtitle={verify ? undefined : 'Connectez-vous pour réserver votre prochain créneau.'}
+    >
+      {verify ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={(a) => finishAuth(a, slug, router, nextPath())} />
+          <button type="button" onClick={() => setVerify(null)}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
+            Retour à la connexion
+          </button>
         </div>
-
-        {verify ? (
-          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <VerifyCodeForm email={verify.email} devCode={verify.devCode} onVerified={(a) => finishAuth(a, slug, router, nextPath())} />
-            <button type="button" onClick={() => setVerify(null)}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
-              Retour à la connexion
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
-            {/* hero */}
-            <div style={{ paddingTop: 48, paddingBottom: 40 }}>
-              <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 46, lineHeight: 1.04, color: th.text, letterSpacing: -0.5 }}>
-                Réservez votre<br />terrain en<br /><span style={{ fontStyle: 'italic' }}>quelques</span> secondes.
-              </div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 16, lineHeight: 1.5, maxWidth: 300 }}>
-                Disponibilités en direct, créneaux bloqués 5 minutes le temps de confirmer.
-              </div>
-            </div>
-
-            {/* form */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 'auto' }}>
-              {error && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
-              )}
-              <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
-              <Field label="Mot de passe" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
-              <button type="button" onClick={() => router.push('/forgot-password')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, padding: '2px 0', alignSelf: 'flex-end', textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                Mot de passe oublié ?
-              </button>
-              <div style={{ height: 4 }} />
-              <Btn type="submit" full icon="arrowR" disabled={loading}>
-                {loading ? 'Connexion…' : 'Se connecter'}
-              </Btn>
-              <button type="button" onClick={() => router.push('/register')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
-                Pas encore de compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créer un compte</span>
-              </button>
-              <button type="button" onClick={() => router.push('/clubs/new')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '2px 0' }}>
-                Vous gérez un club ? <span style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Screen>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {error && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+          )}
+          <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
+          <Field label="Mot de passe" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
+          <button type="button" onClick={() => router.push('/forgot-password')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, padding: '2px 0', alignSelf: 'flex-end', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            Mot de passe oublié ?
+          </button>
+          <div style={{ height: 4 }} />
+          <Btn type="submit" full icon="arrowR" disabled={loading}>
+            {loading ? 'Connexion…' : 'Se connecter'}
+          </Btn>
+          <button type="button" onClick={() => router.push('/register')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
+            Pas encore de compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créer un compte</span>
+          </button>
+          <button type="button" onClick={() => router.push('/clubs/new')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '2px 0' }}>
+            Vous gérez un club ? <span style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Créez-le</span>
+          </button>
+        </form>
+      )}
+    </AuthShell>
   );
 }
