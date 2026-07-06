@@ -298,6 +298,9 @@ export const api = {
   adminGetClub: (clubId: string, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, {}, token),
 
+  adminGetOnboardingStatus: (clubId: string, token: string) =>
+    request<OnboardingStatus>(`/api/clubs/${clubId}/admin/onboarding-status`, {}, token),
+
   adminGetMembers: (clubId: string, token: string) =>
     request<Member[]>(`/api/clubs/${clubId}/admin/members`, {}, token),
 
@@ -1433,6 +1436,17 @@ export interface ClubAdminDetail {
   legalRepresentative: string | null;
   legalEmail: string | null;
   legalPhone: string | null;
+}
+
+/** Statut d'avancement du paramétrage (guide de démarrage), dérivé de l'état réel. */
+export interface OnboardingStatus {
+  hasLogo: boolean;
+  sportsCount: number;
+  resourcesCount: number;
+  hasPresentation: boolean;
+  stripeStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
+  offersCount: number;
+  eventsCount: number;
 }
 
 // --- Contenu club (pages légales/offres + FAQ) ---
