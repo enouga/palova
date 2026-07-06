@@ -91,8 +91,10 @@ export default function NewClubPage() {
 
           <div style={{ ...sectionLabel, marginTop: 4 }}>Gérant</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}><Field label="Prénom" value={firstName} onChange={setFirstName} required autoComplete="given-name" /></div>
-            <div style={{ flex: 1 }}><Field label="Nom" value={lastName} onChange={setLastName} required autoComplete="family-name" /></div>
+            {/* minWidth 0 : sans lui, min-width:auto clampe chaque colonne à la largeur
+                intrinsèque de l'input (size=20) → débordement horizontal en mobile. */}
+            <div style={{ flex: 1, minWidth: 0 }}><Field label="Prénom" value={firstName} onChange={setFirstName} required autoComplete="given-name" /></div>
+            <div style={{ flex: 1, minWidth: 0 }}><Field label="Nom" value={lastName} onChange={setLastName} required autoComplete="family-name" /></div>
           </div>
           <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
           <Field label="Mot de passe (8+ caractères)" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="new-password" />
