@@ -8,6 +8,8 @@ import { WIZ, WizHeader, WizError, WizActions } from './wizardUi';
 
 type Draft = { count: number; price: string; coverage: 'indoor' | 'outdoor' };
 
+const DEFAULT_DRAFT: Draft = { count: 0, price: '', coverage: 'indoor' };
+
 const plural = (noun: string, n: number) => (n > 1 ? `${noun}s` : noun);
 
 export function StepCourts({ clubName, clubSports, resources, clubId, token, onCreated, advance }: {
@@ -28,7 +30,7 @@ export function StepCourts({ clubName, clubSports, resources, clubId, token, onC
   const [error, setError] = useState<string | null>(null);
 
   const setDraft = (csId: string, patch: Partial<Draft>) =>
-    setDrafts((d) => ({ ...d, [csId]: { ...d[csId], ...patch } }));
+    setDrafts((d) => ({ ...d, [csId]: { ...(d[csId] ?? DEFAULT_DRAFT), ...patch } }));
 
   const priceOf = (d: Draft) => Number(d.price.replace(',', '.'));
 
@@ -59,11 +61,10 @@ export function StepCourts({ clubName, clubSports, resources, clubId, token, onC
             created += 1;
             doneHere += 1;
           }
-        } catch (e) {
-          // Échec partiel : on décrémente ce qui a réussi pour que le retry reprenne
-          // exactement au terrain qui a échoué (les ressources créées sont déjà remontées via onCreated).
-          setDraft(cs.id, { count: d.count - doneHere });
-          throw e;
+        } finally {
+          // consomme les créations réussies : 0 après succès complet (retry saute ce sport),
+          // reste à créer après échec partiel (retry reprend au terrain qui a échoué)
+          if (doneHere > 0) setDraft(cs.id, { count: d.count - doneHere });
         }
       }
       advance();
@@ -81,7 +82,7 @@ export function StepCourts({ clubName, clubSports, resources, clubId, token, onC
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {clubSports.map((cs) => {
-          const d = drafts[cs.id] ?? { count: 0, price: '', coverage: 'indoor' as const };
+          const d = drafts[cs.id] ?? DEFAULT_DRAFT;
           const existing = existingCount(cs.id);
           return (
             <div key={cs.id} style={{ background: WIZ.card, border: `1px solid ${WIZ.line}`, borderRadius: 14, padding: 16 }}>
@@ -116,7 +117,7 @@ export function StepCourts({ clubName, clubSports, resources, clubId, token, onC
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {([['indoor', 'Intérieur'], ['outdoor', 'Extérieur']] as const).map(([cov, label]) => (
-                    <button key={cov} type="button" onClick={() => setDraft(cs.id, { coverage: cov })}
+                    <button key={cov} type="button" aria-pressed={d.coverage === cov} onClick={() => setDraft(cs.id, { coverage: cov })}
                       style={{
                         borderRadius: 18, padding: '8px 14px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
                         background: d.coverage === cov ? '#ffffff' : 'transparent',

@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { StepSports } from '@/components/onboarding/StepSports';
 import { StepCourts } from '@/components/onboarding/StepCourts';
@@ -100,6 +101,38 @@ describe('StepCourts', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(api.adminCreateResource).not.toHaveBeenCalled();
     expect(advance).not.toHaveBeenCalled();
+  });
+
+  it('retry multi-sports : ne recrée pas les terrains du sport déjà réussi', async () => {
+    const tennisCs = {
+      id: 'cs-tennis', slotStepMin: null, durationsMin: [],
+      sport: { id: 's-tennis', key: 'tennis', name: 'Tennis', resourceNoun: 'court', defaultDurationsMin: [60], surfaces: [], hasLighting: true },
+    } as unknown as AdminClubSport;
+    (api.adminCreateResource as jest.Mock).mockImplementation((_c, body) =>
+      body.name === 'Court 2'
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({ id: `r-${body.name}`, name: body.name, price: String(body.price), isActive: true, attributes: body.attributes, clubSport: body.clubSportId === 'cs-padel' ? padelCs : tennisCs }),
+    );
+    function Parent() {
+      const [resources, setResources] = React.useState<AdminResource[]>([]);
+      return (
+        <StepCourts clubName="Padel Riviera" clubSports={[padelCs, tennisCs]} resources={resources}
+          clubId="c1" token="t" onCreated={(r) => setResources((l) => [...l, r as AdminResource])} advance={jest.fn()} />
+      );
+    }
+    wrap(<Parent />);
+    fireEvent.change(screen.getByLabelText('Prix au créneau (€) — Padel'), { target: { value: '25' } });
+    fireEvent.change(screen.getByLabelText('Prix au créneau (€) — Tennis'), { target: { value: '20' } });
+    fireEvent.click(screen.getByText('Continuer →'));
+    await screen.findByRole('alert');
+    expect(api.adminCreateResource).toHaveBeenCalledTimes(4); // Piste 1, Piste 2, Court 1, Court 2(fail)
+    // retry : maintenant Court 2 passe
+    (api.adminCreateResource as jest.Mock).mockImplementation((_c, body) =>
+      Promise.resolve({ id: `r2-${body.name}`, name: body.name, price: String(body.price), isActive: true, attributes: body.attributes, clubSport: tennisCs }));
+    fireEvent.click(screen.getByText('Continuer →'));
+    await waitFor(() => expect(api.adminCreateResource).toHaveBeenCalledTimes(5));
+    // le 5e appel est UNIQUEMENT Court 2 — aucune Piste recréée
+    expect((api.adminCreateResource as jest.Mock).mock.calls[4][1].name).toBe('Court 2');
   });
 
   it('échec partiel : les créations réussies sont propagées, erreur affichée, pas d’avance', async () => {
