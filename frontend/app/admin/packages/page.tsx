@@ -170,6 +170,7 @@ export default function AdminPackagesPage() {
   const [entries, setEntries]     = useState('10');
   const [walletAmount, setWallet] = useState('');
   const [validity, setValidity]   = useState('');
+  const [tSportKeys, setTSportKeys] = useState<string[]>([]);
 
   // abonnements
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -213,9 +214,10 @@ export default function AdminPackagesPage() {
         entriesCount: kind === 'ENTRIES' ? Number(entries) : undefined,
         walletAmount: kind === 'WALLET' ? Number(walletAmount) : undefined,
         validityDays: validity ? Number(validity) : null,
+        sportKeys: tSportKeys,
       }, token);
       const pendingImage = imageFile;
-      setName(''); setDescription(''); setPrice(''); setWallet(''); setImageFile(null);
+      setName(''); setDescription(''); setPrice(''); setWallet(''); setImageFile(null); setTSportKeys([]);
       await load();
       if (pendingImage) {
         try { await api.adminUploadPackageTemplateImage(clubId, created.id, pendingImage, token); await load(); }
@@ -252,6 +254,8 @@ export default function AdminPackagesPage() {
   const sportOptions = ['padel', 'squash', 'tennis', 'badminton', 'pickleball', 'pingpong'];
   const toggleSport = (k: string) =>
     setPSports((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+  const toggleTemplateSport = (k: string) =>
+    setTSportKeys((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
   const createPlan = async () => {
     if (!token || !clubId) return;
@@ -320,6 +324,14 @@ export default function AdminPackagesPage() {
             </button>
           ))}
         </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {sportOptions.map((k) => (
+            <button key={k} type="button" onClick={() => toggleTemplateSport(k)}
+              style={{ border: `1.5px solid ${tSportKeys.includes(k) ? th.accent : th.line}`, background: tSportKeys.includes(k) ? th.surface2 : 'transparent', borderRadius: 10, padding: '6px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+              {k}
+            </button>
+          ))}
+        </div>
         <PendingImagePicker file={imageFile} onChange={setImageFile} />
         <label style={{ ...label, marginBottom: 10 }}>Description complète (affichée aux joueurs)
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
@@ -364,6 +376,7 @@ export default function AdminPackagesPage() {
                   {t.kind === 'ENTRIES' ? `${t.entriesCount} entrées` : `${euro(t.walletAmount ?? 0)} crédités`}
                   {' · '}{euro(t.price)}
                   {t.validityDays ? ` · valable ${t.validityDays} j` : ' · sans expiration'}
+                  {' · '}{t.sportKeys.length > 0 ? t.sportKeys.join(', ') : 'Tous sports'}
                 </div>
                 <OfferEditor description={t.description} imageUrl={t.imageUrl} busy={busy}
                   onSave={(d, r, f) => saveTemplateEdits(t, d, r, f)} />
