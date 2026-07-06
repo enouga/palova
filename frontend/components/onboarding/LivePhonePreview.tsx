@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import { assetUrl } from '@/lib/api';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { inkOn } from '@/lib/theme';
-import { PreviewState } from '@/lib/onboarding';
+import { PreviewState, pluralNoun } from '@/lib/onboarding';
 
 function PreviewCard({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -17,9 +17,6 @@ function PreviewCard({ title, children }: { title: string; children: ReactNode }
 const hint = (text: string) => (
   <div style={{ fontSize: 9.5, color: '#b6bfcd', marginTop: 3, fontStyle: 'italic' }}>{text}</div>
 );
-
-/** Pluriel naïf suffisant pour les nouns du catalogue (piste→pistes, court→courts, terrain→terrains). */
-const plural = (noun: string, n: number) => (n > 1 ? `${noun}s` : noun);
 
 /**
  * Le « téléphone vivant » du wizard : un mini club-house qui se construit au fil des étapes.
@@ -70,7 +67,7 @@ export function LivePhonePreview({ preview }: { preview: PreviewState }) {
               <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {withCourts.map((s) => (
                   <div key={s.key} style={{ fontSize: 9.5, color: '#333' }}>
-                    {s.icon ? `${s.icon} ` : ''}{s.name} · {s.courtCount} {plural(s.noun, s.courtCount)}{s.minPrice != null ? ` · dès ${s.minPrice} €` : ''}
+                    {s.icon ? `${s.icon} ` : ''}{s.name} · {s.courtCount} {pluralNoun(s.noun, s.courtCount)}{s.minPrice != null ? ` · dès ${s.minPrice} €` : ''}
                   </div>
                 ))}
               </div>

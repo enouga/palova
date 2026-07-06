@@ -15,26 +15,32 @@ export function StepRules({ club, clubId, token, onPatched, advance }: {
 }) {
   const { th } = useTheme();
   const accent = club.accentColor;
-  const [bookingIdx, setBookingIdx] = useState(() => {
+  // null = les valeurs du club ne correspondent à aucun preset (ex. réouverture après réglage custom) :
+  // rien n'est pré-marqué et Continuer n'envoie pas ce groupe — valider sans rien toucher = no-op sans danger.
+  const [bookingIdx, setBookingIdx] = useState<number | null>(() => {
     const i = BOOKING_PRESETS.findIndex((p) => p.publicDays === club.publicBookingDays && p.memberDays === club.memberBookingDays);
-    return i >= 0 ? i : 0;
+    return i >= 0 ? i : null;
   });
-  const [cancelIdx, setCancelIdx] = useState(() => {
+  const [cancelIdx, setCancelIdx] = useState<number | null>(() => {
     const i = CANCEL_PRESETS.findIndex((p) => p.hours === club.cancellationCutoffHours);
-    return i >= 0 ? i : 0;
+    return i >= 0 ? i : null;
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
+    const body: { publicBookingDays?: number; memberBookingDays?: number; cancellationCutoffHours?: number } = {};
+    if (bookingIdx !== null) {
+      const b = BOOKING_PRESETS[bookingIdx];
+      body.publicBookingDays = b.publicDays;
+      body.memberBookingDays = b.memberDays;
+    }
+    if (cancelIdx !== null) body.cancellationCutoffHours = CANCEL_PRESETS[cancelIdx].hours;
+    if (Object.keys(body).length === 0) { advance(); return; } // rien de sélectionné → rien à écrire
     setBusy(true);
     setError(null);
     try {
-      const b = BOOKING_PRESETS[bookingIdx];
-      const c = CANCEL_PRESETS[cancelIdx];
-      const updated = await api.adminUpdateClub(clubId, {
-        publicBookingDays: b.publicDays, memberBookingDays: b.memberDays, cancellationCutoffHours: c.hours,
-      }, token);
+      const updated = await api.adminUpdateClub(clubId, body, token);
       onPatched(updated);
       advance();
     } catch { setError('Impossible d’enregistrer. Réessayez.'); }

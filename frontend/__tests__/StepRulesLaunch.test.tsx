@@ -32,6 +32,8 @@ describe('StepRules', () => {
     (api.adminUpdateClub as jest.Mock).mockResolvedValue(club);
     const onPatched = jest.fn(); const advance = jest.fn();
     wrap(<StepRules club={club} clubId="c1" token="t" onPatched={onPatched} advance={advance} />);
+    // présélection initiale depuis les valeurs du club (7/14 j, « Jusqu’au début »)
+    expect(screen.getByText('7 jours').closest('button')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByText('14 jours'));
     fireEvent.click(screen.getByText('24 h avant'));
     fireEvent.click(screen.getByText('Continuer →'));
@@ -48,6 +50,15 @@ describe('StepRules', () => {
     fireEvent.click(screen.getByText('Passer cette étape'));
     expect(api.adminUpdateClub).not.toHaveBeenCalled();
     expect(advance).toHaveBeenCalled();
+  });
+
+  it('échec API du save des règles → message, pas d’avance', async () => {
+    (api.adminUpdateClub as jest.Mock).mockRejectedValue(new Error('boom'));
+    const advance = jest.fn();
+    wrap(<StepRules club={club} clubId="c1" token="t" onPatched={jest.fn()} advance={advance} />);
+    fireEvent.click(screen.getByText('Continuer →'));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(advance).not.toHaveBeenCalled();
   });
 });
 
@@ -90,5 +101,15 @@ describe('StepLaunch', () => {
     fireEvent.click(screen.getByText(/Copier/));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('padel-riviera')));
     expect(await screen.findByText(/Copié/)).toBeInTheDocument();
+  });
+
+  it('échec API de la mise en ligne → message, on reste sur le formulaire', async () => {
+    (api.adminUpdateClub as jest.Mock).mockRejectedValue(new Error('boom'));
+    const onFinished = jest.fn();
+    wrap(<StepLaunch club={club} preview={preview} clubId="c1" token="t" onPatched={jest.fn()} onFinished={onFinished} />);
+    fireEvent.click(screen.getByText(/Mettre mon club en ligne/));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onFinished).not.toHaveBeenCalled();
+    expect(screen.getByText(/Mettre mon club en ligne/)).toBeInTheDocument(); // toujours phase form
   });
 });

@@ -1,14 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ClubAdminDetail } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { clubUrl } from '@/lib/clubUrl';
-import { PreviewState } from '@/lib/onboarding';
+import { PreviewState, pluralNoun } from '@/lib/onboarding';
 import { LivePhonePreview } from './LivePhonePreview';
 import { WIZ, WizHeader, WizError } from './wizardUi';
-
-const plural = (noun: string, n: number) => (n > 1 ? `${noun}s` : noun);
 
 // Confettis déterministes (pas de Math.random au rendu — positions dérivées de l'index).
 const CONFETTI_COLORS = Object.values(ACCENTS);
@@ -35,6 +33,13 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // « Copié ✓ » revient à « 📋 Copier » après 2 s (timer nettoyé si démontage entre-temps).
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
 
   const launch = async () => {
     setBusy(true);
@@ -86,7 +91,7 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
   // ---- Final festif ----
   const courtsTotal = preview.sports.reduce((n, s) => n + s.courtCount, 0);
   return (
-    <div style={{ position: 'relative', textAlign: 'center', padding: '30px 0 10px' }}>
+    <div style={{ textAlign: 'center', padding: '30px 0 10px' }}>
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           @keyframes ob-fall {
@@ -95,6 +100,7 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
           }
           .ob-confetti { animation-name: ob-fall; animation-timing-function: linear; animation-iteration-count: 1; animation-fill-mode: both; }
         }
+        @media (prefers-reduced-motion: reduce) { .ob-confetti { display: none; } }
       `}</style>
       <div aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         {CONFETTI.map((c, i) => (
@@ -117,7 +123,7 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
       <div style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 10, background: WIZ.card, border: `1px solid ${WIZ.line}`, borderRadius: 24, padding: '9px 18px' }}>
         <span style={{ color: accent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>{club.slug}.palova.fr</span>
         <button type="button" onClick={copy} style={{ background: 'transparent', border: 'none', borderLeft: `1px solid ${WIZ.line}`, paddingLeft: 10, color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12, cursor: 'pointer' }}>
-          {copied ? 'Copié ✓' : '📋 Copier'}
+          <span aria-live="polite">{copied ? 'Copié ✓' : '📋 Copier'}</span>
         </button>
       </div>
 
@@ -125,7 +131,7 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
         <span style={{ background: `${accent}20`, color: accent, borderRadius: 16, padding: '4px 12px', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700 }}>✓ Identité</span>
         {preview.sports.map((s) => (
           <span key={s.key} style={{ background: `${accent}20`, color: accent, borderRadius: 16, padding: '4px 12px', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700 }}>
-            {s.courtCount > 0 ? `✓ ${s.name} · ${s.courtCount} ${plural(s.noun, s.courtCount)}` : `✓ ${s.name}`}
+            {s.courtCount > 0 ? `✓ ${s.name} · ${s.courtCount} ${pluralNoun(s.noun, s.courtCount)}` : `✓ ${s.name}`}
           </span>
         ))}
         {courtsTotal === 0 && (

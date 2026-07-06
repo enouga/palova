@@ -3,14 +3,12 @@ import { useState } from 'react';
 import { api, AdminClubSport, AdminResource } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { inkOn } from '@/lib/theme';
-import { resourceNames } from '@/lib/onboarding';
+import { resourceNames, pluralNoun } from '@/lib/onboarding';
 import { WIZ, WizHeader, WizError, WizActions } from './wizardUi';
 
 type Draft = { count: number; price: string; coverage: 'indoor' | 'outdoor' };
 
 const DEFAULT_DRAFT: Draft = { count: 0, price: '', coverage: 'indoor' };
-
-const plural = (noun: string, n: number) => (n > 1 ? `${noun}s` : noun);
 
 export function StepCourts({ clubName, clubSports, resources, clubId, token, onCreated, advance }: {
   clubName: string;
@@ -89,13 +87,13 @@ export function StepCourts({ clubName, clubSports, resources, clubId, token, onC
               <div style={{ color: WIZ.text, fontFamily: th.fontUI, fontSize: 15, fontWeight: 800, marginBottom: 4 }}>{cs.sport.name}</div>
               {existing > 0 && (
                 <div style={{ color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12.5, marginBottom: 8 }}>
-                  déjà {existing} {plural(cs.sport.resourceNoun, existing)} ✓ — ajoutez-en si besoin
+                  déjà {existing} {pluralNoun(cs.sport.resourceNoun, existing)} ✓ — ajoutez-en si besoin
                 </div>
               )}
               <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ color: WIZ.mute, fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                    {existing > 0 ? 'À ajouter' : `Combien de ${plural(cs.sport.resourceNoun, 2)} ?`}
+                    {existing > 0 ? 'À ajouter' : `Combien de ${pluralNoun(cs.sport.resourceNoun, 2)} ?`}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button type="button" aria-label={`Retirer un terrain — ${cs.sport.name}`} disabled={d.count <= 0}

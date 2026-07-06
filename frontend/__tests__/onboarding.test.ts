@@ -1,5 +1,5 @@
 import {
-  buildChecklist, checklistProgress, resourceNames,
+  buildChecklist, checklistProgress, resourceNames, pluralNoun,
   BOOKING_PRESETS, CANCEL_PRESETS, STEP_ORDER, ONBOARDING_HIDDEN_KEY,
 } from '@/lib/onboarding';
 import { OnboardingStatus } from '@/lib/api';
@@ -48,6 +48,15 @@ describe('resourceNames', () => {
     expect(resourceNames('piste', 4, 3)).toEqual(['Piste 5', 'Piste 6', 'Piste 7']);
     expect(resourceNames('terrain', 0, 1)).toEqual(['Terrain 1']);
     expect(resourceNames('piste', 2, 0)).toEqual([]);
+  });
+});
+
+describe('pluralNoun', () => {
+  it('singulier ≤ 1, pluriel naïf en s au-delà', () => {
+    expect(pluralNoun('piste', 1)).toBe('piste');
+    expect(pluralNoun('piste', 4)).toBe('pistes');
+    expect(pluralNoun('terrain', 0)).toBe('terrain');
+    expect(pluralNoun('court', 2)).toBe('courts');
   });
 });
 

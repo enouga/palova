@@ -64,6 +64,9 @@ export const CANCEL_PRESETS: CancelPreset[] = [
   { label: '24 h avant',     hours: 24 },
 ];
 
+/** Pluriel naïf des nouns du catalogue (piste→pistes, court→courts, terrain→terrains). */
+export const pluralNoun = (noun: string, n: number): string => (n > 1 ? `${noun}s` : noun);
+
 /** « Piste 5, Piste 6… » : numérote à la suite des ressources existantes. */
 export function resourceNames(noun: string, existingCount: number, count: number): string[] {
   const cap = noun.charAt(0).toUpperCase() + noun.slice(1);
