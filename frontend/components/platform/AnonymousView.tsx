@@ -9,6 +9,7 @@ import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/Age
 import { ClubDirectory } from '@/components/ClubDirectory';
 import { UpcomingTournaments } from '@/components/calendar/UpcomingTournaments';
 import { NationalOpenMatches } from '@/components/platform/NationalOpenMatches';
+import { ClubPitch } from '@/components/platform/ClubPitch';
 
 type Th = ReturnType<typeof useTheme>['th'];
 
@@ -23,8 +24,6 @@ export default function AnonymousView() {
 
   useEffect(() => { api.listNationalOpenMatches().then(setMatches).catch(() => setMatches([])); }, []);
   useEffect(() => { api.listNationalTournaments().then(setTournaments).catch(() => setTournaments([])); }, []);
-
-  const b2bInk = th.mode === 'floodlit' ? th.text : '#f7f5ee';
 
   return (
     <Screen>
@@ -145,44 +144,7 @@ export default function AnonymousView() {
         </Section>
 
         {/* ── Panneau B2B ── */}
-        <div style={{ margin: '46px 20px 0' }}>
-          {/* surface élevée en sombre (th.ink se fondrait dans le fond) + liseré */}
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 26, background: th.mode === 'floodlit' ? th.surface : th.ink, color: b2bInk, padding: '30px 24px 28px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-            <span aria-hidden="true" style={{
-              position: 'absolute', right: -110, top: -130, width: 320, height: 320, borderRadius: '50%',
-              background: `radial-gradient(circle, ${ACCENTS.blue}38, transparent 65%)`,
-            }} />
-            <div style={{ position: 'relative' }}>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: ACCENTS.blue }}>
-                Pour les clubs
-              </div>
-              <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 27, letterSpacing: -0.5, margin: '10px 0 0' }}>
-                Vous gérez un club ?
-              </h2>
-              <p style={{ fontFamily: th.fontUI, fontSize: 14.5, lineHeight: 1.55, opacity: 0.82, margin: '10px 0 0', maxWidth: 460 }}>
-                Palova gère votre quotidien de A à Z — vos membres réservent et paient en ligne,
-                vous pilotez tout depuis un seul back-office.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginTop: 18 }}>
-                {[
-                  ['📆', 'Réservations & planning'], ['💳', 'Caisse & carnets'], ['🏆', 'Tournois & events'],
-                  ['👥', 'Membres & abonnements'], ['💶', 'Paiement en ligne'], ['🌐', 'Votre site club dédié'],
-                ].map(([e, t]) => (
-                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 13, padding: '11px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
-                    <span aria-hidden="true">{e}</span>{t}
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
-                <a href="/offres" style={{ ...ctaBase(th), background: b2bInk, color: th.ink }}>Découvrir Palova pour les clubs →</a>
-                <a href="/clubs/new" style={{ ...ctaBase(th), background: 'transparent', color: b2bInk, boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.35)' }}>Créer mon club</a>
-              </div>
-              <a href="/tarifs" style={{ display: 'inline-block', marginTop: 14, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: b2bInk, opacity: 0.75 }}>
-                Voir les tarifs →
-              </a>
-            </div>
-          </div>
-        </div>
+        <ClubPitch />
 
         {/* ── Outro de marque (les liens légaux vivent dans le Footer global du layout) ── */}
         <div style={{ marginTop: 52, padding: '0 20px', textAlign: 'center' }}>
