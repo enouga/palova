@@ -189,6 +189,29 @@ export function Field({
   );
 }
 
+/* ── SelectField ─ select stylé comme Field (label uppercase + surface arrondie).
+   Les <option> sont passés en children. Utilisé par /register et /clubs/new. */
+export function SelectField({ label, value, onChange, children }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  children: ReactNode;
+}) {
+  const { th } = useTheme();
+  return (
+    <label style={{ display: 'block' }}>
+      <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, display: 'block', marginBottom: 8 }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: '100%', height: 54, padding: '0 16px', borderRadius: 14, background: th.surface,
+          color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 16,
+        }}>
+        {children}
+      </select>
+    </label>
+  );
+}
+
 interface SegOption<T> { value: T; label: string; icon?: IconName; count?: number; }
 
 export function Segmented<T extends string | number>({
