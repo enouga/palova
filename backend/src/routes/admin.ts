@@ -71,6 +71,8 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
   MEMBER_NOT_FOUND:      404,
+  CANNOT_CHANGE_OWNER:   403,
+  CANNOT_CHANGE_SELF:    409,
   NOTE_NOT_FOUND:        404,
   ANNOUNCEMENT_NOT_FOUND: 404,
   SPONSOR_NOT_FOUND:      404,
@@ -880,6 +882,14 @@ router.patch('/members/:userId/watch', async (req: ClubScopedRequest, res: Respo
   try {
     if (typeof req.body.watch !== 'boolean') return void res.status(400).json({ error: 'watch (boolean) requis' });
     res.json(await clubService.setMemberWatch(req.membership!.clubId, asString(req.params.userId), req.body.watch));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Rôle back-office (staff) d'un membre — réservé OWNER/ADMIN (un STAFF ne gère pas ses pairs).
+// body { role: 'ADMIN' | 'STAFF' | null } — null révoque ; `role` absent = 400 (pas de révocation implicite).
+router.patch('/members/:userId/staff-role', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await clubService.setMemberStaffRole(req.membership!.clubId, req.user!.id, asString(req.params.userId), req.body?.role));
   } catch (e) { handleError(e, res, next); }
 });
 
