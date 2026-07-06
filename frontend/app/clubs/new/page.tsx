@@ -5,8 +5,8 @@ import { api, AuthResponse, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { setSession } from '@/lib/session';
 import { clubUrl } from '@/lib/clubUrl';
-import { Screen } from '@/components/ui/Screen';
-import { Logotype, Btn, Field, ThemeToggle } from '@/components/ui/atoms';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { Btn, Field, SelectField } from '@/components/ui/atoms';
 import { VerifyCodeForm } from '@/components/VerifyCodeForm';
 
 export default function NewClubPage() {
@@ -66,71 +66,54 @@ export default function NewClubPage() {
     }
   }
 
-  const labelStyle = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' as const, color: th.textMute, display: 'block', marginBottom: 8 };
+  const onVerify = step === 'verify' && pending;
+  const sectionLabel = { fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' as const, color: th.textFaint };
 
   return (
-    <Screen>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '0 24px 40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 28 }}>
-          <Logotype size={24} />
-          <ThemeToggle />
+    <AuthShell
+      audience="club"
+      title={onVerify ? undefined : "Créez l'espace de votre club."}
+      subtitle={onVerify ? undefined : 'Quelques infos et votre club est en ligne. Vous gérez ensuite tout vous-même : sports, terrains, tarifs, réservations.'}
+    >
+      {onVerify ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <VerifyCodeForm email={pending.email} devCode={pending.devCode} onVerified={finishClub} />
+          <button type="button" onClick={() => { setStep('form'); setError(null); }}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
+            Modifier les informations
+          </button>
         </div>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {error && (
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+          )}
 
-        {step === 'verify' && pending ? (
-          <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <VerifyCodeForm email={pending.email} devCode={pending.devCode} onVerified={finishClub} />
-            <button type="button" onClick={() => { setStep('form'); setError(null); }}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '2px 0' }}>
-              Modifier les informations
-            </button>
+          <div style={{ ...sectionLabel, marginTop: 4 }}>Gérant</div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}><Field label="Prénom" value={firstName} onChange={setFirstName} required autoComplete="given-name" /></div>
+            <div style={{ flex: 1 }}><Field label="Nom" value={lastName} onChange={setLastName} required autoComplete="family-name" /></div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
-            <div style={{ paddingTop: 36, paddingBottom: 28 }}>
-              <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 40, lineHeight: 1.04, color: th.text, letterSpacing: -0.5 }}>
-                Créez l&apos;espace<br />de <span style={{ fontStyle: 'italic' }}>votre</span> club.
-              </div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 15, color: th.textMute, marginTop: 14, lineHeight: 1.5, maxWidth: 320 }}>
-                Quelques infos et votre club est en ligne. Vous gérez ensuite tout vous-même : sports, terrains, tarifs, réservations.
-              </div>
-            </div>
+          <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
+          <Field label="Mot de passe (8+ caractères)" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="new-password" />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {error && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
-              )}
+          <div style={{ ...sectionLabel, marginTop: 8 }}>Club</div>
+          <Field label="Nom du club" icon="pin" value={clubName} onChange={setClubName} required />
+          <Field label="Ville" value={city} onChange={setCity} />
+          <SelectField label="Sport principal" value={sportId} onChange={setSportId}>
+            {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
+          </SelectField>
 
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint, marginTop: 4 }}>Gérant</div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}><Field label="Prénom" value={firstName} onChange={setFirstName} required autoComplete="given-name" /></div>
-                <div style={{ flex: 1 }}><Field label="Nom" value={lastName} onChange={setLastName} required autoComplete="family-name" /></div>
-              </div>
-              <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
-              <Field label="Mot de passe (8+ caractères)" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="new-password" />
-
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint, marginTop: 8 }}>Club</div>
-              <Field label="Nom du club" icon="pin" value={clubName} onChange={setClubName} required />
-              <Field label="Ville" value={city} onChange={setCity} />
-              <label style={{ display: 'block' }}>
-                <span style={labelStyle}>Sport principal</span>
-                <select value={sportId} onChange={(e) => setSportId(e.target.value)}
-                  style={{ width: '100%', height: 54, padding: '0 16px', borderRadius: 14, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 16 }}>
-                  {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
-                </select>
-              </label>
-
-              <div style={{ height: 4 }} />
-              <Btn type="submit" full icon="arrowR" disabled={loading}>
-                {loading ? 'Envoi du code…' : 'Créer mon club'}
-              </Btn>
-              <button type="button" onClick={() => router.push('/login')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
-                Vous avez déjà un compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Se connecter</span>
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Screen>
+          <div style={{ height: 4 }} />
+          <Btn type="submit" full icon="arrowR" disabled={loading}>
+            {loading ? 'Envoi du code…' : 'Créer mon club'}
+          </Btn>
+          <button type="button" onClick={() => router.push('/login')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '6px 0' }}>
+            Vous avez déjà un compte ? <span style={{ color: th.text, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Se connecter</span>
+          </button>
+        </form>
+      )}
+    </AuthShell>
   );
 }
