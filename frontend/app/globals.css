@@ -127,3 +127,20 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
     border-radius: 8px; font-size: 9px; font-weight: 800; line-height: 1;
   }
 }
+
+/* ── Pages d'auth : écran scindé (desktop) / bandeau + colonne (mobile) ──────
+   Bascule 100 % CSS (pas de useIsDesktop) → aucun flash d'hydration.
+   Panneau et bandeau sont tous deux dans le DOM ; le media query affiche l'un. */
+.auth-shell { min-height: 100vh; }
+.auth-panel { display: none; }
+.auth-toggle { display: none; }
+.auth-main { display: flex; flex-direction: column; }
+.auth-title { font-size: 33px; }
+@media (min-width: 800px) {
+  .auth-shell { display: flex; }
+  .auth-panel { display: flex; width: 44%; max-width: 620px; min-height: 100vh; }
+  .auth-banner { display: none; }
+  .auth-toggle { display: flex; }
+  .auth-main { flex: 1; min-height: 100vh; }
+  .auth-title { font-size: 42px; }
+}
