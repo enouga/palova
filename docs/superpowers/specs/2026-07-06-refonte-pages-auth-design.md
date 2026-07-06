@@ -37,7 +37,9 @@ Client component qui porte toute la présentation. Il **remplace `Screen`** sur 
 }
 ```
 
-### Desktop (≥ ~800 px, via le hook `useIsDesktop` existant)
+### Desktop (≥ 800 px — bascule **CSS pure**, classes `.auth-*` dans `globals.css` : panneau et
+bandeau sont tous deux dans le DOM, le media query affiche l'un — pas de `useIsDesktop`, donc
+aucun flash d'hydration sur une page entière)
 
 - Deux colonnes pleine hauteur : panneau gauche **~44 %** (min-height 100vh), colonne droite
   centrée verticalement, contenu du formulaire **max-width ~460 px**.
