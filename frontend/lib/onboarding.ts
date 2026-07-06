@@ -1,4 +1,3 @@
-// frontend/lib/onboarding.ts
 // Helpers PURS de l'onboarding club (wizard + checklist). Aucune horloge, aucun fetch.
 import { OnboardingStatus } from '@/lib/api';
 

@@ -13,6 +13,8 @@ describe('buildChecklist', () => {
   it('club nu : 8 jalons, seul « Créer votre club » est fait', () => {
     const items = buildChecklist(bare);
     expect(items).toHaveLength(8);
+    // fige l'ordre d'affichage consommé par la carte StartChecklist
+    expect(items.map((i) => i.key)).toEqual(['club', 'logo', 'sports', 'courts', 'page', 'stripe', 'offers', 'event']);
     expect(items[0]).toMatchObject({ key: 'club', done: true, href: null });
     expect(items.filter((i) => i.done)).toHaveLength(1);
     expect(checklistProgress(items)).toEqual({ done: 1, total: 8 });
