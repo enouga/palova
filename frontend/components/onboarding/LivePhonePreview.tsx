@@ -29,6 +29,7 @@ export function LivePhonePreview({ preview }: { preview: PreviewState }) {
   const accent = preview.accentColor;
   const withCourts = preview.sports.filter((s) => s.courtCount > 0);
   return (
+    // Attend un fond sombre (halo accent + ombre portée) ; le halo déborde de 30px — ne pas monter sous un parent overflow:hidden.
     <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
       <div aria-hidden style={{ position: 'absolute', inset: -30, background: `radial-gradient(circle at 50% 45%, ${accent}26, transparent 65%)` }} />
       <div style={{ width: 230, background: '#f4f7fc', borderRadius: 28, border: '6px solid #232936', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.55)', position: 'relative' }}>

@@ -34,4 +34,15 @@ describe('LivePhonePreview', () => {
     // logo affiché → une balise img est rendue à la place du monogramme
     expect(document.querySelector('img')).toBeTruthy();
   });
+
+  it('terrains sans prix (état normal juste après l’étape 3) : la ligne s’affiche sans « dès »', () => {
+    render(<LivePhonePreview preview={{
+      ...base,
+      sports: [{ key: 'padel', name: 'Padel', icon: null, noun: 'piste', courtCount: 4, minPrice: null }],
+    }} />);
+    // chip sans icône → nom seul ; ligne terrain sans le suffixe prix
+    expect(screen.getByText('Padel')).toBeInTheDocument();
+    expect(screen.getByText(/4 pistes/)).toBeInTheDocument();
+    expect(screen.queryByText(/dès/)).not.toBeInTheDocument();
+  });
 });
