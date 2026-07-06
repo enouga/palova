@@ -1,14 +1,16 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
+import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { Icon, IconName } from '@/components/ui/Icon';
 
 type Th = ReturnType<typeof useTheme>['th'];
 
 // Panneau B2B de la vitrine palova.fr : pitch éditorial + « aperçu produit » du back-office
-// composé en CSS pur (fenêtre claire flottante sur panneau sombre — mini planning, encaissé
-// du jour, toast de réservation). Icônes du design system teintées ACCENTS (pattern du rail
-// d'offres du Club-house) — plus d'emojis.
+// composé en CSS pur (fenêtre blanche flottante — mini planning, encaissé du jour, toast de
+// réservation). Fond = dégradé brume bleue signature (le noir déplaisait au user) : la page
+// s'ouvre ET se referme sur le motif du hero, encre fixe HERO_INK dans les deux thèmes.
+// Icônes du design system teintées ACCENTS (pattern du rail d'offres du Club-house).
 const FEATURES: Array<{ icon: IconName; label: string; color: string }> = [
   { icon: 'calendar', label: 'Réservations & planning', color: ACCENTS.blue },
   { icon: 'wallet',   label: 'Caisse & carnets',        color: ACCENTS.apricot },
@@ -18,36 +20,35 @@ const FEATURES: Array<{ icon: IconName; label: string; color: string }> = [
   { icon: 'home',     label: 'Votre site club dédié',   color: ACCENTS.emerald },
 ];
 
-// La fenêtre-mockup est un « screenshot » de l'app en thème clair, quelle que soit
-// la direction du site — couleurs fixes, comme le hero brume bleue.
-const WIN_BG = '#f7f5ee';
+// La fenêtre-mockup est un « screenshot » de l'app — blanche pour ressortir sur le
+// dégradé pâle, couleurs fixes dans les deux thèmes (comme le hero brume bleue).
+const WIN_BG = '#ffffff';
 const WIN_INK = '#181510';
 const WIN_MUTE = 'rgba(24,21,14,0.55)';
 const WIN_LINE = 'rgba(24,21,14,0.10)';
+// Bleu profond (brand-700) : kicker lisible sur le dégradé clair (ACCENTS.blue y est trop pâle).
+const KICKER_BLUE = '#3a63a0';
 
 export function ClubPitch() {
   const { th } = useTheme();
-  const ink = th.mode === 'floodlit' ? th.text : '#f7f5ee';
-  // Surface élevée en sombre (th.ink se fondrait dans le fond) + liseré.
-  const panelBg = th.mode === 'floodlit' ? th.surface : th.ink;
 
   return (
     <div style={{ margin: '46px 20px 0' }}>
-      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 26, background: panelBg, color: ink, padding: '30px 26px 28px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 26, background: HERO_GRADIENT, color: HERO_INK, padding: '30px 26px 28px' }}>
         {/* halos de lumière */}
-        <span aria-hidden="true" style={{ position: 'absolute', right: -120, top: -140, width: 380, height: 380, borderRadius: '50%', background: `radial-gradient(circle, ${ACCENTS.blue}30, transparent 62%)` }} />
-        <span aria-hidden="true" style={{ position: 'absolute', left: -140, bottom: -180, width: 360, height: 360, borderRadius: '50%', background: `radial-gradient(circle, ${ACCENTS.apricot}22, transparent 62%)` }} />
+        <span aria-hidden="true" style={{ position: 'absolute', right: -120, top: -140, width: 380, height: 380, borderRadius: '50%', background: `radial-gradient(circle, ${ACCENTS.blue}3a, transparent 62%)` }} />
+        <span aria-hidden="true" style={{ position: 'absolute', left: -140, bottom: -180, width: 360, height: 360, borderRadius: '50%', background: `radial-gradient(circle, ${ACCENTS.apricot}30, transparent 62%)` }} />
 
         <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(272px, 1fr))', gap: '26px 30px', alignItems: 'center' }}>
           {/* ── colonne pitch ── */}
           <div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: ACCENTS.blue }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: KICKER_BLUE }}>
               Pour les clubs
             </div>
             <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 28, letterSpacing: -0.6, margin: '10px 0 0' }}>
               Vous gérez un club ?
             </h2>
-            <p style={{ fontFamily: th.fontUI, fontSize: 14.5, lineHeight: 1.55, opacity: 0.8, margin: '10px 0 0', maxWidth: 440 }}>
+            <p style={{ fontFamily: th.fontUI, fontSize: 14.5, lineHeight: 1.55, color: HERO_INK_MUTED, margin: '10px 0 0', maxWidth: 440 }}>
               Palova gère votre quotidien de A à Z — vos membres réservent et paient en ligne,
               vous pilotez tout depuis un seul back-office.
             </p>
@@ -67,9 +68,9 @@ export function ClubPitch() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
-              <a href="/offres" style={{ ...cta(th), background: ink, color: panelBg }}>Découvrir Palova pour les clubs →</a>
-              <a href="/clubs/new" style={{ ...cta(th), background: 'transparent', color: ink, boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.32)' }}>Créer mon club</a>
-              <a href="/tarifs" style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: ink, opacity: 0.7, textDecoration: 'none' }}>Voir les tarifs →</a>
+              <a href="/offres" style={{ ...cta(th), background: HERO_INK, color: '#f7f5ee' }}>Découvrir Palova pour les clubs →</a>
+              <a href="/clubs/new" style={{ ...cta(th), background: '#ffffff', color: HERO_INK }}>Créer mon club</a>
+              <a href="/tarifs" style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: HERO_INK, opacity: 0.7, textDecoration: 'none' }}>Voir les tarifs →</a>
             </div>
           </div>
 
@@ -81,7 +82,7 @@ export function ClubPitch() {
               <div style={{
                 transform: 'rotate(2.2deg)',
                 background: '#ffffff', color: WIN_INK, borderRadius: 14, padding: '9px 13px 9px 10px',
-                display: 'flex', alignItems: 'center', gap: 9, boxShadow: '0 12px 34px rgba(0,0,0,0.4)',
+                display: 'flex', alignItems: 'center', gap: 9, boxShadow: '0 10px 28px rgba(24,21,14,0.20)',
               }}>
                 <span style={{ width: 27, height: 27, borderRadius: 8, background: `${ACCENTS.emerald}26`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon name="check" size={15} color={ACCENTS.emerald} />
@@ -93,7 +94,7 @@ export function ClubPitch() {
               </div>
             </div>
             {/* fenêtre planning */}
-            <div style={{ background: WIN_BG, color: WIN_INK, borderRadius: 18, padding: '15px 16px 16px', transform: 'rotate(-1.4deg)', boxShadow: '0 18px 50px rgba(0,0,0,0.42), 0 2px 8px rgba(0,0,0,0.25)' }}>
+            <div style={{ background: WIN_BG, color: WIN_INK, borderRadius: 18, padding: '15px 16px 16px', transform: 'rotate(-1.4deg)', boxShadow: '0 16px 42px rgba(24,21,14,0.20), 0 2px 8px rgba(24,21,14,0.10)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>Planning · aujourd&apos;hui</span>
                 <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, background: `${ACCENTS.blue}26`, color: WIN_INK, borderRadius: 999, padding: '3px 9px' }}>14 résas</span>
