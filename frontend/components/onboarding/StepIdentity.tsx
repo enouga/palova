@@ -36,6 +36,7 @@ export function StepIdentity({ club, clubId, token, onLocal, onPatched, advance 
     finally { setUploading(false); }
   };
 
+  // save lit les props au moment du clic — le shell doit réappliquer chaque onLocal dans `club`.
   const save = async () => {
     setBusy(true);
     setError(null);
@@ -105,7 +106,8 @@ export function StepIdentity({ club, clubId, token, onLocal, onPatched, advance 
         ))}
       </div>
 
-      <WizActions accent={accent} busy={busy} onNext={save} onSkip={advance} />
+      {/* verrouillé aussi pendant l'upload : avancer en plein vol laisserait onPatched écraser le logo */}
+      <WizActions accent={accent} busy={busy} disabled={uploading} onNext={save} onSkip={advance} />
     </div>
   );
 }

@@ -73,4 +73,18 @@ describe('StepIdentity', () => {
     expect(api.adminUpdateClub).not.toHaveBeenCalled();
     expect(advance).toHaveBeenCalled();
   });
+
+  it('pendant l’upload du logo, Continuer et Passer sont verrouillés', async () => {
+    let release!: (v: { logoUrl: string }) => void;
+    (api.uploadClubLogo as jest.Mock).mockImplementation(() => new Promise((r) => { release = r; }));
+    const { onLocal } = setup();
+    const input = screen.getByLabelText('Importer votre logo') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'logo.png', { type: 'image/png' })] } });
+    expect(await screen.findByText('Envoi…')).toBeInTheDocument();
+    expect(screen.getByText('Continuer →')).toBeDisabled();
+    expect(screen.getByText('Passer cette étape')).toBeDisabled();
+    release({ logoUrl: '/uploads/x.png' });
+    await waitFor(() => expect(onLocal).toHaveBeenCalledWith({ logoUrl: '/uploads/x.png' }));
+    expect(screen.getByText('Continuer →')).not.toBeDisabled();
+  });
 });

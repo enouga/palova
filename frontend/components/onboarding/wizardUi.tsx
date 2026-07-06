@@ -41,21 +41,22 @@ export function WizError({ children }: { children: ReactNode }) {
 }
 
 /** CTA « Continuer → » (garde busy) + « Passer cette étape » discret. */
-export function WizActions({ accent, busy, onNext, onSkip, nextLabel = 'Continuer →' }: {
-  accent: string; busy: boolean; onNext: () => void; onSkip?: () => void; nextLabel?: string;
+export function WizActions({ accent, busy, disabled = false, onNext, onSkip, nextLabel = 'Continuer →' }: {
+  accent: string; busy: boolean; disabled?: boolean; onNext: () => void; onSkip?: () => void; nextLabel?: string;
 }) {
   const { th } = useTheme();
+  const locked = busy || disabled; // disabled = verrou externe (ex. upload en vol) sans changer le libellé
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 22, flexWrap: 'wrap' }}>
-      <button type="button" onClick={onNext} disabled={busy} style={{
+      <button type="button" onClick={onNext} disabled={locked} style={{
         background: accent, color: inkOn(accent), border: 'none', borderRadius: 12,
         padding: '12px 26px', fontFamily: th.fontUI, fontSize: 14, fontWeight: 800,
-        cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+        cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.6 : 1,
       }}>
         {busy ? 'Enregistrement…' : nextLabel}
       </button>
       {onSkip && (
-        <button type="button" onClick={onSkip} disabled={busy}
+        <button type="button" onClick={onSkip} disabled={locked}
           style={{ background: 'transparent', border: 'none', color: WIZ.mute, fontFamily: th.fontUI, fontSize: 13, cursor: 'pointer' }}>
           Passer cette étape
         </button>
