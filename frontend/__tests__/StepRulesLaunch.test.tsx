@@ -66,7 +66,8 @@ describe('StepLaunch', () => {
     expect(onFinished).toHaveBeenCalled();
     // le final : titre, URL copiable, récap, CTAs
     expect(screen.getByText(/en ligne\./)).toBeInTheDocument();
-    expect(screen.getByText('padel-riviera.palova.fr')).toBeInTheDocument();
+    // l'URL apparaît deux fois (chip copiable + aperçu téléphone) — les deux sont voulues
+    expect(screen.getAllByText('padel-riviera.palova.fr').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('✓ Padel · 4 pistes')).toBeInTheDocument();
     expect(screen.getByText(/Paiement en ligne · plus tard/)).toBeInTheDocument();
     expect(screen.getByText(/Découvrir mon club-house/).closest('a')).toHaveAttribute('href', '/');
@@ -85,7 +86,7 @@ describe('StepLaunch', () => {
     (api.adminUpdateClub as jest.Mock).mockResolvedValue(club);
     wrap(<StepLaunch club={club} preview={preview} clubId="c1" token="t" onPatched={jest.fn()} onFinished={jest.fn()} />);
     fireEvent.click(screen.getByText(/Mettre mon club en ligne/));
-    await screen.findByText('padel-riviera.palova.fr');
+    await screen.findAllByText('padel-riviera.palova.fr');
     fireEvent.click(screen.getByText(/Copier/));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('padel-riviera')));
     expect(await screen.findByText(/Copié/)).toBeInTheDocument();

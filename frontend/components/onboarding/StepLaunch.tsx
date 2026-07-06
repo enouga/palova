@@ -115,10 +115,7 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
       </div>
 
       <div style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 10, background: WIZ.card, border: `1px solid ${WIZ.line}`, borderRadius: 24, padding: '9px 18px' }}>
-        {/* Le slug est isolé dans son propre span (nœud texte distinct de la preview du téléphone plus bas,
-            qui affiche la même URL) — évite la collision « texte identique en double » pour les lecteurs
-            d'écran / tests, sans rien changer visuellement. */}
-        <span style={{ color: accent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}><span>{club.slug}</span>.palova.fr</span>
+        <span style={{ color: accent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>{club.slug}.palova.fr</span>
         <button type="button" onClick={copy} style={{ background: 'transparent', border: 'none', borderLeft: `1px solid ${WIZ.line}`, paddingLeft: 10, color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12, cursor: 'pointer' }}>
           {copied ? 'Copié ✓' : '📋 Copier'}
         </button>
