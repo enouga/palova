@@ -787,4 +787,49 @@ describe('OpenMatchService', () => {
       await expect(service.getOpenMatch('club-demo', 'm1', null)).rejects.toThrow('RESERVATION_NOT_FOUND');
     });
   });
+
+  describe('listNationalOpenMatches', () => {
+    const clubProj = { slug: 'padel-arena-paris', name: 'Padel Arena Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null };
+    const row = (id: string, participants: unknown[], over: Record<string, unknown> = {}) => ({
+      id, startTime: future(24), endTime: future(25),
+      targetLevelMin: null, targetLevelMax: null,
+      resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubId: 'club-demo', clubSport: { sport: { key: 'padel', name: 'Padel' } }, club: clubProj },
+      participants,
+      ...over,
+    });
+    const player = (userId: string) => ({ userId, isOrganizer: userId === 'org', team: null, slot: null, user: { firstName: 'P', lastName: userId, avatarUrl: null } });
+
+    it('filtre PUBLIC/CONFIRMED/padel + club ACTIVE listé dans l\'annuaire, fenêtre 7 jours', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([row('m1', [player('org')])] as any);
+
+      const out = await service.listNationalOpenMatches();
+
+      const args = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.where).toEqual(expect.objectContaining({
+        visibility: 'PUBLIC', status: 'CONFIRMED',
+        resource: { club: { status: 'ACTIVE', listedInDirectory: true }, clubSport: { sport: { key: 'padel' } } },
+      }));
+      expect(args.where.startTime.gt).toBeInstanceOf(Date);
+      expect(args.where.startTime.lte).toBeInstanceOf(Date);
+      expect(out[0]).toMatchObject({ id: 'm1', spotsLeft: 3, full: false, sport: { key: 'padel', name: 'Padel' }, club: clubProj });
+      // Chaque joueur reçoit un côté concret (dérivé effectiveTeams), comme les cartes club.
+      for (const p of out[0].players) expect([1, 2]).toContain(p.team);
+    });
+
+    it('exclut les parties pleines et cape à 12 résultats', async () => {
+      const fullMatch = row('full', ['a', 'b', 'c', 'd'].map(player));
+      const open = Array.from({ length: 14 }, (_, i) => row(`m${i}`, [player('org')]));
+      prismaMock.reservation.findMany.mockResolvedValue([fullMatch, ...open] as any);
+
+      const out = await service.listNationalOpenMatches();
+
+      expect(out).toHaveLength(12);
+      expect(out.every((m: { id: string }) => m.id !== 'full')).toBe(true);
+    });
+
+    it('liste vide si aucune partie', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([] as any);
+      await expect(service.listNationalOpenMatches()).resolves.toEqual([]);
+    });
+  });
 });

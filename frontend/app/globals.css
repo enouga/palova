@@ -73,6 +73,20 @@ body {
 /* Tiroir de facettes (Events) : apparition douce au changement de source */
 @keyframes sp-rise { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* Vitrine palova.fr : entrée du hero (montée + fondu, plus ample que sp-rise) */
+@keyframes sp-hero-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+/* Vitrine palova.fr : relèvement au survol des cartes-liens (les boutons ont déjà le leur) */
+.pl-lift { transition: transform .16s cubic-bezier(.2, 0, 0, 1), box-shadow .2s ease; }
+@media (hover: hover) and (pointer: fine) {
+  .pl-lift:hover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-lift { transition: none; }
+  .pl-lift:hover { transform: none; }
+  .sp-hero-rise { animation: none !important; }
+}
+.sp-hero-rise { animation: sp-hero-rise .55s cubic-bezier(.2, 0, 0, 1) both; }
+
 /* Retour visuel discret sur les boutons : léger relèvement au survol,
    enfoncement au clic. Transform/filter uniquement → n'écrase pas les
    couleurs ni les ombres posées en style inline. Respecte prefers-reduced-motion. */

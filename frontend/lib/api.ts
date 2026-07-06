@@ -54,6 +54,9 @@ export const api = {
 
   listNationalTournaments: () => request<NationalTournament[]>('/api/tournaments/national'),
 
+  /** Vitrine palova.fr : parties ouvertes publiques agrégées tous clubs (7 jours, jamais pleines). */
+  listNationalOpenMatches: () => request<NationalOpenMatch[]>('/api/open-matches/national'),
+
   /** Résout un libellé de sous-domaine (slug actuel ou alias historique). 404 si inconnu. */
   resolveClubSlug: (slug: string) =>
     request<{ slug: string; moved: boolean }>(`/api/clubs/_resolve/${slug}`),
@@ -1947,6 +1950,32 @@ export interface NationalTournamentClub {
 /** Un tournoi du calendrier national = tournoi public + son club. */
 export interface NationalTournament extends Tournament {
   club: NationalTournamentClub;
+}
+
+/** Projection club d'une partie ouverte de la vitrine palova.fr (publique). */
+export interface NationalOpenMatchClub {
+  slug: string;
+  name: string;
+  city: string | null;
+  timezone: string;
+  accentColor: string;
+  logoUrl: string | null;
+}
+
+/** Partie ouverte agrégée sur la vitrine palova.fr : partie publique + son club. */
+export interface NationalOpenMatch {
+  id: string;
+  resourceName: string;
+  sport: { key: string; name: string };
+  startTime: string;
+  endTime: string;
+  maxPlayers: number;
+  spotsLeft: number;
+  full: boolean;
+  targetLevelMin: number | null;
+  targetLevelMax: number | null;
+  players: OpenMatchPlayer[];
+  club: NationalOpenMatchClub;
 }
 
 export interface TournamentDetail extends Tournament {

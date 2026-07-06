@@ -19,6 +19,22 @@ const MATCH_INCLUDE = {
 
 type MatchRow = Prisma.ReservationGetPayload<{ include: typeof MATCH_INCLUDE }>;
 
+// Include de l'agrégat national (vitrine palova.fr) : identité du club en plus,
+// pas de chat ni de données viewer — le DTO est mappé à part, plus léger que toDTO.
+const NATIONAL_INCLUDE = {
+  resource: {
+    select: {
+      id: true, name: true, attributes: true, clubId: true,
+      clubSport: { select: { sport: { select: { key: true, name: true } } } },
+      club: { select: { slug: true, name: true, city: true, timezone: true, accentColor: true, logoUrl: true } },
+    },
+  },
+  participants: {
+    orderBy: { joinedAt: 'asc' },
+    select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+  },
+} satisfies Prisma.ReservationInclude;
+
 // « Parties ouvertes » : les réservations PUBLIC qu'un membre du club peut découvrir
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
 export class OpenMatchService {
@@ -155,6 +171,58 @@ export class OpenMatchService {
     }
 
     return matches.map((m) => this.toDTO(m, levels, unreadByMatch.get(m.id) ?? 0, viewerUserId, club));
+  }
+
+  /**
+   * Agrégat public de la vitrine palova.fr : parties ouvertes padel à venir (7 jours)
+   * des clubs ACTIVE listés dans l'annuaire, jamais pleines (la vitrine vend des places
+   * à prendre). Miroir du calendrier national des tournois — la projection `club`
+   * (slug/timezone/couleur) permet le lien cross-sous-domaine et la date au bon fuseau.
+   */
+  async listNationalOpenMatches() {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + 7 * 24 * 3_600_000);
+    const matches = await prisma.reservation.findMany({
+      where: {
+        visibility: 'PUBLIC',
+        status: 'CONFIRMED',
+        startTime: { gt: now, lte: horizon },
+        resource: { club: { status: 'ACTIVE', listedInDirectory: true }, clubSport: { sport: { key: 'padel' } } },
+      },
+      orderBy: { startTime: 'asc' },
+      take: 40,
+      include: NATIONAL_INCLUDE,
+    });
+
+    const pairs = matches.flatMap((m) =>
+      m.participants.map((p) => ({ userId: p.userId, sportKey: m.resource.clubSport.sport.key })),
+    );
+    const levels = pairs.length > 0 ? await this.ratingService.getLevelsBySport(pairs) : {};
+
+    return matches
+      .map((m) => {
+        const maxPlayers = playerCount((m.resource.attributes as { format?: string } | null)?.format);
+        const sportKey = m.resource.clubSport.sport.key;
+        return {
+          id: m.id,
+          resourceName: m.resource.name,
+          sport: { key: sportKey, name: m.resource.clubSport.sport.name },
+          startTime: m.startTime.toISOString(),
+          endTime: m.endTime.toISOString(),
+          maxPlayers,
+          spotsLeft: Math.max(0, maxPlayers - m.participants.length),
+          full: m.participants.length >= maxPlayers,
+          targetLevelMin: m.targetLevelMin ?? null,
+          targetLevelMax: m.targetLevelMax ?? null,
+          players: effectiveTeams(m.participants, maxPlayers).map((p) => ({
+            userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
+            isOrganizer: p.isOrganizer, level: levels[`${p.userId}:${sportKey}`] ?? null, team: p.team, slot: p.slot,
+          })),
+          club: m.resource.club,
+        };
+      })
+      .filter((m) => m.spotsLeft > 0)
+      .slice(0, 12);
   }
 
   /** Lecture d'UNE partie ouverte (page /parties/[id]) — publique, autorise les parties passées. */

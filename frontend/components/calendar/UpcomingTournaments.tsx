@@ -13,23 +13,32 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 const MAX = 4;
 
 // Aperçu des prochains tournois nationaux sur la vitrine visiteur. Vide → rien rendu.
-export function UpcomingTournaments() {
+// `items` (optionnel) = tournois préchargés par le parent (évite un double fetch) ;
+// `hideTitle` laisse le parent poser son propre en-tête de section.
+export function UpcomingTournaments({ items: preloaded, hideTitle }: { items?: NationalTournament[] | null; hideTitle?: boolean } = {}) {
   const { th } = useTheme();
-  const [items, setItems] = useState<NationalTournament[] | null>(null);
+  const [fetched, setFetched] = useState<NationalTournament[] | null>(null);
   const [now, setNow] = useState<Date | null>(null);
+  const selfFetch = preloaded === undefined;
 
-  useEffect(() => { api.listNationalTournaments().then(setItems).catch(() => setItems([])); }, []);
+  useEffect(() => {
+    if (!selfFetch) return;
+    api.listNationalTournaments().then(setFetched).catch(() => setFetched([]));
+  }, [selfFetch]);
   useEffect(() => { const t = setTimeout(() => setNow(new Date()), 0); return () => clearTimeout(t); }, []);
 
+  const items = selfFetch ? fetched : preloaded;
   if (!items || items.length === 0) return null; // déjà trié par date côté backend
 
   const top = items.slice(0, MAX);
   const showSport = setSpansMultipleSports(top.map((t) => t.sport?.key));
   return (
     <>
-      <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, padding: '30px 20px 0' }}>
-        📅 Prochains tournois
-      </div>
+      {!hideTitle && (
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, padding: '30px 20px 0' }}>
+          📅 Prochains tournois
+        </div>
+      )}
       <div style={{ padding: '12px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {top.map((t) => (
           <AgendaCard

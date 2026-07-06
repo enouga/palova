@@ -1,105 +1,231 @@
 'use client';
+import { useEffect, useState } from 'react';
+import { api, NationalOpenMatch, NationalTournament } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
+import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { ClubDirectory } from '@/components/ClubDirectory';
 import { UpcomingTournaments } from '@/components/calendar/UpcomingTournaments';
+import { NationalOpenMatches } from '@/components/platform/NationalOpenMatches';
 
-// Vitrine publique de palova.fr (visiteur non connecté). Joueur-d'abord, ambiance éditoriale claire.
-// Les sections « Parties » et « Tournois » sont des emplacements (chantiers 3 et 2).
+type Th = ReturnType<typeof useTheme>['th'];
+
+// Vitrine publique de palova.fr (visiteur non connecté) — la « plus belle page du site » :
+// hero brume bleue signature + pouls live, parties ouvertes publiques agrégées tous clubs,
+// annuaire, tournois nationaux, mode d'emploi, panneau B2B, footer éditorial.
+// Hydration-safe : le pouls et les sections data n'apparaissent qu'une fois les fetchs résolus.
 export default function AnonymousView() {
   const { th } = useTheme();
+  const [matches, setMatches] = useState<NationalOpenMatch[] | null>(null);
+  const [tournaments, setTournaments] = useState<NationalTournament[] | null>(null);
+
+  useEffect(() => { api.listNationalOpenMatches().then(setMatches).catch(() => setMatches([])); }, []);
+  useEffect(() => { api.listNationalTournaments().then(setTournaments).catch(() => setTournaments([])); }, []);
+
+  const b2bInk = th.mode === 'floodlit' ? th.text : '#f7f5ee';
+
   return (
     <Screen>
-      <div style={{ paddingBottom: 56 }}>
-        {/* Nav */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 24px 0' }}>
-          <Logotype size={26} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ThemeToggle />
-            <a href="/login" style={linkPill(th)}>Connexion</a>
-          </div>
-        </div>
-
-        {/* Hero */}
-        <div style={{ padding: '28px 24px 8px' }}>
-          <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 40, lineHeight: 1.03, letterSpacing: -1, color: th.text, margin: 0 }}>
-            Trouvez un terrain,<br />une partie, un tournoi.
-          </h1>
-          <p style={{ fontFamily: th.fontUI, fontSize: 16, color: th.textMute, marginTop: 14, lineHeight: 1.5, maxWidth: 520 }}>
-            Le padel près de chez vous — réservez, rejoignez une partie ouverte, inscrivez-vous aux tournois.
-          </p>
-          <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 10, fontWeight: 600 }}>
-            Des clubs partout en France
-          </div>
-        </div>
-
-        {/* Recherche + annuaire (réutilise ClubDirectory : recherche + « Autour de moi ») */}
-        <SectionTitle th={th}>Clubs près de chez vous</SectionTitle>
-        <ClubDirectory />
-
-        {/* Emplacements chantiers 3 & 2 */}
-        <SectionTitle th={th}>Parties ouvertes près de moi</SectionTitle>
-        <SoonCard th={th} label="Les parties ouvertes près de chez vous arrivent bientôt." />
-        <UpcomingTournaments />
-
-        {/* Bandeau B2B */}
-        <div style={{ margin: '34px 20px 0', borderRadius: 22, background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', padding: '26px 22px', textAlign: 'center' }}>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4 }}>Vous gérez un club ?</div>
-          <p style={{ fontFamily: th.fontUI, fontSize: 14.5, opacity: 0.82, marginTop: 8, lineHeight: 1.5 }}>
-            Réservations, caisse, tournois, membres — tout au même endroit.
-          </p>
-          <a href="/offres" style={{ display: 'inline-block', marginTop: 16, background: th.mode === 'floodlit' ? th.text : '#f7f5ee', color: th.ink, borderRadius: 30, padding: '11px 22px', fontFamily: th.fontUI, fontWeight: 800, fontSize: 14.5, textDecoration: 'none' }}>
-            Découvrir Palova pour les clubs →
-          </a>
-        </div>
-
-        {/* Fonctionnalités club */}
-        <SectionTitle th={th}>Ce que Palova fait pour votre club</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, padding: '4px 20px 0' }}>
-          {[
-            { t: 'Réservation & planning', e: '📆' },
-            { t: 'Caisse & carnets', e: '💳' },
-            { t: 'Tournois & events', e: '🏆' },
-          ].map((f) => (
-            <div key={f.t} style={{ background: th.surface, borderRadius: 16, padding: '16px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-              <div style={{ fontSize: 22 }}>{f.e}</div>
-              <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, marginTop: 8 }}>{f.t}</div>
+      <div style={{ paddingBottom: 46 }}>
+        {/* ── Nav sticky translucide ── */}
+        <header style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          background: th.mode === 'floodlit' ? 'rgba(19,19,18,0.78)' : 'rgba(241,238,229,0.82)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          borderBottom: `1px solid ${th.line}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 20px' }}>
+            <Logotype size={26} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ThemeToggle />
+              <a href="/login" style={{ ...pillBase(th), background: 'transparent', color: th.text, boxShadow: `inset 0 0 0 1.5px ${th.lineStrong}` }}>Connexion</a>
+              {/* pill inversée en thème sombre (encre sur encre sinon) */}
+              <a href="/register" style={{ ...pillBase(th), background: th.mode === 'floodlit' ? th.text : th.ink, color: th.mode === 'floodlit' ? th.ink : '#f7f5ee' }}>S&apos;inscrire</a>
             </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', padding: '16px 20px 0', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5 }}>
-          <a href="/tarifs" style={{ color: th.text }}>Voir les tarifs →</a>
-          <a href="/clubs/new" style={{ color: th.text }}>Créer mon club →</a>
+          </div>
+        </header>
+
+        {/* ── Hero immersif ── */}
+        <div style={{ padding: '18px 20px 0' }}>
+          <div className="sp-hero-rise" style={{
+            position: 'relative', overflow: 'hidden', borderRadius: 26,
+            background: HERO_GRADIENT, color: HERO_INK, padding: '36px 26px 30px',
+          }}>
+            {/* filigrane : traces du logo Palova */}
+            <svg viewBox="0 0 100 100" aria-hidden="true" style={{ position: 'absolute', right: -72, top: -58, width: 330, height: 330, opacity: 0.1 }}>
+              <g fill="none" stroke={HERO_INK} strokeWidth={3.4} strokeLinecap="round">
+                <circle cx="50" cy="50" r="37" />
+                <path d="M20 30 Q50 50 20 70" />
+                <path d="M80 30 Q50 50 80 70" />
+              </g>
+            </svg>
+            {/* orbe accent doux */}
+            <span aria-hidden="true" style={{
+              position: 'absolute', left: -90, bottom: -140, width: 320, height: 320, borderRadius: '50%',
+              background: `radial-gradient(circle, ${ACCENTS.blue}42, transparent 66%)`,
+            }} />
+
+            <div style={{ position: 'relative' }}>
+              <div style={{ fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
+                Palova
+              </div>
+              <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 'clamp(34px, 8vw, 46px)', lineHeight: 1.02, letterSpacing: -1.2, margin: '14px 0 0' }}>
+                Le padel se joue ici.
+              </h1>
+              <p style={{ fontFamily: th.fontUI, fontSize: 16, lineHeight: 1.55, color: HERO_INK_MUTED, margin: '14px 0 0', maxWidth: 480 }}>
+                Réservez un terrain, rejoignez une partie ouverte, visez un tournoi —
+                dans les clubs Palova près de chez vous.
+              </p>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 24 }}>
+                <a href="#clubs" style={{ ...ctaBase(th), background: HERO_INK, color: '#f7f5ee' }}>Trouver mon club →</a>
+                {matches !== null && matches.length > 0 && (
+                  <a href="#parties" style={{ ...ctaBase(th), background: '#ffffff', color: HERO_INK }}>Voir les parties</a>
+                )}
+              </div>
+
+              {/* pouls : rendu une fois les données connues (hydration-safe) */}
+              {((matches?.length ?? 0) > 0 || (tournaments?.length ?? 0) > 0) && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 22 }}>
+                  {matches !== null && matches.length > 0 && (
+                    <a href="#parties" style={pulseChip(th)}>
+                      🎾 {matches.length} partie{matches.length > 1 ? 's' : ''} à rejoindre cette semaine
+                    </a>
+                  )}
+                  {tournaments !== null && tournaments.length > 0 && (
+                    <a href="#tournois" style={pulseChip(th)}>
+                      🏆 {tournaments.length} tournoi{tournaments.length > 1 ? 's' : ''} à venir
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', padding: '40px 20px 0', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>
-          {[['FAQ', '/faq'], ['Tarifs', '/tarifs'], ['CGV', '/cgv'], ['Mentions légales', '/mentions-legales'], ['Confidentialité', '/confidentialite']].map(([t, h]) => (
-            <a key={h} href={h} style={{ color: th.textMute, textDecoration: 'none' }}>{t}</a>
-          ))}
+        {/* ── Parties ouvertes publiques ── */}
+        {matches !== null && matches.length > 0 && (
+          <Section id="parties" th={th} kicker="En ce moment" title="Ça joue bientôt"
+            sub="Des places à prendre dans les clubs — rejoignez une partie en deux taps.">
+            <NationalOpenMatches matches={matches} />
+          </Section>
+        )}
+
+        {/* ── Annuaire ── */}
+        <Section id="clubs" th={th} kicker="Annuaire" title="Clubs près de chez vous"
+          sub="Cherchez par nom, par ville, ou autour de vous.">
+          <ClubDirectory />
+        </Section>
+
+        {/* ── Tournois nationaux ── */}
+        {tournaments !== null && tournaments.length > 0 && (
+          <Section id="tournois" th={th} kicker="Compétition" title="Prochains tournois"
+            sub="Les tournois homologués des clubs Palova, partout en France.">
+            <UpcomingTournaments items={tournaments} hideTitle />
+          </Section>
+        )}
+
+        {/* ── Comment ça marche ── */}
+        <Section th={th} kicker="Simple" title="Comment ça marche">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, padding: '16px 20px 0' }}>
+            {[
+              { n: '01', t: 'Trouvez votre club', d: 'Par ville ou autour de vous — chaque club a son espace Palova.' },
+              { n: '02', t: 'Réservez ou rejoignez', d: 'Un terrain en quelques secondes, ou une partie ouverte s’il manque des joueurs.' },
+              { n: '03', t: 'Jouez, progressez', d: 'Résultats, niveau, tournois, events : votre vie de club au même endroit.' },
+            ].map((s) => (
+              <div key={s.n} style={{ background: th.surface, borderRadius: 18, padding: '18px 16px 17px', boxShadow: `${th.shadowSoft}, inset 0 0 0 1px ${th.line}` }}>
+                <div style={{ fontFamily: th.fontMono, fontWeight: 700, fontSize: 13, color: th.accent, letterSpacing: 1 }}>{s.n}</div>
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 17.5, letterSpacing: -0.2, color: th.text, marginTop: 8 }}>{s.t}</div>
+                <p style={{ fontFamily: th.fontUI, fontSize: 13.5, lineHeight: 1.5, color: th.textMute, margin: '6px 0 0' }}>{s.d}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* ── Panneau B2B ── */}
+        <div style={{ margin: '46px 20px 0' }}>
+          {/* surface élevée en sombre (th.ink se fondrait dans le fond) + liseré */}
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 26, background: th.mode === 'floodlit' ? th.surface : th.ink, color: b2bInk, padding: '30px 24px 28px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+            <span aria-hidden="true" style={{
+              position: 'absolute', right: -110, top: -130, width: 320, height: 320, borderRadius: '50%',
+              background: `radial-gradient(circle, ${ACCENTS.blue}38, transparent 65%)`,
+            }} />
+            <div style={{ position: 'relative' }}>
+              <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: ACCENTS.blue }}>
+                Pour les clubs
+              </div>
+              <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 27, letterSpacing: -0.5, margin: '10px 0 0' }}>
+                Vous gérez un club ?
+              </h2>
+              <p style={{ fontFamily: th.fontUI, fontSize: 14.5, lineHeight: 1.55, opacity: 0.82, margin: '10px 0 0', maxWidth: 460 }}>
+                Palova gère votre quotidien de A à Z — vos membres réservent et paient en ligne,
+                vous pilotez tout depuis un seul back-office.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginTop: 18 }}>
+                {[
+                  ['📆', 'Réservations & planning'], ['💳', 'Caisse & carnets'], ['🏆', 'Tournois & events'],
+                  ['👥', 'Membres & abonnements'], ['💶', 'Paiement en ligne'], ['🌐', 'Votre site club dédié'],
+                ].map(([e, t]) => (
+                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 13, padding: '11px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+                    <span aria-hidden="true">{e}</span>{t}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
+                <a href="/offres" style={{ ...ctaBase(th), background: b2bInk, color: th.ink }}>Découvrir Palova pour les clubs →</a>
+                <a href="/clubs/new" style={{ ...ctaBase(th), background: 'transparent', color: b2bInk, boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.35)' }}>Créer mon club</a>
+              </div>
+              <a href="/tarifs" style={{ display: 'inline-block', marginTop: 14, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: b2bInk, opacity: 0.75 }}>
+                Voir les tarifs →
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Outro de marque (les liens légaux vivent dans le Footer global du layout) ── */}
+        <div style={{ marginTop: 52, padding: '0 20px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'center' }}><Logotype size={22} /></div>
+          <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, margin: '12px 0 0' }}>
+            Le padel près de chez vous — réservez, jouez, progressez.
+          </p>
         </div>
       </div>
     </Screen>
   );
 }
 
-function SectionTitle({ children, th }: { children: React.ReactNode; th: ReturnType<typeof useTheme>['th'] }) {
+// En-tête de section éditorial : tiret accent + kicker uppercase, titre display.
+function Section({ id, th, kicker, title, sub, children }: {
+  id?: string; th: Th; kicker: string; title: string; sub?: string; children: React.ReactNode;
+}) {
   return (
-    <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, padding: '30px 20px 0' }}>
+    <section id={id} style={{ marginTop: 44, scrollMarginTop: 70 }}>
+      <div style={{ padding: '0 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span aria-hidden="true" style={{ width: 18, height: 3, borderRadius: 2, background: th.accent }} />
+          <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: th.textMute }}>{kicker}</span>
+        </div>
+        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.6, color: th.text, margin: '8px 0 0' }}>{title}</h2>
+        {sub && <p style={{ fontFamily: th.fontUI, fontSize: 14, lineHeight: 1.5, color: th.textMute, margin: '6px 0 0', maxWidth: 480 }}>{sub}</p>}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-function SoonCard({ label, th }: { label: string; th: ReturnType<typeof useTheme>['th'] }) {
-  return (
-    <div style={{ margin: '12px 20px 0', borderRadius: 16, padding: '18px 16px', background: th.surface2, color: th.textMute, fontFamily: th.fontUI, fontSize: 14, textAlign: 'center', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      {label} <span style={{ fontWeight: 700, color: th.textFaint }}>· Bientôt</span>
-    </div>
-  );
+function pillBase(th: Th): React.CSSProperties {
+  return { borderRadius: 30, padding: '8px 15px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' };
 }
 
-function linkPill(th: ReturnType<typeof useTheme>['th']): React.CSSProperties {
-  return { background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', borderRadius: 30, padding: '8px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, textDecoration: 'none' };
+function ctaBase(th: Th): React.CSSProperties {
+  return { display: 'inline-block', borderRadius: 30, padding: '12px 20px', fontFamily: th.fontUI, fontWeight: 800, fontSize: 14.5, textDecoration: 'none', whiteSpace: 'nowrap' };
+}
+
+function pulseChip(th: Th): React.CSSProperties {
+  return {
+    fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, textDecoration: 'none',
+    background: 'rgba(24,21,14,0.06)', color: HERO_INK, borderRadius: 999, padding: '6px 12px', whiteSpace: 'nowrap',
+  };
 }
