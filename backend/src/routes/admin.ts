@@ -29,6 +29,7 @@ import { RatingService } from '../services/rating.service';
 import { SubscriptionService } from '../services/subscription.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
 import { PresentationService } from '../services/presentation.service';
+import { OnboardingService } from '../services/onboarding.service';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -51,6 +52,7 @@ const ratingService = new RatingService();
 const subscriptionService = new SubscriptionService();
 const emailTemplateService = new EmailTemplateService();
 const presentationService = new PresentationService();
+const onboardingService = new OnboardingService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -1232,6 +1234,11 @@ router.patch('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRe
 });
 router.delete('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await presentationService.removePhoto(req.membership!.clubId, asString(req.params.id)); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
+});
+
+// ---- Guide de démarrage (onboarding) ----
+router.get('/onboarding-status', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await onboardingService.getStatus(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 export default router;
