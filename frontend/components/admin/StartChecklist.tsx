@@ -15,12 +15,17 @@ export function StartChecklist({ clubId, token }: { clubId: string; token: strin
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
   useEffect(() => {
+    setStatus(null); // ne jamais afficher le statut d'un autre club pendant le refetch
     setHidden(window.localStorage.getItem(ONBOARDING_HIDDEN_KEY(clubId)) === 'hidden');
   }, [clubId]);
 
   useEffect(() => {
     if (hidden !== false) return;
-    api.adminGetOnboardingStatus(clubId, token).then(setStatus).catch(() => setStatus(null));
+    let alive = true;
+    api.adminGetOnboardingStatus(clubId, token)
+      .then((s) => { if (alive) setStatus(s); })
+      .catch(() => { if (alive) setStatus(null); });
+    return () => { alive = false; };
   }, [hidden, clubId, token]);
 
   if (hidden !== false || !status) return null;
@@ -64,7 +69,7 @@ export function StartChecklist({ clubId, token }: { clubId: string; token: strin
           <div style={{ color: '#94a0b8', fontFamily: th.fontUI, fontSize: 12.5, marginTop: 3 }}>
             Encore {total - done} étape{total - done > 1 ? 's' : ''} pour un club irrésistible.{' '}
             <a href="/admin/onboarding" style={{ color: accent, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
-              Rouvrir le guide guidé →
+              Rouvrir le guide de démarrage →
             </a>
           </div>
         </div>
@@ -75,6 +80,8 @@ export function StartChecklist({ clubId, token }: { clubId: string; token: strin
           <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 8, background: `${accent}14`, borderRadius: 9, padding: '8px 10px' }}>
             <span aria-hidden style={{ color: accent, fontSize: 12 }}>✓</span>
             <span style={{ color: '#8f9bb0', fontFamily: th.fontUI, fontSize: 12.5, textDecoration: 'line-through' }}>{it.label}</span>
+            {/* cue lecteur d'écran : le barré visuel ne s'entend pas */}
+            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>(fait)</span>
           </div>
         ) : (
           <a key={it.key} href={it.href ?? '#'} style={{

@@ -29,8 +29,9 @@ describe('StartChecklist', () => {
     (api.adminGetOnboardingStatus as jest.Mock).mockResolvedValue(partial);
     wrap();
     expect(await screen.findByText('4/8')).toBeInTheDocument();
-    // jalon fait : présent, jalon ouvert : lien vers sa page admin
+    // jalon fait : présent mais PAS un lien ; jalon ouvert : lien vers sa page admin
     expect(screen.getByText('Vos terrains')).toBeInTheDocument();
+    expect(screen.getByText('Vos terrains').closest('a')).toBeNull();
     const stripe = screen.getByText('Le paiement en ligne (Stripe)').closest('a')!;
     expect(stripe).toHaveAttribute('href', '/admin/payments');
     // lien de réouverture du wizard
