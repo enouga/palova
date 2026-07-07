@@ -85,5 +85,8 @@ describe('ClubReserve — créneaux déjà commencés', () => {
     // Après dépli, l'heure passée apparaît, non réservable (pas un bouton).
     const pastEl = await screen.findByText(fmt(past));
     expect(pastEl.closest('button')).toBeNull();
+    // Le chip est bidirectionnel : re-cliquer replie les créneaux passés.
+    fireEvent.click(screen.getByLabelText('Masquer les créneaux passés'));
+    expect(screen.queryByText(fmt(past))).toBeNull();
   });
 });

@@ -236,19 +236,22 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
-            {/* rangée : sélecteur de sport (si plusieurs sports) à gauche, bascule de vue à droite */}
-            <div style={{ padding: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-              {bookableSports.length > 1 && selectedSportIds !== null ? (
-                <SportPicker
-                  sports={bookableSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
-                  selectedIds={selectedSportIds}
-                  onChange={changeSports}
-                />
-              ) : <span aria-hidden="true" />}
-              <div style={{ marginLeft: 'auto' }}>
-                <ViewToggle value={view} onChange={changeView} />
+            {/* rangée : sélecteur de sport (si plusieurs sports) à gauche, bascule de vue à droite.
+                Masquée si le club n'a aucun terrain réservable (rien à afficher/basculer). */}
+            {bookableSports.length > 0 && (
+              <div style={{ padding: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                {bookableSports.length > 1 && selectedSportIds !== null ? (
+                  <SportPicker
+                    sports={bookableSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
+                    selectedIds={selectedSportIds}
+                    onChange={changeSports}
+                  />
+                ) : <span aria-hidden="true" />}
+                <div style={{ marginLeft: 'auto' }}>
+                  <ViewToggle value={view} onChange={changeView} />
+                </div>
               </div>
-            </div>
+            )}
             {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
               {bookableSports.length === 0 && (
@@ -333,10 +336,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               return (
                                 <>
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: 7 }}>
-                                    {past.length > 0 && !showPast && (
-                                      <button type="button" aria-label="Afficher les créneaux passés" onClick={() => setExpandedPast((m) => ({ ...m, [resource.id]: true }))}
+                                    {past.length > 0 && (
+                                      <button type="button" aria-label={showPast ? 'Masquer les créneaux passés' : 'Afficher les créneaux passés'} onClick={() => setExpandedPast((m) => ({ ...m, [resource.id]: !showPast }))}
                                         style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '7px 6px', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 500 }}>
-                                        ‹ {past.length} passé{past.length > 1 ? 's' : ''}
+                                        {showPast ? '›' : '‹'} {past.length} passé{past.length > 1 ? 's' : ''}
                                       </button>
                                     )}
                                     {showPast && past.map((s) => renderSlot(s, true))}
