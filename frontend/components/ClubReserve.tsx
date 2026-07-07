@@ -16,6 +16,8 @@ import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { SportPicker } from '@/components/reserve/SportPicker';
+import { ACCENTS } from '@/lib/theme';
+import { splitPastSlots, scarcityLabel } from '@/lib/reserveView';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -56,6 +58,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // Repli des créneaux du jour déjà commencés, par terrain (clé = resource.id). Réinitialisé au
+  // changement de date (le passé n'existe que le jour même).
+  const [expandedPast, setExpandedPast] = useState<Record<string, boolean>>({});
   // Résumé d'un règlement par solde prépayé (moyen + restant), affiché sous la bannière de confirmation.
   const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
   const [isSub, setIsSub]       = useState(false);
@@ -112,6 +117,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   }, [token, club.slug]);
 
   useEffect(() => { refreshQuota(); }, [refreshQuota]);
+  useEffect(() => { setExpandedPast({}); }, [date]);
 
   // Résolution de la sélection initiale, sans saut (client only → pas de mismatch d'hydratation) :
   // 1) localStorage (ids encore proposés) → 2) sport préféré si connecté → 3) clubSports[0].
@@ -275,26 +281,44 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                             </div>
                             {slots.length === 0 ? (
                               <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau ce jour.</div>
-                            ) : (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                                {slots.map((s) => {
-                                  // Créneaux du jour déjà commencés → affichés mais non réservables.
-                                  const isPast = new Date(s.startTime).getTime() <= nowMs;
-                                  return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
-                                    <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                      style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 11px', background: th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                      {formatHour(s.startTime, club.timezone)}
-                                      {s.offPeak && <span title="Heures creuses" style={{ width: 5, height: 5, borderRadius: '50%', background: th.accentWarm }} />}
-                                    </button>
-                                  ) : (
-                                    <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
-                                      style={{ borderRadius: 9, padding: '7px 11px', background: th.takenBg, color: th.takenText, fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 500, textDecoration: `line-through ${th.takenText}`, cursor: 'not-allowed' }}>
-                                      {formatHour(s.startTime, club.timezone)}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
+                            ) : (() => {
+                              const { past, rest } = splitPastSlots(slots, nowMs);
+                              const showPast = expandedPast[resource.id] === true;
+                              const bookableCount = rest.filter((s) => s.available && win.slotAllowed(s.startTime)).length;
+                              const scarcity = scarcityLabel(bookableCount, date === todayISO());
+                              const renderSlot = (s: TimeSlot, forcePast?: boolean) => {
+                                const isPast = forcePast ?? (new Date(s.startTime).getTime() <= nowMs);
+                                return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
+                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 6px', background: s.offPeak ? `${th.accentWarm}26` : th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                    {formatHour(s.startTime, club.timezone)}
+                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 600, color: th.accentWarm }}>{Number(s.price)}€</span>}
+                                  </button>
+                                ) : (
+                                  <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
+                                    style={{ borderRadius: 9, padding: '7px 6px', background: th.takenBg, color: th.takenText, fontFamily: th.fontMono, fontSize: 13, fontWeight: 500, textAlign: 'center', textDecoration: `line-through ${th.takenText}`, cursor: 'not-allowed' }}>
+                                    {formatHour(s.startTime, club.timezone)}
+                                  </span>
+                                );
+                              };
+                              return (
+                                <>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: 7 }}>
+                                    {past.length > 0 && !showPast && (
+                                      <button type="button" aria-label="Afficher les créneaux passés" onClick={() => setExpandedPast((m) => ({ ...m, [resource.id]: true }))}
+                                        style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '7px 6px', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 500 }}>
+                                        ‹ {past.length} passé{past.length > 1 ? 's' : ''}
+                                      </button>
+                                    )}
+                                    {showPast && past.map((s) => renderSlot(s, true))}
+                                    {rest.map((s) => renderSlot(s))}
+                                  </div>
+                                  {scarcity && (
+                                    <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: ACCENTS.coral }}>{scarcity}</div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         );
                       })}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ClubReserve } from '../components/ClubReserve';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -72,15 +72,18 @@ describe('ClubReserve — créneaux déjà commencés', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
-  it('affiche tous les créneaux du jour : le créneau à venir est cliquable, le créneau passé est affiché mais non cliquable', async () => {
+  it('replie les créneaux passés derrière un chip ; le créneau à venir reste réservable', async () => {
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
     // Le créneau à venir s'affiche et reste réservable (bouton).
     const futureEl = await screen.findByText(fmt(future));
     expect(futureEl.closest('button')).not.toBeNull();
-    // Le créneau déjà commencé reste affiché (même graphisme que les indisponibles)
-    // mais n'est pas réservable (pas un bouton).
-    const pastEl = screen.getByText(fmt(past));
-    expect(pastEl).toBeInTheDocument();
+    // Le créneau passé est REPLIÉ : son heure n'est pas rendue tant qu'on n'a pas déplié.
+    expect(screen.queryByText(fmt(past))).toBeNull();
+    // Un chip « ‹ 1 passé » est présent ; on le déplie.
+    const toggle = screen.getByLabelText('Afficher les créneaux passés');
+    fireEvent.click(toggle);
+    // Après dépli, l'heure passée apparaît, non réservable (pas un bouton).
+    const pastEl = await screen.findByText(fmt(past));
     expect(pastEl.closest('button')).toBeNull();
   });
 });
