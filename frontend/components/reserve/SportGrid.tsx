@@ -23,8 +23,11 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
 }) {
   const { th } = useTheme();
   const cols = gridColumns(items, nowMs);
-  const freeBg = `${th.accent}2e`;       // accent translucide (libre)
-  const offPeakBg = `${th.accentWarm}33`; // ambré translucide (heures creuses)
+  const dark = th.mode === 'floodlit';
+  const freeBg = `${th.accent}${dark ? '4d' : '2e'}`;        // accent translucide (libre), plus dense en thème sombre
+  const offPeakBg = `${th.accentWarm}${dark ? '4d' : '33'}`; // ambré translucide (heures creuses)
+  const takenFill = dark ? 'rgba(255,255,255,0.06)' : th.takenBg; // pris : discret mais visible
+  const takenBorder = `inset 0 0 0 1px ${th.line}`;               // contour → distingue « pris » d'une case vide (pas de créneau)
 
   if (cols.length === 0) {
     return <div style={{ padding: '12px 0', fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Aucun créneau à venir ce jour.</div>;
@@ -73,7 +76,7 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
                     return (
                       <td key={c}>
                         <div aria-hidden="true" style={{ minWidth: 44, height: 34, borderRadius: 7,
-                          background: slot ? th.takenBg : 'transparent' }} />
+                          background: slot ? takenFill : 'transparent', boxShadow: slot ? takenBorder : 'none' }} />
                       </td>
                     );
                   })}
@@ -86,7 +89,7 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 11, height: 11, borderRadius: 3, background: freeBg }} /> libre</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 11, height: 11, borderRadius: 3, background: offPeakBg }} /> heures creuses</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 11, height: 11, borderRadius: 3, background: th.takenBg }} /> pris</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 11, height: 11, borderRadius: 3, background: takenFill, boxShadow: takenBorder }} /> pris</span>
       </div>
     </div>
   );
