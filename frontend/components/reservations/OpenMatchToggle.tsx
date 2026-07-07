@@ -6,6 +6,7 @@ import { Chip } from '@/components/ui/atoms';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
 import { sportHasLevels } from '@/lib/level';
+import { saveLevelPref } from '@/lib/levelPrefs';
 
 const ERR: Record<string, string> = {
   UNAUTHORIZED: "Seul l'organisateur peut ouvrir cette partie.",
@@ -50,10 +51,15 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
     finally { setBusy(false); }
   };
 
-  const publish = () => run(() => api.setReservationVisibility(
-    reservation.id, 'PUBLIC', token,
-    limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null },
-  ));
+  const publish = () => run(() => {
+    // C'est ici que la fourchette se choisit désormais → on mémorise le choix
+    // (BookingModal ne fait que le relire pour son interrupteur « Partie ouverte »).
+    saveLevelPref({ enabled: limit, min: lmin, max: lmax });
+    return api.setReservationVisibility(
+      reservation.id, 'PUBLIC', token,
+      limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null },
+    );
+  });
   const close = () => run(() => api.setReservationVisibility(reservation.id, 'PRIVATE', token));
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/parties/${reservation.id}` : `/parties/${reservation.id}`;

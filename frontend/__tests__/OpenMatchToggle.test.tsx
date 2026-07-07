@@ -72,6 +72,17 @@ describe('OpenMatchToggle', () => {
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 6 }));
   });
 
+  it('publish enregistre la préférence de niveau (localStorage palova:open-match-level)', async () => {
+    localStorage.clear();
+    wrap();
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ }));
+    fireEvent.click(screen.getByRole('switch', { name: /Limiter le niveau/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalled());
+    expect(JSON.parse(localStorage.getItem('palova:open-match-level')!))
+      .toEqual({ enabled: true, min: 3, max: 6 });
+  });
+
   it('partie ouverte → chip « Ouverte » + « Fermer » (repasse en privé)', async () => {
     const onChanged = jest.fn();
     wrap({ visibility: 'PUBLIC' }, onChanged);
