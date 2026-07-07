@@ -4,7 +4,7 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 import { api } from '../lib/api';
 
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
-jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' } }) }));
+jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' }, slug: 'padel-arena-paris' }) }));
 jest.mock('../lib/useIsDesktop', () => ({ useIsDesktop: () => true }));
 jest.mock('../lib/api', () => ({
   api: {
@@ -20,6 +20,7 @@ jest.mock('../lib/api', () => ({
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminGetMemberPackages: jest.fn().mockResolvedValue([]),
     refundPayment: jest.fn().mockResolvedValue({}),
+    searchClubMembers: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (u: string | null) => u,
 }));

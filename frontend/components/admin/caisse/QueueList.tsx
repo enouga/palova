@@ -45,7 +45,7 @@ export function QueueList({ toCollect, settled, playersOf, selectedId, onSelect 
         <span style={{ fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, color: th.text, flexShrink: 0 }}>{fmtTime(r.startTime)}</span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{who}</span>
-          <span style={{ display: 'block', fontSize: 11, color: th.textFaint }}>{r.resource.name}</span>
+          <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.resource.name}</span>
         </span>
         {dots && !done && <PaymentDots dots={dots} color={th.accent} />}
         {done

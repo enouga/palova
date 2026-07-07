@@ -11,6 +11,7 @@ jest.mock('../lib/api', () => ({
     adminAddReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminGetMembers: jest.fn().mockResolvedValue([]),
+    searchClubMembers: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -29,7 +30,7 @@ const rv = (over: Record<string, unknown> = {}): ClubReservation => ({
 
 const baseProps = () => ({
   players: 4, due: 5200, members: [], quickMethods: ['CARD', 'VOUCHER', 'CASH'] as PaymentMethod[],
-  packagesByUser: {}, clubId: 'club-1', token: 'tok', isDesktop: true,
+  packagesByUser: {}, clubId: 'club-1', slug: 'padel-arena-paris', token: 'tok', isDesktop: true,
   onChanged: jest.fn(), onOptimisticPay: jest.fn().mockReturnValue('opt:1'),
   onOptimisticRefund: jest.fn(), onOpenDetails: jest.fn(), onCancel: jest.fn(),
   onError: jest.fn(), onSettled: jest.fn(),
@@ -169,8 +170,20 @@ it('résa soldée : bandeau ✓ Soldé, pas de boutons de paiement', () => {
   expect(screen.queryByRole('button', { name: /CB/ })).not.toBeInTheDocument();
 });
 
-it('« associer un membre » sur une place générique ouvre le PlayerPicker', () => {
+it('« associer un membre » sur une place générique ouvre le sélecteur de membre', () => {
   renderReg(rv());
   fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);
   expect(screen.getByPlaceholderText(/Rechercher un membre/)).toBeInTheDocument();
+});
+
+it('choisir un membre de l\'annuaire associe un participant (résa avec titulaire)', async () => {
+  (api.searchClubMembers as jest.Mock).mockResolvedValueOnce([
+    { id: 'u9', firstName: 'Nora', lastName: 'Kaci', level: null },
+  ]);
+  const props = baseProps();
+  renderReg(rv(), props);
+  fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);
+  const pick = await screen.findByRole('button', { name: /Nora Kaci/ });
+  fireEvent.click(pick);
+  await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
 });

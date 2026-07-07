@@ -127,4 +127,15 @@ describe('queueGroups', () => {
     expect(g.toCollect).toHaveLength(0);
     expect(g.settled.map((e) => e.r.id)).toEqual(['e']);
   });
+  it('classé par ordre des ressources (puis par heure) quand resourceRank est fourni', () => {
+    const rows = [
+      entry('a', '2099-06-22T16:00:00.000Z', '0.00', { resourceId: 'court-2' }),
+      entry('b', '2099-06-22T15:00:00.000Z', '0.00', { resourceId: 'court-1' }),
+      entry('c', '2099-06-22T17:00:00.000Z', '0.00', { resourceId: 'court-1' }),
+    ];
+    const rank = (id: string) => (({ 'court-1': 0, 'court-2': 1 }) as Record<string, number>)[id] ?? 99;
+    const g = queueGroups(rows, dueOf, rank);
+    // court-1 d'abord (b avant c par heure), puis court-2 (a)
+    expect(g.toCollect.map((e) => e.r.id)).toEqual(['b', 'c', 'a']);
+  });
 });

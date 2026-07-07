@@ -8,7 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { inkOn } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
 import { Icon, IconName } from '@/components/ui/Icon';
-import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { AssociateMemberPicker } from '@/components/admin/caisse/AssociateMemberPicker';
 import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
 const CORAL = '#ff7a4d';
@@ -48,6 +48,7 @@ export interface CashRegisterProps {
   quickMethods: PaymentMethod[];
   packagesByUser?: Record<string, MemberPackage[]>;
   clubId: string;
+  slug: string;
   token: string;
   isDesktop: boolean;
   onChanged: (updated?: ClubReservation) => void | Promise<void>;
@@ -66,7 +67,7 @@ export interface CashRegisterProps {
  * le montant à annoncer s'affiche en grand, puis un tap sur le MOYEN encaisse
  * (optimiste, un appel par place). Toast « Annuler » ~6 s après chaque lot.
  */
-export function CashRegister({ reservation, players, due, members, quickMethods, packagesByUser, clubId, token, isDesktop, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError, onSettled }: CashRegisterProps) {
+export function CashRegister({ reservation, players, due, members, quickMethods, packagesByUser, clubId, slug, token, isDesktop, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError, onSettled }: CashRegisterProps) {
   const { th } = useTheme();
   const isCourt = reservation.type === 'COURT';
   const paid = toCents(reservation.paidAmount);
@@ -202,13 +203,13 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
 
   // Association d'un membre à une place générique (mêmes appels que ReservationCollect).
   const needsHolder = !reservation.user && (reservation.participants ?? []).length === 0;
-  const associate = async (m: Member) => {
+  const associate = async (userId: string) => {
     if (assocBusy) return;
     setAssocBusy(true);
     try {
       const updated = needsHolder
-        ? await api.adminAssignReservationMember(clubId, reservation.id, m.userId, token)
-        : await api.adminAddReservationParticipant(clubId, reservation.id, m.userId, token);
+        ? await api.adminAssignReservationMember(clubId, reservation.id, userId, token)
+        : await api.adminAddReservationParticipant(clubId, reservation.id, userId, token);
       setAssociatingIndex(null);
       await onChanged(updated);
     } catch (e) { onError(mapAssocError(e)); }
@@ -218,7 +219,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     const r = await api.adminCreateMember(clubId, body, token);
     const mem = await api.adminGetMembers(clubId, token);
     const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await associate(created);
+    if (created) await associate(created.userId);
     return r;
   };
 
@@ -252,7 +253,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     cursor: isPaid ? 'default' : 'pointer', opacity: isPaid ? 0.8 : 1, position: 'relative',
   });
   const payBtn = (primary: boolean): CSSProperties => ({
-    flex: '1 1 110px', height: 52, border: 'none', borderRadius: 12, cursor: 'pointer',
+    width: '100%', boxSizing: 'border-box', height: 52, border: 'none', borderRadius: 12, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700,
     background: primary ? th.accent : th.surface, color: primary ? th.onAccent : th.text,
@@ -269,10 +270,12 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
 
   const renderTile = (s: SlotStatus) => {
     if (associatingIndex === s.index) {
+      const excludeIds = [reservation.user?.id, ...(reservation.participants ?? []).map((p) => p.userId)].filter(Boolean) as string[];
       return (
-        <div key={`t${s.index}`} style={{ ...tileBase(false, false), cursor: 'default', gridColumn: '1 / -1' }}>
+        <div key={`t${s.index}`} style={{ ...tileBase(false, false), cursor: 'default', gridColumn: '1 / -1', alignItems: 'stretch' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <PlayerPicker members={members} value={null} onSelect={associate} onClear={() => setAssociatingIndex(null)} onCreate={createAndAssociate} placeholder="Rechercher un membre…" />
+            <AssociateMemberPicker slug={slug} token={token} excludeIds={excludeIds} members={members}
+              onSelect={associate} onCancel={() => setAssociatingIndex(null)} onCreate={createAndAssociate} />
           </div>
         </div>
       );
@@ -338,7 +341,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
 
       {/* ── tuiles joueurs (COURT à parts) ── */}
       {isCourt && players > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10, padding: '16px 18px 4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '16px 18px 4px' }}>
           {statuses.map(renderTile)}
           {unpaid.length > 1 && !settled && (
             <button type="button" onClick={() => setSelected(new Set(unpaid.map((s) => s.index)))}
@@ -368,21 +371,24 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             </span>
             <span data-testid="cx-total" style={{ marginLeft: 'auto', fontFamily: th.fontDisplay, fontSize: 30, fontWeight: 800, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums', color: th.text }}>{fmtEuros(selTotal)}</span>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
             {methods.map((m, i) => (
               <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
                 style={{ ...payBtn(i === 0), opacity: selTotal <= 0 ? 0.45 : 1 }}>
                 <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.textMute} />{QUICK_METHOD_LABEL[m]}
               </button>
             ))}
-            {pk && single && (
+          </div>
+          {/* Carnet / porte-monnaie : bouton secondaire, largeur au contenu (label déjà complet via packageLabel). */}
+          {pk && single && (
+            <div style={{ marginTop: 10 }}>
               <button type="button" onClick={() => paySelection(pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', pk.id)}
                 title={`Régler avec ${packageLabel(pk)}`}
-                style={{ ...payBtn(false), color: th.accent, boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontSize: 13 }}>
-                <Icon name="ticket" size={15} color={th.accent} />{pk.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} · {packageLabel(pk)}
+                style={{ ...payBtn(false), width: 'auto', height: 46, padding: '0 16px', color: th.accent, boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontSize: 13 }}>
+                <Icon name={pk.kind === 'ENTRIES' ? 'ticket' : 'wallet'} size={15} color={th.accent} />{packageLabel(pk)}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -394,9 +400,9 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
         <button type="button" onClick={onCancel} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>Annuler la réservation</button>
       </div>
 
-      {/* ── toast Annuler ── */}
+      {/* ── toast Annuler (snackbar fixe en bas — ne recouvre jamais les moyens de paiement) ── */}
       {toast && (
-        <div role="status" style={{ position: 'absolute', left: 18, right: 18, bottom: 54, display: 'flex', alignItems: 'center', gap: 12, background: th.text, color: th.bg, borderRadius: 12, padding: '10px 14px', fontSize: 12.5, fontWeight: 600, boxShadow: th.shadow }}>
+        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 45, width: 'min(420px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, background: th.text, color: th.bg, borderRadius: 12, padding: '11px 16px', fontSize: 12.5, fontWeight: 600, boxShadow: th.shadow }}>
           <span style={{ flex: 1 }}>✓ {toast.label} encaissé</span>
           <button type="button" onClick={() => undoToast(toast)}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, padding: 0 }}>Annuler</button>

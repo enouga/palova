@@ -1203,10 +1203,13 @@ export class ReservationService {
     });
     if (!membership || membership.status === 'BLOCKED') throw new Error('MEMBER_NOT_FOUND');
 
-    const updated = await prisma.reservation.update({ where: { id: reservationId }, data: { userId: memberUserId } });
+    await prisma.reservation.update({ where: { id: reservationId }, data: { userId: memberUserId } });
     // Best-effort : prévenir le membre qu'il a été rattaché à la réservation.
     await this.safeNotify(() => notifyReservationMemberAssigned(reservationId, memberUserId));
-    return updated;
+    // Forme enrichie (resource/user/participants/dueAmount) comme les 3 méthodes sœurs : le front
+    // patche l'objet renvoyé tel quel dans la caisse/planning — la ligne brute cassait le rendu
+    // (reservation.resource.name sur un objet sans `resource`).
+    return this.loadClubReservation(reservationId, clubId);
   }
 
   /**

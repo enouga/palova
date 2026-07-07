@@ -1312,18 +1312,22 @@ describe('ReservationService', () => {
   describe('assignReservationMember', () => {
     const resa = { id: 'res-1', resource: { clubId: 'club-1' } };
 
-    it('affecte un membre actif à la résa', async () => {
+    it('affecte un membre actif à la résa et renvoie la forme enrichie', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({ ...resa, participants: [] } as any);
       prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb-1', status: 'ACTIVE' } as any);
       prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
       prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', userId: 'user-1' } as any);
-      jest.spyOn(service as any, 'loadClubReservation').mockResolvedValue({ id: 'res-1' } as any);
+      const loadSpy = jest.spyOn(service as any, 'loadClubReservation')
+        .mockResolvedValue({ id: 'res-1', resource: { name: 'Padel int 1' } } as any);
 
-      await service.assignReservationMember('res-1', 'club-1', 'user-1');
+      const result = await service.assignReservationMember('res-1', 'club-1', 'user-1');
 
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'res-1' }, data: { userId: 'user-1' },
       }));
+      // Régression : renvoyer la ligne brute (sans `resource`) cassait le rendu caisse/planning.
+      expect(loadSpy).toHaveBeenCalledWith('res-1', 'club-1');
+      expect(result).toEqual({ id: 'res-1', resource: { name: 'Padel int 1' } });
     });
 
     it('refuse un joueur non membre (MEMBER_NOT_FOUND)', async () => {

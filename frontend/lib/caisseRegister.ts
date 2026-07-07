@@ -97,12 +97,14 @@ export function selectionTotal(statuses: SlotStatus[], selected: ReadonlySet<num
 export interface QueueEntry<R extends { paidAmount: string }> { r: R; due: number; remaining: number }
 
 /**
- * Groupes de la file : « à encaisser » (reste dû > 0) triés par heure de début,
- * puis « soldées » (réglées ou dû nul). Les annulées sont exclues.
+ * Groupes de la file : « à encaisser » (reste dû > 0) puis « soldées » (réglées ou dû nul).
+ * Les annulées sont exclues. Ordre : par **rang de ressource** (ordre des terrains) si
+ * `resourceRank` est fourni, puis par heure de début ; sinon par heure de début seule.
  */
-export function queueGroups<R extends { status: string; startTime: string; paidAmount: string }>(
+export function queueGroups<R extends { status: string; startTime: string; paidAmount: string; resourceId?: string }>(
   reservations: R[],
   dueOf: (r: R) => number,
+  resourceRank?: (resourceId: string) => number,
 ): { toCollect: QueueEntry<R>[]; settled: QueueEntry<R>[] } {
   const entries = reservations
     .filter((r) => r.status !== 'CANCELLED')
@@ -110,9 +112,12 @@ export function queueGroups<R extends { status: string; startTime: string; paidA
       const due = dueOf(r);
       return { r, due, remaining: Math.max(0, due - toCents(r.paidAmount)) };
     });
-  const byTime = (a: QueueEntry<R>, b: QueueEntry<R>) => a.r.startTime.localeCompare(b.r.startTime);
+  const rankOf = (e: QueueEntry<R>) =>
+    resourceRank && e.r.resourceId != null ? resourceRank(e.r.resourceId) : 0;
+  const cmp = (a: QueueEntry<R>, b: QueueEntry<R>) =>
+    (rankOf(a) - rankOf(b)) || a.r.startTime.localeCompare(b.r.startTime);
   return {
-    toCollect: entries.filter((e) => e.remaining > 0).sort(byTime),
-    settled: entries.filter((e) => e.remaining <= 0).sort(byTime),
+    toCollect: entries.filter((e) => e.remaining > 0).sort(cmp),
+    settled: entries.filter((e) => e.remaining <= 0).sort(cmp),
   };
 }

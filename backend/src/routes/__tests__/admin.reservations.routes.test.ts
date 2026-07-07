@@ -81,7 +81,8 @@ describe('PATCH /api/clubs/:clubId/admin/reservations/:id/member', () => {
     prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', userId: 'user-1' } as any);
     const res = await request(app).patch(murl).set('Authorization', `Bearer ${token}`).send({ memberUserId: 'user-1' });
     expect(res.status).toBe(200);
-    expect(res.body.userId).toBe('user-1');
+    // La route renvoie la réservation enrichie (loadClubReservation) — pas la ligne brute.
+    expect(res.body.id).toBe('res-1');
   });
 
   it('400 si memberUserId manquant', async () => {

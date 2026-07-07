@@ -51,7 +51,7 @@ const METHOD_ICON: Record<PaymentMethod, IconName> = {
 export default function AdminEncaissementPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
-  const { club } = useClub();
+  const { club, slug } = useClub();
   const clubId = club?.id;
   const isDesktop = useIsDesktop(900);
   const [data, setData]   = useState<ClubReservationsResponse | null>(null);
@@ -172,6 +172,10 @@ export default function AdminEncaissementPage() {
 
   // Derived helpers
   const resById = new Map(resources.map((r) => [r.id, r]));
+  // Rang d'une ressource = sa position dans la liste des terrains (ordre de la page Terrains),
+  // pour classer la file « à encaisser d'abord » par terrain (puis par heure).
+  const resourceOrder = new Map(resources.map((r, i) => [r.id, i]));
+  const rankOf = (id: string) => resourceOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
   const dueOf = (r: ClubReservation) => dueCents(r, resById.get(r.resourceId), peak, tz);
   const playersOf = (r: ClubReservation) => playerCount(typeof resById.get(r.resourceId)?.attributes?.format === 'string' ? (resById.get(r.resourceId)!.attributes.format as string) : undefined);
   const remainingOf = (r: ClubReservation) => Math.max(0, dueOf(r) - toCents(r.paidAmount));
@@ -249,7 +253,7 @@ export default function AdminEncaissementPage() {
 
   // ── File (deux zones) ─────────────────────────────────────────────────────
   // File sur les résas VISIBLES après filtres — recalculée à chaque rendu.
-  const groups = queueGroups(visible, dueOf);
+  const groups = queueGroups(visible, dueOf, rankOf);
   // La résa affichée dans la caisse : cherchée dans TOUTES les résas du jour (elle peut
   // sortir de `visible` après un filtre/encaissement sans casser la caisse).
   const currentRv = selectedRvId ? dayResas.find((r) => r.id === selectedRvId) ?? null : null;
@@ -257,7 +261,7 @@ export default function AdminEncaissementPage() {
   // Desktop : auto-sélection de la première résa à encaisser (jamais sur mobile).
   useEffect(() => {
     if (!isDesktop || loading || selectedRvId) return;
-    const first = queueGroups(dayResas.filter((r) => r.status !== 'CANCELLED'), dueOf).toCollect[0];
+    const first = queueGroups(dayResas.filter((r) => r.status !== 'CANCELLED'), dueOf, rankOf).toCollect[0];
     if (first) setSelectedRvId(first.r.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop, loading, selectedRvId, data]);
@@ -265,7 +269,7 @@ export default function AdminEncaissementPage() {
   // Résa soldée (toast expiré) → prochaine à encaisser.
   const selectNextDue = useCallback(() => {
     setSelectedRvId((cur) => {
-      const g = queueGroups((data?.reservations ?? []).filter((r) => r.status !== 'CANCELLED'), dueOf);
+      const g = queueGroups((data?.reservations ?? []).filter((r) => r.status !== 'CANCELLED'), dueOf, rankOf);
       const next = g.toCollect.find((e) => e.r.id !== cur);
       return next ? next.r.id : cur;
     });
@@ -341,11 +345,11 @@ export default function AdminEncaissementPage() {
           </div>
           {/* ── zone 2 : la caisse (desktop : colonne sticky) ── */}
           {isDesktop && (
-            <div data-testid="cx-register" style={{ flex: 1, minWidth: 0, position: 'sticky', top: 12 }}>
+            <div data-testid="cx-register" style={{ flex: 1, minWidth: 0, maxWidth: 900, position: 'sticky', top: 12 }}>
               {currentRv ? (
                 <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
                   members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
-                  clubId={clubId!} token={token!} isDesktop
+                  clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop
                   onChanged={onMutated}
                   onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
                   onOptimisticRefund={(ids) => applyRefundLocally(currentRv.id, ids)}
@@ -370,7 +374,7 @@ export default function AdminEncaissementPage() {
           <div data-testid="cx-register-mobile">
             <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
               members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
-              clubId={clubId!} token={token!} isDesktop={false}
+              clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop={false}
               onChanged={onMutated}
               onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
               onOptimisticRefund={(ids) => applyRefundLocally(currentRv.id, ids)}
