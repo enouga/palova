@@ -18,6 +18,7 @@ describe('PlatformService.getStats', () => {
     prismaMock.user.count.mockResolvedValue(120 as any);
     prismaMock.reservation.count.mockResolvedValue(300 as any);
     prismaMock.tournament.count.mockResolvedValue(8 as any);
+    prismaMock.club.findMany.mockResolvedValue([] as any); // clubs billing
 
     const stats = await service.getStats();
     expect(stats).toEqual({
@@ -25,7 +26,58 @@ describe('PlatformService.getStats', () => {
       users: 120,
       reservations: 300,
       tournaments: 8,
+      billing: { mrrCents: 0, byTier: [0, 0, 0, 0, 0], toRegularize: 0, pastDue: 0 },
     });
+  });
+
+  it('agrège MRR, paliers, à-régulariser et impayés', async () => {
+    prismaMock.club.count.mockResolvedValue(0 as any);
+    prismaMock.user.count.mockResolvedValue(0 as any);
+    prismaMock.reservation.count.mockResolvedValue(0 as any);
+    prismaMock.tournament.count.mockResolvedValue(0 as any);
+    prismaMock.club.findMany.mockResolvedValue([
+      // actif t2 mensuel → 5900 au MRR
+      { activeMemberCount: 200, billingExempt: false, platformSubscription: { status: 'active', tier: 2, interval: 'month' } },
+      // actif t3 annuel → 101000/12 arrondi = 8417
+      { activeMemberCount: 500, billingExempt: false, platformSubscription: { status: 'active', tier: 3, interval: 'year' } },
+      // à régulariser (t1 sans abonnement)
+      { activeMemberCount: 60, billingExempt: false, platformSubscription: null },
+      // impayé (compte au MRR : l'abonnement vit encore)
+      { activeMemberCount: 200, billingExempt: false, platformSubscription: { status: 'past_due', tier: 2, interval: 'month' } },
+      // gratuit
+      { activeMemberCount: 10, billingExempt: false, platformSubscription: null },
+      // exonéré (gros club) — pas de relance
+      { activeMemberCount: 900, billingExempt: true, platformSubscription: null },
+    ] as any);
+
+    const stats = await service.getStats();
+    expect(stats.billing).toEqual({
+      mrrCents: 5900 + Math.round(101000 / 12) + 5900,
+      byTier: [1, 1, 2, 1, 1],
+      toRegularize: 1,
+      pastDue: 1,
+    });
+  });
+});
+
+describe('PlatformService.setBillingExempt', () => {
+  const service = new PlatformService();
+
+  it('valide et met à jour', async () => {
+    prismaMock.club.update.mockResolvedValue({ id: 'c1', billingExempt: true } as any);
+    const out = await service.setBillingExempt('c1', true);
+    expect(out).toEqual({ id: 'c1', billingExempt: true });
+  });
+
+  it('rejette VALIDATION_ERROR si le flag n est pas booléen', async () => {
+    await expect(service.setBillingExempt('c1', 'oui' as any)).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('rejette CLUB_NOT_FOUND (P2025)', async () => {
+    prismaMock.club.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('not found', { code: 'P2025', clientVersion: 'x' }),
+    );
+    await expect(service.setBillingExempt('absent', true)).rejects.toThrow('CLUB_NOT_FOUND');
   });
 });
 
@@ -40,6 +92,7 @@ describe('PlatformService.listClubs', () => {
         members: [{ user: { id: 'u1', email: 'owner@palova.fr', firstName: 'O', lastName: 'M' } }],
         _count: { clubMemberships: 48, resources: 5 },
         slugAliases: [],
+        activeMemberCount: 180, billingExempt: false, platformSubscription: null,
       },
     ] as any);
 
@@ -53,6 +106,10 @@ describe('PlatformService.listClubs', () => {
       owners: [{ id: 'u1', email: 'owner@palova.fr', firstName: 'O', lastName: 'M' }],
       counts: { adherents: 48, resources: 5 },
       aliases: [],
+      billing: {
+        activeMembers: 180, observedTier: 2, state: 'TO_REGULARIZE',
+        exempt: false, subscribedTier: null,
+      },
     });
   });
 });

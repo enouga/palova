@@ -27,9 +27,11 @@ describe('GET /api/platform/stats (autorisation)', () => {
     prismaMock.user.count.mockResolvedValue(0 as any);
     prismaMock.reservation.count.mockResolvedValue(0 as any);
     prismaMock.tournament.count.mockResolvedValue(0 as any);
+    prismaMock.club.findMany.mockResolvedValue([] as any); // agrégat billing
     const res = await request(app).get('/api/platform/stats').set('Authorization', `Bearer ${tokenFor('admin')}`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('clubs');
+    expect(res.body).toHaveProperty('billing');
   });
 });
 

@@ -39,6 +39,12 @@ router.patch('/clubs/:id', async (req, res, next) => {
   catch (err) { handleError(err, res, next); }
 });
 
+// Exonération de facturation SaaS (clubs partenaires/pilotes).
+router.patch('/clubs/:id/billing-exempt', async (req, res, next) => {
+  try { res.json(await platform.setBillingExempt(req.params.id, req.body?.exempt)); }
+  catch (err) { handleError(err, res, next); }
+});
+
 // Changement d'alias (slug / sous-domaine) d'un club. L'ancien slug devient un alias permanent.
 router.post('/clubs/:id/slug', async (req, res, next) => {
   try { res.json(await platform.changeClubSlug(req.params.id, req.body?.slug)); }

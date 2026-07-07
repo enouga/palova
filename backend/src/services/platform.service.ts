@@ -3,6 +3,8 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
 import { slugify, RESERVED_SLUGS } from './club.service';
 import { geocodeAddress } from './geo.service';
+import { tierFor, tierPriceCents } from './platformBilling/tiers';
+import { billingState, BillingState } from './platformBilling/platformBilling.service';
 
 export interface CreateClubByPlatformParams {
   club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
@@ -14,24 +16,52 @@ export interface PlatformStats {
   users: number;
   reservations: number;
   tournaments: number;
+  billing: { mrrCents: number; byTier: number[]; toRegularize: number; pastDue: number };
 }
 
 export class PlatformService {
   /** Statistiques globales de la plateforme. */
   async getStats(): Promise<PlatformStats> {
     // Compteurs indépendants (pas de transaction) : sous forte charge, active+suspended peut différer de total. Acceptable pour un tableau de bord.
-    const [total, active, suspended, users, reservations, tournaments] = await Promise.all([
+    const [total, active, suspended, users, reservations, tournaments, billingClubs] = await Promise.all([
       prisma.club.count(),
       prisma.club.count({ where: { status: 'ACTIVE' } }),
       prisma.club.count({ where: { status: 'SUSPENDED' } }),
       prisma.user.count(),
       prisma.reservation.count(),
       prisma.tournament.count(),
+      prisma.club.findMany({
+        where: { status: 'ACTIVE' },
+        select: {
+          activeMemberCount: true, billingExempt: true,
+          platformSubscription: { select: { status: true, tier: true, interval: true } },
+        },
+      }),
     ]);
-    return { clubs: { total, active, suspended }, users, reservations, tournaments };
+
+    // MRR (abonnement annuel ramené au mois) + répartition par palier observé.
+    let mrrCents = 0; let toRegularize = 0; let pastDue = 0;
+    const byTier = [0, 0, 0, 0, 0];
+    for (const c of billingClubs) {
+      const observedTier = tierFor(c.activeMemberCount);
+      byTier[observedTier]++;
+      const state = billingState({ billingExempt: c.billingExempt, observedTier, subscription: c.platformSubscription });
+      if (state === 'TO_REGULARIZE') toRegularize++;
+      if (state === 'PAST_DUE') pastDue++;
+      const sub = c.platformSubscription;
+      if (sub && sub.status !== 'canceled') {
+        mrrCents += sub.interval === 'year'
+          ? Math.round(tierPriceCents(sub.tier, 'year') / 12)
+          : tierPriceCents(sub.tier, 'month');
+      }
+    }
+    return {
+      clubs: { total, active, suspended }, users, reservations, tournaments,
+      billing: { mrrCents, byTier, toRegularize, pastDue },
+    };
   }
 
-  /** Tous les clubs (tous statuts), avec gérants OWNER et compteurs. */
+  /** Tous les clubs (tous statuts), avec gérants OWNER, compteurs et statut billing. */
   async listClubs() {
     const clubs = await prisma.club.findMany({
       orderBy: { createdAt: 'desc' },
@@ -42,19 +72,49 @@ export class PlatformService {
         },
         _count: { select: { clubMemberships: true, resources: true } },
         slugAliases: { select: { slug: true }, orderBy: { createdAt: 'asc' } },
+        platformSubscription: { select: { status: true, tier: true, interval: true } },
       },
     });
-    return clubs.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      name: c.name,
-      city: c.city,
-      status: c.status,
-      createdAt: c.createdAt,
-      owners: c.members.map((m) => m.user),
-      counts: { adherents: c._count.clubMemberships, resources: c._count.resources },
-      aliases: c.slugAliases.map((a) => a.slug),
-    }));
+    return clubs.map((c) => {
+      const observedTier = tierFor(c.activeMemberCount);
+      return {
+        id: c.id,
+        slug: c.slug,
+        name: c.name,
+        city: c.city,
+        status: c.status,
+        createdAt: c.createdAt,
+        owners: c.members.map((m) => m.user),
+        counts: { adherents: c._count.clubMemberships, resources: c._count.resources },
+        aliases: c.slugAliases.map((a) => a.slug),
+        billing: {
+          activeMembers: c.activeMemberCount,
+          observedTier,
+          state: billingState({
+            billingExempt: c.billingExempt, observedTier, subscription: c.platformSubscription,
+          }) as BillingState,
+          exempt: c.billingExempt,
+          subscribedTier: c.platformSubscription && c.platformSubscription.status !== 'canceled'
+            ? c.platformSubscription.tier : null,
+        },
+      };
+    });
+  }
+
+  /** Exonère (ou rétablit) la facturation d'un club — clubs partenaires/pilotes. */
+  async setBillingExempt(id: string, exempt: unknown) {
+    if (typeof exempt !== 'boolean') throw new Error('VALIDATION_ERROR');
+    try {
+      return await prisma.club.update({
+        where: { id }, data: { billingExempt: exempt },
+        select: { id: true, billingExempt: true },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new Error('CLUB_NOT_FOUND');
+      }
+      throw err;
+    }
   }
 
   /** Bascule le statut d'un club (ACTIVE/SUSPENDED). */
