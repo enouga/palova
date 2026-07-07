@@ -87,6 +87,17 @@ body {
 }
 .sp-hero-rise { animation: sp-hero-rise .55s cubic-bezier(.2, 0, 0, 1) both; }
 
+/* Réserver — pills de créneau : lavis d'accent au repos, remplissage plein au survol
+   (couleur/encre fournies en variables --rv-fill / --rv-ink car l'accent est propre au club) */
+.rv-slot { transition: background .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease; }
+@media (hover: hover) and (pointer: fine) {
+  .rv-slot:hover { background: var(--rv-fill) !important; color: var(--rv-ink) !important; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 21, 14, 0.14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-slot { transition: background .15s ease, color .15s ease; }
+  .rv-slot:hover { transform: none; }
+}
+
 /* Retour visuel discret sur les boutons : léger relèvement au survol,
    enfoncement au clic. Transform/filter uniquement → n'écrase pas les
    couleurs ni les ombres posées en style inline. Respecte prefers-reduced-motion. */

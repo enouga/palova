@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
@@ -324,11 +324,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               const renderSlot = (s: TimeSlot, forcePast?: boolean) => {
                                 const isPast = forcePast ?? (new Date(s.startTime).getTime() <= nowMs);
                                 const fill = s.offPeak ? th.accentWarm : th.accent;
+                                // Lavis d'accent au repos (calme), remplissage plein au survol via CSS (.rv-slot) —
+                                // couleur/encre passées en variables car l'accent est propre à chaque club.
+                                const slotVars = { '--rv-fill': fill, '--rv-ink': inkOn(fill) } as CSSProperties;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
-                                  <button key={s.startTime} className="pl-lift" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: fill, color: inkOn(fill), fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, boxShadow: `0 2px 6px ${fill}5c`, transition: 'transform .14s, box-shadow .14s' }}>
+                                  <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                    style={{ ...slotVars, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}1f`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                                     {formatHour(s.startTime, club.timezone)}
-                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, opacity: 0.92 }}>{Number(s.price)}€</span>}
+                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, opacity: 0.85 }}>{Number(s.price)}€</span>}
                                   </button>
                                 ) : (
                                   <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
