@@ -139,6 +139,31 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   }
 }
 
+/* ── Calendrier mensuel : géométrie adaptative des tuiles-jour ──────────────
+   Desktop : tuiles hautes (min 68px). Mobile (≤520px) : les colonnes ne font
+   plus que ~46px de large → la tuile suit sa largeur (proche du carré) et les
+   marqueurs (pavé-compteur, rubans, bouton-icône) se compactent d'un cran.
+   Bascule 100 % CSS via variables consommées en style inline → aucun flash
+   d'hydration (même pattern que .auth-*). */
+.pl-cal-grid {
+  --cal-h-min: 68px; --cal-h-max: none; --cal-ar: auto;
+  --cal-pad: 7px 6px 12px;
+  --cal-chip: 26px; --cal-chip-fs: 14px; --cal-chip-pad: 8px;
+  --cal-ribbon: 7px; --cal-knob: 15px;
+  --cal-rb1: 6px; --cal-rb2: 15px;
+  --cal-cb0: 6px; --cal-cb1: 17px; --cal-cb2: 26px;
+}
+@media (max-width: 520px) {
+  .pl-cal-grid {
+    --cal-h-min: 52px; --cal-h-max: 68px; --cal-ar: 1 / 1.15;
+    --cal-pad: 5px 5px 9px;
+    --cal-chip: 21px; --cal-chip-fs: 12px; --cal-chip-pad: 6px;
+    --cal-ribbon: 6px; --cal-knob: 13px;
+    --cal-rb1: 5px; --cal-rb2: 12px;
+    --cal-cb0: 5px; --cal-cb1: 13px; --cal-cb2: 20px;
+  }
+}
+
 /* ── Pages d'auth : écran scindé (desktop) / bandeau + colonne (mobile) ──────
    Bascule 100 % CSS (pas de useIsDesktop) → aucun flash d'hydration.
    Panneau et bandeau sont tous deux dans le DOM ; le media query affiche l'un. */

@@ -60,7 +60,7 @@ export function MonthCalendar({
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: GAP, marginTop: 12 }}>
+      <div className="pl-cal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: GAP, marginTop: 12 }}>
         {DOW.map((d) => (
           <div key={d} style={{ textAlign: 'center', fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textFaint, paddingBottom: 2 }}>
             {d}
@@ -73,7 +73,8 @@ export function MonthCalendar({
           const event = entries.find((e) => e.kind === 'event');
           const barCount = (tournament ? 1 : 0) + (event ? 1 : 0);
           // La pastille-compteur se pose au-dessus des rubans (0, 1 ou 2 empilés).
-          const chipBottom = barCount >= 2 ? 26 : barCount === 1 ? 17 : 6;
+          // Positions/tailles = variables CSS de .pl-cal-grid (compactées ≤520px).
+          const chipBottom = barCount >= 2 ? 'var(--cal-cb2)' : barCount === 1 ? 'var(--cal-cb1)' : 'var(--cal-cb0)';
           const isToday = cell.key === todayKey;
           const isSelected = cell.key === selected;
           const dim = !cell.inMonth;
@@ -82,24 +83,25 @@ export function MonthCalendar({
           // Ruban continu multi-jours (tournoi/event) : déborde sur le gap, arrondi aux extrémités,
           // + petit bouton à icône posé sur le jour de début pour identifier le type.
           const multiDayBar = (
-            e: Extract<CalendarEntry, { dayKeys: string[] }>, bottom: number, color: string,
+            e: Extract<CalendarEntry, { dayKeys: string[] }>, bottom: string, color: string,
             marker: string, icon: 'trophy' | 'bolt',
           ) => (
             <Fragment key={marker}>
               <span data-marker={marker}
                 style={{
-                  position: 'absolute', bottom, height: RIBBON_H, background: color, opacity: e.past ? 0.4 : 1,
+                  position: 'absolute', bottom, height: 'var(--cal-ribbon)', background: color, opacity: e.past ? 0.4 : 1,
                   left: cell.key === e.startKey ? 6 : -(GAP / 2),
                   right: cell.key === e.endKey ? 6 : -(GAP / 2),
-                  borderTopLeftRadius: cell.key === e.startKey ? RIBBON_H / 2 : 0,
-                  borderBottomLeftRadius: cell.key === e.startKey ? RIBBON_H / 2 : 0,
-                  borderTopRightRadius: cell.key === e.endKey ? RIBBON_H / 2 : 0,
-                  borderBottomRightRadius: cell.key === e.endKey ? RIBBON_H / 2 : 0,
+                  borderTopLeftRadius: cell.key === e.startKey ? 999 : 0,
+                  borderBottomLeftRadius: cell.key === e.startKey ? 999 : 0,
+                  borderTopRightRadius: cell.key === e.endKey ? 999 : 0,
+                  borderBottomRightRadius: cell.key === e.endKey ? 999 : 0,
                 }} />
               {cell.key === e.startKey && (
                 <span aria-hidden
                   style={{
-                    position: 'absolute', left: 4, bottom: bottom - 4, width: 15, height: 15, borderRadius: '50%',
+                    position: 'absolute', left: 4, bottom: `calc(${bottom} - 4px)`,
+                    width: 'var(--cal-knob)', height: 'var(--cal-knob)', borderRadius: '50%',
                     background: color, opacity: e.past ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `0 0 0 1.5px ${knobRing}`,
                   }}>
@@ -113,8 +115,9 @@ export function MonthCalendar({
               aria-pressed={isSelected} aria-label={`Jour ${cell.key}`}
               onClick={() => onSelect(cell.key)}
               style={{
-                position: 'relative', minHeight: 68, borderRadius: 12, border: 'none', cursor: 'pointer',
-                padding: '7px 6px 12px', textAlign: 'left', verticalAlign: 'top',
+                position: 'relative', borderRadius: 12, border: 'none', cursor: 'pointer',
+                minHeight: 'var(--cal-h-min)', maxHeight: 'var(--cal-h-max)', aspectRatio: 'var(--cal-ar)',
+                padding: 'var(--cal-pad)', textAlign: 'left', verticalAlign: 'top',
                 background: isSelected ? th.ink : dim ? 'transparent' : th.surface,
                 boxShadow: isSelected ? 'none' : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
                 WebkitTapHighlightColor: 'transparent',
@@ -133,17 +136,17 @@ export function MonthCalendar({
                   style={{
                     position: 'absolute', right: 4, bottom: chipBottom,
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    minWidth: 26, height: 26, padding: '0 8px', borderRadius: 999,
+                    minWidth: 'var(--cal-chip)', height: 'var(--cal-chip)', padding: '0 var(--cal-chip-pad)', borderRadius: 999,
                     background: resaColor, color: inkOn(resaColor),
-                    fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, lineHeight: 1,
+                    fontFamily: th.fontUI, fontSize: 'var(--cal-chip-fs)', fontWeight: 700, lineHeight: 1,
                     boxShadow: `0 0 0 1.5px ${knobRing}`,
                     opacity: reservations.every((e) => e.past) ? 0.4 : 1,
                   }}>
                   {reservations.length}
                 </span>
               )}
-              {tournament && multiDayBar(tournament, 6, tournamentColor, 'tournament', 'trophy')}
-              {event && multiDayBar(event, tournament ? 15 : 6, eventColor, 'event', 'bolt')}
+              {tournament && multiDayBar(tournament, 'var(--cal-rb1)', tournamentColor, 'tournament', 'trophy')}
+              {event && multiDayBar(event, tournament ? 'var(--cal-rb2)' : 'var(--cal-rb1)', eventColor, 'event', 'bolt')}
             </button>
           );
         })}
