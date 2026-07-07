@@ -17,7 +17,9 @@ import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { SportPicker } from '@/components/reserve/SportPicker';
 import { ACCENTS } from '@/lib/theme';
-import { splitPastSlots, scarcityLabel } from '@/lib/reserveView';
+import { splitPastSlots, scarcityLabel, RESERVE_VIEW_KEY, type ReserveView } from '@/lib/reserveView';
+import { ViewToggle } from '@/components/reserve/ViewToggle';
+import { SportGrid } from '@/components/reserve/SportGrid';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -61,6 +63,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   // Repli des créneaux du jour déjà commencés, par terrain (clé = resource.id). Réinitialisé au
   // changement de date (le passé n'existe que le jour même).
   const [expandedPast, setExpandedPast] = useState<Record<string, boolean>>({});
+  // Vue d'affichage des créneaux : cartes par terrain (défaut) ou grille (matrice). Le premier
+  // rendu est TOUJOURS 'cards' (pas de localStorage dans l'initializer → pas de mismatch
+  // d'hydratation) ; la valeur mémorisée est lue au montage.
+  const [view, setView] = useState<ReserveView>('cards');
   // Résumé d'un règlement par solde prépayé (moyen + restant), affiché sous la bannière de confirmation.
   const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
   const [isSub, setIsSub]       = useState(false);
@@ -118,6 +124,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { refreshQuota(); }, [refreshQuota]);
   useEffect(() => { setExpandedPast({}); }, [date]);
+
+  useEffect(() => {
+    try { const v = localStorage.getItem(RESERVE_VIEW_KEY(club.id)); if (v === 'grid' || v === 'cards') setView(v); } catch { /* localStorage indispo */ }
+  }, [club.id]);
+  const changeView = (v: ReserveView) => {
+    setView(v);
+    try { localStorage.setItem(RESERVE_VIEW_KEY(club.id), v); } catch { /* localStorage indispo */ }
+  };
 
   // Résolution de la sélection initiale, sans saut (client only → pas de mismatch d'hydratation) :
   // 1) localStorage (ids encore proposés) → 2) sport préféré si connecté → 3) clubSports[0].
@@ -222,16 +236,19 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
               <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
             </div>
 
-            {/* sélecteur de sport discret — affiché seulement si le club a plusieurs sports réservables */}
-            {bookableSports.length > 1 && selectedSportIds !== null && (
-              <div style={{ padding: '12px 20px 0' }}>
+            {/* rangée : sélecteur de sport (si plusieurs sports) à gauche, bascule de vue à droite */}
+            <div style={{ padding: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {bookableSports.length > 1 && selectedSportIds !== null ? (
                 <SportPicker
                   sports={bookableSports.map((cs) => ({ id: cs.id, name: cs.sport.name, icon: cs.sport.icon }))}
                   selectedIds={selectedSportIds}
                   onChange={changeSports}
                 />
+              ) : <span aria-hidden="true" />}
+              <div style={{ marginLeft: 'auto' }}>
+                <ViewToggle value={view} onChange={changeView} />
               </div>
-            )}
+            </div>
             {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres */}
             <div style={{ padding: '8px 20px 0' }}>
               {bookableSports.length === 0 && (
@@ -260,6 +277,18 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                       <div style={{ padding: '20px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
                     ) : items.length === 0 ? (
                       <div style={{ padding: '12px 0 4px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun terrain.</div>
+                    ) : view === 'grid' ? (
+                    <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s' }}>
+                      <SportGrid
+                        items={items}
+                        nowMs={nowMs}
+                        timezone={club.timezone}
+                        slotAllowed={win.slotAllowed}
+                        onSlot={onSlot}
+                        sportKey={cs.sport.key}
+                        duration={selDur}
+                      />
+                    </div>
                     ) : (
                     <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(({ resource, slots }) => {
