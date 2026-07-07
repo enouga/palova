@@ -33,6 +33,15 @@ const wallet2 = {
 const sub = {
   id: 'sub-1', benefit: 'INCLUDED', discountPercent: null, sportKeys: ['padel'], offPeakOnly: false,
 } as unknown as Subscription;
+// Soldes portant un sport (via template.sportKeys) : le filtre d'affichage par sport s'appuie dessus.
+const tennisWallet = {
+  id: 'pkg-tennis', kind: 'WALLET', creditsRemaining: null, amountRemaining: '50.00', expiresAt: null,
+  template: { name: 'Tennis', sportKeys: ['tennis'] },
+} as unknown as MemberPackage;
+const allSportsWallet = {
+  id: 'pkg-all', kind: 'WALLET', creditsRemaining: null, amountRemaining: '50.00', expiresAt: null,
+  template: { name: 'Tous sports', sportKeys: [] },
+} as unknown as MemberPackage;
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof BookingModal>> = {}) {
   return render(
@@ -110,5 +119,26 @@ describe('BookingModal — paiement replié (défaut intelligent)', () => {
     expect(await screen.findByText(/Solde insuffisant/)).toBeInTheDocument();
     expect(screen.getByText('Régler au club')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Confirmer la réservation/ })).toBeInTheDocument();
+  });
+
+  it('solde limité à un autre sport : masqué sur un terrain padel (ni avenue, ni défaut, ni « changer »)', async () => {
+    renderModal({ sportKey: 'padel', packages: [tennisWallet] });
+    await screen.findByText(/Créneau bloqué/);
+    expect(screen.getByText('Régler au club')).toBeInTheDocument();
+    expect(screen.queryByText(/Porte-monnaie/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /changer/ })).not.toBeInTheDocument();
+  });
+
+  it('solde limité au bon sport : visible et pré-choisi', async () => {
+    renderModal({ sportKey: 'tennis', packages: [tennisWallet] });
+    await screen.findByText(/Créneau bloqué/);
+    expect(screen.getByText(/Porte-monnaie — 50,00 €/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Confirmer avec mon solde/ })).toBeInTheDocument();
+  });
+
+  it('solde tous sports (sportKeys vide) : visible quel que soit le sport', async () => {
+    renderModal({ sportKey: 'padel', packages: [allSportsWallet] });
+    await screen.findByText(/Créneau bloqué/);
+    expect(screen.getByText(/Porte-monnaie — 50,00 €/)).toBeInTheDocument();
   });
 });

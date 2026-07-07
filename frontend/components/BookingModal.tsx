@@ -165,13 +165,23 @@ export default function BookingModal({
   const reservationRef                = useRef<Reservation | null>(null); // dernière résa connue (même avant le setState)
   const closedRef                     = useRef(false);   // l'utilisateur a fermé (handleClose) — distinct du faux démontage StrictMode
 
+  // Soldes prépayés valables pour le sport du terrain réservé : un carnet/porte-monnaie
+  // limité à certains sports (`template.sportKeys`) n'apparaît que si ce sport correspond ;
+  // `sportKeys` vide = tous sports. Sans sportKey connu, on n'exclut rien (pas de régression).
+  const sportPackages = sportKey
+    ? packages.filter((p) => {
+        const keys = p.template?.sportKeys ?? [];
+        return keys.length === 0 || keys.includes(sportKey);
+      })
+    : packages;
+
   // Défaut intelligent : abonnement couvrant (via l'effet useSub) > premier solde prépayé
   // capable de couvrir > régler au club. Jamais de carnet pré-choisi si le club impose
   // le paiement en ligne (l'avenue carnet reste disponible derrière « changer »).
   const [paySource, setPaySource]     = useState<string | null>(() => {
     if (requireOnlinePayment) return null;
     if (coveringSubscription(subscriptions, { sportKey: sportKey ?? '', isOffPeak: slot.offPeak ?? false })) return null;
-    return pickPackageFor(packages, Math.round(Number(slot.price ?? price) * 100))?.id ?? null;
+    return pickPackageFor(sportPackages, Math.round(Number(slot.price ?? price) * 100))?.id ?? null;
   });
   // Ligne de paiement repliée par défaut (« … · changer ») → dépliée révèle les avenues.
   const [payExpanded, setPayExpanded] = useState(false);
@@ -228,7 +238,7 @@ export default function BookingModal({
   const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
 
   // Y a-t-il autre chose à choisir que le défaut ? (sinon, pas de bouton « changer »)
-  const avenueCount = (cover ? 1 : 0) + packages.length + (onlineAvailable ? 1 : 0) + (requireOnlinePayment ? 0 : 1);
+  const avenueCount = (cover ? 1 : 0) + sportPackages.length + (onlineAvailable ? 1 : 0) + (requireOnlinePayment ? 0 : 1);
   const hasAlternatives = avenueCount > 1;
 
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
@@ -353,7 +363,7 @@ export default function BookingModal({
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
-      const usedPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+      const usedPkg = paySource ? sportPackages.find((p) => p.id === paySource) ?? null : null;
       const confirmed = await api.confirmReservation(
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
@@ -525,7 +535,7 @@ export default function BookingModal({
                 {sectionLabel('card', 'Mode de paiement')}
                 {!payExpanded ? (() => {
                   // Ligne repliée : le moyen pré-choisi + sa conséquence, bouton « changer » si alternatives.
-                  const selPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+                  const selPkg = paySource ? sportPackages.find((p) => p.id === paySource) ?? null : null;
                   const online = !useSub && !selPkg && payMode === 'online' && onlineAvailable;
                   const icon: IconName = useSub ? 'bolt' : selPkg ? (selPkg.kind === 'ENTRIES' ? 'ticket' : 'wallet') : online ? 'card' : 'home';
                   const title = useSub ? 'Couvert par votre abonnement' : selPkg ? packageLabel(selPkg) : online ? 'Payer en ligne' : 'Régler au club';
@@ -612,12 +622,12 @@ export default function BookingModal({
                   })()}
 
                   {/* Avenue 3 — carnets prépayés (paient le TOTAL depuis le solde). */}
-                  {packages.length > 0 && (() => {
-                    const selPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+                  {sportPackages.length > 0 && (() => {
+                    const selPkg = paySource ? sportPackages.find((p) => p.id === paySource) ?? null : null;
                     return (
                     <div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {packages.map((p) => {
+                        {sportPackages.map((p) => {
                           const ok = canCover(p, totalEuros);
                           const sel = paySource === p.id;
                           return (
