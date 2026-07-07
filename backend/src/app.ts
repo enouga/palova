@@ -25,6 +25,7 @@ import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
+import platformBillingWebhooksRouter from './routes/platform-billing-webhooks';
 
 const app = express();
 
@@ -51,6 +52,9 @@ app.use(cors({
 }));
 // Stripe webhooks — raw body requis pour la vérification de signature
 app.use('/api/stripe/webhooks', express.raw({ type: 'application/json' }), stripeWebhooksRouter);
+// Webhook Stripe Billing plateforme (abonnements SaaS des clubs) — hors /api/platform,
+// qui est monté derrière authMiddleware + requireSuperAdmin.
+app.use('/api/billing/webhooks', express.raw({ type: 'application/json' }), platformBillingWebhooksRouter);
 
 app.use(express.json());
 
