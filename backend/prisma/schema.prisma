@@ -290,6 +290,12 @@ model Club {
   stripeAccountStatus    StripeAccountStatus @default(NONE) @map("stripe_account_status")
   requireOnlinePayment   Boolean             @default(false) @map("require_online_payment")
   requireCardFingerprint Boolean             @default(false) @map("require_card_fingerprint")
+  // Facturation SaaS Palova (offre au membre actif) — Customer Stripe du COMPTE
+  // PLATEFORME (≠ ClubStripeCustomer, qui vit sur les comptes Connect des clubs).
+  platformCustomerId  String?   @map("platform_customer_id")
+  activeMemberCount   Int       @default(0) @map("active_member_count")    // snapshot metering nocturne
+  activeMemberCountAt DateTime? @map("active_member_count_at")
+  billingExempt       Boolean   @default(false) @map("billing_exempt")     // club partenaire exonéré (superadmin)
   // Moyens d'encaissement rapides (boutons 1 clic au comptoir), choisis par le club.
   // Sous-ensemble ordonné de PaymentMethod parmi CASH/CARD/VOUCHER/TRANSFER/MEMBER.
   quickPaymentMethods String[] @default(["CARD", "VOUCHER", "CASH"]) @map("quick_payment_methods")
@@ -331,6 +337,8 @@ model Club {
   subscriptionPlans SubscriptionPlan[]
   subscriptions     Subscription[]
   photos            ClubPhoto[]
+  platformSubscription PlatformSubscription?
+  memberSnapshots      ClubMemberSnapshot[]
 
   @@map("clubs")
 }
@@ -1490,4 +1498,39 @@ model UserBlock {
   @@unique([blockerId, blockedId])
   @@index([blockedId])
   @@map("user_blocks")
+}
+
+/// Abonnement SaaS du club à Palova (Stripe Billing, compte plateforme).
+/// Nom distinct de Subscription (= abonnement d'un JOUEUR à un club).
+model PlatformSubscription {
+  id                   String    @id @default(cuid())
+  clubId               String    @unique @map("club_id")
+  stripeSubscriptionId String    @unique @map("stripe_subscription_id")
+  status               String // miroir Stripe : active, past_due, canceled, trialing, unpaid…
+  tier                 Int    // palier souscrit (1-4)
+  interval             String // 'month' | 'year'
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("platform_subscriptions")
+}
+
+/// Photo mensuelle du nombre de membres actifs d'un club (évaluation de palier).
+/// Base de la règle « montée après 2 mois consécutifs » + graphes de suivi.
+model ClubMemberSnapshot {
+  id            String   @id @default(cuid())
+  clubId        String   @map("club_id")
+  month         String // 'YYYY-MM' (Europe/Paris) — mois écoulé au moment de l'évaluation
+  activeMembers Int      @map("active_members")
+  observedTier  Int      @map("observed_tier")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, month])
+  @@map("club_member_snapshots")
 }
