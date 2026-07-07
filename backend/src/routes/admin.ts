@@ -30,6 +30,9 @@ import { SubscriptionService } from '../services/subscription.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
 import { PresentationService } from '../services/presentation.service';
 import { OnboardingService } from '../services/onboarding.service';
+import { billingState } from '../services/platformBilling/platformBilling.service';
+import { createBillingCheckout, createBillingPortal } from '../services/platformBilling/stripeBilling';
+import { tierFor, tierPriceCents, tierLabel } from '../services/platformBilling/tiers';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -114,6 +117,9 @@ const ERROR_STATUS: Record<string, number> = {
   EMAIL_TYPE_UNKNOWN:     404,
   PHOTO_LIMIT_REACHED:    409,
   PHOTO_NOT_FOUND:        404,
+  ALREADY_SUBSCRIBED:     409,
+  NOTHING_TO_SUBSCRIBE:   409,
+  NO_BILLING_ACCOUNT:     409,
 };
 
 function asString(v: unknown): string {
@@ -1250,6 +1256,63 @@ router.delete('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedR
 // ---- Guide de démarrage (onboarding) ----
 router.get('/onboarding-status', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await onboardingService.getStatus(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
+// ---- Abonnement Palova du club (facturation SaaS, offre au membre actif) ----
+
+router.get('/billing', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const clubId = req.membership!.clubId;
+    const club = await prisma.club.findUnique({
+      where: { id: clubId },
+      select: { activeMemberCount: true, activeMemberCountAt: true, billingExempt: true },
+    });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+    const [subscription, snapshots] = await Promise.all([
+      prisma.platformSubscription.findUnique({ where: { clubId } }),
+      prisma.clubMemberSnapshot.findMany({ where: { clubId }, orderBy: { month: 'desc' }, take: 12 }),
+    ]);
+    const observedTier = tierFor(club.activeMemberCount);
+    const live = subscription && subscription.status !== 'canceled' ? subscription : null;
+    res.json({
+      activeMembers: club.activeMemberCount,
+      countedAt: club.activeMemberCountAt,
+      observedTier,
+      tierLabel: tierLabel(observedTier),
+      monthlyPriceCents: tierPriceCents(observedTier, 'month'),
+      yearlyPriceCents: tierPriceCents(observedTier, 'year'),
+      state: billingState({ billingExempt: club.billingExempt, observedTier, subscription }),
+      subscription: live ? {
+        status: live.status,
+        tier: live.tier,
+        tierLabel: tierLabel(live.tier),
+        interval: live.interval,
+        priceCents: tierPriceCents(live.tier, live.interval as 'month' | 'year'),
+        currentPeriodEnd: live.currentPeriodEnd,
+        cancelAtPeriodEnd: live.cancelAtPeriodEnd,
+      } : null,
+      snapshots: snapshots.map((s) => ({ month: s.month, activeMembers: s.activeMembers, tier: s.observedTier })),
+    });
+  } catch (e) { handleError(e, res, next); }
+});
+
+router.post('/billing/checkout', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { interval, returnUrl } = req.body ?? {};
+    if (interval !== 'month' && interval !== 'year') throw new Error('VALIDATION_ERROR');
+    if (typeof returnUrl !== 'string' || !/^https?:\/\//.test(returnUrl)) throw new Error('VALIDATION_ERROR');
+    const url = await createBillingCheckout(req.membership!.clubId, interval, returnUrl);
+    res.json({ url });
+  } catch (e) { handleError(e, res, next); }
+});
+
+router.post('/billing/portal', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { returnUrl } = req.body ?? {};
+    if (typeof returnUrl !== 'string' || !/^https?:\/\//.test(returnUrl)) throw new Error('VALIDATION_ERROR');
+    const url = await createBillingPortal(req.membership!.clubId, returnUrl);
+    res.json({ url });
+  } catch (e) { handleError(e, res, next); }
 });
 
 export default router;
