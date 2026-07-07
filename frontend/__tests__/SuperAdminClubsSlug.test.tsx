@@ -18,6 +18,7 @@ const club = {
   status: 'ACTIVE', createdAt: '2026-01-01', aliases: ['tout-premier'],
   owners: [{ id: 'u1', email: 'owner@x.fr', firstName: 'O', lastName: 'M' }],
   counts: { adherents: 10, resources: 4 },
+  billing: { activeMembers: 10, observedTier: 0, state: 'FREE', exempt: false, subscribedTier: null },
 };
 
 function renderPage() {

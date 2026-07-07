@@ -3,6 +3,7 @@ import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 
 jest.mock('@/lib/ThemeProvider', () => ({ useTheme: () => ({ th: { accent: '#06c', onAccent: '#fff', surface: '#fff', surface2: '#eee', line: '#ccc', lineStrong: '#bbb', text: '#111', textMute: '#666', textFaint: '#999', ink: '#111', fontUI: 'sans-serif', fontDisplay: 'serif', mode: 'day' } }) }));
 jest.mock('@/lib/api', () => ({ assetUrl: (p: string | null) => p }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 const baseMatch: any = {
   id: 'm1', resourceName: 'Court 1', startTime: new Date(Date.now() + 3600000).toISOString(), endTime: new Date(Date.now() + 7200000).toISOString(),

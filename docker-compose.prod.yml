@@ -54,6 +54,8 @@ services:
       # Stripe Connect (charges directes sur les comptes connectés des clubs).
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      # Stripe Billing plateforme (abonnements SaaS des clubs, /api/billing/webhooks).
+      STRIPE_BILLING_WEBHOOK_SECRET: ${STRIPE_BILLING_WEBHOOK_SECRET}
     volumes:
       # Fichiers uploadés (avatars) — sans volume, perdus à chaque rebuild.
       - backend_uploads:/app/uploads
