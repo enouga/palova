@@ -109,6 +109,16 @@ export default function SuperAdminClubs() {
 
   useEffect(load, [load]);
 
+  async function toggleExempt(c: PlatformClub) {
+    if (!token) return;
+    try {
+      await api.platformSetBillingExempt(c.id, !c.billing.exempt, token);
+      load();
+    } catch {
+      setError("Échec de la mise à jour de l'exonération. Réessayez.");
+    }
+  }
+
   async function applyStatus() {
     if (!pending || !token) return;
     const next = pending.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
@@ -144,6 +154,7 @@ export default function SuperAdminClubs() {
             <th style={{ ...head, textAlign: 'left' }}>Gérant</th>
             <th style={{ ...head, textAlign: 'right' }}>Adhérents</th>
             <th style={{ ...head, textAlign: 'right' }}>Ressources</th>
+            <th style={{ ...head, textAlign: 'left' }}>Billing</th>
             <th style={{ ...head, textAlign: 'left' }}>Statut</th>
             <th style={{ ...head, textAlign: 'right' }}>Actions</th>
           </tr></thead>
@@ -161,11 +172,25 @@ export default function SuperAdminClubs() {
                 <td style={{ ...cell, textAlign: 'right', fontFamily: th.fontMono }}>{c.counts.adherents}</td>
                 <td style={{ ...cell, textAlign: 'right', fontFamily: th.fontMono }}>{c.counts.resources}</td>
                 <td style={cell}>
+                  <span style={{ fontFamily: th.fontMono, fontSize: 12.5 }}>{c.billing.activeMembers}</span>
+                  <span style={{ color: th.textFaint, fontSize: 12 }}> actifs · T{c.billing.observedTier}</span><br />
+                  <span style={{ fontSize: 12, fontWeight: 700, color:
+                    c.billing.state === 'OK' ? th.accent
+                    : c.billing.state === 'PAST_DUE' ? '#c4472e'
+                    : c.billing.state === 'TO_REGULARIZE' ? '#e8804f'
+                    : th.textFaint }}>
+                    {{ EXEMPT: 'Exonéré', FREE: 'Gratuit', OK: 'Actif', TO_REGULARIZE: 'À régulariser', PAST_DUE: 'Impayé' }[c.billing.state]}
+                  </span>
+                </td>
+                <td style={cell}>
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: c.status === 'ACTIVE' ? th.accent : th.textFaint }}>
                     {c.status === 'ACTIVE' ? 'Actif' : 'Suspendu'}
                   </span>
                 </td>
                 <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => toggleExempt(c)} style={{ ...actionBtn, marginRight: 8 }}>
+                    {c.billing.exempt ? 'Rétablir la facturation' : 'Exonérer'}
+                  </button>
                   <button onClick={() => setSlugTarget(c)} style={{ ...actionBtn, marginRight: 8 }}>
                     Changer l&apos;alias
                   </button>

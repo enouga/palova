@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
 import { api, PlatformStats } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { eurosFromCents } from '@/lib/payments';
 
 function Card({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   const { th } = useTheme();
@@ -42,6 +43,10 @@ export default function SuperAdminDashboard() {
           <Card label="Utilisateurs" value={stats.users} />
           <Card label="Réservations" value={stats.reservations} />
           <Card label="Tournois" value={stats.tournaments} />
+          <Card label="MRR" value={eurosFromCents(stats.billing.mrrCents)}
+            sub={`paliers : ${stats.billing.byTier.map((n, i) => `T${i}·${n}`).join('  ')}`} />
+          <Card label="À régulariser" value={stats.billing.toRegularize} sub="clubs au-dessus du gratuit sans abonnement" />
+          <Card label="Impayés" value={stats.billing.pastDue} sub="abonnements en échec de paiement" />
         </div>
       )}
     </div>
