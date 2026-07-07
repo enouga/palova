@@ -87,6 +87,17 @@ it('wiring encaissement : CB dans la caisse → adminAddPayment', async () => {
     expect.objectContaining({ method: 'CARD', amount: 13 }), 'tok'));
 });
 
+it('caisse express : tous les moyens de paiement proposés (au-delà des rapides du club)', async () => {
+  renderPage();
+  const register = await screen.findByTestId('cx-register');
+  await waitFor(() => within(register).getByRole('button', { name: /CB/ }));
+  // club configuré ['CARD','VOUCHER','CASH'] → mais l'express affiche AUSSI Virement + Abo/Membre
+  expect(within(register).getByRole('button', { name: /Espèces/ })).toBeInTheDocument();
+  expect(within(register).getByRole('button', { name: /Ticket CE/ })).toBeInTheDocument();
+  expect(within(register).getByRole('button', { name: /Virement/ })).toBeInTheDocument();
+  expect(within(register).getByRole('button', { name: /Abo/ })).toBeInTheDocument();
+});
+
 it('recherche : masque les non-correspondants de la file', async () => {
   renderPage();
   await screen.findByTestId('cx-queue');

@@ -9,7 +9,7 @@ import { CollectPanel } from '@/components/admin/CollectPanel';
 import { Receipt } from '@/components/admin/Receipt';
 import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
-import { dueCents, toCents, fmtEuros, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
+import { dueCents, toCents, fmtEuros, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS, QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode } from '@/lib/collect';
 import { indexPackagesByUser } from '@/lib/packages';
@@ -283,6 +283,9 @@ export default function AdminEncaissementPage() {
 
   // Moyens d'encaissement rapides configurés par le club (repli sur le défaut).
   const quickMethods = (clubDetail?.quickPaymentMethods?.length ? clubDetail.quickPaymentMethods : DEFAULT_QUICK_METHODS) as PaymentMethod[];
+  // Caisse express : proposer TOUS les moyens de paiement — le(s) moyen(s) rapide(s) du club
+  // d'abord (le 1er reste le bouton primaire), puis les autres moyens manuels en complément.
+  const registerMethods = [...quickMethods, ...QUICK_METHODS.filter((m) => !quickMethods.includes(m))] as PaymentMethod[];
 
   const kpiStat = (label: string, value: string, color: string, sub: string, bar?: number) => (
     <div style={{ padding: '2px 14px', minWidth: 88 }}>
@@ -341,7 +344,7 @@ export default function AdminEncaissementPage() {
             <div data-testid="cx-register" style={{ flex: 1, minWidth: 0, position: 'sticky', top: 12 }}>
               {currentRv ? (
                 <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
-                  members={members} quickMethods={quickMethods} packagesByUser={packagesByUser}
+                  members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
                   clubId={clubId!} token={token!} isDesktop
                   onChanged={onMutated}
                   onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
@@ -366,7 +369,7 @@ export default function AdminEncaissementPage() {
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, padding: '4px 0 12px' }}>‹ Retour à la file</button>
           <div data-testid="cx-register-mobile">
             <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
-              members={members} quickMethods={quickMethods} packagesByUser={packagesByUser}
+              members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
               clubId={clubId!} token={token!} isDesktop={false}
               onChanged={onMutated}
               onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
