@@ -117,7 +117,7 @@ export function MonthCalendar({
               style={{
                 position: 'relative', borderRadius: 12, border: 'none', cursor: 'pointer',
                 minHeight: 'var(--cal-h-min)', maxHeight: 'var(--cal-h-max)', aspectRatio: 'var(--cal-ar)',
-                padding: 'var(--cal-pad)', textAlign: 'left', verticalAlign: 'top',
+                padding: 'var(--cal-pad)', textAlign: 'var(--cal-align)' as 'left', verticalAlign: 'top',
                 background: isSelected ? th.ink : dim ? 'transparent' : th.surface,
                 boxShadow: isSelected ? 'none' : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
                 WebkitTapHighlightColor: 'transparent',
@@ -134,7 +134,9 @@ export function MonthCalendar({
               {reservations.length > 0 && (
                 <span data-marker="reservation"
                   style={{
-                    position: 'absolute', right: 4, bottom: chipBottom,
+                    position: 'absolute', bottom: chipBottom,
+                    left: 'var(--cal-chip-left)', right: 'var(--cal-chip-right)',
+                    transform: 'translateX(var(--cal-chip-tx))',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     minWidth: 'var(--cal-chip)', height: 'var(--cal-chip)', padding: '0 var(--cal-chip-pad)', borderRadius: 999,
                     background: resaColor, color: inkOn(resaColor),

@@ -152,6 +152,9 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   --cal-ribbon: 7px; --cal-knob: 15px;
   --cal-rb1: 6px; --cal-rb2: 15px;
   --cal-cb0: 6px; --cal-cb1: 17px; --cal-cb2: 26px;
+  /* Desktop : numéro top-gauche, pavé-compteur bas-droite (tuiles larges). */
+  --cal-align: left;
+  --cal-chip-left: auto; --cal-chip-right: 4px; --cal-chip-tx: 0px;
 }
 @media (max-width: 520px) {
   .pl-cal-grid {
@@ -161,6 +164,10 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
     --cal-ribbon: 6px; --cal-knob: 13px;
     --cal-rb1: 5px; --cal-rb2: 12px;
     --cal-cb0: 5px; --cal-cb1: 13px; --cal-cb2: 20px;
+    /* Mobile : tuile ≈ carrée → numéro centré ; le pavé-compteur reste dans le
+       coin bas-droite (diagonale du numéro) pour ne pas le percuter sur une
+       case courte. */
+    --cal-align: center;
   }
 }
 
