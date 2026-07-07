@@ -102,52 +102,51 @@ describe('BookingModal — page unique', () => {
     expect(screen.getByText(/24\s*h avant le début/)).toBeInTheDocument();
   });
 
-  it('partie ouverte : applyHoldSetup reçoit partnerUserIds + visibility', async () => {
-    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
-    await screen.findByText('Alice Org');
-    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
-    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
-    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
-      'res-1', 'jwt-token',
-      expect.objectContaining({ partnerUserIds: ['user-2'], visibility: 'PUBLIC' }),
-    ));
-  });
-
-  it('padel : applyHoldSetup reçoit teams + slots (organisateur + partenaire, place tapée)', async () => {
-    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
-    await screen.findByText('Alice Org');
-    // Ajout ciblé : « + » d'une place de l'équipe 1 (la D, l'organisateur occupe la G) → feuille → pick.
-    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
-    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
-    // La feuille d'ajout se referme après le pick (la place visée est libérée).
-    expect(screen.queryByPlaceholderText(/Rechercher un membre/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
-      'res-1', 'jwt-token',
-      expect.objectContaining({
-        teams: expect.objectContaining({ 'user-1': 1, 'user-2': 1 }),
-        slots: expect.objectContaining({ 'user-1': 0, 'user-2': 1 }),
-      }),
-    ));
-  });
-
-  it('propose « Partie ouverte » sur un terrain padel multi-joueurs', async () => {
+  it('padel multi-joueurs : interrupteur « Partie ouverte aux membres » présent, OFF par défaut', async () => {
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
     await screen.findByText(/Créneau bloqué/);
-    expect(await screen.findByRole('button', { name: /Partie ouverte/ })).toBeInTheDocument();
+    const sw = screen.getByRole('switch', { name: /Partie ouverte aux membres/ });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/partenaires s.ajoutent après la confirmation/i)).toBeInTheDocument();
   });
 
-  it('cache « Partie ouverte » sur un terrain non-padel', async () => {
+  it('non-padel : pas d interrupteur « Partie ouverte »', async () => {
     renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
     await screen.findByText(/Créneau bloqué/);
-    expect(screen.queryByRole('button', { name: /Partie ouverte/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /Partie ouverte/ })).not.toBeInTheDocument();
+  });
+
+  it('interrupteur OFF → confirmation sans applyHoldSetup', async () => {
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.confirmReservation).toHaveBeenCalled());
+    expect(api.applyHoldSetup).not.toHaveBeenCalled();
+  });
+
+  it('interrupteur ON → applyHoldSetup PUBLIC, partnerUserIds vide, niveaux de la préférence', async () => {
+    localStorage.setItem('palova:open-match-level', JSON.stringify({ enabled: true, min: 4, max: 6 }));
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('switch', { name: /Partie ouverte aux membres/ }));
+    expect(screen.getByText(/Niveau 4–6 · réglable après confirmation/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
+      'res-1', 'jwt-token',
+      { partnerUserIds: [], visibility: 'PUBLIC', targetLevelMin: 4, targetLevelMax: 6 },
+    ));
+  });
+
+  it('interrupteur ON, préférence « ouverte à tous » → targetLevel null', async () => {
+    localStorage.setItem('palova:open-match-level', JSON.stringify({ enabled: false, min: 3, max: 5 }));
+    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('switch', { name: /Partie ouverte aux membres/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
+    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
+      'res-1', 'jwt-token',
+      { partnerUserIds: [], visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null },
+    ));
   });
 
   it('le timer expiré bascule en erreur', async () => {
@@ -172,7 +171,8 @@ describe('BookingModal — page unique', () => {
     renderModal({ slot: { ...mockSlot, price: '30' }, slug: 'club-demo', maxPlayers: 4,
       format: 'double', sportKey: 'padel', price: '30', stripeActive: true });
     fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
-    expect(screen.getByText(/Votre part/)).toBeInTheDocument();
+    // Regex avec « : » pour cibler « Votre part : 7,50€ » sans capter le titre de section « Votre partie ».
+    expect(screen.getByText(/Votre part :/)).toBeInTheDocument();
     expect(screen.getAllByText(/7,50/).length).toBeGreaterThan(0);
   });
 
@@ -185,40 +185,6 @@ describe('BookingModal — page unique', () => {
     expect(api.cancelReservation).not.toHaveBeenCalled();
   });
 
-  it('partie ouverte, niveau OFF : applyHoldSetup sans targetLevelMin/Max', async () => {
-    mockClub = { levelSystemEnabled: false };
-    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
-    await screen.findByText('Alice Org');
-    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
-    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
-    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalled());
-    const setup = (api.applyHoldSetup as jest.Mock).mock.calls[0][2];
-    expect(setup).not.toHaveProperty('targetLevelMin');
-    expect(setup).not.toHaveProperty('targetLevelMax');
-  });
-
-  it('partie ouverte, niveau ON et limite active : applyHoldSetup avec targetLevelMin/Max', async () => {
-    mockClub = { levelSystemEnabled: true };
-    (api.searchClubMembers as jest.Mock).mockResolvedValue([{ id: 'user-2', firstName: 'Marc', lastName: 'Dupont' }]);
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    // L'aperçu d'équipes n'apparaît qu'une fois l'identité de l'organisateur chargée.
-    await screen.findByText('Alice Org');
-    // Ajout ciblé : « + » d'une place de l'équipe 1 → feuille d'ajout → pick.
-    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 1/ })[0]);
-    fireEvent.click(await screen.findByRole('button', { name: /Marc Dupont/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Partie ouverte/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
-      'res-1', 'jwt-token',
-      expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: expect.any(Number), targetLevelMax: expect.any(Number) }),
-    ));
-  });
-
   it('empreinte requise MAIS carte déjà sur fichier : confirme direct (pas de CGV, pas d étape Stripe)', async () => {
     const onConfirmed = jest.fn();
     renderModal({ requireCardFingerprint: true, hasCardOnFile: true, onConfirmed });
@@ -229,13 +195,6 @@ describe('BookingModal — page unique', () => {
     // Confirme directement, sans paymentSource (pas d'étape Stripe).
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
-  });
-
-  it('partie ouverte sur un terrain padel : le limiteur de niveau s affiche', async () => {
-    mockClub = { levelSystemEnabled: true };
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    fireEvent.click(await screen.findByRole('button', { name: /Partie ouverte/ }));
-    expect(screen.getByText(/Limiter le niveau/)).toBeInTheDocument();
   });
 
   // NB : les parties ouvertes sont désormais padel-only (feat/parties-padel-only, sur main).

@@ -1,22 +1,15 @@
 'use client';
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { api, TimeSlot, Reservation, MemberPackage, ClubMemberSearchResult, MyQuotaStatus, Subscription } from '@/lib/api';
+import { api, TimeSlot, Reservation, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
 import { packageLabel, canCover, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, Theme } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
-import { Btn, Segmented } from '@/components/ui/atoms';
-import { Avatar } from '@/components/ui/Avatar';
-import { colorForSeed } from '@/lib/playerColors';
-import { PartnerSearch } from '@/components/tournament/PartnerSearch';
-import { MatchTeams, MatchPlayerData } from '@/components/match/MatchTeams';
-import { AddPlayerSheet, PickedMember } from '@/components/match/AddPlayerSheet';
-import { LevelChip } from '@/components/player/LevelChip';
-import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
+import { Btn } from '@/components/ui/atoms';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
-import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
+import { loadLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
@@ -180,29 +173,19 @@ export default function BookingModal({
   const [fingerprintForced, setFingerprintForced] = useState(false);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
-  const [partners, setPartners]       = useState<ClubMemberSearchResult[]>([]);
-  const [visibility, setVisibility]   = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
-  // Fourchette de niveau d'une partie ouverte : interrupteur + curseur double, mémorisés.
+  // Interrupteur « Partie ouverte » : seule décision d'organisation restée dans la modale.
+  const [openMatch, setOpenMatch] = useState(false);
+  // Fourchette de niveau d'une partie ouverte : interrupteur + bornes, mémorisés (pré-remplis).
   // Limite ACTIVE par défaut (sauf si un choix mémorisé dit le contraire).
   const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
-  // Répartition d'équipes + places G/D (padel) proposée à la création : indice d'affichage
-  // envoyé en best-effort via applyHoldSetup.teams/slots. `me` = organisateur (identité du préview).
-  const [me, setMe] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null } | null>(null);
-  const [teamsDraft, setTeamsDraft] = useState<Record<string, 1 | 2>>({});
-  const [slotsDraft, setSlotsDraft] = useState<Record<string, number>>({});
-  // Ajout ciblé depuis le terrain (padel) : place visée par la feuille d'ajout.
-  const [addTarget, setAddTarget] = useState<{ team: 1 | 2; slot?: number } | null>(null);
 
-  // Multi-joueurs : ajout de partenaires + partie publique/privée.
+  // Multi-joueurs : l'interrupteur « Partie ouverte » n'apparaît que sur un court padel multi-joueurs.
   const cap = maxPlayers ?? 1;
   const showPartners = !!slug && cap > 1;
   // Parties ouvertes = padel uniquement → l'option « Partie ouverte » n'est offerte que sur un court padel.
   const isPadel = sportKey === 'padel';
-  const nbPlayers = 1 + partners.length;
-  const atCap = nbPlayers >= cap;
-  const spotsLeft = Math.max(0, cap - nbPlayers);
   const euros = (cents: number) => (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2).replace('.', ','));
 
   // Prix du créneau calculé par le backend (slot.price : tarif creux ssi
@@ -210,7 +193,6 @@ export default function BookingModal({
   const totalCents = Math.round(Number(slot.price ?? price) * 100);
   const totalEuros = totalCents / 100;
   const totalPrice = totalCents % 100 === 0 ? String(totalCents / 100) : (totalCents / 100).toFixed(2).replace('.', ',');
-  const perPlayer = euros(Math.floor(totalCents / nbPlayers));
   const durLabel = durationLabel(duration);
 
   // Couverture par abonnement : le créneau est creux ssi slot.offPeak (calculé par le backend,
@@ -223,36 +205,6 @@ export default function BookingModal({
   const shareCents = Math.round(totalCents / capacity);
   const perPerson = euros(shareCents);
 
-  // ── Équipes (padel) ─────────────────────────────────────────────────────────
-  // Côté le moins rempli : Équipe 1 tant qu'il reste de la place (capacity/2), sinon Équipe 2.
-  const nextSide = (draft: Record<string, 1 | 2>): 1 | 2 => {
-    const half = Math.max(1, Math.floor(capacity / 2));
-    const c1 = Object.values(draft).filter((t) => t === 1).length;
-    return c1 < half ? 1 : 2;
-  };
-  const addPartner = (m: ClubMemberSearchResult) => {
-    setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
-    setTeamsDraft((d) => (d[m.id] ? d : { ...d, [m.id]: nextSide(d) }));
-  };
-  // Ajout depuis la feuille : la place tapée impose l'équipe ET l'emplacement (pas de nextSide).
-  const addPartnerTo = (m: PickedMember, team: 1 | 2, slot?: number) => {
-    setPartners((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m]));
-    setTeamsDraft((d) => ({ ...d, [m.id]: team }));
-    if (slot != null) setSlotsDraft((d) => ({ ...d, [m.id]: slot }));
-  };
-  const removePartner = (id: string) => {
-    setPartners((xs) => xs.filter((x) => x.id !== id));
-    setTeamsDraft((d) => { const n = { ...d }; delete n[id]; return n; });
-    setSlotsDraft((d) => { const n = { ...d }; delete n[id]; return n; });
-  };
-  // [organisateur, …partenaires] pour l'aperçu d'équipes (padel). Vide tant que `me` inconnu.
-  const buildPlayers = (): MatchPlayerData[] => {
-    if (!me) return [];
-    return [
-      { userId: me.id, firstName: me.firstName, lastName: me.lastName, avatarUrl: me.avatarUrl, isOrganizer: true, team: (teamsDraft[me.id] ?? 1) as 1 | 2, slot: slotsDraft[me.id] },
-      ...partners.map((p) => ({ userId: p.id, firstName: p.firstName, lastName: p.lastName, level: p.level, team: (teamsDraft[p.id] ?? 1) as 1 | 2, slot: slotsDraft[p.id] })),
-    ];
-  };
   const shareTooSmall = shareCents < 50; // minimum Stripe (0,50 €) → le backend refuse (AMOUNT_TOO_SMALL)
 
   // Le paiement en ligne est-il disponible ? (compte Stripe actif, ou imposé par le club)
@@ -322,24 +274,6 @@ export default function BookingModal({
     }).catch(() => {});
   }, [showPartners, token, levelForSport]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Identité de l'organisateur (padel multi-joueurs) : sert d'ancre à l'aperçu d'équipes.
-  // Best-effort — un échec laisse l'affichage sur les pastilles partenaires classiques.
-  useEffect(() => {
-    if (!showPartners || !isPadel || !token) return;
-    let alive = true;
-    api.getMyProfile(token)
-      .then((p) => { if (alive) setMe({ id: p.id, firstName: p.firstName, lastName: p.lastName, avatarUrl: p.avatarUrl }); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [showPartners, isPadel, token]);
-
-  // L'organisateur occupe l'Équipe 1, place G, par défaut dès que son identité est connue.
-  useEffect(() => {
-    if (!me) return;
-    setTeamsDraft((d) => (d[me.id] ? d : { ...d, [me.id]: 1 }));
-    setSlotsDraft((d) => (d[me.id] != null ? d : { ...d, [me.id]: 0 }));
-  }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
   useEffect(() => {
@@ -380,22 +314,18 @@ export default function BookingModal({
   }, [phase, secondsLeft]);
   const urgent = secondsLeft <= 60;
 
-  // Persiste partenaires / visibilité / niveau sur la réservation PENDING (terrain multi-joueurs),
-  // avant la confirmation — directe (club/abo/carnet) OU Stripe (via beforeSubmit) — pour que les
-  // joueurs soient enregistrés quel que soit le confirmeur (client OU webhook), sans course.
+  // Publie la visibilité « partie ouverte » sur la résa PENDING avant confirmation (directe
+  // OU Stripe via beforeSubmit) — les joueurs, eux, s'ajoutent après coup (écran de succès).
+  // Interrupteur OFF → aucun appel : une réservation naît PRIVATE.
   const persistHoldSetup = async () => {
-    if (!showPartners || !reservation) return;
-    const limiting = visibility === 'PUBLIC' && levelForSport && levelLimited;
+    if (!showPartners || !isPadel || !openMatch || !reservation) return;
+    const limiting = levelForSport && levelLimited;
     await api.applyHoldSetup(reservation.id, token, {
-      partnerUserIds: partners.map((p) => p.id),
-      visibility,
-      ...(visibility === 'PUBLIC' && levelForSport
-        ? { targetLevelMin: limiting ? levelMin : null, targetLevelMax: limiting ? levelMax : null }
-        : {}),
-      // Padel : indice de composition d'équipes + places G/D (best-effort côté serveur).
-      ...(isPadel ? { teams: teamsDraft, slots: slotsDraft } : {}),
+      partnerUserIds: [],
+      visibility: 'PUBLIC',
+      targetLevelMin: limiting ? levelMin : null,
+      targetLevelMax: limiting ? levelMax : null,
     });
-    saveLevelPref({ enabled: levelLimited, min: levelMin, max: levelMax });
   };
 
   const handleConfirm = async () => {
@@ -520,88 +450,28 @@ export default function BookingModal({
               {/* Contenu interactif : visible une fois le créneau sécurisé (phase held). */}
               {phase === 'held' && (
               <>
-              {/* Joueurs / visibilité / niveau — terrain multi-joueurs */}
-              {showPartners && (
+              {/* Partie ouverte — seule décision d'organisation dans la modale (padel multi-joueurs).
+                  Partenaires/équipes/niveau s'organisent sur l'écran de succès, sans timer. */}
+              {showPartners && isPadel && (
                 <div style={{ marginTop: 20 }}>
-                  {sectionLabel('users', isPadel && me
-                    ? <>Joueurs <span style={{ color: th.textFaint, fontWeight: 600 }}>· composez les équipes</span></>
-                    : <>Partenaires <span style={{ color: th.textFaint, fontWeight: 600 }}>· membres du club</span></>)}
-                  {isPadel && me ? (
-                    <div style={{ marginBottom: 8 }}>
-                      <MatchTeams size="sm" editable capacity={capacity} players={buildPlayers()}
-                        onSetTeams={(teams, slots) => { setTeamsDraft(teams); setSlotsDraft(slots); }}
-                        onRemove={(pl) => removePartner(pl.userId)} canRemove={(pl) => !pl.isOrganizer}
-                        onAddToTeam={atCap ? undefined : (team, slot) => setAddTarget({ team, slot })}
-                        activeTarget={addTarget} />
-                    </div>
-                  ) : null}
-                  {addTarget && slug && me && (
-                    <AddPlayerSheet slug={slug} token={token} team={addTarget.team} slot={addTarget.slot}
-                      excludeIds={[me.id, ...partners.map((p) => p.id)]}
-                      onPick={(m) => { addPartnerTo(m, addTarget.team, addTarget.slot); setAddTarget(null); }}
-                      onClose={() => setAddTarget(null)} />
-                  )}
-                  {!(isPadel && me) && partners.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                      {partners.map((p) => {
-                        const c = colorForSeed(p.id);
-                        return (
-                        <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: `${c}22`, border: `1px solid ${c}`, borderRadius: 999, padding: '4px 10px 4px 4px' }}>
-                          <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={24} color={c} />
-                          <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>{p.firstName} {p.lastName}</span>
-                          <LevelChip level={p.level} size="xs" />
-                          <button type="button" onClick={() => removePartner(p.id)} aria-label={`Retirer ${p.firstName} ${p.lastName}`}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
-                        </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {atCap ? (
-                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Terrain complet ({cap} joueurs).</div>
-                  ) : !(isPadel && me) && (
-                    <PartnerSearch slug={slug!} token={token} selected={null}
-                      excludeIds={partners.map((p) => p.id)} keepOpenOnSelect
-                      onSelect={addPartner}
-                      onClear={() => {}} />
-                  )}
-
-                  {isPadel && (
-                  <div style={{ marginTop: 14 }}>
-                    <Segmented<'PRIVATE' | 'PUBLIC'> value={visibility} onChange={setVisibility}
-                      options={[{ value: 'PRIVATE', label: 'Partie privée' }, { value: 'PUBLIC', label: 'Partie ouverte' }]} />
-                    <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-                      {visibility === 'PUBLIC'
-                        ? `Visible par les membres du club, qui peuvent rejoindre (${spotsLeft} place${spotsLeft > 1 ? 's' : ''} restante${spotsLeft > 1 ? 's' : ''}).`
-                        : 'Visible uniquement par vous et vos partenaires.'}
-                    </div>
-
-                    {visibility === 'PUBLIC' && levelForSport && (
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
-                          <button type="button" role="switch" aria-checked={levelLimited} aria-label="Limiter le niveau"
-                            onClick={() => setLevelLimited((v) => !v)}
-                            style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: levelLimited ? th.accent : th.lineStrong, transition: 'background .15s' }}>
-                            <span style={{ position: 'absolute', top: 3, left: levelLimited ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
-                          </button>
-                        </div>
-                        {levelLimited && (
-                          <div style={{ marginTop: 14 }}>
-                            <LevelRangeSlider min={levelMin} max={levelMax}
-                              onChange={(lo, hi) => { setLevelMin(lo); setLevelMax(hi); }} />
-                          </div>
-                        )}
-                      </div>
-                    )}
+                  {sectionLabel('users', 'Votre partie')}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <span style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>Partie ouverte aux membres</span>
+                    <button type="button" role="switch" aria-checked={openMatch} aria-label="Partie ouverte aux membres"
+                      onClick={() => setOpenMatch((v) => !v)}
+                      style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: openMatch ? th.accent : th.lineStrong, transition: 'background .15s', flex: '0 0 auto' }}>
+                      <span style={{ position: 'absolute', top: 3, left: openMatch ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+                    </button>
                   </div>
-                  )}
-
-                  {nbPlayers > 1 && (
-                    <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 10, padding: '7px 11px' }}>
-                      <Icon name="users" size={14} color={th.textMute} />≈ {perPlayer} € par joueur ({nbPlayers} joueurs)
-                    </div>
-                  )}
+                  <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
+                    {openMatch
+                      ? (levelForSport
+                          ? (levelLimited
+                              ? `Niveau ${levelMin}–${levelMax} · réglable après confirmation.`
+                              : 'Ouverte à tous les niveaux · réglable après confirmation.')
+                          : 'Visible et rejoignable par les membres du club.')
+                      : 'Vos partenaires s’ajoutent après la confirmation.'}
+                  </div>
                 </div>
               )}
 
