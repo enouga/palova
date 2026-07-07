@@ -304,6 +304,20 @@ export const api = {
   adminGetOnboardingStatus: (clubId: string, token: string) =>
     request<OnboardingStatus>(`/api/clubs/${clubId}/admin/onboarding-status`, {}, token),
 
+  // --- Abonnement Palova du club (facturation SaaS) ---
+  adminGetBilling: (clubId: string, token: string) =>
+    request<ClubBilling>(`/api/clubs/${clubId}/admin/billing`, {}, token),
+
+  adminBillingCheckout: (clubId: string, interval: 'month' | 'year', returnUrl: string, token: string) =>
+    request<{ url: string }>(`/api/clubs/${clubId}/admin/billing/checkout`, {
+      method: 'POST', body: JSON.stringify({ interval, returnUrl }),
+    }, token),
+
+  adminBillingPortal: (clubId: string, returnUrl: string, token: string) =>
+    request<{ url: string }>(`/api/clubs/${clubId}/admin/billing/portal`, {
+      method: 'POST', body: JSON.stringify({ returnUrl }),
+    }, token),
+
   adminGetMembers: (clubId: string, token: string) =>
     request<Member[]>(`/api/clubs/${clubId}/admin/members`, {}, token),
 
@@ -834,6 +848,11 @@ export const api = {
   platformSetClubStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED', token: string) =>
     request<{ id: string; status: 'ACTIVE' | 'SUSPENDED' }>(`/api/platform/clubs/${id}`, {
       method: 'PATCH', body: JSON.stringify({ status }),
+    }, token),
+
+  platformSetBillingExempt: (id: string, exempt: boolean, token: string) =>
+    request<{ id: string; billingExempt: boolean }>(`/api/platform/clubs/${id}/billing-exempt`, {
+      method: 'PATCH', body: JSON.stringify({ exempt }),
     }, token),
 
   platformChangeClubSlug: (id: string, slug: string, token: string) =>
@@ -2271,6 +2290,41 @@ export interface PlatformStats {
   users: number;
   reservations: number;
   tournaments: number;
+  billing: { mrrCents: number; byTier: number[]; toRegularize: number; pastDue: number };
+}
+
+// --- Abonnement Palova du club (facturation SaaS, offre au membre actif) ---
+
+export type BillingState = 'EXEMPT' | 'FREE' | 'OK' | 'TO_REGULARIZE' | 'PAST_DUE';
+
+export interface ClubBillingSubscription {
+  status: string;
+  tier: number;
+  tierLabel: string;
+  interval: 'month' | 'year';
+  priceCents: number;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+export interface ClubBilling {
+  activeMembers: number;
+  countedAt: string | null;
+  observedTier: number;
+  tierLabel: string;
+  monthlyPriceCents: number;
+  yearlyPriceCents: number;
+  state: BillingState;
+  subscription: ClubBillingSubscription | null;
+  snapshots: { month: string; activeMembers: number; tier: number }[];
+}
+
+export interface PlatformClubBilling {
+  activeMembers: number;
+  observedTier: number;
+  state: BillingState;
+  exempt: boolean;
+  subscribedTier: number | null;
 }
 
 export interface PlatformClub {
@@ -2283,6 +2337,7 @@ export interface PlatformClub {
   createdAt: string;
   owners: { id: string; email: string; firstName: string; lastName: string }[];
   counts: { adherents: number; resources: number };
+  billing: PlatformClubBilling;
 }
 
 export interface CreateClubByPlatformBody {
