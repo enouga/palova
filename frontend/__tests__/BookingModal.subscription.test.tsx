@@ -15,6 +15,7 @@ jest.mock('../lib/api', () => ({
     cancelReservation:  jest.fn(),
     applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
     searchClubMembers:  jest.fn(),
+    getMyReservations:  jest.fn().mockResolvedValue([]),
     getMyRating:        jest.fn().mockResolvedValue(null),
     getClubPage:        jest.fn().mockResolvedValue({}),
   },

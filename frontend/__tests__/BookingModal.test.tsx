@@ -17,6 +17,7 @@ jest.mock('../lib/api', () => ({
     applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
     searchClubMembers:  jest.fn(),
     listClubFriends:    jest.fn().mockResolvedValue([]),
+    getMyReservations:  jest.fn().mockResolvedValue([]),
     getMyRating:        jest.fn().mockResolvedValue(null),
     getMyProfile:       jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Alice', lastName: 'Org', avatarUrl: null }),
     getClubPage:        jest.fn().mockResolvedValue({}),
@@ -79,12 +80,28 @@ describe('BookingModal — page unique', () => {
     expect(screen.getByRole('button', { name: /Fermer/ })).toBeInTheDocument();
   });
 
-  it('confirme (régler au club) → confirmReservation + onConfirmed', async () => {
+  it('confirme (régler au club) → succès dans la feuille, puis « Terminé » → onConfirmed', async () => {
     const onConfirmed = jest.fn();
     renderModal({ onConfirmed });
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
-    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+    expect(await screen.findByText(/Réservation confirmée/)).toBeInTheDocument();
+    expect(onConfirmed).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Terminé/ }));
+    expect(onConfirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 'res-1' }), undefined);
+    expect(api.cancelReservation).not.toHaveBeenCalled();
+  });
+
+  it('après confirmation, le backdrop vaut « Terminé » (aucune annulation)', async () => {
+    const onConfirmed = jest.fn(); const onClose = jest.fn();
+    const { container } = renderModal({ onConfirmed, onClose });
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
+    await screen.findByText(/Réservation confirmée/);
+    // L'overlay est le 1er enfant du conteneur racine fixe, avant la feuille (il porte le onClick).
+    const backdrop = (container.firstElementChild as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onConfirmed).toHaveBeenCalled();
+    expect(api.cancelReservation).not.toHaveBeenCalled();
   });
 
   it('fermer annule le hold', async () => {
@@ -183,7 +200,8 @@ describe('BookingModal — page unique', () => {
     const onConfirmed = jest.fn();
     const { unmount } = renderModal({ onConfirmed });
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+    // La feuille bascule sur l'écran de succès (la résa est confirmée, settled).
+    await screen.findByText(/Réservation confirmée/);
     unmount();
     expect(api.cancelReservation).not.toHaveBeenCalled();
   });
@@ -197,7 +215,9 @@ describe('BookingModal — page unique', () => {
     fireEvent.click(confirmBtn);
     // Confirme directement, sans paymentSource (pas d'étape Stripe).
     await waitFor(() => expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', undefined));
-    await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+    // La feuille bascule sur l'écran de succès ; onConfirmed n'est émis qu'au « Terminé ».
+    fireEvent.click(await screen.findByRole('button', { name: /Terminé/ }));
+    expect(onConfirmed).toHaveBeenCalled();
   });
 
   // NB : les parties ouvertes sont désormais padel-only (feat/parties-padel-only, sur main).

@@ -15,6 +15,7 @@ jest.mock('../lib/api', () => ({
     cancelReservation:  jest.fn(),
     applyHoldSetup:     jest.fn().mockResolvedValue({ id: 'res-1', status: 'PENDING' }),
     searchClubMembers:  jest.fn(),
+    getMyReservations:  jest.fn().mockResolvedValue([]),
     getMyRating:        jest.fn().mockResolvedValue(null),
     getClubPage:        jest.fn().mockResolvedValue({}),
   },
@@ -132,6 +133,8 @@ describe('BookingModal — paiement par carnet', () => {
     );
     // Le carnet couvrant est pré-choisi par défaut → confirmation directe avec « mon solde ».
     fireEvent.click(await screen.findByRole('button', { name: /Confirmer avec mon solde/ }));
+    // L'écran de succès s'affiche ; onConfirmed (avec le résumé du solde) n'est émis qu'au « Terminé ».
+    fireEvent.click(await screen.findByRole('button', { name: /Terminé/ }));
     await waitFor(() => {
       expect(onConfirmed).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'res-1' }),

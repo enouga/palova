@@ -16,6 +16,7 @@ import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
 import { hasAcceptedCgv, rememberCgvAccepted } from '@/lib/cgv';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { BookingSuccess } from '@/components/booking/BookingSuccess';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -152,7 +153,9 @@ export default function BookingModal({
   // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel.
   const levelForSport = levelEnabled && sportHasLevels(sportKey);
 
-  const [phase, setPhase]             = useState<'holding' | 'held' | 'error'>('holding');
+  const [phase, setPhase]             = useState<'holding' | 'held' | 'error' | 'confirmed'>('holding');
+  // Résa confirmée + résumé du paiement (affichage succès) + note pour onConfirmed.
+  const [confirmedInfo, setConfirmedInfo] = useState<{ reservation: Reservation; summary: string; paid?: { label: string } } | null>(null);
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [errorMsg, setErrorMsg]       = useState('');
@@ -355,7 +358,14 @@ export default function BookingModal({
         reservation.id, token, paymentSource ? { paymentSource } : undefined,
       );
       settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
-      onConfirmed(confirmed, usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined);
+      setConfirmedInfo({
+        reservation: confirmed,
+        summary: useSub && cover ? 'Couverte par votre abonnement'
+          : usedPkg ? paidWithLabel(usedPkg, totalEuros)
+          : 'À régler au club',
+        paid: usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined,
+      });
+      setPhase('confirmed');
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setPayExpanded(true); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
@@ -379,6 +389,13 @@ export default function BookingModal({
       try { await api.cancelReservation(r.id, token); } catch { /* cleanup job récupèrera */ }
     }
     onClose();
+  };
+
+  // Fermeture de l'écran de succès (« Terminé » ou backdrop) : c'est ICI que la page
+  // est prévenue — même contrat onConfirmed qu'avant, décalé à la fin de l'organisation.
+  const handleDone = () => {
+    if (!confirmedInfo) return;
+    onConfirmed(confirmedInfo.reservation, confirmedInfo.paid);
   };
 
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
@@ -425,10 +442,10 @@ export default function BookingModal({
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-      <div onClick={handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
+      <div onClick={phase === 'confirmed' ? handleDone : handleClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', animation: 'sp-fade .25s ease' }} />
       <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', boxShadow: '0 14px 50px rgba(0,0,0,0.34)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
-        {/* Barre de timer fine (cachée en phase error) */}
-        {phase !== 'error' && (
+        {/* Barre de timer fine (cachée en phase error / confirmed) */}
+        {phase !== 'error' && phase !== 'confirmed' && (
           <div style={{ height: 4, background: th.surface2 }}>
             <div style={{ height: '100%', width: `${(secondsLeft / HOLD_SECONDS) * 100}%`, background: urgent ? ACCENTS.coral : th.accent, transition: 'width 1s linear' }} />
           </div>
@@ -440,6 +457,14 @@ export default function BookingModal({
               <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.onAccent, background: th.accent, padding: '12px 14px', borderRadius: 12, fontWeight: 600 }}>{errorMsg}</div>
               <div style={{ marginTop: 14 }}><Btn full variant="surface" onClick={onClose}>Fermer</Btn></div>
             </>
+          ) : phase === 'confirmed' && confirmedInfo ? (
+            <BookingSuccess
+              reservationId={confirmedInfo.reservation.id}
+              token={token} summary={confirmedInfo.summary}
+              slot={slot} timezone={timezone} resourceName={resourceName} duration={duration}
+              showPartners={showPartners}
+              onDone={handleDone}
+            />
           ) : (
             <>
               {/* En-tête : pill « créneau bloqué » + chip timer */}
@@ -663,7 +688,14 @@ export default function BookingModal({
                           return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
                         }}
                         confirm={async (ids) => { await api.confirmReservation(reservation.id, token, { ...ids, cgvAccepted }); }}
-                        onSuccess={() => { settled.current = true; onConfirmed(reservation); }}
+                        onSuccess={() => {
+                          settled.current = true;
+                          setConfirmedInfo({
+                            reservation,
+                            summary: (payMode === 'online' && onlineAvailable) ? `Payée en ligne · ${onlineAmountLabel}` : 'À régler au club',
+                          });
+                          setPhase('confirmed');
+                        }}
                         onCancel={handleClose} />
                     </div>
                   ) : (
