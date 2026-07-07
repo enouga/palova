@@ -1,12 +1,12 @@
 import { ContentShell } from '@/components/content/ContentShell';
-import { Markdown } from '@/components/ui/Markdown';
-import { PLATFORM_TARIFS } from '@/lib/platformContent';
+import { PricingContent } from '@/components/platform/PricingContent';
 
 // Tarifs Palova (B2B) — toujours le contenu plateforme, y compris depuis un club.
+// (PLATFORM_TARIFS, la version markdown, reste le repli de /offres sur l'hôte plateforme.)
 export default function TarifsPage() {
   return (
     <ContentShell>
-      <Markdown>{PLATFORM_TARIFS}</Markdown>
+      <PricingContent />
     </ContentShell>
   );
 }
