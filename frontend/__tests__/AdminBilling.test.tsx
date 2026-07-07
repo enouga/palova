@@ -36,11 +36,17 @@ describe('AdminBillingPage', () => {
     (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', slug: 'club', name: 'C', role: 'OWNER' }]);
   });
 
-  it('affiche la jauge, le palier observé et le prix', async () => {
+  it('affiche la jauge, la grille des paliers et le palier courant surligné', async () => {
     render(<AdminBillingPage />);
     await waitFor(() => expect(screen.getByText('180')).toBeInTheDocument());
-    expect(screen.getAllByText(/151 – 400 membres actifs/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/59,00 €/).length).toBeGreaterThan(0);
+    // Grille de prix : les 4 paliers payants + le gratuit
+    expect(screen.getAllByText(/29 €/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/59 €/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/149 €/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Gratuit')).toBeInTheDocument();
+    // Palier observé (t2) mis en avant
+    expect(screen.getByText('Votre palier')).toBeInTheDocument();
+    expect(screen.getByText('151 – 400')).toBeInTheDocument();
   });
 
   it('état à régulariser : bouton Souscrire visible pour OWNER, lance le checkout', async () => {
