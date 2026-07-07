@@ -74,7 +74,13 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
   const settled = due > 0 && remaining <= 0;
   const statuses: SlotStatus[] = isCourt && players > 0 ? slotStatuses(reservation, players, due) : [];
 
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Sélection semée SYNCHRONEMENT dès le 1er rendu (pas via effet) : la caisse peut
+  // être montée à la volée par la page (auto-sélection), et un clic sur un moyen doit
+  // trouver une place déjà cochée. L'effet [rvId] plus bas re-sème au changement de résa.
+  const [selected, setSelected] = useState<Set<number>>(() => {
+    const first = nextSelectable(statuses);
+    return first === null ? new Set() : new Set([first]);
+  });
   const [associatingIndex, setAssociatingIndex] = useState<number | null>(null);
   const [assocBusy, setAssocBusy] = useState(false);
   const [toast, setToast] = useState<UndoBatch | null>(null);

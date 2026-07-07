@@ -99,6 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Au quotidien', color: '#5e93da', items: [
       { href: '/admin/planning',     label: 'Planning',     icon: 'calendar' },
       { href: '/admin/reservations', label: 'Encaissement', icon: 'ticket' },
+      { href: '/admin/encaissement', label: 'Caisse express', icon: 'card' },
       { href: '/admin/caisse',       label: 'Caisse',       icon: 'euro' },
     ] },
     { title: 'Animations & jeu', color: '#e6a93c', items: [
