@@ -82,20 +82,24 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     renderModal({ requireOnlinePayment: true, stripeActive: true });
     // Attendre la phase held (hold automatique au montage)
     await screen.findByText(/Créneau bloqué/);
-    expect(screen.queryByRole('button', { name: /Régler au club/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Payer en ligne/ })).toBeInTheDocument();
+    // Paiement en ligne imposé + pas d'alternative → ligne repliée « Payer en ligne », sans « Régler au club ».
+    expect(screen.queryByText('Régler au club')).not.toBeInTheDocument();
+    expect(screen.getByText('Payer en ligne')).toBeInTheDocument();
   });
 
   it('avenue en ligne masquée quand Stripe inactif et paiement non imposé', async () => {
     renderModal({ stripeActive: false, requireOnlinePayment: false });
     await screen.findByText(/Créneau bloqué/);
-    expect(screen.queryByRole('button', { name: /Payer en ligne/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
+    // Sans Stripe ni alternative → ligne repliée « Régler au club », pas de « Payer en ligne ».
+    expect(screen.queryByText('Payer en ligne')).not.toBeInTheDocument();
+    expect(screen.getByText('Régler au club')).toBeInTheDocument();
   });
 
   it('avenue en ligne visible quand Stripe actif (paiement facultatif)', async () => {
     renderModal({ stripeActive: true });
     await screen.findByText(/Créneau bloqué/);
+    // Défaut replié « Régler au club » ; « changer » déplie les deux avenues.
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
     expect(screen.getByRole('button', { name: /Payer en ligne/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
   });
@@ -105,7 +109,9 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     const tinySlot: TimeSlot = { ...mockSlot, price: '0.40' };
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '0.40' });
     renderModal({ stripeActive: true, slot: tinySlot, price: '0.40' });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
     // L'avenue affiche le message "part trop faible".
     expect(screen.getByText(/trop faible/i)).toBeInTheDocument();
     // Cocher les CGV révèle l'étape Stripe, qui charge le TOTAL (pas la part : < 0,50 €).
@@ -117,7 +123,9 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
   it('en ligne → étape Stripe directe avec le montant par personne', async () => {
     // 40 € / 4 joueurs (padel double) = 10 € par personne (payShare capturé dans createIntent)
     renderModal({ stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'payment');
@@ -126,7 +134,9 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
 
   it('en ligne paie toujours la part par personne (10€ = 40€/4), jamais le total', async () => {
     renderModal({ stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
     // L'avenue montre la part (10 €), pas le total (40 €).
     expect(screen.getByText(/Votre part/)).toBeInTheDocument();
     acceptCgv();
@@ -143,13 +153,12 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     expect(step).toHaveAttribute('data-type', 'setup');
   });
 
-  it('défensif : paiement en ligne imposé mais Stripe inactif → avenue désactivée + note, étape Stripe jamais ouverte', async () => {
+  it('défensif : paiement en ligne imposé mais Stripe inactif → note, confirmation bloquée, étape Stripe jamais ouverte', async () => {
     renderModal({ requireOnlinePayment: true, stripeActive: false });
     await screen.findByText(/Créneau bloqué/);
+    // « Payer en ligne » est l'unique avenue (pas d'alternative → ligne repliée sans « changer ») :
+    // la note d'indisponibilité s'affiche sur la ligne repliée, et la confirmation reste bloquée.
     expect(screen.getByText(/momentanément indisponible/i)).toBeInTheDocument();
-    const onlineBtn = screen.getByRole('button', { name: /Payer en ligne/ });
-    expect(onlineBtn).toBeDisabled();
-    // La rangée d'action est conservée pour ce cas, avec un bouton désactivé.
     const confirm = screen.getByRole('button', { name: /Valider le paiement|Confirmer/ });
     expect(confirm).toBeDisabled();
     expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
@@ -170,7 +179,9 @@ describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', ()
 
   it('paiement en ligne → case CGV ; l\'étape Stripe n\'apparaît qu\'une fois cochée (cgvAccepted=true)', async () => {
     renderModal({ stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
 
     const checkbox = screen.getByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).toBeInTheDocument();
@@ -193,14 +204,17 @@ describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', ()
 
   it('carnet prépayé sélectionné → pas de case CGV', async () => {
     renderModal({ stripeActive: true, packages: [{ id: 'pkg-1', kind: 'ENTRIES', creditsRemaining: 10 } as any] });
-    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 10 entrées/ }));
+    // Le carnet couvrant est pré-choisi par défaut (ligne repliée) → aucune case CGV.
+    await screen.findByText(/Carnet — 10 entrées/);
     expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
   });
 
   it('getClubPage rejette (PAGE_NOT_FOUND) → case CGV TOUJOURS affichée + note de repli, étape gardée', async () => {
     (api.getClubPage as jest.Mock).mockRejectedValue(new Error('PAGE_NOT_FOUND'));
     renderModal({ stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
 
     const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
     expect(checkbox).toBeInTheDocument();
@@ -222,7 +236,9 @@ describe('BookingModal — acceptation des CGV au paiement en ligne (Lot 3)', ()
 
   it('liens CGV / confidentialité = ancres vers les pages publiques (nouvel onglet)', async () => {
     renderModal({ stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
 
     const cgvLink = screen.getByRole('link', { name: /conditions générales de vente/i });
     expect(cgvLink).toHaveAttribute('href', '/cgv');

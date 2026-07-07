@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { api, TimeSlot, Reservation, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
-import { packageLabel, canCover, remainingAfterLabel, paidWithLabel } from '@/lib/packages';
+import { packageLabel, canCover, remainingAfterLabel, paidWithLabel, pickPackageFor } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, Theme } from '@/lib/theme';
@@ -13,7 +13,7 @@ import { loadLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
-import { cancellationPolicyLabel } from '@/lib/reservations';
+import { cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
 import { hasAcceptedCgv, rememberCgvAccepted } from '@/lib/cgv';
 import { Icon, IconName } from '@/components/ui/Icon';
 
@@ -162,7 +162,16 @@ export default function BookingModal({
   const reservationRef                = useRef<Reservation | null>(null); // dernière résa connue (même avant le setState)
   const closedRef                     = useRef(false);   // l'utilisateur a fermé (handleClose) — distinct du faux démontage StrictMode
 
-  const [paySource, setPaySource]     = useState<string | null>(null); // id du package choisi, null = pas de carnet
+  // Défaut intelligent : abonnement couvrant (via l'effet useSub) > premier solde prépayé
+  // capable de couvrir > régler au club. Jamais de carnet pré-choisi si le club impose
+  // le paiement en ligne (l'avenue carnet reste disponible derrière « changer »).
+  const [paySource, setPaySource]     = useState<string | null>(() => {
+    if (requireOnlinePayment) return null;
+    if (coveringSubscription(subscriptions, { sportKey: sportKey ?? '', isOffPeak: slot.offPeak ?? false })) return null;
+    return pickPackageFor(packages, Math.round(Number(slot.price ?? price) * 100))?.id ?? null;
+  });
+  // Ligne de paiement repliée par défaut (« … · changer ») → dépliée révèle les avenues.
+  const [payExpanded, setPayExpanded] = useState(false);
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
   // Acceptation CGV — requise dès qu'on passe par une empreinte/paiement CB Stripe.
   const [cgvAccepted, setCgvAccepted] = useState(false);
@@ -214,6 +223,10 @@ export default function BookingModal({
   // En ligne : toujours la part par personne (sauf si trop faible → total).
   const onlineShare = !shareTooSmall;
   const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
+
+  // Y a-t-il autre chose à choisir que le défaut ? (sinon, pas de bouton « changer »)
+  const avenueCount = (cover ? 1 : 0) + packages.length + (onlineAvailable ? 1 : 0) + (requireOnlinePayment ? 0 : 1);
+  const hasAlternatives = avenueCount > 1;
 
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
@@ -345,7 +358,7 @@ export default function BookingModal({
       onConfirmed(confirmed, usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined);
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
+      if (msg === 'INSUFFICIENT_BALANCE') { setPaySource(null); setPayExpanded(true); setErrorMsg('Solde insuffisant — réglez au club.'); return; }
       if (msg === 'CARD_FINGERPRINT_REQUIRED') { setFingerprintForced(true); setPaySource(null); setErrorMsg(BOOKING_ERRORS.CARD_FINGERPRINT_REQUIRED); return; }
       if (BOOKING_ERRORS[msg] && msg !== 'SLOT_NO_LONGER_AVAILABLE') { setErrorMsg(BOOKING_ERRORS[msg]); return; }
       setPhase('error');
@@ -475,8 +488,8 @@ export default function BookingModal({
                 </div>
               )}
 
-              {/* Quota (compteur du joueur) — pleines & creuses sur une ligne */}
-              {quotaStatus && (
+              {/* Quota : affiché seulement s'il mord (≤ 1 résa possible pour la classe du créneau). */}
+              {quotaStatus && quotaBites(quotaStatus, isOffPeak) && (
                 <div style={{ marginTop: 16 }}>
                   <QuotaStatus status={quotaStatus} compact />
                 </div>
@@ -485,6 +498,34 @@ export default function BookingModal({
               {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
               <div style={{ marginTop: 20 }}>
                 {sectionLabel('card', 'Mode de paiement')}
+                {!payExpanded ? (() => {
+                  // Ligne repliée : le moyen pré-choisi + sa conséquence, bouton « changer » si alternatives.
+                  const selPkg = paySource ? packages.find((p) => p.id === paySource) ?? null : null;
+                  const online = !useSub && !selPkg && payMode === 'online' && onlineAvailable;
+                  const icon: IconName = useSub ? 'bolt' : selPkg ? (selPkg.kind === 'ENTRIES' ? 'ticket' : 'wallet') : online ? 'card' : 'home';
+                  const title = useSub ? 'Couvert par votre abonnement' : selPkg ? packageLabel(selPkg) : online ? 'Payer en ligne' : 'Régler au club';
+                  const desc = useSub && cover ? coverageLabel(cover)
+                    : selPkg ? `Après paiement : ${remainingAfterLabel(selPkg, totalEuros)}`
+                    : online ? (onlineRequiredButUnavailable ? 'Paiement en ligne momentanément indisponible — contactez le club.'
+                        : onlineShare ? `Votre part : ${perPerson}€ · ${totalPrice}€ ÷ ${capacity} joueurs` : `Montant : ${totalPrice}€`)
+                    : requireCardFingerprint ? 'Empreinte de carte (protection no-show) · règlement sur place'
+                    : 'Aucune carte enregistrée · vous réglez sur place';
+                  return (
+                    <div style={{ ...payCard(true), display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px' }}>
+                      <span style={payTile(true)}><Icon name={icon} size={18} color={th.onAccent} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text }}>{title}</span>
+                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 2 }}>{desc}</span>
+                      </span>
+                      {hasAlternatives && (
+                        <button type="button" onClick={() => setPayExpanded(true)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent, padding: 0, flex: '0 0 auto' }}>
+                          changer
+                        </button>
+                      )}
+                    </div>
+                  );
+                })() : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                   {/* Avenue 0 — couverture par abonnement (sélectionnée par défaut si le créneau est couvert). */}
@@ -573,7 +614,7 @@ export default function BookingModal({
                     </div>
                     );
                   })()}
-                </div>
+                </div>) }
               </div>
 
               {/* Conditions d'annulation — toujours affiché */}

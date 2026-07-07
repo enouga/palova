@@ -170,7 +170,10 @@ describe('BookingModal — page unique', () => {
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '30' });
     renderModal({ slot: { ...mockSlot, price: '30' }, slug: 'club-demo', maxPlayers: 4,
       format: 'double', sportKey: 'padel', price: '30', stripeActive: true });
-    fireEvent.click(await screen.findByRole('button', { name: /Payer en ligne/ }));
+    // Défaut replié « Régler au club » ; on déplie (« changer ») pour choisir « Payer en ligne ».
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
     // Regex avec « : » pour cibler « Votre part : 7,50€ » sans capter le titre de section « Votre partie ».
     expect(screen.getByText(/Votre part :/)).toBeInTheDocument();
     expect(screen.getAllByText(/7,50/).length).toBeGreaterThan(0);

@@ -72,9 +72,8 @@ describe('BookingModal — paiement par carnet', () => {
   it('propose le carnet en phase held et confirme avec paymentSource', async () => {
     renderWithPackages([pkg]);
 
-    // Le hold est automatique — attendre que le contenu interactif apparaisse
-    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
+    // Le carnet couvrant est pré-choisi par défaut (défaut intelligent) → CTA « mon solde » d'emblée.
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer avec mon solde/ }));
 
     await waitFor(() => {
       expect(api.confirmReservation).toHaveBeenCalledWith('res-1', 'jwt-token', { paymentSource: { packageId: 'pkg-1' } });
@@ -84,9 +83,10 @@ describe('BookingModal — paiement par carnet', () => {
   it('confirme sans paymentSource si « Régler au club » reste sélectionné', async () => {
     renderWithPackages([pkg]);
 
-    // Attendre la phase held
+    // Le carnet est pré-choisi ; on déplie (« changer ») pour repasser sur « Régler au club ».
     await screen.findByText(/Créneau bloqué/);
-    expect(screen.getByRole('button', { name: /Régler au club/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Régler au club/ }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
 
     await waitFor(() => {
@@ -98,9 +98,8 @@ describe('BookingModal — paiement par carnet', () => {
     (api.confirmReservation as jest.Mock).mockRejectedValueOnce(new Error('INSUFFICIENT_BALANCE'));
     renderWithPackages([pkg]);
 
-    // Attendre la phase held
-    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
+    // Le carnet couvrant est pré-choisi → confirmation directe avec « mon solde ».
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer avec mon solde/ }));
 
     expect(await screen.findByText(/Solde insuffisant/)).toBeInTheDocument();
     // toujours en phase held : le bouton de confirmation standard est revenu
@@ -109,13 +108,16 @@ describe('BookingModal — paiement par carnet', () => {
 
   it('affiche le solde restant projeté à la sélection du carnet', async () => {
     renderWithPackages([pkg]);
-    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
+    // Le carnet couvrant est pré-choisi → la ligne repliée montre déjà le restant projeté.
+    await screen.findByText(/Créneau bloqué/);
     expect(screen.getByText(/il restera 6 entrées/)).toBeInTheDocument();
   });
 
   it('porte-monnaie insuffisant : puce désactivée + mention « solde insuffisant »', async () => {
     renderWithPackages([poorWallet]);
+    // Le porte-monnaie ne couvre pas → défaut « Régler au club » ; on déplie pour voir la puce.
     await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
     expect(screen.getByRole('button', { name: /Porte-monnaie/ })).toBeDisabled();
     expect(screen.getByText(/solde insuffisant/)).toBeInTheDocument();
   });
@@ -128,8 +130,8 @@ describe('BookingModal — paiement par carnet', () => {
           token="jwt-token" packages={[pkg]} onClose={jest.fn()} onConfirmed={onConfirmed} />
       </ThemeProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /Carnet — 7 entrées/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer avec mon solde/ }));
+    // Le carnet couvrant est pré-choisi par défaut → confirmation directe avec « mon solde ».
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmer avec mon solde/ }));
     await waitFor(() => {
       expect(onConfirmed).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'res-1' }),
