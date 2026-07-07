@@ -69,38 +69,8 @@ Hébergement par Hetzner ; paiements par Stripe.
 Cookies strictement nécessaires au fonctionnement du service.
 `;
 
-// ⚠️ Les montants ci-dessous sont le miroir de lib/platformTiers.ts (PLATFORM_TIERS) —
-// garder les deux synchronisés si la grille évolue.
-export const PLATFORM_TARIFS = `# Tarifs Palova
-
-**Un seul plan, tout inclus.** Vous payez selon la taille réelle de votre club — jamais pour des options. Et jamais plus de 149 € HT/mois.
-
-## Comment ça marche
-
-Le prix dépend de vos **membres actifs** : les joueurs qui ont réservé un terrain, participé à un tournoi, un événement ou un cours, ou acheté une formule dans les **90 derniers jours**. Le compteur est visible en permanence dans votre espace d'administration — pas de déclaration, pas de surprise.
-
-## Les paliers (HT)
-
-- **0 – 50 membres actifs — Gratuit, pour toujours.** Toutes les fonctionnalités incluses.
-- **51 – 150 — 29 € / mois** (ou 296 € / an, −15 %)
-- **151 – 400 — 59 € / mois** (ou 602 € / an)
-- **401 – 800 — 99 € / mois** (ou 1 010 € / an)
-- **Plus de 800 — 149 € / mois, plafonné** (ou 1 520 € / an)
-
-Le palier s'ajuste automatiquement à la taille de votre club : à la hausse seulement après deux mois consécutifs au-dessus du seuil, à la baisse dès le premier mois. Aucun prorata en cours de période.
-
-## Tout est inclus, à tous les paliers
-
-Réservations en ligne, page club brandée (PWA installable), gestion des membres, abonnements et carnets, tournois & événements, caisse et comptabilité, encaissement en ligne via votre propre compte Stripe (**0 % de commission Palova**), multi-sports, emails automatiques personnalisables, statistiques.
-
-## Multi-club / franchise
-
-Contactez-nous : **contact@palova.fr**.
-
----
-
-Chaque club encaisse directement ses adhérents via son propre compte Stripe : **les fonds vont au club**, Palova n'est pas intermédiaire de paiement.
-`;
+// Les tarifs Palova vivent dans components/platform/PricingContent.tsx (rendu riche,
+// montants issus de lib/platformTiers.ts) — plus de version markdown.
 
 export interface PlatformFaqEntry { category: string; question: string; answer: string }
 
