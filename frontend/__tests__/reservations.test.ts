@@ -1,4 +1,4 @@
-import { isPlayerChangeOpen, isCancellationOpen, cancellationPolicyLabel } from '@/lib/reservations';
+import { isPlayerChangeOpen, isCancellationOpen, cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
 import { MyReservation } from '@/lib/api';
 
 const NOW = Date.now();
@@ -50,5 +50,24 @@ describe('cancellationPolicyLabel', () => {
     const out = cancellationPolicyLabel(24, false);
     expect(out).toContain('Annulation gratuite jusqu’à 24 h avant le début.');
     expect(out).toContain('Aucun remboursement passé ce délai.');
+  });
+});
+
+describe('quotaBites', () => {
+  it('false sans statut ou sans compteur pour la classe du créneau', () => {
+    expect(quotaBites(null, false)).toBe(false);
+    expect(quotaBites(undefined, true)).toBe(false);
+    expect(quotaBites({ model: 'WEEKLY', peak: { used: 4, limit: 5 }, offPeak: null }, true)).toBe(false);
+  });
+
+  it('true quand il reste ≤ 1 réservation possible pour la classe du créneau', () => {
+    expect(quotaBites({ model: 'WEEKLY', peak: { used: 4, limit: 5 }, offPeak: null }, false)).toBe(true);   // reste 1
+    expect(quotaBites({ model: 'UPCOMING', peak: { used: 5, limit: 5 }, offPeak: null }, false)).toBe(true); // plafond atteint
+    expect(quotaBites({ model: 'WEEKLY', peak: null, offPeak: { used: 2, limit: 3 } }, true)).toBe(true);
+  });
+
+  it('false quand il reste ≥ 2 réservations', () => {
+    expect(quotaBites({ model: 'WEEKLY', peak: { used: 1, limit: 5 }, offPeak: null }, false)).toBe(false);
+    expect(quotaBites({ model: 'WEEKLY', peak: null, offPeak: { used: 0, limit: 2 } }, true)).toBe(false);
   });
 });

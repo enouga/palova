@@ -1,4 +1,4 @@
-import { MyReservation } from './api';
+import { MyReservation, MyQuotaStatus } from './api';
 
 /** Vrai tant qu'on est à plus de `cutoffHours` du début. cutoff 0/absent = jusqu'au début. */
 function withinWindow(startTimeIso: string, cutoffHours: number | undefined, now: number): boolean {
@@ -22,4 +22,14 @@ export function cancellationPolicyLabel(cutoffHours: number | undefined, refunds
   const head = `Annulation gratuite jusqu’à ${cutoffHours} h avant le début.`;
   const tail = refunds ? 'Remboursement si vous annulez à temps.' : 'Aucun remboursement passé ce délai.';
   return `${head} ${tail}`;
+}
+
+/**
+ * Le quota du joueur « mord »-il pour la classification du créneau (pleines/creuses) ?
+ * true ssi le compteur concerné existe et qu'il reste ≤ 1 réservation possible —
+ * c'est le seul cas où BookingModal affiche le compteur (sinon : bruit).
+ */
+export function quotaBites(status: MyQuotaStatus | null | undefined, offPeak: boolean): boolean {
+  const count = offPeak ? status?.offPeak : status?.peak;
+  return !!count && count.limit - count.used <= 1;
 }
