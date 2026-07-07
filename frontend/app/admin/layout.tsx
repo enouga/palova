@@ -122,6 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
+      { href: '/admin/billing',      label: 'Abonnement Palova', icon: 'wallet' },
     ] },
     { title: 'Configuration', color: '#9b8cf0', items: [
       { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
