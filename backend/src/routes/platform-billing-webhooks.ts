@@ -6,6 +6,7 @@ import { prisma } from '../db/prisma';
 import {
   syncSubscription, subscriptionFields, StripeSubscriptionLike,
 } from '../services/platformBilling/stripeBilling';
+import { upsertInvoice, StripeInvoiceLike } from '../services/platformBilling/platformInvoices';
 import { buildSubscribedEmail, sendToOwners } from '../services/platformBilling/billingEmails';
 
 const router = Router();
@@ -80,6 +81,8 @@ router.post('/', async (req: Request, res: Response) => {
             data: { status: event.type === 'invoice.paid' ? 'active' : 'past_due' },
           });
         }
+        // Persiste la facture (historique CA plateforme) — best-effort, dans le try/catch.
+        await upsertInvoice(invoice as StripeInvoiceLike, event.type === 'invoice.paid' ? 'paid' : 'failed');
         break;
       }
     }

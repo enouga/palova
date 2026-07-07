@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 import { prisma } from '../../db/prisma';
-import { tierFor } from './tiers';
+import { tierFor, tierPriceCents } from './tiers';
 import { changeSubscriptionTier, cancelAtPeriodEnd } from './stripeBilling';
 import { buildOverFreeTierEmail, buildTierChangeEmail, sendToOwners } from './billingEmails';
 
@@ -24,6 +24,47 @@ export function billingState(input: {
   if (live && (live.status === 'past_due' || live.status === 'unpaid')) return 'PAST_DUE';
   if (live) return 'OK';
   return input.observedTier === 0 ? 'FREE' : 'TO_REGULARIZE';
+}
+
+/** Un club, projeté sur ce qui suffit à l'agrégation billing (cf. select de getStats). */
+export interface BillingClub {
+  activeMemberCount: number;
+  billingExempt: boolean;
+  platformSubscription: { status: string; tier: number; interval: string } | null;
+}
+
+export interface BillingAggregate {
+  mrrCents: number;
+  byTierObserved: number[];   // [t0..t4] par palier observé
+  byTierSubscribed: number[]; // [t0..t4] par palier souscrit (live seulement)
+  toRegularize: number;
+  pastDue: number;
+}
+
+/**
+ * Agrège l'état de facturation d'une liste de clubs ACTIFS — helper PUR, partagé par
+ * le dashboard (getStats) et la vue d'ensemble facturation (billingOverview).
+ * MRR = somme des abonnements live (annuel ramené au mois). Palier gratuit = pas de MRR.
+ */
+export function aggregateBilling(clubs: BillingClub[]): BillingAggregate {
+  let mrrCents = 0; let toRegularize = 0; let pastDue = 0;
+  const byTierObserved = [0, 0, 0, 0, 0];
+  const byTierSubscribed = [0, 0, 0, 0, 0];
+  for (const c of clubs) {
+    const observedTier = tierFor(c.activeMemberCount);
+    byTierObserved[observedTier]++;
+    const state = billingState({ billingExempt: c.billingExempt, observedTier, subscription: c.platformSubscription });
+    if (state === 'TO_REGULARIZE') toRegularize++;
+    if (state === 'PAST_DUE') pastDue++;
+    const sub = c.platformSubscription;
+    if (sub && sub.status !== 'canceled') {
+      byTierSubscribed[sub.tier]++;
+      mrrCents += sub.interval === 'year'
+        ? Math.round(tierPriceCents(sub.tier, 'year') / 12)
+        : tierPriceCents(sub.tier, 'month');
+    }
+  }
+  return { mrrCents, byTierObserved, byTierSubscribed, toRegularize, pastDue };
 }
 
 export class PlatformBillingService {

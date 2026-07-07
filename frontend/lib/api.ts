@@ -860,6 +860,29 @@ export const api = {
       method: 'POST', body: JSON.stringify({ slug }),
     }, token),
 
+  platformClubDetail: (id: string, token: string) =>
+    request<PlatformClubDetail>(`/api/platform/clubs/${id}`, {}, token),
+
+  platformSetSubscriptionTier: (id: string, body: { tier: number; interval?: 'month' | 'year' }, token: string) =>
+    request<{ tier: number; interval: 'month' | 'year'; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean }>(
+      `/api/platform/clubs/${id}/billing/tier`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  platformCancelSubscription: (id: string, token: string) =>
+    request<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>(
+      `/api/platform/clubs/${id}/billing/cancel`, { method: 'POST' }, token),
+
+  platformResumeSubscription: (id: string, token: string) =>
+    request<{ cancelAtPeriodEnd: boolean }>(`/api/platform/clubs/${id}/billing/resume`, { method: 'POST' }, token),
+
+  platformSyncInvoices: (token: string) =>
+    request<{ clubs: number; imported: number }>('/api/platform/billing/sync-invoices', { method: 'POST' }, token),
+
+  platformBillingOverview: (token: string) =>
+    request<PlatformBillingOverview>('/api/platform/billing/overview', {}, token),
+
+  platformUsageStats: (token: string) =>
+    request<PlatformUsageStats>('/api/platform/stats/usage', {}, token),
+
   platformCreateClub: (body: CreateClubByPlatformBody, token: string) =>
     request<{ club: { id: string; slug: string; name: string }; owner: { id: string; email: string } }>(
       '/api/platform/clubs', { method: 'POST', body: JSON.stringify(body) }, token),
@@ -2319,12 +2342,21 @@ export interface ClubBilling {
   snapshots: { month: string; activeMembers: number; tier: number }[];
 }
 
+export interface PlatformClubSubscriptionSummary {
+  status: string;
+  tier: number;
+  interval: 'month' | 'year';
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
 export interface PlatformClubBilling {
   activeMembers: number;
   observedTier: number;
   state: BillingState;
   exempt: boolean;
   subscribedTier: number | null;
+  subscription?: PlatformClubSubscriptionSummary | null;
 }
 
 export interface PlatformClub {
@@ -2338,6 +2370,82 @@ export interface PlatformClub {
   owners: { id: string; email: string; firstName: string; lastName: string }[];
   counts: { adherents: number; resources: number };
   billing: PlatformClubBilling;
+}
+
+// --- Fiche club détaillée + facturation superadmin (v2) ---
+
+export interface PlatformInvoiceRow {
+  id: string;
+  stripeInvoiceId: string;
+  amountCents: number;
+  currency: string;
+  status: string; // 'paid' | 'open' | 'failed' | 'void' | 'uncollectible'
+  tier: number | null;
+  interval: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  paidAt: string | null;
+  hostedInvoiceUrl: string | null;
+  createdAt: string;
+}
+
+export interface PlatformClubDetail {
+  id: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  address: string;
+  timezone: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  createdAt: string;
+  aliases: string[];
+  owners: { id: string; email: string; firstName: string; lastName: string }[];
+  counts: { adherents: number; resources: number; tournaments: number; events: number };
+  billing: {
+    exempt: boolean;
+    activeMembers: number;
+    countedAt: string | null;
+    observedTier: number;
+    state: BillingState;
+    subscription: {
+      status: string; tier: number; interval: 'month' | 'year'; priceCents: number;
+      currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean;
+    } | null;
+    snapshots: { month: string; activeMembers: number; tier: number }[];
+    invoices: PlatformInvoiceRow[];
+  };
+  activity: {
+    reservationsByMonth: { month: string; count: number }[];
+    reservations30d: number;
+    lastReservationAt: string | null;
+  };
+}
+
+export interface PlatformBillingOverview {
+  mrrCents: number;
+  toRegularize: number;
+  pastDue: number;
+  byTierObserved: number[];
+  byTierSubscribed: number[];
+  revenueByMonth: { month: string; amountCents: number }[];
+  totalCollectedCents: number;
+  invoiceCount: number;
+}
+
+export interface PlatformClubActivity {
+  clubId: string;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  activeMembers: number;
+  reservations30d: number;
+  lastReservationAt: string | null;
+}
+
+export interface PlatformUsageStats {
+  months: string[];
+  growth: { newClubs: number[]; newUsers: number[]; reservations: number[] };
+  activity: PlatformClubActivity[];
 }
 
 export interface CreateClubByPlatformBody {

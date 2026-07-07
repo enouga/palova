@@ -3,8 +3,9 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
 import { slugify, RESERVED_SLUGS } from './club.service';
 import { geocodeAddress } from './geo.service';
-import { tierFor, tierPriceCents } from './platformBilling/tiers';
-import { billingState, BillingState } from './platformBilling/platformBilling.service';
+import { tierFor, tierPriceCents, BillingInterval } from './platformBilling/tiers';
+import { billingState, BillingState, aggregateBilling } from './platformBilling/platformBilling.service';
+import { lastMonths, bucketByMonth } from './platformStats.service';
 
 export interface CreateClubByPlatformParams {
   club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
@@ -40,24 +41,13 @@ export class PlatformService {
     ]);
 
     // MRR (abonnement annuel ramené au mois) + répartition par palier observé.
-    let mrrCents = 0; let toRegularize = 0; let pastDue = 0;
-    const byTier = [0, 0, 0, 0, 0];
-    for (const c of billingClubs) {
-      const observedTier = tierFor(c.activeMemberCount);
-      byTier[observedTier]++;
-      const state = billingState({ billingExempt: c.billingExempt, observedTier, subscription: c.platformSubscription });
-      if (state === 'TO_REGULARIZE') toRegularize++;
-      if (state === 'PAST_DUE') pastDue++;
-      const sub = c.platformSubscription;
-      if (sub && sub.status !== 'canceled') {
-        mrrCents += sub.interval === 'year'
-          ? Math.round(tierPriceCents(sub.tier, 'year') / 12)
-          : tierPriceCents(sub.tier, 'month');
-      }
-    }
+    const agg = aggregateBilling(billingClubs);
     return {
       clubs: { total, active, suspended }, users, reservations, tournaments,
-      billing: { mrrCents, byTier, toRegularize, pastDue },
+      billing: {
+        mrrCents: agg.mrrCents, byTier: agg.byTierObserved,
+        toRegularize: agg.toRegularize, pastDue: agg.pastDue,
+      },
     };
   }
 
@@ -72,11 +62,15 @@ export class PlatformService {
         },
         _count: { select: { clubMemberships: true, resources: true } },
         slugAliases: { select: { slug: true }, orderBy: { createdAt: 'asc' } },
-        platformSubscription: { select: { status: true, tier: true, interval: true } },
+        platformSubscription: {
+          select: { status: true, tier: true, interval: true, currentPeriodEnd: true, cancelAtPeriodEnd: true },
+        },
       },
     });
     return clubs.map((c) => {
       const observedTier = tierFor(c.activeMemberCount);
+      const liveSub = c.platformSubscription && c.platformSubscription.status !== 'canceled'
+        ? c.platformSubscription : null;
       return {
         id: c.id,
         slug: c.slug,
@@ -94,11 +88,124 @@ export class PlatformService {
             billingExempt: c.billingExempt, observedTier, subscription: c.platformSubscription,
           }) as BillingState,
           exempt: c.billingExempt,
-          subscribedTier: c.platformSubscription && c.platformSubscription.status !== 'canceled'
-            ? c.platformSubscription.tier : null,
+          subscribedTier: liveSub ? liveSub.tier : null,
+          subscription: liveSub
+            ? {
+                status: liveSub.status, tier: liveSub.tier, interval: liveSub.interval as BillingInterval,
+                currentPeriodEnd: liveSub.currentPeriodEnd, cancelAtPeriodEnd: liveSub.cancelAtPeriodEnd,
+              }
+            : null,
         },
       };
     });
+  }
+
+  /** Fiche club détaillée pour le drill-down superadmin (/superadmin/clubs/[id]). */
+  async getClubDetail(id: string) {
+    const now = new Date();
+    const club = await prisma.club.findUnique({
+      where: { id },
+      include: {
+        members: {
+          where: { role: 'OWNER' },
+          include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        },
+        slugAliases: { select: { slug: true }, orderBy: { createdAt: 'asc' } },
+        platformSubscription: {
+          select: { status: true, tier: true, interval: true, currentPeriodEnd: true, cancelAtPeriodEnd: true },
+        },
+        _count: { select: { clubMemberships: true, resources: true, tournaments: true, clubEvents: true } },
+      },
+    });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+
+    const months = lastMonths(12, now);
+    const since = new Date(`${months[0]}-01T00:00:00Z`);
+    const since30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [snapshots, invoices, reservations, reservations30d, lastReservation] = await Promise.all([
+      prisma.clubMemberSnapshot.findMany({
+        where: { clubId: id }, orderBy: { month: 'desc' }, take: 12,
+        select: { month: true, activeMembers: true, observedTier: true },
+      }),
+      prisma.platformInvoice.findMany({
+        where: { clubId: id }, orderBy: { createdAt: 'desc' }, take: 24,
+      }),
+      prisma.reservation.findMany({
+        where: { resource: { clubId: id }, status: 'CONFIRMED', createdAt: { gte: since } },
+        select: { createdAt: true },
+      }),
+      prisma.reservation.count({
+        where: { resource: { clubId: id }, status: 'CONFIRMED', createdAt: { gte: since30 } },
+      }),
+      prisma.reservation.findFirst({
+        where: { resource: { clubId: id }, status: 'CONFIRMED' },
+        orderBy: { createdAt: 'desc' }, select: { createdAt: true },
+      }),
+    ]);
+
+    const observedTier = tierFor(club.activeMemberCount);
+    const liveSub = club.platformSubscription && club.platformSubscription.status !== 'canceled'
+      ? club.platformSubscription : null;
+    const counts = bucketByMonth(reservations.map((r) => r.createdAt), months);
+
+    return {
+      id: club.id,
+      slug: club.slug,
+      name: club.name,
+      city: club.city,
+      address: club.address,
+      timezone: club.timezone,
+      status: club.status,
+      createdAt: club.createdAt,
+      aliases: club.slugAliases.map((a) => a.slug),
+      owners: club.members.map((m) => m.user),
+      counts: {
+        adherents: club._count.clubMemberships,
+        resources: club._count.resources,
+        tournaments: club._count.tournaments,
+        events: club._count.clubEvents,
+      },
+      billing: {
+        exempt: club.billingExempt,
+        activeMembers: club.activeMemberCount,
+        countedAt: club.activeMemberCountAt,
+        observedTier,
+        state: billingState({
+          billingExempt: club.billingExempt, observedTier, subscription: club.platformSubscription,
+        }) as BillingState,
+        subscription: liveSub
+          ? {
+              status: liveSub.status,
+              tier: liveSub.tier,
+              interval: liveSub.interval as BillingInterval,
+              priceCents: tierPriceCents(liveSub.tier, liveSub.interval as BillingInterval),
+              currentPeriodEnd: liveSub.currentPeriodEnd,
+              cancelAtPeriodEnd: liveSub.cancelAtPeriodEnd,
+            }
+          : null,
+        snapshots: snapshots.map((s) => ({ month: s.month, activeMembers: s.activeMembers, tier: s.observedTier })),
+        invoices: invoices.map((inv) => ({
+          id: inv.id,
+          stripeInvoiceId: inv.stripeInvoiceId,
+          amountCents: inv.amountCents,
+          currency: inv.currency,
+          status: inv.status,
+          tier: inv.tier,
+          interval: inv.interval,
+          periodStart: inv.periodStart,
+          periodEnd: inv.periodEnd,
+          paidAt: inv.paidAt,
+          hostedInvoiceUrl: inv.hostedInvoiceUrl,
+          createdAt: inv.createdAt,
+        })),
+      },
+      activity: {
+        reservationsByMonth: months.map((month, i) => ({ month, count: counts[i] })),
+        reservations30d,
+        lastReservationAt: lastReservation?.createdAt ?? null,
+      },
+    };
   }
 
   /** Exonère (ou rétablit) la facturation d'un club — clubs partenaires/pilotes. */

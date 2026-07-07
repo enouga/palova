@@ -108,9 +108,101 @@ describe('PlatformService.listClubs', () => {
       aliases: [],
       billing: {
         activeMembers: 180, observedTier: 2, state: 'TO_REGULARIZE',
-        exempt: false, subscribedTier: null,
+        exempt: false, subscribedTier: null, subscription: null,
       },
     });
+  });
+
+  it('expose la subscription détaillée d un club abonné (live)', async () => {
+    prismaMock.club.findMany.mockResolvedValue([
+      {
+        id: 'club-2', slug: 'lyon', name: 'Lyon Padel', city: 'Lyon',
+        status: 'ACTIVE', createdAt: new Date('2026-02-01'),
+        members: [], _count: { clubMemberships: 300, resources: 8 }, slugAliases: [],
+        activeMemberCount: 300, billingExempt: false,
+        platformSubscription: {
+          status: 'active', tier: 2, interval: 'month',
+          currentPeriodEnd: new Date('2026-08-01'), cancelAtPeriodEnd: false,
+        },
+      },
+    ] as any);
+    const clubs = await service.listClubs();
+    expect(clubs[0].billing.subscribedTier).toBe(2);
+    expect(clubs[0].billing.subscription).toEqual({
+      status: 'active', tier: 2, interval: 'month',
+      currentPeriodEnd: new Date('2026-08-01'), cancelAtPeriodEnd: false,
+    });
+  });
+});
+
+describe('PlatformService.getClubDetail', () => {
+  const service = new PlatformService();
+
+  it('rejette CLUB_NOT_FOUND si le club n existe pas', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+    await expect(service.getClubDetail('absent')).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('renvoie identité, billing, historique et activité (12 mois bucketés)', async () => {
+    const now = new Date();
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'club-1', slug: 'arena', name: 'Arena', city: 'Paris', address: '1 rue X',
+      timezone: 'Europe/Paris', status: 'ACTIVE', createdAt: new Date('2026-01-01'),
+      billingExempt: false, activeMemberCount: 200, activeMemberCountAt: new Date('2026-07-01'),
+      members: [{ user: { id: 'u1', email: 'o@x.fr', firstName: 'O', lastName: 'M' } }],
+      slugAliases: [{ slug: 'ancien-arena' }],
+      platformSubscription: {
+        status: 'active', tier: 2, interval: 'month',
+        currentPeriodEnd: new Date('2026-08-01'), cancelAtPeriodEnd: false,
+      },
+      _count: { clubMemberships: 48, resources: 5, tournaments: 3, clubEvents: 2 },
+    } as any);
+    prismaMock.clubMemberSnapshot.findMany.mockResolvedValue([
+      { month: '2026-06', activeMembers: 190, observedTier: 2 },
+    ] as any);
+    prismaMock.platformInvoice.findMany.mockResolvedValue([
+      {
+        id: 'inv-1', stripeInvoiceId: 'in_1', amountCents: 5900, currency: 'eur', status: 'paid',
+        tier: 2, interval: 'month', periodStart: null, periodEnd: null,
+        paidAt: new Date('2026-07-01'), hostedInvoiceUrl: 'https://stripe/i', createdAt: new Date('2026-07-01'),
+      },
+    ] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([{ createdAt: now }] as any);
+    prismaMock.reservation.count.mockResolvedValue(7 as any);
+    prismaMock.reservation.findFirst.mockResolvedValue({ createdAt: now } as any);
+
+    const detail = await service.getClubDetail('club-1');
+    expect(detail.name).toBe('Arena');
+    expect(detail.aliases).toEqual(['ancien-arena']);
+    expect(detail.owners).toEqual([{ id: 'u1', email: 'o@x.fr', firstName: 'O', lastName: 'M' }]);
+    expect(detail.counts).toEqual({ adherents: 48, resources: 5, tournaments: 3, events: 2 });
+    expect(detail.billing.observedTier).toBe(2);
+    expect(detail.billing.subscription).toMatchObject({ tier: 2, interval: 'month', priceCents: 5900 });
+    expect(detail.billing.snapshots).toEqual([{ month: '2026-06', activeMembers: 190, tier: 2 }]);
+    expect(detail.billing.invoices).toHaveLength(1);
+    expect(detail.activity.reservationsByMonth).toHaveLength(12);
+    // La résa « now » tombe dans le dernier bucket.
+    expect(detail.activity.reservationsByMonth[11].count).toBe(1);
+    expect(detail.activity.reservations30d).toBe(7);
+  });
+
+  it('subscription null si l abonnement est canceled', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'club-1', slug: 'arena', name: 'Arena', city: 'Paris', address: '', timezone: 'Europe/Paris',
+      status: 'ACTIVE', createdAt: new Date('2026-01-01'), billingExempt: false,
+      activeMemberCount: 10, activeMemberCountAt: null, members: [], slugAliases: [],
+      platformSubscription: { status: 'canceled', tier: 1, interval: 'month', currentPeriodEnd: null, cancelAtPeriodEnd: false },
+      _count: { clubMemberships: 0, resources: 0, tournaments: 0, clubEvents: 0 },
+    } as any);
+    prismaMock.clubMemberSnapshot.findMany.mockResolvedValue([] as any);
+    prismaMock.platformInvoice.findMany.mockResolvedValue([] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([] as any);
+    prismaMock.reservation.count.mockResolvedValue(0 as any);
+    prismaMock.reservation.findFirst.mockResolvedValue(null as any);
+
+    const detail = await service.getClubDetail('club-1');
+    expect(detail.billing.subscription).toBeNull();
+    expect(detail.billing.state).toBe('FREE');
   });
 });
 

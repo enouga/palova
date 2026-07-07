@@ -38,10 +38,12 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   }
 
   const links = [
-    { href: '/superadmin',          label: 'Tableau de bord', icon: 'grid' as const },
-    { href: '/superadmin/clubs',    label: 'Clubs',           icon: 'indoor' as const },
-    { href: '/superadmin/sports',   label: 'Sports',          icon: 'trophy' as const },
-    { href: '/superadmin/clubs/new', label: 'Créer un club',  icon: 'bolt' as const },
+    { href: '/superadmin',           label: 'Tableau de bord', icon: 'grid' as const },
+    { href: '/superadmin/clubs',     label: 'Clubs',           icon: 'indoor' as const },
+    { href: '/superadmin/billing',   label: 'Facturation',     icon: 'euro' as const },
+    { href: '/superadmin/stats',     label: 'Statistiques',    icon: 'chart' as const },
+    { href: '/superadmin/sports',    label: 'Sports',          icon: 'trophy' as const },
+    { href: '/superadmin/clubs/new', label: 'Créer un club',   icon: 'bolt' as const },
   ];
 
   return (
@@ -60,7 +62,9 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {links.map((l) => {
-            const active = pathname === l.href;
+            // La fiche /superadmin/clubs/[id] allume « Clubs » ; /clubs/new son propre item.
+            const active = pathname === l.href
+              || (l.href !== '/superadmin' && l.href !== '/superadmin/clubs/new' && pathname.startsWith(l.href + '/'));
             return (
               <Link key={l.href} href={l.href} style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10,

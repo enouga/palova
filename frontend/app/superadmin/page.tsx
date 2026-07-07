@@ -4,17 +4,7 @@ import { useAuth } from '@/lib/useAuth';
 import { api, PlatformStats } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { eurosFromCents } from '@/lib/payments';
-
-function Card({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
-  const { th } = useTheme();
-  return (
-    <div style={{ background: th.bgElev, border: `1px solid ${th.line}`, borderRadius: 14, padding: '18px 20px' }}>
-      <div style={{ fontSize: 12.5, color: th.textMute, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 34, fontWeight: 700, color: th.text, fontFamily: th.fontMono, marginTop: 6 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12.5, color: th.textFaint, marginTop: 4 }}>{sub}</div>}
-    </div>
-  );
-}
+import { KpiCard } from '@/components/superadmin/KpiCard';
 
 export default function SuperAdminDashboard() {
   const { th } = useTheme();
@@ -39,14 +29,14 @@ export default function SuperAdminDashboard() {
         <div style={{ color: th.textFaint, fontFamily: th.fontUI }}>Chargement…</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-          <Card label="Clubs" value={stats.clubs.total} sub={`${stats.clubs.active} actifs · ${stats.clubs.suspended} suspendus`} />
-          <Card label="Utilisateurs" value={stats.users} />
-          <Card label="Réservations" value={stats.reservations} />
-          <Card label="Tournois" value={stats.tournaments} />
-          <Card label="MRR" value={eurosFromCents(stats.billing.mrrCents)}
-            sub={`paliers : ${stats.billing.byTier.map((n, i) => `T${i}·${n}`).join('  ')}`} />
-          <Card label="À régulariser" value={stats.billing.toRegularize} sub="clubs au-dessus du gratuit sans abonnement" />
-          <Card label="Impayés" value={stats.billing.pastDue} sub="abonnements en échec de paiement" />
+          <KpiCard label="Clubs" value={stats.clubs.total} sub={`${stats.clubs.active} actifs · ${stats.clubs.suspended} suspendus`} href="/superadmin/clubs" />
+          <KpiCard label="Utilisateurs" value={stats.users} />
+          <KpiCard label="Réservations" value={stats.reservations} href="/superadmin/stats" />
+          <KpiCard label="Tournois" value={stats.tournaments} />
+          <KpiCard label="MRR" value={eurosFromCents(stats.billing.mrrCents)}
+            sub={`paliers : ${stats.billing.byTier.map((n, i) => `T${i}·${n}`).join('  ')}`} href="/superadmin/billing" />
+          <KpiCard label="À régulariser" value={stats.billing.toRegularize} sub="clubs au-dessus du gratuit sans abonnement" href="/superadmin/billing" />
+          <KpiCard label="Impayés" value={stats.billing.pastDue} sub="abonnements en échec de paiement" href="/superadmin/billing" />
         </div>
       )}
     </div>

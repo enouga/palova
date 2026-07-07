@@ -339,6 +339,7 @@ model Club {
   photos            ClubPhoto[]
   platformSubscription PlatformSubscription?
   memberSnapshots      ClubMemberSnapshot[]
+  platformInvoices     PlatformInvoice[]
 
   @@map("clubs")
 }
@@ -1533,4 +1534,29 @@ model ClubMemberSnapshot {
 
   @@unique([clubId, month])
   @@map("club_member_snapshots")
+}
+
+/// Facture SaaS Stripe d'un club — miroir local des invoices du compte plateforme.
+/// Alimentée par le webhook (invoice.paid/payment_failed) + synchro superadmin.
+/// Le webhook ne persistant que le statut de l'abonnement, cette table donne
+/// l'historique fiable du CA encaissé pour les stats plateforme.
+model PlatformInvoice {
+  id               String    @id @default(cuid())
+  clubId           String    @map("club_id")
+  stripeInvoiceId  String    @unique @map("stripe_invoice_id")
+  amountCents      Int       @map("amount_cents")
+  currency         String    @default("eur")
+  status           String // 'paid' | 'open' | 'failed' | 'void' | 'uncollectible'
+  tier             Int?
+  interval         String? // 'month' | 'year'
+  periodStart      DateTime? @map("period_start")
+  periodEnd        DateTime? @map("period_end")
+  paidAt           DateTime? @map("paid_at")
+  hostedInvoiceUrl String?   @map("hosted_invoice_url")
+  createdAt        DateTime  @default(now()) @map("created_at") // = `created` Stripe, posé explicitement
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@map("platform_invoices")
 }

@@ -183,12 +183,18 @@ export async function syncSubscription(clubId: string, sub: StripeSubscriptionLi
   });
 }
 
-/** Change le palier d'un abonnement — SANS prorata : effectif à la prochaine facture. */
-export async function changeSubscriptionTier(stripeSubscriptionId: string, newTier: number): Promise<void> {
+/**
+ * Change le palier (et éventuellement la cadence) d'un abonnement — SANS prorata :
+ * effectif à la prochaine facture. `newInterval` absent = cadence courante conservée
+ * (comportement historique du cron mensuel, rétro-compatible).
+ */
+export async function changeSubscriptionTier(
+  stripeSubscriptionId: string, newTier: number, newInterval?: BillingInterval,
+): Promise<void> {
   const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
   const item = sub.items.data[0];
   const parsed = tierFromLookupKey(item.price.lookup_key ?? null);
-  const interval: BillingInterval = parsed?.interval ?? 'month';
+  const interval: BillingInterval = newInterval ?? parsed?.interval ?? 'month';
   const prices = await ensurePlatformPrices();
   await stripe.subscriptions.update(stripeSubscriptionId, {
     items: [{ id: item.id, price: prices[priceLookupKey(newTier, interval)] }],
@@ -199,4 +205,9 @@ export async function changeSubscriptionTier(stripeSubscriptionId: string, newTi
 /** Programme l'annulation à échéance (retour au palier gratuit). */
 export async function cancelAtPeriodEnd(stripeSubscriptionId: string): Promise<void> {
   await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: true });
+}
+
+/** Annule la programmation d'arrêt à échéance (réactivation d'un abonnement). */
+export async function resumeAtPeriodEnd(stripeSubscriptionId: string): Promise<void> {
+  await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: false });
 }

@@ -17,6 +17,7 @@ jest.mock('../../db/stripe', () => ({ stripe: stripeMock }));
 
 import {
   subscriptionFields, createBillingCheckout, ensurePlatformPrices, syncSubscription,
+  changeSubscriptionTier, resumeAtPeriodEnd,
 } from '../platformBilling/stripeBilling';
 
 beforeEach(() => {
@@ -111,5 +112,36 @@ describe('createBillingCheckout', () => {
   it('refuse si palier observé = 0', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ activeMemberCount: 10, platformCustomerId: 'cus_1', members: [] } as any);
     await expect(createBillingCheckout('club-1', 'month', 'https://x')).rejects.toThrow('NOTHING_TO_SUBSCRIBE');
+  });
+});
+
+describe('changeSubscriptionTier', () => {
+  beforeEach(() => {
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_1', items: { data: [{ id: 'si_1', price: { lookup_key: 'palova_t2_month' } }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({});
+  });
+
+  it('conserve la cadence courante sans newInterval', async () => {
+    await changeSubscriptionTier('sub_1', 3);
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith('sub_1', expect.objectContaining({
+      items: [{ id: 'si_1', price: 'price_palova_t3_month' }], proration_behavior: 'none',
+    }));
+  });
+
+  it('bascule sur la cadence annuelle avec newInterval=year', async () => {
+    await changeSubscriptionTier('sub_1', 3, 'year');
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith('sub_1', expect.objectContaining({
+      items: [{ id: 'si_1', price: 'price_palova_t3_year' }],
+    }));
+  });
+});
+
+describe('resumeAtPeriodEnd', () => {
+  it('remet cancel_at_period_end à false', async () => {
+    stripeMock.subscriptions.update.mockResolvedValue({});
+    await resumeAtPeriodEnd('sub_1');
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith('sub_1', { cancel_at_period_end: false });
   });
 });

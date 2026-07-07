@@ -30,6 +30,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   prismaMock.platformSubscription.upsert.mockResolvedValue({} as any);
   prismaMock.platformSubscription.updateMany.mockResolvedValue({ count: 1 } as any);
+  prismaMock.club.findFirst.mockResolvedValue({ id: 'club-1' } as any); // résolution facture par customer
+  prismaMock.platformInvoice.upsert.mockResolvedValue({} as any);
 });
 
 describe('POST /api/billing/webhooks', () => {
@@ -65,10 +67,10 @@ describe('POST /api/billing/webhooks', () => {
     expect(prismaMock.platformSubscription.upsert).toHaveBeenCalled();
   });
 
-  it('invoice.payment_failed → statut past_due', async () => {
+  it('invoice.payment_failed → statut past_due + facture persistée (failed)', async () => {
     mockConstructEvent.mockReturnValue({
       type: 'invoice.payment_failed',
-      data: { object: { subscription: 'sub_1' } },
+      data: { object: { id: 'in_9', subscription: 'sub_1', customer: 'cus_1', amount_due: 5900, created: 1 } },
     });
     const res = await request(app).post(URL).set('stripe-signature', 'sig').send({});
     expect(res.status).toBe(200);
@@ -76,6 +78,26 @@ describe('POST /api/billing/webhooks', () => {
       where: { stripeSubscriptionId: 'sub_1' },
       data: { status: 'past_due' },
     });
+    expect(prismaMock.platformInvoice.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { stripeInvoiceId: 'in_9' },
+    }));
+    const arg = prismaMock.platformInvoice.upsert.mock.calls[0][0] as any;
+    expect(arg.create).toMatchObject({ status: 'failed', amountCents: 5900 });
+  });
+
+  it('invoice.paid → facture persistée (paid)', async () => {
+    mockConstructEvent.mockReturnValue({
+      type: 'invoice.paid',
+      data: { object: { id: 'in_10', subscription: 'sub_1', customer: 'cus_1', amount_paid: 5900, status: 'paid', created: 1,
+        lines: { data: [{ price: { lookup_key: 'palova_t2_month' } }] } } },
+    });
+    const res = await request(app).post(URL).set('stripe-signature', 'sig').send({});
+    expect(res.status).toBe(200);
+    expect(prismaMock.platformSubscription.updateMany).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub_1' }, data: { status: 'active' },
+    });
+    const arg = prismaMock.platformInvoice.upsert.mock.calls[0][0] as any;
+    expect(arg.create).toMatchObject({ status: 'paid', tier: 2, amountCents: 5900 });
   });
 
   it('événement inconnu → 200 sans effet', async () => {
