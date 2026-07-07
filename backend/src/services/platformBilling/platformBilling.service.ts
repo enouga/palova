@@ -1,5 +1,8 @@
+import { DateTime } from 'luxon';
 import { prisma } from '../../db/prisma';
 import { tierFor } from './tiers';
+import { changeSubscriptionTier, cancelAtPeriodEnd } from './stripeBilling';
+import { buildOverFreeTierEmail, buildTierChangeEmail, sendToOwners } from './billingEmails';
 
 /** Fenêtre glissante de la métrique « membre actif ». */
 export const ACTIVE_WINDOW_DAYS = 90;
@@ -94,6 +97,102 @@ export class PlatformBillingService {
     for (const club of clubs) {
       try { await this.refreshActiveMemberCount(club.id, now); }
       catch (err) { console.error(`[billing] refresh ${club.slug}:`, err); }
+    }
+  }
+
+  /**
+   * Évaluation mensuelle d'un club (appelée le 1er du mois) : snapshot du mois écoulé
+   * + règles de palier. Montée = 2 mois consécutifs au-dessus ; descente = dès 1 mois ;
+   * descente à 0 = annulation à échéance ; sans abonnement et palier ≥ 1 = relance.
+   * Renvoie l'action décidée (pour les tests et les logs).
+   */
+  async evaluateClub(
+    club: { id: string; name: string; slug: string; billingExempt: boolean },
+    now: Date,
+  ): Promise<'none' | 'remind' | 'pending_upgrade' | 'upgrade' | 'downgrade' | 'cancel'> {
+    const paris = DateTime.fromJSDate(now, { zone: 'Europe/Paris' });
+    const month = paris.minus({ months: 1 }).toFormat('yyyy-LL');     // mois écoulé
+    const prevMonth = paris.minus({ months: 2 }).toFormat('yyyy-LL');
+
+    const activeMembers = await this.countActiveMembers(club.id, now);
+    const observedTier = tierFor(activeMembers);
+    await prisma.clubMemberSnapshot.upsert({
+      where: { clubId_month: { clubId: club.id, month } },
+      update: { activeMembers, observedTier },
+      create: { clubId: club.id, month, activeMembers, observedTier },
+    });
+    // Rafraîchit aussi la jauge vivante (le nocturne le fait déjà, mais autant être exact).
+    await prisma.club.update({
+      where: { id: club.id },
+      data: { activeMemberCount: activeMembers, activeMemberCountAt: now },
+    });
+
+    if (club.billingExempt) return 'none';
+
+    const sub = await prisma.platformSubscription.findUnique({ where: { clubId: club.id } });
+    const live = sub && sub.status !== 'canceled' ? sub : null;
+
+    if (!live) {
+      if (observedTier === 0) return 'none';
+      await sendToOwners(club.id, buildOverFreeTierEmail({
+        clubName: club.name, slug: club.slug, activeMembers, observedTier,
+      }));
+      return 'remind';
+    }
+
+    if (observedTier === live.tier) return 'none';
+    const interval = live.interval as 'month' | 'year';
+
+    if (observedTier < live.tier) {
+      if (observedTier === 0) {
+        await cancelAtPeriodEnd(live.stripeSubscriptionId);
+        await prisma.platformSubscription.update({
+          where: { clubId: club.id }, data: { cancelAtPeriodEnd: true },
+        });
+        await sendToOwners(club.id, buildTierChangeEmail({
+          clubName: club.name, slug: club.slug, fromTier: live.tier, toTier: 0, interval,
+        }));
+        return 'cancel';
+      }
+      await changeSubscriptionTier(live.stripeSubscriptionId, observedTier);
+      await prisma.platformSubscription.update({
+        where: { clubId: club.id }, data: { tier: observedTier },
+      });
+      await sendToOwners(club.id, buildTierChangeEmail({
+        clubName: club.name, slug: club.slug, fromTier: live.tier, toTier: observedTier, interval,
+      }));
+      return 'downgrade';
+    }
+
+    // Montée : exige que le mois PRÉCÉDENT ait déjà été au-dessus du palier souscrit.
+    const prev = await prisma.clubMemberSnapshot.findUnique({
+      where: { clubId_month: { clubId: club.id, month: prevMonth } },
+    });
+    if (!prev || prev.observedTier <= live.tier) return 'pending_upgrade';
+
+    await changeSubscriptionTier(live.stripeSubscriptionId, observedTier);
+    await prisma.platformSubscription.update({
+      where: { clubId: club.id }, data: { tier: observedTier },
+    });
+    await sendToOwners(club.id, buildTierChangeEmail({
+      clubName: club.name, slug: club.slug, fromTier: live.tier, toTier: observedTier, interval,
+    }));
+    return 'upgrade';
+  }
+
+  /** Cron mensuel : évalue tous les clubs ACTIVE (un échec n'arrête pas la boucle). */
+  async runMonthlyEvaluation(now: Date): Promise<void> {
+    const clubs = await prisma.club.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, slug: true, billingExempt: true },
+    });
+    for (const club of clubs) {
+      try {
+        const action = await this.evaluateClub(club, now);
+        if (action !== 'none') console.log(`[billing] ${club.slug}: ${action}`);
+      } catch (err) {
+        console.error(`[billing] evaluation ${club.slug}:`, err);
+      }
     }
   }
 }

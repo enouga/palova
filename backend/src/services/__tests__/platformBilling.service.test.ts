@@ -1,5 +1,19 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+
+jest.mock('../platformBilling/stripeBilling', () => ({
+  changeSubscriptionTier: jest.fn().mockResolvedValue(undefined),
+  cancelAtPeriodEnd: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../platformBilling/billingEmails', () => ({
+  buildOverFreeTierEmail: jest.fn().mockReturnValue({ subject: 's', html: 'h', text: 't' }),
+  buildTierChangeEmail: jest.fn().mockReturnValue({ subject: 's', html: 'h', text: 't' }),
+  buildSubscribedEmail: jest.fn().mockReturnValue({ subject: 's', html: 'h', text: 't' }),
+  sendToOwners: jest.fn().mockResolvedValue(undefined),
+}));
+
+import { changeSubscriptionTier, cancelAtPeriodEnd } from '../platformBilling/stripeBilling';
+import { sendToOwners } from '../platformBilling/billingEmails';
 import {
   PlatformBillingService, billingState, ACTIVE_WINDOW_DAYS,
 } from '../platformBilling/platformBilling.service';
@@ -82,5 +96,107 @@ describe('refreshActiveMemberCount', () => {
       where: { id: 'club-1' },
       data: { activeMemberCount: 1, activeMemberCountAt: NOW },
     });
+  });
+});
+
+describe('evaluateClub (règles de palier)', () => {
+  const CLUB = { id: 'club-1', name: 'Club', slug: 'club', billingExempt: false };
+  // Évaluation du 2026-08-01 → snapshot du mois écoulé '2026-07', mois précédent '2026-06'.
+  const EVAL_NOW = new Date('2026-08-01T02:30:00Z');
+
+  function mockCount(n: number) {
+    jest.spyOn(service, 'countActiveMembers').mockResolvedValue(n);
+  }
+  function mockSub(sub: { status: string; tier: number; stripeSubscriptionId?: string; interval?: string } | null) {
+    prismaMock.platformSubscription.findUnique.mockResolvedValue(
+      sub ? { stripeSubscriptionId: 'sub_1', interval: 'month', cancelAtPeriodEnd: false, ...sub } as any : null,
+    );
+  }
+  function mockPrevSnapshot(observedTier: number | null) {
+    prismaMock.clubMemberSnapshot.findUnique.mockResolvedValue(
+      observedTier === null ? null : ({ observedTier } as any),
+    );
+  }
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    jest.clearAllMocks();
+    prismaMock.clubMemberSnapshot.upsert.mockResolvedValue({} as any);
+    prismaMock.platformSubscription.update.mockResolvedValue({} as any);
+    prismaMock.club.update.mockResolvedValue({} as any);
+  });
+
+  it('écrit le snapshot du mois écoulé (upsert idempotent)', async () => {
+    mockCount(60); mockSub(null); mockPrevSnapshot(null);
+    await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(prismaMock.clubMemberSnapshot.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { clubId_month: { clubId: 'club-1', month: '2026-07' } },
+      create: expect.objectContaining({ activeMembers: 60, observedTier: 1 }),
+    }));
+  });
+
+  it('exempt → snapshot mais aucune action', async () => {
+    mockCount(500); mockSub(null); mockPrevSnapshot(4);
+    const action = await service.evaluateClub({ ...CLUB, billingExempt: true }, EVAL_NOW);
+    expect(action).toBe('none');
+    expect(sendToOwners).not.toHaveBeenCalled();
+  });
+
+  it('sans abonnement et palier ≥ 1 → relance email', async () => {
+    mockCount(60); mockSub(null); mockPrevSnapshot(null);
+    const action = await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(action).toBe('remind');
+    expect(sendToOwners).toHaveBeenCalledWith('club-1', expect.anything());
+  });
+
+  it('sans abonnement et palier 0 → rien', async () => {
+    mockCount(30); mockSub(null); mockPrevSnapshot(null);
+    expect(await service.evaluateClub(CLUB, EVAL_NOW)).toBe('none');
+  });
+
+  it('montée : 1er mois au-dessus → pending (pas de swap)', async () => {
+    mockCount(200); mockSub({ status: 'active', tier: 1 }); mockPrevSnapshot(1);
+    const action = await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(action).toBe('pending_upgrade');
+    expect(changeSubscriptionTier).not.toHaveBeenCalled();
+  });
+
+  it('montée : 2 mois consécutifs au-dessus → swap + email + maj DB', async () => {
+    mockCount(200); mockSub({ status: 'active', tier: 1 }); mockPrevSnapshot(2);
+    const action = await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(action).toBe('upgrade');
+    expect(changeSubscriptionTier).toHaveBeenCalledWith('sub_1', 2);
+    expect(prismaMock.platformSubscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { clubId: 'club-1' }, data: { tier: 2 },
+    }));
+    expect(sendToOwners).toHaveBeenCalled();
+  });
+
+  it('descente : dès 1 évaluation en dessous → swap', async () => {
+    mockCount(100); mockSub({ status: 'active', tier: 2 }); mockPrevSnapshot(2);
+    const action = await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(action).toBe('downgrade');
+    expect(changeSubscriptionTier).toHaveBeenCalledWith('sub_1', 1);
+  });
+
+  it('descente à 0 → annulation à échéance', async () => {
+    mockCount(30); mockSub({ status: 'active', tier: 1 }); mockPrevSnapshot(1);
+    const action = await service.evaluateClub(CLUB, EVAL_NOW);
+    expect(action).toBe('cancel');
+    expect(cancelAtPeriodEnd).toHaveBeenCalledWith('sub_1');
+    expect(prismaMock.platformSubscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { cancelAtPeriodEnd: true },
+    }));
+  });
+
+  it('palier stable → aucune action', async () => {
+    mockCount(200); mockSub({ status: 'active', tier: 2 }); mockPrevSnapshot(2);
+    expect(await service.evaluateClub(CLUB, EVAL_NOW)).toBe('none');
+    expect(changeSubscriptionTier).not.toHaveBeenCalled();
+  });
+
+  it('abonnement canceled = comme sans abonnement', async () => {
+    mockCount(60); mockSub({ status: 'canceled', tier: 1 }); mockPrevSnapshot(null);
+    expect(await service.evaluateClub(CLUB, EVAL_NOW)).toBe('remind');
   });
 });
