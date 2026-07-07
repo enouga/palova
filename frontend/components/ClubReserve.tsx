@@ -16,7 +16,7 @@ import { bookingWindow } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { SportPicker } from '@/components/reserve/SportPicker';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, inkOn } from '@/lib/theme';
 import { splitPastSlots, scarcityLabel, RESERVE_VIEW_KEY, type ReserveView } from '@/lib/reserveView';
 import { ViewToggle } from '@/components/reserve/ViewToggle';
 import { SportGrid } from '@/components/reserve/SportGrid';
@@ -297,9 +297,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                       {items.map(({ resource, slots }) => {
                         const ct = coverageType(resource.attributes?.coverage);
                         return (
-                          <div key={resource.id} style={{ background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                              <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{resource.name}</span>
+                          <div key={resource.id} style={{ background: th.surface, borderRadius: 20, padding: '15px 17px 16px', boxShadow: th.shadow }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                              <span style={{ fontFamily: th.fontUI, fontWeight: 750, fontSize: 16.5, color: th.text, letterSpacing: '-0.2px' }}>{resource.name}</span>
                               <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
                               {resource.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
                               {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
@@ -307,7 +307,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 <span title="Surface" style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{resource.attributes.surface}</span>
                               )}
                               <span style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                                <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{Number(resource.price)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500 }}> / créneau</span></span>
+                                <span style={{ fontFamily: th.fontDisplay, fontWeight: 750, fontSize: 21, color: th.text, letterSpacing: '-0.5px' }}>{Number(resource.price)}€<span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute, fontWeight: 500, letterSpacing: 0 }}> / créneau</span></span>
                                 {resource.offPeakPrice && <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.accentWarm }}>{Number(resource.offPeakPrice)}€ en heures creuses</span>}
                               </span>
                             </div>
@@ -318,27 +318,31 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               const showPast = expandedPast[resource.id] === true;
                               const bookableCount = rest.filter((s) => s.available && win.slotAllowed(s.startTime)).length;
                               const scarcity = scarcityLabel(bookableCount, date === todayISO());
+                              // Pills pleines : libre = accent du club, creux = apricot (prix inclus),
+                              // pris/passé = « fantôme » (contour fin). L'encre est choisie pour rester
+                              // lisible quel que soit l'accent (inkOn).
                               const renderSlot = (s: TimeSlot, forcePast?: boolean) => {
                                 const isPast = forcePast ?? (new Date(s.startTime).getTime() <= nowMs);
+                                const fill = s.offPeak ? th.accentWarm : th.accent;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
-                                  <button key={s.startTime} onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 9, padding: '7px 6px', background: s.offPeak ? `${th.accentWarm}26` : th.surface2, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                  <button key={s.startTime} className="pl-lift" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
+                                    style={{ border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: fill, color: inkOn(fill), fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, boxShadow: `0 2px 6px ${fill}5c`, transition: 'transform .14s, box-shadow .14s' }}>
                                     {formatHour(s.startTime, club.timezone)}
-                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 600, color: th.accentWarm }}>{Number(s.price)}€</span>}
+                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, opacity: 0.92 }}>{Number(s.price)}€</span>}
                                   </button>
                                 ) : (
                                   <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
-                                    style={{ borderRadius: 9, padding: '7px 6px', background: th.takenBg, color: th.takenText, fontFamily: th.fontMono, fontSize: 13, fontWeight: 500, textAlign: 'center', textDecoration: `line-through ${th.takenText}`, cursor: 'not-allowed' }}>
+                                    style={{ borderRadius: 999, padding: '9px 4px', background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${th.line}`, color: th.textFaint, fontFamily: th.fontMono, fontSize: 13, fontWeight: 600, textAlign: 'center', textDecoration: `line-through ${th.textFaint}`, cursor: 'not-allowed' }}>
                                     {formatHour(s.startTime, club.timezone)}
                                   </span>
                                 );
                               };
                               return (
                                 <>
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: 7 }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(86px, 1fr))', gap: 8 }}>
                                     {past.length > 0 && (
                                       <button type="button" aria-label={showPast ? 'Masquer les créneaux passés' : 'Afficher les créneaux passés'} onClick={() => setExpandedPast((m) => ({ ...m, [resource.id]: !showPast }))}
-                                        style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '7px 6px', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 500 }}>
+                                        style={{ border: 'none', background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${th.line}`, cursor: 'pointer', borderRadius: 999, padding: '9px 4px', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
                                         {showPast ? '›' : '‹'} {past.length} passé{past.length > 1 ? 's' : ''}
                                       </button>
                                     )}
