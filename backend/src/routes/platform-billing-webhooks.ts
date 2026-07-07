@@ -1,16 +1,17 @@
 // Webhook Stripe Billing PLATEFORME (abonnements SaaS des clubs) — secret DÉDIÉ
 // STRIPE_BILLING_WEBHOOK_SECRET, distinct du webhook Connect (stripe-webhooks.ts).
 import { Router, Request, Response } from 'express';
-import Stripe from 'stripe';
 import { stripe } from '../db/stripe';
 import { prisma } from '../db/prisma';
-import { syncSubscription, subscriptionFields } from '../services/platformBilling/stripeBilling';
+import {
+  syncSubscription, subscriptionFields, StripeSubscriptionLike,
+} from '../services/platformBilling/stripeBilling';
 import { buildSubscribedEmail, sendToOwners } from '../services/platformBilling/billingEmails';
 
 const router = Router();
 
 /** Retrouve le club d'un abonnement : metadata.clubId, sinon par Customer. */
-async function resolveClubId(sub: Stripe.Subscription): Promise<string | null> {
+async function resolveClubId(sub: StripeSubscriptionLike): Promise<string | null> {
   const fromMeta = (sub.metadata?.clubId as string) || null;
   if (fromMeta) return fromMeta;
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
@@ -37,7 +38,10 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
+        const session = event.data.object as {
+          client_reference_id?: string | null;
+          subscription?: string | { id: string } | null;
+        };
         const clubId = session.client_reference_id;
         const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
         if (clubId && subId) {
@@ -57,7 +61,7 @@ router.post('/', async (req: Request, res: Response) => {
 
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        const sub = event.data.object as Stripe.Subscription;
+        const sub = event.data.object as unknown as StripeSubscriptionLike;
         const clubId = await resolveClubId(sub);
         if (clubId) await syncSubscription(clubId, sub);
         break;

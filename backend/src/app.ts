@@ -21,6 +21,7 @@ import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
 import { startReminderJob } from './jobs/reminders.job';
+import { startPlatformBillingJob } from './jobs/platformBilling.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
@@ -112,6 +113,7 @@ if (require.main === module) {
         console.log(`Backend démarré sur http://localhost:${PORT}`);
         startCleanupJob();
         startReminderJob();
+        startPlatformBillingJob();
       });
     })
     .catch(console.error);

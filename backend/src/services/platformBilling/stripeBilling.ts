@@ -1,6 +1,5 @@
 // Plomberie Stripe Billing sur le COMPTE PLATEFORME (STRIPE_SECRET_KEY) — rien ici ne
 // touche les comptes Connect des clubs. Prix retrouvés par lookup_key (aucun id en .env).
-import Stripe from 'stripe';
 import { stripe } from '../../db/stripe';
 import { prisma } from '../../db/prisma';
 import {
@@ -135,8 +134,27 @@ export async function createBillingPortal(clubId: string, returnUrl: string): Pr
   return session.url;
 }
 
+/**
+ * Sous-ensemble structurel de l'objet Subscription Stripe utilisé ici (le namespace
+ * de types Stripe n'est pas résolu par le tsconfig du repo — convention : types inline).
+ */
+export interface StripeSubscriptionLike {
+  id: string;
+  status: string;
+  cancel_at_period_end?: boolean | null;
+  customer?: string | { id: string } | null;
+  metadata?: Record<string, string> | null;
+  items?: {
+    data?: Array<{
+      id?: string;
+      price?: { lookup_key?: string | null } | null;
+      current_period_end?: number | null;
+    }> | null;
+  } | null;
+}
+
 /** Champs DB depuis un objet Subscription Stripe (null si price non-Palova). */
-export function subscriptionFields(sub: Stripe.Subscription): {
+export function subscriptionFields(sub: StripeSubscriptionLike): {
   status: string; tier: number; interval: BillingInterval;
   currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean;
 } | null {
@@ -155,7 +173,7 @@ export function subscriptionFields(sub: Stripe.Subscription): {
 }
 
 /** Upsert de la ligne PlatformSubscription depuis l'objet Stripe (webhook + checkout). */
-export async function syncSubscription(clubId: string, sub: Stripe.Subscription): Promise<void> {
+export async function syncSubscription(clubId: string, sub: StripeSubscriptionLike): Promise<void> {
   const fields = subscriptionFields(sub);
   if (!fields) return;
   await prisma.platformSubscription.upsert({
