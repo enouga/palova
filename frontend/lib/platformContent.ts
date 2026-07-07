@@ -69,24 +69,37 @@ Hébergement par Hetzner ; paiements par Stripe.
 Cookies strictement nécessaires au fonctionnement du service.
 `;
 
+// ⚠️ Les montants ci-dessous sont le miroir de lib/platformTiers.ts (PLATFORM_TIERS) —
+// garder les deux synchronisés si la grille évolue.
 export const PLATFORM_TARIFS = `# Tarifs Palova
 
-Palova équipe les clubs de padel (et autres sports de terrain) d'un site de réservation, de gestion et d'encaissement clé en main.
+**Un seul plan, tout inclus.** Vous payez selon la taille réelle de votre club — jamais pour des options. Et jamais plus de 149 € HT/mois.
 
-## Découverte — 0 €
-Pour démarrer : réservations en ligne, page club brandée, annuaire public. Idéal pour tester.
+## Comment ça marche
 
-## Club — [à compléter] € / mois
-Tout Découverte + gestion des membres et abonnés, tournois & événements, parties ouvertes, caisse et comptabilité.
+Le prix dépend de vos **membres actifs** : les joueurs qui ont réservé un terrain, participé à un tournoi, un événement ou un cours, ou acheté une formule dans les **90 derniers jours**. Le compteur est visible en permanence dans votre espace d'administration — pas de déclaration, pas de surprise.
 
-## Club Pro — [à compléter] € / mois
-Tout Club + encaissement en ligne (Stripe Connect), quotas avancés, multi-sports, support prioritaire.
+## Les paliers (HT)
+
+- **0 – 50 membres actifs — Gratuit, pour toujours.** Toutes les fonctionnalités incluses.
+- **51 – 150 — 29 € / mois** (ou 296 € / an, −15 %)
+- **151 – 400 — 59 € / mois** (ou 602 € / an)
+- **401 – 800 — 99 € / mois** (ou 1 010 € / an)
+- **Plus de 800 — 149 € / mois, plafonné** (ou 1 520 € / an)
+
+Le palier s'ajuste automatiquement à la taille de votre club : à la hausse seulement après deux mois consécutifs au-dessus du seuil, à la baisse dès le premier mois. Aucun prorata en cours de période.
+
+## Tout est inclus, à tous les paliers
+
+Réservations en ligne, page club brandée (PWA installable), gestion des membres, abonnements et carnets, tournois & événements, caisse et comptabilité, encaissement en ligne via votre propre compte Stripe (**0 % de commission Palova**), multi-sports, emails automatiques personnalisables, statistiques.
+
+## Multi-club / franchise
+
+Contactez-nous : **contact@palova.fr**.
 
 ---
 
 Chaque club encaisse directement ses adhérents via son propre compte Stripe : **les fonds vont au club**, Palova n'est pas intermédiaire de paiement.
-
-Envie d'équiper votre club ? Écrivez-nous à **contact@palova.fr**.
 `;
 
 export interface PlatformFaqEntry { category: string; question: string; answer: string }
@@ -98,6 +111,6 @@ export const PLATFORM_FAQ: PlatformFaqEntry[] = [
   { category: 'Démarrer', question: 'Mes adhérents doivent-ils installer une application ?', answer: 'Non. Palova est une application web installable (PWA) : vos adhérents y accèdent depuis n\'importe quel navigateur, et peuvent l\'ajouter à leur écran d\'accueil.' },
   { category: 'Encaissement', question: 'Comment fonctionne le paiement en ligne ?', answer: 'Chaque club connecte son propre compte Stripe : les paiements de vos adhérents vous sont versés directement. Palova n\'est pas intermédiaire de paiement.' },
   { category: 'Encaissement', question: 'Qui gère mes CGV et mentions légales ?', answer: 'Vous. Palova vous fournit des modèles pré-remplis avec vos informations ; vous les complétez et les publiez depuis votre espace d\'administration, rubrique « Contenu & mentions ».' },
-  { category: 'Facturation', question: 'Quelles sont les formules ?', answer: 'Voir la page Tarifs. Une formule de découverte gratuite permet de tester les réservations en ligne avant de passer à une formule complète.' },
+  { category: 'Facturation', question: 'Quelles sont les formules ?', answer: 'Un seul plan tout inclus, dont le prix dépend du nombre de membres actifs de votre club (joueurs ayant réservé ou participé dans les 90 derniers jours) : gratuit jusqu\'à 50, puis de 29 à 149 € HT/mois maximum. Voir la page Tarifs.' },
   { category: 'Données', question: 'Où sont hébergées les données ?', answer: 'Les données sont hébergées en Europe (Hetzner, Allemagne) et traitées conformément au RGPD.' },
 ];

@@ -104,7 +104,8 @@ Tout sur le **compte plateforme** (`stripe` client existant, sans `stripeAccount
 - **Portal** : `POST …/billing/portal` (OWNER) → session Customer Portal (configuration
   créée programmatiquement si absente : historique de factures, changement de carte,
   annulation à échéance).
-- **Webhook dédié** `POST /api/platform/billing/webhook` — secret propre
+- **Webhook dédié** `POST /api/billing/webhooks` (hors `/api/platform`, monté derrière
+  `requireSuperAdmin`) — secret propre
   `STRIPE_BILLING_WEBHOOK_SECRET` (séparé du webhook Connect `stripe-webhooks.ts` existant),
   raw body, événements :
   - `checkout.session.completed` → upsert `PlatformSubscription` depuis
@@ -195,7 +196,7 @@ d'impayé restent gérés par Stripe.
 - `.env` : `STRIPE_BILLING_WEBHOOK_SECRET` (nouveau) — à ajouter à `.env.prod.example` et
   au pass-through `docker-compose.prod.yml`.
 - Webhook à déclarer dans le dashboard Stripe (endpoint
-  `https://api.palova.fr/api/platform/billing/webhook`, événements du §4).
+  `https://api.palova.fr/api/billing/webhooks`, événements du §4).
 - Dev sans Stripe configuré : la page `/admin/billing` affiche la jauge et l'état, les
   boutons Checkout/Portal renvoient l'erreur mappée `STRIPE_NOT_CONFIGURED`.
 
