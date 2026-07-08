@@ -8,6 +8,9 @@ export const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀
 export type MemberSeg = 'all' | 'subs' | 'staff' | 'watch' | 'blocked';
 export type MemberSort = 'name' | 'recent' | 'activity';
 
+/** Libellé du rôle back-office (partagé liste / panneau / CSV). */
+export const STAFF_LABEL: Record<'OWNER' | 'ADMIN' | 'STAFF', string> = { OWNER: 'Gérant', ADMIN: 'Admin', STAFF: 'Staff' };
+
 const inSeg = (m: Member, seg: MemberSeg): boolean => {
   switch (seg) {
     case 'subs': return m.isSubscriber;
@@ -83,8 +86,6 @@ export function memberKpis(members: Member[], nowMs: number): {
   return { total: members.length, subscribers, activeRecent, blocked };
 }
 
-const ROLE_CSV: Record<'OWNER' | 'ADMIN' | 'STAFF', string> = { OWNER: 'Gérant', ADMIN: 'Admin', STAFF: 'Staff' };
-
 /** Date JJ/MM/AAAA en UTC (déterministe), ou '' si absente. */
 function frDate(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -110,7 +111,7 @@ export function membersCsv(members: Member[], _nowMs: number): string {
     m.subscriptionPlan ?? '',
     m.hasActivePackage ? 'Oui' : 'Non',
     m.status === 'BLOCKED' ? 'Bloqué' : 'Actif',
-    m.staffRole ? ROLE_CSV[m.staffRole] : '',
+    m.staffRole ? STAFF_LABEL[m.staffRole] : '',
     m.level ? String(m.level.level) : '',
     frDate(m.lastSeenAt),
     frDate(m.since),
