@@ -5,8 +5,8 @@ import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
 import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
-import { RatingService } from './rating.service';
-import { namedTier, MIN_RANKED_MATCHES } from './rating/level';
+import { RatingService, UserLevel } from './rating.service';
+import { namedTier, MIN_RANKED_MATCHES, LEVEL_SPORT_KEY } from './rating/level';
 import { computeResultStats, ResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
@@ -383,24 +383,82 @@ export class ClubService {
   // --- Membres (fichier-membres du club ; être membre non bloqué = pouvoir réserver) ---
 
   async listMembers(clubId: string) {
-    const [members, staff] = await Promise.all([
+    const now = new Date();
+    // Comptes supprimés (RGPD) exclus : leurs lignes anonymisées sont inertes et pollueraient KPI/CSV.
+    const [members, staff, subs, packages] = await Promise.all([
       prisma.clubMembership.findMany({
-        where: { clubId },
+        where: { clubId, user: { deletedAt: null } },
         orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
         select: {
           id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
-          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatarUrl: true } },
         },
       }),
       // rôle back-office (table ClubMember) mappé par userId — une requête pour tout le club
       prisma.clubMember.findMany({ where: { clubId }, select: { userId: true, role: true } }),
+      // abonnements club actifs (prédicat miroir de subscription.service.listMySubscriptionsBySlug)
+      prisma.subscription.findMany({
+        where: { clubId, status: 'ACTIVE', expiresAt: { gt: now } },
+        select: { userId: true, plan: { select: { name: true } } },
+      }),
+      // carnets / porte-monnaie — utilisabilité calculée en JS (isUsable, miroir de memberStats.service)
+      prisma.memberPackage.findMany({
+        where: { clubId },
+        select: { userId: true, creditsRemaining: true, amountRemaining: true, expiresAt: true },
+      }),
     ]);
     const roleByUser = new Map(staff.map((s) => [s.userId, s.role]));
+    const userIds = members.map((m) => m.user.id);
+
+    const [levels, lastSeenRows] = await Promise.all([
+      // niveau padel (clé fixe — jamais de sport préféré par user = N+1) ; tolère l'absence de sport
+      this.ratingService.getLevelsForUsers(userIds, LEVEL_SPORT_KEY).catch(() => ({} as Record<string, UserLevel>)),
+      // dernière réservation CONFIRMED passée (organisateur OU participant), en une requête pour tout le club
+      userIds.length === 0
+        ? Promise.resolve([] as { userId: string; lastSeenAt: Date }[])
+        : prisma.$queryRaw<{ userId: string; lastSeenAt: Date }[]>(Prisma.sql`
+            SELECT t."user_id" AS "userId", MAX(t."start_time") AS "lastSeenAt"
+            FROM (
+              SELECT r."user_id", r."start_time"
+              FROM "reservations" r
+              JOIN "resources" rs ON rs."id" = r."resource_id"
+              WHERE rs."club_id" = ${clubId} AND r."status" = 'CONFIRMED'
+                AND r."start_time" <= ${now} AND r."user_id" IS NOT NULL
+              UNION ALL
+              SELECT rp."user_id", r."start_time"
+              FROM "reservation_participants" rp
+              JOIN "reservations" r ON r."id" = rp."reservation_id"
+              JOIN "resources" rs ON rs."id" = r."resource_id"
+              WHERE rs."club_id" = ${clubId} AND r."status" = 'CONFIRMED'
+                AND r."start_time" <= ${now}
+            ) t
+            GROUP BY t."user_id"
+          `),
+    ]);
+
+    const subByUser = new Map<string, string | null>();
+    for (const s of subs) if (!subByUser.has(s.userId)) subByUser.set(s.userId, s.plan?.name ?? null);
+
+    const num = (v: unknown) => (v == null ? 0 : Number(v));
+    const isUsable = (p: { creditsRemaining: number | null; amountRemaining: unknown; expiresAt: Date | null }) =>
+      (p.expiresAt == null || p.expiresAt.getTime() > now.getTime())
+      && ((p.creditsRemaining ?? 0) > 0 || num(p.amountRemaining) > 0);
+    const usableByUser = new Set<string>();
+    for (const p of packages) if (isUsable(p)) usableByUser.add(p.userId);
+
+    const lastSeenBy = new Map(lastSeenRows.map((r) => [r.userId, r.lastSeenAt]));
+
     return members.map((m) => ({
       id: m.id, userId: m.user.id,
       firstName: m.user.firstName, lastName: m.user.lastName, email: m.user.email, phone: m.user.phone,
+      avatarUrl: m.user.avatarUrl ?? null,
       isSubscriber: m.isSubscriber, membershipNo: m.membershipNo, status: m.status, note: m.note, watch: m.watch, since: m.createdAt,
       staffRole: roleByUser.get(m.user.id) ?? null,
+      level: levels[m.user.id] ?? null,
+      hasActiveSubscription: subByUser.has(m.user.id),
+      subscriptionPlan: subByUser.get(m.user.id) ?? null,
+      hasActivePackage: usableByUser.has(m.user.id),
+      lastSeenAt: lastSeenBy.get(m.user.id)?.toISOString() ?? null,
     }));
   }
 

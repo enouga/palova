@@ -885,25 +885,100 @@ describe('ClubService — sections du Club-house', () => {
   });
 });
 
-describe('ClubService — listMembers (rôle staff)', () => {
+describe('ClubService — listMembers (enrichi)', () => {
   let service: ClubService;
-  beforeEach(() => { service = new ClubService(); });
-
-  it('expose staffRole depuis club_members (null pour un membre simple), en 1 requête', async () => {
+  beforeEach(() => {
+    service = new ClubService();
+    // Deux membres par défaut ; chaque requête d'enrichissement renvoie vide (surchargée au cas par cas).
     prismaMock.clubMembership.findMany.mockResolvedValue([
       { id: 'm1', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-01'),
-        user: { id: 'u1', firstName: 'Olivia', lastName: 'Gerante', email: 'o@x.fr', phone: null } },
+        user: { id: 'u1', firstName: 'Olivia', lastName: 'Gerante', email: 'o@x.fr', phone: null, avatarUrl: '/uploads/avatars/u1.jpg' } },
       { id: 'm2', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-02'),
-        user: { id: 'u2', firstName: 'Paul', lastName: 'Martin', email: 'p@x.fr', phone: null } },
+        user: { id: 'u2', firstName: 'Paul', lastName: 'Martin', email: 'p@x.fr', phone: null, avatarUrl: null } },
     ] as any);
     prismaMock.clubMember.findMany.mockResolvedValue([{ userId: 'u1', role: 'OWNER' }] as any);
+    prismaMock.subscription.findMany.mockResolvedValue([] as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any); // getLevelsForUsers → sportId('padel')
+    prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+  });
 
+  it('expose staffRole depuis club_members (null pour un membre simple), en 1 requête', async () => {
     const rows = await service.listMembers('club-demo');
 
     expect(rows[0].staffRole).toBe('OWNER');
     expect(rows[1].staffRole).toBeNull();
     // une seule requête staff pour tout le club (pas de N+1)
     expect(prismaMock.clubMember.findMany).toHaveBeenCalledWith({ where: { clubId: 'club-demo' }, select: { userId: true, role: true } });
+  });
+
+  it('exclut les comptes supprimés (deletedAt) et expose avatarUrl', async () => {
+    const rows = await service.listMembers('club-demo');
+    const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ clubId: 'club-demo', user: { deletedAt: null } });
+    expect(arg.select.user.select.avatarUrl).toBe(true);
+    expect(rows[0].avatarUrl).toBe('/uploads/avatars/u1.jpg');
+    expect(rows[1].avatarUrl).toBeNull();
+  });
+
+  it('mappe l\'abonnement club actif (+ nom de formule)', async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([{ userId: 'u1', plan: { name: 'Premium' } }] as any);
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].hasActiveSubscription).toBe(true);
+    expect(rows[0].subscriptionPlan).toBe('Premium');
+    expect(rows[1].hasActiveSubscription).toBe(false);
+    expect(rows[1].subscriptionPlan).toBeNull();
+    // prédicat : ACTIVE + non expiré
+    const arg = (prismaMock.subscription.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.clubId).toBe('club-demo');
+    expect(arg.where.status).toBe('ACTIVE');
+    expect(arg.where.expiresAt.gt).toBeInstanceOf(Date);
+  });
+
+  it('mappe hasActivePackage via isUsable (valide / expiré / vide)', async () => {
+    const future = new Date(Date.now() + 86_400_000);
+    const past = new Date(Date.now() - 86_400_000);
+    prismaMock.memberPackage.findMany.mockResolvedValue([
+      { userId: 'u1', creditsRemaining: 3, amountRemaining: null, expiresAt: future }, // utilisable
+      { userId: 'u2', creditsRemaining: 0, amountRemaining: '0', expiresAt: null },     // vide → non
+      { userId: 'u2', creditsRemaining: 5, amountRemaining: null, expiresAt: past },    // expiré → non
+    ] as any);
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].hasActivePackage).toBe(true);
+    expect(rows[1].hasActivePackage).toBe(false);
+  });
+
+  it('expose le niveau via getLevelsForUsers avec la clé padel fixe', async () => {
+    prismaMock.playerRating.findMany.mockResolvedValue([
+      { userId: 'u1', displayLevel: 4.2, rd: 80, isProvisional: false },
+    ] as any);
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].level?.level).toBe(4.2);
+    expect(rows[1].level).toBeNull();
+    expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'padel' } }));
+  });
+
+  it('ne throw pas si le sport padel est absent (niveaux tous null)', async () => {
+    prismaMock.sport.findUnique.mockResolvedValue(null as any); // → SPORT_NOT_FOUND, avalé
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].level).toBeNull();
+    expect(rows[1].level).toBeNull();
+  });
+
+  it('expose lastSeenAt (ISO) depuis le $queryRaw, null si absent', async () => {
+    prismaMock.$queryRaw.mockResolvedValue([{ userId: 'u1', lastSeenAt: new Date('2026-07-01T10:00:00Z') }] as any);
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].lastSeenAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(rows[1].lastSeenAt).toBeNull();
+  });
+
+  it('ne fait aucune requête par membre (batch à plat)', async () => {
+    await service.listMembers('club-demo');
+    expect(prismaMock.subscription.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.memberPackage.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.playerRating.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
   });
 });
 
