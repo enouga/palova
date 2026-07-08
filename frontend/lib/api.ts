@@ -1228,6 +1228,13 @@ export interface Member {
   watch?: boolean;     // drapeau « à surveiller »
   staffRole?: 'OWNER' | 'ADMIN' | 'STAFF' | null; // rôle back-office (table ClubMember), null = membre simple
   since?: string;
+  // --- enrichissements liste (additifs, cf. listMembers) ---
+  avatarUrl?: string | null;
+  level?: UserLevel | null;              // niveau padel (null si pas de rating / système désactivé)
+  hasActiveSubscription?: boolean;
+  subscriptionPlan?: string | null;      // nom de la formule d'abonnement club active
+  hasActivePackage?: boolean;            // carnet / porte-monnaie encore utilisable
+  lastSeenAt?: string | null;            // dernière réservation confirmée passée (ISO), null si aucune
 }
 
 export interface MemberNote {
