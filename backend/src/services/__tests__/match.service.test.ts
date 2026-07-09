@@ -485,5 +485,6 @@ describe('listToRecord', () => {
     expect(arg.where.endTime.gte).toEqual(new Date(NOW2.getTime() - 7 * 24 * 3600 * 1000));
     expect(arg.where.participants.some.userId).toBe('u1');
     expect(arg.where.resource.club.levelSystemEnabled).toBe(true);
+    expect(arg.where.resource.clubSport.sport.key).toBe('padel');
   });
 });

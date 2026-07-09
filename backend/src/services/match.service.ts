@@ -94,7 +94,7 @@ export class MatchService {
         status: 'CONFIRMED',
         endTime: { lte: now, gte: from },
         participants: { some: { userId } },
-        resource: { club: { levelSystemEnabled: true } },
+        resource: { club: { levelSystemEnabled: true }, clubSport: { sport: { key: 'padel' } } },
       },
       orderBy: { endTime: 'desc' },
       select: {
