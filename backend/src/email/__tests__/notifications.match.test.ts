@@ -4,7 +4,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 const dispatchMock = jest.fn();
 jest.mock('../../services/notification/dispatcher', () => ({ dispatch: (...a: unknown[]) => dispatchMock(...a) }));
 
-import { notifyMatchPendingConfirmation, notifyReservationRefunded } from '../notifications';
+import { notifyMatchPendingConfirmation, notifyReservationRefunded, notifyMatchResultPrompt } from '../notifications';
 
 const club = { id: 'club-1', name: 'Padel Arena', slug: 'arena', logoUrl: null, accentColor: '#d6ff3f', timezone: 'Europe/Paris' };
 
@@ -82,5 +82,50 @@ describe('notifyReservationRefunded → dispatch', () => {
       clubId: 'club-1',
       email: expect.objectContaining({ to: 'sophie@x.fr' }),
     }));
+  });
+});
+
+describe('notifyMatchResultPrompt → dispatch', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  it('dispatch MY_MATCHES/match.to_record aux 4 joueurs, sans email', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'resa-1',
+      resource: { name: 'Court 1', club, clubSport: { sport: { key: 'padel' } } },
+      participants: [
+        { userId: 'p1', user: { firstName: 'Alice' } },
+        { userId: 'p2', user: { firstName: 'Bob' } },
+        { userId: 'p3', user: { firstName: 'Carol' } },
+        { userId: 'p4', user: { firstName: 'David' } },
+      ],
+      matches: [],
+    } as any);
+
+    await notifyMatchResultPrompt('resa-1');
+
+    expect(dispatchMock).toHaveBeenCalledTimes(4);
+    const call = dispatchMock.mock.calls[0][0];
+    expect(call.category).toBe('MY_MATCHES');
+    expect(call.type).toBe('match.to_record');
+    expect(call.clubId).toBe('club-1');
+    expect(call.email).toBeUndefined();
+    expect(call.url).toContain('/me/matches');
+  });
+
+  it('ne dispatch rien si un Match non annulé existe', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'resa-1',
+      resource: { name: 'Court 1', club, clubSport: { sport: { key: 'padel' } } },
+      participants: [
+        { userId: 'p1', user: { firstName: 'Alice' } },
+        { userId: 'p2', user: { firstName: 'Bob' } },
+        { userId: 'p3', user: { firstName: 'Carol' } },
+        { userId: 'p4', user: { firstName: 'David' } },
+      ],
+      matches: [{ status: 'PENDING' }],
+    } as any);
+
+    await notifyMatchResultPrompt('resa-1');
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 });

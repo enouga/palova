@@ -1023,6 +1023,44 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
   }
 }
 
+/**
+ * Invite chacun des 4 joueurs à saisir le résultat après un match padel joué.
+ * Cloche + push seulement (pas d'email → pas de type dans le registre).
+ * Re-vérifie les gardes ; ne fait rien si un Match non annulé existe déjà pour la résa
+ * (déjà saisi, en attente de confirmation, ou contesté).
+ */
+export async function notifyMatchResultPrompt(reservationId: string): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      resource: {
+        select: { name: true, club: { select: { id: true, slug: true } } },
+      },
+      participants: { select: { userId: true } },
+      matches: { select: { status: true } },
+    },
+  });
+  if (!resa) return;
+  if (resa.participants.length !== 4) return;
+  // Mock-fidelity : le mock Prisma ne filtre pas les `where` imbriqués sur relation, on
+  // sélectionne donc tous les statuts et on filtre en JS (bloque aussi sur DISPUTED).
+  if (resa.matches.some((m) => m.status !== 'CANCELLED')) return;
+
+  const club = resa.resource.club;
+  const url = clubAppUrl(club.slug, '/me/matches');
+  for (const p of resa.participants) {
+    await dispatch({
+      userId: p.userId,
+      clubId: club.id,
+      category: 'MY_MATCHES',
+      type: 'match.to_record',
+      title: "Comment s'est passé votre match ?",
+      body: `Saisissez le résultat de votre partie sur ${resa.resource.name}.`,
+      url,
+    });
+  }
+}
+
 export async function notifyReservationCancelled(reservationId: string, actorUserId?: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
