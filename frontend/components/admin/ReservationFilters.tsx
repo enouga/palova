@@ -3,9 +3,14 @@ import { CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { DateField } from '@/components/ui/DateField';
 import { SportPicker } from '@/components/reserve/SportPicker';
-import { PeriodMode } from '@/lib/collect';
+import { PeriodMode, StatusMode } from '@/lib/collect';
 
 export interface SportFacet { key: string; name: string }
+export interface MethodFacet { key: string; label: string }
+
+const STATUS_LABELS: [StatusMode, string][] = [
+  ['all', 'Tout'], ['unpaid', 'Non payé'], ['partial', 'Partiel'], ['paid', 'Soldé'], ['cancelled', 'Annulées'],
+];
 
 export interface ReservationFiltersProps {
   query: string; onQuery: (q: string) => void;
@@ -17,6 +22,11 @@ export interface ReservationFiltersProps {
   dueOnly: boolean; onDueOnly: (v: boolean) => void;
   /** Nombre de filtres non par défaut (pour « Réinitialiser »). */
   activeCount: number; onReset: () => void;
+  /** Filtre par statut d'encaissement (page Paiements) — omis → groupe masqué. */
+  status?: StatusMode; onStatus?: (s: StatusMode) => void;
+  /** Filtre par moyen (page Paiements) : facettes présentes le jour + sélection multi.
+   *  Omis / liste vide → groupe masqué. */
+  methodFacets?: MethodFacet[]; selectedMethods?: Set<string>; onMethods?: (keys: string[]) => void;
 }
 
 /**
@@ -78,6 +88,40 @@ export function ReservationFilters(p: ReservationFiltersProps) {
           </button>
         )}
       </div>
+
+      {/* ── Ligne 3 (page Paiements) : statut d'encaissement ─────────────────── */}
+      {p.status !== undefined && p.onStatus && (
+        <div role="radiogroup" aria-label="Statut" style={{ display: 'inline-flex', flexWrap: 'wrap', border: `1px solid ${th.line}`, borderRadius: 999, overflow: 'hidden', background: th.surface, alignSelf: 'flex-start' }}>
+          {STATUS_LABELS.map(([mode, label], i) => (
+            <button key={mode} type="button" role="radio" aria-checked={p.status === mode} onClick={() => p.onStatus!(mode)}
+              style={i === 0 ? segBtn(p.status === mode) : { ...segBtn(p.status === mode), borderLeft: `1px solid ${th.line}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Ligne 4 (page Paiements) : moyens présents le jour (chips multi) ──── */}
+      {p.methodFacets && p.methodFacets.length > 0 && p.onMethods && (
+        <div role="group" aria-label="Moyens" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}>Moyen</span>
+          {p.methodFacets.map((m) => {
+            const on = p.selectedMethods?.has(m.key) ?? false;
+            const next = () => {
+              const cur = new Set(p.selectedMethods ?? []);
+              on ? cur.delete(m.key) : cur.add(m.key);
+              p.onMethods!([...cur]);
+            };
+            return (
+              <button key={m.key} type="button" aria-pressed={on} onClick={next}
+                style={{ padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+                  border: `1px solid ${on ? th.accent : th.line}`, background: on ? th.accent : 'transparent', color: on ? th.onAccent : th.text }}>
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

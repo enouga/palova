@@ -51,9 +51,9 @@ beforeEach(() => {
   ]));
 });
 
-it('titre « Caisse express » + file en deux groupes triés (à encaisser par heure, soldées)', async () => {
+it('titre « Caisse » + file en deux groupes triés (à encaisser par heure, soldées)', async () => {
   renderPage();
-  expect(await screen.findByRole('heading', { name: 'Caisse express' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Caisse' })).toBeInTheDocument();
   expect(await screen.findByText("À encaisser d'abord")).toBeInTheDocument();
   expect(screen.getByText('Soldées')).toBeInTheDocument();
   const queue = screen.getByTestId('cx-queue');

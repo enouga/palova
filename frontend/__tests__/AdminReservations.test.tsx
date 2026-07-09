@@ -38,9 +38,9 @@ const resp = (reservations: unknown[]) => ({ reservations, summary: { total: '0'
 // jest.mock / mockResolvedValue sont conservées) pour des assertions de nombre fiables.
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); });
 
-it('renomme la page en « Encaissement »', async () => {
+it('renomme la page en « Paiements »', async () => {
   renderPage();
-  expect(await screen.findByRole('heading', { name: 'Encaissement' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Paiements' })).toBeInTheDocument();
 });
 
 it('déplie une ligne par place : titulaire + 3 places « Associer un membre » (double)', async () => {
@@ -365,4 +365,77 @@ it('la modale Détails montre QUI a payé dans les encaissements (joueur · moye
   expect(await screen.findByText('Encaissements')).toBeInTheDocument();
   // le règlement attribué à pt-1 affiche le nom du joueur + le moyen, dans une même ligne
   expect(screen.getByText((_, el) => el?.textContent === 'Jean Test · Carte')).toBeInTheDocument();
+});
+
+// ── Filtres statut & moyen (rebranchés depuis lib/collect.ts) ────────────────
+describe('filtres statut & moyen', () => {
+  const pay = (id: string, method: string, amount: string) => ({
+    id, amount, method, participantId: null, payerName: null, note: null,
+    voucherRef: null, voucherIssuer: null, voucherStatus: null,
+    createdAt: '2099-06-22T14:00:00.000Z', refundedAmount: '0.00', receiptNo: null,
+  });
+  const trio = () => [
+    mkResa('rv-paye', 'court-1', 'C1', { paidAmount: '52.00', payments: [pay('p1', 'CARD', '52.00')], user: { id: 'u1', firstName: 'Jean', lastName: 'Paye', email: 'p@x.fr' } }),
+    mkResa('rv-doit', 'court-1', 'C1', { user: { id: 'u2', firstName: 'Jean', lastName: 'Doit', email: 'd@x.fr' } }),
+    mkResa('rv-annul', 'court-1', 'C1', { status: 'CANCELLED', user: { id: 'u3', firstName: 'Jean', lastName: 'Annulee', email: 'a@x.fr' } }),
+  ];
+  // Le nom du titulaire figure sur l'en-tête ET la ligne de place → on compte, pas d'unicité.
+  const seen = (name: string) => screen.queryAllByText(name).length > 0;
+
+  it('le filtre Statut isole non payé / soldé / annulées', async () => {
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp(trio()));
+    renderPage();
+    await screen.findAllByText('Jean Paye');                    // défaut : actives visibles…
+    expect(seen('Jean Doit')).toBe(true);
+    expect(seen('Jean Annulee')).toBe(false);                   // …annulées masquées
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Non payé' }));
+    await waitFor(() => expect(seen('Jean Paye')).toBe(false));
+    expect(seen('Jean Doit')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Soldé' }));
+    await waitFor(() => expect(seen('Jean Doit')).toBe(false));
+    expect(seen('Jean Paye')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Annulées' }));
+    await waitFor(() => expect(seen('Jean Annulee')).toBe(true));
+    expect(seen('Jean Paye')).toBe(false);
+    expect(seen('Jean Doit')).toBe(false);
+  });
+
+  it('le filtre Moyen ne garde que les résas encaissées par ce moyen (toggle)', async () => {
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+      mkResa('rv-cash', 'court-1', 'C1', { paidAmount: '20.00', payments: [pay('p1', 'CASH', '20.00')], user: { id: 'u1', firstName: 'Jean', lastName: 'Especes', email: 'e@x.fr' } }),
+      mkResa('rv-card', 'court-1', 'C1', { paidAmount: '20.00', payments: [pay('p2', 'CARD', '20.00')], user: { id: 'u2', firstName: 'Jean', lastName: 'Carte', email: 'c@x.fr' } }),
+      mkResa('rv-rien', 'court-1', 'C1', { user: { id: 'u3', firstName: 'Jean', lastName: 'Rien', email: 'r@x.fr' } }),
+    ]));
+    renderPage();
+    await screen.findAllByText('Jean Especes');
+    const group = screen.getByRole('group', { name: 'Moyens' });
+    // seuls les moyens présents dans les encaissements du jour sont proposés
+    expect(within(group).queryByRole('button', { name: 'Virement' })).toBeNull();
+
+    fireEvent.click(within(group).getByRole('button', { name: 'Espèces' }));
+    await waitFor(() => expect(seen('Jean Carte')).toBe(false));
+    expect(seen('Jean Especes')).toBe(true);
+    expect(seen('Jean Rien')).toBe(false);
+
+    fireEvent.click(within(group).getByRole('button', { name: 'Espèces' }));   // toggle off
+    await waitFor(() => expect(seen('Jean Carte')).toBe(true));
+    expect(seen('Jean Rien')).toBe(true);
+  });
+
+  it('« Réinitialiser » remet statut et moyen à zéro', async () => {
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp(trio()));
+    renderPage();
+    await screen.findAllByText('Jean Paye');
+    fireEvent.click(screen.getByRole('radio', { name: 'Non payé' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Moyens' })).getByRole('button', { name: 'Carte' }));
+    await waitFor(() => expect(seen('Jean Doit')).toBe(false));   // non payé ∩ Carte = vide
+
+    fireEvent.click(screen.getByRole('button', { name: /Réinitialiser/ }));
+    await waitFor(() => expect(seen('Jean Paye')).toBe(true));
+    expect(seen('Jean Doit')).toBe(true);
+    expect(seen('Jean Annulee')).toBe(false);                   // retour au défaut (actives)
+  });
 });

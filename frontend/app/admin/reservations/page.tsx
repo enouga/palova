@@ -12,7 +12,7 @@ import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
-import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode } from '@/lib/collect';
+import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode, StatusMode, statusFilter, hasAnyMethod } from '@/lib/collect';
 import { indexPackagesByUser } from '@/lib/packages';
 import { ReservationFilters, SportFacet } from '@/components/admin/ReservationFilters';
 
@@ -74,6 +74,8 @@ export default function AdminReservationsPage() {
   const [sportSel, setSportSel] = useState<Set<string> | null>(null);   // sports cochés (null = pas encore résolu)
   const [period, setPeriod]     = useState<PeriodMode>('upcoming');     // « À venir » par défaut
   const [dueOnly, setDueOnly]   = useState(false);                      // « À encaisser » par défaut off
+  const [status, setStatus]     = useState<StatusMode>('all');          // filtre statut d'encaissement
+  const [methodSel, setMethodSel] = useState<Set<string>>(new Set());   // moyens cochés (vide = tous)
   const [nowMs, setNowMs]       = useState<number | null>(null);        // heure courante (posée côté client)
 
   const statusStyle = (s: string): CSSProperties => ({
@@ -234,19 +236,32 @@ export default function AdminReservationsPage() {
     : period === 'next' ? isNextSlot(r, nextWindow)
     : isUpcoming(r, nowMs);   // 'upcoming'
   const passDue    = (r: ClubReservation) => !dueOnly || isCollectable(r);
-  const passActive = (r: ClubReservation) => r.status !== 'CANCELLED';   // annulées masquées
+  // Le statut remplace le masquage des annulées : mode 'cancelled' → montre les annulées,
+  // les autres modes ne montrent que l'actif (statusFilter gère les deux sens).
+  const passStatus = (r: ClubReservation) => statusFilter(status, dueOf(r), toCents(r.paidAmount), r.status === 'CANCELLED');
+  const passMethod = (r: ClubReservation) => hasAnyMethod(r.payments, methodSel);
 
-  const visible = dayResas.filter((r) => passActive(r) && passSearch(r) && passSport(r) && passWindow(r) && passDue(r));
+  const visible = dayResas.filter((r) => passStatus(r) && passMethod(r) && passSearch(r) && passSport(r) && passWindow(r) && passDue(r));
+
+  // Facettes « Moyen » : moyens réellement présents dans les encaissements du jour, ordre METHOD_LABEL.
+  const methodsPresent = new Set(dayResas.flatMap((r) => r.payments.map((p) => p.method)));
+  const methodFacets = (Object.keys(METHOD_LABEL) as PaymentMethod[])
+    .filter((m) => methodsPresent.has(m))
+    .map((m) => ({ key: m, label: METHOD_LABEL[m] }));
 
   const activeCount =
     (dueOnly ? 1 : 0) +
     (period !== 'upcoming' ? 1 : 0) +
+    (status !== 'all' ? 1 : 0) +
+    (methodSel.size > 0 ? 1 : 0) +
     (query.trim() ? 1 : 0) +
     (multiSport && sel.size !== sportsPresent.length ? 1 : 0);
 
   const resetFilters = () => {
     setDueOnly(false);
     setPeriod('upcoming');
+    setStatus('all');
+    setMethodSel(new Set());
     setQuery('');
     changeSports(sportsPresent.map((s) => s.key));   // tous cochés + persiste
   };
@@ -339,6 +354,8 @@ export default function AdminReservationsPage() {
       selectedSports={sel} onSports={changeSports}
       period={period} onPeriod={setPeriod}
       dueOnly={dueOnly} onDueOnly={setDueOnly}
+      status={status} onStatus={setStatus}
+      methodFacets={methodFacets} selectedMethods={methodSel} onMethods={(keys) => setMethodSel(new Set(keys))}
       activeCount={activeCount} onReset={resetFilters}
     />
   );
@@ -347,7 +364,7 @@ export default function AdminReservationsPage() {
     <div>
       {/* Titre + bandeau KPI compact aligné à droite (gain de hauteur ; passe sous le titre si étroit). */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', margin: '0 0 18px' }}>
-        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Encaissement</h1>
+        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Paiements</h1>
         {data && (
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', background: th.surface, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '6px 2px' }}>
             {kpiStat("Encaissé", fmtEuros(paidDay), th.mode === 'floodlit' ? th.accent : SETTLED_COLOR, `${encCount} enc.`)}
