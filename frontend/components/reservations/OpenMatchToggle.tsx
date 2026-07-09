@@ -4,7 +4,6 @@ import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Chip } from '@/components/ui/atoms';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
-import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
 import { sportHasLevels } from '@/lib/level';
 import { saveLevelPref } from '@/lib/levelPrefs';
 
@@ -62,8 +61,6 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   });
   const close = () => run(() => api.setReservationVisibility(reservation.id, 'PRIVATE', token));
 
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/parties/${reservation.id}` : `/parties/${reservation.id}`;
-
   const switchBtn = (
     <button type="button" role="switch" aria-checked={limit} aria-label="Limiter le niveau"
       onClick={() => setLimit((v) => !v)}
@@ -81,7 +78,6 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
       {isPublic ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Chip tone="accent">Ouverte</Chip>
-          <MatchShareButton url={shareUrl} title={reservation.resource.name} style={{ height: 34 }} />
           <button type="button" onClick={close} disabled={busy}
             style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
             Fermer
