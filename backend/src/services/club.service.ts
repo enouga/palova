@@ -385,9 +385,10 @@ export class ClubService {
   async listMembers(clubId: string) {
     const now = new Date();
     // Comptes supprimés (RGPD) exclus : leurs lignes anonymisées sont inertes et pollueraient KPI/CSV.
+    // Le compte super-admin plateforme est invisible côté club (son adhésion éventuelle est technique).
     const [members, staff, subs, packages] = await Promise.all([
       prisma.clubMembership.findMany({
-        where: { clubId, user: { deletedAt: null } },
+        where: { clubId, user: { deletedAt: null, isSuperAdmin: false } },
         orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
         select: {
           id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
@@ -509,7 +510,8 @@ export class ClubService {
   /** Ajoute un membre par email (le compte joueur doit déjà exister). */
   async addMemberByEmail(clubId: string, email: string) {
     const user = await prisma.user.findFirst({ where: { email: { equals: (email || '').trim(), mode: 'insensitive' } } });
-    if (!user) throw new Error('USER_NOT_FOUND');
+    // Le compte super-admin plateforme n'est pas rattachable à un club : traité comme inexistant (pas d'énumération).
+    if (!user || user.isSuperAdmin) throw new Error('USER_NOT_FOUND');
     await prisma.clubMembership.upsert({
       where: { userId_clubId: { userId: user.id, clubId } },
       update: { status: 'ACTIVE' },
@@ -531,6 +533,8 @@ export class ClubService {
 
     const existing = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (existing) {
+      // Le compte super-admin plateforme n'est jamais rattaché à un club (même code que le compte inconnu).
+      if (existing.isSuperAdmin) throw new Error('USER_NOT_FOUND');
       await prisma.clubMembership.upsert({
         where: { userId_clubId: { userId: existing.id, clubId } },
         update: { status: 'ACTIVE', membershipNo },
@@ -606,9 +610,12 @@ export class ClubService {
         clubId: club.id,
         status: 'ACTIVE',
         userId: { not: callerUserId },
-        ...(query
-          ? { user: { OR: [{ firstName: { contains: query, mode: 'insensitive' } }, { lastName: { contains: query, mode: 'insensitive' } }] } }
-          : {}),
+        user: {
+          isSuperAdmin: false, // le compte plateforme n'apparaît jamais dans l'annuaire d'un club
+          ...(query
+            ? { OR: [{ firstName: { contains: query, mode: 'insensitive' } }, { lastName: { contains: query, mode: 'insensitive' } }] }
+            : {}),
+        },
       },
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
       take: 20,
@@ -684,6 +691,7 @@ export class ClubService {
         clubId: club.id,
         status: 'ACTIVE',
         user: {
+          isSuperAdmin: false,
           showInLeaderboard: true,
           playerRatings: { some: { sportId: sport.id, matchesPlayed: { gte: MIN_RANKED_MATCHES } } },
         },

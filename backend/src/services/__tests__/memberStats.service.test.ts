@@ -36,6 +36,14 @@ describe('MemberStatsService.getMemberHistory', () => {
     await expect(service.getMemberHistory('club-1', 'u1')).rejects.toThrow('MEMBER_NOT_FOUND');
   });
 
+  it('compte super-admin plateforme → MEMBER_NOT_FOUND (pas de fiche côté club, même par accès direct)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({
+      createdAt: D('2026-01-01T00:00:00Z'), isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false,
+      user: { firstName: 'Super', lastName: 'Admin', email: 'super@palova.fr', phone: null, avatarUrl: null, isSuperAdmin: true },
+    } as any);
+    await expect(service.getMemberHistory('club-1', 'u-super')).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
   it('expose le drapeau watch', async () => {
     prismaMock.clubMembership.findUnique.mockResolvedValue({
       createdAt: D('2026-01-01T00:00:00Z'), isSubscriber: true, membershipNo: 'L42', status: 'ACTIVE', watch: true,

@@ -129,6 +129,7 @@ export class FollowService {
       where: {
         followerId: userId,
         following: {
+          isSuperAdmin: false, // le compte plateforme n'apparaît jamais côté club
           clubMemberships: { some: { clubId, status: 'ACTIVE' } },
           ...(query
             ? { OR: [{ firstName: { contains: query, mode: 'insensitive' } }, { lastName: { contains: query, mode: 'insensitive' } }] }

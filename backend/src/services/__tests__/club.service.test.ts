@@ -38,7 +38,7 @@ describe('ClubService — recherche de membres', () => {
 
     expect(result).toEqual([{ id: 'u1', firstName: 'Jean', lastName: 'Dupont', level: null, iFollow: false, mutual: false, friend: { status: 'none', requestable: false } }]);
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
-    expect(arg.where.user).toBeUndefined(); // pas de filtre nom quand la requête est vide
+    expect(arg.where.user).toEqual({ isSuperAdmin: false }); // pas de filtre nom quand la requête est vide (super-admin toujours exclu)
     expect(arg.take).toBe(20);
   });
 
@@ -61,7 +61,8 @@ describe('ClubService — recherche de membres', () => {
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.userId).toEqual({ not: 'caller' });
     expect(arg.where.status).toBe('ACTIVE');
-    expect(arg.where.user).toBeDefined(); // filtre nom appliqué quand la requête est non vide
+    expect(arg.where.user.OR).toBeDefined(); // filtre nom appliqué quand la requête est non vide
+    expect(arg.where.user.isSuperAdmin).toBe(false); // le compte plateforme reste exclu même avec filtre nom
     expect(arg.take).toBe(20);
   });
   it('enrichit chaque membre avec son niveau padel (level)', async () => {
@@ -255,6 +256,9 @@ describe('clubLeaderboard', () => {
     expect(res.entries.map((e) => [e.rank, e.userId])).toEqual([[1, 'u1'], [2, 'u3'], [3, 'u2']]);
     expect(res.entries[0].tier).toBe('Avancé'); // namedTier(6.2)
     expect(res.me).toEqual({ optedIn: true, ranked: true, rank: 1, level: 6.2, matchesPlayed: 30, matchesToGo: 0, wins: 0, losses: 0, streak: 0 });
+    // le compte super-admin plateforme est exclu du classement
+    const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.user.isSuperAdmin).toBe(false);
   });
 
   it('me non classé : opt-in mais pas assez de matchs → matchesToGo', async () => {
@@ -913,10 +917,10 @@ describe('ClubService — listMembers (enrichi)', () => {
     expect(prismaMock.clubMember.findMany).toHaveBeenCalledWith({ where: { clubId: 'club-demo' }, select: { userId: true, role: true } });
   });
 
-  it('exclut les comptes supprimés (deletedAt) et expose avatarUrl', async () => {
+  it('exclut les comptes supprimés (deletedAt) et le super-admin plateforme, et expose avatarUrl', async () => {
     const rows = await service.listMembers('club-demo');
     const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
-    expect(arg.where).toEqual({ clubId: 'club-demo', user: { deletedAt: null } });
+    expect(arg.where).toEqual({ clubId: 'club-demo', user: { deletedAt: null, isSuperAdmin: false } });
     expect(arg.select.user.select.avatarUrl).toBe(true);
     expect(rows[0].avatarUrl).toBe('/uploads/avatars/u1.jpg');
     expect(rows[1].avatarUrl).toBeNull();
@@ -979,6 +983,26 @@ describe('ClubService — listMembers (enrichi)', () => {
     expect(prismaMock.memberPackage.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.playerRating.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ClubService — le super-admin plateforme est invisible côté club', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('addMemberByEmail refuse le compte super-admin (USER_NOT_FOUND, comme un compte inconnu)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u-super', isSuperAdmin: true } as any);
+    await expect(service.addMemberByEmail('club-demo', 'super@palova.fr')).rejects.toThrow('USER_NOT_FOUND');
+    expect(prismaMock.clubMembership.upsert).not.toHaveBeenCalled();
+  });
+
+  it('createMember refuse un email existant appartenant au super-admin (USER_NOT_FOUND)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u-super', isSuperAdmin: true } as any);
+    await expect(
+      service.createMember('club-demo', { firstName: 'Super', lastName: 'Admin', email: 'super@palova.fr' }),
+    ).rejects.toThrow('USER_NOT_FOUND');
+    expect(prismaMock.clubMembership.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 });
 

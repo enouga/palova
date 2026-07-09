@@ -134,9 +134,10 @@ describe('FollowService — amis du club (ajout rapide)', () => {
       .mockResolvedValueOnce([{ followerId: 'u2' }] as any); // mutual
     const list = await service.listClubFriends('demo', 'u1');
     expect(list).toEqual([{ id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, level: null, mutual: true }]);
-    // le filtre passe bien par la co-appartenance active au club
+    // le filtre passe bien par la co-appartenance active au club, super-admin plateforme exclu
     const arg = (prismaMock.follow.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.following.clubMemberships.some).toEqual({ clubId: 'club-demo', status: 'ACTIVE' });
+    expect(arg.where.following.isSuperAdmin).toBe(false);
   });
 
   it('renvoie [] si je ne suis aucun membre du club', async () => {

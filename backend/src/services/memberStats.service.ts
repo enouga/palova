@@ -94,10 +94,11 @@ export class MemberStatsService {
       where: { userId_clubId: { userId, clubId } },
       select: {
         createdAt: true, isSubscriber: true, membershipNo: true, status: true, watch: true,
-        user: { select: { firstName: true, lastName: true, email: true, phone: true, avatarUrl: true } },
+        user: { select: { firstName: true, lastName: true, email: true, phone: true, avatarUrl: true, isSuperAdmin: true } },
       },
     });
-    if (!membership) throw new Error('MEMBER_NOT_FOUND');
+    // Le compte super-admin plateforme n'a pas de fiche joueur côté club, même par accès direct.
+    if (!membership || membership.user.isSuperAdmin) throw new Error('MEMBER_NOT_FOUND');
 
     const now = new Date();
 
