@@ -72,6 +72,13 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Club Démo')).toBeInTheDocument();
   });
 
+  it("lien rapide vers le Club-house dans l'en-tête", async () => {
+    await wrap();
+    const link = screen.getByLabelText('Voir le Club-house');
+    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
   it('le toggle masque puis ré-affiche la sidebar', async () => {
     await wrap();
     expect(screen.getByText('Tableau de bord')).toBeInTheDocument();

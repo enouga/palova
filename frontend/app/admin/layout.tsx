@@ -165,6 +165,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
             : <Logotype size={22} />}
           <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{club.name}</span>
+          <a href="/" target="_blank" rel="noreferrer" aria-label="Voir le Club-house" title="Voir le Club-house (nouvel onglet)" style={{
+            flexShrink: 0, width: 28, height: 28, borderRadius: 8,
+            background: 'transparent', border: `1px solid ${th.line}`, color: th.textMute,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
+          }}>
+            <Icon name="eye" size={15} color={th.textMute} />
+          </a>
           <button type="button" aria-label="Masquer le menu" title="Masquer le menu" onClick={() => setCollapsed(true)} style={{
             marginLeft: 'auto', flexShrink: 0, width: 28, height: 28, borderRadius: 8, cursor: 'pointer',
             background: 'transparent', border: `1px solid ${th.line}`, color: th.textMute,
