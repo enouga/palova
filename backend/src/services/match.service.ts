@@ -8,6 +8,8 @@ import {
 } from './rating/level';
 import { notifyMatchPendingConfirmation, notifyNewMatchComment } from '../email/notifications';
 import { recomputeSportRatings } from './rating/recompute';
+import { effectiveTeams } from './matchTeams';
+import { playerCount } from '../utils/courtType';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -77,6 +79,60 @@ export class MatchService {
     });
     this.safeNotify(() => notifyMatchPendingConfirmation(match.id));
     return match;
+  }
+
+  /**
+   * Réservations padel jouées (< 7 j) où `userId` est PARTICIPANT (pas seulement organisateur),
+   * à 4 joueurs, sans résultat non annulé, club à niveau activé — prêtes à saisir.
+   * Le côté/slot d'équipe est résolu à la lecture (effectiveTeams), comme listUserReservations.
+   */
+  async listToRecord(userId: string, now: Date) {
+    const from = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    const rows = await prisma.reservation.findMany({
+      where: {
+        type: 'COURT',
+        status: 'CONFIRMED',
+        endTime: { lte: now, gte: from },
+        participants: { some: { userId } },
+        resource: { club: { levelSystemEnabled: true } },
+      },
+      orderBy: { endTime: 'desc' },
+      select: {
+        id: true, startTime: true, endTime: true,
+        resource: {
+          select: {
+            name: true, attributes: true,
+            clubSport: { select: { sport: { select: { key: true, name: true } } } },
+            club: { select: { slug: true, name: true, timezone: true } },
+          },
+        },
+        participants: {
+          orderBy: { joinedAt: 'asc' },
+          select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
+        },
+        matches: { select: { status: true } },
+      },
+    });
+
+    return rows
+      .filter((r) => r.participants.length === 4 && r.matches.every((m) => m.status === 'CANCELLED'))
+      .map((r) => {
+        const capacity = playerCount((r.resource.attributes as { format?: string } | null)?.format);
+        const teamed = effectiveTeams(r.participants, capacity);
+        return {
+          reservationId: r.id,
+          startTime: r.startTime,
+          endTime: r.endTime,
+          club: { slug: r.resource.club.slug, name: r.resource.club.name, timezone: r.resource.club.timezone },
+          resourceName: r.resource.name,
+          sport: { key: r.resource.clubSport.sport.key, name: r.resource.clubSport.sport.name },
+          players: teamed.map((p) => ({
+            userId: p.userId, isOrganizer: p.isOrganizer,
+            firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
+            team: p.team, slot: p.slot,
+          })),
+        };
+      });
   }
 
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */

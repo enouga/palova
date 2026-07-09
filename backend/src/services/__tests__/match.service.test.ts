@@ -415,3 +415,75 @@ describe('commentaires de litige', () => {
     await expect(service.addComment('m1', 'u2', 'x'.repeat(1001))).rejects.toThrow('VALIDATION_ERROR');
   });
 });
+
+describe('listToRecord', () => {
+  const NOW2 = new Date('2026-06-11T10:00:00Z');
+  const baseReservation = () => ({
+    id: 'r1',
+    startTime: new Date('2026-06-10T18:00:00Z'),
+    endTime: new Date('2026-06-10T19:30:00Z'),
+    resource: {
+      name: 'Court 1',
+      attributes: { format: 'DOUBLE' },
+      clubSport: { sport: { key: 'padel', name: 'Padel' } },
+      club: { slug: 'arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+    },
+    participants: [
+      { userId: 'u1', isOrganizer: true, team: 1, slot: 0, user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+      { userId: 'u2', isOrganizer: false, team: 1, slot: 1, user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+      { userId: 'u3', isOrganizer: false, team: 2, slot: 0, user: { firstName: 'C', lastName: 'C', avatarUrl: null } },
+      { userId: 'u4', isOrganizer: false, team: 2, slot: 1, user: { firstName: 'D', lastName: 'D', avatarUrl: null } },
+    ],
+    matches: [],
+  });
+
+  it('renvoie une entrée avec équipes concrètes pour un participant non-organisateur', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+    const rows = await service.listToRecord('u3', NOW2);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reservationId).toBe('r1');
+    expect(rows[0].club.slug).toBe('arena');
+    expect(rows[0].resourceName).toBe('Court 1');
+    expect(rows[0].sport.key).toBe('padel');
+    expect(rows[0].players).toHaveLength(4);
+    const u1 = rows[0].players.find((p) => p.userId === 'u1')!;
+    expect(u1.team).toBe(1);
+    expect(u1.slot).toBe(0);
+  });
+
+  it('exclut les réservations avec un Match non annulé', async () => {
+    const r = baseReservation();
+    r.matches = [{ status: 'PENDING' }] as any;
+    prismaMock.reservation.findMany.mockResolvedValue([r] as any);
+    const rows = await service.listToRecord('u1', NOW2);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('ré-inclut une réservation dont le seul Match est CANCELLED', async () => {
+    const r = baseReservation();
+    r.matches = [{ status: 'CANCELLED' }] as any;
+    prismaMock.reservation.findMany.mockResolvedValue([r] as any);
+    const rows = await service.listToRecord('u1', NOW2);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('exclut les réservations à moins de 4 participants', async () => {
+    const r = baseReservation();
+    r.participants = r.participants.slice(0, 3);
+    prismaMock.reservation.findMany.mockResolvedValue([r] as any);
+    const rows = await service.listToRecord('u1', NOW2);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('interroge la fenêtre 7 jours et le club à niveau activé', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([] as any);
+    await service.listToRecord('u1', NOW2);
+    const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.type).toBe('COURT');
+    expect(arg.where.status).toBe('CONFIRMED');
+    expect(arg.where.endTime.lte).toEqual(NOW2);
+    expect(arg.where.endTime.gte).toEqual(new Date(NOW2.getTime() - 7 * 24 * 3600 * 1000));
+    expect(arg.where.participants.some.userId).toBe('u1');
+    expect(arg.where.resource.club.levelSystemEnabled).toBe(true);
+  });
+});
