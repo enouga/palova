@@ -347,3 +347,35 @@ describe('Account deletion routes', () => {
     expect(deleteAccount).toHaveBeenCalledWith('u1', 'password123');
   });
 });
+
+describe('GET /api/me/matches/to-record', () => {
+  it('401 sans token', async () => {
+    const res = await request(app).get('/api/me/matches/to-record');
+    expect(res.status).toBe(401);
+  });
+
+  it('renvoie la liste des matchs à saisir', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([{
+      id: 'r1',
+      startTime: new Date('2026-06-10T18:00:00Z'),
+      endTime: new Date('2026-06-10T19:30:00Z'),
+      resource: {
+        name: 'Court 1', attributes: { format: 'DOUBLE' },
+        clubSport: { sport: { key: 'padel', name: 'Padel' } },
+        club: { slug: 'arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+      },
+      participants: [
+        { userId: 'u1', isOrganizer: true, team: 1, slot: 0, user: { firstName: 'A', lastName: 'A', avatarUrl: null } },
+        { userId: 'u2', isOrganizer: false, team: 1, slot: 1, user: { firstName: 'B', lastName: 'B', avatarUrl: null } },
+        { userId: 'u3', isOrganizer: false, team: 2, slot: 0, user: { firstName: 'C', lastName: 'C', avatarUrl: null } },
+        { userId: 'u4', isOrganizer: false, team: 2, slot: 1, user: { firstName: 'D', lastName: 'D', avatarUrl: null } },
+      ],
+      matches: [],
+    }] as any);
+    const res = await request(app).get('/api/me/matches/to-record').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].reservationId).toBe('r1');
+    expect(res.body[0].players).toHaveLength(4);
+  });
+});

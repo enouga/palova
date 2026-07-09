@@ -15,6 +15,7 @@ import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { AccountService } from '../services/account.service';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
+import { MatchService } from '../services/match.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -24,6 +25,7 @@ const ratingService = new RatingService();
 const accountService = new AccountService();
 const followService = new FollowService();
 const friendshipService = new FriendshipService();
+const matchService = new MatchService();
 
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
@@ -282,6 +284,13 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
       })),
       commentCount: r.match._count.comments,
     })));
+  } catch (err) { next(err); }
+});
+
+// Réservations padel jouées, prêtes à saisir (participant, pas seulement organisateur).
+router.get('/matches/to-record', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await matchService.listToRecord(req.user!.id, new Date()));
   } catch (err) { next(err); }
 });
 
