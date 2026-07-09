@@ -19,6 +19,10 @@ jest.mock('../lib/api', () => ({
     adminSetMemberWatch: jest.fn(),
     // Onglet Niveau fusionné (lots C+D) : la fiche charge aussi le niveau (override admin).
     adminGetMemberLevel: jest.fn(),
+    // Recharge/correction d'un solde + rôle du viewer (gating « Corriger »).
+    getMyClubs: jest.fn(),
+    adminRechargePackage: jest.fn(),
+    adminAdjustPackage: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -48,12 +52,16 @@ const HISTORY: MemberHistory = {
 
 const renderPage = () => render(<ThemeProvider><MemberHistoryPage /></ThemeProvider>);
 
+const balEntries = { id: 'pk1', kind: 'ENTRIES' as const, name: 'Carnet 10', creditsRemaining: 3, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00.000Z', expiresAt: null };
+const withBalance = (): MemberHistory => ({ ...HISTORY, finance: { ...HISTORY.finance, prepaid: { balances: [balEntries], consumption: [] } } });
+
 beforeEach(() => {
   (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(HISTORY);
   (api.adminGetMemberNotes as jest.Mock).mockResolvedValue([]);
   (api.adminAddMemberNote as jest.Mock).mockResolvedValue({ id: 'n1', body: 'Joueur sympa', createdAt: '2026-06-23T14:00:00.000Z', author: { firstName: 'Sarah', lastName: 'P' } });
   (api.adminSetMemberWatch as jest.Mock).mockResolvedValue({ userId: 'u1', watch: true });
   (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({ levels: {}, history: [] });
+  (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'ADMIN' }]);
 });
 
 it('affiche identité, badge « à risque » et chip « Carnet actif »', async () => {
@@ -105,6 +113,48 @@ it('toggle « à surveiller » appelle l\'API', async () => {
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: /Marquer à surveiller/ }));
   await waitFor(() => expect(api.adminSetMemberWatch).toHaveBeenCalledWith('club-1', 'u1', true, 'tok'));
+});
+
+it('onglet Finances : recharger un solde appelle adminRechargePackage', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  (api.adminRechargePackage as jest.Mock).mockResolvedValue({ package: {}, payment: {} });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  await screen.findByText('Carnet 10');
+  fireEvent.click(screen.getByRole('button', { name: 'Recharger Carnet 10' }));
+  fireEvent.change(await screen.findByLabelText('Entrées à ajouter'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('Montant encaissé (€)'), { target: { value: '100' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await waitFor(() => expect(api.adminRechargePackage).toHaveBeenCalledWith(
+    'club-1', 'u1', 'pk1', expect.objectContaining({ addEntries: 5, price: 100 }), 'tok'));
+});
+
+it('onglet Finances : « Corriger » réservé ADMIN/OWNER (absent pour un STAFF)', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'STAFF' }]);
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  await screen.findByText('Carnet 10');
+  await waitFor(() => expect(api.getMyClubs).toHaveBeenCalled());
+  expect(screen.getByRole('button', { name: 'Recharger Carnet 10' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Corriger/ })).toBeNull();
+});
+
+it('onglet Finances : un ADMIN corrige un solde (adminAdjustPackage)', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  (api.adminAdjustPackage as jest.Mock).mockResolvedValue({ package: {} });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  await screen.findByText('Carnet 10');
+  fireEvent.click(await screen.findByRole('button', { name: 'Corriger Carnet 10' }));
+  fireEvent.change(await screen.findByLabelText("Nouveau nombre d'entrées"), { target: { value: '8' } });
+  fireEvent.change(screen.getByLabelText('Motif de la correction'), { target: { value: 'erreur' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await waitFor(() => expect(api.adminAdjustPackage).toHaveBeenCalledWith(
+    'club-1', 'u1', 'pk1', { newCredits: 8, reason: 'erreur' }, 'tok'));
 });
 
 it('membre introuvable → message d\'erreur', async () => {

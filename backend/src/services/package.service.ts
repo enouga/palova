@@ -161,6 +161,108 @@ export class PackageService {
     });
   }
 
+  /**
+   * Recharge un solde EXISTANT (top-up) : incrémente le solde + Payment de recharge
+   * dans la même transaction. Refuse un solde expiré (les crédits ajoutés seraient
+   * inutilisables — `consume()` filtre `notExpired`). Encaissé en CASH/CARD/TRANSFER/
+   * VOUCHER/OTHER (jamais en prépayé), comme une vente.
+   */
+  async rechargePackage(clubId: string, userId: string, packageId: string, body: {
+    addEntries?: number; price?: number; addAmount?: number; method?: string;
+    payerName?: string; voucherRef?: string; voucherIssuer?: string;
+  }, createdByUserId?: string) {
+    const pkg = await prisma.memberPackage.findUnique({
+      where: { id: packageId },
+      include: { template: { select: { name: true } } },
+    });
+    if (!pkg || pkg.clubId !== clubId || pkg.userId !== userId) throw new Error('PACKAGE_NOT_FOUND');
+    if (pkg.expiresAt && pkg.expiresAt <= new Date()) throw new Error('PACKAGE_EXPIRED');
+
+    const method = (SALE_METHODS.includes(body.method as typeof SALE_METHODS[number])
+      ? body.method : 'CASH') as PaymentMethod;
+    if (method === 'VOUCHER' && !body.voucherRef?.trim()) throw new Error('VALIDATION_ERROR');
+
+    let paymentAmount: Prisma.Decimal;
+    let pkgData: Prisma.MemberPackageUpdateInput;
+    if (pkg.kind === 'ENTRIES') {
+      if (!Number.isInteger(body.addEntries) || (body.addEntries as number) <= 0) throw new Error('VALIDATION_ERROR');
+      if (typeof body.price !== 'number' || isNaN(body.price) || body.price <= 0) throw new Error('VALIDATION_ERROR');
+      const add = body.addEntries as number;
+      paymentAmount = new Prisma.Decimal(body.price);
+      pkgData = { creditsRemaining: { increment: add }, creditsTotal: { increment: add } };
+    } else {
+      if (typeof body.addAmount !== 'number' || isNaN(body.addAmount) || body.addAmount <= 0) throw new Error('VALIDATION_ERROR');
+      const add = new Prisma.Decimal(body.addAmount);
+      paymentAmount = add;
+      pkgData = { amountRemaining: { increment: add }, amountTotal: { increment: add } };
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const pkgUpdated = await tx.memberPackage.update({ where: { id: pkg.id }, data: pkgData });
+      const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
+      const payment = await tx.payment.create({
+        data: {
+          clubId,
+          amount: paymentAmount,
+          method,
+          memberPackageId: pkg.id,
+          payerName: body.payerName?.trim() || null,
+          note: `Recharge ${pkg.template.name}`,
+          voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
+          voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
+          voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
+          createdByUserId: createdByUserId ?? null,
+          receiptNo,
+        },
+      });
+      return { package: pkgUpdated, payment };
+    });
+  }
+
+  /**
+   * Corrige un solde EXISTANT à une valeur CIBLE (sans mouvement d'argent) et
+   * journalise la correction dans MemberNote (unique trace d'audit). Réservé
+   * OWNER/ADMIN au niveau route. `total` remonté si cible > total (jauge
+   * « X restant sur Y » cohérente), jamais baissé.
+   */
+  async adjustPackage(clubId: string, userId: string, packageId: string, body: {
+    newCredits?: number; newAmount?: number; reason?: string;
+  }, authorId: string) {
+    const pkg = await prisma.memberPackage.findUnique({
+      where: { id: packageId },
+      include: { template: { select: { name: true } } },
+    });
+    if (!pkg || pkg.clubId !== clubId || pkg.userId !== userId) throw new Error('PACKAGE_NOT_FOUND');
+    const reason = body.reason?.trim();
+    if (!reason) throw new Error('VALIDATION_ERROR');
+
+    let pkgData: Prisma.MemberPackageUpdateInput;
+    let oldStr: string;
+    let newStr: string;
+    if (pkg.kind === 'ENTRIES') {
+      if (!Number.isInteger(body.newCredits) || (body.newCredits as number) < 0) throw new Error('VALIDATION_ERROR');
+      const target = body.newCredits as number;
+      pkgData = { creditsRemaining: target, creditsTotal: Math.max(pkg.creditsTotal ?? 0, target) };
+      oldStr = `${pkg.creditsRemaining ?? 0} entrée(s)`;
+      newStr = `${target} entrée(s)`;
+    } else {
+      if (typeof body.newAmount !== 'number' || isNaN(body.newAmount) || body.newAmount < 0) throw new Error('VALIDATION_ERROR');
+      const target = new Prisma.Decimal(body.newAmount);
+      const curTotal = pkg.amountTotal ?? new Prisma.Decimal(0);
+      pkgData = { amountRemaining: target, amountTotal: target.greaterThan(curTotal) ? target : curTotal };
+      oldStr = `${(pkg.amountRemaining ?? new Prisma.Decimal(0)).toFixed(2)} €`;
+      newStr = `${target.toFixed(2)} €`;
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const pkgUpdated = await tx.memberPackage.update({ where: { id: pkg.id }, data: pkgData });
+      await tx.memberNote.create({
+        data: { clubId, userId, authorId, body: `Solde « ${pkg.template.name} » corrigé : ${oldStr} → ${newStr} (motif : ${reason})` },
+      });
+      return { package: pkgUpdated };
+    });
+  }
+
   // --- Consommation & soldes ---
 
   /** Alloue le prochain numéro de reçu du club (séquentiel, dans la transaction appelante). */

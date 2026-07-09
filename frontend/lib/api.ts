@@ -508,6 +508,12 @@ export const api = {
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  adminRechargePackage: (clubId: string, userId: string, packageId: string, body: RechargePackageBody, token: string) =>
+    request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages/${packageId}/recharge`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminAdjustPackage: (clubId: string, userId: string, packageId: string, body: AdjustPackageBody, token: string) =>
+    request<{ package: MemberPackage }>(`/api/clubs/${clubId}/admin/members/${userId}/packages/${packageId}/adjust`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   // --- Override admin du niveau (réservé ADMIN/OWNER) ---
   // Fiche niveau d'un membre : niveaux courants par sport + historique des corrections.
   adminGetMemberLevel: (clubId: string, userId: string, token: string) =>
@@ -1836,6 +1842,14 @@ export interface SellPackageBody {
   voucherRef?: string;
   voucherIssuer?: string;
 }
+
+// Recharge d'un solde existant (top-up encaissé) : entrées OU montant selon le kind du solde.
+export interface RechargePackageBody {
+  addEntries?: number; price?: number; addAmount?: number;
+  method?: PaymentMethod; payerName?: string; voucherRef?: string; voucherIssuer?: string;
+}
+// Correction d'un solde (valeur cible, sans argent) — motif obligatoire (journalisé).
+export interface AdjustPackageBody { newCredits?: number; newAmount?: number; reason: string }
 
 export type CreatePackageTemplateBody = {
   kind: PackageKind; name: string; description?: string | null; price: number;

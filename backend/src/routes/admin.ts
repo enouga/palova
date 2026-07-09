@@ -88,6 +88,7 @@ const ERROR_STATUS: Record<string, number> = {
   SLOT_NOT_AVAILABLE:    409,
   TEMPLATE_NOT_FOUND:     404,
   PACKAGE_NOT_FOUND:      404,
+  PACKAGE_EXPIRED:        409,
   PAYMENT_NOT_FOUND:      404,
   INSUFFICIENT_BALANCE:   409,
   PAYMENT_EXCEEDS_DUE:    409,
@@ -866,6 +867,14 @@ router.get('/members/:userId/packages', async (req: ClubScopedRequest, res: Resp
 });
 router.post('/members/:userId/packages', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await packageService.sellPackage(req.membership!.clubId, asString(req.params.userId), { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
+});
+// Recharge d'un solde existant (top-up encaissé) — tout STAFF.
+router.post('/members/:userId/packages/:packageId/recharge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await packageService.rechargePackage(req.membership!.clubId, asString(req.params.userId), asString(req.params.packageId), req.body, req.user!.id)); } catch (e) { handleError(e, res, next); }
+});
+// Correction d'un solde (sans argent, journalisée) — réservé OWNER/ADMIN.
+router.post('/members/:userId/packages/:packageId/adjust', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await packageService.adjustPackage(req.membership!.clubId, asString(req.params.userId), asString(req.params.packageId), req.body, req.user!.id)); } catch (e) { handleError(e, res, next); }
 });
 
 // Passif d'un joueur : activité, finances, niveau, fidélité (un seul payload).

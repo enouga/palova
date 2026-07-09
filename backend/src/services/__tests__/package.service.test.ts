@@ -365,3 +365,128 @@ describe('PackageService — listActiveByClub', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe('PackageService — recharge d’un solde existant', () => {
+  let service: PackageService;
+  beforeEach(() => {
+    service = new PackageService();
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 5 } as any);
+    prismaMock.memberPackage.update.mockResolvedValue({ id: 'pkg-1' } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+  });
+
+  const pkgEntries = { id: 'pkg-1', clubId: 'club-1', userId: 'user-1', kind: 'ENTRIES', creditsRemaining: 3, creditsTotal: 10, amountRemaining: null, amountTotal: null, expiresAt: null, template: { name: 'Carnet 10' } };
+  const pkgWallet = { id: 'pkg-2', clubId: 'club-1', userId: 'user-1', kind: 'WALLET', creditsRemaining: null, creditsTotal: null, amountRemaining: new Prisma.Decimal(20), amountTotal: new Prisma.Decimal(50), expiresAt: null, template: { name: 'Porte-monnaie' } };
+
+  it('recharge un carnet : incrémente creditsRemaining + creditsTotal et crée un Payment (pas de note)', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any);
+    await service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100, method: 'CARD' }, 'staff-1');
+    expect(prismaMock.memberPackage.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pkg-1' },
+      data: expect.objectContaining({ creditsRemaining: { increment: 5 }, creditsTotal: { increment: 5 } }),
+    }));
+    const pay = prismaMock.payment.create.mock.calls[0][0].data as any;
+    expect(pay.memberPackageId).toBe('pkg-1');
+    expect(Number(pay.amount)).toBe(100);
+    expect(pay.method).toBe('CARD');
+    expect(pay.receiptNo).toBe(5);
+    expect(String(pay.note)).toContain('Recharge');
+    expect(prismaMock.memberNote.create).not.toHaveBeenCalled();
+  });
+
+  it('recharge un porte-monnaie : incrémente amountRemaining + amountTotal, Payment = montant ajouté', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgWallet as any);
+    await service.rechargePackage('club-1', 'user-1', 'pkg-2', { addAmount: 30, method: 'CASH' }, 'staff-1');
+    const data = prismaMock.memberPackage.update.mock.calls[0][0].data as any;
+    expect(Number(data.amountRemaining.increment)).toBe(30);
+    expect(Number(data.amountTotal.increment)).toBe(30);
+    expect(Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount)).toBe(30);
+  });
+
+  it('refuse un solde d’un autre club ou d’un autre membre', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue({ ...pkgEntries, clubId: 'autre' } as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100 }, 's')).rejects.toThrow('PACKAGE_NOT_FOUND');
+    prismaMock.memberPackage.findUnique.mockResolvedValue({ ...pkgEntries, userId: 'autre' } as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100 }, 's')).rejects.toThrow('PACKAGE_NOT_FOUND');
+  });
+
+  it('refuse la recharge d’un solde expiré', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue({ ...pkgEntries, expiresAt: new Date(Date.now() - 86_400_000) } as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100 }, 's')).rejects.toThrow('PACKAGE_EXPIRED');
+  });
+
+  it('refuse des quantités/montants invalides', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 0, price: 100 }, 's')).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 2.5, price: 100 }, 's')).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 0 }, 's')).rejects.toThrow('VALIDATION_ERROR');
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgWallet as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-2', { addAmount: 0 }, 's')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('recharge en ticket CE : exige voucherRef et pose voucherStatus', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any);
+    await expect(service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100, method: 'VOUCHER' }, 's')).rejects.toThrow('VALIDATION_ERROR');
+    await service.rechargePackage('club-1', 'user-1', 'pkg-1', { addEntries: 5, price: 100, method: 'VOUCHER', voucherRef: 'ANCV-9' }, 's');
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ method: 'VOUCHER', voucherRef: 'ANCV-9', voucherStatus: 'PENDING_REIMBURSEMENT' }),
+    }));
+  });
+});
+
+describe('PackageService — correction d’un solde (sans argent)', () => {
+  let service: PackageService;
+  beforeEach(() => {
+    service = new PackageService();
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.memberPackage.update.mockResolvedValue({ id: 'pkg-1' } as any);
+    prismaMock.memberNote.create.mockResolvedValue({ id: 'note-1' } as any);
+  });
+
+  const pkgEntries = { id: 'pkg-1', clubId: 'club-1', userId: 'user-1', kind: 'ENTRIES', creditsRemaining: 3, creditsTotal: 10, amountRemaining: null, amountTotal: null, expiresAt: null, template: { name: 'Carnet 10' } };
+  const pkgWallet = { id: 'pkg-2', clubId: 'club-1', userId: 'user-1', kind: 'WALLET', creditsRemaining: null, creditsTotal: null, amountRemaining: new Prisma.Decimal(20), amountTotal: new Prisma.Decimal(50), expiresAt: null, template: { name: 'Porte-monnaie' } };
+
+  it('corrige un carnet à une cible et journalise dans MemberNote, sans Payment', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any);
+    await service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 8, reason: 'erreur de saisie' }, 'staff-1');
+    expect(prismaMock.memberPackage.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pkg-1' },
+      data: expect.objectContaining({ creditsRemaining: 8 }),
+    }));
+    const note = prismaMock.memberNote.create.mock.calls[0][0].data as any;
+    expect(note).toMatchObject({ clubId: 'club-1', userId: 'user-1', authorId: 'staff-1' });
+    expect(note.body).toContain('3');
+    expect(note.body).toContain('8');
+    expect(note.body).toContain('erreur de saisie');
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('remonte le total si la cible dépasse le total, sinon le laisse', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any); // total 10
+    await service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 12, reason: 'x' }, 's');
+    expect((prismaMock.memberPackage.update.mock.calls[0][0].data as any).creditsTotal).toBe(12);
+    prismaMock.memberPackage.update.mockClear();
+    await service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 2, reason: 'x' }, 's');
+    const data = prismaMock.memberPackage.update.mock.calls[0][0].data as any;
+    expect(data.creditsRemaining).toBe(2);
+    expect(data.creditsTotal).toBe(10); // inchangé
+  });
+
+  it('corrige un porte-monnaie à un montant cible', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgWallet as any);
+    await service.adjustPackage('club-1', 'user-1', 'pkg-2', { newAmount: 35, reason: 'y' }, 's');
+    expect(Number((prismaMock.memberPackage.update.mock.calls[0][0].data as any).amountRemaining)).toBe(35);
+  });
+
+  it('refuse une cible négative ou un motif vide', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue(pkgEntries as any);
+    await expect(service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: -1, reason: 'x' }, 's')).rejects.toThrow('VALIDATION_ERROR');
+    await expect(service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 5, reason: '  ' }, 's')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('refuse un solde hors périmètre', async () => {
+    prismaMock.memberPackage.findUnique.mockResolvedValue({ ...pkgEntries, clubId: 'autre' } as any);
+    await expect(service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 5, reason: 'x' }, 's')).rejects.toThrow('PACKAGE_NOT_FOUND');
+  });
+});

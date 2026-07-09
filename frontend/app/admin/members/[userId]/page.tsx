@@ -16,6 +16,7 @@ import { LevelOverrideForm } from '@/components/admin/LevelOverrideForm';
 import { MonthlyRevenueChart } from '@/components/admin/stats/MonthlyRevenueChart';
 import { DayHourHeatmap } from '@/components/admin/stats/DayHourHeatmap';
 import { PaymentMethodChart } from '@/components/admin/stats/PaymentMethodChart';
+import { PackageBalanceDialog } from '@/components/admin/members/PackageBalanceDialog';
 import {
   winRate, lastVisitLabel, cancellationLabel, tenureLabel, weekdayLabel, methodLabel,
 } from '@/lib/memberStats';
@@ -83,6 +84,9 @@ export default function MemberHistoryPage() {
   const [noteBody, setNoteBody] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Rôle du viewer : la correction d'un solde (sans argent) est réservée OWNER/ADMIN.
+  const [viewer, setViewer] = useState<{ role: 'OWNER' | 'ADMIN' | 'STAFF' } | null>(null);
+  const [pkgAction, setPkgAction] = useState<{ mode: 'recharge' | 'adjust'; bal: MemberHistory['finance']['prepaid']['balances'][number] } | null>(null);
   // Garde anti-race : un reload (onSaved après correction de niveau) peut chevaucher
   // un chargement en cours ; on ignore le résultat d'une requête périmée.
   const reqIdRef = useRef(0);
@@ -112,6 +116,13 @@ export default function MemberHistoryPage() {
   }, [token, clubId, userId, levelEnabled]);
 
   useEffect(() => { if (ready && token && clubId && userId) load(); }, [ready, token, clubId, userId, load]);
+
+  useEffect(() => {
+    if (!ready || !token || !clubId) return;
+    api.getMyClubs(token)
+      .then((clubs) => { const mine = clubs.find((c) => c.clubId === clubId); setViewer(mine ? { role: mine.role } : null); })
+      .catch(() => setViewer(null));
+  }, [ready, token, clubId]);
 
   const toggleWatch = async () => {
     if (!token || !clubId) return;
@@ -155,6 +166,7 @@ export default function MemberHistoryPage() {
 
   const m = data.member;
   const { counts, finance, game, loyalty, favorites } = data;
+  const canCorrect = viewer?.role === 'OWNER' || viewer?.role === 'ADMIN';
   const reservations = onlyLate ? data.reservations.filter((r) => r.lateCancel) : data.reservations;
 
   // --- Données pour la partie « correction de niveau » (C2), à l'intérieur de l'onglet Niveau ---
@@ -302,15 +314,34 @@ export default function MemberHistoryPage() {
                 <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, margin: 0 }}>Aucune formule prépayée.</p>
               ) : (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {finance.prepaid.balances.map((b) => (
-                    <div key={b.id} style={{ background: th.surface2, borderRadius: 12, padding: '10px 14px' }}>
+                  {finance.prepaid.balances.map((b) => {
+                    const expired = !!b.expiresAt && new Date(b.expiresAt).getTime() < Date.now();
+                    return (
+                    <div key={b.id} style={{ background: th.surface2, borderRadius: 12, padding: '10px 14px', minWidth: 180 }}>
                       <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>{b.name}</div>
                       <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
                         {b.kind === 'ENTRIES' ? `${b.creditsRemaining ?? 0} entrée(s)` : `${b.amountRemaining ? money(b.amountRemaining) : '0 €'} restant`}
                         {b.expiresAt ? ` · expire le ${fmtDate(b.expiresAt)}` : ''}
                       </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        <button
+                          aria-label={`Recharger ${b.name}`}
+                          disabled={expired}
+                          onClick={() => setPkgAction({ mode: 'recharge', bal: b })}
+                          title={expired ? 'Solde expiré — vendez une nouvelle offre' : undefined}
+                          style={{ border: `1px solid ${th.line}`, background: 'transparent', color: expired ? th.textFaint : th.text, borderRadius: 8, padding: '5px 10px', cursor: expired ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, opacity: expired ? 0.6 : 1 }}
+                        >{expired ? 'Expiré' : 'Recharger'}</button>
+                        {canCorrect && (
+                          <button
+                            aria-label={`Corriger ${b.name}`}
+                            onClick={() => setPkgAction({ mode: 'adjust', bal: b })}
+                            style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}
+                          >Corriger</button>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               {finance.prepaid.consumption.length > 0 && (
@@ -487,6 +518,14 @@ export default function MemberHistoryPage() {
           </Section>
         )}
       </div>
+
+      {pkgAction && token && clubId && (
+        <PackageBalanceDialog
+          clubId={clubId} userId={userId} token={token}
+          mode={pkgAction.mode} bal={pkgAction.bal}
+          onClose={() => setPkgAction(null)} onDone={load}
+        />
+      )}
     </div>
   );
 }
