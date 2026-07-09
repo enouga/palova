@@ -31,9 +31,9 @@ const wrap = (over = {}, onChanged = () => {}) =>
 describe('OpenMatchToggle', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('padel confirmée future avec place libre → propose « Ouvrir aux joueurs du club »', () => {
+  it('padel confirmée future avec place libre → propose « Ouvrir la partie »', () => {
     wrap();
-    expect(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
   });
 
   it('ne rend rien pour un sport non-padel', () => {
@@ -58,7 +58,7 @@ describe('OpenMatchToggle', () => {
   it('ouvre la feuille et publie sans fourchette de niveau', async () => {
     const onChanged = jest.fn();
     wrap({}, onChanged);
-    fireEvent.click(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
@@ -66,7 +66,7 @@ describe('OpenMatchToggle', () => {
 
   it('publie avec une fourchette quand « Limiter le niveau » est activé', async () => {
     wrap();
-    fireEvent.click(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('switch', { name: /Limiter le niveau/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 6 }));
@@ -75,7 +75,7 @@ describe('OpenMatchToggle', () => {
   it('publish enregistre la préférence de niveau (localStorage palova:open-match-level)', async () => {
     localStorage.clear();
     wrap();
-    fireEvent.click(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('switch', { name: /Limiter le niveau/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalled());

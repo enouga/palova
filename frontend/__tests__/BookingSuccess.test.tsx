@@ -55,7 +55,7 @@ describe('BookingSuccess', () => {
     renderSuccess();
     expect(await screen.findByText(/Organisez votre partie/i)).toBeInTheDocument();
     expect(await screen.findByText(/Alice/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
     expect(api.getMyReservations).toHaveBeenCalledWith('jwt');
   });
 

@@ -86,7 +86,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
       ) : !sheet ? (
         <button type="button" onClick={() => setSheet(true)} disabled={busy}
           style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 14px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>
-          Ouvrir aux joueurs du club
+          Ouvrir la partie
         </button>
       ) : (
         <div style={{ border: `1px solid ${th.line}`, borderRadius: 14, padding: 14, background: th.surface }}>

@@ -112,8 +112,8 @@ describe('ReservationPlayersInline', () => {
       'r1', { 'u-org': 1, u2: 2 }, 'abc', { 'u-org': 0, u2: 1 }));
   });
 
-  it('padel : propose d’ouvrir la partie aux joueurs du club', () => {
+  it('padel : propose d’ouvrir la partie', () => {
     wrap(padel);
-    expect(screen.getByRole('button', { name: /Ouvrir aux joueurs du club/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
   });
 });
