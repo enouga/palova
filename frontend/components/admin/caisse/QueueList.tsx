@@ -43,9 +43,11 @@ export function QueueList({ toCollect, settled, playersOf, selectedId, onSelect 
     return (
       <button key={r.id} type="button" onClick={() => onSelect(r)} aria-current={sel || undefined} style={st}>
         <span style={{ fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, color: th.text, flexShrink: 0 }}>{fmtTime(r.startTime)}</span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{who}</span>
-          <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.resource.name}</span>
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>{who}</span>
+          <span style={{ display: 'inline-flex', alignSelf: 'flex-start', maxWidth: '100%', background: `${th.accent}22`, borderRadius: 999, padding: '1.5px 9px' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: th.textMute, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.resource.name}</span>
+          </span>
         </span>
         {dots && !done && <PaymentDots dots={dots} color={th.accent} />}
         {done
