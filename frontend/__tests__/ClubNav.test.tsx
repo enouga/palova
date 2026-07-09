@@ -263,6 +263,29 @@ describe('ClubNav', () => {
     expect(await screen.findByText('Parties')).toBeInTheDocument();
   });
 
+  it("affiche l'icône « Espace club » (lien /admin) quand on gère ce club, quel que soit le rôle", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getMyClubs.mockResolvedValueOnce([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'STAFF' }]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const link = await screen.findByLabelText('Espace club');
+    expect(link).toHaveAttribute('href', '/admin');
+  });
+
+  it("masque l'icône « Espace club » si on ne gère pas ce club", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getMyClubs.mockResolvedValueOnce([{ clubId: 'autre-club', slug: 'x', name: 'X', role: 'OWNER' }]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    await screen.findByText('Mes réservations'); // menu chargé
+    expect(screen.queryByLabelText('Espace club')).not.toBeInTheDocument();
+  });
+
+  it("masque l'icône « Espace club » sans session", () => {
+    wrap();
+    expect(screen.queryByLabelText('Espace club')).not.toBeInTheDocument();
+  });
+
   it('expose un libellé court (.cn-lbl-short) pour les onglets longs — affiché à la place du long sur mobile actif', async () => {
     document.cookie = 'token=abc; path=/';
     pathname = '/me/reservations';

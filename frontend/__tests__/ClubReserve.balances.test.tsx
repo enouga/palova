@@ -27,6 +27,8 @@ jest.mock('../lib/api', () => ({
     getOpenMatchUnread: jest.fn().mockResolvedValue({ count: 0 }),
     // consommé par ClubNav (badge 💬 Messages du header)
     getDmUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (icône « Espace club » du header)
+    getMyClubs: jest.fn().mockResolvedValue([]),
     // consommé par ClubNav (pastille « parties ouvertes » de l'onglet Parties)
     getOpenMatches: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)

@@ -84,6 +84,17 @@ export function ClubNav({ club }: { club: ClubDetail }) {
     return () => { alive = false; es.close(); window.removeEventListener('palova:dm-unread', onLocal); };
   }, [showMessages, token, pathname]);
 
+  // Raccourci « Espace club » dans l'en-tête : visible pour l'OWNER/ADMIN/STAFF du club courant
+  // (rôle indifférent, cf. api.getMyClubs qui renvoie toute adhésion ClubMember). Le même lien
+  // dans le menu ProfileMenu est réservé aux AUTRES clubs gérés (pas de doublon).
+  const [manages, setManages] = useState(false);
+  useEffect(() => {
+    if (!ready || !token) { setManages(false); return; }
+    let alive = true;
+    api.getMyClubs(token).then((list) => { if (alive) setManages(list.some((m) => m.clubId === club.id)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [ready, token, club.id]);
+
   // Compteur « Mes réservations » À VENIR — identique au compteur de l'onglet « À venir »
   // de /me/reservations : réservations terrain + inscriptions tournois + events + cours, fusionnés
   // par buildAgendaList (annulés exclus), même cloisonnement par club (sauf si le club ouvre la
@@ -194,6 +205,14 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI,
                   }}>{dmUnread > 99 ? '99+' : dmUnread}</span>
                 )}
+              </Link>
+            )}
+            {manages && (
+              // Raccourci direct vers le back-office, même langage que l'icône Messages.
+              <Link href="/admin" aria-label="Espace club" title="Espace club"
+                style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
+                <Icon name="settings" size={19} color={th.text} />
               </Link>
             )}
             <NotificationBell /><ProfileMenu />

@@ -175,13 +175,30 @@ describe('ProfileMenu', () => {
     expect(screen.queryByText('Superadmin')).not.toBeInTheDocument();
   });
 
-  it("lien « Espace club » si on gère le club courant", async () => {
+  it("pas de lien « Espace club » dans le menu pour le club courant (déplacé dans l'en-tête)", async () => {
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'OWNER' }]);
     wrap();
     openMenu();
-    expect(await screen.findByText('Espace club')).toBeInTheDocument();
+    await screen.findByText('Mes clubs'); // menu chargé
+    expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+  });
+
+  it("lien « Espace club » pour les AUTRES clubs gérés, pas le club courant", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getMyClubs.mockResolvedValue([
+      { clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'OWNER' },
+      { clubId: 'c2', slug: 'autre', name: 'Autre Club', role: 'ADMIN' },
+      { clubId: 'c3', slug: 'troisieme', name: 'Troisième Club', role: 'STAFF' },
+    ]);
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Espace club — Autre Club')).toBeInTheDocument();
+    expect(screen.getByText('Espace club — Troisième Club')).toBeInTheDocument();
+    expect(screen.queryByText('Espace club — Club Démo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Espace club')).not.toBeInTheDocument(); // pas de version courte (2 autres clubs)
   });
 
   it("lien « Espace club » visible aussi sur l'hôte plateforme dès qu'on gère un club", async () => {

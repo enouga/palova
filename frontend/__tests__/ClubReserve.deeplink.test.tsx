@@ -32,6 +32,8 @@ jest.mock('../lib/api', () => ({
     getMyLessons: jest.fn().mockResolvedValue([]),
     // consommé par ClubNav (badge 💬 Messages du header)
     getDmUnread: jest.fn().mockResolvedValue({ count: 0 }),
+    // consommé par ClubNav (icône « Espace club » du header)
+    getMyClubs: jest.fn().mockResolvedValue([]),
     // consommés par NotificationBell (intégré dans ClubNav)
     getUnreadCount: jest.fn().mockResolvedValue({ count: 0 }),
     getNotifications: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
