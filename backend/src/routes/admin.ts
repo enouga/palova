@@ -872,8 +872,8 @@ router.post('/members/:userId/packages', async (req: ClubScopedRequest, res: Res
 router.post('/members/:userId/packages/:packageId/recharge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await packageService.rechargePackage(req.membership!.clubId, asString(req.params.userId), asString(req.params.packageId), req.body, req.user!.id)); } catch (e) { handleError(e, res, next); }
 });
-// Correction d'un solde (sans argent, journalisée) — réservé OWNER/ADMIN.
-router.post('/members/:userId/packages/:packageId/adjust', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Correction d'un solde (sans argent, journalisée dans les notes) — tout STAFF.
+router.post('/members/:userId/packages/:packageId/adjust', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.adjustPackage(req.membership!.clubId, asString(req.params.userId), asString(req.params.packageId), req.body, req.user!.id)); } catch (e) { handleError(e, res, next); }
 });
 

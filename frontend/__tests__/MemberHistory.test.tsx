@@ -130,16 +130,15 @@ it('onglet Finances : recharger un solde appelle adminRechargePackage', async ()
     'club-1', 'u1', 'pk1', expect.objectContaining({ addEntries: 5, price: 100 }), 'tok'));
 });
 
-it('onglet Finances : « Corriger » réservé ADMIN/OWNER (absent pour un STAFF)', async () => {
+it('onglet Finances : « Corriger » disponible pour tout staff', async () => {
   (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
   (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'STAFF' }]);
   renderPage();
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
   await screen.findByText('Carnet 10');
-  await waitFor(() => expect(api.getMyClubs).toHaveBeenCalled());
   expect(screen.getByRole('button', { name: 'Recharger Carnet 10' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /^Corriger/ })).toBeNull();
+  expect(await screen.findByRole('button', { name: 'Corriger Carnet 10' })).toBeInTheDocument();
 });
 
 it('onglet Finances : un ADMIN corrige un solde (adminAdjustPackage)', async () => {

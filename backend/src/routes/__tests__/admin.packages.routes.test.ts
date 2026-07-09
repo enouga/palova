@@ -72,14 +72,14 @@ describe('POST /members/:userId/packages/:packageId/recharge', () => {
   });
 });
 
-describe('POST /members/:userId/packages/:packageId/adjust (réservé ADMIN)', () => {
+describe('POST /members/:userId/packages/:packageId/adjust', () => {
   const url = `${base}/members/u9/packages/pkg-1/adjust`;
 
-  it('403 pour un viewer STAFF', async () => {
+  it('200 : un STAFF peut corriger un solde', async () => {
     memberRoles({ admin1: 'STAFF' });
     const res = await request(app).post(url).set(auth).send({ newCredits: 8, reason: 'erreur' });
-    expect(res.status).toBe(403);
-    expect(prismaMock.memberPackage.update).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(prismaMock.memberNote.create).toHaveBeenCalled();
   });
 
   it('200 : un ADMIN corrige un solde', async () => {

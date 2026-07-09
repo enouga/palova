@@ -84,8 +84,7 @@ export default function MemberHistoryPage() {
   const [noteBody, setNoteBody] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  // Rôle du viewer : la correction d'un solde (sans argent) est réservée OWNER/ADMIN.
-  const [viewer, setViewer] = useState<{ role: 'OWNER' | 'ADMIN' | 'STAFF' } | null>(null);
+  // Recharge/correction d'un solde prépayé : ouvertes à tout STAFF (la correction est journalisée).
   const [pkgAction, setPkgAction] = useState<{ mode: 'recharge' | 'adjust'; bal: MemberHistory['finance']['prepaid']['balances'][number] } | null>(null);
   // Garde anti-race : un reload (onSaved après correction de niveau) peut chevaucher
   // un chargement en cours ; on ignore le résultat d'une requête périmée.
@@ -116,13 +115,6 @@ export default function MemberHistoryPage() {
   }, [token, clubId, userId, levelEnabled]);
 
   useEffect(() => { if (ready && token && clubId && userId) load(); }, [ready, token, clubId, userId, load]);
-
-  useEffect(() => {
-    if (!ready || !token || !clubId) return;
-    api.getMyClubs(token)
-      .then((clubs) => { const mine = clubs.find((c) => c.clubId === clubId); setViewer(mine ? { role: mine.role } : null); })
-      .catch(() => setViewer(null));
-  }, [ready, token, clubId]);
 
   const toggleWatch = async () => {
     if (!token || !clubId) return;
@@ -166,7 +158,6 @@ export default function MemberHistoryPage() {
 
   const m = data.member;
   const { counts, finance, game, loyalty, favorites } = data;
-  const canCorrect = viewer?.role === 'OWNER' || viewer?.role === 'ADMIN';
   const reservations = onlyLate ? data.reservations.filter((r) => r.lateCancel) : data.reservations;
 
   // --- Données pour la partie « correction de niveau » (C2), à l'intérieur de l'onglet Niveau ---
@@ -331,13 +322,11 @@ export default function MemberHistoryPage() {
                           title={expired ? 'Solde expiré — vendez une nouvelle offre' : undefined}
                           style={{ border: `1px solid ${th.line}`, background: 'transparent', color: expired ? th.textFaint : th.text, borderRadius: 8, padding: '5px 10px', cursor: expired ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, opacity: expired ? 0.6 : 1 }}
                         >{expired ? 'Expiré' : 'Recharger'}</button>
-                        {canCorrect && (
-                          <button
-                            aria-label={`Corriger ${b.name}`}
-                            onClick={() => setPkgAction({ mode: 'adjust', bal: b })}
-                            style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}
-                          >Corriger</button>
-                        )}
+                        <button
+                          aria-label={`Corriger ${b.name}`}
+                          onClick={() => setPkgAction({ mode: 'adjust', bal: b })}
+                          style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}
+                        >Corriger</button>
                       </div>
                     </div>
                     );
