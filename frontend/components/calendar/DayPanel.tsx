@@ -12,6 +12,7 @@ import { PlayerPills } from '@/components/player/PlayerPills';
 import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
 import { MatchTeams } from '@/components/match/MatchTeams';
 import { ReservationAgendaCard } from '@/components/reservations/ReservationAgendaCard';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -45,15 +46,17 @@ export function DayPanel({
   matchStatusFor?: (reservationId: string) => 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED' | undefined;
 }) {
   const { th } = useTheme();
+  const isDesktop = useIsDesktop(700);
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
 
-  const card = (children: React.ReactNode, key: string, stripe: string, past: boolean) => (
+  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale,
+  // carte pleine (inset 1px de contour) — la pleine largeur étirait le mini-terrain pour rien.
+  const card = (children: React.ReactNode, key: string, past: boolean) => (
     <div key={key} style={{
       background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}`,
-      display: 'flex', gap: 12, opacity: past ? 0.6 : 1,
+      opacity: past ? 0.6 : 1,
     }}>
-      <div style={{ width: 4, borderRadius: 2, background: stripe, flexShrink: 0, alignSelf: 'stretch' }} />
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+      {children}
     </div>
   );
 
@@ -62,9 +65,9 @@ export function DayPanel({
       <div style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6, color: th.textMute }}>
         {dayTitle(dayKey)}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12, alignItems: 'start', marginTop: 10 }}>
         {entries.length === 0 ? (
-          <div style={{ padding: '18px 0', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+          <div style={{ gridColumn: '1 / -1', padding: '18px 0', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
             Rien ce jour-là.
             <div style={{ marginTop: 10 }}>
               <button onClick={onReserve}
@@ -88,7 +91,7 @@ export function DayPanel({
                     onRecordResult={onRecordResult} canRecord={canRecord}
                     existingMatchStatus={matchStatusFor?.(r.id)}
                   />,
-                  `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
+                  `res-${r.id}`, e.past,
                 );
               }
               return card(
@@ -144,7 +147,7 @@ export function DayPanel({
                     </div>
                   )}
                 </>,
-                `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
+                `res-${r.id}`, e.past,
               );
             }
 
@@ -172,7 +175,7 @@ export function DayPanel({
                     Équipe : {team}
                   </div>
                 </>,
-                `reg-${e.reg.id}`, agendaKindMeta('tournament').color, e.past,
+                `reg-${e.reg.id}`, e.past,
               );
             }
 
@@ -197,7 +200,7 @@ export function DayPanel({
                     <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
                   </div>
                 </>,
-                `lesson-${e.enrollment.enrollmentId}`, agendaKindMeta('lesson').color, e.past,
+                `lesson-${e.enrollment.enrollmentId}`, e.past,
               );
             }
 
@@ -220,7 +223,7 @@ export function DayPanel({
                   <a href={clubUrl(ev.club.slug, `/events/${ev.id}`)} style={linkStyle}>Voir</a>
                 </div>
               </>,
-              `evt-${e.ev.id}`, agendaKindMeta('event').color, e.past,
+              `evt-${e.ev.id}`, e.past,
             );
           })
         )}

@@ -21,6 +21,7 @@ import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { canRecordResult } from '@/lib/match';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -32,6 +33,7 @@ function fmtHour(iso: string, tz: string): string {
 export default function MyReservationsPage() {
   const router = useRouter();
   const { th } = useTheme();
+  const isDesktop = useIsDesktop(700);
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
   const levelEnabled = club?.levelSystemEnabled !== false;
@@ -218,11 +220,11 @@ export default function MyReservationsPage() {
             )}
           </div>
         ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 13, padding: '18px 20px 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 13, alignItems: 'start', padding: '18px 20px 0' }}>
           {loading ? (
-            <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+            <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
           ) : list.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+            <div style={{ gridColumn: '1 / -1', padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
               {tab === 'upcoming' ? 'Rien à venir.' : 'Rien de passé.'}
               {tab === 'upcoming' && (
                 <div style={{ marginTop: 12 }}>

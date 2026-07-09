@@ -188,15 +188,10 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
     );
   }
 
-  const cardStyle = { background: th.surface, borderRadius: 20, padding: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', gap: 12, opacity: item.past ? 0.7 : 1 } as const;
-  const inner = (
-    <>
-      <div style={{ width: 4, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
-      <div style={{ flex: 1, minWidth: 0 }}>{body}</div>
-    </>
-  );
+  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale.
+  const cardStyle = { background: th.surface, borderRadius: 20, padding: 16, boxShadow: `inset 0 0 0 1px ${th.line}`, opacity: item.past ? 0.7 : 1 } as const;
 
   return isForeign
-    ? <a href={foreignHref} style={{ ...cardStyle, textDecoration: 'none', color: 'inherit' }}>{inner}</a>
-    : <div style={cardStyle}>{inner}</div>;
+    ? <a href={foreignHref} style={{ ...cardStyle, textDecoration: 'none', color: 'inherit' }}>{body}</a>
+    : <div style={cardStyle}>{body}</div>;
 }
