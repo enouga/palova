@@ -58,7 +58,7 @@ function renderPanel(props: Partial<React.ComponentProps<typeof DayPanel>> = {})
       <DayPanel
         dayKey="2026-06-12" entries={entries} localSlug={null}
         token="abc" now={Date.now()}
-        onCancel={jest.fn()} onPlayersChanged={jest.fn()}
+        onCancel={jest.fn()} onPlayersChanged={jest.fn()} onOpenChat={jest.fn()}
         onReserve={jest.fn()} reserveLabel="Réserver un créneau" {...props}
       />
     </ThemeProvider>,
@@ -148,5 +148,41 @@ describe('DayPanel', () => {
     // Édition ouverte : la 1re place libre devient le bouton « Ajouter un joueur », l'autre reste « Place libre ».
     expect(screen.getByRole('button', { name: /Ajouter un joueur/ })).toBeInTheDocument();
     expect(screen.getAllByText('Place libre')).toHaveLength(1);
+  });
+});
+
+describe('DayPanel — carte alignée sur Mes parties (padel, non-étranger)', () => {
+  const padelRes: MyReservation = {
+    id: 'res-padel',
+    startTime: futureStart,
+    endTime: futureEnd,
+    status: 'CONFIRMED',
+    totalPrice: '25',
+    visibility: 'PUBLIC',
+    resource: { id: 'court-1', name: 'Court 1', sport: { key: 'padel', name: 'Padel' }, club: { name: 'Padel Arena', slug: 'padel-arena', timezone: 'Europe/Paris' } },
+    capacity: 4,
+    participants: [
+      { id: 'p1', userId: 'u-org', isOrganizer: true, firstName: 'Org', lastName: 'A', avatarUrl: null },
+    ],
+  };
+
+  it('affiche le chip de places et transmet le clic Discuter via onOpenChat', () => {
+    const onOpenChat = jest.fn();
+    renderPanel({
+      entries: buildCalendarEntries([padelRes], [], [], [], NOW),
+      onOpenChat,
+    });
+    expect(screen.getByText('3 places')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Discuter/ }));
+    expect(onOpenChat).toHaveBeenCalledWith(expect.objectContaining({ id: 'res-padel' }));
+  });
+
+  it('transmet existingMatchStatus via matchStatusFor pour une résa passée', () => {
+    const pastRes = { ...padelRes, startTime: '2020-01-01T10:00:00Z', endTime: '2020-01-01T11:00:00Z' };
+    renderPanel({
+      entries: buildCalendarEntries([pastRes], [], [], [], NOW),
+      matchStatusFor: () => 'CONFIRMED',
+    });
+    expect(screen.getByText('Résultat enregistré')).toBeInTheDocument();
   });
 });

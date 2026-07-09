@@ -11,6 +11,7 @@ import { KIND_LABEL } from '@/lib/events';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
 import { MatchTeams } from '@/components/match/MatchTeams';
+import { ReservationAgendaCard } from '@/components/reservations/ReservationAgendaCard';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -25,8 +26,8 @@ function dayTitle(dayKey: string): string {
 }
 
 export function DayPanel({
-  dayKey, entries, localSlug, token, now, onCancel, onPlayersChanged, onReserve, reserveLabel,
-  onRecordResult, canRecord, showSport,
+  dayKey, entries, localSlug, token, now, onCancel, onPlayersChanged, onOpenChat, onReserve, reserveLabel,
+  onRecordResult, canRecord, showSport, matchStatusFor,
 }: {
   dayKey: string;
   entries: CalendarEntry[];
@@ -35,11 +36,13 @@ export function DayPanel({
   now: number;
   onCancel: (r: MyReservation) => void;
   onPlayersChanged: () => void;
+  onOpenChat: (r: MyReservation) => void;
   onReserve: () => void;
   reserveLabel: string;
   onRecordResult?: (r: MyReservation) => void;
   canRecord?: (r: MyReservation) => boolean;
   showSport?: boolean; // vue cross-club couvrant plusieurs sports → préfixe le sport au sous-titre
+  matchStatusFor?: (reservationId: string) => 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED' | undefined;
 }) {
   const { th } = useTheme();
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
@@ -76,6 +79,18 @@ export function DayPanel({
               const r = e.r;
               const tz = r.resource.club.timezone;
               const isForeign = localSlug != null && r.resource.club.slug !== localSlug;
+              const isPadel = r.resource.sport?.key === 'padel';
+              if (!isForeign && isPadel) {
+                return card(
+                  <ReservationAgendaCard
+                    reservation={r} past={e.past} showSport={showSport} token={token} now={now}
+                    onCancel={onCancel} onPlayersChanged={onPlayersChanged} onOpenChat={onOpenChat}
+                    onRecordResult={onRecordResult} canRecord={canRecord}
+                    existingMatchStatus={matchStatusFor?.(r.id)}
+                  />,
+                  `res-${r.id}`, agendaKindMeta('reservation').color, e.past,
+                );
+              }
               return card(
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
