@@ -112,6 +112,8 @@ describe('MatchResultModal', () => {
       ]}
       initialTeams={{ a: 1, b: 1, c: 2, d: 2 }}
     /></ThemeProvider>);
+    // Équipes complètes (2/2) → mode résumé par défaut ; « Modifier les équipes » révèle l'affectation pré-remplie.
+    fireEvent.click(screen.getByText('Modifier les équipes'));
     expect(screen.getByTestId('team1-a')).toHaveAttribute('data-active', 'true');
     expect(screen.getByTestId('team2-c')).toHaveAttribute('data-active', 'true');
   });
@@ -126,4 +128,48 @@ it('permet de retirer un set ajouté (pas de bouton retirer avec un seul set)', 
   fireEvent.click(screen.getByTestId('set1-remove'));
   expect(screen.queryByTestId('set1-remove')).toBeNull();
   expect(screen.queryByTestId('set0-remove')).toBeNull();
+});
+
+const fullTeams = { u1: 1, u2: 1, u3: 2, u4: 2 } as Record<string, 1 | 2>;
+
+describe('MatchResultModal — mode résumé', () => {
+  it('montre le résumé et cache les boutons 1/2 quand les équipes sont complètes', () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={() => {}}
+      initialTeams={fullTeams} /></ThemeProvider>);
+    expect(screen.getByText('Modifier les équipes')).toBeInTheDocument();
+    expect(screen.queryByTestId('team1-u1')).toBeNull();
+    expect(screen.getByTestId('set0-team1-plus')).toBeInTheDocument();
+  });
+
+  it('« Modifier les équipes » révèle l\'affectation pré-remplie', () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={() => {}}
+      initialTeams={fullTeams} /></ThemeProvider>);
+    fireEvent.click(screen.getByText('Modifier les équipes'));
+    expect(screen.getByTestId('team1-u1')).toHaveAttribute('data-active', 'true');
+    expect(screen.getByTestId('team2-u3')).toHaveAttribute('data-active', 'true');
+  });
+
+  it('enregistre directement depuis le mode résumé', async () => {
+    const onSaved = jest.fn();
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={onSaved}
+      initialTeams={fullTeams} /></ThemeProvider>);
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByTestId('set0-team1-plus'));
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('set0-team2-plus'));
+    fireEvent.click(screen.getByText('Enregistrer'));
+    await waitFor(() => expect(api.recordMatchResult).toHaveBeenCalled());
+    const call = (api.recordMatchResult as jest.Mock).mock.calls.at(-1)!;
+    expect(call[1].teams[1]).toEqual(expect.arrayContaining(['u1', 'u2']));
+    expect(call[1].teams[2]).toEqual(expect.arrayContaining(['u3', 'u4']));
+  });
+
+  it('affiche l\'affectation directe si initialTeams incomplet', () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={() => {}}
+      initialTeams={{ u1: 1, u2: 1 }} /></ThemeProvider>);
+    expect(screen.queryByText('Modifier les équipes')).toBeNull();
+    expect(screen.getByTestId('team1-u1')).toBeInTheDocument();
+  });
 });
