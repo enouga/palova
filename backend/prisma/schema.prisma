@@ -274,6 +274,9 @@ model Club {
   // matches/agenda/posters/top/offers/clubCard/announcements + sponsors (visibilité
   // seule, position fixe en bas). null = ordre adaptatif par défaut (visiteur/membre).
   clubHouseSections Json? @map("club_house_sections")
+  // Vitesse d'auto-défilement du kiosque « À la une » du Club-house, en secondes.
+  // 0 = manuel (pas de défilement automatique) ; sinon borné 3..20 s. Défaut 6.
+  clubHouseKioskSeconds Int @default(6) @map("club_house_kiosk_seconds")
   // Délais (heures avant le début d'une réservation) au-delà desquels le joueur ne
   // peut plus, respectivement, changer les joueurs de la partie / annuler. 0 = jusqu'au début.
   playerChangeCutoffHours Int @default(0) @map("player_change_cutoff_hours")

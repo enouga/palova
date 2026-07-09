@@ -7,7 +7,6 @@ jest.mock('../lib/useAuth', () => ({ useAuth: () => mockAuth }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 // Stub des sections pour tester l'ORDRE sans leur logique interne :
-jest.mock('../components/clubhouse/PosterMosaic', () => ({ PosterMosaic: () => <div data-testid="sec-posters" /> }));
 jest.mock('../components/clubhouse/OpenMatchesShowcase', () => ({ OpenMatchesShowcase: () => <div data-testid="sec-matches" /> }));
 jest.mock('../components/clubhouse/OffersShowcase', () => ({ OffersShowcase: () => <div data-testid="sec-offers" /> }));
 jest.mock('../components/clubhouse/TopOfMonth', () => ({ TopOfMonth: () => <div data-testid="sec-top" /> }));
@@ -21,7 +20,6 @@ jest.mock('../lib/api', () => ({
     getClubSponsors: jest.fn().mockResolvedValue([]),
     getClubTournaments: jest.fn().mockResolvedValue([]),
     getClubEvents: jest.fn().mockResolvedValue([]),
-    getClubAvailability: jest.fn().mockResolvedValue([]),
     getMyReservations: jest.fn().mockResolvedValue([]),
     getOpenMatches: jest.fn().mockResolvedValue([]),
     getClubPresentation: jest.fn().mockResolvedValue(null),
@@ -44,8 +42,8 @@ const clubWith = (sections: unknown) =>
   ({ ...(club as unknown as Record<string, unknown>), clubHouseSections: sections }) as never;
 const wrapWith = (c: never) => render(<ThemeProvider><ClubHouse club={c} /></ThemeProvider>);
 
-const pinned = { id: 'a1', title: 'Tournoi interne', body: 'Lots !', linkUrl: null, imageUrl: null, isPublished: true, pinned: true, createdAt: '2026-06-09', updatedAt: '' };
-const regular = { id: 'a2', title: 'Créneaux du matin', body: 'Dès 8h.', linkUrl: null, imageUrl: null, isPublished: true, pinned: false, createdAt: '2026-06-08', updatedAt: '' };
+const pinned = { id: 'a1', title: 'Tournoi interne', body: 'Lots !', linkUrl: null, imageUrl: null, kind: 'INFO', validUntil: null, isPublished: true, pinned: true, createdAt: '2026-06-09', updatedAt: '' };
+const regular = { id: 'a2', title: 'Créneaux du matin', body: 'Dès 8h.', linkUrl: null, imageUrl: null, kind: 'INFO', validUntil: null, isPublished: true, pinned: false, createdAt: '2026-06-08', updatedAt: '' };
 
 /** Fixtures des sections v2 : tout est présent pour tester l'ordre. */
 const fullSections = () => {
@@ -77,7 +75,6 @@ describe('ClubHouse', () => {
     mocked.getClubSponsors.mockResolvedValue([]);
     mocked.getClubTournaments.mockResolvedValue([]);
     mocked.getClubEvents.mockResolvedValue([]);
-    mocked.getClubAvailability.mockResolvedValue([]);
     mocked.getMyReservations.mockResolvedValue([]);
     mocked.getOpenMatches.mockResolvedValue([]);
     mocked.getClubPresentation.mockResolvedValue(null as never);
@@ -86,52 +83,34 @@ describe('ClubHouse', () => {
     mocked.getMyClubSubscriptions.mockResolvedValue([]);
   });
 
-  it('annonce épinglée → son titre dans le hero, sans doublon dans la liste', async () => {
+  it('annonces → kiosque « À la une » : la 1re (épinglée) affichée, navigation vers les autres', async () => {
     mocked.getClubAnnouncements.mockResolvedValue([pinned, regular] as never);
     wrap();
     expect(await screen.findByText('Tournoi interne')).toBeInTheDocument();
-    expect(screen.getByTestId('clubhouse-hero')).toHaveTextContent('Tournoi interne');
-    expect(screen.getAllByText('Tournoi interne')).toHaveLength(1);
+    expect(screen.getByTestId('clubhouse-kiosk')).toHaveTextContent('Tournoi interne');
+    // La 2e annonce n'est pas rendue tant qu'on n'a pas navigué (une diapo à la fois).
+    expect(screen.queryByText('Créneaux du matin')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Annonce 2 sur 2' }));
     expect(screen.getByText('Créneaux du matin')).toBeInTheDocument();
+    expect(screen.queryByText('Tournoi interne')).not.toBeInTheDocument();
   });
 
-  it('pas d annonce épinglée → hero avec accroche générique, annonces en liste', async () => {
-    mocked.getClubAnnouncements.mockResolvedValue([regular] as never);
+  it('aucune annonce → kiosque avec l accroche générique', async () => {
     wrap();
-    expect(await screen.findByText('Créneaux du matin')).toBeInTheDocument();
-    expect(screen.getByTestId('clubhouse-hero')).toHaveTextContent('Réservez, jouez, retrouvez-vous.');
+    await waitFor(() => expect(mocked.getClubAnnouncements).toHaveBeenCalled());
+    expect(screen.getByTestId('clubhouse-kiosk')).toHaveTextContent('Réservez, jouez, retrouvez-vous.');
   });
 
-  it('annonce expirée → masquée partout ; annonce à image → bento, pas la liste', async () => {
+  it('annonce expirée → exclue du kiosque ; annonce à image = diapo, pas hors kiosque', async () => {
     const expired = { ...regular, id: 'a3', title: 'Expirée', validUntil: '2020-01-01T23:59:59.999Z' };
     const withImage = { ...regular, id: 'a4', title: 'Affiche', imageUrl: '/uploads/announcements/x.jpg' };
     mocked.getClubAnnouncements.mockResolvedValue([regular, expired, withImage] as never);
     wrap();
     expect(await screen.findByText('Créneaux du matin')).toBeInTheDocument();
     expect(screen.queryByText('Expirée')).not.toBeInTheDocument();
-    expect(screen.queryByText('Affiche')).not.toBeInTheDocument(); // vit dans la bento (stub)
-    expect(screen.getByTestId('sec-posters')).toBeInTheDocument();
-  });
-
-  it('créneau libre à venir → chip « Prochain créneau » dans le pouls du hero (plus de bloc dédié)', async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const future = new Date(Date.now() + 2 * 3600e3).toISOString();
-    mocked.getClubAvailability.mockImplementation(async (_slug: string, date: string) =>
-      (date === today
-        ? [{ resource: { id: 'court-1', name: 'Terrain 1' }, slots: [{ startTime: future, endTime: future, available: true, price: '25', offPeak: false }] }]
-        : []) as never);
-    wrap();
-    expect(await screen.findByText(/^Prochain créneau/)).toBeInTheDocument();
-    // Le bloc « Prochains créneaux libres » a été retiré de la page (2026-07-05).
-    expect(screen.queryByText(/Prochains créneaux libres/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Réserver' })).not.toBeInTheDocument();
-  });
-
-  it('aucune dispo → pas de chip « Prochain créneau »', async () => {
-    mocked.getClubAnnouncements.mockResolvedValue([regular] as never);
-    wrap();
-    await screen.findByText('Créneaux du matin');
-    expect(screen.queryByText(/Prochain créneau/)).not.toBeInTheDocument();
+    // withImage est la 2e diapo (non rendue) — le kiosque a 2 segments (regular + withImage).
+    expect(screen.getByRole('button', { name: 'Annonce 2 sur 2' })).toBeInTheDocument();
+    expect(screen.queryByText('Affiche')).not.toBeInTheDocument();
   });
 
   it('tournoi publié à venir → bloc « Prochains events »', async () => {
@@ -206,9 +185,7 @@ describe('ClubHouse', () => {
       { key: 'clubCard', visible: true },
       { key: 'matches', visible: false },
       { key: 'agenda', visible: true },
-      { key: 'posters', visible: true },
       { key: 'offers', visible: true },
-      { key: 'announcements', visible: true },
       { key: 'sponsors', visible: true },
     ]));
     await waitFor(() => expect(screen.getByTestId('sec-top')).toBeInTheDocument());
@@ -227,21 +204,10 @@ describe('ClubHouse', () => {
     expect(mocked.getClubSponsors).not.toHaveBeenCalled();
   });
 
-  it('posters et annonces masqués, rien d autre → fallback « Pas d\'informations »', async () => {
-    mocked.getClubAnnouncements.mockResolvedValue([
-      regular,
-      { ...regular, id: 'a9', title: 'Affiche', imageUrl: '/uploads/announcements/x.jpg' },
-    ] as never);
-    // act async : les fetchs mockés se résolvent AVANT l'assertion (sinon le fallback
-    // transitoire du premier rendu — ann encore vide — rend le test toujours vert).
-    await act(async () => {
-      wrapWith(clubWith([
-        { key: 'posters', visible: false },
-        { key: 'announcements', visible: false },
-      ]));
-    });
+  it('aucune annonce ni section → kiosque accroche + « Pas d\'informations »', async () => {
+    // act async : les fetchs mockés (tous vides) se résolvent AVANT l'assertion.
+    await act(async () => { wrap(); });
     expect(screen.getByText(/Pas d'informations pour le moment/)).toBeInTheDocument();
-    expect(screen.queryByTestId('sec-posters')).not.toBeInTheDocument();
-    expect(screen.queryByText('Créneaux du matin')).not.toBeInTheDocument();
+    expect(screen.getByTestId('clubhouse-kiosk')).toHaveTextContent('Réservez, jouez, retrouvez-vous.');
   });
 });

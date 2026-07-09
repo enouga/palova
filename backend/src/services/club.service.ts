@@ -55,7 +55,7 @@ export function normalizeQuickPaymentMethods(input: unknown): string[] {
 }
 
 /** Clés de sections du Club-house configurables par le club (ordre + visibilité). */
-const CLUB_HOUSE_SECTION_KEYS = ['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements', 'sponsors'] as const;
+const CLUB_HOUSE_SECTION_KEYS = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'] as const;
 
 /** Valide/normalise la config des sections du Club-house. null/invalide → DbNull (= ordre
  *  adaptatif par défaut). Clé inconnue rejetée, doublon ignoré (1re occurrence gagne),
@@ -75,6 +75,13 @@ export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValu
   if (out.length === 0) return Prisma.DbNull;
   for (const key of CLUB_HOUSE_SECTION_KEYS) if (!seen.has(key)) out.push({ key, visible: true });
   return out as unknown as Prisma.InputJsonValue;
+}
+
+/** Vitesse d'auto-défilement du kiosque « À la une » (secondes). 0 = manuel (pas de
+ *  défilement auto) ; sinon borné à 3..20 s. Miroir front : AnnouncementKiosk. */
+export function normalizeKioskSeconds(input: number): number {
+  if (!Number.isFinite(input) || input <= 0) return 0;
+  return Math.min(20, Math.max(3, Math.round(input)));
 }
 
 /** Transforme un nom en slug URL (minuscules, tirets, sans accents). Miroir : frontend/lib/slug.ts — garder les deux synchronisés. */
@@ -215,6 +222,7 @@ export class ClubService {
         cancellationCutoffHours: true,
         refundOnCancelWithinCutoff: true,
         clubHouseSections: true,
+        clubHouseKioskSeconds: true,
         clubSports: {
           select: {
             id: true, slotStepMin: true, durationsMin: true,
@@ -284,6 +292,7 @@ export class ClubService {
         requireCardFingerprint: true,
         quickPaymentMethods: true,
         clubHouseSections: true,
+        clubHouseKioskSeconds: true,
         legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
         legalRepresentative: true, legalEmail: true, legalPhone: true,
       },
@@ -309,6 +318,7 @@ export class ClubService {
     requireCardFingerprint?: boolean;
     quickPaymentMethods?: string[];
     clubHouseSections?: unknown;
+    clubHouseKioskSeconds?: number;
     legalEntityName?: string;
     legalForm?: string;
     siret?: string;
@@ -369,6 +379,7 @@ export class ClubService {
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
         ...(Array.isArray(params.quickPaymentMethods) ? { quickPaymentMethods: normalizeQuickPaymentMethods(params.quickPaymentMethods) } : {}),
         ...(params.clubHouseSections !== undefined ? { clubHouseSections: normalizeClubHouseSections(params.clubHouseSections) } : {}),
+        ...(typeof params.clubHouseKioskSeconds === 'number' ? { clubHouseKioskSeconds: normalizeKioskSeconds(params.clubHouseKioskSeconds) } : {}),
         ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),
         ...(params.legalForm !== undefined ? { legalForm: legal(params.legalForm) } : {}),
         ...(params.siret !== undefined ? { siret: legal(params.siret) } : {}),

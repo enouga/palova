@@ -1,30 +1,7 @@
-import { activePosters, announcementExpired, clubPulse, fullSectionSettings, hiddenSectionKeys, matchSeats, offerIsActive, pickUpcomingSlots, posterLayout, resolveSections, SECTION_DEFS, SECTION_KEYS, SPONSORS_DEF, tournamentPlacesLabel, todayISO, UpcomingSlot } from '../lib/clubhouse';
-import { Announcement, ClubAvailability, ClubHouseSectionSetting, Tournament } from '../lib/api';
+import { announcementExpired, fullSectionSettings, hiddenSectionKeys, kiosqueSlides, matchSeats, offerIsActive, resolveSections, SECTION_DEFS, SECTION_KEYS, SPONSORS_DEF, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
+import { Announcement, ClubHouseSectionSetting, Tournament } from '../lib/api';
 
-const slot = (startTime: string, available = true) =>
-  ({ startTime, endTime: startTime, available, price: '25', offPeak: false });
-const court = (id: string, name: string, slots: ReturnType<typeof slot>[]) =>
-  ({ resource: { id, name }, slots }) as unknown as ClubAvailability;
 const NOW = new Date('2026-06-10T12:00:00Z');
-
-describe('pickUpcomingSlots', () => {
-  it('garde les créneaux libres postérieurs à maintenant, triés, max 3, tous terrains', () => {
-    const avail = [
-      court('c1', 'Terrain 1', [slot('2026-06-10T10:00:00Z'), slot('2026-06-10T15:00:00Z'), slot('2026-06-10T18:00:00Z')]),
-      court('c2', 'Terrain 2', [slot('2026-06-10T13:00:00Z'), slot('2026-06-10T14:00:00Z', false), slot('2026-06-10T19:00:00Z')]),
-    ];
-    const out = pickUpcomingSlots(avail, NOW);
-    expect(out.map((s) => [s.resourceName, s.slot.startTime])).toEqual([
-      ['Terrain 2', '2026-06-10T13:00:00Z'],
-      ['Terrain 1', '2026-06-10T15:00:00Z'],
-      ['Terrain 1', '2026-06-10T18:00:00Z'],
-    ]);
-  });
-
-  it('renvoie [] quand plus rien de libre', () => {
-    expect(pickUpcomingSlots([court('c1', 'T1', [slot('2026-06-10T10:00:00Z')])], NOW)).toEqual([]);
-  });
-});
 
 describe('tournamentPlacesLabel', () => {
   const t = (maxTeams: number | null, confirmedCount: number) => ({ maxTeams, confirmedCount }) as Tournament;
@@ -67,30 +44,6 @@ const ann = (over: Partial<Announcement>): Announcement => ({
   pinned: false, kind: 'INFO', validUntil: null, createdAt: '', updatedAt: '', ...over,
 });
 
-describe('activePosters', () => {
-  const now = new Date('2026-07-05T12:00:00Z');
-  it('garde les annonces avec image non expirées, exclut le hero, plafond 5', () => {
-    const list = [
-      ann({ id: 'hero', imageUrl: '/u/h.jpg', pinned: true }),
-      ann({ id: 'ok', imageUrl: '/u/1.jpg' }),
-      ann({ id: 'expired', imageUrl: '/u/2.jpg', validUntil: '2026-07-01T23:59:59.999Z' }),
-      ann({ id: 'noimg' }),
-      ...[3, 4, 5, 6, 7, 8].map((i) => ann({ id: `p${i}`, imageUrl: `/u/${i}.jpg` })),
-    ];
-    const out = activePosters(list, now, 'hero');
-    expect(out.map((a) => a.id)).toEqual(['ok', 'p3', 'p4', 'p5', 'p6']);
-  });
-});
-
-describe('posterLayout', () => {
-  it('single / duo / bento', () => {
-    expect(posterLayout(1)).toBe('single');
-    expect(posterLayout(2)).toBe('duo');
-    expect(posterLayout(3)).toBe('bento');
-    expect(posterLayout(5)).toBe('bento');
-  });
-});
-
 describe('announcementExpired', () => {
   const now = new Date('2026-07-05T12:00:00Z');
   it('null = jamais expirée ; date passée = expirée', () => {
@@ -100,27 +53,19 @@ describe('announcementExpired', () => {
   });
 });
 
-describe('clubPulse', () => {
-  const now = new Date('2026-07-05T10:00:00.000Z');
-  const upSlot: UpcomingSlot = { resourceId: 'r1', resourceName: 'Padel 1', slot: slot('2026-07-05T18:00:00.000Z') as never };
-
-  it('émet une chip par donnée présente (créneau, parties, event)', () => {
-    const chips = clubPulse({ slots: [upSlot], matchCount: 3, nextEventStart: '2026-07-09T10:00:00.000Z', now, timezone: 'Europe/Paris' });
-    expect(chips.map((c) => c.kind)).toEqual(['slot', 'matches', 'event']);
-    expect(chips[0].label).toMatch(/^Prochain créneau/);
-    expect(chips[1].label).toBe('3 parties cherchent des joueurs');
-    expect(chips[2].label).toBe('Prochain event J-4');
+describe('kiosqueSlides', () => {
+  const now = new Date('2026-07-05T12:00:00Z');
+  it('garde les annonces actives (avec ou sans image), ordre conservé, exclut les expirées, plafond 6', () => {
+    const list = [
+      ann({ id: 'a1' }),                                              // texte seul
+      ann({ id: 'a2', imageUrl: '/u/2.jpg' }),                        // avec affiche
+      ann({ id: 'expired', validUntil: '2026-07-01T23:59:59.999Z' }), // exclue
+      ...[3, 4, 5, 6, 7, 8].map((i) => ann({ id: `a${i}` })),
+    ];
+    expect(kiosqueSlides(list, now).map((a) => a.id)).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'a6']);
   });
-
-  it("singulier pour 1 partie, event du jour = « aujourd'hui »", () => {
-    const chips = clubPulse({ slots: [], matchCount: 1, nextEventStart: '2026-07-05T08:00:00.000Z', now, timezone: 'Europe/Paris' });
-    expect(chips[0].label).toBe('1 partie cherche des joueurs');
-    expect(chips[1].label).toBe("Prochain event aujourd'hui");
-  });
-
-  it('now null (hydration) ou aucune donnée → []', () => {
-    expect(clubPulse({ slots: [upSlot], matchCount: 2, nextEventStart: null, now: null, timezone: 'Europe/Paris' })).toEqual([]);
-    expect(clubPulse({ slots: [], matchCount: 0, nextEventStart: null, now, timezone: 'Europe/Paris' })).toEqual([]);
+  it('aucune annonce → []', () => {
+    expect(kiosqueSlides([], now)).toEqual([]);
   });
 });
 
@@ -134,8 +79,8 @@ describe('matchSeats', () => {
 
 describe('resolveSections', () => {
   it('config null → ordres adaptatifs historiques (membre ≠ visiteur), sponsors visibles', () => {
-    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'posters', 'top', 'offers', 'clubCard', 'announcements']);
-    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'posters', 'offers', 'top', 'announcements']);
+    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'top', 'offers', 'clubCard']);
+    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'offers', 'top']);
     expect(resolveSections(undefined, false).sponsorsVisible).toBe(true);
   });
 
@@ -144,10 +89,8 @@ describe('resolveSections', () => {
       { key: 'top', visible: true },
       { key: 'matches', visible: false },
       { key: 'agenda', visible: true },
-      { key: 'posters', visible: true },
       { key: 'offers', visible: true },
       { key: 'clubCard', visible: true },
-      { key: 'announcements', visible: true },
       { key: 'sponsors', visible: false },
     ];
     const member = resolveSections(config, true);
@@ -160,15 +103,15 @@ describe('resolveSections', () => {
   });
 
   it('clé connue absente de la config → ajoutée en fin, visible (tolérance versions)', () => {
-    const { order } = resolveSections([{ key: 'announcements', visible: true }], true);
-    expect(order[0]).toBe('announcements');
-    expect(order).toHaveLength(7);
+    const { order } = resolveSections([{ key: 'clubCard', visible: true }], true);
+    expect(order[0]).toBe('clubCard');
+    expect(order).toHaveLength(5);
   });
 
-  it('clé inconnue ignorée', () => {
-    const { order } = resolveSections([{ key: 'hero', visible: true } as never, { key: 'top', visible: true }], true);
+  it('clé inconnue (dont anciennes posters/announcements) ignorée', () => {
+    const { order } = resolveSections([{ key: 'posters', visible: true } as never, { key: 'top', visible: true }], true);
     expect(order[0]).toBe('top');
-    expect(order).not.toContain('hero');
+    expect(order).not.toContain('posters');
   });
 });
 
@@ -189,17 +132,17 @@ describe('hiddenSectionKeys', () => {
 });
 
 describe('fullSectionSettings / SECTION_DEFS', () => {
-  it('null → 8 entrées visibles, ordre par défaut membre + sponsors en fin', () => {
+  it('null → 6 entrées visibles, ordre par défaut membre + sponsors en fin', () => {
     const full = fullSectionSettings(null);
-    expect(full).toHaveLength(8);
+    expect(full).toHaveLength(6);
     expect(full[0]).toEqual({ key: 'matches', visible: true });
-    expect(full[7].key).toBe('sponsors');
+    expect(full[5].key).toBe('sponsors');
     expect(full.every((e) => e.visible)).toBe(true);
   });
 
   it('config partielle → complétée sans doublon, 1re occurrence gagne', () => {
     const full = fullSectionSettings([{ key: 'top', visible: false }, { key: 'top', visible: true }]);
-    expect(full).toHaveLength(8);
+    expect(full).toHaveLength(6);
     expect(full[0]).toEqual({ key: 'top', visible: false });
   });
 

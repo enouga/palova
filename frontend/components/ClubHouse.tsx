@@ -1,20 +1,17 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubEvent, ClubAvailability, OpenMatch, ClubPresentation, PublicOffers, TopMonthEntry } from '@/lib/api';
+import { api, ClubDetail, Announcement, Sponsor, MyReservation, Tournament, ClubEvent, OpenMatch, ClubPresentation, PublicOffers, TopMonthEntry } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
-import { effectiveDurations, defaultDuration } from '@/lib/duration';
-import { pickUpcomingSlots, todayISO, addDaysISO, activePosters, announcementExpired, clubPulse, resolveSections, hiddenSectionKeys } from '@/lib/clubhouse';
+import { kiosqueSlides, resolveSections, hiddenSectionKeys } from '@/lib/clubhouse';
 import { mergeAgenda } from '@/lib/events';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Chip } from '@/components/ui/atoms';
-import { ClubHouseHero } from '@/components/clubhouse/ClubHouseHero';
-import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
+import { AnnouncementKiosk } from '@/components/clubhouse/AnnouncementKiosk';
+import { SectionHeader } from '@/components/clubhouse/SectionHeader';
 import { TournamentsAlaUne } from '@/components/clubhouse/TournamentsAlaUne';
 import { MyReservationsCard } from '@/components/clubhouse/MyReservationsCard';
 import { clubIsMultiSport } from '@/lib/sportBadge';
-import { PosterMosaic } from '@/components/clubhouse/PosterMosaic';
 import { OpenMatchesShowcase } from '@/components/clubhouse/OpenMatchesShowcase';
 import { OffersShowcase } from '@/components/clubhouse/OffersShowcase';
 import { TopOfMonth } from '@/components/clubhouse/TopOfMonth';
@@ -26,9 +23,9 @@ function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
-// Page « Club-house » : hero À la une, vitrine du club (présentation, affiches,
-// offres, top du mois, parties ouvertes), rivière de partenaires. L'ordre des
-// sections s'adapte au visiteur (découverte d'abord) ou au membre (action d'abord).
+// Page « Club-house » : kiosque « À la une » (les annonces du club), vitrine du club
+// (présentation, offres, top du mois, parties ouvertes), rivière de partenaires. L'ordre
+// des sections s'adapte au visiteur (découverte d'abord) ou au membre (action d'abord).
 // Chaque bloc charge en indépendance et se masque en silence si vide ou en erreur.
 export function ClubHouse({ club }: { club: ClubDetail }) {
   const { th } = useTheme();
@@ -38,7 +35,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const [spons, setSpons] = useState<Sponsor[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [events, setEvents] = useState<ClubEvent[]>([]);
-  const [avail, setAvail] = useState<ClubAvailability[]>([]);
   const [next, setNext] = useState<MyReservation[]>([]);
   const [openMatches, setOpenMatches] = useState<OpenMatch[]>([]);
   const [presentation, setPresentation] = useState<ClubPresentation | null>(null);
@@ -58,13 +54,9 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     return () => { clearTimeout(t); clearInterval(h); };
   }, []);
 
-  // Sections masquées par la config admin : leurs fetchs sont sautés (annonces et dispo
-  // restent inconditionnels — le hero et sa chip « Prochain créneau » en dépendent).
+  // Sections masquées par la config admin : leurs fetchs sont sautés (les annonces
+  // restent inconditionnelles — le kiosque « À la une » en dépend).
   const hidden = useMemo(() => hiddenSectionKeys(club.clubHouseSections), [club.clubHouseSections]);
-
-  const duration = defaultDuration(Array.from(new Set(
-    club.clubSports.flatMap((cs) => effectiveDurations(cs.durationsMin, cs.sport.defaultDurationsMin)),
-  )).sort((a, b) => a - b));
 
   const loadNext = useCallback(async () => {
     if (!token) return;
@@ -103,22 +95,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     if (!token || hidden.has('offers')) { setHasSub(false); return; }
     api.getMyClubSubscriptions(club.slug, token).then((subs) => setHasSub(subs.length > 0)).catch(() => setHasSub(false));
   }, [club.slug, token, hidden]);
-  // Prochains créneaux libres : on avance jour par jour (jusqu'à 7 j) et on s'arrête
-  // dès qu'on a au moins 3 créneaux à venir → le bloc ne disparaît plus le soir.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const acc: ClubAvailability[] = [];
-      for (let d = 0; d < 7; d++) {
-        try { acc.push(...await api.getClubAvailability(club.slug, addDaysISO(todayISO(), d), duration)); }
-        catch { /* jour ignoré */ }
-        if (cancelled) return;
-        if (pickUpcomingSlots(acc, new Date(), 3).length >= 3) break;
-      }
-      if (!cancelled) setAvail(acc);
-    })();
-    return () => { cancelled = true; };
-  }, [club.slug, duration]);
   useEffect(() => { if (ready && token && !hidden.has('agenda')) loadNext(); }, [ready, token, loadNext, hidden]);
   // Parties ouvertes visibles de tous : token facultatif (flags viewer à false en anonyme).
   useEffect(() => {
@@ -135,20 +111,15 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   };
 
   const now = new Date();
-  // Hero : l'annonce épinglée la plus récente (l'API renvoie épinglées d'abord), non expirée.
-  const hero = ann.length > 0 && ann[0].pinned && !announcementExpired(ann[0], now) ? ann[0] : null;
-  // Les annonces AVEC image vivent dans la bento « À l'affiche » ; la liste texte garde les autres.
-  // Section masquée → dérivation vidée (comme les fetchs sautés, elle ne pèse plus dans `empty`).
-  const posters = hidden.has('posters') ? [] : activePosters(ann, now, hero?.id ?? null);
-  const restAnn = hidden.has('announcements') ? [] : ann.filter((a) => a !== hero && !posters.includes(a) && !announcementExpired(a, now) && !a.imageUrl);
-  const slots = pickUpcomingSlots(avail, now);
+  // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), épinglées d'abord.
+  const slides = kiosqueSlides(ann, now);
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
   const showClubCard = !!presentation && (!!presentation.presentationText || presentation.photos.length > 0);
   const showOffers = !!offers && ((!hasSub && offers.plans.length > 0) || offers.packages.length > 0);
 
-  const empty = !hero && slots.length === 0 && nextEvents.length === 0 && restAnn.length === 0 && spons.length === 0
-    && next.length === 0 && upcomingMatches.length === 0 && posters.length === 0 && !showClubCard && !showOffers && topMonth.length < 3;
+  const empty = slides.length === 0 && nextEvents.length === 0 && spons.length === 0
+    && next.length === 0 && upcomingMatches.length === 0 && !showClubCard && !showOffers && topMonth.length < 3;
 
   const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '30px 20px 0' }}>{node}</div>;
 
@@ -172,7 +143,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
       </>
     ),
     matches: upcomingMatches.length > 0 && <OpenMatchesShowcase matches={upcomingMatches.slice(0, 6)} timezone={club.timezone} />,
-    posters: posters.length > 0 && <PosterMosaic posters={posters} />,
     offers: showOffers && offers && (
       <OffersShowcase
         offers={offers}
@@ -183,23 +153,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
       />
     ),
     top: topMonth.length >= 3 && <TopOfMonth entries={topMonth} />,
-    announcements: restAnn.length > 0 && (
-      <div>
-        <SectionHeader title="Annonces" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {restAnn.map((a) => (
-            <div key={a.id} style={{ ...cardStyle(th), borderRadius: 16, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {a.pinned && <Chip tone="accent">Épinglé</Chip>}
-                <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>{a.title}</span>
-              </div>
-              <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.body}</p>
-              {a.linkUrl && <a href={a.linkUrl} target="_blank" rel="noreferrer" style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.accent }}>En savoir plus →</a>}
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
   };
 
   // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
@@ -207,11 +160,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
   return (
     <>
-      <ClubHouseHero
-        clubName={club.name}
-        announcement={hero}
-        pulse={clubPulse({ slots, matchCount: upcomingMatches.length, nextEventStart: nextEvents[0]?.startTime ?? null, now: clock, timezone: club.timezone })}
-      />
+      <AnnouncementKiosk clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />
 
       {order.map((k) => wrap(k, sections[k]))}
 

@@ -820,24 +820,22 @@ describe('normalizeClubHouseSections', () => {
       { key: 'top', visible: false },
       { key: 'matches', visible: true },
       { key: 'agenda', visible: true },
-      { key: 'posters', visible: true },
       { key: 'offers', visible: true },
       { key: 'clubCard', visible: true },
-      { key: 'announcements', visible: true },
       { key: 'sponsors', visible: true },
     ]);
   });
 
-  it('rejette les clés inconnues et dédoublonne (première occurrence gagne)', () => {
+  it('rejette les clés inconnues (dont anciennes posters/announcements) et dédoublonne (première occurrence gagne)', () => {
     const out = normalizeClubHouseSections([
-      { key: 'hero', visible: false },
+      { key: 'posters', visible: false },
       { key: 'matches', visible: false },
       { key: 'matches', visible: true },
       'nimporte',
     ]) as { key: string; visible: boolean }[];
     expect(out.find((e) => e.key === 'matches')).toEqual({ key: 'matches', visible: false });
-    expect(out.some((e) => e.key === 'hero')).toBe(false);
-    expect(out).toHaveLength(8);
+    expect(out.some((e) => e.key === 'posters')).toBe(false);
+    expect(out).toHaveLength(6);
   });
 
   it('visible absent ou non-false → true', () => {
@@ -862,7 +860,7 @@ describe('ClubService — sections du Club-house', () => {
     await svc.updateClub('club-1', { clubHouseSections: [{ key: 'top', visible: false }, { key: 'nope', visible: true }] } as any);
     const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
     expect(arg.data.clubHouseSections[0]).toEqual({ key: 'top', visible: false });
-    expect(arg.data.clubHouseSections).toHaveLength(8);
+    expect(arg.data.clubHouseSections).toHaveLength(6);
     expect((arg.data.clubHouseSections as any[]).some((e) => e.key === 'nope')).toBe(false);
   });
 
@@ -886,6 +884,38 @@ describe('ClubService — sections du Club-house', () => {
     await svc.getClubForAdmin('club-1');
     const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
     expect(arg.select.clubHouseSections).toBe(true);
+  });
+
+  it('updateClub écrit clubHouseKioskSeconds normalisé (borné) ; 0 = manuel', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { clubHouseKioskSeconds: 99 } as any);
+    expect((prismaMock.club.update as jest.Mock).mock.calls[0][0].data.clubHouseKioskSeconds).toBe(20);
+    await svc.updateClub('club-1', { clubHouseKioskSeconds: 0 } as any);
+    expect((prismaMock.club.update as jest.Mock).mock.calls[1][0].data.clubHouseKioskSeconds).toBe(0);
+  });
+
+  it('getClubBySlug/getClubForAdmin exposent clubHouseKioskSeconds', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ status: 'ACTIVE', clubSports: [] } as any);
+    await svc.getClubBySlug('demo');
+    expect((prismaMock.club.findUnique as jest.Mock).mock.calls[0][0].select.clubHouseKioskSeconds).toBe(true);
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    expect((prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0].select.clubHouseKioskSeconds).toBe(true);
+  });
+});
+
+describe('normalizeKioskSeconds', () => {
+  const { normalizeKioskSeconds } = require('../club.service');
+  it('0, négatif ou NaN → 0 (manuel)', () => {
+    expect(normalizeKioskSeconds(0)).toBe(0);
+    expect(normalizeKioskSeconds(-5)).toBe(0);
+    expect(normalizeKioskSeconds(NaN)).toBe(0);
+  });
+  it('borne à 3..20 et arrondit', () => {
+    expect(normalizeKioskSeconds(1)).toBe(3);
+    expect(normalizeKioskSeconds(6)).toBe(6);
+    expect(normalizeKioskSeconds(6.6)).toBe(7);
+    expect(normalizeKioskSeconds(50)).toBe(20);
   });
 });
 

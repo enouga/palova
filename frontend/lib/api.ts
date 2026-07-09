@@ -1185,7 +1185,7 @@ export type BookingReleaseMode = 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT'
 
 // Sections du Club-house configurables par le club (ordre + visibilité).
 // 'sponsors' = visibilité seule (position fixe en bas de page).
-export type ClubHouseSectionKey = 'matches' | 'agenda' | 'posters' | 'top' | 'offers' | 'clubCard' | 'announcements' | 'sponsors';
+export type ClubHouseSectionKey = 'matches' | 'agenda' | 'top' | 'offers' | 'clubCard' | 'sponsors';
 export interface ClubHouseSectionSetting { key: ClubHouseSectionKey; visible: boolean; }
 
 export interface ClubDetail {
@@ -1217,6 +1217,7 @@ export interface ClubDetail {
   cancellationCutoffHours: number;
   refundOnCancelWithinCutoff: boolean;
   clubHouseSections?: ClubHouseSectionSetting[] | null; // null/absent = ordre adaptatif par défaut
+  clubHouseKioskSeconds?: number; // auto-défilement du kiosque « À la une » (s) ; 0 = manuel ; absent = 6
   clubSports: ClubSportPublic[];
 }
 
@@ -1490,6 +1491,7 @@ export interface ClubAdminDetail {
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
   clubHouseSections?: ClubHouseSectionSetting[] | null;
+  clubHouseKioskSeconds?: number;
   levelSystemEnabled: boolean;
   legalEntityName: string | null;
   legalForm: string | null;
@@ -1594,6 +1596,7 @@ export type UpdateClubBody = Partial<{
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
   clubHouseSections: ClubHouseSectionSetting[] | null;
+  clubHouseKioskSeconds: number;
   levelSystemEnabled: boolean;
   legalEntityName: string;
   legalForm: string;

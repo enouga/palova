@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState, CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, CSSProperties } from 'react';
 import { api, ClubHouseSectionKey, ClubHouseSectionSetting } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { fullSectionSettings, SECTION_DEFS, SPONSORS_DEF } from '@/lib/clubhouse';
@@ -17,17 +17,40 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
   const [dragKey, setDragKey] = useState<ClubHouseSectionKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  // Vitesse d'auto-défilement du kiosque « À la une » : `speed` = secondes (3..20) mémorisées,
+  // `manual` = true → pas de défilement auto (stocké 0). Persistance débouncée pour le curseur.
+  const [speed, setSpeed] = useState(6);
+  const [manual, setManual] = useState(false);
+  const kioskTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     try {
       const club = await api.adminGetClub(clubId, token);
       setItems(fullSectionSettings(club.clubHouseSections));
       setCustomized(club.clubHouseSections != null);
+      const s = club.clubHouseKioskSeconds ?? 6;
+      setManual(s <= 0);
+      setSpeed(s > 0 ? s : 6);
       setError(null);
     } catch (e) { setError((e as Error).message); }
   }, [clubId, token]);
 
   useEffect(() => { load(); }, [load]);
+
+  const persistKiosk = (seconds: number) => {
+    api.adminUpdateClub(clubId, { clubHouseKioskSeconds: seconds }, token).catch((e) => setError((e as Error).message));
+  };
+  // Curseur : maj optimiste + persistance débouncée (un seul PATCH en fin de glissement).
+  const onSpeed = (v: number) => {
+    setSpeed(v);
+    if (kioskTimer.current) clearTimeout(kioskTimer.current);
+    kioskTimer.current = setTimeout(() => persistKiosk(v), 350);
+  };
+  const onManual = (m: boolean) => {
+    setManual(m);
+    if (kioskTimer.current) clearTimeout(kioskTimer.current);
+    persistKiosk(m ? 0 : speed);
+  };
 
   // Persiste la liste complète (8 entrées) ; optimiste, recharge l'état serveur si échec.
   const persist = async (next: ClubHouseSectionSetting[]) => {
@@ -93,9 +116,28 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
       <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 4px', color: th.text }}>Sections du Club-house</h2>
       <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, margin: '0 0 14px', lineHeight: 1.5 }}>
         Choisissez les sections affichées sur la page d’accueil et leur ordre (glissez, ou ↑↓).
-        Le bandeau « À la une » est toujours en tête de page.
+        Le kiosque « À la une » (vos annonces) est toujours en tête de page.
         {!customized && ' Par défaut, l’ordre s’adapte automatiquement (visiteur / membre) ; dès que vous personnalisez, le même ordre s’applique à tous.'}
       </p>
+
+      {/* Vitesse d'auto-défilement du kiosque « À la une ». */}
+      <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>Défilement des annonces</span>
+          <span style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: manual ? th.textMute : th.accent }}>
+            {manual ? 'Manuel' : `${speed} s`}
+          </span>
+        </div>
+        <input type="range" min={3} max={20} step={1} value={speed} disabled={manual}
+          aria-label="Temps de pause entre deux annonces (secondes)"
+          onChange={(e) => onSpeed(Number(e.target.value))}
+          style={{ width: '100%', accentColor: th.accent, cursor: manual ? 'default' : 'pointer', opacity: manual ? 0.4 : 1 }} />
+        <label style={{ ...toggleLabel, whiteSpace: 'normal' }}>
+          <input type="checkbox" checked={manual} onChange={(e) => onManual(e.target.checked)} aria-label="Pas de défilement automatique" />
+          Pas de défilement automatique (le visiteur navigue à la main)
+        </label>
+      </div>
+
       {error && <div style={{ marginBottom: 12, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.map((s, idx) => {

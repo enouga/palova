@@ -50,7 +50,7 @@ describe('/admin/club', () => {
     fireEvent.click(screen.getByLabelText('Afficher Top du mois'));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
     const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
-    expect(body.clubHouseSections).toHaveLength(8);
+    expect(body.clubHouseSections).toHaveLength(6);
     expect(body.clubHouseSections.find((s: { key: string }) => s.key === 'top')).toEqual({ key: 'top', visible: false });
   });
 
@@ -62,6 +62,20 @@ describe('/admin/club', () => {
     const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
     expect(body.clubHouseSections[0].key).toBe('agenda');
     expect(body.clubHouseSections[1].key).toBe('matches');
+  });
+
+  it('carte Sections : curseur de vitesse du kiosque → PATCH clubHouseKioskSeconds (débouncé)', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Défilement des annonces')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Temps de pause entre deux annonces (secondes)'), { target: { value: '12' } });
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseKioskSeconds: 12 }, 't'));
+  });
+
+  it('carte Sections : « Pas de défilement automatique » → PATCH 0 (manuel)', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByLabelText('Pas de défilement automatique')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Pas de défilement automatique'));
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseKioskSeconds: 0 }, 't'));
   });
 
   it('carte Sections : config personnalisée → Réinitialiser → ConfirmDialog → PATCH null', async () => {
