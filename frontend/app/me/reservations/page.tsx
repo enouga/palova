@@ -20,6 +20,7 @@ import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { canRecordResult } from '@/lib/match';
+import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 
 function fmtDate(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -48,6 +49,7 @@ export default function MyReservationsPage() {
   const [refundMsg, setRefundMsg] = useState<string | null>(null);
   const [matches, setMatches] = useState<MyMatch[]>([]);
   const [recordingFor, setRecordingFor] = useState<MyReservation | null>(null);
+  const [chatFor, setChatFor] = useState<MyReservation | null>(null);
   const [ym, setYm] = useState(() => {
     const [y, m] = todayKey().split('-').map(Number);
     return { year: y, month: m };
@@ -204,10 +206,12 @@ export default function MyReservationsPage() {
                   now={now ?? Date.now()}
                   onCancel={setConfirmCancel}
                   onPlayersChanged={() => { if (token) load(token); }}
+                  onOpenChat={setChatFor}
                   onReserve={() => router.push(reserveHref)}
                   reserveLabel={slug ? 'Réserver un créneau' : 'Trouver un club'}
                   canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
                   onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
+                  matchStatusFor={(rid) => matchFor(rid)?.status}
                   showSport={showSport}
                 />
               </>
@@ -236,6 +240,7 @@ export default function MyReservationsPage() {
                 token={token}
                 onCancel={setConfirmCancel}
                 onPlayersChanged={() => { if (token) load(token); }}
+                onOpenChat={setChatFor}
                 canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
                 onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
                 existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
@@ -273,6 +278,16 @@ export default function MyReservationsPage() {
           context={{ whenIso: recordingFor.startTime, tz: recordingFor.resource.club.timezone, courtName: recordingFor.resource.name }}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); api.getMyMatches(token).then(setMatches).catch(() => {}); }}
+        />
+      )}
+      {chatFor && token && (
+        <OpenMatchChatSheet
+          slug={chatFor.resource.club.slug} token={token} reservationId={chatFor.id}
+          viewerUserId={chatFor.participants.find((p) => p.isOrganizer)?.userId ?? ''}
+          viewerIsOrganizer
+          title={`${chatFor.resource.name} · ${fmtDate(chatFor.startTime, chatFor.resource.club.timezone)} · ${fmtHour(chatFor.startTime, chatFor.resource.club.timezone)}`}
+          timezone={chatFor.resource.club.timezone}
+          onClose={() => setChatFor(null)}
         />
       )}
     </Screen>
