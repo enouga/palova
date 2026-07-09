@@ -18,6 +18,7 @@ import { TopOfMonth } from '@/components/clubhouse/TopOfMonth';
 import { ClubPresentationCard } from '@/components/clubhouse/ClubPresentationCard';
 import { SponsorMarquee } from '@/components/clubhouse/SponsorMarquee';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
+import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 
 function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -161,6 +162,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   return (
     <>
       <AnnouncementKiosk clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />
+
+      {club.levelSystemEnabled !== false && (
+        <ResultsToRecord token={token} clubSlug={club.slug} />
+      )}
 
       {order.map((k) => wrap(k, sections[k]))}
 

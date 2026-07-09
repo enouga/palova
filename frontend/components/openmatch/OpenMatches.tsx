@@ -15,6 +15,7 @@ import { recommendMatches } from '@/lib/recommend';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
 import { useIsDesktop } from '@/lib/useIsDesktop';
+import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -129,6 +130,9 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         )}
         {!levelEnabled || !token || view === 'parties' ? (
           <>
+        {levelEnabled && (
+          <ResultsToRecord token={token} clubSlug={club.slug} />
+        )}
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
@@ -225,6 +229,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           </>
         ) : view === 'matchs' ? (
           <>
+            <ResultsToRecord token={token} clubSlug={club.slug}
+              onRecorded={() => api.getMyMatches(token).then(setMyMatches).catch(() => {})} />
             <div style={{ padding: '18px 20px 0' }}>
               <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Mes matchs</h1>
               <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>

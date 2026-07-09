@@ -11,6 +11,7 @@ import { BackButton, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
+import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 
 // Page joueur dédiée « Mes matchs à confirmer » : liste les matchs où je dois confirmer ou
 // contester un résultat (et l'historique). Cible des notifications match.pending_confirmation /
@@ -75,6 +76,8 @@ export default function MyMatchesPage() {
         {error && <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
         <div style={{ padding: '18px 20px 0' }}>
+          <ResultsToRecord token={token}
+            onRecorded={() => { if (token) api.getMyMatches(token).then(setMatches).catch(() => {}); }} />
           {loading ? (
             <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
           ) : (

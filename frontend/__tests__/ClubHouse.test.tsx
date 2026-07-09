@@ -27,6 +27,7 @@ jest.mock('../lib/api', () => ({
     getClubTopMonth: jest.fn().mockResolvedValue([]),
     getMyClubSubscriptions: jest.fn().mockResolvedValue([]),
     cancelReservation: jest.fn(),
+    getMatchesToRecord: jest.fn().mockResolvedValue([]),
   },
 }));
 import { api } from '../lib/api';

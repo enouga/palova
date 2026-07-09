@@ -19,6 +19,8 @@ jest.mock('../lib/api', () => ({
     getOpenMatches:   jest.fn(),
     // Vue « Mes matchs » (résultats) intégrée à /parties.
     getMyMatches:     jest.fn().mockResolvedValue([]),
+    // Prompt « Résultat à saisir » (ResultsToRecord), monté sur les vues parties + matchs.
+    getMatchesToRecord: jest.fn().mockResolvedValue([]),
     joinOpenMatch:    jest.fn().mockResolvedValue({ id: 'm1' }),
     leaveOpenMatch:   jest.fn().mockResolvedValue({ id: 'm1' }),
     removeOpenMatchPlayer: jest.fn().mockResolvedValue({ id: 'm1' }),

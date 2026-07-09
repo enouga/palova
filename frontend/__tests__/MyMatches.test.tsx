@@ -23,6 +23,7 @@ jest.mock('../lib/api', () => ({
     confirmMatch: jest.fn().mockResolvedValue({ ok: true }),
     disputeMatch: jest.fn().mockResolvedValue({ ok: true }),
     getMatchComments: jest.fn().mockResolvedValue({ status: 'DISPUTED', comments: [] }),
+    getMatchesToRecord: jest.fn().mockResolvedValue([]),
   },
 }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
