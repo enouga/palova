@@ -276,6 +276,11 @@ export default function MyReservationsPage() {
         <MatchResultModal
           reservationId={recordingFor.id}
           players={recordingFor.participants ?? []}
+          initialTeams={Object.fromEntries(
+            (recordingFor.participants ?? [])
+              .filter((p) => p.team === 1 || p.team === 2)
+              .map((p) => [p.userId, p.team as 1 | 2]),
+          )}
           token={token}
           context={{ whenIso: recordingFor.startTime, tz: recordingFor.resource.club.timezone, courtName: recordingFor.resource.name }}
           onClose={() => setRecordingFor(null)}
