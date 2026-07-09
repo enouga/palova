@@ -96,11 +96,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { items: [
       { href: '/admin', label: 'Tableau de bord', icon: 'grid' },
     ] },
+    // Un job par surface : la Caisse (/admin/encaissement) est LE comptoir du quotidien,
+    // « Ventes & journée » (/admin/caisse) vend les offres et clôt la journée, et le
+    // contrôle des paiements (/admin/reservations) vit dans « Finances ».
     { title: 'Au quotidien', color: '#5e93da', items: [
-      { href: '/admin/planning',     label: 'Planning',     icon: 'calendar' },
-      { href: '/admin/reservations', label: 'Encaissement', icon: 'ticket' },
-      { href: '/admin/encaissement', label: 'Caisse express', icon: 'card' },
-      { href: '/admin/caisse',       label: 'Caisse',       icon: 'euro' },
+      { href: '/admin/planning',     label: 'Planning',          icon: 'calendar' },
+      { href: '/admin/encaissement', label: 'Caisse',            icon: 'euro' },
+      { href: '/admin/caisse',       label: 'Ventes & journée',  icon: 'card' },
     ] },
     { title: 'Animations & jeu', color: '#e6a93c', items: [
       { href: '/admin/tournaments', label: 'Tournois', icon: 'trophy' },
@@ -120,6 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
+      { href: '/admin/reservations', label: 'Paiements',         icon: 'ticket' },
       { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
