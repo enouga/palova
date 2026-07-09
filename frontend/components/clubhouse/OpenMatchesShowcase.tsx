@@ -4,7 +4,7 @@ import { OpenMatch } from '@/lib/api';
 import { matchSeats } from '@/lib/clubhouse';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
-import { formatDateShortTimeRange } from '@/lib/tournament';
+import { formatDateShort, formatDateShortTimeRange, formatHourRange } from '@/lib/tournament';
 import { rangeLabel } from '@/lib/levelMatch';
 import { colorForSeed } from '@/lib/playerColors';
 import { Avatar } from '@/components/ui/Avatar';
@@ -25,10 +25,15 @@ export function OpenMatchesShowcase({ matches, timezone }: { matches: OpenMatch[
           const level = (m.targetLevelMin != null || m.targetLevelMax != null)
             ? rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null) : null;
           const when = formatDateShortTimeRange(m.startTime, m.endTime, timezone);
+          const dateLabel = formatDateShort(m.startTime, timezone);
+          const timeLabel = formatHourRange(m.startTime, m.endTime, timezone);
           return (
             <article key={m.id} style={{ ...cardStyle(th), flex: '0 0 272px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text }}>{when}</div>
+                {/* date et heure sur 2 lignes distinctes — un saut de ligne au milieu de « → 09h30 »
+                    apparaissait selon la longueur du texte (largeur de carte fixe, texte variable) */}
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{dateLabel}</div>
+                <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{timeLabel}</div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
                   {m.resourceName}{level ? ` · ${level}` : ''}
                 </div>
