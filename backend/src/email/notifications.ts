@@ -1034,7 +1034,11 @@ export async function notifyMatchResultPrompt(reservationId: string): Promise<vo
     where: { id: reservationId },
     include: {
       resource: {
-        select: { name: true, club: { select: { id: true, slug: true } } },
+        select: {
+          name: true,
+          clubSport: { select: { sport: { select: { key: true } } } },
+          club: { select: { id: true, slug: true, levelSystemEnabled: true } },
+        },
       },
       participants: { select: { userId: true } },
       matches: { select: { status: true } },
@@ -1045,6 +1049,10 @@ export async function notifyMatchResultPrompt(reservationId: string): Promise<vo
   // Mock-fidelity : le mock Prisma ne filtre pas les `where` imbriqués sur relation, on
   // sélectionne donc tous les statuts et on filtre en JS (bloque aussi sur DISPUTED).
   if (resa.matches.some((m) => m.status !== 'CANCELLED')) return;
+  // Le cron (Task 4) balaie large (résas COURT) et délègue le gating ici : n'invite qu'au
+  // padel, et seulement si le club a activé le système de niveau.
+  if (!resa.resource.club.levelSystemEnabled) return;
+  if (resa.resource.clubSport.sport.key !== 'padel') return;
 
   const club = resa.resource.club;
   const url = clubAppUrl(club.slug, '/me/matches');

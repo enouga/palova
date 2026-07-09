@@ -91,7 +91,7 @@ describe('notifyMatchResultPrompt → dispatch', () => {
   it('dispatch MY_MATCHES/match.to_record aux 4 joueurs, sans email', async () => {
     prismaMock.reservation.findUnique.mockResolvedValue({
       id: 'resa-1',
-      resource: { name: 'Court 1', club, clubSport: { sport: { key: 'padel' } } },
+      resource: { name: 'Court 1', club: { ...club, levelSystemEnabled: true }, clubSport: { sport: { key: 'padel' } } },
       participants: [
         { userId: 'p1', user: { firstName: 'Alice' } },
         { userId: 'p2', user: { firstName: 'Bob' } },
@@ -115,7 +115,7 @@ describe('notifyMatchResultPrompt → dispatch', () => {
   it('ne dispatch rien si un Match non annulé existe', async () => {
     prismaMock.reservation.findUnique.mockResolvedValue({
       id: 'resa-1',
-      resource: { name: 'Court 1', club, clubSport: { sport: { key: 'padel' } } },
+      resource: { name: 'Court 1', club: { ...club, levelSystemEnabled: true }, clubSport: { sport: { key: 'padel' } } },
       participants: [
         { userId: 'p1', user: { firstName: 'Alice' } },
         { userId: 'p2', user: { firstName: 'Bob' } },
@@ -125,6 +125,22 @@ describe('notifyMatchResultPrompt → dispatch', () => {
       matches: [{ status: 'PENDING' }],
     } as any);
 
+    await notifyMatchResultPrompt('resa-1');
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
+
+  it('ne dispatch rien pour un sport non-padel', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({
+      id: 'resa-1',
+      resource: { name: 'Court 1', club: { ...club, levelSystemEnabled: true }, clubSport: { sport: { key: 'tennis' } } },
+      participants: [
+        { userId: 'p1', user: { firstName: 'Alice' } },
+        { userId: 'p2', user: { firstName: 'Bob' } },
+        { userId: 'p3', user: { firstName: 'Carol' } },
+        { userId: 'p4', user: { firstName: 'David' } },
+      ],
+      matches: [],
+    } as any);
     await notifyMatchResultPrompt('resa-1');
     expect(dispatchMock).not.toHaveBeenCalled();
   });
