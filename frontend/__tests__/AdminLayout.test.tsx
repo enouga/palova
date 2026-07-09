@@ -72,11 +72,12 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Club Démo')).toBeInTheDocument();
   });
 
-  it("lien rapide vers le Club-house dans l'en-tête", async () => {
+  it("lien rapide vers le Club-house dans l'en-tête (nouvel onglet, pas de capture PWA)", async () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     await wrap();
-    const link = screen.getByLabelText('Voir le Club-house');
-    expect(link).toHaveAttribute('href', '/');
-    expect(link).toHaveAttribute('target', '_blank');
+    fireEvent.click(screen.getByLabelText('Voir le Club-house'));
+    expect(openSpy).toHaveBeenCalledWith('/', '_blank', 'noopener,noreferrer');
+    openSpy.mockRestore();
   });
 
   it('le toggle masque puis ré-affiche la sidebar', async () => {
