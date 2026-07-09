@@ -3,9 +3,10 @@ import { prismaMock } from '../../__mocks__/prisma';
 
 jest.mock('../../email/notifications', () => ({
   notifyReservationReminder: jest.fn(),
+  notifyMatchResultPrompt: jest.fn(),
 }));
 
-import { notifyReservationReminder } from '../../email/notifications';
+import { notifyReservationReminder, notifyMatchResultPrompt } from '../../email/notifications';
 import { runReminders, REMINDER_WINDOWS, REMINDER_PERIOD_MIN } from '../reminders.job';
 
 const notifyMock = notifyReservationReminder as jest.Mock;
@@ -46,5 +47,36 @@ describe('runReminders', () => {
     await expect(runReminders(fixedNow)).resolves.not.toThrow();
     // Still calls for both windows (2 calls total)
     expect(notifyMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('runReminders — passe post-match', () => {
+  const promptMock = notifyMatchResultPrompt as jest.Mock;
+  const fixedNow2 = new Date('2026-07-01T12:00:00Z');
+
+  beforeEach(() => {
+    promptMock.mockReset();
+    (notifyReservationReminder as jest.Mock).mockReset();
+    // 1er appel findMany = fenêtre J-1, 2e = H-2, 3e = passe post-match.
+    prismaMock.reservation.findMany.mockResolvedValue([{ id: 'rp1' }] as any);
+  });
+
+  it('notifie le résultat pour les réservations finies dans la tranche [-30min, -15min]', async () => {
+    await runReminders(fixedNow2);
+    expect(promptMock).toHaveBeenCalledWith('rp1');
+    // La requête post-match cible endTime dans la bonne tranche.
+    const postCall = (prismaMock.reservation.findMany as jest.Mock).mock.calls.find(
+      (c) => c[0]?.where?.endTime,
+    );
+    expect(postCall).toBeTruthy();
+    const expectedFrom = new Date(fixedNow2.getTime() - 30 * 60000);
+    const expectedTo = new Date(fixedNow2.getTime() - 15 * 60000);
+    expect(postCall[0].where.endTime).toEqual({ gt: expectedFrom, lte: expectedTo });
+    expect(postCall[0].where.status).toBe('CONFIRMED');
+  });
+
+  it('un échec de notification post-match ne casse pas le job', async () => {
+    promptMock.mockRejectedValueOnce(new Error('boom'));
+    await expect(runReminders(fixedNow2)).resolves.not.toThrow();
   });
 });

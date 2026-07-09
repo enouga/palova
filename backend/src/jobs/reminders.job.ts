@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../db/prisma';
-import { notifyReservationReminder } from '../email/notifications';
+import { notifyReservationReminder, notifyMatchResultPrompt } from '../email/notifications';
 
 // Idempotency by design: each reservation falls into a window's narrow [lead−period, lead] slice
 // for exactly one 15-min job run, so it's reminded once per window.
@@ -19,6 +19,10 @@ export const REMINDER_WINDOWS = [
 ];
 export const REMINDER_PERIOD_MIN = 15;
 
+// Invitation à saisir le résultat : lead 15 min après la fin du match (le temps de sortir
+// du terrain). Tranche = [now − (lead + période), now − lead] = [-30min, -15min].
+export const RESULT_PROMPT_LEAD_MIN = 15;
+
 export async function runReminders(now: Date): Promise<void> {
   for (const w of REMINDER_WINDOWS) {
     const from = new Date(now.getTime() + (w.leadMin - REMINDER_PERIOD_MIN) * 60000);
@@ -33,6 +37,21 @@ export async function runReminders(now: Date): Promise<void> {
       } catch (e) {
         console.error('[reminders]', (e as Error).message);
       }
+    }
+  }
+
+  // Passe post-match : réservations dont la fin tombe dans la tranche écoulée.
+  const postFrom = new Date(now.getTime() - (RESULT_PROMPT_LEAD_MIN + REMINDER_PERIOD_MIN) * 60000);
+  const postTo = new Date(now.getTime() - RESULT_PROMPT_LEAD_MIN * 60000);
+  const played = await prisma.reservation.findMany({
+    where: { status: 'CONFIRMED', type: 'COURT', endTime: { gt: postFrom, lte: postTo } },
+    select: { id: true },
+  });
+  for (const r of played) {
+    try {
+      await notifyMatchResultPrompt(r.id);
+    } catch (e) {
+      console.error('[reminders:post-match]', (e as Error).message);
     }
   }
 }
