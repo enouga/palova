@@ -119,6 +119,7 @@ export const api = {
   recordMatchResult: (reservationId: string, body: { teams: Record<1 | 2, string[]>; sets: [number, number][] }, token: string) =>
     request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
   getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
+  getMatchesToRecord: (token: string) => request<MatchToRecord[]>('/api/me/matches/to-record', {}, token),
   confirmMatch: (matchId: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
   disputeMatch: (matchId: string, message: string, token: string) =>
@@ -1115,6 +1116,26 @@ export interface MyMatch {
   sport: { name: string };
   resource: { name: string } | null;
   players: MyMatchPlayer[];
+}
+
+export interface MatchToRecordPlayer {
+  userId: string;
+  isOrganizer: boolean;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  team: 1 | 2;
+  slot: number;
+}
+
+export interface MatchToRecord {
+  reservationId: string;
+  startTime: string;
+  endTime: string;
+  club: { slug: string; name: string; timezone: string };
+  resourceName: string;
+  sport: { key: string; name: string };
+  players: MatchToRecordPlayer[];
 }
 
 export interface ClubMatchPlayer {
