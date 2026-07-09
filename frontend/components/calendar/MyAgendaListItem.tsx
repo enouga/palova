@@ -11,6 +11,7 @@ import { KIND_LABEL } from '@/lib/events';
 import { PlayerPills } from '@/components/player/PlayerPills';
 import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
 import { MatchTeams } from '@/components/match/MatchTeams';
+import { ReservationAgendaCard } from '@/components/reservations/ReservationAgendaCard';
 
 function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -24,13 +25,14 @@ function fmtDate(iso: string, tz: string): string {
  * `localSlug` = club courant (sous-domaine), ou null sur la plateforme. Une entrée d'un AUTRE club
  * (« étrangère ») devient une carte-lien qui renvoie vers l'app de ce club, sans actions inline.
  */
-export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged, onRecordResult, canRecord, existingMatchStatus, showSport }: {
+export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlayersChanged, onOpenChat, onRecordResult, canRecord, existingMatchStatus, showSport }: {
   item: AgendaListItem;
   now: number;
   localSlug: string | null;
   token: string | null;
   onCancel: (r: MyReservation) => void;
   onPlayersChanged: () => void;
+  onOpenChat: (r: MyReservation) => void;
   onRecordResult?: (r: MyReservation) => void;
   canRecord?: (r: MyReservation) => boolean;
   existingMatchStatus?: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
@@ -72,59 +74,70 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
   let body: React.ReactNode;
   if (item.kind === 'reservation') {
     const r = item.r;
-    const canCancel = isCancellationOpen(r, now);
-    const showRecord = item.past && !isForeign && canRecord?.(r) && !existingMatchStatus;
-    const MATCH_STATUS_LABEL: Record<string, string> = { PENDING: 'À confirmer', CONFIRMED: 'Résultat enregistré', DISPUTED: 'En litige' };
-    body = (
-      <>
-        <div style={headRow}>
-          <span style={title}>{r.resource.name}</span>
-          <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
-        </div>
-        <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>
-        <div style={metaRow}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(r.startTime, tz)} · {fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
-          <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
-          {isForeign ? goHint : (!item.past && (
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              <button onClick={() => onCancel(r)} disabled={!canCancel} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? '#ff7a4d' : th.textFaint }}>Annuler</button>
-            </span>
-          ))}
-        </div>
-        {showRecord && onRecordResult && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => onRecordResult(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Saisir le résultat</button>
+    const isPadel = r.resource.sport?.key === 'padel';
+    if (!isForeign && isPadel) {
+      body = (
+        <ReservationAgendaCard
+          reservation={r} past={item.past} showSport={showSport} showDate token={token} now={now}
+          onCancel={onCancel} onPlayersChanged={onPlayersChanged} onOpenChat={onOpenChat}
+          onRecordResult={onRecordResult} canRecord={canRecord} existingMatchStatus={existingMatchStatus}
+        />
+      );
+    } else {
+      const canCancel = isCancellationOpen(r, now);
+      const showRecord = item.past && !isForeign && canRecord?.(r) && !existingMatchStatus;
+      const MATCH_STATUS_LABEL: Record<string, string> = { PENDING: 'À confirmer', CONFIRMED: 'Résultat enregistré', DISPUTED: 'En litige' };
+      body = (
+        <>
+          <div style={headRow}>
+            <span style={title}>{r.resource.name}</span>
+            <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
           </div>
-        )}
-        {item.past && !isForeign && existingMatchStatus && MATCH_STATUS_LABEL[existingMatchStatus] && (
-          <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{MATCH_STATUS_LABEL[existingMatchStatus]}</div>
-        )}
-        {!isForeign && !item.past && token ? (
-          <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
-        ) : (r.participants?.length ?? 0) > 0 ? (
-          <div style={{ marginTop: 9 }}>
-            {r.resource.sport?.key === 'padel' ? (
-              <MatchTeams
-                players={(r.participants ?? []).map((p) => ({
-                  userId: p.userId, firstName: p.firstName, lastName: p.lastName,
-                  avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
-                  team: (p.team ?? 1) as 1 | 2,
-                  slot: p.slot,
-                }))}
-                capacity={r.capacity ?? 4}
-                size="sm"
-              />
-            ) : (
-              <PlayerPills
-                players={r.participants ?? []}
-                spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))}
-                size="sm"
-              />
-            )}
+          <div style={subtitle}>{sportPrefix}{r.resource.club.name}</div>
+          <div style={metaRow}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={14} color={th.textMute} />{fmtDate(r.startTime, tz)} · {fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}</span>
+            <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
+            {isForeign ? goHint : (!item.past && (
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button onClick={() => onCancel(r)} disabled={!canCancel} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? '#ff7a4d' : th.textFaint }}>Annuler</button>
+              </span>
+            ))}
           </div>
-        ) : null}
-      </>
-    );
+          {showRecord && onRecordResult && (
+            <div style={{ marginTop: 8 }}>
+              <button onClick={() => onRecordResult(r)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Saisir le résultat</button>
+            </div>
+          )}
+          {item.past && !isForeign && existingMatchStatus && MATCH_STATUS_LABEL[existingMatchStatus] && (
+            <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{MATCH_STATUS_LABEL[existingMatchStatus]}</div>
+          )}
+          {!isForeign && !item.past && token ? (
+            <ReservationPlayersInline reservation={r} token={token} now={now} onChanged={onPlayersChanged} />
+          ) : (r.participants?.length ?? 0) > 0 ? (
+            <div style={{ marginTop: 9 }}>
+              {r.resource.sport?.key === 'padel' ? (
+                <MatchTeams
+                  players={(r.participants ?? []).map((p) => ({
+                    userId: p.userId, firstName: p.firstName, lastName: p.lastName,
+                    avatarUrl: p.avatarUrl, isOrganizer: p.isOrganizer, level: p.level,
+                    team: (p.team ?? 1) as 1 | 2,
+                    slot: p.slot,
+                  }))}
+                  capacity={r.capacity ?? 4}
+                  size="sm"
+                />
+              ) : (
+                <PlayerPills
+                  players={r.participants ?? []}
+                  spotsLeft={Math.max(0, (r.capacity ?? 0) - (r.participants?.length ?? 0))}
+                  size="sm"
+                />
+              )}
+            </div>
+          ) : null}
+        </>
+      );
+    }
   } else if (item.kind === 'lesson') {
     const lesson = item.enrollment.lesson;
     const res = lesson.reservation;

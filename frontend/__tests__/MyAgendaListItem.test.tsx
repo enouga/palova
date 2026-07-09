@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MyAgendaListItem } from '../components/calendar/MyAgendaListItem';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -25,6 +25,7 @@ const baseProps = {
   token: null,
   onCancel: jest.fn(),
   onPlayersChanged: jest.fn(),
+  onOpenChat: jest.fn(),
 };
 
 describe('MyAgendaListItem — places G/D persistées (lecture seule)', () => {
@@ -71,5 +72,34 @@ describe('MyAgendaListItem — badge sport', () => {
     );
     expect(screen.getByText(/P500 · Messieurs · Demo/)).toBeInTheDocument();
     expect(screen.queryByText(/Tennis · P500/)).not.toBeInTheDocument();
+  });
+});
+
+describe('MyAgendaListItem — carte alignée sur Mes parties (padel, non-étranger)', () => {
+  it('affiche le chip de places et transmet le clic Discuter via onOpenChat', () => {
+    const onOpenChat = jest.fn();
+    const item = {
+      kind: 'reservation' as const,
+      id: 'r1',
+      start: '2030-01-01T10:00:00Z',
+      past: false,
+      r: {
+        id: 'r1', startTime: '2030-01-01T10:00:00Z', endTime: '2030-01-01T11:00:00Z',
+        status: 'CONFIRMED', totalPrice: '25', visibility: 'PUBLIC',
+        resource: { id: 'res1', name: 'Terrain 1', sport: { key: 'padel', name: 'Padel' }, club: { name: 'Demo', slug: 'demo', timezone: 'Europe/Paris' } },
+        capacity: 4,
+        participants: [
+          { id: 'p1', userId: 'u1', isOrganizer: true, firstName: 'Paul', lastName: 'B', avatarUrl: null, team: 1, slot: 0 },
+        ],
+      },
+    };
+    render(
+      <ThemeProvider>
+        <MyAgendaListItem {...baseProps} token="abc" item={item as any} onOpenChat={onOpenChat} />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('3 places')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Discuter/ }));
+    expect(onOpenChat).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
   });
 });
