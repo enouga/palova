@@ -3,6 +3,14 @@
 * { box-sizing: border-box; }
 
 html, body { margin: 0; padding: 0; }
+/* Anti-débordement horizontal : si un élément dépasse la largeur de l'écran
+   (ex. une carte de réservation un peu trop large selon les données), on CLIP
+   le dépassement au lieu de laisser la page défiler latéralement et pousser tout
+   le contenu de travers → le calendrier « Mes réservations » paraissait décentré
+   (marge normale à gauche, collé au bord droit). `clip` (et non `hidden`) ne crée
+   PAS de conteneur de défilement : nav collante, scroll vertical et rails à
+   défilement horizontal internes restent intacts. */
+html, body { overflow-x: clip; }
 /* Réserve la gouttière de scrollbar sur LES DEUX bords : quand la barre de
    défilement « classique » prend 15 px à droite (desktop, et certains mobiles
    type Samsung/WebView qui n'ont pas de scrollbar overlay), on réserve une
