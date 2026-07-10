@@ -168,11 +168,14 @@ export default function MyReservationsPage() {
         </div>
 
         {quotaStatus && (
-          <div style={{ padding: '14px 20px 0' }}>
-            {/* Quotas : même rendu compact (pleines & creuses sur une ligne) que Réserver/BookingModal. */}
-            <div style={{ maxWidth: 360 }}>
-              <QuotaStatus status={quotaStatus} compact />
+          // Quotas : rendu IDENTIQUE à Réserver (pastilles à largeur naturelle dans une rangée
+          // défilante pleine largeur + fondu au bord droit) → même taille sur les deux pages.
+          // (Le mode `compact` reste réservé au conteneur étroit de BookingModal.)
+          <div style={{ margin: '14px 0 0', position: 'relative' }}>
+            <div className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '0 20px' }}>
+              <QuotaStatus status={quotaStatus} inline />
             </div>
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 28, background: `linear-gradient(90deg, ${th.bg}00, ${th.bg})`, pointerEvents: 'none' }} />
           </div>
         )}
 

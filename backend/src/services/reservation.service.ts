@@ -767,7 +767,12 @@ export class ReservationService {
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)      throw new Error('UNAUTHORIZED');
     if (reservation.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
-    this.assertWithinCutoff(reservation.startTime, reservation.resource.club.cancellationCutoffHours, 'CANCELLATION_TOO_LATE');
+    // La fenêtre d'annulation ne concerne QUE les réservations confirmées (interdit d'annuler
+    // une vraie résa trop proche du début). Un hold PENDING = blocage transitoire du tunnel de
+    // réservation : l'abandonner doit TOUJOURS libérer le créneau, même s'il commence bientôt.
+    if (reservation.status === 'CONFIRMED') {
+      this.assertWithinCutoff(reservation.startTime, reservation.resource.club.cancellationCutoffHours, 'CANCELLATION_TOO_LATE');
+    }
 
     const cancelled = await this.performCancel(reservation);
     const refunded = await this.autoRefundOnCancel(

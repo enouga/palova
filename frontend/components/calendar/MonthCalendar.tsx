@@ -79,7 +79,7 @@ export function MonthCalendar({
           const isSelected = cell.key === selected;
           const dim = !cell.inMonth;
           // Anneau du « bouton de départ » d'un ruban : couleur du fond de la cellule pour le détacher.
-          const knobRing = isSelected ? th.ink : dim ? 'transparent' : th.surface;
+          const knobRing = isSelected ? th.accent : dim ? 'transparent' : th.surface;
           // Ruban continu multi-jours (tournoi/event) : déborde sur le gap, arrondi aux extrémités,
           // + petit bouton à icône posé sur le jour de début pour identifier le type.
           const multiDayBar = (
@@ -118,13 +118,13 @@ export function MonthCalendar({
                 position: 'relative', borderRadius: 12, border: 'none', cursor: 'pointer',
                 minHeight: 'var(--cal-h-min)', maxHeight: 'var(--cal-h-max)', aspectRatio: 'var(--cal-ar)',
                 padding: 'var(--cal-pad)', textAlign: 'var(--cal-align)' as 'left', verticalAlign: 'top',
-                background: isSelected ? th.ink : dim ? 'transparent' : th.surface,
+                background: isSelected ? th.accent : dim ? 'transparent' : th.surface,
                 boxShadow: isSelected ? 'none' : dim ? 'none' : `inset 0 0 0 1px ${th.line}`,
                 WebkitTapHighlightColor: 'transparent',
               }}>
               <span style={{
                 fontFamily: th.fontUI, fontSize: 12.5, fontWeight: isToday ? 700 : 500,
-                color: isSelected ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : dim ? th.textFaint : isToday ? th.accent : th.text,
+                color: isSelected ? inkOn(th.accent) : dim ? th.textFaint : isToday ? th.accent : th.text,
               }}>
                 {cell.day}
               </span>

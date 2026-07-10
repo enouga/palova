@@ -328,6 +328,32 @@ describe('ReservationService', () => {
       await expect(service.cancelReservation('res-1', 'user-1')).rejects.toThrow('CANCELLATION_TOO_LATE');
     });
 
+    it('libère un hold PENDING même dans la fenêtre d\'annulation (abandon du checkout)', async () => {
+      const soon = new Date(Date.now() + 3_600_000); // début dans 1h
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'hold-1', resourceId: 'court-1', userId: 'user-1', status: 'PENDING',
+        startTime: soon, endTime: new Date(soon.getTime() + 3_600_000),
+        // cutoff 24h → une résa CONFIRMED serait « trop tard », mais un hold PENDING doit toujours se libérer
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 24, refundOnCancelWithinCutoff: false } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'hold-1', status: 'CANCELLED', resourceId: 'court-1',
+        startTime: soon, endTime: new Date(soon.getTime() + 3_600_000),
+      } as any);
+      redisMock.del.mockResolvedValue(1);
+
+      await service.cancelReservation('hold-1', 'user-1');
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith({
+        where: { id: 'hold-1' },
+        data: { status: 'CANCELLED', cancelledAt: expect.any(Date) },
+      });
+      expect(sseBroadcast()).toHaveBeenCalledWith(
+        'court-1',
+        expect.objectContaining({ type: 'slot_released' }),
+      );
+    });
+
     it('lève UNAUTHORIZED si userId ne correspond pas', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', userId: 'user-other', status: 'CONFIRMED',
