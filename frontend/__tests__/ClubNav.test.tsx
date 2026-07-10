@@ -94,7 +94,9 @@ describe('ClubNav', () => {
 
   it('affiche le nom du club en titre non cliquable', () => {
     wrap();
-    expect(screen.getByText('Club Démo')).toBeInTheDocument();
+    // Le nom est rendu en deux variantes (rangée 1 pour le desktop + pied de barre pour le
+    // mobile), montrées selon le breakpoint via CSS ; aucune n'est un lien.
+    expect(screen.getAllByText('Club Démo').length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Club Démo' })).not.toBeInTheDocument();
   });
 

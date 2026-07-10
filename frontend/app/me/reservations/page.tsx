@@ -113,7 +113,11 @@ export default function MyReservationsPage() {
 
   const agenda   = useMemo(() => buildAgendaList(fItems, fRegs, fEvts, fLessons, nowDate), [fItems, fRegs, fEvts, fLessons, nowDate]);
   const upcoming = useMemo(() => agenda.filter((i) => !i.past), [agenda]);
-  const past     = useMemo(() => agenda.filter((i) =>  i.past), [agenda]);
+  // Passées : les plus récentes d'abord (tri décroissant, à l'inverse de « À venir »).
+  const past     = useMemo(
+    () => agenda.filter((i) => i.past).sort((a, b) => b.start.localeCompare(a.start) || b.id.localeCompare(a.id)),
+    [agenda],
+  );
   const list = tab === 'past' ? past : upcoming;
 
   const entries = useMemo(
@@ -163,19 +167,23 @@ export default function MyReservationsPage() {
             </div>
           </div>
         )}
-        <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
+        <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 'clamp(27px, 7.2vw, 38px)', lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
           Mes réservations
         </div>
 
         {quotaStatus && (
-          // Quotas : rendu IDENTIQUE à Réserver (pastilles à largeur naturelle dans une rangée
-          // défilante pleine largeur + fondu au bord droit) → même taille sur les deux pages.
-          // (Le mode `compact` reste réservé au conteneur étroit de BookingModal.)
-          <div style={{ margin: '14px 0 0', position: 'relative' }}>
-            <div className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '0 20px' }}>
-              <QuotaStatus status={quotaStatus} inline />
-            </div>
-            <div aria-hidden="true" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 28, background: `linear-gradient(90deg, ${th.bg}00, ${th.bg})`, pointerEvents: 'none' }} />
+          <div style={{ margin: '14px 0 0', padding: '0 20px' }}>
+            {isDesktop ? (
+              // Desktop : pastilles à largeur naturelle en rangée (place de reste, look d'origine).
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                <QuotaStatus status={quotaStatus} inline />
+              </div>
+            ) : (
+              // Mobile : deux colonnes égales sur UNE seule ligne (mode compact) → « Heures pleines »
+              // et « Heures creuses » côte à côte même sur téléphone étroit (elles se rétrécissent
+              // au lieu de déborder), le suffixe de période s'affiche une fois dessous.
+              <QuotaStatus status={quotaStatus} compact />
+            )}
           </div>
         )}
 

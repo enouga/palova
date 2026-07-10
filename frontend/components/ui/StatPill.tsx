@@ -44,22 +44,27 @@ export function StatPill({ icon, accent, label, value, meter, warn, fill, compac
         // Non-fill : largeur naturelle intouchable — dans une rangée en overflow (Réserver),
         // sans ça la colonne texte (minWidth 0) se compresse et ré-ellipsise la valeur.
         display: fill ? 'flex' : 'inline-flex', width: fill ? '100%' : undefined, minWidth: fill ? 0 : undefined, flexShrink: fill ? undefined : 0,
-        alignItems: 'center', gap: 11,
-        background: th.surface, borderRadius: 999, padding: '7px 16px 7px 8px', whiteSpace: 'nowrap',
+        // Compact (2 colonnes sur une ligne, conteneur étroit) : tuile + gouttières resserrées
+        // pour que le libellé « Heures pleines/creuses » tienne en entier même à ~360px.
+        alignItems: 'center', gap: compact ? 9 : 11,
+        background: th.surface, borderRadius: 999, padding: compact ? '7px 10px 7px 7px' : '7px 16px 7px 8px', whiteSpace: 'nowrap',
         boxShadow: `inset 0 0 0 1px ${warn ? `${ACCENTS.coral}55` : th.line}, ${th.shadowSoft}`,
       }}
     >
       <span aria-hidden="true" style={{
-        width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+        width: compact ? 28 : 34, height: compact ? 28 : 34, borderRadius: '50%', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center', background: tileBg,
       }}>
-        <Icon name={icon} size={18} color={iconColor} />
+        <Icon name={icon} size={compact ? 16 : 18} color={iconColor} />
       </span>
 
       <span style={{ display: 'flex', flexDirection: 'column', gap: meter ? 4 : 1, minWidth: 0 }}>
         <span style={{
-          fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+          // Compact : police + interlettrage réduits pour que « Heures pleines/creuses » tienne en
+          // entier dans une colonne étroite (~360px) ; l'ellipsis reste un filet de sécurité.
+          fontFamily: th.fontUI, fontSize: compact ? 9 : 10, fontWeight: 700, letterSpacing: compact ? 0.1 : 0.5,
           textTransform: 'uppercase', color: th.textMute, lineHeight: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{label}</span>
 
         {meter ? (

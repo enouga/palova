@@ -72,7 +72,7 @@ describe('ClubReserve — rangée quotas défilante', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; jest.clearAllMocks(); });
 
-  it('rend les quotas seuls sur la rangée défilante, suffixe dans chaque jauge — pas de porte-monnaie ni d\'Abonné', async () => {
+  it('rend les quotas seuls (compact mobile, deux colonnes sur une ligne, suffixe mutualisé) — pas de porte-monnaie ni d\'Abonné', async () => {
     mocked.getMyClubPackages.mockResolvedValue(wallet as never);
     mocked.getMyClubSubscriptions.mockResolvedValue(subs as never);
     mocked.getMyQuotaStatus.mockResolvedValue({
@@ -83,14 +83,13 @@ describe('ClubReserve — rangée quotas défilante', () => {
 
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
 
-    // Une seule rangée défilante (scrollbar masquée) contenant les deux jauges.
+    // jsdom = mobile (useIsDesktop false) → rendu compact contenant les deux jauges.
     const row = await screen.findByTestId('balances-row');
-    expect(row.classList.contains('sp-scroll-x')).toBe(true);
     expect(row).toContainElement(screen.getByText('15/100'));
     expect(row).toContainElement(screen.getByText('0/67'));
 
-    // Le suffixe de période vit DANS chaque jauge (2 occurrences), pas de libellé orphelin.
-    expect(screen.getAllByText('cette semaine')).toHaveLength(2);
+    // Compact : le suffixe de période est mutualisé (une seule occurrence sous la rangée).
+    expect(screen.getAllByText('cette semaine')).toHaveLength(1);
 
     // Soldes et abonnement : déjà dans le menu profil → pas de doublon sur Réserver.
     expect(screen.queryByText('130,00 €')).not.toBeInTheDocument();

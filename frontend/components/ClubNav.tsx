@@ -146,8 +146,16 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           .cn-card { background: ${glassSolid} !important; }
         }
         .cn-lbl-short { display: none; }
+        /* Nom du club en pied de barre : réservé au mobile (sur desktop il vit dans la rangée 1). */
+        .cn-title-bottom { display: none; }
         @media (max-width:600px){
           .cn-card { padding: 10px 10px 11px !important; border-radius: 20px !important; }
+          /* Sur mobile, le nom du club sort de la rangée 1 (où la grappe d'icônes — jusqu'à 5 chez
+             un gérant — le compressait jusqu'à « Padel … ») : rangée 1 = logo + icônes, et le nom
+             s'affiche en pleine largeur tout en bas de la barre, sous les onglets. */
+          .cn-title { display: none; }
+          .cn-actions { margin-left: auto; }
+          .cn-title-bottom { display: block; }
           .cn-tabs { gap: 4px !important; margin-top: 10px !important; }
           .cn-tab { flex-direction: column !important; gap: 3px !important; padding: 7px 3px !important; border-radius: 13px !important; }
           .cn-tab svg { width: 22px; height: 22px; }
@@ -179,7 +187,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
         overflow: 'visible',
       }}>
         {/* Rangée 1 : logo du club (repli marque Palova) → accueil · nom du club · actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="cn-row1" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {showClubLogo ? (
             <Link href="/" style={{ display: 'inline-flex', flexShrink: 0 }}>
               <img src={assetUrl(club.logoUrl) ?? undefined} alt={`Logo ${club.name}`}
@@ -189,8 +197,8 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           ) : (
             <Logotype href={platformUrl('/')} size={22} />
           )}
-          <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span className="cn-title" style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
+          <div className="cn-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ThemeToggle />
             {showMessages && (
               // Icône Messages : même langage que la cloche (rond surface2, badge rouge non-lus).
@@ -264,6 +272,10 @@ export function ClubNav({ club }: { club: ClubDetail }) {
             );
           })}
         </div>
+
+        {/* Nom du club en pied de barre (mobile uniquement, cf. `.cn-title-bottom`) : le nom ne
+            tient pas à côté de la grappe d'icônes dans la rangée 1, on l'affiche ici en entier. */}
+        <div className="cn-title-bottom" style={{ marginTop: 11, textAlign: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, color: th.text, letterSpacing: -0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</div>
       </div>
     </div>
   );

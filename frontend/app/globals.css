@@ -141,7 +141,7 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
     gap: 4px; padding: 7px 2px;
   }
   .sp-seg-icon { display: inline-flex; }
-  .sp-seg-label { font-size: 11px; }
+  .sp-seg-label { font-size: 13px; }
   .sp-seg-count-inline { display: none; }
   .sp-seg-badge {
     display: flex; align-items: center; justify-content: center;
