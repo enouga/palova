@@ -11,6 +11,9 @@ import {
   agendaKindMeta,
   agendaItemClubSlug,
   CalendarEntry,
+  addDaysKey,
+  frLongLabel,
+  frWeekday,
 } from '@/lib/calendar';
 import { MyReservation, MyTournamentRegistration, MyEventRegistration, MyLessonEnrollment } from '@/lib/api';
 import { ACCENTS } from '@/lib/theme';
@@ -446,5 +449,24 @@ describe('cours (lessons)', () => {
 describe('todayKey', () => {
   it('retourne une clé YYYY-MM-DD', () => {
     expect(todayKey(new Date('2026-06-10T12:00:00.000Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe('addDaysKey', () => {
+  it('avance et recule d\'un nombre de jours (arithmétique UTC, sans décalage DST)', () => {
+    expect(addDaysKey('2026-07-10', 1)).toBe('2026-07-11');
+    expect(addDaysKey('2026-07-10', -1)).toBe('2026-07-09');
+    expect(addDaysKey('2026-07-10', -7)).toBe('2026-07-03');
+  });
+  it('franchit les bornes de mois et d\'année', () => {
+    expect(addDaysKey('2026-07-01', -1)).toBe('2026-06-30');
+    expect(addDaysKey('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('frLongLabel / frWeekday', () => {
+  it('libellé long français sans passer par un fuseau local', () => {
+    expect(frLongLabel('2026-07-10')).toBe('vendredi 10 juillet');
+    expect(frWeekday('2026-07-10')).toBe('vendredi');
   });
 });

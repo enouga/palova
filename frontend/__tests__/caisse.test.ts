@@ -1,4 +1,4 @@
-import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId, hhmm, isSalePayment, trendSeries } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import type { ReservationType, ClubReservation } from '@/lib/api';
 
@@ -306,5 +306,44 @@ describe('encaissement optimiste', () => {
     expect(centsToStr(625)).toBe('6.25');
     expect(centsToStr(0)).toBe('0.00');
     expect(centsToStr(2500)).toBe('25.00');
+  });
+});
+
+describe('hhmm', () => {
+  it('heure locale du club au format HH:MM (été Paris = UTC+2)', () => {
+    expect(hhmm('2026-07-10T16:04:00.000Z', 'Europe/Paris')).toBe('18:04');
+  });
+});
+
+describe('isSalePayment', () => {
+  it('vente = paiement sans réservation liée (carnet/abo/recharge)', () => {
+    expect(isSalePayment({ reservation: null })).toBe(true);
+    expect(isSalePayment({ reservation: { id: 'rv-1' } })).toBe(false);
+  });
+});
+
+describe('trendSeries', () => {
+  const byDay = [
+    { date: '2026-07-03', net: '10.00' },
+    { date: '2026-07-08', net: '30.00' },
+    { date: '2026-07-10', net: '20.00' },
+  ];
+  it('renvoie 7 points finissant à endKey, jours manquants comblés à 0', () => {
+    const t = trendSeries(byDay, '2026-07-10');
+    expect(t.points.map((p) => p.key)).toEqual([
+      '2026-07-04', '2026-07-05', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10',
+    ]);
+    expect(t.points.map((p) => p.cents)).toEqual([0, 0, 0, 0, 3000, 0, 2000]);
+  });
+  it('compare au même jour de semaine S-1 (J-7)', () => {
+    const t = trendSeries(byDay, '2026-07-10');
+    expect(t.todayCents).toBe(2000);
+    expect(t.prevWeekCents).toBe(1000);
+    expect(t.deltaPct).toBe(100);
+  });
+  it('deltaPct null quand la semaine précédente est à 0 (pas de division)', () => {
+    const t = trendSeries([{ date: '2026-07-10', net: '20.00' }], '2026-07-10');
+    expect(t.prevWeekCents).toBe(0);
+    expect(t.deltaPct).toBeNull();
   });
 });

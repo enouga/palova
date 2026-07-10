@@ -1,4 +1,5 @@
 import type { OffPeakHours, OffPeakRange, ReservationType, PaymentMethod, ClubReservation, Payment } from '@/lib/api';
+import { addDaysKey } from '@/lib/calendar';
 
 // Helpers purs de la caisse du planning. Tous les calculs se font en centimes
 // (entiers) : les montants API sont des strings décimales ("52.00") et la
@@ -307,4 +308,46 @@ export function applyOptimisticRefund(rv: ClubReservation, paymentIds: string[])
       : p;
   });
   return { ...rv, paidAmount: centsToStr(Math.max(0, toCents(rv.paidAmount) - refundedTotal)), payments, participants };
+}
+
+// ── Ventes & journée : heure locale, ventes, tendance ─────────────────────────
+
+/** ISO → "HH:MM" au fuseau donné (24 h). */
+export function hhmm(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })
+    .format(new Date(iso));
+}
+
+/** Une « vente » = un encaissement SANS réservation liée (carnet, abo, recharge, libre). */
+export function isSalePayment(p: { reservation: unknown | null }): boolean {
+  return p.reservation == null;
+}
+
+export interface TrendPoint { key: string; cents: number }
+export interface TrendModel {
+  /** 7 points, de endKey-6 à endKey inclus (net encaissé/jour en centimes). */
+  points: TrendPoint[];
+  todayCents: number;
+  prevWeekCents: number;
+  /** Variation % vs le même jour de semaine S-1 ; null si S-1 = 0 (pas de division). */
+  deltaPct: number | null;
+}
+
+/**
+ * Série de tendance sur 7 jours (fuseau déjà appliqué en amont : `byDay` vient de
+ * `adminAccountingSummary`, dont les clés jour sont au fuseau du club). Comble les
+ * jours absents à 0 et compare endKey au même jour de semaine 7 jours plus tôt.
+ */
+export function trendSeries(byDay: { date: string; net: string }[], endKey: string): TrendModel {
+  const map = new Map<string, number>();
+  for (const d of byDay) map.set(d.date, toCents(d.net));
+  const points: TrendPoint[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const key = addDaysKey(endKey, -i);
+    points.push({ key, cents: map.get(key) ?? 0 });
+  }
+  const todayCents = map.get(endKey) ?? 0;
+  const prevWeekCents = map.get(addDaysKey(endKey, -7)) ?? 0;
+  const deltaPct = prevWeekCents === 0 ? null : Math.round(((todayCents - prevWeekCents) / prevWeekCents) * 100);
+  return { points, todayCents, prevWeekCents, deltaPct };
 }

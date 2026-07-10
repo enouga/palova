@@ -276,3 +276,27 @@ export function agendaItemClubSlug(item: AgendaListItem): string {
   if (item.kind === 'lesson') return item.enrollment.lesson.club.slug;
   return item.ev.event.club.slug;
 }
+
+/** "YYYY-MM-DD" + delta jours, arithmétique UTC pure (aucun décalage de fuseau/DST). */
+export function addDaysKey(key: string, delta: number): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + delta * 86_400_000;
+  const dt = new Date(t);
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+/** "YYYY-MM-DD" → "vendredi 10 juillet" (rendu UTC : indépendant du fuseau du navigateur). */
+export function frLongLabel(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+/** "YYYY-MM-DD" → "vendredi" (jour de semaine seul). */
+export function frWeekday(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(y, m - 1, d)));
+}
