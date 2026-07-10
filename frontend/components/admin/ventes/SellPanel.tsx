@@ -1,0 +1,131 @@
+'use client';
+import { useState } from 'react';
+import { useTheme } from '@/lib/ThemeProvider';
+import { packageLabel } from '@/lib/packages';
+import { Btn } from '@/components/ui/atoms';
+import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import type { Member, PackageTemplate, SubscriptionPlan, MemberPackage, PaymentMethod, CreateMemberBody } from '@/lib/api';
+
+const METHOD_LABEL: Record<string, string> = {
+  CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', VOUCHER: 'Ticket CE', OTHER: 'Autre',
+};
+const SALE_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'];
+
+export interface SellSelection {
+  kind: 'package' | 'subscription';
+  id: string;
+  method: PaymentMethod;
+  voucherRef?: string;
+  voucherIssuer?: string;
+}
+
+interface Offer { key: string; kind: 'package' | 'subscription'; id: string; name: string; price: string; suffix?: string }
+
+const euro = (s: string) => `${Number(s).toFixed(2).replace('.', ',')} €`;
+
+/** Panneau de vente unifié : un seul acheteur, carnets ET abonnements groupés. */
+export function SellPanel({ members, templates, plans, buyer, buyerPackages, busy, onPickBuyer, onClear, onCreate, onSell }: {
+  members: Member[];
+  templates: PackageTemplate[];
+  plans: SubscriptionPlan[];
+  buyer: Member | null;
+  buyerPackages: MemberPackage[];
+  busy: boolean;
+  onPickBuyer: (m: Member) => void;
+  onClear: () => void;
+  onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean }>;
+  onSell: (sel: SellSelection) => void;
+}) {
+  const { th } = useTheme();
+  const [selKey, setSelKey] = useState('');
+  const [method, setMethod] = useState<PaymentMethod>('CASH');
+  const [ref, setRef] = useState('');
+  const [issuer, setIssuer] = useState('');
+  const [refError, setRefError] = useState(false);
+
+  const packageOffers: Offer[] = templates.map((t) => ({ key: `package:${t.id}`, kind: 'package', id: t.id, name: t.name, price: t.price }));
+  const planOffers: Offer[] = plans.map((p) => ({ key: `subscription:${p.id}`, kind: 'subscription', id: p.id, name: p.name, price: p.monthlyPrice, suffix: '/mois' }));
+  const selected = [...packageOffers, ...planOffers].find((o) => o.key === selKey) ?? null;
+
+  const card = { background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow } as const;
+  const sectionTitle = { fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 as const, color: th.text, marginBottom: 12 };
+  const groupLabel = { fontFamily: th.fontMono, fontSize: 10, fontWeight: 600 as const, letterSpacing: 0.5, textTransform: 'uppercase' as const, color: th.textFaint, margin: '10px 0 6px' };
+  const input = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 } as const;
+
+  const offerRow = (o: Offer) => {
+    const active = o.key === selKey;
+    return (
+      <button key={o.key} type="button" onClick={() => { setSelKey(o.key); setRefError(false); }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', textAlign: 'left',
+          border: `1px solid ${active ? th.accent : th.line}`, background: active ? `${th.accent}12` : 'transparent', color: th.text,
+          borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 6 }}>
+        <span style={{ fontWeight: 600 }}>{o.name}</span>
+        <span style={{ color: active ? th.accent : th.textMute, fontWeight: 700, whiteSpace: 'nowrap' }}>{euro(o.price)}{o.suffix ?? ''}</span>
+      </button>
+    );
+  };
+
+  const sell = () => {
+    if (!selected) return;
+    if (method === 'VOUCHER' && !ref.trim()) { setRefError(true); return; }
+    onSell({
+      kind: selected.kind, id: selected.id, method,
+      voucherRef: method === 'VOUCHER' ? ref.trim() : undefined,
+      voucherIssuer: method === 'VOUCHER' ? issuer.trim() || undefined : undefined,
+    });
+    setSelKey(''); setRef(''); setIssuer(''); setRefError(false);
+  };
+
+  return (
+    <div style={card}>
+      <div style={sectionTitle}>Vendre à un membre</div>
+      <div style={{ marginBottom: 12 }}>
+        <PlayerPicker
+          members={members}
+          value={buyer ? { firstName: buyer.firstName, lastName: buyer.lastName } : null}
+          onSelect={onPickBuyer}
+          onClear={() => { onClear(); setSelKey(''); }}
+          onCreate={onCreate}
+          placeholder="Cliquez pour voir les membres, ou tapez un nom…"
+        />
+      </div>
+
+      {buyer && (
+        <>
+          {buyerPackages.length > 0 && (
+            <div style={{ marginBottom: 10, fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
+              Soldes actuels : {buyerPackages.map((p) => packageLabel(p)).join(' · ')}
+            </div>
+          )}
+
+          {packageOffers.length > 0 && <div style={groupLabel}>Carnets &amp; cartes</div>}
+          {packageOffers.map(offerRow)}
+          {planOffers.length > 0 && <div style={groupLabel}>Abonnements</div>}
+          {planOffers.map(offerRow)}
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '12px 0' }}>
+            {SALE_METHODS.map((m) => (
+              <button key={m} type="button" onClick={() => { setMethod(m); setRefError(false); }}
+                style={{ border: `1px solid ${method === m ? th.accent : th.line}`, background: method === m ? th.accent : 'transparent',
+                  color: method === m ? th.onAccent : th.text, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                {METHOD_LABEL[m]}
+              </button>
+            ))}
+          </div>
+
+          {method === 'VOUCHER' && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <input type="text" value={ref} onChange={(e) => { setRef(e.target.value); setRefError(false); }} placeholder="N° du ticket"
+                style={{ ...input, flex: 1, minWidth: 120, border: `1px solid ${refError ? '#ff7a4d' : th.line}` }} />
+              <input type="text" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 110 }} />
+            </div>
+          )}
+
+          <Btn type="button" icon="check" onClick={sell} disabled={busy || !selected}>
+            {busy ? '…' : selected ? `Encaisser ${euro(selected.price)}${selected.suffix ?? ''}` : 'Encaisser'}
+          </Btn>
+        </>
+      )}
+    </div>
+  );
+}
