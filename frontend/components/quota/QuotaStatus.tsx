@@ -33,16 +33,18 @@ export function QuotaStatus(
       label={label}
       meter={{ used: count.used, limit: count.limit, suffix }}
       warn={count.used >= count.limit} // plafond atteint → alerte douce coral
-      fill={fill || compact}
+      fill={fill}
       compact={compact}
     />
   ));
 
-  // Compact : 2 colonnes égales (1 si une seule classe) + suffixe unique dessous.
+  // Compact : pastilles à largeur naturelle qui s'enroulent (2 côte à côte si ça tient,
+  // sinon empilées) → jamais de débordement horizontal sur écran étroit (téléphone
+  // réel plus étroit / grande police système), suffixe unique dessous.
   if (compact) {
     return (
       <div>
-        <div style={{ display: 'grid', gridTemplateColumns: cells.length > 1 ? '1fr 1fr' : '1fr', gap: 10 }}>{pills}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{pills}</div>
         <div style={{ marginTop: 6, textAlign: 'center', fontFamily: th.fontUI, fontSize: 11, fontWeight: 500, color: th.textFaint }}>{suffix}</div>
       </div>
     );
