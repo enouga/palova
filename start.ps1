@@ -82,6 +82,14 @@ function Start-Hidden([string]$WorkDir, [string]$Command, [string]$LogFile) {
         -WorkingDirectory $WorkDir -WindowStyle Hidden
 }
 
+# node_modules peut exister mais avoir son node_modules\.bin vide (shims nodemon/next
+# disparus alors que les paquets sont intacts) : un simple Test-Path node_modules ne le
+# detecte pas, npm run dev echoue alors instantanement ("nodemon n'est pas reconnu") et
+# le script attend 60 s pour rien avant de conclure "le backend ne repond pas".
+function Test-DepsInstalled([string]$Dir, [string]$BinCheck) {
+    return (Test-Path "$Dir\node_modules") -and (Test-Path "$Dir\node_modules\.bin\$BinCheck")
+}
+
 # ---------- Mode -Stop ----------
 if ($Stop) {
     Write-Host "`nArret des serveurs Palova..." -ForegroundColor Yellow
@@ -143,8 +151,8 @@ else { Write-Host "PostgreSQL : timeout (on continue quand meme)" -ForegroundCol
 
 # ---------- 3) Backend (port 3001) ----------
 Write-Host "`n[3/5] Backend..." -ForegroundColor Yellow
-if (-not (Test-Path "$PALOVA_PATH\backend\node_modules")) {
-    Write-Host "node_modules absent - npm install + prisma generate (une fois)..." -ForegroundColor Yellow
+if (-not (Test-DepsInstalled "$PALOVA_PATH\backend" "nodemon.cmd")) {
+    Write-Host "node_modules absent ou incomplet (bin shims manquants) - npm install + prisma generate..." -ForegroundColor Yellow
     Push-Location "$PALOVA_PATH\backend"; npm install; npx prisma generate; Pop-Location
 }
 Stop-StaleStack
@@ -160,8 +168,8 @@ if (Wait-Http "http://localhost:3001/health" 60) {
 
 # ---------- 4) Frontend (port 3000, cache purge) ----------
 Write-Host "`n[4/5] Frontend..." -ForegroundColor Yellow
-if (-not (Test-Path "$PALOVA_PATH\frontend\node_modules")) {
-    Write-Host "node_modules absent - npm install (une fois)..." -ForegroundColor Yellow
+if (-not (Test-DepsInstalled "$PALOVA_PATH\frontend" "next.cmd")) {
+    Write-Host "node_modules absent ou incomplet (bin shims manquants) - npm install..." -ForegroundColor Yellow
     Push-Location "$PALOVA_PATH\frontend"; npm install; Pop-Location
 }
 Stop-PortOwner 3000

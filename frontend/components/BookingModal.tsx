@@ -240,6 +240,10 @@ export default function BookingModal({
   // Y a-t-il autre chose à choisir que le défaut ? (sinon, pas de bouton « changer »)
   const avenueCount = (cover ? 1 : 0) + sportPackages.length + (onlineAvailable ? 1 : 0) + (requireOnlinePayment ? 0 : 1);
   const hasAlternatives = avenueCount > 1;
+  // Quand le paiement en ligne est possible et qu'il existe plusieurs avenues, on affiche
+  // directement les possibilités (au lieu de la ligne repliée « … · changer » qui cacherait
+  // l'option « Payer en ligne »). Le repli reste pour les cas sans paiement en ligne.
+  const showAvenues = payExpanded || (onlineAvailable && hasAlternatives);
 
   // La confirmation va-t-elle passer par un intent CB Stripe (paiement OU empreinte) ?
   // Miroir exact de la condition de bascule dans handleConfirm. Dans ce cas seulement,
@@ -388,15 +392,17 @@ export default function BookingModal({
     }
   };
 
-  const handleClose = async () => {
+  const handleClose = () => {
     // closedRef signale aux effets que l'utilisateur a fermé (≠ faux démontage StrictMode).
-    // Si le hold est déjà posé, on l'annule ici ; s'il arrive APRÈS (fermeture pendant le
-    // blocage), l'effet de montage le libère via closedRef.
+    // Si le hold est déjà posé, on le LIBÈRE ICI, immédiatement — sans bloquer la fermeture
+    // sur la réponse réseau (fire-and-forget) : le créneau se libère dès le clic « Abandonner »
+    // / clic sur le fond, et la modale se ferme dans la foulée. Si le hold arrive APRÈS
+    // (fermeture pendant le blocage), l'effet de montage le libère via closedRef.
     closedRef.current = true;
     const r = reservation ?? reservationRef.current;
     if (r && !settled.current) {
       settled.current = true;
-      try { await api.cancelReservation(r.id, token); } catch { /* cleanup job récupèrera */ }
+      api.cancelReservation(r.id, token).catch(() => { /* cleanup job récupèrera */ });
     }
     onClose();
   };
@@ -533,7 +539,7 @@ export default function BookingModal({
               {/* Choix du mode de paiement — avenues mutuellement exclusives. */}
               <div style={{ marginTop: 20 }}>
                 {sectionLabel('card', 'Mode de paiement')}
-                {!payExpanded ? (() => {
+                {!showAvenues ? (() => {
                   // Ligne repliée : le moyen pré-choisi + sa conséquence, bouton « changer » si alternatives.
                   const selPkg = paySource ? sportPackages.find((p) => p.id === paySource) ?? null : null;
                   const online = !useSub && !selPkg && payMode === 'online' && onlineAvailable;

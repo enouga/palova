@@ -215,11 +215,25 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     } catch (e) { onError(mapAssocError(e)); }
     finally { setAssocBusy(false); }
   };
-  const createAndAssociate = async (body: CreateMemberBody) => {
+  // Remplacer le joueur d'une place déjà associée (recalcule les parts côté serveur).
+  const changeParticipant = async (participantId: string, userId: string) => {
+    if (assocBusy) return;
+    setAssocBusy(true);
+    try {
+      const updated = await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, userId, token);
+      setAssociatingIndex(null);
+      await onChanged(updated);
+    } catch (e) { onError(mapAssocError(e)); }
+    finally { setAssocBusy(false); }
+  };
+  const createAndAssociate = async (body: CreateMemberBody, replaceParticipantId?: string) => {
     const r = await api.adminCreateMember(clubId, body, token);
     const mem = await api.adminGetMembers(clubId, token);
     const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await associate(created.userId);
+    if (created) {
+      if (replaceParticipantId) await changeParticipant(replaceParticipantId, created.userId);
+      else await associate(created.userId);
+    }
     return r;
   };
 
@@ -253,11 +267,11 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     cursor: isPaid ? 'default' : 'pointer', opacity: isPaid ? 0.8 : 1, position: 'relative',
   });
   const payBtn = (primary: boolean): CSSProperties => ({
-    width: '100%', boxSizing: 'border-box', height: 52, border: 'none', borderRadius: 12, cursor: 'pointer',
+    width: '100%', boxSizing: 'border-box', height: 52, border: 'none', borderRadius: 14, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700,
-    background: primary ? th.accent : th.surface, color: primary ? th.onAccent : th.text,
-    boxShadow: primary ? 'none' : `inset 0 0 0 1.5px ${th.lineStrong}`,
+    background: primary ? th.accent : `${th.accent}16`, color: primary ? th.onAccent : th.text,
+    boxShadow: primary ? `0 3px 10px ${th.accent}4d` : 'none',
   });
   const avatar = (seed: string, first: string, last: string) => {
     const c = colorForSeed(seed);
@@ -275,7 +289,9 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
         <div key={`t${s.index}`} style={{ ...tileBase(false, false), cursor: 'default', gridColumn: '1 / -1', alignItems: 'stretch' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <AssociateMemberPicker slug={slug} token={token} excludeIds={excludeIds} members={members}
-              onSelect={associate} onCancel={() => setAssociatingIndex(null)} onCreate={createAndAssociate} />
+              onSelect={s.participantId ? (uid) => changeParticipant(s.participantId!, uid) : associate}
+              onCancel={() => setAssociatingIndex(null)}
+              onCreate={(body) => createAndAssociate(body, s.participantId ?? undefined)} />
           </div>
         </div>
       );
@@ -292,13 +308,13 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
           ? <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: th.surfaceHi, color: th.textMute, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{s.index + 1}</span>
           : avatar((s.slot as { seed: string }).seed, (s.slot as { firstName: string }).firstName, (s.slot as { lastName: string }).lastName)}
         <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: generic ? th.textMute : th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: generic ? th.textFaint : th.textMute, lineHeight: 1.2, wordBreak: 'break-word' }}>
             {name}
             {s.slot.kind === 'participant' && (s.slot as { isOrganizer: boolean }).isOrganizer && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 600, color: th.textFaint, background: th.surfaceHi, borderRadius: 5, padding: '1px 5px' }}>orga</span>}
           </span>
           {s.paid ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: SETTLED_COLOR, fontWeight: 700 }}>
-              ✓ réglé{s.method && <span style={{ color: th.textMute, fontWeight: 500 }}>· {METHOD_LABEL_FULL[s.method] ?? s.method}</span>}
+            <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, rowGap: 2, fontSize: 11.5, color: SETTLED_COLOR, fontWeight: 700 }}>
+              <span style={{ whiteSpace: 'nowrap' }}>✓ réglé</span>{s.method && <span style={{ color: th.textMute, fontWeight: 500, whiteSpace: 'nowrap' }}>· {METHOD_LABEL_FULL[s.method] ?? s.method}</span>}
               {s.payments.some((p) => toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && !isOptimisticId(p.id)) && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); refundSlot(s.payments); }}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontSize: 11, fontWeight: 600, textDecoration: 'underline', padding: 0 }}>annuler</button>
@@ -307,6 +323,9 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
           ) : generic ? (
             <button type="button" onClick={(e) => { e.stopPropagation(); setAssociatingIndex(s.index); }}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontSize: 11.5, fontWeight: 600, padding: 0 }}>associer un membre</button>
+          ) : s.slot.kind === 'participant' && !(s.slot as { isOrganizer: boolean }).isOrganizer ? (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setAssociatingIndex(s.index); }}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontSize: 11.5, fontWeight: 600, padding: 0 }}>changer</button>
           ) : null}
         </span>
         {!s.paid && <span style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: th.text, whiteSpace: 'nowrap' }}>{fmtEuros(s.amountCents)}</span>}
@@ -322,7 +341,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
       {/* ── en-tête ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px 12px', borderBottom: `1px solid ${th.line}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: th.text }}>{fmtTime(reservation.startTime)} — {reservation.resource.name}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: th.textMute }}><span style={{ color: th.accent }}>{fmtTime(reservation.startTime)}</span> — {reservation.resource.name}</div>
           <div style={{ fontSize: 12, color: th.textMute, marginTop: 2 }}>
             {who}{isCourt && players > 0 ? ` · ${players} joueurs` : ''}{due > 0 ? ` · ${fmtEuros(due)}` : ''}
           </div>
@@ -341,11 +360,11 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
 
       {/* ── tuiles joueurs (COURT à parts) ── */}
       {isCourt && players > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '16px 18px 4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(184px, 1fr))', gap: 10, padding: '16px 18px 4px' }}>
           {statuses.map(renderTile)}
           {unpaid.length > 1 && !settled && (
             <button type="button" onClick={() => setSelected(new Set(unpaid.map((s) => s.index)))}
-              style={{ gridColumn: '1 / -1', padding: '9px 0', borderRadius: 10, border: 'none', background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${th.lineStrong}`, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}>
+              style={{ gridColumn: '1 / -1', padding: '10px 0', borderRadius: 12, border: 'none', background: th.surface2, boxShadow: 'none', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute }}>
               Tout le reste — {unpaid.length} parts · {fmtEuros(unpaid.reduce((s, x) => s + x.amountCents, 0))}
             </button>
           )}
@@ -375,7 +394,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             {methods.map((m, i) => (
               <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
                 style={{ ...payBtn(i === 0), opacity: selTotal <= 0 ? 0.45 : 1 }}>
-                <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.textMute} />{QUICK_METHOD_LABEL[m]}
+                <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.accent} />{QUICK_METHOD_LABEL[m]}
               </button>
             ))}
           </div>
@@ -384,7 +403,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             <div style={{ marginTop: 10 }}>
               <button type="button" onClick={() => paySelection(pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', pk.id)}
                 title={`Régler avec ${packageLabel(pk)}`}
-                style={{ ...payBtn(false), width: 'auto', height: 46, padding: '0 16px', color: th.accent, boxShadow: `inset 0 0 0 1.5px ${th.accent}`, fontSize: 13 }}>
+                style={{ ...payBtn(false), width: 'auto', height: 46, padding: '0 18px', color: th.accent, fontSize: 13 }}>
                 <Icon name={pk.kind === 'ENTRIES' ? 'ticket' : 'wallet'} size={15} color={th.accent} />{packageLabel(pk)}
               </button>
             </div>

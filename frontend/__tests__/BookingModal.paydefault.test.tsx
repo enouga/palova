@@ -88,10 +88,11 @@ describe('BookingModal — paiement replié (défaut intelligent)', () => {
     expect(screen.getByText('Régler au club')).toBeInTheDocument();
   });
 
-  it('« changer » déplie les avenues existantes (gating inchangé)', async () => {
+  it('paiement en ligne possible : avenues affichées directement (pas de « changer »)', async () => {
     renderModal({ packages: [carnet], stripeActive: true });
     await screen.findByText(/Créneau bloqué/);
-    fireEvent.click(screen.getByRole('button', { name: /changer/ }));
+    // Online est une possibilité → on montre les avenues d'emblée, sans repli « changer ».
+    expect(screen.queryByRole('button', { name: /changer/ })).not.toBeInTheDocument();
     expect(screen.getByText('Régler au club')).toBeInTheDocument();
     expect(screen.getByText('Payer en ligne')).toBeInTheDocument();
     expect(screen.getByText(/Carnet — 7 entrées/)).toBeInTheDocument();
