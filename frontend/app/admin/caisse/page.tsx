@@ -1,26 +1,18 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { api, CaisseSummary, CaissePayment, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail, SubscriptionPlan } from '@/lib/api';
-import { packageLabel } from '@/lib/packages';
-import { toCents, fmtEuros, validatePaymentAmount } from '@/lib/caisse';
+import { api, CaissePayment, CaisseSummary, Member, MemberPackage, PackageTemplate, PaymentMethod, CreateMemberBody, ClubAdminDetail, SubscriptionPlan } from '@/lib/api';
+import { toCents, fmtEuros, validatePaymentAmount, trendSeries, TrendModel } from '@/lib/caisse';
+import { addDaysKey, frLongLabel, frWeekday, todayKey } from '@/lib/calendar';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
-import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { Receipt } from '@/components/admin/Receipt';
+import { TrendKpis } from '@/components/admin/ventes/TrendKpis';
+import { DayJournal, JournalFilter } from '@/components/admin/ventes/DayJournal';
+import { SellPanel, SellSelection } from '@/components/admin/ventes/SellPanel';
 
-const METHOD_LABEL: Record<PaymentMethod, string> = {
-  CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
-  SUBSCRIPTION: 'Abonnement',
-};
-// Méthodes qui font entrer de l'argent (les prépayés sont des consommations).
-const MONEY_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
-const SALE_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'];
-
-function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 const euro = (s: string | number) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 
 function paymentLabel(p: CaissePayment): string {
@@ -37,31 +29,23 @@ export default function AdminCaissePage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  const tz = club?.timezone ?? 'Europe/Paris';
 
-  const [date, setDate]         = useState(todayISO());
-  const [caisse, setCaisse]     = useState<CaisseSummary | null>(null);
-  const [outstanding, setOut]   = useState('0.00');
+  const [date, setDate]       = useState(todayKey());
+  const [caisse, setCaisse]   = useState<CaisseSummary | null>(null);
+  const [outstanding, setOut] = useState('0.00');
   const [vouchers, setVouchers] = useState<CaissePayment[]>([]);
-  const [error, setError]       = useState<string | null>(null);
-  const [busy, setBusy]         = useState(false);
+  const [trend, setTrend]     = useState<TrendModel | null>(null);
+  const [filter, setFilter]   = useState<JournalFilter>('all');
+  const [error, setError]     = useState<string | null>(null);
+  const [busy, setBusy]       = useState(false);
   const [clubDetail, setClubDetail] = useState<ClubAdminDetail | null>(null);
   const [receiptTarget, setReceiptTarget] = useState<CaissePayment | null>(null);
-
-  // vente de carnet
   const [members, setMembers]     = useState<Member[]>([]);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
+  const [plans, setPlans]         = useState<SubscriptionPlan[]>([]);
   const [buyer, setBuyer]         = useState<Member | null>(null);
   const [buyerPackages, setBuyerPackages] = useState<MemberPackage[]>([]);
-  const [sellTplId, setSellTplId] = useState('');
-  const [sellMethod, setSellMethod] = useState<PaymentMethod>('CASH');
-  const [sellRef, setSellRef]     = useState('');
-  const [sellIssuer, setSellIssuer] = useState('');
-
-  // vente d'abonnement
-  const [plans, setPlans]       = useState<SubscriptionPlan[]>([]);
-  const [sellPlanId, setSellPlanId] = useState('');
-
-  // remboursement d'un encaissement
   const [refundTarget, setRefundTarget] = useState<CaissePayment | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
@@ -70,7 +54,11 @@ export default function AdminCaissePage() {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const [c, resv, v, mem, tpl, detail, pls] = await Promise.all([
+      const startKey = addDaysKey(date, -7);
+      const mEnd = { y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)) };
+      const mStart = { y: Number(startKey.slice(0, 4)), m: Number(startKey.slice(5, 7)) };
+      const sameMonth = mEnd.y === mStart.y && mEnd.m === mStart.m;
+      const [c, resv, v, mem, tpl, detail, pls, ...sums] = await Promise.all([
         api.adminGetCaisse(clubId, date, token),
         api.adminGetReservations(clubId, { date }, token),
         api.adminGetVouchers(clubId, 'PENDING_REIMBURSEMENT', token),
@@ -78,6 +66,8 @@ export default function AdminCaissePage() {
         api.adminGetPackageTemplates(clubId, token),
         api.adminGetClub(clubId, token),
         api.adminGetSubscriptionPlans(clubId, token),
+        api.adminAccountingSummary(clubId, mEnd.y, mEnd.m, token),
+        ...(sameMonth ? [] : [api.adminAccountingSummary(clubId, mStart.y, mStart.m, token)]),
       ]);
       setCaisse(c);
       setOut(resv.summary.outstanding);
@@ -86,6 +76,7 @@ export default function AdminCaissePage() {
       setTemplates(tpl.filter((t) => t.isActive));
       setClubDetail(detail);
       setPlans(pls.filter((p) => p.isActive));
+      setTrend(trendSeries(sums.flatMap((s) => s.byDay), date));
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId, date]);
 
@@ -110,36 +101,17 @@ export default function AdminCaissePage() {
     return r;
   };
 
-  const sell = async () => {
-    if (!token || !clubId || !buyer || !sellTplId) return;
-    if (sellMethod === 'VOUCHER' && !sellRef.trim()) { setError('Référence du ticket CE requise.'); return; }
+  const onSell = async (sel: SellSelection) => {
+    if (!token || !clubId || !buyer) return;
     setBusy(true);
     try {
       setError(null);
-      await api.adminSellPackage(clubId, buyer.userId, {
-        templateId: sellTplId, method: sellMethod,
-        payerName: `${buyer.firstName} ${buyer.lastName}`,
-        voucherRef: sellMethod === 'VOUCHER' ? sellRef.trim() : undefined,
-        voucherIssuer: sellMethod === 'VOUCHER' ? sellIssuer.trim() || undefined : undefined,
-      }, token);
-      setSellRef(''); setSellIssuer('');
-      await Promise.all([load(), pickBuyer(buyer)]);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
-  };
-
-  const sellSub = async () => {
-    if (!token || !clubId || !buyer || !sellPlanId) return;
-    if (sellMethod === 'VOUCHER' && !sellRef.trim()) { setError('Référence du ticket CE requise.'); return; }
-    setBusy(true);
-    try {
-      setError(null);
-      await api.adminSellSubscription(clubId, buyer.userId, {
-        planId: sellPlanId, method: sellMethod,
-        payerName: `${buyer.firstName} ${buyer.lastName}`,
-        voucherRef: sellMethod === 'VOUCHER' ? sellRef.trim() : undefined,
-        voucherIssuer: sellMethod === 'VOUCHER' ? sellIssuer.trim() || undefined : undefined,
-      }, token);
+      const common = {
+        method: sel.method, payerName: `${buyer.firstName} ${buyer.lastName}`,
+        voucherRef: sel.voucherRef, voucherIssuer: sel.voucherIssuer,
+      };
+      if (sel.kind === 'package') await api.adminSellPackage(clubId, buyer.userId, { templateId: sel.id, ...common }, token);
+      else await api.adminSellSubscription(clubId, buyer.userId, { planId: sel.id, ...common }, token);
       await Promise.all([load(), pickBuyer(buyer)]);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -184,179 +156,72 @@ export default function AdminCaissePage() {
     finally { setBusy(false); }
   };
 
-  const moneyTotal = caisse
-    ? MONEY_METHODS.reduce((s, m) => s + Number(caisse.totalsByMethod[m] ?? 0), 0)
-    : 0;
-
   const input = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 } as const;
-  const card = { background: th.surface, borderRadius: 16, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}` } as const;
-  const sectionTitle = { fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 as const, color: th.text, marginBottom: 12 };
-  const stat = (label: string, value: string) => (
-    <div key={label}>
-      <div style={{ fontFamily: th.fontMono, fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint }}>{label}</div>
-      <div style={{ fontFamily: th.fontDisplay, fontSize: 19, fontWeight: 600, color: th.text }}>{value}</div>
-    </div>
-  );
+
+  const collectedCents = caisse
+    ? (['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'] as PaymentMethod[])
+        .reduce((s, m) => s + toCents(caisse.totalsByMethod[m] ?? '0'), 0)
+    : 0;
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 18px', flexWrap: 'wrap' }}>
-        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Ventes &amp; journée</h1>
-        <DateField value={date} onChange={setDate} size="sm" />
+        <div>
+          <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Ventes &amp; journée</h1>
+          <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 2, textTransform: 'capitalize' }}>{frLongLabel(date)}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" aria-label="Jour précédent" onClick={() => setDate(addDaysKey(date, -1))}
+            style={{ border: `1px solid ${th.line}`, background: th.surface, color: th.text, borderRadius: 9, width: 34, height: 34, cursor: 'pointer', fontSize: 16 }}>‹</button>
+          <DateField value={date} onChange={setDate} size="sm" />
+          <button type="button" aria-label="Jour suivant" onClick={() => setDate(addDaysKey(date, 1))}
+            style={{ border: `1px solid ${th.line}`, background: th.surface, color: th.text, borderRadius: 9, width: 34, height: 34, cursor: 'pointer', fontSize: 16 }}>›</button>
+        </div>
       </div>
 
       {error && <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
-      {/* totaux du jour */}
-      <div style={{ ...card, marginBottom: 18 }}>
-        <div style={sectionTitle}>Journée du {date}</div>
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {stat('Encaissé', euro(moneyTotal))}
-          {stat('Reste dû (jour)', euro(outstanding))}
-          {(Object.entries(caisse?.totalsByMethod ?? {}) as [PaymentMethod, string][]).map(([m, v]) => stat(METHOD_LABEL[m], euro(v)))}
-        </div>
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {(caisse?.payments ?? []).map((p) => {
-            const refunded = toCents(p.refundedAmount ?? '0');
-            const isFullyRefunded = p.status === 'REFUNDED';
-            return (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '7px 0', borderTop: `1px solid ${th.line}` }}>
-                <span style={{ flex: 1 }}>{paymentLabel(p)}</span>
-                <span style={{ color: th.textMute }}>{METHOD_LABEL[p.method]}{p.voucherRef ? ` · ${p.voucherRef}` : ''}</span>
-                {refunded > 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#ff7a4d', background: '#ff7a4d22', borderRadius: 6, padding: '2px 7px', whiteSpace: 'nowrap' }}>
-                    remboursé {fmtEuros(refunded)}
-                  </span>
-                )}
-                <b style={{ color: isFullyRefunded ? th.textMute : th.text }}>{euro(p.amount)}</b>
-                {!isFullyRefunded && (
-                  <button type="button" onClick={() => openRefund(p)} disabled={busy}
-                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '4px 9px', cursor: busy ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    Rembourser
+      {trend && <TrendKpis collectedCents={collectedCents} outstanding={outstanding} count={caisse?.payments.length ?? 0} trend={trend} weekday={frWeekday(date)} />}
+
+      <div className="ventes-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.7fr) minmax(300px, 1fr)', gap: 18, alignItems: 'start' }}>
+        <DayJournal
+          payments={caisse?.payments ?? []}
+          tz={tz}
+          totalsByMethod={caisse?.totalsByMethod ?? {}}
+          filter={filter}
+          onFilter={setFilter}
+          onReceipt={setReceiptTarget}
+          onRefund={openRefund}
+          busy={busy}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <SellPanel
+            members={members} templates={templates} plans={plans}
+            buyer={buyer} buyerPackages={buyerPackages} busy={busy}
+            onPickBuyer={pickBuyer} onClear={() => { setBuyer(null); setBuyerPackages([]); }}
+            onCreate={createBuyer} onSell={onSell}
+          />
+          <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 12 }}>Tickets CE à rembourser ({vouchers.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {vouchers.map((p) => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '8px 0', borderTop: `1px solid ${th.line}` }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>{paymentLabel(p)}</span>
+                  <span style={{ color: th.textMute, fontSize: 12 }}>{p.voucherRef}{p.voucherIssuer ? ` · ${p.voucherIssuer}` : ''}</span>
+                  <b>{euro(p.amount)}</b>
+                  <button type="button" onClick={() => reimburse(p)} disabled={busy}
+                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
+                    Remboursé
                   </button>
-                )}
-                <button type="button" onClick={() => setReceiptTarget(p)}
-                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '4px 9px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                  Reçu
-                </button>
-              </div>
-            );
-          })}
-          {caisse && caisse.payments.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun encaissement ce jour.</div>}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
-        {/* vente de carnet / porte-monnaie */}
-        <div style={card}>
-          <div style={sectionTitle}>Vendre une offre</div>
-          <div style={{ marginBottom: 12 }}>
-            <PlayerPicker
-              members={members}
-              value={buyer ? { firstName: buyer.firstName, lastName: buyer.lastName } : null}
-              onSelect={pickBuyer}
-              onClear={() => { setBuyer(null); setBuyerPackages([]); }}
-              onCreate={createBuyer}
-              placeholder="Cliquez pour voir les membres, ou tapez un nom…"
-            />
-          </div>
-
-          {buyer && (
-            <>
-              {buyerPackages.length > 0 && (
-                <div style={{ marginBottom: 12, fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
-                  Soldes actuels : {buyerPackages.map((p) => packageLabel(p)).join(' · ')}
                 </div>
-              )}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>Offre
-                  <select value={sellTplId} onChange={(e) => setSellTplId(e.target.value)} style={input}>
-                    <option value="">Choisir…</option>
-                    {templates.map((t) => <option key={t.id} value={t.id}>{t.name} — {euro(t.price)}</option>)}
-                  </select>
-                </label>
-                <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
-                  <select value={sellMethod} onChange={(e) => setSellMethod(e.target.value as PaymentMethod)} style={input}>
-                    {SALE_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                  </select>
-                </label>
-                {sellMethod === 'VOUCHER' && (
-                  <>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
-                      <input type="text" value={sellRef} onChange={(e) => setSellRef(e.target.value)} placeholder="N° du ticket" style={{ ...input, width: 120 }} />
-                    </label>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
-                      <input type="text" value={sellIssuer} onChange={(e) => setSellIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 100 }} />
-                    </label>
-                  </>
-                )}
-                <Btn type="button" icon="check" onClick={sell} disabled={busy || !sellTplId}>{busy ? '…' : 'Vendre'}</Btn>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* vente d'abonnement */}
-        <div style={card}>
-          <div style={sectionTitle}>Vendre un abonnement</div>
-          <div style={{ marginBottom: 12 }}>
-            <PlayerPicker
-              members={members}
-              value={buyer ? { firstName: buyer.firstName, lastName: buyer.lastName } : null}
-              onSelect={pickBuyer}
-              onClear={() => { setBuyer(null); setBuyerPackages([]); }}
-              onCreate={createBuyer}
-              placeholder="Cliquez pour voir les membres, ou tapez un nom…"
-            />
-          </div>
-
-          {buyer && (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>Abonnement
-                <select value={sellPlanId} onChange={(e) => setSellPlanId(e.target.value)} style={input}>
-                  <option value="">Choisir…</option>
-                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {euro(p.monthlyPrice)}/mois</option>)}
-                </select>
-              </label>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Moyen
-                <select value={sellMethod} onChange={(e) => setSellMethod(e.target.value as PaymentMethod)} style={input}>
-                  {SALE_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                </select>
-              </label>
-              {sellMethod === 'VOUCHER' && (
-                <>
-                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Référence
-                    <input type="text" value={sellRef} onChange={(e) => setSellRef(e.target.value)} placeholder="N° du ticket" style={{ ...input, width: 120 }} />
-                  </label>
-                  <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Émetteur
-                    <input type="text" value={sellIssuer} onChange={(e) => setSellIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 100 }} />
-                  </label>
-                </>
-              )}
-              <Btn type="button" icon="check" onClick={sellSub} disabled={busy || !sellPlanId}>{busy ? '…' : 'Vendre l’abonnement'}</Btn>
+              ))}
+              {vouchers.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun ticket en attente.</div>}
             </div>
-          )}
-        </div>
-
-        {/* tickets CE à rembourser */}
-        <div style={card}>
-          <div style={sectionTitle}>Tickets CE à rembourser ({vouchers.length})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {vouchers.map((p) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '7px 0', borderTop: `1px solid ${th.line}` }}>
-                <span style={{ flex: 1 }}>{paymentLabel(p)}</span>
-                <span style={{ color: th.textMute }}>{p.voucherRef}{p.voucherIssuer ? ` · ${p.voucherIssuer}` : ''}</span>
-                <b>{euro(p.amount)}</b>
-                <button type="button" onClick={() => reimburse(p)} disabled={busy}
-                  style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
-                  Remboursé
-                </button>
-              </div>
-            ))}
-            {vouchers.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun ticket en attente.</div>}
           </div>
         </div>
       </div>
+
+      <style>{`@media (max-width: 860px) { .ventes-grid { grid-template-columns: 1fr !important; } .ventes-grid > div:last-child { order: -1; } }`}</style>
 
       {/* modale reçu imprimable */}
       {receiptTarget && clubDetail && (
