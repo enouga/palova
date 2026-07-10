@@ -168,6 +168,12 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   --cal-align: left;
   --cal-chip-left: auto; --cal-chip-right: 4px; --cal-chip-tx: 0px;
 }
+/* Les tuiles-jour ont aspect-ratio + min-height → largeur mini imposée (~45px).
+   Sur écran étroit (téléphone réel plus étroit / grande police), 7 colonnes de 45px
+   dépassent la largeur dispo → la grille déborde et le calendrier paraît décentré
+   (cellules rognées à droite). min-width:0 les laisse rétrécir pour tenir dans leur
+   colonne 1fr ; la hauteur reste gérée par min-height. */
+.pl-cal-grid > button { min-width: 0; }
 @media (max-width: 520px) {
   .pl-cal-grid {
     --cal-h-min: 52px; --cal-h-max: 68px; --cal-ar: 1 / 1.15;
