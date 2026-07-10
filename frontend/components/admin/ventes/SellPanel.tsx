@@ -34,7 +34,7 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
   onPickBuyer: (m: Member) => void;
   onClear: () => void;
   onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean }>;
-  onSell: (sel: SellSelection) => void;
+  onSell: (sel: SellSelection) => void | Promise<boolean | void>;
 }) {
   const { th } = useTheme();
   const [selKey, setSelKey] = useState('');
@@ -65,15 +65,17 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
     );
   };
 
-  const sell = () => {
+  const sell = async () => {
     if (!selected) return;
     if (method === 'VOUCHER' && !ref.trim()) { setRefError(true); return; }
-    onSell({
+    // On ne vide la sélection (offre + réf ticket) que si la vente n'a PAS échoué,
+    // pour que l'utilisateur puisse réessayer sans tout ressaisir.
+    const ok = await onSell({
       kind: selected.kind, id: selected.id, method,
       voucherRef: method === 'VOUCHER' ? ref.trim() : undefined,
       voucherIssuer: method === 'VOUCHER' ? issuer.trim() || undefined : undefined,
     });
-    setSelKey(''); setRef(''); setIssuer(''); setRefError(false);
+    if (ok !== false) { setSelKey(''); setRef(''); setIssuer(''); setRefError(false); }
   };
 
   return (

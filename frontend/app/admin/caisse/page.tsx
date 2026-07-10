@@ -101,8 +101,8 @@ export default function AdminCaissePage() {
     return r;
   };
 
-  const onSell = async (sel: SellSelection) => {
-    if (!token || !clubId || !buyer) return;
+  const onSell = async (sel: SellSelection): Promise<boolean> => {
+    if (!token || !clubId || !buyer) return false;
     setBusy(true);
     try {
       setError(null);
@@ -113,7 +113,8 @@ export default function AdminCaissePage() {
       if (sel.kind === 'package') await api.adminSellPackage(clubId, buyer.userId, { templateId: sel.id, ...common }, token);
       else await api.adminSellSubscription(clubId, buyer.userId, { planId: sel.id, ...common }, token);
       await Promise.all([load(), pickBuyer(buyer)]);
-    } catch (e) { setError((e as Error).message); }
+      return true;
+    } catch (e) { setError((e as Error).message); return false; }
     finally { setBusy(false); }
   };
 
