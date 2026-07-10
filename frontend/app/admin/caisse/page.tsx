@@ -204,7 +204,7 @@ export default function AdminCaissePage() {
           />
           <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow }}>
             <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 12 }}>Tickets CE à rembourser ({vouchers.length})</div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 340, overflowY: 'auto' }}>
               {vouchers.map((p) => (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '8px 0', borderTop: `1px solid ${th.line}` }}>
                   <span style={{ flex: 1, minWidth: 0 }}>{paymentLabel(p)}</span>
