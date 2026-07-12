@@ -401,7 +401,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     defaults: {
       subject: 'Nouveau message — {{terrain}}',
       heading: 'Nouveau message dans ta partie 💬',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p style="margin:0 0 12px;">Un nouveau message a été posté dans ta partie :</p><p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;"><strong>{{auteur}}</strong> : {{message}}</p>',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Un nouveau message a été posté dans ta partie :</p><blockquote><strong>{{auteur}}</strong> : {{message}}</blockquote>',
       ctaLabel: 'Voir la discussion',
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Club', v.club)],
@@ -423,7 +423,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     defaults: {
       subject: 'Nouveau message de {{auteur}}',
       heading: 'Nouveau message privé 💬',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p style="margin:0 0 12px;">Vous avez reçu un message privé :</p><p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;"><strong>{{auteur}}</strong> : {{message}}</p>',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Vous avez reçu un message privé :</p><blockquote><strong>{{auteur}}</strong> : {{message}}</blockquote>',
       ctaLabel: 'Répondre',
     },
     infoRows: (v) => [row('Club', v.club)],
@@ -464,7 +464,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     defaults: {
       subject: '{{auteur}} a contesté le résultat de votre match',
       heading: 'Résultat contesté',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p><strong>{{auteur}}</strong> a contesté le résultat (<strong>{{score}}</strong>) et a laissé un message :</p><p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;">{{extrait}}</p>',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p><strong>{{auteur}}</strong> a contesté le résultat (<strong>{{score}}</strong>) et a laissé un message :</p><blockquote>{{extrait}}</blockquote>',
       ctaLabel: 'Voir la discussion',
     },
   },
@@ -484,7 +484,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     defaults: {
       subject: 'Nouveau message sur le litige de votre match',
       heading: 'Nouveau message',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p><strong>{{auteur}}</strong> a écrit dans la discussion du litige (<strong>{{score}}</strong>) :</p><p style="margin:0;padding:12px 14px;background:#f4f4f5;border-radius:8px;font-style:italic;">{{extrait}}</p>',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p><strong>{{auteur}}</strong> a écrit dans la discussion du litige (<strong>{{score}}</strong>) :</p><blockquote>{{extrait}}</blockquote>',
       ctaLabel: 'Voir la discussion',
     },
   },

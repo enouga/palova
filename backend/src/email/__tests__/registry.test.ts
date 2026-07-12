@@ -191,12 +191,14 @@ describe('renderClubEmail', () => {
     expect(mail.html).toContain('max-width:100%');
   });
 
-  it('ne nettoie PAS le corps par défaut (styles inline préservés)', () => {
+  it('ne nettoie PAS le corps par défaut (blockquote décoré, contenu préservé)', () => {
     const mail = renderClubEmail('match.disputed', {
       prenom: 'Marie', auteur: 'Éric', score: '6-4 / 6-3', extrait: 'Litige',
       lien: 'https://x.fr/m/1',
     }, brand, null);
-    expect(mail.html).toContain('background:#f4f4f5');
+    expect(mail.html).toContain('Éric');
+    expect(mail.html).toContain('Litige');
+    expect(mail.html).toContain('border-left:3px solid');
   });
 });
 
