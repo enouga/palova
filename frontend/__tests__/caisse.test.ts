@@ -1,4 +1,4 @@
-import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId, hhmm, isSalePayment, trendSeries } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, participantPastilles, popoverPosition, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId, hhmm, isSalePayment, trendSeries } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import type { ReservationType, ClubReservation } from '@/lib/api';
 
@@ -182,6 +182,79 @@ describe('paymentDots', () => {
   it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
     expect(paymentDots(resa({ type: 'TOURNAMENT', payments: 1 }), 4, 5200)).toBeNull();
     expect(paymentDots(resa({ totalPrice: '0.00' }), 4, 0)).toBeNull();
+  });
+});
+
+describe('participantPastilles', () => {
+  const withParticipants = (paidAmount: string, parts: { id: string; isOrganizer: boolean; firstName: string; lastName: string; paid: string; outstanding: string }[]) => ({
+    id: 'r1', type: 'COURT' as ReservationType, paidAmount,
+    user: { firstName: 'Jean', lastName: 'Test' },
+    participants: parts.map((p) => ({ ...p, share: '13.00' })),
+  });
+
+  it('2 participants, rien payé → 2 pastilles dues (pas soldé)', () => {
+    const rv = withParticipants('0.00', [
+      { id: 'p1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', paid: '0.00', outstanding: '13.00' },
+      { id: 'p2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', paid: '0.00', outstanding: '13.00' },
+    ]);
+    const m = participantPastilles(rv, 2, 2600)!;
+    expect(m.settled).toBe(false);
+    expect(m.seats).toHaveLength(2);
+    expect(m.seats[0]).toMatchObject({ initials: 'JT', name: 'Jean Test', paid: false, outstandingCents: 1300 });
+    expect(m.seats[1]).toMatchObject({ initials: 'LR', name: 'Léa Roy', paid: false, outstandingCents: 1300 });
+  });
+
+  it("la part réglée d'un joueur est verte même si la résa entière ne l'est pas", () => {
+    const rv = withParticipants('13.00', [
+      { id: 'p1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', paid: '13.00', outstanding: '0.00' },
+      { id: 'p2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', paid: '0.00', outstanding: '13.00' },
+    ]);
+    const m = participantPastilles(rv, 2, 2600)!;
+    expect(m.settled).toBe(false);
+    expect(m.seats[0]!.paid).toBe(true);
+    expect(m.seats[1]!.paid).toBe(false);
+  });
+
+  it('résa soldée au global → toutes les places occupées passent vertes, même sans détail par joueur', () => {
+    const rv = withParticipants('52.00', [
+      { id: 'p1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', paid: '0.00', outstanding: '13.00' },
+      { id: 'p2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', paid: '0.00', outstanding: '13.00' },
+    ]);
+    const m = participantPastilles(rv, 4, 5200)!;   // double : 2 places vides en plus
+    expect(m.settled).toBe(true);
+    expect(m.seats[0]!.paid).toBe(true);
+    expect(m.seats[1]!.paid).toBe(true);
+    expect(m.seats[2]).toBeNull();
+    expect(m.seats[3]).toBeNull();
+  });
+
+  it("sans détail par joueur (résa créée en admin) → 1 pastille titulaire (holder) + places vides", () => {
+    const rv = { id: 'r1', type: 'COURT' as ReservationType, paidAmount: '0.00', user: { firstName: 'Jean', lastName: 'Dupont' }, participants: [] };
+    const m = participantPastilles(rv, 4, 5200)!;
+    expect(m.seats[0]).toMatchObject({ initials: 'JD', name: 'Jean Dupont', paid: false, outstandingCents: 5200 });
+    expect(m.seats.slice(1)).toEqual([null, null, null]);
+  });
+
+  it('holder payé intégralement → pastille verte, résa soldée', () => {
+    const rv = { id: 'r1', type: 'COURT' as ReservationType, paidAmount: '52.00', user: { firstName: 'Jean', lastName: 'Dupont' }, participants: [] };
+    const m = participantPastilles(rv, 4, 5200)!;
+    expect(m.settled).toBe(true);
+    expect(m.seats[0]).toMatchObject({ paid: true, outstandingCents: 0 });
+  });
+
+  it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
+    expect(participantPastilles({ id: 'r1', type: 'TOURNAMENT' as ReservationType, paidAmount: '0.00', user: null, participants: [] }, 4, 5200)).toBeNull();
+    expect(participantPastilles({ id: 'r1', type: 'COURT' as ReservationType, paidAmount: '0.00', user: null, participants: [] }, 4, 0)).toBeNull();
+  });
+});
+
+describe('popoverPosition', () => {
+  it('place le panneau à droite du bloc quand il y a la place', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 50 }, 1280)).toEqual({ left: 228, top: 50 });
+  });
+
+  it('bascule à gauche quand le panneau déborderait à droite du viewport', () => {
+    expect(popoverPosition({ left: 700, right: 790, top: 50 }, 800)).toEqual({ left: 462, top: 50 });
   });
 });
 

@@ -235,6 +235,74 @@ export function deriveSlots(
   return slots;
 }
 
+// ── Pastilles-initiales de paiement (planning) ────────────────────────────
+
+export interface PastilleSeat {
+  seed: string;
+  initials: string;
+  name: string;
+  paid: boolean;
+  paidCents: number;
+  outstandingCents: number;
+}
+
+export interface PastillesModel {
+  /** Une entrée par place (capacité du terrain) ; `null` = place vide. */
+  seats: (PastilleSeat | null)[];
+  settled: boolean;
+  totalPaidCents: number;
+  totalDueCents: number;
+}
+
+/**
+ * Modèle des pastilles-initiales de paiement d'un bloc du planning : une
+ * pastille par place (réutilise `deriveSlots`, même logique que la caisse),
+ * verte + initiales quand la part du joueur est réglée (ou que la résa est
+ * soldée au global, même sans détail par joueur), place vide = pointillés.
+ * `null` si non applicable (pas un créneau COURT payant) — miroir de `paymentDots`.
+ */
+export function participantPastilles(
+  rv: {
+    id: string;
+    type: ReservationType;
+    paidAmount: string;
+    user: { firstName: string; lastName: string } | null;
+    participants: { id: string; isOrganizer: boolean; firstName: string; lastName: string; paid: string; share: string; outstanding: string }[];
+  },
+  players: number,
+  due: number,
+): PastillesModel | null {
+  if (rv.type !== 'COURT' || due <= 0) return null;
+  const totalPaidCents = toCents(rv.paidAmount);
+  const settled = totalPaidCents >= due;
+  const slots = deriveSlots(rv, players);
+  const seats: (PastilleSeat | null)[] = slots.slice(0, players).map((s) => {
+    if (s.kind === 'empty') return null;
+    const paidCents = s.kind === 'participant' ? s.paidCents : totalPaidCents;
+    const outstandingCents = s.kind === 'participant' ? s.outstandingCents : Math.max(0, due - totalPaidCents);
+    return {
+      seed: s.seed,
+      initials: `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase(),
+      name: `${s.firstName} ${s.lastName}`.trim(),
+      paid: settled || outstandingCents <= 0,
+      paidCents,
+      outstandingCents,
+    };
+  });
+  return { seats, settled, totalPaidCents, totalDueCents: due };
+}
+
+export interface PopoverAnchor { left: number; right: number; top: number }
+
+/**
+ * Position (fixed) du panneau de détail au survol d'une vignette : à droite du
+ * bloc par défaut, bascule à gauche si le panneau déborderait du viewport.
+ */
+export function popoverPosition(anchor: PopoverAnchor, viewportWidth: number, panelWidth = 230, gap = 8): { left: number; top: number } {
+  const flip = anchor.right + gap + panelWidth > viewportWidth;
+  return { left: flip ? anchor.left - gap - panelWidth : anchor.right + gap, top: anchor.top };
+}
+
 // ── Encaissement optimiste ─────────────────────────────────────────────────
 // Le comptoir doit réagir AU CLIC, sans attendre l'aller-retour réseau. On
 // applique le paiement (ou le remboursement) localement tout de suite, puis on
