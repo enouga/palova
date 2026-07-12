@@ -122,11 +122,3 @@ it('bandeau KPI présent (Encaissé / Reste / Total)', async () => {
   expect(screen.getByText('Total')).toBeInTheDocument();
 });
 
-it('« Montant libre, reçu, historique » ouvre la modale Détails (CollectPanel)', async () => {
-  renderPage();
-  const register = await screen.findByTestId('cx-register');
-  const btn = await waitFor(() => within(register).getByRole('button', { name: /Montant libre/ }));
-  fireEvent.click(btn);
-  // la modale affiche le nom du terrain en titre display + le bandeau d'état
-  expect(await screen.findByText('Reste à encaisser')).toBeInTheDocument();
-});

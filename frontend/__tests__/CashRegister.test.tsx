@@ -9,7 +9,11 @@ jest.mock('../lib/api', () => ({
     refundPayment: jest.fn().mockResolvedValue({ id: 'rf-1' }),
     adminAssignReservationMember: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminAddReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
-    adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
+    adminChangeReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
+    adminAssignReservationMemberNew: jest.fn().mockResolvedValue({ id: 'rv-1', createdMember: { userId: 'u-new', tempPassword: 'tmp', existed: false } }),
+    adminAddReservationParticipantNew: jest.fn().mockResolvedValue({ id: 'rv-1', createdMember: { userId: 'u-new', tempPassword: 'tmp', existed: false } }),
+    adminChangeReservationParticipantNew: jest.fn().mockResolvedValue({ id: 'rv-1', createdMember: { userId: 'u-new', tempPassword: 'tmp', existed: false } }),
+    adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false, userId: 'u-new' }),
     adminGetMembers: jest.fn().mockResolvedValue([]),
     searchClubMembers: jest.fn().mockResolvedValue([]),
   },
@@ -186,6 +190,48 @@ it('choisir un membre de l\'annuaire associe un participant (résa avec titulair
   const pick = await screen.findByRole('button', { name: /Nora Kaci/ });
   fireEvent.click(pick);
   await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
+});
+
+it('associer un membre sélectionne (focus) la place tout juste associée', async () => {
+  (api.searchClubMembers as jest.Mock).mockResolvedValueOnce([
+    { id: 'u9', firstName: 'Nora', lastName: 'Kaci', level: null },
+  ]);
+  renderReg(rv());
+  expect(screen.getAllByRole('checkbox')[0]).toHaveAttribute('aria-checked', 'true');   // place 0 (titulaire) par défaut
+  fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);             // place 1 (1re générique)
+  fireEvent.click(await screen.findByRole('button', { name: /Nora Kaci/ }));
+  await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalled());
+  const tiles = screen.getAllByRole('checkbox');
+  expect(tiles[1]).toHaveAttribute('aria-checked', 'true');
+  expect(tiles[0]).toHaveAttribute('aria-checked', 'false');
+});
+
+it('cliquer un membre affiche un retour immédiat pendant l\'appel réseau (pas figé)', async () => {
+  (api.searchClubMembers as jest.Mock).mockResolvedValueOnce([
+    { id: 'u9', firstName: 'Nora', lastName: 'Kaci', level: null },
+  ]);
+  let resolve!: (v: unknown) => void;
+  (api.adminAddReservationParticipant as jest.Mock).mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+  renderReg(rv());
+  fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);
+  fireEvent.click(await screen.findByRole('button', { name: /Nora Kaci/ }));
+  expect(await screen.findByText('Association…')).toBeInTheDocument();
+  await act(async () => { resolve({ id: 'rv-1' }); });
+});
+
+it('créer un nouveau joueur l\'associe en UN SEUL appel réseau (endpoint fusionné, pas de refetch annuaire)', async () => {
+  renderReg(rv());
+  fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);
+  fireEvent.click(screen.getByRole('button', { name: /Créer un joueur/ }));
+  fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Jo' } });
+  fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Doe' } });
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jo@x.fr' } });
+  fireEvent.click(screen.getByRole('button', { name: /Créer le joueur/ }));
+  await waitFor(() => expect(api.adminAddReservationParticipantNew).toHaveBeenCalledWith(
+    'club-1', 'rv-1', expect.objectContaining({ firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' }), 'tok',
+  ));
+  expect(api.adminCreateMember).not.toHaveBeenCalled();
+  expect(api.adminGetMembers).not.toHaveBeenCalled();
 });
 
 it('payAtClubOnly : un seul bouton « Encaissé » (moyen CLUB), pas de choix de moyen', async () => {

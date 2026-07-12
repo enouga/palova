@@ -325,8 +325,10 @@ export const api = {
   adminAddMemberByEmail: (clubId: string, email: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/members`, { method: 'POST', body: JSON.stringify({ email }) }, token),
 
+  // `member` = ligne membre déjà prête (le back la construit lui-même) : les appelants n'ont
+  // plus besoin d'un `adminGetMembers` complet pour retrouver le membre qu'ils viennent de créer.
   adminCreateMember: (clubId: string, body: CreateMemberBody, token: string) =>
-    request<{ tempPassword: string | null; existed: boolean }>(`/api/clubs/${clubId}/admin/members/create`, { method: 'POST', body: JSON.stringify(body) }, token),
+    request<{ tempPassword: string | null; existed: boolean; userId: string; member: Member }>(`/api/clubs/${clubId}/admin/members/create`, { method: 'POST', body: JSON.stringify(body) }, token),
 
   adminUpdateMember: (clubId: string, id: string, body: UpdateMemberBody, token: string) =>
     request<Member>(`/api/clubs/${clubId}/admin/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
@@ -435,6 +437,19 @@ export const api = {
   // Remplace un participant par un autre membre, en une fois (recalcule les parts).
   adminChangeReservationParticipant: (clubId: string, reservationId: string, participantId: string, memberUserId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
+
+  // Variantes « créer un joueur puis l'associer » — un seul aller-retour réseau (le serveur crée
+  // le membre ET l'associe dans la même requête ; `ClubReservation.createdMember` porte le résultat
+  // de la création). Avant, le client faisait `adminCreateMember` puis un `adminGetMembers` complet
+  // pour retrouver l'id créé, puis l'appel d'association : 3 allers-retours au lieu d'1.
+  adminAssignReservationMemberNew: (clubId: string, reservationId: string, newMember: CreateMemberBody, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/member`, { method: 'PATCH', body: JSON.stringify({ newMember }) }, token),
+
+  adminAddReservationParticipantNew: (clubId: string, reservationId: string, newMember: CreateMemberBody, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants`, { method: 'POST', body: JSON.stringify({ newMember }) }, token),
+
+  adminChangeReservationParticipantNew: (clubId: string, reservationId: string, participantId: string, newMember: CreateMemberBody, token: string) =>
+    request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/participants/${participantId}`, { method: 'PATCH', body: JSON.stringify({ newMember }) }, token),
 
   // --- Abonnements (admin) ---
   adminGetSubscriptionPlans: (clubId: string, token: string) =>
@@ -959,6 +974,10 @@ export const api = {
   adminEnrollStudent: (clubId: string, lessonId: string, userId: string, token: string) =>
     request<LessonStudent>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
 
+  // Crée un joueur à la volée puis l'inscrit, en un seul aller-retour réseau.
+  adminEnrollNewStudent: (clubId: string, lessonId: string, newMember: CreateMemberBody, token: string) =>
+    request<LessonStudent>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ newMember }) }, token),
+
   adminPromoteStudent: (clubId: string, lessonId: string, enrollId: string, token: string) =>
     request<LessonStudent>(`/api/clubs/${clubId}/admin/lessons/${lessonId}/students/${enrollId}`, { method: 'PATCH' }, token),
 
@@ -1454,6 +1473,7 @@ export interface OpenMatch {
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
+  messageCount: number; // total de messages non supprimés (affiché sur « Discuter »)
   cardVersion?: string; // hash d'état de la carte OG — versionne l'URL de partage (?s=) et l'og:image
 }
 
@@ -1997,6 +2017,8 @@ export interface ClubReservation {
   hasCardFingerprint?: boolean;
   seriesId?: string | null;
   lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE' } | null;
+  /** présent seulement sur la réponse d'une association « créer un membre à la volée puis associer ». */
+  createdMember?: { userId: string; tempPassword: string | null; existed: boolean } | null;
 }
 
 export interface ClubReservationsResponse {
@@ -2534,6 +2556,8 @@ export interface LessonStudent {
   lastName: string;
   avatarUrl: string | null;
   waitlistPosition: number | null;
+  /** présent seulement sur la réponse d'une inscription « créer un membre à la volée puis inscrire ». */
+  createdMember?: { userId: string; tempPassword: string | null; existed: boolean } | null;
 }
 
 export interface Coach {

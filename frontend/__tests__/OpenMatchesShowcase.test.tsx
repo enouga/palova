@@ -7,7 +7,7 @@ const match = (over: Partial<OpenMatch>): OpenMatch => ({
   id: 'm1', resourceName: 'Terrain 1', startTime: '2026-07-06T18:00:00Z', endTime: '2026-07-06T19:30:00Z',
   maxPlayers: 4, spotsLeft: 3, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [{ userId: 'u1', firstName: 'Ana', lastName: 'B', avatarUrl: null, isOrganizer: true }],
-  targetLevelMin: 4, targetLevelMax: 6, lastMessageAt: null, unreadCount: 0, ...over,
+  targetLevelMin: 4, targetLevelMax: 6, lastMessageAt: null, unreadCount: 0, messageCount: 0, ...over,
 });
 
 const wrap = (matches: OpenMatch[]) =>

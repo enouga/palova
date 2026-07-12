@@ -46,7 +46,7 @@ const match = {
   id: 'm1', resourceName: 'Terrain 1', startTime: future, endTime: future, sport: { key: 'padel', name: 'Padel' },
   maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 }],
-  lastMessageAt: null, unreadCount: 0,
+  lastMessageAt: null, unreadCount: 0, messageCount: 0,
 };
 
 describe('OpenMatchDetail', () => {

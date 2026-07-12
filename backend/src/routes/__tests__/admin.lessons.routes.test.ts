@@ -27,6 +27,25 @@ describe('routes lessons students', () => {
     expect(res.body.status).toBe('CONFIRMED');
   });
 
+  it('POST /lessons/:id/students avec newMember → crée le membre puis l\'inscrit, en un seul appel client', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, seriesId: null, series: null } as any);
+    prismaMock.user.findFirst.mockResolvedValue(null as any);
+    prismaMock.user.create.mockResolvedValue({ id: 'u-new', firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr', phone: null, avatarUrl: null } as any);
+    prismaMock.clubMembership.create.mockResolvedValue({ id: 'mb-new', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date() } as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.lessonEnrollment.findUnique.mockResolvedValue(null);
+    prismaMock.lessonEnrollment.count.mockResolvedValue(0);
+    prismaMock.lessonEnrollment.create.mockResolvedValue({ id: 'e1', status: 'CONFIRMED' } as any);
+    const res = await request(app).post(`${base}/lessons/l1/students`).set(auth)
+      .send({ newMember: { firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' } });
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('CONFIRMED');
+    expect(res.body.createdMember.userId).toBe('u-new');
+    expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
+  });
+
   it('GET /lessons/:id/students → 200 liste', async () => {
     prismaMock.lesson.findUnique.mockResolvedValue({ id: 'l1', clubId: 'club-demo', capacity: 2, seriesId: null, series: null } as any);
     prismaMock.lessonEnrollment.findMany.mockResolvedValue([] as any);

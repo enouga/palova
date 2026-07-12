@@ -538,6 +538,25 @@ export class ClubService {
    * Crée un membre directement (compte + adhésion). Pas d'emailing : renvoie un
    * mot de passe temporaire à transmettre au joueur (durcir plus tard via invitation).
    */
+  /**
+   * Forme « ligne membre » (miroir non enrichi de `listMembers`) pour un membre créé/rattaché
+   * à la volée : évite au front un `adminGetMembers` complet juste pour retrouver la ligne
+   * qu'il vient de créer. Les champs d'enrichissement (niveau, abonnement…) sont neutres/vides
+   * pour un membre tout juste créé — cohérent, pas d'aller-retour supplémentaire pour les calculer.
+   */
+  private toMemberRow(membership: { id: string; isSubscriber: boolean; membershipNo: string | null; status: string; note: string | null; watch: boolean; createdAt: Date },
+    user: { id: string; firstName: string; lastName: string; email: string; phone: string | null; avatarUrl: string | null }) {
+    return {
+      id: membership.id, userId: user.id,
+      firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone,
+      avatarUrl: user.avatarUrl ?? null,
+      isSubscriber: membership.isSubscriber, membershipNo: membership.membershipNo,
+      status: membership.status, note: membership.note, watch: membership.watch, since: membership.createdAt,
+      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null,
+      hasActivePackage: false, lastSeenAt: null,
+    };
+  }
+
   async createMember(clubId: string, params: { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string }) {
     const firstName = (params.firstName || '').trim();
     const lastName  = (params.lastName || '').trim();
@@ -549,12 +568,12 @@ export class ClubService {
     if (existing) {
       // Le compte super-admin plateforme n'est jamais rattaché à un club (même code que le compte inconnu).
       if (existing.isSuperAdmin) throw new Error('USER_NOT_FOUND');
-      await prisma.clubMembership.upsert({
+      const membership = await prisma.clubMembership.upsert({
         where: { userId_clubId: { userId: existing.id, clubId } },
         update: { status: 'ACTIVE', membershipNo },
         create: { userId: existing.id, clubId, membershipNo },
       });
-      return { tempPassword: null as string | null, existed: true };
+      return { tempPassword: null as string | null, existed: true, userId: existing.id, member: this.toMemberRow(membership, existing) };
     }
 
     const tempPassword = Math.random().toString(36).slice(2, 10);
@@ -562,8 +581,8 @@ export class ClubService {
     const user = await prisma.user.create({
       data: { email, password: hashed, firstName, lastName, phone: params.phone?.trim() || null },
     });
-    await prisma.clubMembership.create({ data: { userId: user.id, clubId, membershipNo } });
-    return { tempPassword, existed: false };
+    const membership = await prisma.clubMembership.create({ data: { userId: user.id, clubId, membershipNo } });
+    return { tempPassword, existed: false, userId: user.id, member: this.toMemberRow(membership, user) };
   }
 
   async updateMembership(

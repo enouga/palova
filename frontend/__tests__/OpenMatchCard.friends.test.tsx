@@ -12,7 +12,7 @@ const baseMatch: any = {
     { userId: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null, isOrganizer: true, level: null },
     { userId: 'u9', firstName: 'Zoé', lastName: 'X', avatarUrl: null, isOrganizer: false, level: null },
   ],
-  lastMessageAt: null, unreadCount: 0,
+  lastMessageAt: null, unreadCount: 0, messageCount: 0,
 };
 const noop = () => {};
 const props: any = { timezone: 'Europe/Paris', slug: 'demo', token: 't', busy: false, addingOpen: false,

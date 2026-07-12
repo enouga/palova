@@ -1051,6 +1051,41 @@ describe('ClubService — le super-admin plateforme est invisible côté club', 
   });
 });
 
+describe('ClubService — createMember renvoie directement la ligne membre (évite un adminGetMembers)', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('nouveau compte : member reflète le user + la membership fraîchement créés', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null as any);
+    prismaMock.user.create.mockResolvedValue({ id: 'u-new', firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr', phone: null, avatarUrl: null } as any);
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    prismaMock.clubMembership.create.mockResolvedValue({ id: 'mb-new', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt } as any);
+
+    const r = await service.createMember('club-demo', { firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' });
+
+    expect(r.existed).toBe(false);
+    expect(r.userId).toBe('u-new');
+    expect(r.member).toEqual({
+      id: 'mb-new', userId: 'u-new', firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr', phone: null, avatarUrl: null,
+      isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, since: createdAt,
+      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, hasActivePackage: false, lastSeenAt: null,
+    });
+  });
+
+  it('compte existant (autre club) : member reflète la nouvelle adhésion, pas de nouveau user créé', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u-ex', firstName: 'Léa', lastName: 'Roy', email: 'l@x.fr', phone: '0600000000', avatarUrl: 'a.png', isSuperAdmin: false } as any);
+    const createdAt = new Date('2026-02-01T00:00:00.000Z');
+    prismaMock.clubMembership.upsert.mockResolvedValue({ id: 'mb-ex', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt } as any);
+
+    const r = await service.createMember('club-demo', { firstName: 'Léa', lastName: 'Roy', email: 'l@x.fr' });
+
+    expect(r.existed).toBe(true);
+    expect(r.userId).toBe('u-ex');
+    expect(r.member).toMatchObject({ id: 'mb-ex', userId: 'u-ex', firstName: 'Léa', lastName: 'Roy', email: 'l@x.fr' });
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('ClubService — setMemberStaffRole', () => {
   let service: ClubService;
   beforeEach(() => {

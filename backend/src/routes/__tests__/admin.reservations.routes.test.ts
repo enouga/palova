@@ -99,6 +99,24 @@ describe('PATCH /api/clubs/:clubId/admin/reservations/:id/member', () => {
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('MEMBER_NOT_FOUND');
   });
+
+  it('200 crée le membre à la volée (newMember) puis l\'affecte — un seul aller-retour client', async () => {
+    asMember();
+    prismaMock.user.findFirst.mockResolvedValue(null as any);           // pas de compte existant sur cet email
+    prismaMock.user.create.mockResolvedValue({ id: 'user-new' } as any);
+    prismaMock.clubMembership.create.mockResolvedValue({} as any);
+    prismaMock.reservation.findUnique.mockResolvedValue({ id: 'res-1', resource: { clubId: 'club-demo' } } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'mb-1', status: 'ACTIVE' } as any);
+    prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', userId: 'user-new' } as any);
+    const res = await request(app).patch(murl).set('Authorization', `Bearer ${token}`)
+      .send({ newMember: { firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' } });
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('res-1');
+    expect(res.body.createdMember).toMatchObject({ userId: 'user-new', tempPassword: expect.any(String), existed: false });
+    expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
+    // la réservation est bien affectée au userId fraîchement créé, pas à un id fourni par le client
+    expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({ data: { userId: 'user-new' } }));
+  });
 });
 
 describe('PATCH /api/clubs/:clubId/admin/reservations/:id/schedule', () => {

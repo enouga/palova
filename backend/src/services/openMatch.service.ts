@@ -15,6 +15,7 @@ const MATCH_INCLUDE = {
     select: { userId: true, isOrganizer: true, team: true, slot: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } },
   },
   openMatchMessages: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+  _count: { select: { openMatchMessages: { where: { deletedAt: null } } } },
 } satisfies Prisma.ReservationInclude;
 
 type MatchRow = Prisma.ReservationGetPayload<{ include: typeof MATCH_INCLUDE }>;
@@ -119,6 +120,7 @@ export class OpenMatchService {
       targetLevelMax: m.targetLevelMax ?? null,
       players,
       lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
+      messageCount: m._count.openMatchMessages,
       unreadCount,
       // Hash d'état de la carte OG : versionne l'og:image et l'URL de partage (?s=).
       cardVersion: matchCardStateHash({

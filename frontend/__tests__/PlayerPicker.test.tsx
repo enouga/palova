@@ -12,7 +12,7 @@ const members: Member[] = [
 function setup(over: Partial<React.ComponentProps<typeof PlayerPicker>> = {}) {
   const onSelect = jest.fn();
   const onClear  = jest.fn();
-  const onCreate = jest.fn().mockResolvedValue({ tempPassword: 'abc12345', existed: false });
+  const onCreate = jest.fn().mockResolvedValue({ tempPassword: 'abc12345', existed: false, userId: 'u-new', member: members[0] });
   render(
     <ThemeProvider>
       <PlayerPicker members={members} value={null} onSelect={onSelect} onClear={onClear} onCreate={onCreate} {...over} />
@@ -32,6 +32,27 @@ describe('PlayerPicker', () => {
     fireEvent.change(screen.getByPlaceholderText('Rechercher un joueur…'), { target: { value: 'mar' } });
     fireEvent.click(screen.getByText(/Marie Curie/));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-2' }));
+  });
+
+  it('sélection d\'un membre existant : bandeau « Sélection… » tant que l\'appelant est busy (pas figé)', () => {
+    const onSelect = jest.fn();
+    const { rerender } = render(
+      <ThemeProvider><PlayerPicker members={members} value={null} onSelect={onSelect} onClear={jest.fn()} onCreate={jest.fn()} busy={false} /></ThemeProvider>,
+    );
+    fireEvent.change(screen.getByPlaceholderText('Rechercher un joueur…'), { target: { value: 'mar' } });
+    fireEvent.click(screen.getByText(/Marie Curie/));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-2' }));
+    // Le parent passe busy=true dès le clic (synchrone, avant résolution réseau).
+    rerender(
+      <ThemeProvider><PlayerPicker members={members} value={null} onSelect={onSelect} onClear={jest.fn()} onCreate={jest.fn()} busy /></ThemeProvider>,
+    );
+    expect(screen.getByText('Sélection…')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Rechercher un joueur…')).not.toBeInTheDocument();
+    // Résolution réseau → le parent repasse busy=false : le bandeau disparaît (repli sur le champ tant que `value` n'a pas encore été mis à jour par le parent).
+    rerender(
+      <ThemeProvider><PlayerPicker members={members} value={null} onSelect={onSelect} onClear={jest.fn()} onCreate={jest.fn()} busy={false} /></ThemeProvider>,
+    );
+    expect(screen.queryByText('Sélection…')).not.toBeInTheDocument();
   });
 
   it('affiche la pastille de niveau dans la liste (look annuaire du front)', () => {
@@ -79,7 +100,7 @@ describe('PlayerPicker', () => {
   });
 
   it('message « rattaché » si le compte existait déjà', async () => {
-    const onCreate = jest.fn().mockResolvedValue({ tempPassword: null, existed: true });
+    const onCreate = jest.fn().mockResolvedValue({ tempPassword: null, existed: true, userId: 'u-1', member: members[0] });
     setup({ onCreate });
     fireEvent.click(screen.getByText('+ Créer un joueur'));
     fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Paul' } });

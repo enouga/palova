@@ -17,7 +17,7 @@ interface Row { id: string; firstName: string; lastName: string; level: UserLeve
  * de comptoir n'a pas forcément d'adhésion active, or `searchClubMembers` exige le caller membre
  * actif (sinon MEMBERSHIP_REQUIRED) — l'association doit rester possible dans tous les cas.
  */
-export function AssociateMemberPicker({ slug, token, excludeIds, members, onSelect, onCancel, onCreate }: {
+export function AssociateMemberPicker({ slug, token, excludeIds, members, onSelect, onCancel, onCreate, busy = false }: {
   slug: string;
   token: string;
   /** Ids (userId) à masquer : titulaire + participants déjà présents. */
@@ -26,7 +26,9 @@ export function AssociateMemberPicker({ slug, token, excludeIds, members, onSele
   members: Member[];
   onSelect: (userId: string) => void;
   onCancel: () => void;
-  onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean }>;
+  onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean; userId: string }>;
+  /** requête d'association en cours (sélection existante OU création) : désactive la liste, feedback immédiat. */
+  busy?: boolean;
 }) {
   const { th } = useTheme();
   const [q, setQ] = useState('');
@@ -37,6 +39,10 @@ export function AssociateMemberPicker({ slug, token, excludeIds, members, onSele
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
+  // Ligne cliquée : feedback immédiat (avant même la résolution réseau), remis à zéro
+  // dès que le parent n'est plus busy (succès → composant démonté ; échec → réessai possible).
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  useEffect(() => { if (!busy) setPickedId(null); }, [busy]);
 
   // Annuaire des membres actifs (mêmes API que PartnerSearch / AddPlayerSheet), débounce 250 ms ;
   // vide → liste complète. Un échec (MEMBERSHIP_REQUIRED…) bascule sur le repli local.
@@ -104,17 +110,19 @@ export function AssociateMemberPicker({ slug, token, excludeIds, members, onSele
         <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder="Rechercher un membre…"
           style={{ width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1.5px solid ${th.accent}`, borderRadius: 10, padding: '11px 12px 11px 38px', fontFamily: th.fontUI, fontSize: 14.5, color: th.text, outline: 'none' }} />
       </div>
-      <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+      <div style={{ maxHeight: 240, overflowY: 'auto', opacity: busy ? 0.6 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
         {rows.length === 0
           ? <div style={{ padding: '8px 6px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>Aucun membre trouvé.</div>
           : rows.map((m) => (
-              <button key={m.id} type="button" onClick={() => onSelect(m.id)}
+              <button key={m.id} type="button" disabled={busy} onClick={() => { setPickedId(m.id); onSelect(m.id); }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = th.surface2; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
                 <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={null} size={28} color={colorForSeed(m.id)} />
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{m.firstName} {m.lastName}</span>
-                <LevelChip level={m.level} size="xs" />
+                {pickedId === m.id
+                  ? <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600, color: th.accent, flexShrink: 0 }}>Association…</span>
+                  : <LevelChip level={m.level} size="xs" />}
                 <span aria-hidden style={{ width: 26, height: 26, borderRadius: '50%', background: `${th.accent}22`, color: th.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>+</span>
               </button>
             ))}

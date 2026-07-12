@@ -24,13 +24,15 @@ interface Offer { key: string; kind: 'package' | 'subscription'; id: string; nam
 const euro = (s: string) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 
 /** Panneau de vente unifié : un seul acheteur, carnets ET abonnements groupés. */
-export function SellPanel({ members, templates, plans, buyer, buyerPackages, busy, onPickBuyer, onClear, onCreate, onSell }: {
+export function SellPanel({ members, templates, plans, buyer, buyerPackages, busy, pickerBusy, onPickBuyer, onClear, onCreate, onSell }: {
   members: Member[];
   templates: PackageTemplate[];
   plans: SubscriptionPlan[];
   buyer: Member | null;
   buyerPackages: MemberPackage[];
   busy: boolean;
+  /** sélection/création de l'acheteur en cours (distinct de `busy` = encaissement de la vente). */
+  pickerBusy?: boolean;
   onPickBuyer: (m: Member) => void;
   onClear: () => void;
   onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean }>;
@@ -88,6 +90,7 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
           onSelect={onPickBuyer}
           onClear={() => { onClear(); setSelKey(''); }}
           onCreate={onCreate}
+          busy={pickerBusy}
           placeholder="Cliquez pour voir les membres, ou tapez un nom…"
         />
       </div>

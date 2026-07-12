@@ -6,6 +6,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { inkOn } from '@/lib/theme';
 import { ClubNav } from '@/components/ClubNav';
+import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { cardStyle } from '@/components/clubhouse/SectionHeader';
@@ -57,7 +58,7 @@ export default function ClubPage() {
   const paragraphs = pres?.presentationText ? pres.presentationText.split(/\n{2,}/) : [];
 
   return (
-    <div style={{ minHeight: '100vh', background: th.bg }}>
+    <Screen>
       <ClubNav club={club} />
 
       {/* Hero cinéma */}
@@ -85,7 +86,7 @@ export default function ClubPage() {
         </div>
       </div>
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '22px 20px 60px' }}>
+      <main style={{ padding: '22px 20px 60px' }}>
         <style>{`
           .cp-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
           @media(min-width:800px){.cp-grid{grid-template-columns:1.5fr 1fr}}
@@ -168,6 +169,6 @@ export default function ClubPage() {
           <img src={lightbox} alt="Photo du club" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }} />
         </div>
       )}
-    </div>
+    </Screen>
   );
 }

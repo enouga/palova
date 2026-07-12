@@ -7,7 +7,7 @@ const match = (over: Partial<OpenMatch> = {}): OpenMatch => ({
   maxPlayers: 4, spotsLeft: 2, full: false,
   viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [], targetLevelMin: 6, targetLevelMax: 7,
-  lastMessageAt: null, unreadCount: 0, cardVersion: 'abc123def456',
+  lastMessageAt: null, unreadCount: 0, messageCount: 0, cardVersion: 'abc123def456',
   ...over,
 });
 

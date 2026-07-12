@@ -12,8 +12,12 @@ export interface PlayerPickerProps {
   value: { firstName: string; lastName: string } | null;
   onSelect: (m: Member) => void;
   onClear: () => void;
+  // Forme minimale requise par ce composant (il n'exploite que ces 2 champs) — les appelants
+  // sont libres de renvoyer des champs additionnels (userId, member…) pour leur propre usage.
   onCreate: (body: CreateMemberBody) => Promise<{ tempPassword: string | null; existed: boolean }>;
   placeholder?: string;
+  /** mutation en cours côté appelant (sélection existante OU création) : désactive la liste, feedback immédiat. */
+  busy?: boolean;
 }
 
 // "Jean Dupont" → { firstName: 'Jean', lastName: 'Dupont' } ; un seul mot → prénom.
@@ -23,7 +27,7 @@ function splitName(q: string): { firstName: string; lastName: string } {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
-export function PlayerPicker({ members, value, onSelect, onClear, onCreate, placeholder }: PlayerPickerProps) {
+export function PlayerPicker({ members, value, onSelect, onClear, onCreate, placeholder, busy = false }: PlayerPickerProps) {
   const { th } = useTheme();
   const [query, setQuery]           = useState('');
   const [open, setOpen]             = useState(false);
@@ -34,6 +38,10 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
   const [createErr, setCreateErr]   = useState<string | null>(null);
   const [createMsg, setCreateMsg]   = useState<string | null>(null);
   const inputRef                    = useRef<HTMLInputElement>(null);
+  // Ligne cliquée : feedback immédiat (avant même la résolution réseau), remis à zéro dès que
+  // l'appelant n'est plus busy (succès → le picker repasse en mode chip ; échec → réessai possible).
+  const [pickedId, setPickedId]     = useState<string | null>(null);
+  useEffect(() => { if (!busy) setPickedId(null); }, [busy]);
 
   const valueKey = value ? `${value.firstName} ${value.lastName}` : '';
   // Changement de cible (autre résa / réinit) : on repart en mode « chip ».
@@ -51,7 +59,7 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
     ? (q ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)) : members).slice(0, 8)
     : [];
 
-  const pick = (m: Member) => { setQuery(''); setOpen(false); setEditing(false); setCreateMsg(null); onSelect(m); };
+  const pick = (m: Member) => { setPickedId(m.userId); setQuery(''); setOpen(false); setEditing(false); setCreateMsg(null); onSelect(m); };
 
   const openCreate = () => {
     const { firstName, lastName } = splitName(query);
@@ -93,7 +101,14 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
 
   return (
     <div style={{ position: 'relative' }}>
-      {showChip ? (
+      {busy && pickedId ? (
+        // Sélection d'un membre existant en vol : retour immédiat (avant même la résolution
+        // réseau) — la liste se referme déjà au clic, sans ce bandeau on aurait l'impression
+        // que rien ne s'est passé pendant l'aller-retour.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px', opacity: 0.7 }}>
+          <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Sélection…</span>
+        </div>
+      ) : showChip ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px' }}>
           <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{value!.firstName} {value!.lastName}</span>
           <button type="button" onClick={() => { setEditing(true); setQuery(''); setOpen(true); onClear(); }}
