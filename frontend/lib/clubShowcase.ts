@@ -59,7 +59,8 @@ export function openNowChip(hours: HoursRange | null, timezone: string, now: Dat
   // en-GB : rend « 12 » nu (fr-FR rendrait « 12 h » → NaN).
   const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: timezone }).format(now));
   const open = h >= hours.open && h < hours.close;
-  return open ? { open: true, label: `Ouvert · jusqu'à ${hours.close}h` } : { open: false, label: `Ouvre à ${hours.open}h` };
+  const closeLabel = hours.close >= 24 ? 'minuit' : `${hours.close}h`;
+  return open ? { open: true, label: `Ouvert · jusqu'à ${closeLabel}` } : { open: false, label: `Ouvre à ${hours.open}h` };
 }
 
 export function coverUrl(p: ClubPresentation): string | null {

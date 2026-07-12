@@ -48,6 +48,8 @@ describe('clubShowcase helpers', () => {
     expect(openNowChip(h, 'Europe/Paris', new Date('2026-07-12T03:00:00Z'))).toEqual({ open: false, label: 'Ouvre à 8h' });
     expect(openNowChip(h, 'Europe/Paris', null)).toBeNull();
     expect(openNowChip(null, 'Europe/Paris', new Date())).toBeNull();
+    expect(openNowChip({ open: 8, close: 24 }, 'Europe/Paris', new Date('2026-07-12T10:00:00Z')))
+      .toEqual({ open: true, label: "Ouvert · jusqu'à minuit" });
   });
 
   it('coverUrl : coverImageUrl sinon 1re photo sinon null', () => {

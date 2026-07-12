@@ -44,7 +44,7 @@ export function ClubShowcase({ presentation, club, now }: { presentation: ClubPr
         @media(min-width:700px){
           .cs-scene{height:340px}
           .cs-rail{display:flex;gap:8px;position:absolute;right:20px;bottom:20px;z-index:3}
-          .cs-photochip{display:none}
+          .cs-photochip{display:none !important} /* bat le display inline-flex du style inline */
         }
         .cs-amen-label{font-family:${th.fontUI};font-size:12px;font-weight:600}
         @media(max-width:479px){.cs-amen-label{display:none}}
