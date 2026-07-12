@@ -15,7 +15,8 @@ import { clubIsMultiSport } from '@/lib/sportBadge';
 import { OpenMatchesShowcase } from '@/components/clubhouse/OpenMatchesShowcase';
 import { OffersShowcase } from '@/components/clubhouse/OffersShowcase';
 import { TopOfMonth } from '@/components/clubhouse/TopOfMonth';
-import { ClubPresentationCard } from '@/components/clubhouse/ClubPresentationCard';
+import { ClubShowcase } from '@/components/clubhouse/ClubShowcase';
+import { showShowcase } from '@/lib/clubShowcase';
 import { SponsorMarquee } from '@/components/clubhouse/SponsorMarquee';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
@@ -116,7 +117,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const slides = kiosqueSlides(ann, now);
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
-  const showClubCard = !!presentation && (!!presentation.presentationText || presentation.photos.length > 0);
+  const showClubCard = showShowcase(presentation);
   const showOffers = !!offers && ((!hasSub && offers.plans.length > 0) || offers.packages.length > 0);
 
   const empty = slides.length === 0 && nextEvents.length === 0 && spons.length === 0
@@ -128,7 +129,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     clubCard: showClubCard && presentation && (
       <div>
         <SectionHeader title="Le club" action={{ label: 'Découvrir →', href: '/club' }} />
-        <ClubPresentationCard presentation={presentation} clubName={club.name} />
+        <ClubShowcase presentation={presentation} club={club} now={clock} />
       </div>
     ),
     // Prochains events + Vos réservations côte à côte (≥ 700px) — cartes sœurs, même langage.

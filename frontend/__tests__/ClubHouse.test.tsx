@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 jest.mock('../components/clubhouse/OpenMatchesShowcase', () => ({ OpenMatchesShowcase: () => <div data-testid="sec-matches" /> }));
 jest.mock('../components/clubhouse/OffersShowcase', () => ({ OffersShowcase: () => <div data-testid="sec-offers" /> }));
 jest.mock('../components/clubhouse/TopOfMonth', () => ({ TopOfMonth: () => <div data-testid="sec-top" /> }));
-jest.mock('../components/clubhouse/ClubPresentationCard', () => ({ ClubPresentationCard: () => <div data-testid="sec-club" /> }));
+jest.mock('../components/clubhouse/ClubShowcase', () => ({ ClubShowcase: () => <div data-testid="sec-club" /> }));
 jest.mock('../components/clubhouse/SponsorMarquee', () => ({ SponsorMarquee: () => <div data-testid="sec-sponsors" /> }));
 
 jest.mock('../lib/api', () => ({
