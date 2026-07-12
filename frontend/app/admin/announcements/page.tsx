@@ -80,7 +80,7 @@ export default function AdminAnnouncementsPage() {
     const body: AnnouncementBody = {
       title: form.title.trim(),
       body: form.body.trim(),
-      linkUrl: form.linkUrl.trim() || undefined,
+      linkUrl: form.linkUrl.trim() || null,
       kind: form.kind,
       validUntil: form.validUntil || null,
       pinned: form.pinned,

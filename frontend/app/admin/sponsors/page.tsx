@@ -62,7 +62,7 @@ export default function AdminSponsorsPage() {
     const body: SponsorBody = {
       name: form.name.trim(),
       logoUrl: form.logoUrl.trim(),
-      linkUrl: form.linkUrl.trim() || undefined,
+      linkUrl: form.linkUrl.trim() || null,
       sortOrder: Number.parseInt(form.sortOrder, 10) || 0,
       isActive: form.isActive,
       offerText: form.offerText.trim(),

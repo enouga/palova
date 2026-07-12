@@ -1983,8 +1983,8 @@ export interface Sponsor {
   createdAt: string;
 }
 
-export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string | null; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
-export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
+export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string | null; imageUrl: string | null; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
+export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string | null; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
 
 export type ReservationType = 'COURT' | 'COACHING' | 'TOURNAMENT' | 'EVENT';
 

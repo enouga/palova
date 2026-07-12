@@ -224,14 +224,14 @@ export function Segmented<T extends string | number>({
         const active = o.value === value;
         const withIcon = o.icon != null;
         return (
-          <button key={String(o.value)} onClick={() => onChange(o.value)}
+          <button key={String(o.value)} onClick={() => onChange(o.value)} aria-pressed={active}
             className={withIcon ? 'sp-seg-tab' : undefined}
             style={{
               flex: 1, border: 'none', cursor: 'pointer', borderRadius: 10, padding: '10px 6px',
               fontFamily: th.fontUI, fontWeight: active ? 700 : 600, fontSize: 14.5,
               background: active ? th.surface : 'transparent',
-              color: th.text,
-              boxShadow: active ? th.shadowSoft : 'none', transition: 'all .15s',
+              color: active ? th.text : th.textMute,
+              boxShadow: active ? th.shadowSoft : `inset 0 0 0 1px ${th.line}`, transition: 'all .15s',
             }}>
             {withIcon && (
               <span className="sp-seg-icon">

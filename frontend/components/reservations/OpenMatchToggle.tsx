@@ -70,7 +70,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   );
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginBottom: 10 }}>
       {error && (
         <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
       )}
@@ -79,13 +79,13 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Chip tone="accent">Ouverte</Chip>
           <button type="button" onClick={close} disabled={busy}
-            style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>
             Fermer
           </button>
         </div>
       ) : !sheet ? (
         <button type="button" onClick={() => setSheet(true)} disabled={busy}
-          style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 14px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 14px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>
           Ouvrir la partie
         </button>
       ) : (
@@ -101,11 +101,11 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
             <button type="button" onClick={publish} disabled={busy}
-              style={{ border: 'none', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 10, padding: '9px 16px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 10, padding: '9px 16px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
               Publier
             </button>
             <button type="button" onClick={() => setSheet(false)} disabled={busy}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>
               Annuler
             </button>
           </div>
