@@ -1,12 +1,13 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage, Payment, CaissePayment, ClubAdminDetail } from '@/lib/api';
 import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
 import { endTimeFrom } from '@/lib/duration';
-import { localMinutesOfDay, weekdayOf } from '@/lib/planningTime';
+import { localMinutesOfDay, weekdayOf, fromMinutes, toMinutes, findOverlap, pxToMinutes, BusySlot } from '@/lib/planningTime';
+import { moveTarget, resizeTarget, createTarget } from '@/lib/planningDrag';
 import { TYPE_META, TYPE_ORDER } from '@/lib/reservationType';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
@@ -52,6 +53,30 @@ function toCaissePayment(p: Payment, rv: ClubReservation): CaissePayment {
 }
 // Dimensions de la grille verticale (terrains en colonnes, heures en lignes).
 const HOUR_H = 68, TIME_W = 56, COL_MIN_W = 120, HEADER_H = 52;
+// Seuil (px) sous lequel un mousedown+mouseup vaut clic simple, pas un drag.
+const DRAG_THRESHOLD_PX = 5;
+
+// État du drag & drop de la grille — DELTA-based (lib/planningDrag), la colonne (terrain)
+// survolée est résolue en DOM (document.elementFromPoint) pendant le déplacement.
+type DragState =
+  | { kind: 'move'; reservationId: string; durationMin: number; originResourceId: string; originStartMin: number; targetResourceId: string; targetStartMin: number; conflict: boolean }
+  | { kind: 'resize'; reservationId: string; resourceId: string; startMin: number; originEndMin: number; targetEndMin: number; conflict: boolean }
+  | { kind: 'create'; resourceId: string; anchorMin: number; targetEndMin: number }
+  | null;
+
+interface RescheduleToast {
+  reservationId: string;
+  label: string;
+  previous: { resourceId: string; date: string; startTime: string; endTime: string };
+}
+
+// Ghost visuel d'un drag pour UNE colonne donnée (null si le drag ne concerne pas ce terrain).
+function dragGhostFor(drag: DragState, resourceId: string): { startMin: number; endMin: number; conflict: boolean } | null {
+  if (!drag) return null;
+  if (drag.kind === 'move')   return drag.targetResourceId === resourceId ? { startMin: drag.targetStartMin, endMin: drag.targetStartMin + drag.durationMin, conflict: drag.conflict } : null;
+  if (drag.kind === 'resize') return drag.resourceId === resourceId       ? { startMin: drag.startMin, endMin: drag.targetEndMin, conflict: drag.conflict } : null;
+  return drag.resourceId === resourceId ? { startMin: drag.anchorMin, endMin: drag.targetEndMin, conflict: false } : null;
+}
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -114,6 +139,16 @@ export default function AdminPlanningPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);   // modale « Détails / options » (CollectPanel avancé) au-dessus de la caisse
   const optSeq = useRef(0);                                 // ids uniques des encaissements optimistes (CashRegister)
   const [isFs, setIsFs]           = useState(false);
+
+  // Drag & drop de la grille (déplacer / étirer / créer en glissant).
+  const [drag, setDragState] = useState<DragState>(null);
+  const dragRef = useRef<DragState>(null);         // valeur "vive" lue au mouseup (setDragState est asynchrone)
+  const dragOriginY = useRef(0);                   // clientY au mousedown (référence du delta)
+  const draggedRef = useRef(false);                // un vrai drag a eu lieu → le clic de fin est ignoré
+  const setDrag = (next: DragState) => { dragRef.current = next; setDragState(next); };
+  const [toast, setToast] = useState<RescheduleToast | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const [members, setMembers]   = useState<Member[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -275,6 +310,157 @@ export default function AdminPlanningPage() {
     return playerCount(typeof r?.attributes?.format === 'string' ? r.attributes.format : undefined);
   };
   const dueOf = (rv: ClubReservation) => dueCents(rv, resById.get(rv.resource.id), peak, tz);
+
+  // Créneaux occupés (tous terrains, résas non annulées) — conflits pendant un drag ET dans la
+  // modale de création (chips/avertissement).
+  const allBusySlots: BusySlot[] = reservations
+    .filter((rv) => rv.status !== 'CANCELLED')
+    .map((rv) => {
+      const s = localMinutesOfDay(rv.startTime, tz);
+      let e = localMinutesOfDay(rv.endTime, tz);
+      if (e <= s) e = 24 * 60;
+      return { id: rv.id, resourceId: rv.resource.id, startMin: s, endMin: e };
+    });
+
+  // Applique un nouveau terrain/horaire à une résa SANS appel réseau (patch optimiste) : le
+  // delta en minutes (même jour affiché, même fuseau) est appliqué aux Date déjà correctes —
+  // plus sûr qu'une reconstruction manuelle tz-aware, suffisant en attendant la réconciliation.
+  const applyScheduleLocally = (rv: ClubReservation, resourceId: string, startMin: number, endMin: number): ClubReservation => {
+    const startDeltaMin = startMin - localMinutesOfDay(rv.startTime, tz);
+    const endDeltaMin = endMin - localMinutesOfDay(rv.endTime, tz);
+    const newStartIso = new Date(new Date(rv.startTime).getTime() + startDeltaMin * 60_000).toISOString();
+    const newEndIso = new Date(new Date(rv.endTime).getTime() + endDeltaMin * 60_000).toISOString();
+    const targetRes = resById.get(resourceId);
+    return { ...rv, resource: { ...rv.resource, id: resourceId, name: targetRes?.name ?? rv.resource.name }, startTime: newStartIso, endTime: newEndIso };
+  };
+
+  const armRescheduleToast = (t: RescheduleToast) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(t);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  };
+
+  // Déplacement/étirement confirmé (drag relâché sans conflit) : optimiste + appel serveur +
+  // toast « Annuler ». Un échec réseau revert le patch optimiste (pas de toast à annuler).
+  const commitReschedule = async (rv: ClubReservation, targetResourceId: string, startMin: number, endMin: number, label: string) => {
+    if (!token || !clubId) return;
+    const previous = {
+      resourceId: rv.resource.id, date,
+      startTime: fromMinutes(localMinutesOfDay(rv.startTime, tz)),
+      endTime: fromMinutes(localMinutesOfDay(rv.endTime, tz)),
+    };
+    patchReservation(applyScheduleLocally(rv, targetResourceId, startMin, endMin));
+    armRescheduleToast({ reservationId: rv.id, label, previous });
+    try {
+      await api.adminRescheduleReservation(clubId, rv.id, { resourceId: targetResourceId, date, startTime: fromMinutes(startMin), endTime: fromMinutes(endMin) }, token);
+    } catch (e) {
+      patchReservation(rv); // revert
+      setToast(null);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      setError((e as Error).message);
+    }
+  };
+
+  const undoReschedule = async () => {
+    if (!toast || !token || !clubId) return;
+    const { reservationId, previous } = toast;
+    setToast(null);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    const rv = reservations.find((r) => r.id === reservationId);
+    if (!rv) return;
+    patchReservation(applyScheduleLocally(rv, previous.resourceId, toMinutes(previous.startTime), toMinutes(previous.endTime)));
+    try {
+      await api.adminRescheduleReservation(clubId, reservationId, previous, token);
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  // Démarre un drag « déplacer » (corps du bloc) ou « étirer » (poignée basse). Le bloc reste
+  // un <button> (contrat des tests existants) ; la poignée fait stopPropagation pour ne pas
+  // déclencher aussi le déplacement du bloc parent.
+  const startBlockDrag = (evt: ReactMouseEvent, rv: ClubReservation, kind: 'move' | 'resize', startMin: number, endMin: number) => {
+    if (rv.status === 'CANCELLED' || busy) return;
+    evt.preventDefault();
+    draggedRef.current = false;
+    dragOriginY.current = evt.clientY;
+    if (kind === 'move') {
+      setDrag({ kind: 'move', reservationId: rv.id, durationMin: endMin - startMin, originResourceId: rv.resource.id, originStartMin: startMin, targetResourceId: rv.resource.id, targetStartMin: startMin, conflict: false });
+    } else {
+      setDrag({ kind: 'resize', reservationId: rv.id, resourceId: rv.resource.id, startMin, originEndMin: endMin, targetEndMin: endMin, conflict: false });
+    }
+  };
+
+  // Démarre un drag « créer en glissant » sur une case vide (départ aligné 30 min).
+  const startCreateDrag = (evt: ReactMouseEvent, resourceId: string) => {
+    if ((evt.target as HTMLElement).closest('button') || busy) return;
+    const rect = (evt.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const raw = pxToMinutes(evt.clientY - rect.top, HOUR_H, minOpen * 60, 30);
+    const anchorMin = Math.min(Math.max(raw, minOpen * 60), maxClose * 60 - 30);
+    evt.preventDefault();
+    draggedRef.current = false;
+    dragOriginY.current = evt.clientY;
+    setDrag({ kind: 'create', resourceId, anchorMin, targetEndMin: anchorMin + 30 });
+  };
+
+  // Suivi global (souris) du drag en cours : ghost + conflit en direct, résolution au relâché.
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (evt: MouseEvent) => {
+      const deltaPx = evt.clientY - dragOriginY.current;
+      if (Math.abs(deltaPx) > DRAG_THRESHOLD_PX) draggedRef.current = true;
+      const overEl = document.elementFromPoint(evt.clientX, evt.clientY) as HTMLElement | null;
+      const hoveredResourceId = overEl?.closest('[data-resource-id]')?.getAttribute('data-resource-id') ?? null;
+      const cur = dragRef.current;
+      if (!cur) return;
+      if (cur.kind === 'move') {
+        const targetResourceId = hoveredResourceId ?? cur.targetResourceId;
+        const targetRes = resById.get(targetResourceId);
+        const rOpen = (targetRes?.openHour ?? minOpen) * 60;
+        const rClose = (targetRes?.closeHour ?? maxClose) * 60;
+        const { startMin } = moveTarget(cur.originStartMin, cur.durationMin, deltaPx, HOUR_H, rOpen, rClose);
+        const conflict = !!findOverlap(allBusySlots, targetResourceId, startMin, cur.durationMin, cur.reservationId);
+        setDrag({ ...cur, targetResourceId, targetStartMin: startMin, conflict });
+      } else if (cur.kind === 'resize') {
+        const r = resById.get(cur.resourceId);
+        const rClose = (r?.closeHour ?? maxClose) * 60;
+        const targetEndMin = resizeTarget(cur.startMin, cur.originEndMin, deltaPx, HOUR_H, rClose);
+        const conflict = !!findOverlap(allBusySlots, cur.resourceId, cur.startMin, targetEndMin - cur.startMin, cur.reservationId);
+        setDrag({ ...cur, targetEndMin, conflict });
+      } else {
+        const r = resById.get(cur.resourceId);
+        const rClose = (r?.closeHour ?? maxClose) * 60;
+        const targetEndMin = createTarget(cur.anchorMin, deltaPx, HOUR_H, rClose);
+        setDrag({ ...cur, targetEndMin });
+      }
+    };
+    const onUp = () => {
+      const cur = dragRef.current;
+      setDrag(null);
+      if (!cur) return;
+      if (cur.kind === 'create') {
+        if (draggedRef.current) {
+          openCreate({ resourceId: cur.resourceId, startTime: fromMinutes(cur.anchorMin), durationMin: cur.targetEndMin - cur.anchorMin });
+        }
+        return;
+      }
+      if (!draggedRef.current || cur.conflict) return;
+      const rv = reservations.find((r) => r.id === cur.reservationId);
+      if (!rv) return;
+      if (cur.kind === 'move') {
+        if (cur.targetResourceId === cur.originResourceId && cur.targetStartMin === cur.originStartMin) return;
+        commitReschedule(rv, cur.targetResourceId, cur.targetStartMin, cur.targetStartMin + cur.durationMin, 'Déplacé');
+      } else {
+        if (cur.targetEndMin === cur.originEndMin) return;
+        commitReschedule(rv, cur.resourceId, cur.startMin, cur.targetEndMin, 'Étiré');
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag?.kind]);
 
   // Stats (sur les réservations affichées).
   let openMin = 0, bookedMin = 0, outstandingCents = 0;
@@ -508,9 +694,13 @@ export default function AdminPlanningPage() {
             </div>
 
             {/* une colonne par terrain */}
-            {resources.map((r) => (
-              <div key={r.id}
+            {resources.map((r) => {
+              const ghost = dragGhostFor(drag, r.id);
+              return (
+              <div key={r.id} data-resource-id={r.id}
+                onMouseDown={(e) => startCreateDrag(e, r.id)}
                 onClick={(e) => {
+                  if (draggedRef.current) { draggedRef.current = false; return; }
                   if ((e.target as HTMLElement).closest('button')) return; // ne crée pas si on clique une réservation
                   const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
                   const h = Math.floor((e.clientY - rect.top) / HOUR_H) + minOpen;
@@ -534,17 +724,22 @@ export default function AdminPlanningPage() {
                   const height = Math.max(((e - s) / 60) * HOUR_H - 4, 26);
                   const small = height < 46;
                   const pend = rv.status === 'PENDING';
+                  const cancelled = rv.status === 'CANCELLED';
+                  const dragging = drag?.kind === 'move' && drag.reservationId === rv.id;
                   const c = TYPE_META[rv.type].color;
                   const due = dueOf(rv);
                   const dots = paymentDots(rv, playersOf(rv), due);
                   return (
-                    <button key={rv.id} type="button" onClick={() => openRes(rv)}
+                    <button key={rv.id} type="button"
+                      onMouseDown={(evt) => startBlockDrag(evt, rv, 'move', s, e)}
+                      onClick={() => { if (draggedRef.current) { draggedRef.current = false; return; } openRes(rv); }}
                       title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}${dots ? ` · payé ${fmtEuros(toCents(rv.paidAmount))} / ${fmtEuros(due)}` : ''}`}
                       style={{
                         position: 'absolute', top: top + 2, left: 3, right: 3, height, boxSizing: 'border-box',
-                        borderRadius: 9, padding: small ? '3px 8px' : '5px 8px', overflow: 'hidden', zIndex: 2, textAlign: 'left', cursor: 'pointer',
+                        borderRadius: 9, padding: small ? '3px 8px' : '5px 8px', overflow: 'hidden', zIndex: 2, textAlign: 'left',
+                        cursor: cancelled ? 'pointer' : 'grab',
                         background: tint(c), boxShadow: `inset 3px 0 0 ${c}`,
-                        border: pend ? `1px dashed ${c}` : '1px solid transparent', opacity: pend ? 0.85 : 1,
+                        border: pend ? `1px dashed ${c}` : '1px solid transparent', opacity: dragging ? 0.3 : (pend ? 0.85 : 1),
                         display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: 2,
                       }}>
                       <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text, lineHeight: 1.15, display: '-webkit-box', WebkitLineClamp: small ? 1 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{labelOf(rv)}</span>
@@ -556,11 +751,32 @@ export default function AdminPlanningPage() {
                       {rv.hasCardFingerprint && (
                         <span title="Empreinte bancaire enregistrée" style={{ fontSize: 11, position: 'absolute', right: small ? 5 : 8, top: small ? 2 : 4 }}>💳</span>
                       )}
+                      {!cancelled && !pend && (
+                        <div aria-label="Étirer la durée"
+                          onMouseDown={(evt) => { evt.stopPropagation(); startBlockDrag(evt, rv, 'resize', s, e); }}
+                          onClick={(evt) => evt.stopPropagation()}
+                          style={{ position: 'absolute', left: '25%', right: '25%', bottom: -3, height: 8, cursor: 'ns-resize' }} />
+                      )}
                     </button>
                   );
                 })}
+                {ghost && (
+                  <div style={{
+                    position: 'absolute', zIndex: 3, pointerEvents: 'none', borderRadius: 9,
+                    top: ((ghost.startMin - minOpen * 60) / 60) * HOUR_H + 2, left: 3, right: 3,
+                    height: Math.max(((ghost.endMin - ghost.startMin) / 60) * HOUR_H - 4, 20),
+                    background: ghost.conflict ? 'rgba(224,90,78,0.16)' : `${th.accent}26`,
+                    boxShadow: `inset 0 0 0 2px ${ghost.conflict ? '#e05a4e' : th.accent}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontFamily: th.fontMono, fontSize: 11, fontWeight: 800, color: ghost.conflict ? '#e05a4e' : th.accent }}>
+                      {fromMinutes(ghost.startMin)}–{fromMinutes(ghost.endMin)}
+                    </span>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             {/* barre d'heure courante */}
             {nowVisible && (
@@ -860,6 +1076,14 @@ export default function AdminPlanningPage() {
             </div>
           </div>
         </>
+      )}
+
+      {toast && (
+        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 55, width: 'min(360px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, background: th.text, color: th.bg, borderRadius: 12, padding: '11px 16px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, boxShadow: th.shadow }}>
+          <span style={{ flex: 1 }}>✓ {toast.label}</span>
+          <button type="button" onClick={undoReschedule}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, padding: 0 }}>Annuler</button>
+        </div>
       )}
 
       <CreateEventModal

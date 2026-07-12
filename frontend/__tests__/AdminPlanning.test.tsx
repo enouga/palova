@@ -25,6 +25,7 @@ jest.mock('../lib/api', () => ({
     adminChangeReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminCreateReservation: jest.fn().mockResolvedValue({ id: 'new-1' }),
+    adminRescheduleReservation: jest.fn().mockResolvedValue({ id: 'rv-1' }),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -206,4 +207,98 @@ it('bouton « Ajouter » → modale Studio préremplie → adminCreateReservatio
   await waitFor(() => expect(api.adminCreateReservation).toHaveBeenCalledWith(
     'club-1', expect.objectContaining({ resourceId: 'court-1', type: 'COURT' }), 'tok',
   ));
+});
+
+// HOUR_H = 68px : 17px = 15 min pile, 68px = 60 min pile. jsdom renvoie des rects à zéro par
+// défaut (top:0), donc clientY se lit directement comme un décalage en px depuis le haut de
+// la grille — pas besoin de mocker getBoundingClientRect.
+describe('drag & drop de la grille', () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  beforeEach(() => {
+    // jsdom n'implémente pas elementFromPoint par défaut ; repli neutre, écrasé par test si besoin.
+    (document as any).elementFromPoint = jest.fn(() => null);
+  });
+
+  it('créer en glissant sur une case vide ouvre la modale préremplie (début + durée dessinés)', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([]));
+    const { container } = render(<ThemeProvider><AdminPlanningPage /></ThemeProvider>);
+    const col = await waitFor(() => {
+      const el = container.querySelector('[data-resource-id="court-1"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    // Ancre 17:00 (openHour=8 → 480min ; clientY=612 → +540min → 1020min = 17:00 pile).
+    fireEvent.mouseDown(col, { clientY: 612 });
+    fireEvent.mouseMove(window, { clientY: 612 + 68 }); // +60 min → fin 18:00
+    fireEvent.mouseUp(window);
+
+    expect(await screen.findByText("Nouvel événement")).toBeInTheDocument();
+    expect(screen.getByDisplayValue('17:00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('déplacer un bloc (même terrain) optimiste + adminRescheduleReservation + toast Annuler qui revert', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa({
+      startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', // 18:00–19:00 Paris (été)
+    })]));
+    const { container } = render(<ThemeProvider><AdminPlanningPage /></ThemeProvider>);
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    const col = container.querySelector('[data-resource-id="court-1"]') as HTMLElement;
+    (document as any).elementFromPoint = jest.fn(() => col);
+
+    fireEvent.mouseDown(block, { clientY: 300 });
+    fireEvent.mouseMove(window, { clientX: 0, clientY: 300 + 68 }); // +60 min
+    fireEvent.mouseUp(window);
+
+    await waitFor(() => expect(api.adminRescheduleReservation).toHaveBeenCalledWith(
+      'club-1', 'rv-1', { resourceId: 'court-1', date: today, startTime: '19:00', endTime: '20:00' }, 'tok',
+    ));
+    expect(await screen.findByRole('button', { name: 'Annuler' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await waitFor(() => expect(api.adminRescheduleReservation).toHaveBeenLastCalledWith(
+      'club-1', 'rv-1', { resourceId: 'court-1', date: today, startTime: '18:00', endTime: '19:00' }, 'tok',
+    ));
+  });
+
+  it("étirer la poignée basse d'un bloc change la fin sans toucher au début", async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa({
+      startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z', // 18:00–19:00 Paris
+    })]));
+    const { container } = render(<ThemeProvider><AdminPlanningPage /></ThemeProvider>);
+    await screen.findByText('Jean Test');
+    const handle = container.querySelector('[aria-label="Étirer la durée"]') as HTMLElement;
+    expect(handle).not.toBeNull();
+
+    fireEvent.mouseDown(handle, { clientY: 300 });
+    fireEvent.mouseMove(window, { clientY: 300 + 34 }); // +30 min → fin 19:30
+    fireEvent.mouseUp(window);
+
+    await waitFor(() => expect(api.adminRescheduleReservation).toHaveBeenCalledWith(
+      'club-1', 'rv-1', { resourceId: 'court-1', date: today, startTime: '18:00', endTime: '19:30' }, 'tok',
+    ));
+  });
+
+  it('un déplacement sur un créneau déjà occupé (conflit) est ignoré (pas d\'appel API)', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+      twoPlayerResa({ id: 'rv-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z' }), // 18:00–19:00
+      twoPlayerResa({ id: 'rv-2', startTime: '2099-06-22T17:00:00.000Z', endTime: '2099-06-22T18:00:00.000Z', user: { id: 'u9', firstName: 'Marie', lastName: 'Roy', email: 'm@x.fr' } }), // 19:00–20:00
+    ]));
+    const { container } = render(<ThemeProvider><AdminPlanningPage /></ThemeProvider>);
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    const col = container.querySelector('[data-resource-id="court-1"]') as HTMLElement;
+    (document as any).elementFromPoint = jest.fn(() => col);
+
+    fireEvent.mouseDown(block, { clientY: 300 });
+    fireEvent.mouseMove(window, { clientY: 300 + 68 }); // viserait 19:00–20:00 → chevauche rv-2
+    fireEvent.mouseUp(window);
+
+    expect(api.adminRescheduleReservation).not.toHaveBeenCalled();
+  });
 });
