@@ -100,3 +100,41 @@ describe('PATCH /api/clubs/:clubId/admin/reservations/:id/member', () => {
     expect(res.body.error).toBe('MEMBER_NOT_FOUND');
   });
 });
+
+describe('PATCH /api/clubs/:clubId/admin/reservations/:id/schedule', () => {
+  const surl = `${url}/res-1/schedule`;
+  const scheduleBody = { resourceId: 'court-2', date: '2026-06-16', startTime: '18:00', endTime: '19:30' };
+
+  it('200 déplace la réservation', async () => {
+    asMember();
+    const spy = jest.spyOn(ReservationService.prototype, 'adminRescheduleReservation')
+      .mockResolvedValue({ id: 'res-1', resourceId: 'court-2' } as any);
+    const res = await request(app).patch(surl).set('Authorization', `Bearer ${token}`).send(scheduleBody);
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('res-1');
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      clubId: 'club-demo', reservationId: 'res-1', resourceId: 'court-2', date: '2026-06-16', startTime: '18:00', endTime: '19:30',
+    }));
+    spy.mockRestore();
+  });
+
+  it('400 si resourceId manquant', async () => {
+    asMember();
+    const res = await request(app).patch(surl).set('Authorization', `Bearer ${token}`).send({ ...scheduleBody, resourceId: undefined });
+    expect(res.status).toBe(400);
+  });
+
+  it('409 SLOT_NOT_AVAILABLE si le créneau cible est pris', async () => {
+    asMember();
+    jest.spyOn(ReservationService.prototype, 'adminRescheduleReservation').mockRejectedValue(new Error('SLOT_NOT_AVAILABLE'));
+    const res = await request(app).patch(surl).set('Authorization', `Bearer ${token}`).send(scheduleBody);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('SLOT_NOT_AVAILABLE');
+  });
+
+  it('403 si l utilisateur n est pas membre du club', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    const res = await request(app).patch(surl).set('Authorization', `Bearer ${token}`).send(scheduleBody);
+    expect(res.status).toBe(403);
+  });
+});

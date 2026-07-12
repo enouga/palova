@@ -417,6 +417,9 @@ export const api = {
   adminCreateReservation: (clubId: string, body: CreateReservationBody, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  adminRescheduleReservation: (clubId: string, reservationId: string, body: RescheduleReservationBody, token: string) =>
+    request<Reservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/schedule`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+
   adminAddPayment: (clubId: string, reservationId: string, body: AddPaymentBody, token: string) =>
     request<Payment>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/payments`, { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -1695,6 +1698,13 @@ export interface CreateReservationBody {
   price?: number;
   // Cours (Lot 2) — paramètres optionnels si type=COACHING
   lessonParams?: { coachId: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; allowSelfEnroll: boolean };
+}
+
+export interface RescheduleReservationBody {
+  resourceId: string;
+  date: string;       // YYYY-MM-DD
+  startTime: string;  // HH:mm
+  endTime: string;    // HH:mm
 }
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'CHEQUE' | 'CLUB' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER' | 'SUBSCRIPTION';

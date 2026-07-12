@@ -25,12 +25,14 @@ const mockNotifyAssigned = jest.fn();
 const mockNotifyRefunded = jest.fn();
 const mockNotifyCancelled = jest.fn();
 const mockNotifyActivityCancelled = jest.fn();
+const mockNotifyRescheduled = jest.fn();
 jest.mock('../../email/notifications', () => ({
   notifyMatchPartnersInvited: (...a: unknown[]) => mockNotifyPartners(...a),
   notifyReservationMemberAssigned: (...a: unknown[]) => mockNotifyAssigned(...a),
   notifyReservationRefunded: (...a: unknown[]) => mockNotifyRefunded(...a),
   notifyReservationCancelled: (...a: unknown[]) => mockNotifyCancelled(...a),
   notifyActivityCancelledByClub: (...a: unknown[]) => mockNotifyActivityCancelled(...a),
+  notifyReservationRescheduled: (...a: unknown[]) => mockNotifyRescheduled(...a),
 }));
 
 const sseBroadcast = () => mockBroadcast;
@@ -46,6 +48,7 @@ describe('ReservationService', () => {
     mockNotifyRefunded.mockReset().mockResolvedValue(undefined);
     mockNotifyCancelled.mockReset().mockResolvedValue(undefined);
     mockNotifyActivityCancelled.mockReset().mockResolvedValue(undefined);
+    mockNotifyRescheduled.mockReset().mockResolvedValue(undefined);
   });
 
   const baseParams = {
@@ -550,6 +553,111 @@ describe('ReservationService', () => {
     it('lève VALIDATION_ERROR si début == fin', async () => {
       mockResource();
       await expect(service.adminCreateReservation({ ...base, startTime: '18:00', endTime: '18:00' })).rejects.toThrow('VALIDATION_ERROR');
+    });
+  });
+
+  describe('adminRescheduleReservation', () => {
+    const reschedule = {
+      clubId: 'club-demo', reservationId: 'res-1', resourceId: 'court-2',
+      date: '2026-06-16', startTime: '18:00', endTime: '19:30',
+    };
+    const existing = () => ({
+      id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED',
+      startTime: new Date('2026-06-15T16:00:00.000Z'), endTime: new Date('2026-06-15T17:00:00.000Z'),
+      resource: { clubId: 'club-demo' },
+    });
+    const mockTarget = () => prismaMock.resource.findUnique.mockResolvedValue(
+      { clubId: 'club-demo', club: { timezone: 'Europe/Paris' } } as any);
+
+    it('déplace la résa (nouveau terrain + horaire) et diffuse released (ancien) + confirmed (nouveau)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-2',
+        startTime: new Date('2026-06-16T16:00:00.000Z'), endTime: new Date('2026-06-16T17:30:00.000Z'),
+      } as any);
+
+      const res = await service.adminRescheduleReservation(reschedule);
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'res-1' },
+        data: expect.objectContaining({ resourceId: 'court-2' }),
+      }));
+      expect(sseBroadcast()).toHaveBeenCalledWith('court-1', expect.objectContaining({ type: 'slot_released', reservationId: 'res-1' }));
+      expect(sseBroadcast()).toHaveBeenCalledWith('court-2', expect.objectContaining({ type: 'slot_confirmed', reservationId: 'res-1' }));
+      expect(mockNotifyRescheduled).toHaveBeenCalledWith('res-1');
+      expect(res.resourceId).toBe('court-2');
+    });
+
+    it('le conflit exclut la résa elle-même (déplacer sur son propre créneau fonctionne)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-2', startTime: new Date(), endTime: new Date() } as any);
+
+      await service.adminRescheduleReservation(reschedule);
+
+      expect(prismaMock.reservation.count).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: { not: 'res-1' } }),
+      }));
+    });
+
+    it('lève SLOT_NOT_AVAILABLE si une AUTRE résa occupe la cible', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(1 as any);
+
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('SLOT_NOT_AVAILABLE');
+      expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('lève RESERVATION_NOT_FOUND si la résa n existe pas', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(null as any);
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('RESERVATION_NOT_FOUND');
+    });
+
+    it('lève CLUB_MISMATCH si la résa est d un autre club', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...existing(), resource: { clubId: 'autre-club' } } as any);
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('CLUB_MISMATCH');
+    });
+
+    it('lève ALREADY_CANCELLED si la résa est déjà annulée', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({ ...existing(), status: 'CANCELLED' } as any);
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('ALREADY_CANCELLED');
+    });
+
+    it('lève RESOURCE_NOT_FOUND si le terrain cible n existe pas', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      prismaMock.resource.findUnique.mockResolvedValue(null as any);
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('RESOURCE_NOT_FOUND');
+    });
+
+    it('lève CLUB_MISMATCH si le terrain cible est d un autre club', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'autre-club', club: { timezone: 'Europe/Paris' } } as any);
+      await expect(service.adminRescheduleReservation(reschedule)).rejects.toThrow('CLUB_MISMATCH');
+    });
+
+    it('lève VALIDATION_ERROR si fin <= début', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      await expect(service.adminRescheduleReservation({ ...reschedule, startTime: '19:00', endTime: '18:00' })).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it("un échec de l'email de notification n'empêche pas le déplacement (best-effort)", async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: 'res-1', resourceId: 'court-2', startTime: new Date(), endTime: new Date() } as any);
+      mockNotifyRescheduled.mockRejectedValue(new Error('smtp down'));
+
+      const res = await service.adminRescheduleReservation(reschedule);
+      expect(res.id).toBe('res-1');
     });
   });
 

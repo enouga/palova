@@ -11,7 +11,7 @@ import { PackageService } from './package.service';
 import { SubscriptionService } from './subscription.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
 import { playerCount } from '../utils/courtType';
-import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed } from '../email/notifications';
+import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed, notifyReservationRescheduled } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
@@ -921,6 +921,91 @@ export class ReservationService {
     });
 
     return created;
+  }
+
+  /**
+   * Déplacement (horaire et/ou terrain) d'une résa par un gestionnaire — mêmes garanties que
+   * `adminCreateReservation` (transaction Serializable, conflits CONFIRMED + PENDING < 10 min),
+   * la résa elle-même étant exclue du comptage de conflit. Prix/paiements/participants
+   * inchangés. SSE `slot_released` sur l'ancien créneau + `slot_confirmed` sur le nouveau ;
+   * notification best-effort aux joueurs de la résa.
+   */
+  async adminRescheduleReservation(params: {
+    clubId: string;
+    reservationId: string;
+    resourceId: string;
+    date: string;       // YYYY-MM-DD (heure locale du club)
+    startTime: string;  // HH:mm
+    endTime: string;    // HH:mm
+  }) {
+    const { clubId, reservationId, resourceId, date, startTime, endTime } = params;
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      select: { id: true, resourceId: true, startTime: true, endTime: true, status: true, resource: { select: { clubId: true } } },
+    });
+    if (!reservation)                            throw new Error('RESERVATION_NOT_FOUND');
+    if (reservation.resource.clubId !== clubId)  throw new Error('CLUB_MISMATCH');
+    if (reservation.status === 'CANCELLED')      throw new Error('ALREADY_CANCELLED');
+
+    const target = await prisma.resource.findUnique({
+      where: { id: resourceId },
+      select: { clubId: true, club: { select: { timezone: true } } },
+    });
+    if (!target)                  throw new Error('RESOURCE_NOT_FOUND');
+    if (target.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const tz = target.club.timezone;
+    const start = DateTime.fromISO(`${date}T${startTime}`, { zone: tz });
+    const end   = DateTime.fromISO(`${date}T${endTime}`,   { zone: tz });
+    if (!start.isValid || !end.isValid || end <= start) throw new Error('VALIDATION_ERROR');
+
+    const startUtc = start.toUTC().toJSDate();
+    const endUtc   = end.toUTC().toJSDate();
+    const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const conflicts = await tx.reservation.count({
+        where: {
+          id: { not: reservationId },
+          resourceId,
+          OR: [
+            { status: 'CONFIRMED' },
+            { status: 'PENDING', createdAt: { gt: holdExpiryCutoff } },
+          ],
+          startTime: { lt: endUtc },
+          endTime:   { gt: startUtc },
+        },
+      });
+      if (conflicts > 0) throw new Error('SLOT_NOT_AVAILABLE');
+
+      return tx.reservation.update({
+        where: { id: reservationId },
+        data: { resourceId, startTime: startUtc, endTime: endUtc },
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 10_000,
+    });
+
+    SSEService.getInstance().broadcast(reservation.resourceId, {
+      type: 'slot_released',
+      resourceId: reservation.resourceId,
+      reservationId: updated.id,
+      startTime: reservation.startTime.toISOString(),
+      endTime: reservation.endTime.toISOString(),
+    });
+    SSEService.getInstance().broadcast(resourceId, {
+      type: 'slot_confirmed',
+      resourceId,
+      reservationId: updated.id,
+      startTime: updated.startTime.toISOString(),
+      endTime: updated.endTime.toISOString(),
+    });
+
+    await this.safeNotify(() => notifyReservationRescheduled(updated.id));
+
+    return updated;
   }
 
   /**

@@ -445,6 +445,24 @@ router.patch('/reservations/:id', async (req: ClubScopedRequest, res: Response, 
   } catch (err) { handleError(err, res, next); }
 });
 
+// Déplace une réservation (nouveau terrain et/ou horaire) — planning admin (drag & drop, modale).
+router.patch('/reservations/:id/schedule', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { resourceId, date, startTime, endTime } = req.body;
+    if (typeof resourceId !== 'string' || !resourceId)  return void res.status(400).json({ error: 'resourceId requis' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(asString(date)))    return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
+    if (!/^\d{2}:\d{2}$/.test(asString(startTime)) || !/^\d{2}:\d{2}$/.test(asString(endTime))) {
+      return void res.status(400).json({ error: 'heures HH:mm requises' });
+    }
+    const updated = await reservationService.adminRescheduleReservation({
+      clubId: req.membership!.clubId,
+      reservationId: asString(req.params.id),
+      resourceId, date, startTime, endTime,
+    });
+    res.json(updated);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // (Ré)affecte le joueur d'une réservation (associer un joueur à l'encaissement).
 router.patch('/reservations/:id/member', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
