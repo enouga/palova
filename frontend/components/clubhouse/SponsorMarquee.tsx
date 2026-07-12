@@ -7,8 +7,9 @@ import { deadlineCountdown } from '@/lib/tournament';
 import { ACCENTS } from '@/lib/theme';
 import { SectionHeader } from '@/components/clubhouse/SectionHeader';
 
-// Rivière des partenaires : cartes riches défilantes (logo + nom + offre + code),
-// boucle CSS pure avec pause au survol ; statique si ≤ 2 sponsors ou reduced-motion.
+// Rivière des partenaires : le logo est la carte (tuile blanche XL), nom +
+// offre dessous ; boucle CSS pure avec pause au survol, statique si ≤ 2
+// sponsors ou reduced-motion.
 export function SponsorMarquee({ sponsors, now = null }: { sponsors: Sponsor[]; now?: Date | null }) {
   const { th } = useTheme();
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -24,35 +25,43 @@ export function SponsorMarquee({ sponsors, now = null }: { sponsors: Sponsor[]; 
   const card = (s: Sponsor, i: number) => {
     const active = offerIsActive(s, ref);
     const expiry = active && s.offerUntil && now ? deadlineCountdown(s.offerUntil, now) : null;
-    const inner = (
-      <>
+    const tile = (
+      <div style={{ width: 150, height: 84, borderRadius: 12, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 1px 4px rgba(20,40,80,.14)`, padding: 10 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={assetUrl(s.logoUrl) ?? ''} alt={s.name} style={{ width: 46, height: 46, borderRadius: 11, objectFit: 'contain', background: '#fff', padding: 4, flexShrink: 0 }} />
-        <span style={{ minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13, fontWeight: 800, color: th.text, whiteSpace: 'nowrap' }}>{s.name}</span>
-          {active && s.offerText && (
-            <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute, whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.offerText}</span>
-          )}
-          {expiry?.urgent && (
-            <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: ACCENTS.coral }}>{expiry.text}</span>
-          )}
-        </span>
-      </>
+        <img src={assetUrl(s.logoUrl) ?? ''} alt={s.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+      </div>
+    );
+    const name = (
+      <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: th.text, textAlign: 'center' }}>
+        {s.name}
+      </div>
     );
     return (
-      <span key={`${s.id}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, background: th.surface, borderRadius: 14, padding: '10px 14px', boxShadow: `inset 0 0 0 1px ${th.line}`, flexShrink: 0 }}>
+      <div key={`${s.id}-${i}`} style={{ width: 150, flexShrink: 0, textAlign: 'center' }}>
         {s.linkUrl
-          ? <a href={s.linkUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>{inner}</a>
-          : <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{inner}</span>}
-        {active && s.offerCode && (
-          <button onClick={() => copy(s)} aria-label={`Copier le code ${s.offerCode}`} style={{
-            border: 'none', cursor: 'pointer', fontFamily: th.fontMono, fontSize: 11, fontWeight: 700,
-            color: th.accent, background: `${th.accent}1c`, borderRadius: 8, padding: '4px 8px',
-          }}>
-            {copiedId === s.id ? '✓ Copié' : s.offerCode}
-          </button>
+          ? <a href={s.linkUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'block' }}>{tile}{name}</a>
+          : <>{tile}{name}</>}
+        {active && (s.offerText || s.offerCode) && (
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {s.offerText && (
+              <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, color: th.accent, background: `${th.accent}1c`, borderRadius: 7, padding: '3px 8px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.offerText}
+              </span>
+            )}
+            {s.offerCode && (
+              <button onClick={() => copy(s)} aria-label={`Copier le code ${s.offerCode}`} style={{
+                border: 'none', cursor: 'pointer', fontFamily: th.fontMono, fontSize: 11, fontWeight: 700,
+                color: '#fff', background: th.text, borderRadius: 7, padding: '3px 8px',
+              }}>
+                {copiedId === s.id ? '✓ Copié' : s.offerCode}
+              </button>
+            )}
+            {expiry?.urgent && (
+              <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: ACCENTS.coral }}>{expiry.text}</span>
+            )}
+          </div>
         )}
-      </span>
+      </div>
     );
   };
 
@@ -66,8 +75,8 @@ export function SponsorMarquee({ sponsors, now = null }: { sponsors: Sponsor[]; 
         .sp-marquee::before, .sp-marquee::after { content: ''; position: absolute; top: 0; bottom: 0; width: 32px; z-index: 2; pointer-events: none; }
         .sp-marquee::before { left: 0; background: linear-gradient(90deg, ${th.bg}, transparent); }
         .sp-marquee::after { right: 0; background: linear-gradient(-90deg, ${th.bg}, transparent); }
-        .sp-track { display: flex; gap: 12px; width: max-content; padding: 2px 20px; }
-        .sp-track[data-scrolling='true'] { animation: sp-slide ${Math.max(18, sponsors.length * 6)}s linear infinite; }
+        .sp-track { display: flex; gap: 16px; width: max-content; padding: 2px 20px; align-items: flex-start; }
+        .sp-track[data-scrolling='true'] { animation: sp-slide ${Math.max(22, sponsors.length * 8)}s linear infinite; }
         .sp-track[data-scrolling='true']:hover { animation-play-state: paused; }
         @keyframes sp-slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @media (prefers-reduced-motion: reduce) {
