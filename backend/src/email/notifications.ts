@@ -12,6 +12,12 @@ import { SSEService } from '../services/sse.service';
 
 const ratingService = new RatingService();
 
+/** Select club partagé par tous les emails (identité + coordonnées du pied de page). */
+const EMAIL_CLUB_SELECT = {
+  id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true,
+  address: true, city: true, contactPhone: true, contactEmail: true,
+} as const;
+
 /** Libellé français d'une fourchette de niveau (0–8) pour l'email « partie à ton niveau ». */
 function levelRangeLabel(min: number | null, max: number | null): string {
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
@@ -135,7 +141,7 @@ function playerNotifContent(
 
 const tournamentInclude = {
   tournament: {
-    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: EMAIL_CLUB_SELECT } },
   },
   captain: { select: { id: true, email: true, firstName: true, lastName: true } },
   partner: { select: { id: true, email: true, firstName: true, lastName: true } },
@@ -244,7 +250,7 @@ export async function notifyTournamentPromotion(registrationId: string): Promise
 
 const eventInclude = {
   event: {
-    include: { club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+    include: { club: { select: EMAIL_CLUB_SELECT } },
   },
   user: { select: { id: true, email: true, firstName: true, lastName: true } },
 } as const;
@@ -351,7 +357,7 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
       resource: {
         select: {
           name: true, attributes: true,
-          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          club: { select: EMAIL_CLUB_SELECT },
         },
       },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
@@ -395,7 +401,7 @@ export async function notifyOpenMatchChatMessage(reservationId: string, messageI
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } },
       participants: { select: { userId: true } },
       openMatchMessages: { where: { id: messageId }, select: { id: true, body: true, user: { select: { firstName: true, lastName: true } } } },
     },
@@ -465,7 +471,7 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
       resource: {
         select: {
           name: true, attributes: true,
-          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          club: { select: EMAIL_CLUB_SELECT },
           clubSport: { select: { sport: { select: { key: true } } } },
         },
       },
@@ -540,7 +546,7 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
@@ -578,7 +584,7 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
 export async function notifyOpenMatchRemoved(reservationId: string, removedUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+    include: { resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } } },
   });
   if (!resa) return;
   const member = await prisma.user.findUnique({ where: { id: removedUserId }, select: { firstName: true, email: true } });
@@ -606,7 +612,7 @@ export async function notifyOpenMatchAdded(reservationId: string, addedUserId: s
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
@@ -640,7 +646,7 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
-      resource: { select: { name: true, attributes: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, attributes: true, club: { select: EMAIL_CLUB_SELECT } } },
       participants: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
     },
   });
@@ -675,7 +681,7 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
 export async function notifyReservationMemberAssigned(reservationId: string, memberUserId: string): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } } },
+    include: { resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } } },
   });
   if (!resa) return;
   const member = await prisma.user.findUnique({ where: { id: memberUserId }, select: { firstName: true, email: true } });
@@ -715,7 +721,7 @@ export async function notifyReservationRefunded(
     where: { id: reservationId },
     include: {
       user: { select: { id: true, firstName: true, email: true } },
-      resource: { select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } } },
+      resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } },
     },
   });
   if (!resa?.user?.email) return;
@@ -762,13 +768,13 @@ async function loadLessonEnrollment(enrollmentId: string) {
         include: {
           coach: { select: { name: true } },
           reservation: { select: { startTime: true, endTime: true } },
-          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          club: { select: EMAIL_CLUB_SELECT },
         },
       },
       series: {
         include: {
           coach: { select: { name: true } },
-          club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+          club: { select: EMAIL_CLUB_SELECT },
         },
       },
       user: { select: { id: true, email: true, firstName: true, lastName: true } },
@@ -911,7 +917,7 @@ export async function notifyNewMatchComment(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      club: { select: EMAIL_CLUB_SELECT },
       players: { include: { user: { select: { id: true, email: true, firstName: true } } } },
     },
   });
@@ -988,7 +994,7 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+      club: { select: EMAIL_CLUB_SELECT },
       creator: { select: { firstName: true, lastName: true } },
       players: { select: { userId: true, user: { select: { email: true, firstName: true } } } },
     },
@@ -1074,7 +1080,7 @@ export async function notifyReservationCancelled(reservationId: string, actorUse
     where: { id: reservationId },
     include: {
       resource: {
-        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+        select: { name: true, club: { select: EMAIL_CLUB_SELECT } },
       },
       participants: { include: { user: { select: { id: true, firstName: true } } } },
     },
@@ -1102,7 +1108,7 @@ export async function notifyReservationRescheduled(reservationId: string, actorU
     where: { id: reservationId },
     include: {
       resource: {
-        select: { name: true, club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } } },
+        select: { name: true, club: { select: EMAIL_CLUB_SELECT } },
       },
       participants: { include: { user: { select: { id: true, firstName: true } } } },
     },
@@ -1133,7 +1139,7 @@ export async function notifyActivityCancelledByClub(
     const tournament = await prisma.tournament.findUnique({
       where: { id: activityId },
       include: {
-        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        club: { select: EMAIL_CLUB_SELECT },
         registrations: {
           where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
           include: {
@@ -1179,7 +1185,7 @@ export async function notifyActivityCancelledByClub(
     const event = await prisma.clubEvent.findUnique({
       where: { id: activityId },
       include: {
-        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        club: { select: EMAIL_CLUB_SELECT },
         registrations: {
           where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
           include: { user: { select: { id: true, email: true, firstName: true } } },
@@ -1219,7 +1225,7 @@ export async function notifyActivityCancelledByClub(
     const lesson = await prisma.lesson.findUnique({
       where: { id: activityId },
       include: {
-        club: { select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true } },
+        club: { select: EMAIL_CLUB_SELECT },
         coach: { select: { name: true } },
         reservation: { select: { startTime: true, endTime: true } },
         enrollments: {
@@ -1393,7 +1399,7 @@ export async function notifyDirectMessage(conversationId: string, messageId: str
   if (!already && conv.clubId && recipient.email) {
     const club = await prisma.club.findUnique({
       where: { id: conv.clubId },
-      select: { id: true, name: true, slug: true, logoUrl: true, accentColor: true },
+      select: EMAIL_CLUB_SELECT,
     });
     if (club) {
       const override = await emailTemplates.getOverride(club.id, 'dm.message');

@@ -13,6 +13,7 @@ export const OGCARDS_DIR = path.join(UPLOADS_DIR, 'ogcards'); // cache des carte
 export const ANNOUNCEMENTS_DIR = path.join(UPLOADS_DIR, 'announcements'); // affiches d'annonces
 export const CLUB_PHOTOS_DIR = path.join(UPLOADS_DIR, 'club-photos'); // galerie de présentation des clubs
 export const OFFERS_DIR = path.join(UPLOADS_DIR, 'offers'); // affiches d'offres prépayées / abonnements
+export const EMAIL_IMAGES_DIR = path.join(UPLOADS_DIR, 'email-images'); // images insérées dans les emails personnalisés
 
 // Racine des fichiers PRIVÉS (photos de messagerie) — JAMAIS servie statiquement :
 // streaming via une route authentifiée uniquement. Volume Docker dédié en prod.
@@ -29,6 +30,7 @@ export function ensureUploadDirs(): void {
   fs.mkdirSync(ANNOUNCEMENTS_DIR, { recursive: true });
   fs.mkdirSync(CLUB_PHOTOS_DIR, { recursive: true });
   fs.mkdirSync(OFFERS_DIR, { recursive: true });
+  fs.mkdirSync(EMAIL_IMAGES_DIR, { recursive: true });
   fs.mkdirSync(DM_DIR, { recursive: true });
 }
 

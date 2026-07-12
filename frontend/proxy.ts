@@ -70,5 +70,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  // Exclut les fichiers statiques (extension connue en fin de chemin) — ⚠️ pas « tout chemin
+  // contenant un point » : ça excluait à tort des segments dynamiques comme les types d'email
+  // (`registration.confirmed`), qui perdaient x-club-slug et restaient bloqués sur « Chargement… ».
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:ico|png|jpe?g|gif|svg|webp|css|js|json|woff2?|ttf|map|txt|xml|webmanifest)$).*)',
+  ],
 };

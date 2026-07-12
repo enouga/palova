@@ -6,7 +6,7 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, OFFERS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, OFFERS_DIR, EMAIL_IMAGES_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -1173,22 +1173,22 @@ router.get('/broadcasts', requireClubMember('ADMIN'), async (req: ClubScopedRequ
   } catch (err) { handleError(err, res, next); }
 });
 
-// --- Emails automatiques personnalisables (OWNER/ADMIN) ---
+// --- Emails automatiques personnalisables (STAFF et +) ---
 
-router.get('/emails', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/emails', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const items = await emailTemplateService.listForAdmin(req.membership!.clubId);
     res.json({ items });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/emails/:type', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     res.json(await emailTemplateService.getForAdmin(req.membership!.clubId, asString(req.params.type)));
   } catch (err) { handleError(err, res, next); }
 });
 
-router.put('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.put('/emails/:type', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
     const result = await emailTemplateService.upsert(req.membership!.clubId, asString(req.params.type), {
@@ -1198,14 +1198,14 @@ router.put('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRe
   } catch (err) { handleError(err, res, next); }
 });
 
-router.delete('/emails/:type', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.delete('/emails/:type', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     await emailTemplateService.remove(req.membership!.clubId, asString(req.params.type));
     res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/emails/:type/preview', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/emails/:type/preview', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
     res.json(await emailTemplateService.renderPreview(req.membership!.clubId, asString(req.params.type), {
@@ -1214,7 +1214,7 @@ router.post('/emails/:type/preview', requireClubMember('ADMIN'), async (req: Clu
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/emails/:type/test', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/emails/:type/test', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { subject, heading, bodyHtml, ctaLabel, footerNote } = req.body;
     const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { email: true } });
@@ -1224,6 +1224,29 @@ router.post('/emails/:type/test', requireClubMember('ADMIN'), async (req: ClubSc
     }, me.email);
     res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
+});
+
+const emailImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Image insérée dans le corps d'un email personnalisé (JPEG/PNG/WebP, 5 Mo max) → { url }.
+router.post('/emails/images', requireClubMember('STAFF'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  emailImageUpload.single('image')(req, res, async (err: unknown) => {
+    try {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return void res.status(400).json({ error: 'Image trop lourde (5 Mo max)' });
+        }
+        return next(err as Error);
+      }
+      const file = req.file;
+      const ext = file && EXT_BY_MIME[file.mimetype];
+      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      ensureUploadDirs();
+      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
+      await fs.promises.writeFile(path.join(EMAIL_IMAGES_DIR, filename), file.buffer);
+      res.json({ url: `/uploads/email-images/${filename}` });
+    } catch (e) { handleError(e, res, next); }
+  });
 });
 
 // --- Page club (présentation + galerie) — réservé ADMIN/OWNER ---

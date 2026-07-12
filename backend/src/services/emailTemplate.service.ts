@@ -74,7 +74,7 @@ export class EmailTemplateService {
     const heading = (draft.heading ?? '').trim();
     const bodyRaw = (draft.bodyHtml ?? '').trim();
     if (!subject || !heading || !bodyRaw) throw new Error('VALIDATION_ERROR');
-    if (subject.length > 200 || heading.length > 200 || bodyRaw.length > 10000) throw new Error('VALIDATION_ERROR');
+    if (subject.length > 200 || heading.length > 200 || bodyRaw.length > 20000) throw new Error('VALIDATION_ERROR');
 
     const bodyHtml = sanitizeBodyHtml(bodyRaw);
     const ctaLabel = (draft.ctaLabel ?? '').trim() || null;
@@ -95,7 +95,8 @@ export class EmailTemplateService {
 
   private async loadBrand(clubId: string): Promise<Brand> {
     const club = await prisma.club.findUniqueOrThrow({
-      where: { id: clubId }, select: { name: true, logoUrl: true, accentColor: true },
+      where: { id: clubId },
+      select: { name: true, slug: true, logoUrl: true, accentColor: true, address: true, city: true, contactPhone: true, contactEmail: true },
     });
     return brandFromClub(club);
   }

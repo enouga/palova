@@ -1002,6 +1002,19 @@ export const api = {
     request<{ subject: string; html: string }>(`/api/clubs/${clubId}/admin/emails/${type}/preview`, { method: 'POST', body: JSON.stringify(draft) }, token),
   adminTestEmail: (clubId: string, type: string, draft: EmailDraft, token: string) =>
     request<{ ok: true }>(`/api/clubs/${clubId}/admin/emails/${type}/test`, { method: 'POST', body: JSON.stringify(draft) }, token),
+  /** Upload d'une image insérée dans un email personnalisé : fetch dédié (FormData). */
+  adminUploadEmailImage: async (clubId: string, file: File, token: string): Promise<{ url: string }> => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/emails/images`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
 };
 
 // --- Types ---

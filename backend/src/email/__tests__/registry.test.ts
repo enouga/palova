@@ -2,6 +2,7 @@ import {
   substituteText,
   substituteHtml,
   sanitizeBodyHtml,
+  decorateBodyHtml,
   collectPlaceholders,
 } from '../registry';
 import { EMAIL_DEFS, sampleVars } from '../registry';
@@ -49,6 +50,31 @@ describe('sanitizeBodyHtml', () => {
   it('supprime les schémas de lien dangereux', () => {
     const out = sanitizeBodyHtml('<a href="javascript:alert(1)">x</a>');
     expect(out).not.toContain('javascript:');
+  });
+});
+
+describe('sanitizeBodyHtml — images', () => {
+  it('conserve les img /uploads et http(s), rejette les autres sources', () => {
+    expect(sanitizeBodyHtml('<img src="/uploads/email-images/a.png" alt="x">')).toContain('/uploads/email-images/a.png');
+    expect(sanitizeBodyHtml('<img src="https://exemple.fr/a.png">')).toContain('https://exemple.fr/a.png');
+    expect(sanitizeBodyHtml('<img src="javascript:alert(1)">')).not.toContain('<img');
+    expect(sanitizeBodyHtml('<img alt="sans src">')).not.toContain('<img');
+    expect(sanitizeBodyHtml('<img src="/etc/passwd">')).not.toContain('<img');
+  });
+});
+
+describe('decorateBodyHtml', () => {
+  it('absolutise les /uploads, style les images, colore les liens', () => {
+    const out = decorateBodyHtml('<p><img src="/uploads/email-images/a.png" alt="" /><a href="https://x.fr">x</a></p>', '#5e93da');
+    expect(out).toContain('/uploads/email-images/a.png');
+    expect(out).toMatch(/src="https?:\/\/[^"]+\/uploads\/email-images\/a\.png"/);
+    expect(out).toContain('max-width:100%');
+    expect(out).toContain('<a style="color:#5e93da;"');
+  });
+
+  it('style les blockquotes sans style', () => {
+    const out = decorateBodyHtml('<blockquote>citation</blockquote>', '#5e93da');
+    expect(out).toContain('border-left:3px solid');
   });
 });
 
@@ -155,11 +181,46 @@ describe('renderClubEmail', () => {
     expect(mail.text).not.toContain('Léa,Votre');
   });
 
-  it('ne nettoie PAS le corps par défaut (styles inline préservés)', () => {
+  it('renderClubEmail : une image uploadée dans un corps personnalisé arrive absolutisée et stylée', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, {
+      subject: 's', heading: 'h',
+      bodyHtml: '<p>ok</p><img src="/uploads/email-images/a.png" alt="affiche">',
+      ctaLabel: null, footerNote: null,
+    } as any);
+    expect(mail.html).toMatch(/src="https?:\/\/[^"]+\/uploads\/email-images\/a\.png"/);
+    expect(mail.html).toContain('max-width:100%');
+  });
+
+  it('ne nettoie PAS le corps par défaut (blockquote décoré, contenu préservé)', () => {
     const mail = renderClubEmail('match.disputed', {
       prenom: 'Marie', auteur: 'Éric', score: '6-4 / 6-3', extrait: 'Litige',
       lien: 'https://x.fr/m/1',
     }, brand, null);
-    expect(mail.html).toContain('background:#f4f4f5');
+    expect(mail.html).toContain('Éric');
+    expect(mail.html).toContain('Litige');
+    expect(mail.html).toContain('border-left:3px solid');
+  });
+});
+
+describe('brandFromClub — coordonnées & manageUrl', () => {
+  it('construit adresse jointe, téléphone, email et manageUrl depuis le slug', () => {
+    const b = brandFromClub({
+      name: 'Arena', logoUrl: null, accentColor: '#5e93da',
+      slug: 'arena', address: '12 rue du Padel', city: 'Paris',
+      contactPhone: '01 23 45 67 89', contactEmail: 'c@arena.fr',
+    });
+    expect(b.address).toBe('12 rue du Padel, Paris');
+    expect(b.phone).toBe('01 23 45 67 89');
+    expect(b.email).toBe('c@arena.fr');
+    expect(b.manageUrl).toContain('arena');
+    expect(b.manageUrl).toContain('/me/profile');
+  });
+
+  it('champs absents → null (jamais undefined dans le rendu)', () => {
+    const b = brandFromClub({ name: 'Arena', logoUrl: null, accentColor: '#5e93da' });
+    expect(b.address).toBeNull();
+    expect(b.phone).toBeNull();
+    expect(b.email).toBeNull();
+    expect(b.manageUrl).toBeNull();
   });
 });
