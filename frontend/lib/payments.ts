@@ -12,6 +12,8 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   ONLINE: 'Carte en ligne',
   OTHER: 'Autre',
   VOUCHER: 'Ticket CE',
+  CHEQUE: 'Chèque',
+  CLUB: 'Au club',
   PACK_CREDIT: 'Carnet',
   WALLET: 'Porte-monnaie',
   MEMBER: 'Abonnement',

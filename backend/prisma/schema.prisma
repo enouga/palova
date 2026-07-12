@@ -44,7 +44,9 @@ enum PaymentMethod {
   TRANSFER
   ONLINE
   OTHER
-  VOUCHER      // ticket CE / chèque sport
+  VOUCHER      // ticket CE / chèque vacances / coupon sport ANCV (émetteur en réf.)
+  CHEQUE       // chèque papier
+  CLUB         // « Au club » : encaissement en un clic sans détail du moyen (option club payAtClubOnly)
   PACK_CREDIT  // consommation d'1 entrée d'un carnet
   WALLET       // débit du porte-monnaie €
   MEMBER       // couvert par l'abonnement du membre (pas de flux d'argent)
@@ -304,8 +306,11 @@ model Club {
   activeMemberCountAt DateTime? @map("active_member_count_at")
   billingExempt       Boolean   @default(false) @map("billing_exempt")     // club partenaire exonéré (superadmin)
   // Moyens d'encaissement rapides (boutons 1 clic au comptoir), choisis par le club.
-  // Sous-ensemble ordonné de PaymentMethod parmi CASH/CARD/VOUCHER/TRANSFER/MEMBER.
+  // Sous-ensemble ordonné de PaymentMethod parmi CASH/CARD/VOUCHER/CHEQUE/TRANSFER/MEMBER.
   quickPaymentMethods String[] @default(["CARD", "VOUCHER", "CASH"]) @map("quick_payment_methods")
+  // « Paiement au club » : encaissement en un clic — pas de choix de moyen, un seul bouton
+  // « Encaissé » qui enregistre un vrai paiement sous le moyen neutre CLUB (compte dans le CA).
+  payAtClubOnly       Boolean  @default(false) @map("pay_at_club_only")
   // Identité légale du club (marchand Stripe Connect distinct) : alimente les mentions
   // légales auto-générées et les modèles de CGV/confidentialité. Tous optionnels.
   legalEntityName     String? @map("legal_entity_name")     // raison sociale

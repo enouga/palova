@@ -1,4 +1,4 @@
-import { installState, isIosUa } from '../lib/install';
+import { installState, isIosUa, isAndroidUa } from '../lib/install';
 
 const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 const UA_IPAD_DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
@@ -11,6 +11,12 @@ describe('isIosUa', () => {
   it("Android n'est pas iOS", () => expect(isIosUa(UA_CHROME_ANDROID)).toBe(false));
 });
 
+describe('isAndroidUa', () => {
+  it('détecte Android', () => expect(isAndroidUa(UA_CHROME_ANDROID)).toBe(true));
+  it("un iPhone n'est pas Android", () => expect(isAndroidUa(UA_IPHONE)).toBe(false));
+  it("un desktop n'est pas Android", () => expect(isAndroidUa(UA_IPAD_DESKTOP)).toBe(false));
+});
+
 describe('installState', () => {
   it('déjà installée (standalone) → hidden, même si prompt dispo', () =>
     expect(installState({ standalone: true, canPrompt: true, ios: false })).toBe('hidden'));
@@ -18,6 +24,12 @@ describe('installState', () => {
     expect(installState({ standalone: false, canPrompt: true, ios: false })).toBe('native'));
   it('iOS sans prompt → ios-manual', () =>
     expect(installState({ standalone: false, canPrompt: false, ios: true })).toBe('ios-manual'));
+  it('Android sans prompt → android-manual (repli tutoriel)', () =>
+    expect(installState({ standalone: false, canPrompt: false, ios: false, android: true })).toBe('android-manual'));
+  it('Android AVEC prompt natif → native (le prompt prime sur le tutoriel)', () =>
+    expect(installState({ standalone: false, canPrompt: true, ios: false, android: true })).toBe('native'));
+  it('Android déjà installée (standalone) → hidden', () =>
+    expect(installState({ standalone: true, canPrompt: false, ios: false, android: true })).toBe('hidden'));
   it('navigateur sans installation → hidden', () =>
     expect(installState({ standalone: false, canPrompt: false, ios: false })).toBe('hidden'));
 });

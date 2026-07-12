@@ -39,12 +39,12 @@ function toCaissePayment(p: Payment, rv: ClubReservation): CaissePayment {
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
   SUBSCRIPTION: 'Abonnement',
 };
 const METHOD_ICON: Record<PaymentMethod, IconName> = {
   CASH: 'euro', CARD: 'card', TRANSFER: 'arrowR', ONLINE: 'card', OTHER: 'euro',
-  VOUCHER: 'ticket', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user',
+  VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user',
   SUBSCRIPTION: 'user',
 };
 
@@ -290,6 +290,7 @@ export default function AdminEncaissementPage() {
   // Caisse express : proposer TOUS les moyens de paiement — le(s) moyen(s) rapide(s) du club
   // d'abord (le 1er reste le bouton primaire), puis les autres moyens manuels en complément.
   const registerMethods = [...quickMethods, ...QUICK_METHODS.filter((m) => !quickMethods.includes(m))] as PaymentMethod[];
+  const payAtClubOnly = clubDetail?.payAtClubOnly ?? false;   // option club : encaissement en un clic (moyen neutre CLUB)
 
   const kpiStat = (label: string, value: string, color: string, sub: string, bar?: number) => (
     <div style={{ padding: '2px 14px', minWidth: 88 }}>
@@ -349,7 +350,7 @@ export default function AdminEncaissementPage() {
               {currentRv ? (
                 <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
                   members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
-                  clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop
+                  clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop payAtClubOnly={payAtClubOnly}
                   onChanged={onMutated}
                   onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
                   onOptimisticRefund={(ids) => applyRefundLocally(currentRv.id, ids)}
@@ -374,7 +375,7 @@ export default function AdminEncaissementPage() {
           <div data-testid="cx-register-mobile">
             <CashRegister reservation={currentRv} players={playersOf(currentRv)} due={dueOf(currentRv)}
               members={members} quickMethods={registerMethods} packagesByUser={packagesByUser}
-              clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop={false}
+              clubId={clubId!} slug={slug ?? ''} token={token!} isDesktop={false} payAtClubOnly={payAtClubOnly}
               onChanged={onMutated}
               onOptimisticPay={(intent) => applyPaymentLocally(currentRv.id, intent)}
               onOptimisticRefund={(ids) => applyRefundLocally(currentRv.id, ids)}
@@ -387,7 +388,7 @@ export default function AdminEncaissementPage() {
 
       {selected && (
         <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 28, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: isDesktop ? 880 : 640, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 28, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div>
                 <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 25, letterSpacing: -0.3, color: th.text }}>{selected.resource.name}</div>
@@ -441,7 +442,7 @@ export default function AdminEncaissementPage() {
             })()}
 
             <div style={{ marginTop: 20 }}>
-              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} packagesByUser={packagesByUser} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
+              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} packagesByUser={packagesByUser} columns={isDesktop} payAtClubOnly={payAtClubOnly} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
             </div>
 
             {selected.payments.length > 0 && (

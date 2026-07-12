@@ -6,7 +6,7 @@ import { RatingService } from './rating.service';
 
 // Encaissements « argent réel » (les autres méthodes sont du prépayé déjà encaissé
 // à la vente du carnet/porte-monnaie, ou l'abonnement). Miroir de accounting.service.ts.
-const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'CHEQUE', 'CLUB'];
 const isMoney = (m: string) => MONEY_METHODS.includes(m);
 
 // Au-delà de ce délai sans visite, un joueur (ayant déjà joué) est signalé « à risque ».

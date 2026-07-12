@@ -10,12 +10,12 @@ import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { Btn } from '@/components/ui/atoms';
 
-const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
+const METHOD_LABEL: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', MEMBER: 'Abo / Membre', OTHER: 'Autre' };
 // Libellé court de TOUS les moyens, pour le badge « réglé · {moyen} » (carnet/porte-monnaie/abo inclus).
-const METHOD_SHORT: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', MEMBER: 'Abo', OTHER: 'Autre', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', SUBSCRIPTION: 'Abonnement' };
+const METHOD_SHORT: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', MEMBER: 'Abo', OTHER: 'Autre', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', SUBSCRIPTION: 'Abonnement' };
 // Tous les moyens de paiement manuels du comptoir (carnets/porte-monnaie = boutons package à part).
-const ALL_METHODS: PaymentMethod[] = ['CARD', 'CASH', 'TRANSFER', 'VOUCHER', 'MEMBER', 'OTHER'];
-const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CASH: 'euro', TRANSFER: 'arrowR', OTHER: 'euro' };
+const ALL_METHODS: PaymentMethod[] = ['CARD', 'CASH', 'TRANSFER', 'VOUCHER', 'CHEQUE', 'MEMBER', 'OTHER'];
+const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', CASH: 'euro', TRANSFER: 'arrowR', OTHER: 'euro' };
 
 const CORAL = '#ff7a4d';
 
@@ -44,10 +44,16 @@ export interface CollectPanelProps {
   settlementPresets?: { label: string; note: string }[];
   /** userId ayant un abonnement ACTIF (résolu par le parent) — pour la garde ci-dessus. */
   subscribedUserIds?: ReadonlySet<string>;
+  /** desktop : rend Joueurs (gauche) et Encaisser (droite) côte à côte au lieu de les empiler,
+   *  pour éviter le scroll vertical — les moyens de paiement restent visibles à l'ouverture.
+   *  Sans effet quand la résa est soldée (la section Encaisser disparaît). Défaut false. */
+  columns?: boolean;
+  /** option club « paiement au club » : un seul bouton « Encaissé » (moyen neutre CLUB) au lieu du choix de moyen. */
+  payAtClubOnly?: boolean;
   onError?: (msg: string) => void;
 }
 
-export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, collectEmptyPlaces = false, settlementPresets, subscribedUserIds, onError }: CollectPanelProps) {
+export function CollectPanel({ reservation, due, players, members, clubId, token, quickMethods, packagesByUser, onChanged, onPaid, collectEmptyPlaces = false, settlementPresets, subscribedUserIds, columns = false, payAtClubOnly = false, onError }: CollectPanelProps) {
   const { th } = useTheme();
 
   // Moyens mis en avant (boutons pleins) = ceux configurés par le club, dans le même ordre que
@@ -97,6 +103,9 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const capTitle = overCap ? `Plafond : ${fmtEuros(maxPayable)}` : undefined;
   // Soldé = il y a un prix dû et il est entièrement couvert (les events libres, due=0, restent encaissables).
   const settled = due > 0 && remaining <= 0;
+  // Layout 2 colonnes (desktop) : Joueurs | Encaisser côte à côte. Désactivé si soldé — la
+  // section Encaisser disparaît alors, donc Joueurs occupe toute la largeur (pas de colonne vide).
+  const twoCol = columns && !settled;
 
   // Part d'une place (dû ÷ capacité) + places SANS joueur couvertes par les paiements anonymes
   // (payé total − payé attribué aux joueurs nommés) → statut « réglé » de haut en bas, comme la page.
@@ -262,7 +271,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   );
 
   return (
-    <div>
+    <div style={twoCol ? { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 20, alignItems: 'start' } : undefined}>
       {/* ── JOUEURS (fusion « Joueur » + « Par joueur ») — en tête, juste sous « Reste à encaisser » ── */}
       <div>
         <div style={{ ...sectionLabel, marginBottom: 10 }}>Joueurs</div>
@@ -398,7 +407,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
 
       {/* ── ENCAISSER — masqué quand soldé ─────────────────────── */}
       {!settled && (
-        <div style={{ marginTop: 22, borderRadius: 16, background: th.surface2, padding: 14 }}>
+        <div style={{ marginTop: twoCol ? 0 : 22, borderRadius: 16, background: th.surface2, padding: 14 }}>
           {/* Cible active : encaissement ciblé sur un joueur ou une place sans joueur (sinon, résa entière) */}
           {(activePart || payGenericN != null) && (
             <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10, background: `${th.accent}1f`, fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
@@ -425,6 +434,16 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           </div>
           {overCap && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: CORAL }}>Plafond : {fmtEuros(maxPayable)}</div>}
 
+          {payAtClubOnly ? (
+            /* Option club « paiement au club » : un seul bouton, pas de choix de moyen (moyen neutre CLUB). */
+            <button type="button" disabled={cannotPay} title={capTitle} onClick={() => payNow('CLUB')}
+              style={{ marginTop: 12, width: '100%', height: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', borderRadius: 12,
+                cursor: cannotPay ? 'default' : 'pointer', opacity: cannotPay ? 0.45 : 1, background: th.accent, color: th.onAccent,
+                fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, boxShadow: th.neon ? `0 6px 20px ${th.accent}33` : 'none' }}>
+              <Icon name="check" size={17} color={th.onAccent} />{busy ? '…' : `Encaissé · ${fmtEuros(amountC)}`}
+            </button>
+          ) : (
+          <>
           {/* Moyens — rapides du club (pleins) puis tous les autres (discrets) */}
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {primaryMethods.map((m) => (
@@ -514,6 +533,8 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
             const msg = prepaidHint(!!targetUserId, 0, maxPayable);
             return msg ? <div style={{ marginTop: 14, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>{msg}</div> : null;
           })()}
+          </>
+          )}
         </div>
       )}
     </div>

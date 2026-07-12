@@ -11,6 +11,7 @@ import { Btn } from '@/components/ui/atoms';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { loadLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
@@ -97,7 +98,7 @@ function BookingHeaderCard({ slot, timezone, resourceName, format, totalPrice, p
       {/* Lavis diagonal à l'accent du club (purement décoratif). */}
       <div aria-hidden style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${th.accent}24 0%, transparent 58%)`, pointerEvents: 'none' }} />
       <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
-        <div style={{ display: 'flex', gap: 12, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <span style={{ width: 44, height: 44, flex: '0 0 auto', borderRadius: 13, background: `${th.accent}1f`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="ball" size={24} color={th.accent} />
           </span>
@@ -106,21 +107,29 @@ function BookingHeaderCard({ slot, timezone, resourceName, format, totalPrice, p
               <span style={{ fontFamily: th.fontDisplay, fontSize: 21, fontWeight: 700, letterSpacing: -0.4, color: th.text }}>{resourceName ?? 'Court'}</span>
               <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: th.textMute, border: `1px solid ${th.lineStrong}`, background: th.bgElev, borderRadius: 999, padding: '2px 9px' }}>{courtFormat(format) ?? 'Double'}</span>
             </div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, marginTop: 8, textTransform: 'capitalize' }}>{dateLabel}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 4, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-              <Icon name="clock" size={13} color={th.textFaint} />
-              {formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)} · {durLabel}
-              {slot.offPeak && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 6, padding: '2px 7px' }}>
-                  <Icon name="moon" size={10} color="#b45309" />heures creuses
-                </span>
-              )}
-            </div>
           </div>
         </div>
         <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
           <div style={{ fontFamily: th.fontDisplay, fontSize: 34, fontWeight: 800, letterSpacing: -1.3, color: th.text, lineHeight: 0.95 }}>{totalPrice}€</div>
           <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 5 }}>≈ {perPerson} € / pers · {capacity} j.</div>
+        </div>
+      </div>
+      {/* Date + horaire en pleine largeur (ré-indentées sous le nom) : hors de la colonne
+          écrasée par la colonne prix, donc « Samedi 11 Juillet » et « 08h00 → 09h30 · 1 h 30 »
+          ne se coupent jamais, quelle que soit la largeur de l'écran. */}
+      <div style={{ position: 'relative', paddingLeft: 56, marginTop: 8 }}>
+        <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text, textTransform: 'capitalize' }}>{dateLabel}</div>
+        <div style={{ marginTop: 4, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+            <Icon name="clock" size={13} color={th.textFaint} />
+            {formatHour(slot.startTime, timezone)} → {formatHour(slot.endTime, timezone)}
+          </span>
+          <span style={{ whiteSpace: 'nowrap' }}>· {durLabel}</span>
+          {slot.offPeak && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 6, padding: '2px 7px' }}>
+              <Icon name="moon" size={10} color="#b45309" />heures creuses
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -149,6 +158,7 @@ export default function BookingModal({
   clubId, requireOnlinePayment, requireCardFingerprint, hasCardOnFile, stripeActive, cancellationCutoffHours, refundOnCancelWithinCutoff,
 }: BookingModalProps) {
   const { th } = useTheme();
+  const isDesktop = useIsDesktop();
   const levelEnabled = useLevelSystemEnabled();
   // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel.
   const levelForSport = levelEnabled && sportHasLevels(sportKey);
@@ -722,11 +732,13 @@ export default function BookingModal({
                   )}
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: 11, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
-                  <Btn variant="surface" onClick={handleClose} disabled={busy} style={{ flex: '0 0 38%' }}>Abandonner</Btn>
+                <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', gap: 11, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
+                  {/* Mobile : boutons empilés pleine largeur (le libellé du bouton principal
+                      tient sur une ligne) ; desktop : rangée Abandonner / Confirmer. */}
+                  <Btn variant="surface" onClick={handleClose} disabled={busy} style={isDesktop ? { flex: '0 0 38%' } : { width: '100%' }}>Abandonner</Btn>
                   <Btn icon="arrowR" onClick={handleConfirm}
                     disabled={phase !== 'held' || busy || (payMode === 'online' && onlineRequiredButUnavailable && !paySource)}
-                    style={{ flex: 1 }}>
+                    style={isDesktop ? { flex: 1 } : { width: '100%' }}>
                     {useSub ? 'Confirmer avec mon abonnement'
                       : paySource ? 'Confirmer avec mon solde'
                       : (payMode === 'online' && onlineAvailable) ? `Valider le paiement · ${onlineAmountLabel}`

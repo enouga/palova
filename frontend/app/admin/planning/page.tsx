@@ -4,11 +4,12 @@ import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Mem
 import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
+import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
+import { CashRegister } from '@/components/admin/caisse/CashRegister';
 import { Receipt } from '@/components/admin/Receipt';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
@@ -32,11 +33,11 @@ const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED:
 // Libellés / icônes des moyens de paiement pour la liste « Encaissements » (cohérent page Encaissement).
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement',
+  VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement',
 };
 const METHOD_ICON: Record<PaymentMethod, IconName> = {
   CASH: 'euro', CARD: 'card', TRANSFER: 'arrowR', ONLINE: 'card', OTHER: 'euro',
-  VOUCHER: 'ticket', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user', SUBSCRIPTION: 'user',
+  VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user', SUBSCRIPTION: 'user',
 };
 // Règlements « sans encaissement » (débités au joueur : coffre, offres, abonnement) : enregistrés
 // en MEMBER (hors totaux caisse) avec la note = libellé. Affichés en boutons 1 clic dans la modale.
@@ -135,6 +136,8 @@ export default function AdminPlanningPage() {
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);   // modale « Détails / options » (CollectPanel avancé) au-dessus de la caisse
+  const optSeq = useRef(0);                                 // ids uniques des encaissements optimistes (CashRegister)
   const [isFs, setIsFs]           = useState(false);
 
   const [members, setMembers]   = useState<Member[]>([]);
@@ -213,6 +216,23 @@ export default function AdminPlanningPage() {
     const [list] = await Promise.all([reloadReservations(), reloadPackages()]);
     setSelected((cur) => (cur ? list.find((r) => r.id === cur.id) ?? cur : cur));
   }, [patchReservation, reloadReservations, reloadPackages]);
+
+  // Encaissement OPTIMISTE (CashRegister) : reflète le paiement DÈS le clic dans la modale ET la
+  // grille, et renvoie l'id synthétique (sert au toast « Annuler » avant réconciliation serveur).
+  const applyPaymentLocally = useCallback((reservationId: string, intent: PaymentIntent): string => {
+    const id = `opt:${(optSeq.current += 1)}`;
+    const iso = new Date().toISOString();
+    setSelected((cur) => (cur && cur.id === reservationId ? applyOptimisticPayment(cur, intent, id, iso) : cur));
+    setRes((cur) => cur.map((r) => (r.id === reservationId ? applyOptimisticPayment(r, intent, id, iso) : r)));
+    return id;
+  }, []);
+  const applyRefundLocally = useCallback((reservationId: string, paymentIds: string[]) => {
+    setSelected((cur) => (cur && cur.id === reservationId ? applyOptimisticRefund(cur, paymentIds) : cur));
+    setRes((cur) => cur.map((r) => (r.id === reservationId ? applyOptimisticRefund(r, paymentIds) : r)));
+  }, []);
+
+  // Caisse de la modale : mêmes boutons que la page Caisse (moyens rapides du club d'abord, puis les autres).
+  const registerMethods = [...quickMethods, ...QUICK_METHODS.filter((m) => !quickMethods.includes(m))] as PaymentMethod[];
 
   // Annule (rembourse) un encaissement depuis la liste — couvre aussi les paiements ANONYMES
   // (réservation entière / place vide / préréglé Coffre-Offres-Abonnement / « Autre ») qui ne
@@ -608,7 +628,7 @@ export default function AdminPlanningPage() {
         <div onClick={() => setSelected(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: isDesktop ? 640 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 24 : 18, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+            style={{ width: '100%', maxWidth: isDesktop ? 880 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 24 : 18, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: isDesktop ? 22 : 19, color: th.text, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis' }}>{selected.resource.name}</div>
@@ -622,8 +642,9 @@ export default function AdminPlanningPage() {
             {error && (
               <div style={{ marginTop: 10, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
             )}
-            {/* Bandeau d'état — reste à encaisser / soldé (cohérent avec la page Paiements) */}
-            {(() => {
+            {/* Bandeau d'état — reste à encaisser / soldé. Pour une résa active, l'en-tête de la
+                caisse (CashRegister) l'affiche déjà → on ne le garde que pour une résa annulée. */}
+            {selected.status === 'CANCELLED' && (() => {
               const dueC = dueOf(selected);
               const paidC = toCents(selected.paidAmount);
               const restC = Math.max(0, dueC - paidC);
@@ -679,23 +700,26 @@ export default function AdminPlanningPage() {
 
             {selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 12 }}>
-                {/* Encaissement par joueur : chaque ligne se sélectionne (« Régler ») et TOUS les
-                    moyens s'activent en bas, sous les lignes, pour le joueur sélectionné (sinon la
-                    réservation entière). Affiché directement — aucun panneau « Détails / options ».
-                    La modale ne se ferme pas au paiement (pas de `onPaid`). */}
-                <CollectPanel
+                {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
+                    puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
+                    « Montant libre, reçu, historique » ouvre la modale Détails (CollectPanel). */}
+                <CashRegister
                   reservation={selected}
-                  due={dueOf(selected)}
                   players={playersOf(selected)}
+                  due={dueOf(selected)}
                   members={members}
-                  quickMethods={quickMethods}
+                  quickMethods={registerMethods}
                   packagesByUser={packagesByUser}
-                  collectEmptyPlaces
-                  settlementPresets={SETTLEMENT_PRESETS}
-                  subscribedUserIds={subscribedIds}
                   clubId={clubId!}
+                  slug={club?.slug ?? ''}
                   token={token!}
+                  isDesktop={isDesktop}
+                  payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
                   onChanged={onCollected}
+                  onOptimisticPay={(intent) => applyPaymentLocally(selected.id, intent)}
+                  onOptimisticRefund={(ids) => applyRefundLocally(selected.id, ids)}
+                  onOpenDetails={() => setDetailsOpen(true)}
+                  onCancel={() => setConfirmCancel(true)}
                   onError={(msg) => setError(msg)}
                 />
               </div>
@@ -797,25 +821,21 @@ export default function AdminPlanningPage() {
               </div>
             )}
 
-            {/* annulation */}
-            {selected.status !== 'CANCELLED' && (
+            {/* Annulation — le déclencheur « Annuler la réservation » est dans le pied de la caisse
+                (onCancel → confirmCancel). Ici : la confirmation, et l'annulation de série si besoin. */}
+            {selected.status !== 'CANCELLED' && (confirmCancel || selected.seriesId) && (
               <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
                 {confirmCancel ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>Confirmer l&apos;annulation ?</span>
                     <button onClick={doCancel} disabled={busy} style={{ border: 'none', background: '#ff7a4d', color: '#fff', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{busy ? '…' : 'Oui, annuler'}</button>
                     <button onClick={() => setConfirmCancel(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5 }}>Retour</button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <button onClick={() => setConfirmCancel(true)} style={{ border: `1px solid ${th.line}`, background: 'transparent', color: '#ff7a4d', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>Annuler la réservation</button>
-                    {selected.seriesId && (
-                      <button type="button" onClick={cancelSeries} disabled={busy}
-                        style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
-                        Annuler toute la série
-                      </button>
-                    )}
-                  </div>
+                  <button type="button" onClick={cancelSeries} disabled={busy}
+                    style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
+                    Annuler toute la série
+                  </button>
                 )}
               </div>
             )}
@@ -829,6 +849,38 @@ export default function AdminPlanningPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modale « Détails / options » (au-dessus de la caisse) : montant libre, par joueur,
+          Ticket CE avec référence, carnet/porte-monnaie, règlements sans encaissement. */}
+      {detailsOpen && selected && (
+        <div onClick={() => setDetailsOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 58, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: isDesktop ? 880 : 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: isDesktop ? 24 : 18, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text }}>Détails · options</div>
+              <button onClick={() => setDetailsOpen(false)} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 30, height: 30, color: th.textMute, fontSize: 16 }}>✕</button>
+            </div>
+            <CollectPanel
+              reservation={selected}
+              due={dueOf(selected)}
+              players={playersOf(selected)}
+              members={members}
+              quickMethods={quickMethods}
+              packagesByUser={packagesByUser}
+              collectEmptyPlaces
+              settlementPresets={SETTLEMENT_PRESETS}
+              subscribedUserIds={subscribedIds}
+              columns={isDesktop}
+              payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
+              clubId={clubId!}
+              token={token!}
+              onChanged={onCollected}
+              onError={(msg) => setError(msg)}
+            />
           </div>
         </div>
       )}

@@ -189,14 +189,14 @@ export function validatePaymentAmount(cents: number, remainingCents: number): bo
 // ── Encaissement par joueur ───────────────────────────────────────────────
 
 /** Moyens d'encaissement rapides éligibles aux boutons 1 clic (miroir backend QUICK_PAYMENT_METHODS). */
-export const QUICK_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER'];
+export const QUICK_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'VOUCHER', 'CHEQUE', 'TRANSFER', 'MEMBER'];
 
 /** Repli si le club n'a configuré AUCUN moyen rapide (miroir du défaut de la migration `add_quick_payment_methods`). */
 export const DEFAULT_QUICK_METHODS: PaymentMethod[] = ['CARD', 'VOUCHER', 'CASH'];
 
 /** Libellé court des moyens rapides (sans icône — l'UI ajoute l'icône). */
 export const QUICK_METHOD_LABEL: Record<string, string> = {
-  CASH: 'Espèces', CARD: 'CB', VOUCHER: 'Ticket CE', TRANSFER: 'Virement', MEMBER: 'Abo / Membre',
+  CASH: 'Espèces', CARD: 'CB', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', TRANSFER: 'Virement', MEMBER: 'Abo / Membre',
 };
 
 /** Une place de la réservation : un joueur (participant), le titulaire seul, ou une place libre. */

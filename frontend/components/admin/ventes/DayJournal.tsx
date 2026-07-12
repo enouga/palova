@@ -8,9 +8,9 @@ export type JournalFilter = 'all' | 'sales' | 'resa';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement',
+  VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement',
 };
-const MONEY_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const MONEY_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'CHEQUE', 'CLUB'];
 const PREPAID_METHODS: PaymentMethod[] = ['PACK_CREDIT', 'WALLET', 'MEMBER', 'SUBSCRIPTION'];
 const FILTERS: { value: JournalFilter; label: string }[] = [
   { value: 'all', label: 'Tout' }, { value: 'sales', label: 'Ventes' }, { value: 'resa', label: 'Résas' },

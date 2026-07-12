@@ -139,6 +139,7 @@ export default function AdminSettingsPage() {
         requireOnlinePayment: club.requireOnlinePayment,
         requireCardFingerprint: club.requireCardFingerprint,
         quickPaymentMethods: club.quickPaymentMethods,
+        payAtClubOnly: club.payAtClubOnly,
       };
       await api.adminUpdateClub(clubId, body, token);
       setSaved(true);
@@ -430,6 +431,21 @@ export default function AdminSettingsPage() {
         <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>
           Choisissez les moyens proposés en <strong>1 clic</strong> sur chaque ligne joueur de la page <strong>Encaissement</strong>. Les autres moyens (montant libre, n&apos;&nbsp;de Ticket CE, carnet&hellip;) restent accessibles via « Détails ».
         </p>
+
+        {/* Option « paiement au club » : un seul bouton « Encaissé », sans choix de moyen. */}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${th.line}` }}>
+          <input type="checkbox" checked={!!club.payAtClubOnly}
+            onChange={(e) => set('payAtClubOnly', e.target.checked)}
+            style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer', marginTop: 2 }} />
+          <span>
+            <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 15, fontWeight: 600, color: th.text }}>Paiement au club — encaissement en un clic</span>
+            <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 2 }}>
+              À l&apos;encaissement, un seul bouton <strong>« Encaissé »</strong> au lieu du choix du moyen. Le paiement est bien enregistré (il compte dans le chiffre d&apos;affaires) sous le libellé neutre « Au club ». Les moyens rapides ci-dessous sont alors masqués.
+            </span>
+          </span>
+        </label>
+
+        {!club.payAtClubOnly && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {QUICK_METHODS.map((m) => {
             const checked = (club.quickPaymentMethods ?? []).includes(m);
@@ -448,6 +464,7 @@ export default function AdminSettingsPage() {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Paiement en ligne — déplacé sur sa page dédiée */}

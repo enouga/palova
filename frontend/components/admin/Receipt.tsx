@@ -3,7 +3,7 @@ import { fmtEuros, toCents } from '@/lib/caisse';
 
 const METHOD_LABEL: Partial<Record<PaymentMethod, string>> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
 };
 
 function paymentObject(p: CaissePayment): string {

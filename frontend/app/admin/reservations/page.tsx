@@ -4,6 +4,7 @@ import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminRes
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { ReservationCollect } from '@/components/admin/ReservationCollect';
@@ -36,12 +37,12 @@ function toCaissePayment(p: Payment, rv: ClubReservation): CaissePayment {
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
-  VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
   SUBSCRIPTION: 'Abonnement',
 };
 const METHOD_ICON: Record<PaymentMethod, IconName> = {
   CASH: 'euro', CARD: 'card', TRANSFER: 'arrowR', ONLINE: 'card', OTHER: 'euro',
-  VOUCHER: 'ticket', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user',
+  VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', PACK_CREDIT: 'ticket', WALLET: 'euro', MEMBER: 'user',
   SUBSCRIPTION: 'user',
 };
 
@@ -49,6 +50,7 @@ export default function AdminReservationsPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { club } = useClub();
+  const isDesktop = useIsDesktop();
   const clubId = club?.id;
   const [data, setData]   = useState<ClubReservationsResponse | null>(null);
   const [date, setDate]   = useState(todayISO());
@@ -292,6 +294,7 @@ export default function AdminReservationsPage() {
   // Moyens d'encaissement rapides configurés par le club. Liste vide (le club a tout décoché)
   // OU pas encore chargée → repli sur le défaut, pour que la page reste utilisable en 1 clic.
   const quickMethods = (clubDetail?.quickPaymentMethods?.length ? clubDetail.quickPaymentMethods : DEFAULT_QUICK_METHODS) as PaymentMethod[];
+  const payAtClubOnly = clubDetail?.payAtClubOnly ?? false;   // option club : encaissement en un clic (moyen neutre CLUB)
 
   // Stat KPI compacte (bandeau à droite du titre) — bien plus discrète que les anciennes grosses tuiles.
   const kpiStat = (label: string, value: string, color: string, sub: string, bar?: number) => (
@@ -414,7 +417,7 @@ export default function AdminReservationsPage() {
 
       {selected && (
         <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 28, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: isDesktop ? 880 : 640, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 28, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div>
                 <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 25, letterSpacing: -0.3, color: th.text }}>{selected.resource.name}</div>
@@ -468,7 +471,7 @@ export default function AdminReservationsPage() {
             })()}
 
             <div style={{ marginTop: 20 }}>
-              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} packagesByUser={packagesByUser} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
+              <CollectPanel reservation={selected} due={dueOf(selected)} players={playersOf(selected)} members={members} quickMethods={quickMethods} packagesByUser={packagesByUser} columns={isDesktop} payAtClubOnly={payAtClubOnly} clubId={clubId!} token={token!} onChanged={refreshSelected} onError={(msg) => setError(msg)} />
             </div>
 
             {selected.payments.length > 0 && (

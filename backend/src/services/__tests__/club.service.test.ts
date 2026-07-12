@@ -648,6 +648,21 @@ describe('ClubService — moyens d\'encaissement rapides', () => {
     const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
     expect(arg.select.quickPaymentMethods).toBe(true);
   });
+
+  it('updateClub écrit payAtClubOnly (booléen) et l\'ignore si absent', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { payAtClubOnly: true });
+    expect((prismaMock.club.update as jest.Mock).mock.calls[0][0].data.payAtClubOnly).toBe(true);
+    (prismaMock.club.update as jest.Mock).mockClear();
+    await svc.updateClub('club-1', { name: 'X' });
+    expect((prismaMock.club.update as jest.Mock).mock.calls[0][0].data.payAtClubOnly).toBeUndefined();
+  });
+
+  it('getClubForAdmin sélectionne payAtClubOnly', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    expect((prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0].select.payAtClubOnly).toBe(true);
+  });
 });
 
 describe('club.service — persistance du département', () => {

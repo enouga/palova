@@ -4,13 +4,13 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 import { api } from '../lib/api';
 
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
-jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' } }) }));
+jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1', slug: 'c' } }) }));
 // Le planning lit useAdminChrome depuis le layout admin — mocké pour ne pas charger
 // tout le chrome (sidebar, gardes de droits) dans un test de page isolé.
 jest.mock('../app/admin/layout', () => ({ useAdminChrome: () => ({ collapsed: false, setCollapsed: jest.fn() }) }));
 jest.mock('../lib/api', () => ({
   api: {
-    adminGetClub: jest.fn().mockResolvedValue({ name: 'Club', address: 'X', timezone: 'Europe/Paris', offPeakHours: null, quickPaymentMethods: ['CARD', 'VOUCHER', 'CASH'] }),
+    adminGetClub: jest.fn().mockResolvedValue({ name: 'Club', address: 'X', timezone: 'Europe/Paris', offPeakHours: null, quickPaymentMethods: ['CARD', 'VOUCHER', 'CASH'], payAtClubOnly: false }),
     adminGetResources: jest.fn(),
     adminGetMembers: jest.fn().mockResolvedValue([]),
     adminGetReservations: jest.fn(),
@@ -53,7 +53,7 @@ const oneNamedResa = () => twoPlayerResa({
   participants: [{ id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' }],
 });
 const resp = (reservations: unknown[]) => ({ reservations, summary: { total: '0', paid: '0', paidTotal: '0', outstanding: '0' } });
-// Abonnement ACTIF (non expiré) — pour afficher les règlements sans encaissement.
+// Abonnement ACTIF (non expiré) — pour afficher les règlements sans encaissement (dans « Détails »).
 const activeSub = () => [{ id: 's1', status: 'ACTIVE', expiresAt: '2099-01-01T00:00:00.000Z' }];
 
 // Ouvre la modale de détail en cliquant le pavé de la réservation dans la grille.
@@ -63,44 +63,41 @@ const openModal = async () => {
 
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); });
 
-it("sélectionne une ligne joueur puis encaisse SA part avec un moyen (en bas), sans fermer la modale", async () => {
+it("encaisse la part du joueur présélectionné (tuile) avec un moyen, sans fermer la modale", async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
   renderPage();
   await openModal();
-  // On SÉLECTIONNE la 1re ligne joueur (Jean = pt-1) → cible son participantId.
-  fireEvent.click((await screen.findAllByRole('button', { name: 'Régler' }))[0]);
-  // Les moyens sont un seul jeu, EN BAS ; on encaisse en Carte.
-  fireEvent.click(screen.getByRole('button', { name: 'Carte' }));
+  // Caisse : Jean (pt-1) est la 1re tuile, présélectionnée ; on encaisse en CB.
+  fireEvent.click(await screen.findByRole('button', { name: 'CB' }));
   await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
     'club-1', 'rv-1', expect.objectContaining({ participantId: 'pt-1', method: 'CARD', amount: 13 }), 'tok',
   ));
   expect(screen.getByRole('button', { name: 'Fermer' })).toBeInTheDocument();   // modale toujours ouverte
 });
 
-it('les moyens sont un seul jeu EN BAS (pas un par ligne) ; chaque ligne se sélectionne', async () => {
+it('les joueurs sont des tuiles cliquables (pas un bouton « Régler ») et les moyens un seul jeu', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
   renderPage();
   await openModal();
-  await screen.findByRole('button', { name: 'Carte' });
-  expect(screen.getAllByRole('button', { name: 'Régler' })).toHaveLength(2);   // une sélection par joueur
-  expect(screen.getAllByRole('button', { name: 'Carte' })).toHaveLength(1);    // un seul jeu de moyens, en bas
+  await screen.findByRole('button', { name: 'CB' });
+  expect(screen.getAllByRole('checkbox')).toHaveLength(2);                 // une tuile sélectionnable par joueur
+  expect(screen.queryByRole('button', { name: 'Régler' })).toBeNull();     // plus de bouton « Régler »
+  expect(screen.getAllByRole('button', { name: 'CB' })).toHaveLength(1);   // un seul jeu de moyens
 });
 
-it('propose TOUS les moyens de paiement en bas (rapides + les autres)', async () => {
+it('propose les mêmes moyens que la page Caisse (CB, Espèces, Ticket CE, Virement, Chèque)', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
   renderPage();
   await openModal();
-  await screen.findByRole('button', { name: 'Carte' });
-  ['Espèces', 'Virement', 'Ticket CE', 'Autre'].forEach((l) =>
+  await screen.findByRole('button', { name: 'CB' });
+  ['Espèces', 'Ticket CE', 'Virement', 'Chèque'].forEach((l) =>
     expect(screen.getByRole('button', { name: l })).toBeInTheDocument());
-  // « Abo / Membre » générique retiré : doublon avec le règlement « Abonnement » sans encaissement.
-  expect(screen.queryByRole('button', { name: 'Abo / Membre' })).toBeNull();
 });
 
-it("encaisse la réservation entière → le bandeau d'état passe à « Soldé »", async () => {
+it('encaisse toutes les parts (« Tout le reste ») → la caisse passe à « Soldé »', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   let n = 0;
   (api.adminGetReservations as jest.Mock).mockImplementation(() => {
@@ -109,23 +106,20 @@ it("encaisse la réservation entière → le bandeau d'état passe à « Soldé 
   });
   renderPage();
   await openModal();
-  fireEvent.click(await screen.findByRole('button', { name: 'Carte' }));   // aucun joueur ciblé → réservation entière (26)
-  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
-    'club-1', 'rv-1', expect.objectContaining({ method: 'CARD', amount: 26 }), 'tok',
-  ));
-  expect(await screen.findByText('✓ Soldé')).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: /Tout le reste/ }));   // sélectionne les 2 parts
+  fireEvent.click(screen.getByRole('button', { name: 'CB' }));
+  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalled());
+  expect(await screen.findByText(/Soldé/)).toBeInTheDocument();
 });
 
-it("permet de sélectionner une ligne SANS joueur et d'encaisser sa part (anonyme)", async () => {
+it("permet de sélectionner une place SANS joueur et d'encaisser sa part (anonyme)", async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([doubleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([oneNamedResa()]));
   renderPage();
   await openModal();
-  // 1 joueur nommé (pt-1) + 3 places vides → 4 boutons « Régler ».
-  const reglers = await screen.findAllByRole('button', { name: 'Régler' });
-  expect(reglers).toHaveLength(4);
-  fireEvent.click(reglers[1]);                                    // 1re place vide
-  fireEvent.click(screen.getByRole('button', { name: 'Carte' }));
+  await screen.findByRole('button', { name: 'CB' });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Joueur 2' }));   // ajoute la 1re place vide à la sélection
+  fireEvent.click(screen.getByRole('button', { name: 'CB' }));
   await waitFor(() => {
     const call = (api.adminAddPayment as jest.Mock).mock.calls.at(-1)!;
     expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4), anonyme
@@ -133,30 +127,29 @@ it("permet de sélectionner une ligne SANS joueur et d'encaisser sa part (anonym
   });
 });
 
-it('propose les règlements sans encaissement Coffre / Offres / Abonnement (joueur avec abonnement actif)', async () => {
+it('le lien « Montant libre… » ouvre les options avancées (Coffre / Offres / Abonnement)', async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
   (api.adminGetMemberSubscriptions as jest.Mock).mockResolvedValue(activeSub());   // titulaire abonné actif
   renderPage();
   await openModal();
-  // Les boutons apparaissent après le chargement des abonnements (asynchrone).
+  fireEvent.click(await screen.findByRole('button', { name: /Montant libre/ }));   // ouvre « Détails · options »
   await screen.findByRole('button', { name: 'Coffre' });
   ['Offres', 'Abonnement'].forEach((l) => expect(screen.getByRole('button', { name: l })).toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: 'Coffre' }));           // aucun joueur ciblé → résa entière
-  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
-    'club-1', 'rv-1', expect.objectContaining({ method: 'MEMBER', note: 'Coffre' }), 'tok',
-  ));
 });
 
-it("masque les règlements sans encaissement si le joueur n'a ni abonnement ni carnet/porte-monnaie", async () => {
+it('option club « paiement au club » : un seul bouton « Encaissé » (moyen CLUB), pas de choix de moyen', async () => {
+  (api.adminGetClub as jest.Mock).mockResolvedValue({ name: 'Club', address: 'X', timezone: 'Europe/Paris', offPeakHours: null, quickPaymentMethods: ['CARD', 'VOUCHER', 'CASH'], payAtClubOnly: true });
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
-  (api.adminGetMemberSubscriptions as jest.Mock).mockResolvedValue([]);   // aucun abonnement (et pas de package)
   renderPage();
   await openModal();
-  await screen.findByRole('button', { name: 'Carte' });
-  expect(screen.queryByRole('button', { name: 'Coffre' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Abonnement' })).toBeNull();
+  const encaisse = await screen.findByRole('button', { name: /Encaissé/ });
+  expect(screen.queryByRole('button', { name: 'CB' })).toBeNull();       // pas de choix de moyen
+  fireEvent.click(encaisse);
+  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+    'club-1', 'rv-1', expect.objectContaining({ method: 'CLUB', amount: 13 }), 'tok',
+  ));
 });
 
 it("permet d'annuler un encaissement depuis la liste (même anonyme), comme la page Encaissement", async () => {

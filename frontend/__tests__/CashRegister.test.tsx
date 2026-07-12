@@ -30,7 +30,7 @@ const rv = (over: Record<string, unknown> = {}): ClubReservation => ({
 
 const baseProps = () => ({
   players: 4, due: 5200, members: [], quickMethods: ['CARD', 'VOUCHER', 'CASH'] as PaymentMethod[],
-  packagesByUser: {}, clubId: 'club-1', slug: 'padel-arena-paris', token: 'tok', isDesktop: true,
+  packagesByUser: {}, clubId: 'club-1', slug: 'padel-arena-paris', token: 'tok', isDesktop: true, payAtClubOnly: false,
   onChanged: jest.fn(), onOptimisticPay: jest.fn().mockReturnValue('opt:1'),
   onOptimisticRefund: jest.fn(), onOpenDetails: jest.fn(), onCancel: jest.fn(),
   onError: jest.fn(), onSettled: jest.fn(),
@@ -186,4 +186,14 @@ it('choisir un membre de l\'annuaire associe un participant (résa avec titulair
   const pick = await screen.findByRole('button', { name: /Nora Kaci/ });
   fireEvent.click(pick);
   await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
+});
+
+it('payAtClubOnly : un seul bouton « Encaissé » (moyen CLUB), pas de choix de moyen', async () => {
+  const r = rv({ participants: [part('pt-1', 'u1', 'Léa', 'Roy')] });   // pt-1 présélectionné (part 13 €)
+  renderReg(r, { ...baseProps(), payAtClubOnly: true });
+  expect(screen.queryByRole('button', { name: 'CB' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Espèces' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Encaissé/ }));
+  await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith('club-1', 'rv-1',
+    expect.objectContaining({ method: 'CLUB', amount: 13, participantId: 'pt-1' }), 'tok'));
 });

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { InstallState, installState, isIosUa } from '@/lib/install';
+import { InstallState, installState, isIosUa, isAndroidUa } from '@/lib/install';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -11,13 +11,14 @@ interface BeforeInstallPromptEvent extends Event {
 // expose l'état d'éligibilité + le déclencheur du prompt natif.
 export function useInstallPrompt(): { state: InstallState; promptInstall: () => void } {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [env, setEnv] = useState({ standalone: false, ios: false, installed: false });
+  const [env, setEnv] = useState({ standalone: false, ios: false, android: false, installed: false });
 
   useEffect(() => {
     setEnv({
       standalone: window.matchMedia('(display-mode: standalone)').matches
         || (navigator as unknown as { standalone?: boolean }).standalone === true,
       ios: isIosUa(navigator.userAgent, navigator.maxTouchPoints > 1),
+      android: isAndroidUa(navigator.userAgent),
       installed: false,
     });
     const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e as BeforeInstallPromptEvent); };
@@ -32,7 +33,7 @@ export function useInstallPrompt(): { state: InstallState; promptInstall: () => 
 
   const state: InstallState = env.installed
     ? 'hidden'
-    : installState({ standalone: env.standalone, canPrompt: deferred != null, ios: env.ios });
+    : installState({ standalone: env.standalone, canPrompt: deferred != null, ios: env.ios, android: env.android });
   const promptInstall = () => { deferred?.prompt(); setDeferred(null); };
   return { state, promptInstall };
 }

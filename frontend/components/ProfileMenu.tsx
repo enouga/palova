@@ -36,7 +36,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const [packages, setPackages] = useState<MemberPackage[]>([]);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const { state: installState, promptInstall } = useInstallPrompt();
-  const [iosHelp, setIosHelp] = useState(false);
+  const [installHelp, setInstallHelp] = useState(false);
 
   // Identité chargée dès le montage : l'info-bulle de survol (« qui est connecté ? ») doit être
   // prête sans ouvrir le menu. Les données par club (clubs/membership/soldes) restent paresseuses.
@@ -177,15 +177,16 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}
             {installState !== 'hidden' && (
               <MenuItem th={th} icon="home" label="Installer l'application"
-                onClick={() => { setOpen(false); if (installState === 'native') promptInstall(); else setIosHelp(true); }} />
+                onClick={() => { setOpen(false); if (installState === 'native') promptInstall(); else setInstallHelp(true); }} />
             )}
             <MenuItem th={th} icon="logout" label="Se déconnecter" onClick={() => { setOpen(false); logout(); }} />
           </div>
         </div>
       )}
 
-      {/* Tutoriel iOS : pas de prompt natif sur Safari iOS, on guide vers « Sur l'écran d'accueil ». */}
-      {iosHelp && (
+      {/* Tutoriel manuel : pas de prompt natif capturé (Safari iOS, ou Android quand Chrome met
+          beforeinstallprompt en sourdine — typiquement après une désinstallation) → on guide à la main. */}
+      {installHelp && (
         <div role="dialog" aria-label="Installer l'application" style={{
           position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.45)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
@@ -193,11 +194,21 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           <div style={{ width: 340, maxWidth: '100%', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 16, padding: 20, fontFamily: th.fontUI, color: th.text }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>Installer l'application</div>
             <ol style={{ margin: 0, paddingLeft: 18, fontSize: 14, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <li>Ouvrez le menu <strong>Partager</strong> de Safari</li>
-              <li>Choisissez <strong>« Sur l'écran d'accueil »</strong></li>
-              <li>Validez avec <strong>Ajouter</strong></li>
+              {installState === 'android-manual' ? (
+                <>
+                  <li>Ouvrez le <strong>menu de Chrome</strong> (⋮, en haut à droite)</li>
+                  <li>Choisissez <strong>« Installer l'application »</strong> (ou « Ajouter à l'écran d'accueil »)</li>
+                  <li>Validez avec <strong>Installer</strong></li>
+                </>
+              ) : (
+                <>
+                  <li>Ouvrez le menu <strong>Partager</strong> de Safari</li>
+                  <li>Choisissez <strong>« Sur l'écran d'accueil »</strong></li>
+                  <li>Validez avec <strong>Ajouter</strong></li>
+                </>
+              )}
             </ol>
-            <button onClick={() => setIosHelp(false)} style={{
+            <button onClick={() => setInstallHelp(false)} style={{
               marginTop: 14, width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
               background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontWeight: 700, fontSize: 14,
             }}>Compris</button>

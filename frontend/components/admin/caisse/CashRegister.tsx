@@ -13,8 +13,8 @@ import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
 const CORAL = '#ff7a4d';
 const TOAST_MS = 6000;
-const METHOD_ICON: Record<string, IconName> = { CASH: 'euro', CARD: 'card', VOUCHER: 'ticket', TRANSFER: 'arrowR', MEMBER: 'user', PACK_CREDIT: 'ticket', WALLET: 'euro', ONLINE: 'card', OTHER: 'euro', SUBSCRIPTION: 'user' };
-const METHOD_LABEL_FULL: Record<string, string> = { CASH: 'Espèces', CARD: 'CB', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre', VOUCHER: 'Ticket CE', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement' };
+const METHOD_ICON: Record<string, IconName> = { CASH: 'euro', CARD: 'card', VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', TRANSFER: 'arrowR', MEMBER: 'user', PACK_CREDIT: 'ticket', WALLET: 'euro', ONLINE: 'card', OTHER: 'euro', SUBSCRIPTION: 'user' };
+const METHOD_LABEL_FULL: Record<string, string> = { CASH: 'Espèces', CARD: 'CB', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement' };
 
 function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
 function mapPayError(e: unknown, perPlayer: boolean): string {
@@ -51,6 +51,8 @@ export interface CashRegisterProps {
   slug: string;
   token: string;
   isDesktop: boolean;
+  /** option club « paiement au club » : un seul bouton « Encaissé » (moyen neutre CLUB), pas de choix de moyen. */
+  payAtClubOnly?: boolean;
   onChanged: (updated?: ClubReservation) => void | Promise<void>;
   /** patch local immédiat d'un encaissement ; renvoie l'id synthétique (`opt:N`) créé. */
   onOptimisticPay: (intent: PaymentIntent) => string;
@@ -67,7 +69,7 @@ export interface CashRegisterProps {
  * le montant à annoncer s'affiche en grand, puis un tap sur le MOYEN encaisse
  * (optimiste, un appel par place). Toast « Annuler » ~6 s après chaque lot.
  */
-export function CashRegister({ reservation, players, due, members, quickMethods, packagesByUser, clubId, slug, token, isDesktop, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError, onSettled }: CashRegisterProps) {
+export function CashRegister({ reservation, players, due, members, quickMethods, packagesByUser, clubId, slug, token, isDesktop, payAtClubOnly = false, onChanged, onOptimisticPay, onOptimisticRefund, onOpenDetails, onCancel, onError, onSettled }: CashRegisterProps) {
   const { th } = useTheme();
   const isCourt = reservation.type === 'COURT';
   const paid = toCents(reservation.paidAmount);
@@ -390,23 +392,33 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             </span>
             <span data-testid="cx-total" style={{ marginLeft: 'auto', fontFamily: th.fontDisplay, fontSize: 30, fontWeight: 800, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums', color: th.text }}>{fmtEuros(selTotal)}</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
-            {methods.map((m, i) => (
-              <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
-                style={{ ...payBtn(i === 0), opacity: selTotal <= 0 ? 0.45 : 1 }}>
-                <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.accent} />{QUICK_METHOD_LABEL[m]}
-              </button>
-            ))}
-          </div>
-          {/* Carnet / porte-monnaie : bouton secondaire, largeur au contenu (label déjà complet via packageLabel). */}
-          {pk && single && (
-            <div style={{ marginTop: 10 }}>
-              <button type="button" onClick={() => paySelection(pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', pk.id)}
-                title={`Régler avec ${packageLabel(pk)}`}
-                style={{ ...payBtn(false), width: 'auto', height: 46, padding: '0 18px', color: th.accent, fontSize: 13 }}>
-                <Icon name={pk.kind === 'ENTRIES' ? 'ticket' : 'wallet'} size={15} color={th.accent} />{packageLabel(pk)}
-              </button>
-            </div>
+          {payAtClubOnly ? (
+            /* Option club « paiement au club » : un seul bouton, pas de choix de moyen. */
+            <button type="button" disabled={selTotal <= 0} onClick={() => paySelection('CLUB')}
+              style={{ ...payBtn(true), opacity: selTotal <= 0 ? 0.45 : 1 }}>
+              <Icon name="check" size={16} color={th.onAccent} />Encaissé · {fmtEuros(selTotal)}
+            </button>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
+                {methods.map((m, i) => (
+                  <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
+                    style={{ ...payBtn(i === 0), opacity: selTotal <= 0 ? 0.45 : 1 }}>
+                    <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.accent} />{QUICK_METHOD_LABEL[m]}
+                  </button>
+                ))}
+              </div>
+              {/* Carnet / porte-monnaie : bouton secondaire, largeur au contenu (label déjà complet via packageLabel). */}
+              {pk && single && (
+                <div style={{ marginTop: 10 }}>
+                  <button type="button" onClick={() => paySelection(pk.kind === 'ENTRIES' ? 'PACK_CREDIT' : 'WALLET', pk.id)}
+                    title={`Régler avec ${packageLabel(pk)}`}
+                    style={{ ...payBtn(false), width: 'auto', height: 46, padding: '0 18px', color: th.accent, fontSize: 13 }}>
+                    <Icon name={pk.kind === 'ENTRIES' ? 'ticket' : 'wallet'} size={15} color={th.accent} />{packageLabel(pk)}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -421,7 +433,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
 
       {/* ── toast Annuler (snackbar fixe en bas — ne recouvre jamais les moyens de paiement) ── */}
       {toast && (
-        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 45, width: 'min(420px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, background: th.text, color: th.bg, borderRadius: 12, padding: '11px 16px', fontSize: 12.5, fontWeight: 600, boxShadow: th.shadow }}>
+        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 55, width: 'min(420px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, background: th.text, color: th.bg, borderRadius: 12, padding: '11px 16px', fontSize: 12.5, fontWeight: 600, boxShadow: th.shadow }}>
           <span style={{ flex: 1 }}>✓ {toast.label} encaissé</span>
           <button type="button" onClick={() => undoToast(toast)}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, padding: 0 }}>Annuler</button>

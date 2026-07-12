@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { Member, CreateMemberBody } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
+import { LevelChip } from '@/components/player/LevelChip';
+import { colorForSeed } from '@/lib/playerColors';
 
 export interface PlayerPickerProps {
   members: Member[];
@@ -124,13 +127,19 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
       )}
 
       {showList && (
-        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, maxHeight: 240, overflowY: 'auto', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, boxShadow: th.shadowSoft }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, maxHeight: 240, overflowY: 'auto', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, boxShadow: th.shadowSoft, padding: 4 }}>
           {matches.length === 0
             ? <div style={{ padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>{members.length === 0 ? 'Aucun membre dans ce club.' : 'Aucun membre trouvé.'}</div>
             : matches.map((m) => (
+                // Ligne « annuaire » alignée sur AddPlayerSheet du front (avatar + niveau + « + »), sans rangée « Mes amis ».
                 <button key={m.userId} type="button" onClick={() => pick(m)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13.5, color: th.text }}>
-                  {m.firstName} {m.lastName} <span style={{ color: th.textFaint }}>· {m.email}</span>
+                  onMouseEnter={(e) => { e.currentTarget.style.background = th.surface2; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+                  <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl ?? null} size={28} color={colorForSeed(m.userId)} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{m.firstName} {m.lastName}</span>
+                  <LevelChip level={m.level} size="xs" />
+                  <span aria-hidden style={{ width: 26, height: 26, borderRadius: '50%', background: `${th.accent}22`, color: th.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>+</span>
                 </button>
               ))}
         </div>

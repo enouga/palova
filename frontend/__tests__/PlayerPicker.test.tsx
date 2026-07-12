@@ -5,7 +5,7 @@ import { PlayerPicker } from '../components/admin/PlayerPicker';
 import type { Member } from '../lib/api';
 
 const members: Member[] = [
-  { id: 'mb-1', userId: 'u-1', firstName: 'Jean', lastName: 'Dupont', email: 'jean@x.fr', phone: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null },
+  { id: 'mb-1', userId: 'u-1', firstName: 'Jean', lastName: 'Dupont', email: 'jean@x.fr', phone: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, avatarUrl: null, level: { level: 6.2, tier: 'Confirmé', isProvisional: false, reliability: 82 } },
   { id: 'mb-2', userId: 'u-2', firstName: 'Marie', lastName: 'Curie', email: 'marie@x.fr', phone: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null },
 ];
 
@@ -32,6 +32,12 @@ describe('PlayerPicker', () => {
     fireEvent.change(screen.getByPlaceholderText('Rechercher un joueur…'), { target: { value: 'mar' } });
     fireEvent.click(screen.getByText(/Marie Curie/));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-2' }));
+  });
+
+  it('affiche la pastille de niveau dans la liste (look annuaire du front)', () => {
+    setup();
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un joueur…'));
+    expect(screen.getByText('6.2')).toBeInTheDocument();
   });
 
   it('affiche le joueur sélectionné et « Changer » appelle onClear', () => {

@@ -1511,6 +1511,7 @@ export interface ClubAdminDetail {
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
+  payAtClubOnly?: boolean;
   clubHouseSections?: ClubHouseSectionSetting[] | null;
   clubHouseKioskSeconds?: number;
   levelSystemEnabled: boolean;
@@ -1616,6 +1617,7 @@ export type UpdateClubBody = Partial<{
   requireOnlinePayment: boolean;
   requireCardFingerprint: boolean;
   quickPaymentMethods: PaymentMethod[];
+  payAtClubOnly: boolean;
   clubHouseSections: ClubHouseSectionSetting[] | null;
   clubHouseKioskSeconds: number;
   levelSystemEnabled: boolean;
@@ -1682,7 +1684,7 @@ export interface CreateReservationBody {
   lessonParams?: { coachId: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; allowSelfEnroll: boolean };
 }
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER' | 'SUBSCRIPTION';
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'CHEQUE' | 'CLUB' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER' | 'SUBSCRIPTION';
 export type PackageKind = 'ENTRIES' | 'WALLET';
 export type VoucherStatus = 'PENDING_REIMBURSEMENT' | 'REIMBURSED';
 

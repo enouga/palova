@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 
-const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'CHEQUE', 'CLUB'];
 const isMoney = (m: string) => MONEY_METHODS.includes(m);
 
 export class AccountingService {

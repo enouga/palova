@@ -41,7 +41,7 @@ function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.I
 }
 
 /** Moyens d'encaissement rapides autorisés comme boutons 1 clic (sous-ensemble de PaymentMethod). */
-const QUICK_PAYMENT_METHODS = ['CASH', 'CARD', 'VOUCHER', 'TRANSFER', 'MEMBER'] as const;
+const QUICK_PAYMENT_METHODS = ['CASH', 'CARD', 'VOUCHER', 'CHEQUE', 'TRANSFER', 'MEMBER'] as const;
 
 /** Valide/normalise la liste des moyens rapides : sous-ensemble autorisé, dédoublonné, ordre conservé. */
 export function normalizeQuickPaymentMethods(input: unknown): string[] {
@@ -291,6 +291,7 @@ export class ClubService {
         requireOnlinePayment: true,
         requireCardFingerprint: true,
         quickPaymentMethods: true,
+        payAtClubOnly: true,
         clubHouseSections: true,
         clubHouseKioskSeconds: true,
         legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
@@ -317,6 +318,7 @@ export class ClubService {
     requireOnlinePayment?: boolean;
     requireCardFingerprint?: boolean;
     quickPaymentMethods?: string[];
+    payAtClubOnly?: boolean;
     clubHouseSections?: unknown;
     clubHouseKioskSeconds?: number;
     legalEntityName?: string;
@@ -378,6 +380,7 @@ export class ClubService {
         ...(typeof params.requireOnlinePayment === 'boolean' ? { requireOnlinePayment: params.requireOnlinePayment } : {}),
         ...(typeof params.requireCardFingerprint === 'boolean' ? { requireCardFingerprint: params.requireCardFingerprint } : {}),
         ...(Array.isArray(params.quickPaymentMethods) ? { quickPaymentMethods: normalizeQuickPaymentMethods(params.quickPaymentMethods) } : {}),
+        ...(typeof params.payAtClubOnly === 'boolean' ? { payAtClubOnly: params.payAtClubOnly } : {}),
         ...(params.clubHouseSections !== undefined ? { clubHouseSections: normalizeClubHouseSections(params.clubHouseSections) } : {}),
         ...(typeof params.clubHouseKioskSeconds === 'number' ? { clubHouseKioskSeconds: normalizeKioskSeconds(params.clubHouseKioskSeconds) } : {}),
         ...(params.legalEntityName !== undefined ? { legalEntityName: legal(params.legalEntityName) } : {}),

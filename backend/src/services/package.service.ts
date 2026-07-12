@@ -9,7 +9,7 @@ import { OFFERS_DIR } from '../utils/uploads';
 const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
 
 /** Méthodes qui représentent un vrai flux d'argent (miroir de accounting.service.ts). */
-const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER'];
+const MONEY_METHODS = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'CHEQUE', 'CLUB'];
 const isMoney = (m: string) => MONEY_METHODS.includes(m);
 
 /** Supprime le fichier d'image uploadé d'une offre (best-effort, jamais bloquant). */

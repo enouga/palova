@@ -1722,9 +1722,9 @@ export class ReservationService {
     if (!reservation)                                  throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.resource.clubId !== params.clubId) throw new Error('CLUB_MISMATCH');
 
-    const methods = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'PACK_CREDIT', 'WALLET', 'MEMBER'];
+    const methods = ['CASH', 'CARD', 'TRANSFER', 'ONLINE', 'OTHER', 'VOUCHER', 'CHEQUE', 'CLUB', 'PACK_CREDIT', 'WALLET', 'MEMBER'];
     const method = (methods.includes(params.method ?? '') ? params.method : 'CASH') as
-      'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
+      'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'OTHER' | 'VOUCHER' | 'CHEQUE' | 'CLUB' | 'PACK_CREDIT' | 'WALLET' | 'MEMBER';
 
     const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 

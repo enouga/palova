@@ -26,7 +26,7 @@ jest.mock('../lib/api', () => ({
 const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 
 // État d'installation PWA contrôlable par test (objet stable — cf. note mocks CLAUDE.md).
-const installCtx: { state: 'hidden' | 'native' | 'ios-manual'; promptInstall: jest.Mock } =
+const installCtx: { state: 'hidden' | 'native' | 'ios-manual' | 'android-manual'; promptInstall: jest.Mock } =
   { state: 'hidden', promptInstall: jest.fn() };
 jest.mock('../lib/useInstallPrompt', () => ({ useInstallPrompt: () => installCtx }));
 
@@ -287,6 +287,20 @@ describe('ProfileMenu', () => {
     expect(installCtx.promptInstall).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: "Installer l'application" })).toBeInTheDocument();
     expect(screen.getByText(/Sur l'écran d'accueil/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Compris'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('état android-manual : le clic ouvre le tutoriel « menu de Chrome »', async () => {
+    document.cookie = 'token=abc; path=/';
+    installCtx.state = 'android-manual';
+    wrap();
+    openMenu();
+    fireEvent.click(await screen.findByText("Installer l'application"));
+    expect(installCtx.promptInstall).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: "Installer l'application" })).toBeInTheDocument();
+    expect(screen.getByText(/menu de Chrome/)).toBeInTheDocument();
+    expect(screen.queryByText(/Sur l'écran d'accueil/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Compris'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

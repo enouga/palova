@@ -229,4 +229,50 @@ describe('CollectPanel', () => {
     );
     expect((screen.getByLabelText(/Encaisser/i) as HTMLInputElement).value).toBe('32');
   });
+
+  const findGrid = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('div')).find((d) => d.style.display === 'grid');
+
+  it('columns : Joueurs et Encaisser côte à côte dans une grille 2 colonnes (desktop)', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <CollectPanel reservation={RV()} due={5200} players={4} members={[]} clubId="club-1" token="tok" onChanged={jest.fn()} columns />
+      </ThemeProvider>,
+    );
+    expect(findGrid(container)).toBeTruthy();
+    // les deux sections restent présentes (l'action d'encaissement n'est plus reléguée sous Joueurs)
+    expect(screen.getByText('Joueurs')).toBeInTheDocument();
+    expect(screen.getByText('Montant à encaisser')).toBeInTheDocument();
+  });
+
+  it('columns : pas de grille quand la résa est soldée (Encaisser masqué → une seule colonne)', () => {
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '13.00', outstanding: '0.00' };
+    const { container } = render(
+      <ThemeProvider>
+        <CollectPanel reservation={RV({ participants: [part], paidAmount: '13.00' })} due={1300} players={4} members={[]} clubId="club-1" token="tok" onChanged={jest.fn()} columns />
+      </ThemeProvider>,
+    );
+    expect(findGrid(container)).toBeUndefined();
+    expect(screen.queryByText('Montant à encaisser')).toBeNull();
+  });
+
+  it('sans columns (défaut) : pas de grille (empilé, mobile)', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <CollectPanel reservation={RV()} due={5200} players={4} members={[]} clubId="club-1" token="tok" onChanged={jest.fn()} />
+      </ThemeProvider>,
+    );
+    expect(findGrid(container)).toBeUndefined();
+  });
+
+  it('payAtClubOnly : un seul bouton « Encaissé » (moyen CLUB), pas de choix de moyen', async () => {
+    renderPanel({}, { payAtClubOnly: true });
+    // aucun bouton de moyen (Carte / Espèces / Ticket CE…)
+    expect(screen.queryByRole('button', { name: 'Carte' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Espèces' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Encaissé/ }));
+    await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ method: 'CLUB', amount: 52 }), 'tok',
+    ));
+  });
 });
