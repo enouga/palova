@@ -131,9 +131,18 @@ export function OpenMatchCard({
           <Btn variant="surface" style={{ ...actionBtn, ...chatTint }} onClick={() => (isAnonymous ? onAuthPrompt(m) : onOpenChat(m))}>
             Discuter
           </Btn>
-          {!isAnonymous && m.unreadCount > 0 && (
-            <span aria-label={`${m.unreadCount} non lus`} style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
-              {m.unreadCount > 99 ? '99+' : m.unreadCount}
+          {!isAnonymous && m.messageCount > 0 && (
+            <span
+              aria-label={m.unreadCount > 0 ? `${m.unreadCount} non lus` : `${m.messageCount} message${m.messageCount > 1 ? 's' : ''}`}
+              style={{
+                position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+                background: m.unreadCount > 0 ? '#e5484d' : th.surface2,
+                color: m.unreadCount > 0 ? '#fff' : th.textMute,
+                fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI,
+                boxShadow: m.unreadCount > 0 ? 'none' : `inset 0 0 0 1px ${th.line}`,
+              }}
+            >
+              {m.messageCount > 99 ? '99+' : m.messageCount}
             </span>
           )}
         </span>

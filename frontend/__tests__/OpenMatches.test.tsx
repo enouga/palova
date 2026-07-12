@@ -65,7 +65,7 @@ const match = (over: Record<string, unknown> = {}) => ({
   id: 'm1', resourceName: 'Terrain 1', startTime: future, endTime: future,
   maxPlayers: 4, spotsLeft: 2, full: false, viewerIsParticipant: false, viewerIsOrganizer: false,
   players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true }],
-  lastMessageAt: null, unreadCount: 0,
+  lastMessageAt: null, unreadCount: 0, messageCount: 0,
   ...over,
 });
 

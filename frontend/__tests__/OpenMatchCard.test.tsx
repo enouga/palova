@@ -34,6 +34,7 @@ function makeMatch(over: Partial<OpenMatch> = {}): OpenMatch {
     players: [{ userId: 'u-org', firstName: 'Org', lastName: 'A', avatarUrl: null, isOrganizer: true, team: 1 as (1 | 2) }],
     lastMessageAt: null,
     unreadCount: 0,
+    messageCount: 0,
     ...over,
   };
 }
@@ -111,25 +112,37 @@ describe('OpenMatchCard', () => {
     expect(screen.queryByText('Padel')).not.toBeInTheDocument();
   });
 
-  it('affiche le badge numérique quand unreadCount > 0', () => {
-    const match = makeMatch({ unreadCount: 3, viewerIsParticipant: true });
+  it('affiche le badge numérique (nombre de messages) quand unreadCount > 0', () => {
+    const match = makeMatch({ unreadCount: 3, messageCount: 5, viewerIsParticipant: true });
     render(
       <ThemeProvider>
         <OpenMatchCard {...makeProps(match)} />
       </ThemeProvider>
     );
     expect(screen.getByLabelText('3 non lus')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
-  it('n\'affiche pas de badge quand unreadCount est 0', () => {
-    const match = makeMatch({ unreadCount: 0 });
+  it('affiche un badge neutre avec le total de messages quand il n\'y a pas de non lus', () => {
+    const match = makeMatch({ unreadCount: 0, messageCount: 5 });
+    render(
+      <ThemeProvider>
+        <OpenMatchCard {...makeProps(match)} />
+      </ThemeProvider>
+    );
+    expect(screen.getByLabelText('5 messages')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('n\'affiche pas de badge quand il n\'y a aucun message', () => {
+    const match = makeMatch({ unreadCount: 0, messageCount: 0 });
     render(
       <ThemeProvider>
         <OpenMatchCard {...makeProps(match)} />
       </ThemeProvider>
     );
     expect(screen.queryByLabelText(/non lus/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/messages?/)).not.toBeInTheDocument();
   });
 
   it('anonyme : « Rejoindre » appelle onAuthPrompt, et « Discuter » ouvre aussi l\'invite', () => {

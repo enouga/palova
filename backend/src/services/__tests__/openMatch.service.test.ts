@@ -43,7 +43,7 @@ describe('OpenMatchService', () => {
           participants: [
             { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
             { userId: 'viewer', isOrganizer: false, team: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
-          ],          openMatchMessages: [],
+          ],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -79,7 +79,7 @@ describe('OpenMatchService', () => {
           participants: [
             { userId: 'org', isOrganizer: true, team: 1, slot: 1, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
             { userId: 'viewer', isOrganizer: false, team: 1, slot: null, user: { firstName: 'V', lastName: 'B', avatarUrl: null } },
-          ],          openMatchMessages: [],
+          ],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -95,7 +95,7 @@ describe('OpenMatchService', () => {
         {
           id: 'm1', startTime: future(48), endTime: future(49),
           resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
-          participants: [], openMatchMessages: [],
+          participants: [], openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -110,7 +110,7 @@ describe('OpenMatchService', () => {
       const row = {
         id: 'm1', startTime: t0, endTime: t1,
         resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
-        participants: [org], openMatchMessages: [],
+        participants: [org], openMatchMessages: [], _count: { openMatchMessages: 0 },
       };
       prismaMock.reservation.findMany.mockResolvedValue([row] as any);
       const [a] = await service.listOpenMatches('club-demo', null);
@@ -144,7 +144,7 @@ describe('OpenMatchService', () => {
           id: 'm1', startTime: future(48), endTime: future(49),
           resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [{ userId: 'org', isOrganizer: true, user: { firstName: 'O', lastName: 'A', avatarUrl: null } }],
-          openMatchMessages: [],
+          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -168,7 +168,7 @@ describe('OpenMatchService', () => {
           participants: [
             { userId: 'player-rated', isOrganizer: true, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
             { userId: 'player-no-rating', isOrganizer: false, user: { firstName: 'Bob', lastName: 'B', avatarUrl: null } },
-          ],          openMatchMessages: [],
+          ],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -196,14 +196,14 @@ describe('OpenMatchService', () => {
           resource: { id: 'court-padel', name: 'Court Padel', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
           participants: [
             { userId: 'player-a', isOrganizer: true, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
-          ],          openMatchMessages: [],
+          ],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
         {
           id: 'match-tennis', startTime: future(48), endTime: future(49),
           resource: { id: 'court-tennis', name: 'Court Tennis', attributes: { format: 'double' }, clubSport: { sport: { key: 'tennis' } } },
           participants: [
             { userId: 'player-a', isOrganizer: false, user: { firstName: 'Alice', lastName: 'A', avatarUrl: null } },
-          ],          openMatchMessages: [],
+          ],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -233,12 +233,12 @@ describe('OpenMatchService', () => {
         {
           id: 'rOpen', startTime: future(48), endTime: future(49),
           resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
-          participants: [{ userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } }],          openMatchMessages: [],
+          participants: [{ userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } }],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
         {
           id: 'rOther', startTime: future(72), endTime: future(73),
           resource: { id: 'court-2', name: 'Court 2', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel' } } },
-          participants: [{ userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } }],          openMatchMessages: [],
+          participants: [{ userId: 'org', isOrganizer: true, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } }],          openMatchMessages: [], _count: { openMatchMessages: 0 },
         },
       ] as any);
 
@@ -736,7 +736,7 @@ describe('OpenMatchService', () => {
       participants: [
         { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } },
       ],
-      openMatchMessages: [],
+      openMatchMessages: [], _count: { openMatchMessages: 0 },
       ...over,
     });
 
