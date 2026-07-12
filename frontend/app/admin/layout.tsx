@@ -167,7 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {club.logoUrl
             ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
             : <Logotype size={22} />}
-          <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{club.name}</span>
+          <span title={club.name} style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
           {/* Note : si l'app PWA du club est installée ET que la « gestion des liens » du
               navigateur est activée pour elle, ce clic peut rouvrir la fenêtre app plutôt
               qu'un onglet — réglage propre à chaque navigateur/poste (chrome://apps,
