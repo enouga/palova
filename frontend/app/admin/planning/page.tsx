@@ -5,7 +5,9 @@ import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
 import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
-import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
+import { endTimeFrom } from '@/lib/duration';
+import { localMinutesOfDay, weekdayOf } from '@/lib/planningTime';
+import { TYPE_META, TYPE_ORDER } from '@/lib/reservationType';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
@@ -19,16 +21,9 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
 import NoShowChargeModal from '@/components/admin/NoShowChargeModal';
-import { TimePicker } from '@/components/ui/TimePicker';
 import { DateField } from '@/components/ui/DateField';
+import { CreateEventModal, CreateEventFormState, CreateEventPrefill } from '@/components/admin/planning/CreateEventModal';
 
-const TYPE_META: Record<ReservationType, { label: string; color: string }> = {
-  COURT:      { label: 'Terrain',   color: '#5e93da' },
-  COACHING:   { label: 'Coaching',  color: '#34b888' },
-  TOURNAMENT: { label: 'Tournoi',   color: '#f0913c' },
-  EVENT:      { label: 'Événement', color: '#a98bf0' },
-};
-const TYPE_ORDER: ReservationType[] = ['COURT', 'COACHING', 'TOURNAMENT', 'EVENT'];
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
 // Libellés / icônes des moyens de paiement pour la liste « Encaissements » (cohérent page Encaissement).
 const METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -72,13 +67,6 @@ function fmtDay(iso: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-// Minutes locales (fuseau du club) depuis minuit pour un instant ISO.
-function localMinutes(iso: string, tz: string): number {
-  const f = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(new Date(iso));
-  const [h, m] = f.split(':').map(Number);
-  return h * 60 + m;
-}
-
 function nowMinutes(tz: string): number {
   const f = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(new Date());
   const [h, m] = f.split(':').map(Number);
@@ -87,19 +75,6 @@ function nowMinutes(tz: string): number {
 
 function fmtHM(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
-}
-
-// weekday Luxon (1=lundi..7=dimanche) depuis une date "YYYY-MM-DD".
-function weekdayOf(dateISO: string): number {
-  const d = new Date(`${dateISO}T00:00:00Z`);
-  const js = d.getUTCDay(); // 0=dimanche..6=samedi
-  return js === 0 ? 7 : js;
-}
-// durée en minutes entre deux "HH:mm" (>0 supposé, validé à la soumission).
-function durationMinutes(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  return (eh * 60 + em) - (sh * 60 + sm);
 }
 
 export default function AdminPlanningPage() {
@@ -142,21 +117,7 @@ export default function AdminPlanningPage() {
 
   const [members, setMembers]   = useState<Member[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [cType, setCType]       = useState<ReservationType>('COURT'); // Terrain par défaut
-  const [cResourceId, setCResId] = useState('');
-  const [cDate, setCDate]       = useState(date);
-  const [cStart, setCStart]     = useState('18:00');
-  const [cEnd, setCEnd]         = useState('19:00');
-  const [cTitle, setCTitle]     = useState('');
-  const [cMember, setCMember] = useState<Member | null>(null);
-  const [cPrice, setCPrice]     = useState('');
-  const [cRecurring, setCRecurring] = useState(false);
-  const [cEndDate, setCEndDate]     = useState('');
-  const [cIsCourse, setCIsCourse]           = useState(false);
-  const [cCoachId, setCCoachId]             = useState('');
-  const [cCapacity, setCCapacity]           = useState('1');
-  const [cAllowSelfEnroll, setCAllowSelfEnroll] = useState(false);
-  const [cEnrollMode, setCEnrollMode]       = useState<'SERIES' | 'PER_SESSION'>('SERIES');
+  const [createPrefill, setCreatePrefill] = useState<CreateEventPrefill | undefined>(undefined);
   const [coaches, setCoaches]               = useState<Coach[]>([]);
   const [students, setStudents]             = useState<LessonStudent[]>([]);
 
@@ -314,11 +275,6 @@ export default function AdminPlanningPage() {
     return playerCount(typeof r?.attributes?.format === 'string' ? r.attributes.format : undefined);
   };
   const dueOf = (rv: ClubReservation) => dueCents(rv, resById.get(rv.resource.id), peak, tz);
-  // Durée de créneau par défaut d'un terrain (durées du sport-de-club, 1h30 si proposée).
-  const defaultDurOf = (rid: string) => {
-    const r = resById.get(rid);
-    return r ? defaultDuration(effectiveDurations(r.clubSport.durationsMin, r.clubSport.sport.defaultDurationsMin)) : 60;
-  };
 
   // Stats (sur les réservations affichées).
   let openMin = 0, bookedMin = 0, outstandingCents = 0;
@@ -326,8 +282,8 @@ export default function AdminPlanningPage() {
   for (const rv of shown) {
     const r = resources.find((x) => x.id === rv.resource.id);
     if (r) {
-      const s = Math.max(localMinutes(rv.startTime, tz), r.openHour * 60);
-      const e = Math.min(localMinutes(rv.endTime, tz), r.closeHour * 60);
+      const s = Math.max(localMinutesOfDay(rv.startTime, tz), r.openHour * 60);
+      const e = Math.min(localMinutesOfDay(rv.endTime, tz), r.closeHour * 60);
       if (e > s) bookedMin += e - s;
     }
     outstandingCents += Math.max(0, dueOf(rv) - toCents(rv.paidAmount));
@@ -396,71 +352,66 @@ export default function AdminPlanningPage() {
     finally { setBusy(false); }
   };
 
-  // Création à la volée + sélection (formulaire de création de résa).
+  // Création à la volée + sélection (formulaire de création de résa) — la modale sélectionne
+  // elle-même le membre créé via le champ `member` du résultat.
   const createForResa = async (body: CreateMemberBody) => {
     if (!token || !clubId) return { tempPassword: null, existed: false };
     const r = await api.adminCreateMember(clubId, body, token);
     const mem = await api.adminGetMembers(clubId, token);
     setMembers(mem);
     const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) setCMember(created);
-    return r;
+    return { ...r, member: created };
   };
 
-  const openCreate = (prefill?: { resourceId?: string; startHour?: number }) => {
-    const sh = Math.max(minOpen, Math.min(prefill?.startHour ?? minOpen, maxClose - 1));
-    const rid = prefill?.resourceId ?? resources[0]?.id ?? '';
-    const start = `${String(sh).padStart(2, '0')}:00`;
-    setCType('COURT'); // Terrain par défaut (le cas le plus fréquent en caisse)
-    setCResId(rid);
-    setCDate(date);
-    setCStart(start);
-    setCEnd(endTimeFrom(start, defaultDurOf(rid), resById.get(rid)?.closeHour ?? maxClose));
-    setCTitle(''); setCMember(null); setCPrice('');
+  const openCreate = (prefill?: CreateEventPrefill) => {
+    setCreatePrefill(prefill);
     setError(null);
-    setCRecurring(false);
-    setCEndDate(date);
-    setCIsCourse(false);
-    setCCoachId('');
-    setCCapacity('1');
-    setCAllowSelfEnroll(false);
-    setCEnrollMode('SERIES');
     setCreateOpen(true);
   };
 
-  const submitCreate = async () => {
+  // Charge les résas d'un jour ≠ `date` (jour affiché sur la grille), pour que la modale garde
+  // conflits/chips justes quand l'utilisateur choisit un autre jour dans le sélecteur.
+  const loadReservationsForDate = useCallback(async (dateISO: string): Promise<ClubReservation[]> => {
+    if (!token || !clubId) return [];
+    const resv = await api.adminGetReservations(clubId, { date: dateISO }, token);
+    return resv.reservations;
+  }, [token, clubId]);
+
+  const submitCreate = async (form: CreateEventFormState) => {
     if (!token || !clubId) return;
-    if (!cResourceId) { setError('Choisis un terrain.'); return; }
-    if (cEnd <= cStart) { setError("L'heure de fin doit être après le début."); return; }
+    if (!form.resourceId) { setError('Choisis un terrain.'); return; }
+    const closeHour = resById.get(form.resourceId)?.closeHour ?? maxClose;
+    const endTime = endTimeFrom(form.startTime, form.durationMin, closeHour);
+    if (endTime <= form.startTime) { setError("La durée doit produire une fin après le début."); return; }
     setBusy(true);
     try {
       setError(null);
-      const courseParams = (cIsCourse && cType === 'COACHING')
-        ? { coachId: cCoachId, capacity: Number(cCapacity), lessonKind: (Number(cCapacity) <= 1 ? 'INDIVIDUAL' : 'COLLECTIVE') as 'INDIVIDUAL' | 'COLLECTIVE', allowSelfEnroll: cAllowSelfEnroll }
+      const courseParams = (form.isCourse && form.type === 'COACHING')
+        ? { coachId: form.coachId, capacity: Number(form.capacity), lessonKind: (Number(form.capacity) <= 1 ? 'INDIVIDUAL' : 'COLLECTIVE') as 'INDIVIDUAL' | 'COLLECTIVE', allowSelfEnroll: form.allowSelfEnroll }
         : null;
-      if (cRecurring) {
-        if (!cEndDate || cEndDate < cDate) { setError('La date de fin doit être après la date de début.'); setBusy(false); return; }
+      if (form.recurring) {
+        if (!form.endDate || form.endDate < form.date) { setError('La date de fin doit être après la date de début.'); setBusy(false); return; }
         const res = await api.adminCreateSeries(clubId, {
-          resourceId: cResourceId,
-          type: cType,
-          title: cTitle.trim() || undefined,
-          weekday: weekdayOf(cDate),
-          startLocal: cStart,
-          durationMin: durationMinutes(cStart, cEnd),
-          startDate: cDate,
-          endDate: cEndDate,
-          ...(courseParams ? { ...courseParams, enrollmentMode: cEnrollMode } : {}),
+          resourceId: form.resourceId,
+          type: form.type,
+          title: form.title.trim() || undefined,
+          weekday: weekdayOf(form.date),
+          startLocal: form.startTime,
+          durationMin: form.durationMin,
+          startDate: form.date,
+          endDate: form.endDate,
+          ...(courseParams ? { ...courseParams, enrollmentMode: form.enrollMode } : {}),
         }, token);
         if (res.skipped.length > 0) {
           alert(`${res.created} séance(s) créée(s). ${res.skipped.length} ignorée(s) (créneau déjà pris).`);
         }
       } else {
         await api.adminCreateReservation(clubId, {
-          resourceId: cResourceId, date: cDate, startTime: cStart, endTime: cEnd,
-          type: cType,
-          title: cTitle.trim() || undefined,
-          memberUserId: cMember?.userId ?? undefined,
-          price: cPrice ? Number(cPrice) : undefined,
+          resourceId: form.resourceId, date: form.date, startTime: form.startTime, endTime,
+          type: form.type,
+          title: form.title.trim() || undefined,
+          memberUserId: form.member?.userId ?? undefined,
+          price: form.price ? Number(form.price) : undefined,
           ...(courseParams ? { lessonParams: courseParams } : {}),
         }, token);
       }
@@ -576,8 +527,8 @@ export default function AdminPlanningPage() {
                   <div style={{ position: 'absolute', left: 0, right: 0, zIndex: 1, top: (r.closeHour - minOpen) * HOUR_H, height: (maxClose - r.closeHour) * HOUR_H, background: th.takenBg, backgroundImage: hatch }} />
                 )}
                 {(byResource.get(r.id) ?? []).map((rv) => {
-                  const s = Math.max(localMinutes(rv.startTime, tz), minOpen * 60);
-                  let e = Math.min(localMinutes(rv.endTime, tz), maxClose * 60);
+                  const s = Math.max(localMinutesOfDay(rv.startTime, tz), minOpen * 60);
+                  let e = Math.min(localMinutesOfDay(rv.endTime, tz), maxClose * 60);
                   if (e <= s) e = maxClose * 60; // résa finissant après minuit : clampe à la fermeture
                   const top = ((s - minOpen * 60) / 60) * HOUR_H;
                   const height = Math.max(((e - s) / 60) * HOUR_H - 4, 26);
@@ -911,142 +862,23 @@ export default function AdminPlanningPage() {
         </>
       )}
 
-      {createOpen && (
-        <div onClick={() => { setCreateOpen(false); setError(null); }}
-          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 460, background: th.surface, borderRadius: 18, boxShadow: th.shadow, padding: 22, fontFamily: th.fontUI, maxHeight: '90vh', overflow: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 21, color: th.text }}>Nouvel événement</div>
-              <button onClick={() => { setCreateOpen(false); setError(null); }} aria-label="Fermer" style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 9, width: 30, height: 30, color: th.textMute, fontSize: 16 }}>✕</button>
-            </div>
-
-            {error && (
-              <div style={{ marginTop: 12, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
-            )}
-
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>Type</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {TYPE_ORDER.map((t) => {
-                  const on = cType === t;
-                  const c = TYPE_META[t].color;
-                  return (
-                    <button key={t} type="button" onClick={() => setCType(t)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', border: `1.5px solid ${on ? c : th.line}`, background: on ? tint(c) : 'transparent', borderRadius: 10, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{TYPE_META[t].label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>Terrain
-                <select value={cResourceId}
-                  onChange={(e) => {
-                    const rid = e.target.value;
-                    setCResId(rid);
-                    // Réaligne la fin sur la durée de créneau par défaut du terrain choisi.
-                    setCEnd(endTimeFrom(cStart, defaultDurOf(rid), resById.get(rid)?.closeHour ?? maxClose));
-                  }}
-                  style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
-                  {resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </label>
-            </div>
-
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 8 }}>Jour &amp; début</div>
-                <TimePicker value={cStart} onChange={setCStart} presets={['08:00', '12:00', '18:00', '20:00']}
-                  leading={<DateField value={cDate} onChange={setCDate} size="sm" />} />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: th.textMute, marginBottom: 8 }}>Fin</div>
-                <TimePicker value={cEnd} onChange={setCEnd} presets={['09:00', '13:00', '19:00', '21:00']} />
-              </div>
-            </div>
-
-            <label style={{ marginTop: 12, fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Intitulé (optionnel)
-              <input type="text" value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex. Maintenance, Tournoi P100…" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }} />
-            </label>
-
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, color: th.textMute, marginBottom: 4 }}>Membre (optionnel)</div>
-              <PlayerPicker
-                members={members}
-                value={cMember}
-                onSelect={setCMember}
-                onClear={() => setCMember(null)}
-                onCreate={createForResa}
-                placeholder="Cliquez pour voir les membres, ou tapez un nom…"
-              />
-            </div>
-
-            {cType === 'COACHING' && (
-              <div style={{ marginTop: 14, borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={cIsCourse} onChange={(e) => setCIsCourse(e.target.checked)} />
-                  Cours encadré (coach + élèves)
-                </label>
-                {cIsCourse && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Coach
-                      <select value={cCoachId} onChange={(e) => setCCoachId(e.target.value)}
-                        style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
-                        <option value="">— choisir —</option>
-                        {coaches.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </label>
-                    <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Capacité (élèves max)
-                      <input type="number" min={1} value={cCapacity} onChange={(e) => setCCapacity(e.target.value)}
-                        style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, color: th.text, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={cAllowSelfEnroll} onChange={(e) => setCAllowSelfEnroll(e.target.checked)} />
-                      Ouvert à l&apos;auto-inscription des joueurs
-                    </label>
-                    {cRecurring && (
-                      <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Inscription
-                        <select value={cEnrollMode} onChange={(e) => setCEnrollMode(e.target.value as 'SERIES' | 'PER_SESSION')}
-                          style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '8px 10px', fontFamily: th.fontUI, fontSize: 14 }}>
-                          <option value="SERIES">À la série (trimestre)</option>
-                          <option value="PER_SESSION">Séance par séance</option>
-                        </select>
-                      </label>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div style={{ marginTop: 14, borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, cursor: 'pointer' }}>
-                <input type="checkbox" checked={cRecurring} onChange={(e) => setCRecurring(e.target.checked)} />
-                Répéter chaque semaine
-              </label>
-              {cRecurring && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: th.textMute, marginBottom: 6 }}>
-                    Tous les <strong style={{ color: th.text }}>{['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][weekdayOf(cDate) - 1]}s</strong> à {cStart}, jusqu&apos;au :
-                  </div>
-                  <DateField value={cEndDate} onChange={setCEndDate} size="sm" />
-                  <div style={{ fontSize: 11.5, color: th.textMute, marginTop: 6 }}>Le membre et le prix ne s&apos;appliquent pas à une série.</div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Prix €
-                <input type="number" min={0} step="0.5" value={cPrice} onChange={(e) => setCPrice(e.target.value)} placeholder="0" style={{ border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14, width: 90 }} />
-              </label>
-              <div style={{ flex: 1 }} />
-              <Btn type="button" icon="check" onClick={submitCreate} disabled={busy || (cIsCourse && !cCoachId)}>{busy ? '…' : 'Créer'}</Btn>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateEventModal
+        open={createOpen}
+        onClose={() => { setCreateOpen(false); setError(null); }}
+        resources={resources}
+        members={members}
+        coaches={coaches}
+        reservationsOfDay={reservations}
+        gridDate={date}
+        peak={peak}
+        tz={tz}
+        prefill={createPrefill}
+        busy={busy}
+        error={error}
+        onSubmit={submitCreate}
+        createForResa={createForResa}
+        loadReservationsForDate={loadReservationsForDate}
+      />
     </div>
   );
 }

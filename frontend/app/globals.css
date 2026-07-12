@@ -205,3 +205,12 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .auth-main { flex: 1; min-height: 100vh; }
   .auth-title { font-size: 42px; }
 }
+
+/* ── Modale « Nouvel événement » (planning admin) : 2 colonnes dès 700px,
+   empilées avant (bascule 100 % CSS, pas de useIsDesktop → aucun flash). ── */
+.pl-create-grid { display: block; }
+.pl-create-recap { margin-top: 16px; }
+@media (min-width: 700px) {
+  .pl-create-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
+  .pl-create-recap { margin-top: 0; }
+}

@@ -24,6 +24,7 @@ jest.mock('../lib/api', () => ({
     adminRemoveReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminChangeReservationParticipant: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
+    adminCreateReservation: jest.fn().mockResolvedValue({ id: 'new-1' }),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -194,4 +195,15 @@ it('la modale liste les encaissements existants (section « Encaissements »)', 
   renderPage();
   await openModal();
   expect(await screen.findByText('Encaissements')).toBeInTheDocument();
+});
+
+it('bouton « Ajouter » → modale Studio préremplie → adminCreateReservation avec le bon body', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([]));
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Créer l'événement/ }));
+  await waitFor(() => expect(api.adminCreateReservation).toHaveBeenCalledWith(
+    'club-1', expect.objectContaining({ resourceId: 'court-1', type: 'COURT' }), 'tok',
+  ));
 });
