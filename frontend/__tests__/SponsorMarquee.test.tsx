@@ -24,6 +24,12 @@ describe('SponsorMarquee', () => {
     expect(screen.getAllByText('Head Padel').length).toBeGreaterThanOrEqual(2); // nom sous la tuile
   });
 
+  it('la tuile logo est en héros (150×84, fond blanc)', () => {
+    wrap([sponsor({}), sponsor({ id: 's2', name: 'Nox' }), sponsor({ id: 's3', name: 'CM' })], now);
+    const tile = screen.getAllByAltText('Head Padel')[0].parentElement;
+    expect(tile).toHaveStyle({ width: '150px', height: '84px', background: 'rgb(255, 255, 255)' });
+  });
+
   it('offre active → chip + bouton code copiable', () => {
     wrap([sponsor({ offerText: '-15 % raquettes', offerCode: 'PADEL15' }), sponsor({ id: 's2', name: 'Nox' }), sponsor({ id: 's3', name: 'CM' })], now);
     expect(screen.getAllByText('-15 % raquettes').length).toBe(2);
