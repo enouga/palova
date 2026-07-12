@@ -256,6 +256,14 @@ describe('popoverPosition', () => {
   it('bascule à gauche quand le panneau déborderait à droite du viewport', () => {
     expect(popoverPosition({ left: 700, right: 790, top: 50 }, 800)).toEqual({ left: 462, top: 50 });
   });
+
+  it('clamp vertical : ne dépasse pas le bas du viewport quand hauteur/viewport fournis', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 700 }, 1280, 230, 8, 800, 200)).toEqual({ left: 228, top: 592 });
+  });
+
+  it('sans viewportHeight/panelHeight fournis, pas de clamp vertical (rétro-compatible)', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 700 }, 1280)).toEqual({ left: 228, top: 700 });
+  });
 });
 
 describe('playerCount', () => {

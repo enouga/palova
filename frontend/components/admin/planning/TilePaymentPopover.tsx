@@ -10,7 +10,9 @@ const PANEL_W = 230;
 export function TilePaymentPopover({ model, anchor }: { model: PastillesModel; anchor: PopoverAnchor }) {
   const { th } = useTheme();
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const { left, top } = popoverPosition(anchor, viewportWidth, PANEL_W);
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const estimatedPanelHeight = 54 + model.seats.length * 20;
+  const { left, top } = popoverPosition(anchor, viewportWidth, PANEL_W, 8, viewportHeight, estimatedPanelHeight);
   const remaining = model.totalDueCents - model.totalPaidCents;
   return (
     <div role="tooltip" style={{

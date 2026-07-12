@@ -297,10 +297,24 @@ export interface PopoverAnchor { left: number; right: number; top: number }
 /**
  * Position (fixed) du panneau de détail au survol d'une vignette : à droite du
  * bloc par défaut, bascule à gauche si le panneau déborderait du viewport.
+ * Clamp vertical optionnel (fourni ssi `viewportHeight`/`panelHeight` sont
+ * connus) pour ne jamais déborder en bas.
  */
-export function popoverPosition(anchor: PopoverAnchor, viewportWidth: number, panelWidth = 230, gap = 8): { left: number; top: number } {
+export function popoverPosition(
+  anchor: PopoverAnchor,
+  viewportWidth: number,
+  panelWidth = 230,
+  gap = 8,
+  viewportHeight?: number,
+  panelHeight?: number,
+): { left: number; top: number } {
   const flip = anchor.right + gap + panelWidth > viewportWidth;
-  return { left: flip ? anchor.left - gap - panelWidth : anchor.right + gap, top: anchor.top };
+  const left = flip ? anchor.left - gap - panelWidth : anchor.right + gap;
+  let top = anchor.top;
+  if (viewportHeight != null && panelHeight != null) {
+    top = Math.max(gap, Math.min(top, viewportHeight - panelHeight - gap));
+  }
+  return { left, top };
 }
 
 // ── Encaissement optimiste ─────────────────────────────────────────────────
