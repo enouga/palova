@@ -2,6 +2,7 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
 
 let listImpl = jest.fn();
 let getImpl = jest.fn();
@@ -42,9 +43,9 @@ describe('GET /emails', () => {
   it('401 sans token', async () => {
     expect((await request(app).get(base)).status).toBe(401);
   });
-  it('403 pour STAFF', async () => {
+  it('200 pour STAFF (accès élargi à toute l\'équipe)', async () => {
     prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
-    expect((await request(app).get(base).set(auth)).status).toBe(403);
+    expect((await request(app).get(base).set(auth)).status).toBe(200);
   });
   it('200 items pour ADMIN', async () => {
     const res = await request(app).get(base).set(auth);
@@ -105,5 +106,28 @@ describe('POST /emails/:type/test', () => {
       .send({ subject: 's', heading: 'h', bodyHtml: '<p>b</p>' });
     expect(res.status).toBe(200);
     expect(testImpl).toHaveBeenCalledWith('club-demo', 'registration.confirmed', expect.any(Object), 'owner@x.fr');
+  });
+});
+
+describe('POST /emails/images', () => {
+  it('200 pour STAFF : écrit le fichier et renvoie une URL /uploads/email-images/', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
+    const write = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined as never);
+    const res = await request(app).post(`${base}/images`).set(auth)
+      .attach('image', Buffer.from([0x89, 0x50, 0x4e, 0x47]), { filename: 'a.png', contentType: 'image/png' });
+    expect(res.status).toBe(200);
+    expect(res.body.url).toMatch(/^\/uploads\/email-images\/club-demo-\d+\.png$/);
+    expect(write).toHaveBeenCalled();
+    write.mockRestore();
+  });
+
+  it('400 pour un format non supporté', async () => {
+    const res = await request(app).post(`${base}/images`).set(auth)
+      .attach('image', Buffer.from('x'), { filename: 'a.gif', contentType: 'image/gif' });
+    expect(res.status).toBe(400);
+  });
+
+  it('401 sans token', async () => {
+    expect((await request(app).post(`${base}/images`)).status).toBe(401);
   });
 });
