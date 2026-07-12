@@ -5,8 +5,10 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ClubHouseSectionsCard } from '@/components/admin/ClubHouseSectionsCard';
+import { AMENITIES } from '@/lib/clubShowcase';
 
 const MAX_PHOTOS = 12;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -20,7 +22,7 @@ export default function AdminClubPage() {
   const clubId = club?.id;
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [pres, setPres] = useState<ClubPresentation | null>(null);
-  const [form, setForm] = useState({ presentationText: '', openingHoursText: '', contactPhone: '', contactEmail: '' });
+  const [form, setForm] = useState({ presentationText: '', openingHoursText: '', contactPhone: '', contactEmail: '', foundedYear: '', amenities: [] as string[] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -39,6 +41,8 @@ export default function AdminClubPage() {
       openingHoursText: p.openingHoursText ?? '',
       contactPhone: p.contactPhone ?? '',
       contactEmail: p.contactEmail ?? '',
+      foundedYear: p.foundedYear != null ? String(p.foundedYear) : '',
+      amenities: p.amenities ?? [],
     });
   };
 
@@ -63,10 +67,17 @@ export default function AdminClubPage() {
         openingHoursText: form.openingHoursText || null,
         contactPhone: form.contactPhone || null,
         contactEmail: form.contactEmail || null,
+        foundedYear: form.foundedYear ? Number(form.foundedYear) : null,
+        amenities: form.amenities,
       }, token));
       setSaved(true);
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError((e as Error).message === 'VALIDATION_ERROR' ? 'Année de création invalide' : (e as Error).message); }
     finally { setSaving(false); }
+  };
+
+  const toggleAmenity = (key: string) => {
+    setSaved(false);
+    setForm((f) => ({ ...f, amenities: f.amenities.includes(key) ? f.amenities.filter((k) => k !== key) : [...f.amenities, key] }));
   };
 
   const photos = pres?.photos ?? [];
@@ -146,6 +157,23 @@ export default function AdminClubPage() {
               Email de contact
               <input value={form.contactEmail} onChange={(e) => { setSaved(false); setForm({ ...form, contactEmail: e.target.value }); }} placeholder="contact@club.fr" type="email" style={inputStyle} />
             </label>
+          </div>
+          <label style={{ ...labelStyle, maxWidth: 180 }}>
+            Année de création
+            <input value={form.foundedYear} onChange={(e) => { setSaved(false); setForm({ ...form, foundedYear: e.target.value.replace(/\D/g, '') }); }}
+              placeholder="Ex. 2021" inputMode="numeric" aria-label="Année de création" style={inputStyle} />
+          </label>
+          <div style={labelStyle}>
+            Sur place (équipements & services)
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+              {AMENITIES.map((a) => (
+                <label key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 11, background: th.bg, border: `1px solid ${th.line}`, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.text }}>
+                  <input type="checkbox" checked={form.amenities.includes(a.key)} onChange={() => toggleAmenity(a.key)} aria-label={a.label} />
+                  <Icon name={a.icon} size={15} color={th.accent} />
+                  {a.label}
+                </label>
+              ))}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
             <Btn onClick={save} icon="check" disabled={saving}>{saving ? '…' : 'Enregistrer'}</Btn>

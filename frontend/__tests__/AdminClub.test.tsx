@@ -9,7 +9,8 @@ jest.mock('@/lib/api', () => ({
   api: {
     adminGetPresentation: jest.fn().mockResolvedValue({
       presentationText: 'Texte', contactPhone: null, contactEmail: null, openingHoursText: null,
-      coverImageUrl: null, photos: [{ id: 'p1', url: '/uploads/club-photos/1.jpg', caption: null, sortOrder: 0 }],
+      coverImageUrl: null, foundedYear: null, amenities: [],
+      photos: [{ id: 'p1', url: '/uploads/club-photos/1.jpg', caption: null, sortOrder: 0 }],
     }),
     adminUpdatePresentation: jest.fn().mockResolvedValue({}),
     adminAddClubPhoto: jest.fn(),
@@ -33,6 +34,17 @@ describe('/admin/club', () => {
     fireEvent.click(screen.getByRole('button', { name: /Enregistrer/i }));
     await waitFor(() => expect(api.adminUpdatePresentation).toHaveBeenCalledWith(
       'c1', expect.objectContaining({ presentationText: 'Nouveau texte' }), 't',
+    ));
+  });
+
+  it('édite année de création + équipements', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByLabelText(/Année de création/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Année de création/i), { target: { value: '2021' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Parking/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer/i }));
+    await waitFor(() => expect(api.adminUpdatePresentation).toHaveBeenCalledWith(
+      'c1', expect.objectContaining({ foundedYear: 2021, amenities: ['parking'] }), 't',
     ));
   });
 
