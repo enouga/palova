@@ -247,6 +247,10 @@ model Club {
   openingHoursText String?  @map("opening_hours_text")  // texte libre, ex. « Lun-Ven 8h-22h »
   // Opt-in : afficher les formules (abonnements + carnets) sur le Club-house public.
   showOffersPublicly Boolean @default(false) @map("show_offers_publicly")
+  // Vitrine club : année de création (kicker « Depuis 2021 ») + équipements cochés
+  // (catalogue fermé AMENITY_KEYS — presentation.service, miroir front lib/clubShowcase).
+  foundedYear Int?     @map("founded_year")
+  amenities   String[] @default([]) @map("amenities")
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
   coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
