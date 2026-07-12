@@ -9,7 +9,7 @@ import {
 } from '@/lib/events';
 
 // Barre de filtres de la page Events. Chaque source porte l'icône et l'accent de ses
-// cartes (trophy·apricot / bolt·cyan / cours·bleu) — la barre enseigne le code couleur
+// cartes (trophy·apricot / bolt·violet / cours·bleu) — la barre enseigne le code couleur
 // de la liste. Dessous, un tiroir de facettes groupées et labellisées, avec compteurs
 // live (une facette ne se compte jamais elle-même) et « Quand » transverse aux sources.
 
@@ -18,7 +18,7 @@ type Facets = ReturnType<typeof agendaFacets>;
 const SOURCES: { key: AgendaFilter; label: string; icon: IconName; accent: string | null }[] = [
   { key: 'tout', label: 'Tout', icon: 'grid', accent: null }, // null = encre du thème
   { key: 'competitions', label: 'Compétitions', icon: 'trophy', accent: ACCENTS.apricot },
-  { key: 'animations', label: 'Animations', icon: 'bolt', accent: ACCENTS.cyan },
+  { key: 'animations', label: 'Animations', icon: 'bolt', accent: ACCENTS.violet },
   { key: 'cours', label: 'Cours', icon: 'user', accent: ACCENTS.blue },
 ];
 

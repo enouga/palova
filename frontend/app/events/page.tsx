@@ -169,7 +169,7 @@ export default function EventsPage() {
                 <AgendaCard
                   key={`event-${item.event.id}`}
                   icon="bolt"
-                  accent={ACCENTS.cyan}
+                  accent={ACCENTS.violet}
                   tag={KIND_LABEL[item.event.kind]}
                   title={item.event.name}
                   dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
