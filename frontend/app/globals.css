@@ -178,7 +178,7 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .pl-cal-grid {
     --cal-h-min: 52px; --cal-h-max: 68px; --cal-ar: 1 / 1.15;
     --cal-pad: 5px 5px 9px;
-    --cal-chip: 21px; --cal-chip-fs: 12px; --cal-chip-pad: 6px;
+    --cal-chip: 17px; --cal-chip-fs: 10.5px; --cal-chip-pad: 5px;
     --cal-ribbon: 6px; --cal-knob: 13px;
     --cal-rb1: 5px; --cal-rb2: 12px;
     --cal-cb0: 5px; --cal-cb1: 13px; --cal-cb2: 20px;
