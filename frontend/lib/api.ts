@@ -588,7 +588,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) }, token),
   adminGetPresentation: (clubId: string, token: string) =>
     request<ClubPresentation>(`/api/clubs/${clubId}/admin/presentation`, {}, token),
-  adminUpdatePresentation: (clubId: string, body: Partial<Pick<ClubPresentation, 'presentationText' | 'contactPhone' | 'contactEmail' | 'openingHoursText'>>, token: string) =>
+  adminUpdatePresentation: (clubId: string, body: Partial<Pick<ClubPresentation, 'presentationText' | 'contactPhone' | 'contactEmail' | 'openingHoursText' | 'foundedYear' | 'amenities'>>, token: string) =>
     request<ClubPresentation>(`/api/clubs/${clubId}/admin/presentation`, { method: 'PATCH', body: JSON.stringify(body) }, token),
   adminUpdateClubPhoto: (clubId: string, id: string, body: { caption?: string | null; sortOrder?: number }, token: string) =>
     request<ClubPhoto>(`/api/clubs/${clubId}/admin/photos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
@@ -1906,6 +1906,8 @@ export interface ClubPresentation {
   latitude: number | null; longitude: number | null;
   contactPhone: string | null; contactEmail: string | null;
   openingHoursText: string | null;
+  foundedYear: number | null;
+  amenities: string[];
   photos: ClubPhoto[];
 }
 
