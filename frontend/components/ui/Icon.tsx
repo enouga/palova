@@ -5,7 +5,8 @@ export type IconName =
   | 'chevL' | 'chevR' | 'arrowR' | 'plus' | 'card' | 'x' | 'search' | 'bell'
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
   | 'moon' | 'logout' | 'grip' | 'trophy' | 'eye' | 'eyeOff' | 'info' | 'home'
-  | 'share' | 'download' | 'ball' | 'trash' | 'menu' | 'wallet' | 'chat' | 'send';
+  | 'share' | 'download' | 'ball' | 'trash' | 'menu' | 'wallet' | 'chat' | 'send'
+  | 'cup' | 'cart' | 'shower' | 'parking' | 'racket' | 'parasol' | 'wifi' | 'whistle' | 'camera';
 
 interface IconProps {
   name: IconName;
@@ -63,6 +64,15 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     case 'wallet': glyph = <><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H17a2 2 0 0 1 2 2" {...p} /><path d="M3 7.5V17a2.5 2.5 0 0 0 2.5 2.5H19a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5.5A2.5 2.5 0 0 1 3 7.5Z" {...p} /><circle cx="16.3" cy="13" r="1.15" fill={color} stroke="none" /></>; break;
     case 'chat': glyph = <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" {...p} />; break;
     case 'send': glyph = <><path d="M21.5 2.5L11 13" {...p} /><path d="M21.5 2.5L15 21l-4-8-8-4 18.5-6.5z" {...p} /></>; break;
+    case 'cup': glyph = <><path d="M4.5 4.5h15L12 12.5v6" {...p} /><path d="M8.5 21h7" {...p} /><path d="M7 8h10" {...p} /></>; break;
+    case 'cart': glyph = <><circle cx="9.5" cy="19.5" r="1.4" {...p} /><circle cx="17" cy="19.5" r="1.4" {...p} /><path d="M3.5 4.5h2l2.2 11h10.6l2.2-8H6.4" {...p} /></>; break;
+    case 'shower': glyph = <><path d="M4.5 21V6a3 3 0 013-3h2.5" {...p} /><path d="M12 8.5a4.5 4.5 0 019 0z" {...p} /><path d="M13.5 12v.01M16.5 12v.01M19.5 12v.01M15 15.5v.01M18 15.5v.01" {...p} /></>; break;
+    case 'parking': glyph = <><rect x="4" y="4" width="16" height="16" rx="3.5" {...p} /><path d="M9.5 17V7.5H13a2.75 2.75 0 010 5.5H9.5" {...p} /></>; break;
+    case 'racket': glyph = <><circle cx="14.5" cy="9" r="6" {...p} /><path d="M10.3 13.2L4.5 19" {...p} /><path d="M11.5 5.5l6.5 6.5M9 8.5l6 6" {...p} /></>; break;
+    case 'parasol': glyph = <><path d="M12 3.5a9 9 0 019 9H3a9 9 0 019-9z" {...p} /><path d="M12 12.5V19a2 2 0 002 2" {...p} /></>; break;
+    case 'wifi': glyph = <><path d="M2.5 9.5a14 14 0 0119 0M5.5 13a9.5 9.5 0 0113 0M8.5 16.2a5 5 0 017 0" {...p} /><circle cx="12" cy="19.4" r="1" fill={color} stroke="none" /></>; break;
+    case 'whistle': glyph = <><circle cx="9.5" cy="14" r="5.5" {...p} /><path d="M14.5 11.5L21 8.5v4.5l-6 1.5" {...p} /></>; break;
+    case 'camera': glyph = <><rect x="3" y="7" width="18" height="13" rx="2.5" {...p} /><path d="M8.5 7l1.5-2.5h4L15.5 7" {...p} /><circle cx="12" cy="13.5" r="3.5" {...p} /></>; break;
   }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0, ...style }}>
