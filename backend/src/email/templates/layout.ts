@@ -19,8 +19,8 @@ export interface Brand {
 // (URL absolue via links.platformAsset) car il dépend du domaine canonique.
 export const PALOVA_BRAND: Brand = { name: 'Palova', logoUrl: null, accentColor: '#5e93da' };
 
-// Bleu nuit d'ancrage — conservé pour compat (utilisé ailleurs / testé), plus utilisé par
-// renderLayout lui-même (le gabarit « Éditorial épuré » n'a plus de dégradé d'en-tête).
+// Bleu nuit d'ancrage — gardé pour l'API publique testée, plus utilisé par renderLayout
+// lui-même (le gabarit « Éditorial épuré » n'a plus de dégradé d'en-tête).
 const HEADER_DARK_FACTOR = 0.5;
 
 /** Assombrit une couleur hex (multiplie les canaux RGB). */
@@ -91,7 +91,7 @@ export function renderLayout(input: LayoutInput): string {
   const SANS = 'Helvetica,Arial,sans-serif';
 
   // En-tête centré : logo (image) ou tuile encre avec l'initiale du club.
-  const initial = escapeHtml((brand.name || 'P').trim().charAt(0).toUpperCase());
+  const initial = escapeHtml(((brand.name || '').trim().charAt(0) || 'P').toUpperCase());
   const logo = brand.logoUrl
     ? `<img src="${brand.logoUrl}" alt="${escapeHtml(brand.name)}" height="36" style="display:inline-block;height:36px;width:auto;max-height:36px;border-radius:9px;border:0;outline:none;text-decoration:none;" />`
     : `<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td width="36" height="36" style="width:36px;height:36px;background:${INK};border-radius:9px;text-align:center;vertical-align:middle;font-family:${SANS};font-size:17px;font-weight:800;color:#ffffff;">${initial}</td></tr></table>`;
@@ -122,7 +122,7 @@ export function renderLayout(input: LayoutInput): string {
     ctaLabel && ctaUrl
       ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 6px;">
           <tr><td bgcolor="${INK}" style="border-radius:999px;background:${INK};">
-            <a href="${ctaUrl}" style="display:inline-block;padding:13px 28px;font-family:${SANS};font-size:14.5px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">${escapeHtml(ctaLabel)}</a>
+            <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;padding:13px 28px;font-family:${SANS};font-size:14.5px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">${escapeHtml(ctaLabel)}</a>
           </td></tr>
         </table>`
       : '';
@@ -134,7 +134,7 @@ export function renderLayout(input: LayoutInput): string {
   const coordParts = [brand.address, brand.phone, brand.email].filter(Boolean) as string[];
   const coordLine = `<strong style="color:#5d6675;">${escapeHtml(brand.name)}</strong>${coordParts.length ? ' · ' + coordParts.map(escapeHtml).join(' · ') : ''}`;
   const manageLink = brand.manageUrl
-    ? `<a href="${brand.manageUrl}" style="color:${FAINT};text-decoration:underline;">Gérer mes notifications</a> · `
+    ? `<a href="${escapeHtml(brand.manageUrl)}" style="color:${FAINT};text-decoration:underline;">Gérer mes notifications</a> · `
     : '';
 
   return `<!doctype html>

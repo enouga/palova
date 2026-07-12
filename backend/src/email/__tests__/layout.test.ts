@@ -74,4 +74,27 @@ describe('renderLayout — gabarit « Éditorial épuré »', () => {
     expect(html).toContain('border-top:1px solid #e8eaee');
     expect(html).toContain('demain');
   });
+
+  it('échappe les valeurs hostiles (nom, coordonnées, URLs) — pas d\'injection HTML', () => {
+    const hostileBrand: Brand = {
+      name: '<script>alert(1)</script>',
+      logoUrl: null,
+      accentColor: '#5e93da',
+      address: '"><img src=x onerror=alert(1)>',
+      phone: '<b>tel</b>',
+      email: 'x@x.fr" onmouseover="alert(1)',
+      manageUrl: 'https://x.fr" onmouseover="alert(1)',
+    };
+    const html = renderLayout({
+      brand: hostileBrand,
+      heading: 'Titre',
+      introHtml: '<p>Corps</p>',
+      ctaLabel: 'Voir',
+      ctaUrl: 'https://x.fr" onmouseover="alert(2)',
+    });
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<b>tel</b>');
+    expect(html).not.toContain('onmouseover="alert');
+  });
 });
