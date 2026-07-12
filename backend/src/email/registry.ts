@@ -1,6 +1,6 @@
 import sanitizeHtml from 'sanitize-html';
 import { Brand, InfoRow, PALOVA_BRAND, escapeHtml, renderLayout } from './templates/layout';
-import { absoluteAsset } from './links';
+import { absoluteAsset, clubAppUrl } from './links';
 
 const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
@@ -46,12 +46,21 @@ export function sanitizeBodyHtml(html: string): string {
   return sanitizeHtml(html, SANITIZE_OPTS);
 }
 
-/** Brand email d'un club (logo en URL absolue, repli Palova). */
-export function brandFromClub(club: { name: string; logoUrl: string | null; accentColor: string }): Brand {
+/** Brand email d'un club (logo en URL absolue, coordonnées pour le pied de page, repli Palova). */
+export function brandFromClub(club: {
+  name: string; logoUrl: string | null; accentColor: string;
+  slug?: string | null; address?: string | null; city?: string | null;
+  contactPhone?: string | null; contactEmail?: string | null;
+}): Brand {
+  const address = [club.address, club.city].filter(Boolean).join(', ');
   return {
     name: club.name || PALOVA_BRAND.name,
     logoUrl: absoluteAsset(club.logoUrl),
     accentColor: club.accentColor || PALOVA_BRAND.accentColor,
+    address: address || null,
+    phone: club.contactPhone || null,
+    email: club.contactEmail || null,
+    manageUrl: club.slug ? clubAppUrl(club.slug, '/me/profile') : null,
   };
 }
 

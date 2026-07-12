@@ -163,3 +163,26 @@ describe('renderClubEmail', () => {
     expect(mail.html).toContain('background:#f4f4f5');
   });
 });
+
+describe('brandFromClub — coordonnées & manageUrl', () => {
+  it('construit adresse jointe, téléphone, email et manageUrl depuis le slug', () => {
+    const b = brandFromClub({
+      name: 'Arena', logoUrl: null, accentColor: '#5e93da',
+      slug: 'arena', address: '12 rue du Padel', city: 'Paris',
+      contactPhone: '01 23 45 67 89', contactEmail: 'c@arena.fr',
+    });
+    expect(b.address).toBe('12 rue du Padel, Paris');
+    expect(b.phone).toBe('01 23 45 67 89');
+    expect(b.email).toBe('c@arena.fr');
+    expect(b.manageUrl).toContain('arena');
+    expect(b.manageUrl).toContain('/me/profile');
+  });
+
+  it('champs absents → null (jamais undefined dans le rendu)', () => {
+    const b = brandFromClub({ name: 'Arena', logoUrl: null, accentColor: '#5e93da' });
+    expect(b.address).toBeNull();
+    expect(b.phone).toBeNull();
+    expect(b.email).toBeNull();
+    expect(b.manageUrl).toBeNull();
+  });
+});
