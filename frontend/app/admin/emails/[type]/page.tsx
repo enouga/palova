@@ -1,14 +1,13 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, AdminEmailDetail, EmailDraft, EmailVarDef } from '@/lib/api';
+import { api, AdminEmailDetail, EmailDraft } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { EmailPreview } from '@/components/admin/email/EmailPreview';
-
-type Field = 'subject' | 'heading' | 'bodyHtml' | 'ctaLabel';
+import { RichEmailEditor } from '@/components/admin/email/RichEmailEditor';
 
 export default function EmailEditorPage() {
   const { th } = useTheme();
@@ -24,11 +23,6 @@ export default function EmailEditorPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const focused = useRef<Field>('bodyHtml');
-  const refs = {
-    subject: useRef<HTMLInputElement>(null), heading: useRef<HTMLInputElement>(null),
-    bodyHtml: useRef<HTMLTextAreaElement>(null), ctaLabel: useRef<HTMLInputElement>(null),
-  };
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -52,17 +46,12 @@ export default function EmailEditorPage() {
     return () => clearTimeout(h);
   }, [token, clubId, type, draft, detail]);
 
-  function insertVar(v: EmailVarDef) {
-    const f = focused.current;
-    const el = refs[f].current;
-    const token2 = `{{${v.key}}}`;
-    setDraft((d) => {
-      const cur = (d[f] ?? '') as string;
-      const start = el?.selectionStart ?? cur.length;
-      const end = el?.selectionEnd ?? cur.length;
-      return { ...d, [f]: cur.slice(0, start) + token2 + cur.slice(end) };
-    });
-  }
+  const setField = (f: keyof EmailDraft) => (stored: string) => setDraft((d) => ({ ...d, [f]: stored }));
+
+  const uploadImage = useCallback(async (file: File) => {
+    if (!token || !clubId) throw new Error('Non connecté');
+    return (await api.adminUploadEmailImage(clubId, file, token)).url;
+  }, [token, clubId]);
 
   async function save() {
     if (!token || !clubId) return;
@@ -89,8 +78,6 @@ export default function EmailEditorPage() {
   }
 
   const labelStyle: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 6 };
-  const inputStyle: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 12, background: th.bg, color: th.text, border: `1px solid ${th.line}`, fontFamily: th.fontUI, fontSize: 15 };
-  const areaStyle: CSSProperties = { padding: '12px 14px', borderRadius: 12, background: th.bg, color: th.text, border: `1px solid ${th.line}`, fontFamily: 'monospace', fontSize: 14, minHeight: 150, resize: 'vertical' };
 
   if (!detail) {
     if (loadError) return <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55' }}>{loadError}</p>;
@@ -98,35 +85,32 @@ export default function EmailEditorPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1080, display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+    <div style={{ maxWidth: 1120, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <button onClick={() => router.push('/admin/emails')} style={{ ...labelStyle, background: 'none', border: 'none', cursor: 'pointer', alignSelf: 'start' }}>← Tous les emails</button>
-      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, margin: 0, color: th.text }}>{detail.title}</h1>
-      <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '-12px 0 0' }}>{detail.description}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, margin: 0, color: th.text }}>{detail.title}</h1>
+        <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, padding: '3px 11px', borderRadius: 99, background: detail.override ? `${th.accent}22` : th.bgElev, color: detail.override ? th.accent : th.textFaint, border: `1px solid ${detail.override ? th.accent : th.line}` }}>
+        {detail.override ? 'Personnalisé' : 'Défaut'}
+        </span>
+      </div>
+      <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '-8px 0 0' }}>{detail.description}</p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24, alignItems: 'start' }}>
         {/* Colonne édition */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {detail.vars.map((v) => (
-              <button key={v.key} type="button" title={v.label} onClick={() => insertVar(v)}
-                style={{ fontFamily: 'monospace', fontSize: 12, padding: '4px 8px', borderRadius: 8, border: `1px solid ${th.line}`, background: th.bgElev, color: th.text, cursor: 'pointer' }}>
-                {`{{${v.key}}}`}
-              </button>
-            ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          <div style={labelStyle}>Objet
+            <RichEmailEditor singleLine value={draft.subject} vars={detail.vars} onChange={setField('subject')} />
           </div>
-          <label style={labelStyle}>Objet
-            <input ref={refs.subject} style={inputStyle} value={draft.subject} onFocus={() => (focused.current = 'subject')} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))} />
-          </label>
-          <label style={labelStyle}>Titre
-            <input ref={refs.heading} style={inputStyle} value={draft.heading} onFocus={() => (focused.current = 'heading')} onChange={(e) => setDraft((d) => ({ ...d, heading: e.target.value }))} />
-          </label>
-          <label style={labelStyle}>Corps (HTML)
-            <textarea ref={refs.bodyHtml} style={areaStyle} value={draft.bodyHtml} onFocus={() => (focused.current = 'bodyHtml')} onChange={(e) => setDraft((d) => ({ ...d, bodyHtml: e.target.value }))} />
-          </label>
+          <div style={labelStyle}>Titre
+            <RichEmailEditor singleLine value={draft.heading} vars={detail.vars} onChange={setField('heading')} />
+          </div>
+          <div style={labelStyle}>Message
+            <RichEmailEditor value={draft.bodyHtml} vars={detail.vars} onChange={setField('bodyHtml')} onUploadImage={uploadImage} />
+          </div>
           {detail.hasCta && (
-            <label style={labelStyle}>Libellé du bouton
-              <input ref={refs.ctaLabel} style={inputStyle} value={draft.ctaLabel} onFocus={() => (focused.current = 'ctaLabel')} onChange={(e) => setDraft((d) => ({ ...d, ctaLabel: e.target.value }))} />
-            </label>
+            <div style={labelStyle}>Libellé du bouton
+              <RichEmailEditor singleLine value={draft.ctaLabel ?? ''} vars={detail.vars} onChange={setField('ctaLabel')} />
+            </div>
           )}
           {msg && <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.accent, margin: 0 }}>{msg}</p>}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -136,8 +120,8 @@ export default function EmailEditorPage() {
           </div>
         </div>
 
-        {/* Colonne aperçu */}
-        <div>
+        {/* Colonne aperçu (collante en desktop) */}
+        <div style={{ position: 'sticky', top: 12, minWidth: 0 }}>
           <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 6 }}>Aperçu</div>
           <EmailPreview html={previewHtml} />
         </div>
