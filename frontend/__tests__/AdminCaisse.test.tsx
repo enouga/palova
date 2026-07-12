@@ -58,7 +58,7 @@ it('vend un abonnement depuis le panneau unifié', async () => {
   renderPage();
   await screen.findByText('115,00 €');
   fireEvent.focus(screen.getByPlaceholderText(/Cliquez pour voir les membres/));
-  fireEvent.click(await screen.findByText(/marie@x\.fr/));   // ligne membre (unique par email)
+  fireEvent.click(await screen.findByText('Marie Dupont'));   // ligne membre (PlayerPicker n'affiche pas l'email)
   fireEvent.click(await screen.findByText(/Abo Or/));
   fireEvent.click(screen.getByRole('button', { name: /Encaisser/ }));
   await waitFor(() => expect(api.adminSellSubscription).toHaveBeenCalledWith('club-1', 'u1', expect.objectContaining({ planId: 'pl1' }), 'tok'));

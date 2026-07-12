@@ -204,16 +204,23 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
   };
 
   // Association d'un membre à une place générique (mêmes appels que ReservationCollect).
+  // La place associée reste sélectionnée ensuite (focus) : `idx` est capturé avant la remise
+  // à zéro de `associatingIndex`, `statuses[idx]` retombe forcément non payé.
   const needsHolder = !reservation.user && (reservation.participants ?? []).length === 0;
+  const finishAssociation = async (idx: number | null, updated: ClubReservation) => {
+    setAssociatingIndex(null);
+    if (idx !== null) setSelected(new Set([idx]));
+    await onChanged(updated);
+  };
   const associate = async (userId: string) => {
     if (assocBusy) return;
     setAssocBusy(true);
+    const idx = associatingIndex;
     try {
       const updated = needsHolder
         ? await api.adminAssignReservationMember(clubId, reservation.id, userId, token)
         : await api.adminAddReservationParticipant(clubId, reservation.id, userId, token);
-      setAssociatingIndex(null);
-      await onChanged(updated);
+      await finishAssociation(idx, updated);
     } catch (e) { onError(mapAssocError(e)); }
     finally { setAssocBusy(false); }
   };
@@ -221,22 +228,31 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
   const changeParticipant = async (participantId: string, userId: string) => {
     if (assocBusy) return;
     setAssocBusy(true);
+    const idx = associatingIndex;
     try {
       const updated = await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, userId, token);
-      setAssociatingIndex(null);
-      await onChanged(updated);
+      await finishAssociation(idx, updated);
     } catch (e) { onError(mapAssocError(e)); }
     finally { setAssocBusy(false); }
   };
+  // Création + association en UN SEUL aller-retour réseau : le serveur crée le membre PUIS
+  // l'associe dans la même requête (avant : 2 appels séquentiels — créer, puis associer).
   const createAndAssociate = async (body: CreateMemberBody, replaceParticipantId?: string) => {
-    const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) {
-      if (replaceParticipantId) await changeParticipant(replaceParticipantId, created.userId);
-      else await associate(created.userId);
-    }
-    return r;
+    if (assocBusy) return { tempPassword: null, existed: false, userId: '' };
+    setAssocBusy(true);
+    const idx = associatingIndex;
+    try {
+      const updated = replaceParticipantId
+        ? await api.adminChangeReservationParticipantNew(clubId, reservation.id, replaceParticipantId, body, token)
+        : needsHolder
+          ? await api.adminAssignReservationMemberNew(clubId, reservation.id, body, token)
+          : await api.adminAddReservationParticipantNew(clubId, reservation.id, body, token);
+      await finishAssociation(idx, updated);
+      return updated.createdMember ?? { tempPassword: null, existed: false, userId: '' };
+    } catch (e) {
+      onError(mapAssocError(e));
+      return { tempPassword: null, existed: false, userId: '' };
+    } finally { setAssocBusy(false); }
   };
 
   // ── dérivés d'affichage ──────────────────────────────────────────────────
@@ -269,9 +285,9 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     cursor: isPaid ? 'default' : 'pointer', opacity: isPaid ? 0.8 : 1, position: 'relative',
   });
   const payBtn = (primary: boolean): CSSProperties => ({
-    width: '100%', boxSizing: 'border-box', height: 52, border: 'none', borderRadius: 14, cursor: 'pointer',
+    width: '100%', boxSizing: 'border-box', height: 46, border: 'none', borderRadius: 13, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700,
+    fontFamily: th.fontUI, fontSize: 14, fontWeight: 700,
     background: primary ? th.accent : `${th.accent}16`, color: primary ? th.onAccent : th.text,
     boxShadow: primary ? `0 3px 10px ${th.accent}4d` : 'none',
   });
@@ -290,7 +306,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
       return (
         <div key={`t${s.index}`} style={{ ...tileBase(false, false), cursor: 'default', gridColumn: '1 / -1', alignItems: 'stretch' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <AssociateMemberPicker slug={slug} token={token} excludeIds={excludeIds} members={members}
+            <AssociateMemberPicker slug={slug} token={token} excludeIds={excludeIds} members={members} busy={assocBusy}
               onSelect={s.participantId ? (uid) => changeParticipant(s.participantId!, uid) : associate}
               onCancel={() => setAssociatingIndex(null)}
               onCreate={(body) => createAndAssociate(body, s.participantId ?? undefined)} />
@@ -400,10 +416,10 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             </button>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {methods.map((m, i) => (
                   <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
-                    style={{ ...payBtn(i === 0), opacity: selTotal <= 0 ? 0.45 : 1 }}>
+                    style={{ ...payBtn(i === 0), flex: '1 1 130px', width: 'auto', opacity: selTotal <= 0 ? 0.45 : 1 }}>
                     <Icon name={METHOD_ICON[m]} size={15} color={i === 0 ? th.onAccent : th.accent} />{QUICK_METHOD_LABEL[m]}
                   </button>
                 ))}
@@ -424,11 +440,8 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
       )}
 
       {/* ── pied ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 18px 14px', fontSize: 12.5 }}>
-        <button type="button" onClick={onOpenDetails} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0 }}>
-          Montant libre, reçu, historique <Icon name="chevR" size={14} color={th.accent} />
-        </button>
-        <button type="button" onClick={onCancel} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>Annuler la réservation</button>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '0 18px 14px', fontSize: 12.5 }}>
+        <button type="button" onClick={onCancel} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>Annuler la réservation</button>
       </div>
 
       {/* ── toast Annuler (snackbar fixe en bas — ne recouvre jamais les moyens de paiement) ── */}

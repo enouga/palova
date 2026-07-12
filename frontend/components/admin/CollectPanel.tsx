@@ -227,16 +227,27 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     finally { setBusy(false); }
   };
 
-  // Création à la volée : crée le membre, le retrouve, applique l'action (assign/ajout).
-  const createThen = async (body: CreateMemberBody, then: (m: Member) => Promise<void>) => {
-    const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await then(created);
-    return r;
+  // Création + association en UN SEUL aller-retour réseau (le serveur crée le membre PUIS
+  // l'associe dans la même requête — avant : créer, recharger tout l'annuaire pour retrouver
+  // l'id créé par email, puis associer : 3 allers-retours au lieu d'1).
+  const createAndAssign = async (body: CreateMemberBody) => {
+    setBusy(true);
+    try {
+      const updated = await api.adminAssignReservationMemberNew(clubId, reservation.id, body, token);
+      onChanged(updated);
+      return updated.createdMember ?? { tempPassword: null, existed: false };
+    } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
+    finally { setBusy(false); }
   };
-  const createAndAssign = (body: CreateMemberBody) => createThen(body, assignPlayer);
-  const createAndAddParticipant = (body: CreateMemberBody) => createThen(body, addParticipant);
+  const createAndAddParticipant = async (body: CreateMemberBody) => {
+    setBusy(true);
+    try {
+      const updated = await api.adminAddReservationParticipantNew(clubId, reservation.id, body, token);
+      onChanged(updated);
+      return updated.createdMember ?? { tempPassword: null, existed: false };
+    } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
+    finally { setBusy(false); }
+  };
   // Associe un membre à une place libre : 1re place sans titulaire → titulaire (assign),
   // sinon → participant supplémentaire (comme la page Encaissement).
   const associateEmpty = async (m: Member) => {
@@ -244,7 +255,11 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     else await addParticipant(m);
     setAssociatingIndex(null);
   };
-  const createAndAssociateEmpty = (body: CreateMemberBody) => createThen(body, associateEmpty);
+  const createAndAssociateEmpty = async (body: CreateMemberBody) => {
+    const r = !reservation.user && bills.length === 0 ? await createAndAssign(body) : await createAndAddParticipant(body);
+    setAssociatingIndex(null);
+    return r;
+  };
 
   // ── tokens de style partagés ───────────────────────────────────────────
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '7px 10px', fontFamily: th.fontUI, fontSize: 14 };
@@ -280,7 +295,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
         <div style={{ marginBottom: bills.length > 0 || emptyCount > 0 ? 12 : 4 }}>
           <div style={caption}>Réservation au nom de</div>
           <PlayerPicker
-            members={members}
+            members={members} busy={busy}
             value={reservation.user ? { firstName: reservation.user.firstName, lastName: reservation.user.lastName } : null}
             onSelect={assignPlayer} onClear={() => {}} onCreate={createAndAssign}
             placeholder="Cliquez pour voir les membres, ou tapez un nom…"
@@ -306,9 +321,19 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                 return (
                   <div key={p.id} style={{ padding: '2px 0' }}>
                     <div style={{ ...caption, marginBottom: 4 }}>Remplacer {p.firstName} {p.lastName} par…</div>
-                    <PlayerPicker members={members} value={null}
+                    <PlayerPicker members={members} value={null} busy={busy}
                       onSelect={(m) => changeParticipant(p.id, m)} onClear={() => setChangingId(null)}
-                      onCreate={(body) => createThen(body, (m) => changeParticipant(p.id, m))}
+                      onCreate={async (body) => {
+                        setBusy(true);
+                        try {
+                          const updated = await api.adminChangeReservationParticipantNew(clubId, reservation.id, p.id, body, token);
+                          setChangingId(null);
+                          if (payParticipantId === p.id) setPayParticipantId(null);
+                          onChanged(updated);
+                          return updated.createdMember ?? { tempPassword: null, existed: false };
+                        } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
+                        finally { setBusy(false); }
+                      }}
                       placeholder="Rechercher un membre…" />
                   </div>
                 );
@@ -359,7 +384,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
               if (associatingIndex === idx) {
                 return (
                   <div key={`empty-${idx}`} style={{ padding: '2px 0' }}>
-                    <PlayerPicker members={members} value={null}
+                    <PlayerPicker members={members} value={null} busy={busy}
                       onSelect={associateEmpty} onClear={() => setAssociatingIndex(null)}
                       onCreate={createAndAssociateEmpty} placeholder="Rechercher un membre…" />
                   </div>
@@ -400,7 +425,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
         {/* Ajout libre — events / réservations hors capacité COURT (les places numérotées remplacent ce picker pour un terrain) */}
         {!isCourt && (
           <div style={{ marginTop: 10 }}>
-            <PlayerPicker members={members} value={null} onSelect={addParticipant} onClear={() => {}} onCreate={createAndAddParticipant} placeholder="+ Ajouter un joueur…" />
+            <PlayerPicker members={members} value={null} busy={busy} onSelect={addParticipant} onClear={() => {}} onCreate={createAndAddParticipant} placeholder="+ Ajouter un joueur…" />
           </div>
         )}
       </div>

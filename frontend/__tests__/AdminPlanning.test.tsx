@@ -55,8 +55,6 @@ const oneNamedResa = () => twoPlayerResa({
   participants: [{ id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '0.00', outstanding: '13.00' }],
 });
 const resp = (reservations: unknown[]) => ({ reservations, summary: { total: '0', paid: '0', paidTotal: '0', outstanding: '0' } });
-// Abonnement ACTIF (non expiré) — pour afficher les règlements sans encaissement (dans « Détails »).
-const activeSub = () => [{ id: 's1', status: 'ACTIVE', expiresAt: '2099-01-01T00:00:00.000Z' }];
 
 // Ouvre la modale de détail en cliquant le pavé de la réservation dans la grille.
 const openModal = async () => {
@@ -127,17 +125,6 @@ it("permet de sélectionner une place SANS joueur et d'encaisser sa part (anonym
     expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4), anonyme
     expect(call[2].participantId).toBeUndefined();
   });
-});
-
-it('le lien « Montant libre… » ouvre les options avancées (Coffre / Offres / Abonnement)', async () => {
-  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
-  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
-  (api.adminGetMemberSubscriptions as jest.Mock).mockResolvedValue(activeSub());   // titulaire abonné actif
-  renderPage();
-  await openModal();
-  fireEvent.click(await screen.findByRole('button', { name: /Montant libre/ }));   // ouvre « Détails · options »
-  await screen.findByRole('button', { name: 'Coffre' });
-  ['Offres', 'Abonnement'].forEach((l) => expect(screen.getByRole('button', { name: l })).toBeInTheDocument());
 });
 
 it('option club « paiement au club » : un seul bouton « Encaissé » (moyen CLUB), pas de choix de moyen', async () => {

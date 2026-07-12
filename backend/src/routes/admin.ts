@@ -129,6 +129,28 @@ function asString(v: unknown): string {
   return '';
 }
 
+/**
+ * Résout le `memberUserId` d'une association joueur↔réservation : soit fourni directement,
+ * soit à créer à la volée (`body.newMember`) — évite au client 2 appels réseau séquentiels
+ * (créer le membre PUIS l'associer) en les fusionnant côté serveur en un seul aller-retour.
+ */
+async function resolveMemberUserId(clubId: string, body: Record<string, unknown>): Promise<{
+  memberUserId: string;
+  createdMember: { userId: string; tempPassword: string | null; existed: boolean } | null;
+}> {
+  const direct = asString(body.memberUserId);
+  if (direct) return { memberUserId: direct, createdMember: null };
+  const nm = body.newMember as { firstName?: unknown; lastName?: unknown; email?: unknown; phone?: unknown } | undefined;
+  if (nm && typeof nm === 'object') {
+    const created = await clubService.createMember(clubId, {
+      firstName: asString(nm.firstName), lastName: asString(nm.lastName),
+      email: asString(nm.email), phone: asString(nm.phone) || undefined,
+    });
+    return { memberUserId: created.userId, createdMember: created };
+  }
+  return { memberUserId: '', createdMember: null };
+}
+
 async function assertLevelSystem(clubId: string): Promise<void> {
   const c = await prisma.club.findUnique({ where: { id: clubId }, select: { levelSystemEnabled: true } });
   if (!c || !c.levelSystemEnabled) throw new Error('LEVEL_SYSTEM_DISABLED');
@@ -464,26 +486,26 @@ router.patch('/reservations/:id/schedule', async (req: ClubScopedRequest, res: R
 });
 
 // (Ré)affecte le joueur d'une réservation (associer un joueur à l'encaissement).
+// `memberUserId` (membre existant) OU `newMember` (créé à la volée, en un seul aller-retour).
 router.patch('/reservations/:id/member', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const memberUserId = asString(req.body.memberUserId);
-    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
-    const updated = await reservationService.assignReservationMember(
-      asString(req.params.id), req.membership!.clubId, memberUserId,
-    );
-    res.json(updated);
+    const clubId = req.membership!.clubId;
+    const { memberUserId, createdMember } = await resolveMemberUserId(clubId, req.body);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId ou newMember requis' });
+    const updated = await reservationService.assignReservationMember(asString(req.params.id), clubId, memberUserId);
+    res.json({ ...updated, createdMember });
   } catch (err) { handleError(err, res, next); }
 });
 
 // Ajoute un membre comme participant (répartition du paiement par joueur).
+// `memberUserId` (membre existant) OU `newMember` (créé à la volée, en un seul aller-retour).
 router.post('/reservations/:id/participants', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const memberUserId = asString(req.body.memberUserId);
-    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
-    const updated = await reservationService.addReservationParticipant(
-      asString(req.params.id), req.membership!.clubId, memberUserId,
-    );
-    res.json(updated);
+    const clubId = req.membership!.clubId;
+    const { memberUserId, createdMember } = await resolveMemberUserId(clubId, req.body);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId ou newMember requis' });
+    const updated = await reservationService.addReservationParticipant(asString(req.params.id), clubId, memberUserId);
+    res.json({ ...updated, createdMember });
   } catch (err) { handleError(err, res, next); }
 });
 
@@ -498,14 +520,16 @@ router.delete('/reservations/:id/participants/:participantId', async (req: ClubS
 });
 
 // Remplace un participant par un autre membre, en une fois (recalcule les parts).
+// `memberUserId` (membre existant) OU `newMember` (créé à la volée, en un seul aller-retour).
 router.patch('/reservations/:id/participants/:participantId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const memberUserId = asString(req.body.memberUserId);
-    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId requis' });
+    const clubId = req.membership!.clubId;
+    const { memberUserId, createdMember } = await resolveMemberUserId(clubId, req.body);
+    if (!memberUserId) return void res.status(400).json({ error: 'memberUserId ou newMember requis' });
     const updated = await reservationService.changeReservationParticipant(
-      asString(req.params.id), req.membership!.clubId, asString(req.params.participantId), memberUserId,
+      asString(req.params.id), clubId, asString(req.params.participantId), memberUserId,
     );
-    res.json(updated);
+    res.json({ ...updated, createdMember });
   } catch (err) { handleError(err, res, next); }
 });
 
@@ -741,8 +765,15 @@ router.delete('/reservation-series/:id', async (req: ClubScopedRequest, res: Res
 router.get('/lessons/:id/students', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await lessonService.listStudents(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
+// `userId` (élève existant) OU `newMember` (créé à la volée, en un seul aller-retour).
 router.post('/lessons/:id/students', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
-  try { res.status(201).json(await lessonService.adminEnrollStudent(asString(req.params.id), asString(req.body.userId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+  try {
+    const clubId = req.membership!.clubId;
+    const { memberUserId, createdMember } = await resolveMemberUserId(clubId, { memberUserId: req.body.userId, newMember: req.body.newMember });
+    if (!memberUserId) return void res.status(400).json({ error: 'userId ou newMember requis' });
+    const enrolled = await lessonService.adminEnrollStudent(asString(req.params.id), memberUserId, clubId);
+    res.status(201).json({ ...enrolled, createdMember });
+  } catch (e) { handleError(e, res, next); }
 });
 router.patch('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await lessonService.adminPromoteStudent(asString(req.params.id), asString(req.params.enrollId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }

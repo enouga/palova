@@ -49,6 +49,9 @@ export default function AdminCaissePage() {
   const [refundTarget, setRefundTarget] = useState<CaissePayment | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  // Busy dédié au picker acheteur (distinct de `busy` = encaissement de la vente) : feedback
+  // immédiat pendant l'aller-retour réseau de la sélection/création d'un acheteur.
+  const [pickingBuyer, setPickingBuyer] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -84,20 +87,21 @@ export default function AdminCaissePage() {
 
   const pickBuyer = async (m: Member) => {
     if (!token || !clubId) return;
+    setPickingBuyer(true);
     setBuyer(m);
     try { setBuyerPackages(await api.adminGetMemberPackages(clubId, m.userId, token)); }
     catch (e) { setError((e as Error).message); }
+    finally { setPickingBuyer(false); }
   };
 
-  // Création d'un joueur à la volée : crée le compte+adhésion, recharge le
-  // fichier-membres, puis sélectionne le nouvel acheteur.
+  // Création d'un joueur à la volée : crée le compte+adhésion (le back renvoie directement
+  // la ligne membre — pas de `adminGetMembers` complet pour la retrouver), l'ajoute au
+  // fichier-membres local, puis sélectionne le nouvel acheteur.
   const createBuyer = async (body: CreateMemberBody) => {
     if (!token || !clubId) return { tempPassword: null, existed: false };
     const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    setMembers(mem);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await pickBuyer(created);
+    setMembers((cur) => [...cur, r.member]);
+    await pickBuyer(r.member);
     return r;
   };
 
@@ -198,7 +202,7 @@ export default function AdminCaissePage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <SellPanel
             members={members} templates={templates} plans={plans}
-            buyer={buyer} buyerPackages={buyerPackages} busy={busy}
+            buyer={buyer} buyerPackages={buyerPackages} busy={busy} pickerBusy={pickingBuyer}
             onPickBuyer={pickBuyer} onClear={() => { setBuyer(null); setBuyerPackages([]); }}
             onCreate={createBuyer} onSell={onSell}
           />

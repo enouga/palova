@@ -12,6 +12,9 @@ jest.mock('../lib/api', () => ({
     adminAddReservationParticipant: jest.fn(),
     adminRemoveReservationParticipant: jest.fn(),
     adminChangeReservationParticipant: jest.fn(),
+    adminAssignReservationMemberNew: jest.fn(),
+    adminAddReservationParticipantNew: jest.fn(),
+    adminChangeReservationParticipantNew: jest.fn(),
     refundPayment: jest.fn(),
     adminCreateMember: jest.fn(),
   },
@@ -145,6 +148,24 @@ describe('CollectPanel', () => {
     fireEvent.focus(screen.getByPlaceholderText('Rechercher un membre…'));
     fireEvent.click(screen.getByText(/Marie Curie/));
     await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
+  });
+
+  it('« associer » une place libre en créant un nouveau joueur : UN SEUL appel réseau (pas de refetch annuaire)', async () => {
+    (api.adminAddReservationParticipantNew as jest.Mock).mockResolvedValue({ id: 'rv-1' });
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    renderPanel({ participants: [part] });
+    fireEvent.click(screen.getAllByRole('button', { name: /Associer un membre/ })[0]);
+    // 2 pickers « + Créer un joueur » à ce stade (« Réservation au nom de » + la place associée) : le 2nd est le nôtre.
+    fireEvent.click(screen.getAllByRole('button', { name: /Créer un joueur/ })[1]);
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Jo' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Doe' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jo@x.fr' } });
+    fireEvent.click(screen.getByRole('button', { name: /Créer le joueur/ }));
+    await waitFor(() => expect(api.adminAddReservationParticipantNew).toHaveBeenCalledWith(
+      'club-1', 'rv-1', expect.objectContaining({ firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' }), 'tok',
+    ));
+    expect(api.adminCreateMember).not.toHaveBeenCalled();
+    expect(api.adminGetMembers).not.toHaveBeenCalled();
   });
 
   it('collectEmptyPlaces : une place sans joueur est sélectionnable (« Régler ») et encaisse une part anonyme', async () => {

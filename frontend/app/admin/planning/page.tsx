@@ -539,14 +539,13 @@ export default function AdminPlanningPage() {
   };
 
   // Création à la volée + sélection (formulaire de création de résa) — la modale sélectionne
-  // elle-même le membre créé via le champ `member` du résultat.
+  // elle-même le membre créé via le champ `member` du résultat. Le back renvoie directement la
+  // ligne membre : plus de `adminGetMembers` complet pour la retrouver par email.
   const createForResa = async (body: CreateMemberBody) => {
     if (!token || !clubId) return { tempPassword: null, existed: false };
     const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    setMembers(mem);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    return { ...r, member: created };
+    setMembers((cur) => [...cur, r.member]);
+    return r;
   };
 
   const openCreate = (prefill?: CreateEventPrefill) => {
@@ -869,7 +868,10 @@ export default function AdminPlanningPage() {
               <div style={{ marginTop: 12 }}>
                 {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
                     puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
-                    « Montant libre, reçu, historique » ouvre la modale Détails (CollectPanel). */}
+                    « Montant libre, options avancées » (ouvrant la modale Détails/CollectPanel) a été
+                    retiré — jugé inutile, le reçu/historique est déjà affiché en dessous dans cette
+                    page. `onOpenDetails` ne reste câblé que pour le cas due=0 (« Encaisser un
+                    montant… »). */}
                 <CashRegister
                   reservation={selected}
                   players={playersOf(selected)}
@@ -960,6 +962,7 @@ export default function AdminPlanningPage() {
                   <PlayerPicker
                     members={members}
                     value={null}
+                    busy={busy}
                     onSelect={(m) => {
                       setBusy(true);
                       api.adminEnrollStudent(clubId!, selected.lesson!.id, m.userId, token!)
@@ -969,18 +972,17 @@ export default function AdminPlanningPage() {
                     }}
                     onClear={() => {}}
                     onCreate={async (body) => {
-                      const r = await api.adminCreateMember(clubId!, body, token!);
-                      const mem = await api.adminGetMembers(clubId!, token!);
-                      setMembers(mem);
-                      const created = mem.find((mm) => mm.email.toLowerCase() === body.email.toLowerCase());
-                      if (created) {
-                        setBusy(true);
-                        await api.adminEnrollStudent(clubId!, selected.lesson!.id, created.userId, token!)
-                          .then(() => loadStudents(selected.lesson!.id))
-                          .catch(() => {})
-                          .finally(() => setBusy(false));
-                      }
-                      return r;
+                      // Un seul aller-retour réseau : le serveur crée le membre PUIS l'inscrit
+                      // dans la même requête (avant : créer, recharger tout l'annuaire pour
+                      // retrouver l'id créé par email, puis inscrire — 3 allers-retours au lieu d'1).
+                      setBusy(true);
+                      try {
+                        const r = await api.adminEnrollNewStudent(clubId!, selected.lesson!.id, body, token!);
+                        await loadStudents(selected.lesson!.id);
+                        return r.createdMember ?? { tempPassword: null, existed: false };
+                      } catch {
+                        return { tempPassword: null, existed: false };
+                      } finally { setBusy(false); }
                     }}
                     placeholder="+ Ajouter un élève…"
                   />

@@ -142,14 +142,22 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
     } catch (e) { onError(mapAssocError(e)); }
     finally { setBusyKey(null); }
   };
-  const createThen = async (body: CreateMemberBody, then: (m: Member) => Promise<void>) => {
-    const r = await api.adminCreateMember(clubId, body, token);
-    const mem = await api.adminGetMembers(clubId, token);
-    const created = mem.find((m) => m.email.toLowerCase() === body.email.toLowerCase());
-    if (created) await then(created);
-    return r;
+  // Création + association en UN SEUL aller-retour réseau (le serveur crée le membre PUIS
+  // l'associe dans la même requête — avant : créer, recharger tout l'annuaire pour retrouver
+  // l'id créé par email, puis associer : 3 allers-retours au lieu d'1).
+  const createAndAssociate = async (body: CreateMemberBody) => {
+    if (busyKey) return { tempPassword: null, existed: false };
+    setBusyKey('assoc');
+    try {
+      const updated = needsHolder
+        ? await api.adminAssignReservationMemberNew(clubId, reservation.id, body, token)
+        : await api.adminAddReservationParticipantNew(clubId, reservation.id, body, token);
+      setAssociatingIndex(null);
+      await onChanged(updated);
+      return updated.createdMember ?? { tempPassword: null, existed: false };
+    } catch (e) { onError(mapAssocError(e)); return { tempPassword: null, existed: false }; }
+    finally { setBusyKey(null); }
   };
-  const createAndAssociate = (body: CreateMemberBody) => createThen(body, associate);
 
   // Annule (rembourse) le règlement d'une ligne : reflète le remboursement immédiatement,
   // puis rembourse intégralement les paiements (déjà persistés) en file. Les paiements
@@ -243,7 +251,7 @@ export function ReservationCollect({ reservation, players, due, members, quickMe
         return (
           <div key={`e${s.index}`} style={row(i)}>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <PlayerPicker members={members} value={null} onSelect={associate} onClear={() => setAssociatingIndex(null)} onCreate={createAndAssociate} placeholder="Rechercher un membre…" />
+              <PlayerPicker members={members} value={null} busy={anyBusy} onSelect={associate} onClear={() => setAssociatingIndex(null)} onCreate={createAndAssociate} placeholder="Rechercher un membre…" />
             </div>
           </div>
         );

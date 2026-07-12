@@ -8,6 +8,8 @@ jest.mock('../lib/api', () => ({
     adminAddPayment: jest.fn().mockResolvedValue({ id: 'p1' }),
     adminAssignReservationMember: jest.fn().mockResolvedValue({ id: 'r1' }),
     adminAddReservationParticipant: jest.fn().mockResolvedValue({ id: 'r1' }),
+    adminAssignReservationMemberNew: jest.fn().mockResolvedValue({ id: 'r1' }),
+    adminAddReservationParticipantNew: jest.fn().mockResolvedValue({ id: 'r1' }),
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminGetMembers: jest.fn().mockResolvedValue([]),
     refundPayment: jest.fn().mockResolvedValue({ id: 'rf1' }),
@@ -158,6 +160,22 @@ it('place vide → définit le titulaire si aucun joueur (assign)', async () => 
   fireEvent.click(screen.getByText(/New Player/));
   await waitFor(() => expect(api.adminAssignReservationMember).toHaveBeenCalledWith('club-1', 'r1', 'u9', 'tok'));
   expect(api.adminAddReservationParticipant).not.toHaveBeenCalled();
+});
+
+it('place vide → créer un nouveau joueur l\'associe en UN SEUL appel réseau (pas de refetch annuaire)', async () => {
+  const reservation = baseResa({ participants: [part('pt-1', 'Jean', 'Test', { isOrganizer: true, share: '52.00', outstanding: '52.00' })] });
+  renderCollect({ reservation });
+  fireEvent.click(screen.getAllByRole('button', { name: /Associer un membre/ })[0]);
+  fireEvent.click(screen.getByRole('button', { name: /Créer un joueur/ }));
+  fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Jo' } });
+  fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Doe' } });
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jo@x.fr' } });
+  fireEvent.click(screen.getByRole('button', { name: /Créer le joueur/ }));
+  await waitFor(() => expect(api.adminAddReservationParticipantNew).toHaveBeenCalledWith(
+    'club-1', 'r1', expect.objectContaining({ firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr' }), 'tok',
+  ));
+  expect(api.adminCreateMember).not.toHaveBeenCalled();
+  expect(api.adminGetMembers).not.toHaveBeenCalled();
 });
 
 it('réservation non-COURT → pas de places, mais encaissement disponible', () => {
