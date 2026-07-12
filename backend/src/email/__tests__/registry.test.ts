@@ -2,6 +2,7 @@ import {
   substituteText,
   substituteHtml,
   sanitizeBodyHtml,
+  decorateBodyHtml,
   collectPlaceholders,
 } from '../registry';
 import { EMAIL_DEFS, sampleVars } from '../registry';
@@ -49,6 +50,31 @@ describe('sanitizeBodyHtml', () => {
   it('supprime les schémas de lien dangereux', () => {
     const out = sanitizeBodyHtml('<a href="javascript:alert(1)">x</a>');
     expect(out).not.toContain('javascript:');
+  });
+});
+
+describe('sanitizeBodyHtml — images', () => {
+  it('conserve les img /uploads et http(s), rejette les autres sources', () => {
+    expect(sanitizeBodyHtml('<img src="/uploads/email-images/a.png" alt="x">')).toContain('/uploads/email-images/a.png');
+    expect(sanitizeBodyHtml('<img src="https://exemple.fr/a.png">')).toContain('https://exemple.fr/a.png');
+    expect(sanitizeBodyHtml('<img src="javascript:alert(1)">')).not.toContain('<img');
+    expect(sanitizeBodyHtml('<img alt="sans src">')).not.toContain('<img');
+    expect(sanitizeBodyHtml('<img src="/etc/passwd">')).not.toContain('<img');
+  });
+});
+
+describe('decorateBodyHtml', () => {
+  it('absolutise les /uploads, style les images, colore les liens', () => {
+    const out = decorateBodyHtml('<p><img src="/uploads/email-images/a.png" alt="" /><a href="https://x.fr">x</a></p>', '#5e93da');
+    expect(out).toContain('/uploads/email-images/a.png');
+    expect(out).toMatch(/src="https?:\/\/[^"]+\/uploads\/email-images\/a\.png"/);
+    expect(out).toContain('max-width:100%');
+    expect(out).toContain('<a style="color:#5e93da;"');
+  });
+
+  it('style les blockquotes sans style', () => {
+    const out = decorateBodyHtml('<blockquote>citation</blockquote>', '#5e93da');
+    expect(out).toContain('border-left:3px solid');
   });
 });
 
@@ -153,6 +179,16 @@ describe('renderClubEmail', () => {
     expect(mail.text).not.toContain('&amp;');
     expect(mail.text).not.toContain('&lt;');
     expect(mail.text).not.toContain('Léa,Votre');
+  });
+
+  it('renderClubEmail : une image uploadée dans un corps personnalisé arrive absolutisée et stylée', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, {
+      subject: 's', heading: 'h',
+      bodyHtml: '<p>ok</p><img src="/uploads/email-images/a.png" alt="affiche">',
+      ctaLabel: null, footerNote: null,
+    } as any);
+    expect(mail.html).toMatch(/src="https?:\/\/[^"]+\/uploads\/email-images\/a\.png"/);
+    expect(mail.html).toContain('max-width:100%');
   });
 
   it('ne nettoie PAS le corps par défaut (styles inline préservés)', () => {

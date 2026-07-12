@@ -72,6 +72,14 @@ describe('EmailTemplateService (écriture)', () => {
       .rejects.toThrow('VALIDATION_ERROR');
   });
 
+  it('upsert accepte un corps de 15 000 caractères et refuse au-delà de 20 000', async () => {
+    (prismaMock.clubEmailTemplate.upsert as jest.Mock).mockImplementation(async (args: any) => args.create);
+    const ok = { subject: 's', heading: 'h', bodyHtml: '<p>' + 'a'.repeat(15000) + '</p>' };
+    await expect(service.upsert('c1', 'registration.confirmed', ok)).resolves.toBeTruthy();
+    const tooBig = { subject: 's', heading: 'h', bodyHtml: '<p>' + 'a'.repeat(20001) + '</p>' };
+    await expect(service.upsert('c1', 'registration.confirmed', tooBig)).rejects.toThrow('VALIDATION_ERROR');
+  });
+
   it('remove supprime la surcharge (idempotent)', async () => {
     prismaMock.clubEmailTemplate.deleteMany.mockResolvedValue({ count: 1 } as any);
     await service.remove('club-1', 'registration.confirmed');

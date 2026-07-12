@@ -26,9 +26,16 @@ export function collectPlaceholders(tpl: string): string[] {
 }
 
 const SANITIZE_OPTS: sanitizeHtml.IOptions = {
-  allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'a', 'ul', 'ol', 'li', 'span', 'h2', 'h3', 'blockquote'],
-  allowedAttributes: { a: ['href'], p: ['style'], span: ['style'], h2: ['style'], h3: ['style'] },
+  allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'a', 'ul', 'ol', 'li', 'span', 'h2', 'h3', 'blockquote', 'img'],
+  allowedAttributes: { a: ['href'], p: ['style'], span: ['style'], h2: ['style'], h3: ['style'], img: ['src', 'alt'] },
   allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+  allowProtocolRelative: false,
+  // Une image n'est gardée que si sa source est http(s) ou un chemin /uploads/ de Palova
+  // (allowedSchemes ne filtre pas les chemins relatifs — on le fait ici explicitement).
+  exclusiveFilter: (frame) =>
+    frame.tag === 'img' &&
+    !(/^https?:\/\//i.test(frame.attribs.src || '') || (frame.attribs.src || '').startsWith('/uploads/')),
   allowedStyles: {
     '*': {
       color: [/^#[0-9a-fA-F]{3,6}$/, /^rgb\(/],
@@ -44,6 +51,22 @@ const SANITIZE_OPTS: sanitizeHtml.IOptions = {
 /** Assainit le corps HTML **personnalisé** d'un club (allowlist serrée). */
 export function sanitizeBodyHtml(html: string): string {
   return sanitizeHtml(html, SANITIZE_OPTS);
+}
+
+/**
+ * Décore le corps AU RENDU (jamais au stockage) : sources /uploads absolutisées,
+ * style des images, liens à l'accent, blockquotes/h2/h3 sans style → style du gabarit.
+ * Limitation assumée : un h2/h3 déjà stylé (ex. text-align de l'éditeur) garde son style
+ * et ne reçoit pas la police serif.
+ */
+export function decorateBodyHtml(html: string, accent: string): string {
+  return html
+    .replace(/(<img\b[^>]*\bsrc=")(\/uploads\/[^"]+)"/gi, (_m, pre: string, p: string) => `${pre}${absoluteAsset(p)}"`)
+    .replace(/<img\b/gi, '<img style="max-width:100%;height:auto;border-radius:12px;"')
+    .replace(/<a\b(?![^>]*\bstyle=)/gi, `<a style="color:${accent};"`)
+    .replace(/<blockquote\b(?![^>]*\bstyle=)/gi, '<blockquote style="margin:14px 0;padding:8px 16px;border-left:3px solid #d8dce3;color:#5d6675;font-style:italic;"')
+    .replace(/<h2\b(?![^>]*\bstyle=)/gi, `<h2 style="font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:26px;font-weight:600;color:#181d26;margin:18px 0 8px;"`)
+    .replace(/<h3\b(?![^>]*\bstyle=)/gi, `<h3 style="font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:24px;font-weight:600;color:#181d26;margin:16px 0 6px;"`);
 }
 
 /** Brand email d'un club (logo en URL absolue, coordonnées pour le pied de page, repli Palova). */
@@ -552,7 +575,9 @@ export function renderClubEmail(
   const infoRows = def.infoRows ? def.infoRows(vars) : [];
   const ctaUrl = def.hasCta ? vars.lien : undefined;
 
-  const html = renderLayout({ brand, preheader: subject, heading, introHtml, infoRows, ctaLabel, ctaUrl, footerNote });
+  const accent = brand.accentColor || PALOVA_BRAND.accentColor;
+  const decoratedIntro = decorateBodyHtml(introHtml, accent);
+  const html = renderLayout({ brand, preheader: subject, heading, introHtml: decoratedIntro, infoRows, ctaLabel, ctaUrl, footerNote });
   const text = buildText(textBody, infoRows, ctaLabel, ctaUrl, footerNote);
   return { subject, html, text };
 }
