@@ -37,8 +37,11 @@ Caisse `/admin/encaissement`, `QueueList`, `CashRegister`).
 - **Résa soldée au global** (`toCents(paidAmount) >= due`, règle existante de `paymentDots`) →
   **toutes** les pastilles passent vertes + ✓ à droite, même si le détail par joueur n'est pas
   ventilé (paiement global « Tout solder », paiements sans `participantId`).
-- **Défensif** : si `participants.length > places`, on affiche `places` pastilles + « +n »
-  (miroir de l'overflow actuel).
+- **Défensif** : le nombre de pastilles est plafonné à `places` (capacité du terrain) ;
+  contrairement aux paiements (qui peuvent être plus nombreux que les places), le nombre de
+  participants ne peut structurellement pas dépasser la capacité (gardes existantes à
+  l'ajout/join). Pas d'indicateur « +n » ici — cas impossible par construction, pas de code
+  mort pour un scénario qui ne peut pas se produire.
 - **Gating identique aux points actuels** : `type === 'COURT' && due > 0`, rangée complète
   seulement si `!small`.
 - **Petit créneau** (`small`, hauteur < 46 px) : si soldé → ✓ seul (inchangé) ; sinon jusqu'à
@@ -69,19 +72,25 @@ Caisse `/admin/encaissement`, `QueueList`, `CashRegister`).
 ## Architecture
 
 - **Helper pur** dans `lib/caisse.ts` : `participantPastilles(rv, players, due)` →
-  `PastillesModel | null`
+  `PastillesModel | null`, construit par-dessus `deriveSlots` (même dérivation de place que la
+  caisse — y compris le repli « holder » quand une résa n'a aucun participant détaillé, ex.
+  créée depuis la modale Studio admin, auquel cas le titulaire seul occupe 1 place).
   - `null` si `type !== 'COURT' || due <= 0` (miroir de `paymentDots`) ;
-  - `{ seats, settled, overflow }` où `seats` = tableau de `places` entrées :
-    `{ initials, name, paid: boolean, paidCents, outstandingCents }` pour un participant,
-    `null` pour une place vide ; `settled` = `toCents(paidAmount) >= due`.
+  - `{ seats, settled, totalPaidCents, totalDueCents }` où `seats` = tableau de `places`
+    entrées : `{ seed, initials, name, paid: boolean, paidCents, outstandingCents }` pour un
+    participant, `null` pour une place vide ; `settled` = `toCents(paidAmount) >= due`.
+- **Helper pur** `popoverPosition(anchor, viewportWidth, panelWidth?, gap?)` → `{ left, top }` :
+  le calcul flip (bascule à gauche si le panneau déborderait à droite) vit ici, testable sans DOM.
 - **Composant** `components/admin/PaymentInitials.tsx` : rendu des pastilles
   (props `model`, `compact?` pour la variante small 2-max). Thème-aware (`useTheme`).
-- **Composant** `components/admin/TilePaymentPopover.tsx` : présentation pure du panneau
-  (props `model`, `anchorRect`) — le calcul flip/clamp y vit, testable.
+- **Composant** `components/admin/planning/TilePaymentPopover.tsx` : présentation pure du
+  panneau (props `model`, `anchor`), appelle `popoverPosition` pour se positionner.
 - **Page planning** : remplace `<PaymentDots>` par `<PaymentInitials>` ; état hover local
-  `{ reservationId, rect } | null` + timer 400 ms (`onMouseEnter`/`onMouseLeave` sur le bloc,
-  annulé par `onMouseDown` et par `drag !== null`) ; popover rendu en fin de page.
-- `PaymentDots` et `paymentDots` **ne bougent pas** (toujours utilisés ailleurs).
+  `{ id, anchor, model } | null` + timer 400 ms (`onMouseEnter`/`onMouseLeave` sur le bloc,
+  annulé par `onMouseDown` — qui démarre un drag — et par `drag !== null` au rendu) ; popover
+  rendu en fin de page.
+- `PaymentDots`, `paymentDots` et `SETTLED_COLOR` **ne bougent pas** (toujours utilisés par
+  `CashRegister`, `QueueList`, `/admin/reservations`, `/admin/encaissement`).
 
 ## Hors périmètre
 
@@ -92,8 +101,9 @@ Caisse `/admin/encaissement`, `QueueList`, `CashRegister`).
 
 ## Tests
 
-- `caisse.test.ts` : `participantPastilles` — gating COURT/du, part réglée vs due, settled
-  global force tout payé, places vides, overflow, initiales (casse, noms vides).
+- `caisse.test.ts` : `participantPastilles` — gating COURT/dû, part réglée vs due, settled
+  global force tout payé, places vides, repli holder (résa sans détail participant),
+  `popoverPosition` (flip droite/gauche).
 - `AdminPlanning.test.tsx` : pastilles rendues avec initiales ; panneau apparaît après le délai
   (fake timers) et liste noms + reste dû ; pas de panneau si `mousedown`/drag ; title sans la
   partie paiement.
