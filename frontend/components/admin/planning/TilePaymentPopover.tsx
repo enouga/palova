@@ -1,7 +1,8 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
 import { fmtEuros, popoverPosition } from '@/lib/caisse';
-import type { PastillesModel, PopoverAnchor } from '@/lib/caisse';
+import type { PopoverAnchor } from '@/lib/caisse';
+import type { PastillesModel } from '@/lib/caisseRegister';
 import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
 const PANEL_W = 230;

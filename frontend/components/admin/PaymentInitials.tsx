@@ -1,6 +1,6 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
-import type { PastillesModel } from '@/lib/caisse';
+import type { PastillesModel } from '@/lib/caisseRegister';
 import { SETTLED_COLOR } from './PaymentDots';
 
 /**

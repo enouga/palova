@@ -1,4 +1,4 @@
-import { slotStatuses, nextSelectable, selectionTotal, queueGroups, SlotStatus } from '../lib/caisseRegister';
+import { slotStatuses, nextSelectable, selectionTotal, queueGroups, participantPastilles, SlotStatus } from '../lib/caisseRegister';
 
 // ── factories minimales (structurelles, mêmes formes que l'API) ────────────
 const pay = (id: string, amount: string, method = 'CARD', participantId: string | null = null, refunded = '0.00') => ({
@@ -70,6 +70,68 @@ describe('slotStatuses', () => {
     // 45 € anonymes = 3 parts couvertes (3 × 13), reste 7 € sur la 4e place.
     expect(s[3].paid).toBe(false);
     expect(s[3].amountCents).toBe(700);
+  });
+});
+
+describe('participantPastilles', () => {
+  it('participants nommés : chacun paie sa part (dérivée de slotStatuses)', () => {
+    const r = rv({
+      participants: [part('p1', 'u1', 'Jean', 'Test', '13.00'), part('p2', 'u2', 'Léa', 'Roy')],
+      paidAmount: '13.00',
+    });
+    const m = participantPastilles(r, 2, 2600)!;
+    expect(m.settled).toBe(false);
+    expect(m.seats[0]).toMatchObject({ initials: 'JT', name: 'Jean Test', paid: true, outstandingCents: 0 });
+    expect(m.seats[1]).toMatchObject({ initials: 'LR', name: 'Léa Roy', paid: false, outstandingCents: 1300 });
+  });
+
+  it('paiements anonymes couvrant des places génériques → pastilles vertes SANS nom réel (bug corrigé : "Padel int 3" en prod)', () => {
+    // 1 organisateur nommé + 3 places réglées par des paiements anonymes au comptoir : soldé.
+    const r = rv({
+      participants: [part('p1', 'u0', 'Jean', 'Dupont', '6.25')],
+      payments: [pay('p1pay', '6.25', 'CARD', 'p1'), pay('a1', '6.25'), pay('a2', '6.25'), pay('a3', '6.25')],
+      paidAmount: '25.00', totalPrice: '25.00',
+    });
+    const m = participantPastilles(r, 4, 2500)!;
+    expect(m.settled).toBe(true);
+    expect(m.seats.every((s) => s !== null && s.paid)).toBe(true);   // AUCUNE pastille grise pointillée
+    expect(m.seats[0]).toMatchObject({ initials: 'JD', name: 'Jean Dupont' });
+    expect(m.seats[1]!.name).toBe('Joueur 1');
+    expect(m.seats[2]!.name).toBe('Joueur 2');
+    expect(m.seats[3]!.name).toBe('Joueur 3');
+  });
+
+  it('couverture anonyme PARTIELLE (pas soldé) : places couvertes vertes, place non couverte grise pointillée', () => {
+    const r = rv({ user: null, payments: [pay('a1', '13.00'), pay('a2', '13.00')], paidAmount: '26.00' });
+    const m = participantPastilles(r, 4, 5200)!;
+    expect(m.settled).toBe(false);
+    expect(m.seats[0]).toMatchObject({ paid: true, name: 'Joueur 1' });
+    expect(m.seats[1]).toMatchObject({ paid: true, name: 'Joueur 2' });
+    expect(m.seats[2]).toBeNull();
+    expect(m.seats[3]).toBeNull();
+  });
+
+  it("holder seul (résa admin sans détail participant), non soldé → pastille nommée non réglée + places vides", () => {
+    const r = rv({ paidAmount: '0.00' });   // user = Jean Dupont, aucun participant
+    const m = participantPastilles(r, 4, 5200)!;
+    expect(m.settled).toBe(false);
+    expect(m.seats[0]).toMatchObject({ initials: 'JD', name: 'Jean Dupont', paid: false, outstandingCents: 1300 });
+    expect(m.seats.slice(1)).toEqual([null, null, null]);
+  });
+
+  it('résa soldée au global → TOUTES les places (nommées ou non) passent vertes, aucune pointillée', () => {
+    const r = rv({
+      participants: [part('p1', 'u1', 'Jean', 'Test'), part('p2', 'u2', 'Léa', 'Roy')],
+      paidAmount: '52.00',
+    });
+    const m = participantPastilles(r, 4, 5200)!;
+    expect(m.settled).toBe(true);
+    expect(m.seats.every((s) => s !== null && s.paid)).toBe(true);
+  });
+
+  it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
+    expect(participantPastilles(rv({ type: 'TOURNAMENT' }), 4, 5200)).toBeNull();
+    expect(participantPastilles(rv(), 4, 0)).toBeNull();
   });
 });
 

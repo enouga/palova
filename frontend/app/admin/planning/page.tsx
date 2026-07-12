@@ -4,7 +4,8 @@ import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Mem
 import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, dueCents, fmtEuros, participantPastilles, PastillesModel, PopoverAnchor, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
+import { toCents, dueCents, fmtEuros, PopoverAnchor, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
+import { participantPastilles, PastillesModel } from '@/lib/caisseRegister';
 import { endTimeFrom } from '@/lib/duration';
 import { localMinutesOfDay, weekdayOf, fromMinutes, toMinutes, findOverlap, pxToMinutes, BusySlot } from '@/lib/planningTime';
 import { moveTarget, resizeTarget, createTarget } from '@/lib/planningDrag';
