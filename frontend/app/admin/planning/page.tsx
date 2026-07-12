@@ -755,7 +755,7 @@ export default function AdminPlanningPage() {
                       onMouseEnter={(evt) => { if (dots) scheduleHover(rv, dots, evt.currentTarget); }}
                       onMouseLeave={() => cancelHover(rv.id)}
                       onClick={() => { if (draggedRef.current) { draggedRef.current = false; return; } openRes(rv); }}
-                      title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}`}
+                      title={dots ? undefined : `${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}`}
                       style={{
                         position: 'absolute', top: top + 2, left: 3, right: 3, height, boxSizing: 'border-box',
                         borderRadius: 9, padding: small ? '3px 8px' : '5px 8px', overflow: 'hidden', zIndex: 2, textAlign: 'left',

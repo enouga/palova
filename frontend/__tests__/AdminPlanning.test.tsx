@@ -137,13 +137,12 @@ describe('pastilles-initiales de paiement + panneau au survol', () => {
     expect(screen.getByText('LR')).toBeInTheDocument();
   });
 
-  it('le title du bloc ne détaille plus payé/dû (remplacé par le survol)', async () => {
+  it("le title natif est retiré quand le panneau au survol est disponible (évite le doublon d'infobulle)", async () => {
     (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
     (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
     renderPage();
     const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
-    expect(block.title).not.toMatch(/payé/);
-    expect(block.title).toMatch(/Jean Test · Terrain/);
+    expect(block.title).toBe('');
   });
 
   it('un survol prolongé (~400ms) ouvre un panneau détaillant qui a payé et le reste dû', async () => {
