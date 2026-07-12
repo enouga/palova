@@ -1,21 +1,29 @@
 // Layout HTML d'email, sans dépendance : tables + CSS inline (la seule mise en forme
-// qui survit à la plupart des clients mail). Aux couleurs du club (accent + logo) si
-// disponibles, repli identité Palova sinon.
+// qui survit à la plupart des clients mail). Gabarit « Éditorial épuré » : liseré fin à la
+// couleur du club, en-tête centré (logo + nom en petites capitales), titre en serif,
+// CTA en pill sombre, pied de page avec coordonnées du club + lien de gestion des notifs.
 
 export interface Brand {
   name: string;
   logoUrl: string | null;
   accentColor: string;
+  /** Coordonnées du club pour le pied de page (facultatives — lignes omises si absentes). */
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  /** URL « Gérer mes notifications » (profil membre sur le sous-domaine du club). */
+  manageUrl?: string | null;
 }
 
 // Identité Palova = bleu primaire du site (ACCENTS.blue). Le logo est injecté par l'appelant
 // (URL absolue via links.platformAsset) car il dépend du domaine canonique.
 export const PALOVA_BRAND: Brand = { name: 'Palova', logoUrl: null, accentColor: '#5e93da' };
 
-// Bleu nuit d'ancrage du dégradé d'en-tête (= HERO_NAVY du site pour l'accent bleu).
+// Bleu nuit d'ancrage — conservé pour compat (utilisé ailleurs / testé), plus utilisé par
+// renderLayout lui-même (le gabarit « Éditorial épuré » n'a plus de dégradé d'en-tête).
 const HEADER_DARK_FACTOR = 0.5;
 
-/** Assombrit une couleur hex (multiplie les canaux RGB) pour le bas du dégradé d'en-tête. */
+/** Assombrit une couleur hex (multiplie les canaux RGB). */
 export function darken(hex: string, factor = HEADER_DARK_FACTOR): string {
   const h = (hex || '').replace('#', '').trim();
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
@@ -72,38 +80,38 @@ export interface LayoutInput {
 export function renderLayout(input: LayoutInput): string {
   const { brand, preheader, heading, introHtml, codeBlock, infoRows = [], ctaLabel, ctaUrl, footerNote } = input;
   const accent = brand.accentColor || PALOVA_BRAND.accentColor;
-  const onAccent = readableTextOn(accent);
-  const headerGradient = `linear-gradient(115deg, ${accent}, ${darken(accent)})`;
 
-  // Wordmark (nom de la marque/club), avec le logo en tuile blanche à gauche s'il existe.
-  const wordmark = `<span style="font-size:24px;font-weight:800;letter-spacing:0.5px;color:${onAccent};">${escapeHtml(brand.name)}</span>`;
-  const header = brand.logoUrl
-    ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr>
-        <td style="padding-right:13px;vertical-align:middle;">
-          <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#ffffff;border-radius:12px;padding:5px;line-height:0;">
-            <img src="${brand.logoUrl}" alt="${escapeHtml(brand.name)}" height="38" style="display:block;height:38px;width:auto;max-height:38px;border-radius:9px;border:0;outline:none;text-decoration:none;" />
-          </td></tr></table>
-        </td>
-        <td style="vertical-align:middle;">${wordmark}</td>
-      </tr></table>`
-    : wordmark;
+  // Palette « Éditorial épuré » : encre froide, hairlines, fond neutre.
+  const INK = '#181d26';
+  const BODY = '#4a5261';
+  const MUTE = '#8a93a3';
+  const FAINT = '#9aa2b0';
+  const HAIR = '#e8eaee';
+  const SERIF = "Georgia,'Times New Roman',serif";
+  const SANS = 'Helvetica,Arial,sans-serif';
+
+  // En-tête centré : logo (image) ou tuile encre avec l'initiale du club.
+  const initial = escapeHtml((brand.name || 'P').trim().charAt(0).toUpperCase());
+  const logo = brand.logoUrl
+    ? `<img src="${brand.logoUrl}" alt="${escapeHtml(brand.name)}" height="36" style="display:inline-block;height:36px;width:auto;max-height:36px;border-radius:9px;border:0;outline:none;text-decoration:none;" />`
+    : `<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td width="36" height="36" style="width:36px;height:36px;background:${INK};border-radius:9px;text-align:center;vertical-align:middle;font-family:${SANS};font-size:17px;font-weight:800;color:#ffffff;">${initial}</td></tr></table>`;
 
   const codeHtml = codeBlock
     ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:22px 0 14px;">
-        <tr><td align="center" style="background:#eef3fb;border:1px solid #d4e1f4;border-radius:14px;padding:22px 16px;">
-          <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#6d6a5d;margin-bottom:8px;">${escapeHtml(codeBlock.caption || 'Votre code')}</div>
-          <div style="font-size:40px;font-weight:800;letter-spacing:10px;color:#2c4668;font-family:'Courier New',Courier,monospace;">${escapeHtml(codeBlock.code)}</div>
+        <tr><td align="center" style="background:#f4f6f9;border:1px solid ${HAIR};border-radius:14px;padding:22px 16px;">
+          <div style="font-family:${SANS};font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTE};margin-bottom:8px;">${escapeHtml(codeBlock.caption || 'Votre code')}</div>
+          <div style="font-size:40px;font-weight:800;letter-spacing:10px;color:${INK};font-family:'Courier New',Courier,monospace;">${escapeHtml(codeBlock.code)}</div>
         </td></tr>
       </table>`
     : '';
 
   const infoTable = infoRows.length
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:18px 0 4px;border-collapse:collapse;">
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:20px 0 4px;border-collapse:collapse;border-top:1px solid ${HAIR};">
         ${infoRows
           .map(
             (row) => `<tr>
-              <td style="padding:9px 0;font-size:14px;color:#6d6a5d;width:38%;vertical-align:top;border-bottom:1px solid #efece2;">${escapeHtml(row.label)}</td>
-              <td style="padding:9px 0;font-size:14px;color:#181510;font-weight:600;border-bottom:1px solid #efece2;">${escapeHtml(row.value)}</td>
+              <td style="padding:9px 0;font-family:${SANS};font-size:13.5px;color:${MUTE};width:38%;vertical-align:top;border-bottom:1px solid ${HAIR};">${escapeHtml(row.label)}</td>
+              <td align="right" style="padding:9px 0;font-family:${SANS};font-size:13.5px;color:${INK};font-weight:600;text-align:right;border-bottom:1px solid ${HAIR};">${escapeHtml(row.value)}</td>
             </tr>`,
           )
           .join('')}
@@ -112,15 +120,21 @@ export function renderLayout(input: LayoutInput): string {
 
   const cta =
     ctaLabel && ctaUrl
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 6px;">
-          <tr><td bgcolor="${accent}" style="border-radius:11px;background:${accent};background-image:${headerGradient};">
-            <a href="${ctaUrl}" style="display:inline-block;padding:13px 24px;font-size:15px;font-weight:700;color:${onAccent};text-decoration:none;border-radius:11px;">${escapeHtml(ctaLabel)}</a>
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 6px;">
+          <tr><td bgcolor="${INK}" style="border-radius:999px;background:${INK};">
+            <a href="${ctaUrl}" style="display:inline-block;padding:13px 28px;font-family:${SANS};font-size:14.5px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">${escapeHtml(ctaLabel)}</a>
           </td></tr>
         </table>`
       : '';
 
-  const footer = footerNote
-    ? `<p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#9b978a;">${escapeHtml(footerNote)}</p>`
+  const note = footerNote
+    ? `<p style="margin:18px 0 0;font-family:${SANS};font-size:12px;line-height:18px;color:${FAINT};text-align:center;">${escapeHtml(footerNote)}</p>`
+    : '';
+
+  const coordParts = [brand.address, brand.phone, brand.email].filter(Boolean) as string[];
+  const coordLine = `<strong style="color:#5d6675;">${escapeHtml(brand.name)}</strong>${coordParts.length ? ' · ' + coordParts.map(escapeHtml).join(' · ') : ''}`;
+  const manageLink = brand.manageUrl
+    ? `<a href="${brand.manageUrl}" style="color:${FAINT};text-decoration:underline;">Gérer mes notifications</a> · `
     : '';
 
   return `<!doctype html>
@@ -131,22 +145,29 @@ export function renderLayout(input: LayoutInput): string {
   <meta name="color-scheme" content="light only" />
   <title>${escapeHtml(heading)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f1eee5;">
+<body style="margin:0;padding:0;background:#f4f5f7;">
   <span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">${escapeHtml(preheader || heading)}</span>
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f1eee5;padding:28px 0;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f5f7;padding:28px 0;font-family:${SANS};">
     <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(24,21,16,0.10);">
-        <tr><td bgcolor="${accent}" style="background:${accent};background-image:${headerGradient};padding:22px 30px;">${header}</td></tr>
-        <tr><td style="padding:32px 30px 28px;">
-          <h1 style="margin:0 0 12px;font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:28px;color:#181510;">${escapeHtml(heading)}</h1>
-          <div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:23px;color:#4a4639;">${introHtml}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(24,29,38,0.08);">
+        <tr><td bgcolor="${accent}" style="height:5px;line-height:5px;font-size:0;background:${accent};">&nbsp;</td></tr>
+        <tr><td align="center" style="padding:28px 30px 0;">
+          ${logo}
+          <div style="margin-top:12px;font-family:${SANS};font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${INK};">${escapeHtml(brand.name)}</div>
+        </td></tr>
+        <tr><td style="padding:16px 34px 30px;">
+          <h1 style="margin:12px 0 16px;font-family:${SERIF};font-size:26px;line-height:34px;font-weight:400;color:${INK};text-align:center;">${escapeHtml(heading)}</h1>
+          <div style="font-family:${SANS};font-size:15px;line-height:24px;color:${BODY};">${introHtml}</div>
           ${codeHtml}
           ${infoTable}
           ${cta}
-          ${footer}
+          ${note}
+        </td></tr>
+        <tr><td align="center" style="border-top:1px solid ${HAIR};padding:18px 30px 22px;font-family:${SANS};font-size:11.5px;line-height:19px;color:${FAINT};">
+          ${coordLine}<br/>
+          ${manageLink}Envoyé avec Palova
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:#9b978a;">Envoyé par Palova · Réservez vos terrains de padel</p>
     </td></tr>
   </table>
 </body>
