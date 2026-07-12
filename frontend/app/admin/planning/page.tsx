@@ -4,12 +4,14 @@ import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Mem
 import { capacityLabel } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
-import { toCents, dueCents, fmtEuros, paymentDots, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
+import { toCents, dueCents, fmtEuros, participantPastilles, PastillesModel, PopoverAnchor, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
 import { endTimeFrom } from '@/lib/duration';
 import { localMinutesOfDay, weekdayOf, fromMinutes, toMinutes, findOverlap, pxToMinutes, BusySlot } from '@/lib/planningTime';
 import { moveTarget, resizeTarget, createTarget } from '@/lib/planningDrag';
 import { TYPE_META, TYPE_ORDER } from '@/lib/reservationType';
-import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
+import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
+import { PaymentInitials } from '@/components/admin/PaymentInitials';
+import { TilePaymentPopover } from '@/components/admin/planning/TilePaymentPopover';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { CashRegister } from '@/components/admin/caisse/CashRegister';
@@ -149,6 +151,23 @@ export default function AdminPlanningPage() {
   const [toast, setToast] = useState<RescheduleToast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  // Panneau de paiement au survol (~400 ms) d'un bloc COURT payant : nom + montants par joueur.
+  const [hover, setHover] = useState<{ id: string; anchor: PopoverAnchor; model: PastillesModel } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
+  const clearHoverTimer = () => { if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; } };
+  const scheduleHover = (rv: ClubReservation, model: PastillesModel, el: HTMLElement) => {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      setHover({ id: rv.id, model, anchor: { left: r.left, right: r.right, top: r.top } });
+    }, 400);
+  };
+  const cancelHover = (id: string) => {
+    clearHoverTimer();
+    setHover((cur) => (cur?.id === id ? null : cur));
+  };
 
   const [members, setMembers]   = useState<Member[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -379,6 +398,7 @@ export default function AdminPlanningPage() {
   // déclencher aussi le déplacement du bloc parent.
   const startBlockDrag = (evt: ReactMouseEvent, rv: ClubReservation, kind: 'move' | 'resize', startMin: number, endMin: number) => {
     if (rv.status === 'CANCELLED' || busy) return;
+    cancelHover(rv.id);
     evt.preventDefault();
     draggedRef.current = false;
     dragOriginY.current = evt.clientY;
@@ -728,12 +748,14 @@ export default function AdminPlanningPage() {
                   const dragging = drag?.kind === 'move' && drag.reservationId === rv.id;
                   const c = TYPE_META[rv.type].color;
                   const due = dueOf(rv);
-                  const dots = paymentDots(rv, playersOf(rv), due);
+                  const dots = participantPastilles(rv, playersOf(rv), due);
                   return (
                     <button key={rv.id} type="button"
                       onMouseDown={(evt) => startBlockDrag(evt, rv, 'move', s, e)}
+                      onMouseEnter={(evt) => { if (dots) scheduleHover(rv, dots, evt.currentTarget); }}
+                      onMouseLeave={() => cancelHover(rv.id)}
                       onClick={() => { if (draggedRef.current) { draggedRef.current = false; return; } openRes(rv); }}
-                      title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}${dots ? ` · payé ${fmtEuros(toCents(rv.paidAmount))} / ${fmtEuros(due)}` : ''}`}
+                      title={`${labelOf(rv)} · ${TYPE_META[rv.type].label} · ${fmtHM(rv.startTime, tz)}–${fmtHM(rv.endTime, tz)}`}
                       style={{
                         position: 'absolute', top: top + 2, left: 3, right: 3, height, boxSizing: 'border-box',
                         borderRadius: 9, padding: small ? '3px 8px' : '5px 8px', overflow: 'hidden', zIndex: 2, textAlign: 'left',
@@ -744,10 +766,10 @@ export default function AdminPlanningPage() {
                       }}>
                       <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text, lineHeight: 1.15, display: '-webkit-box', WebkitLineClamp: small ? 1 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{labelOf(rv)}</span>
                       {!small && <span style={{ fontFamily: th.fontMono, fontSize: 10, color: th.textMute, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pend ? 'attente · ' : ''}{fmtHM(rv.startTime, tz)}–{fmtHM(rv.endTime, tz)}</span>}
-                      {dots && !small && <span style={{ marginTop: 'auto', display: 'flex' }}><PaymentDots dots={dots} color={c} /></span>}
+                      {dots && !small && <span style={{ marginTop: 'auto', display: 'flex' }}><PaymentInitials model={dots} /></span>}
                       {dots && small && (dots.settled
                         ? <span style={{ position: 'absolute', right: 5, bottom: 3, fontSize: 9, fontWeight: 700, color: SETTLED_COLOR, lineHeight: 1 }}>✓</span>
-                        : dots.filled > 0 && <span style={{ position: 'absolute', right: 6, bottom: 5, width: 6, height: 6, borderRadius: '50%', background: c }} />)}
+                        : dots.seats.some(Boolean) && <span style={{ position: 'absolute', right: 6, bottom: 4 }}><PaymentInitials model={dots} compact /></span>)}
                       {rv.hasCardFingerprint && (
                         <span title="Empreinte bancaire enregistrée" style={{ fontSize: 11, position: 'absolute', right: small ? 5 : 8, top: small ? 2 : 4 }}>💳</span>
                       )}
@@ -789,6 +811,8 @@ export default function AdminPlanningPage() {
         <div style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>{resources.length} terrain{resources.length > 1 ? 's' : ''} · {shown.length} réservation{shown.length > 1 ? 's' : ''} affichée{shown.length > 1 ? 's' : ''}</div>
         </>
       )}
+
+      {hover && !drag && <TilePaymentPopover model={hover.model} anchor={hover.anchor} />}
 
       {/* modale détail réservation */}
       {selected && (
