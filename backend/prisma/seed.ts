@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_PACKAGE_OFFERS, DEFAULT_SUBSCRIPTION_PLANS } from './seed-offers';
+import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_PACKAGE_OFFERS } from './seed-offers';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -163,12 +163,16 @@ async function main() {
       }
     }
 
+    // Abonnement TOUTES HEURES : la couverture automatique par abonnement (Caisse/Planning)
+    // doit être visible en démo sur n'importe quel créneau — un plan « heures creuses » ne
+    // couvrirait rien tant que le club n'a pas de plages creuses configurées.
     const padelPlan = await prisma.subscriptionPlan.findFirst({
-      where: { clubId: club.id, name: DEFAULT_SUBSCRIPTION_PLANS[0].name }, // « Abonnement Padel — heures creuses »
+      where: { clubId: club.id, name: 'Abonnement Padel — illimité' },
     });
     if (padelPlan) {
+      // Un seul abonnement actif pour le compte de démo, quel que soit le plan (idempotence).
       const existing = await prisma.subscription.findFirst({
-        where: { clubId: club.id, userId: testUserId, planId: padelPlan.id, status: 'ACTIVE' },
+        where: { clubId: club.id, userId: testUserId, status: 'ACTIVE' },
       });
       if (!existing) {
         await prisma.subscription.create({
