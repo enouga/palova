@@ -307,6 +307,45 @@ describe('renewSubscription', () => {
   });
 });
 
+describe('changeSubscription', () => {
+  const svc = new SubscriptionService();
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 8 } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1' } as any);
+    prismaMock.subscription.update.mockResolvedValue({ id: 's1', status: 'CANCELLED' } as any);
+    prismaMock.subscription.create.mockResolvedValue({ id: 's-new', status: 'ACTIVE' } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay-c' } as any);
+  });
+
+  it('résilie l\'actuel et vend le nouveau (snapshot du nouveau plan)', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'club-1', userId: 'u1' } as any);
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'p2', clubId: 'club-1', isActive: true, name: 'Padel illimité', monthlyPrice: '39.00',
+      commitmentMonths: 1, sportKeys: ['padel'], offPeakOnly: false, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+    } as any);
+
+    const out = await svc.changeSubscription('s1', 'club-1', { planId: 'p2', method: 'CARD', createdByUserId: 'staff-1' });
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({ where: { id: 's1' }, data: { status: 'CANCELLED' } });
+    expect(prismaMock.subscription.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ planId: 'p2', userId: 'u1', monthlyPriceSnapshot: '39.00', status: 'ACTIVE' }),
+    }));
+    expect(out.subscription.id).toBe('s-new');
+  });
+
+  it('plan inactif/autre club → PLAN_NOT_FOUND', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'club-1', userId: 'u1' } as any);
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ id: 'p2', clubId: 'club-1', isActive: false } as any);
+    await expect(svc.changeSubscription('s1', 'club-1', { planId: 'p2' })).rejects.toThrow('PLAN_NOT_FOUND');
+  });
+
+  it('abo introuvable / autre club → SUBSCRIPTION_NOT_FOUND', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'autre', userId: 'u1' } as any);
+    await expect(svc.changeSubscription('s1', 'club-1', { planId: 'p2' })).rejects.toThrow('SUBSCRIPTION_NOT_FOUND');
+  });
+});
+
 describe('SubscriptionService.coverageFor', () => {
   const incl = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED' as const, discountPercent: null };
   const disc = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'DISCOUNT' as const, discountPercent: 50 };

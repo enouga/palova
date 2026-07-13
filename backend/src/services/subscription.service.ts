@@ -231,6 +231,23 @@ export class SubscriptionService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
+  /** Changement de forfait : résilie l'actuel + vend le nouveau (snapshot, plein tarif, pas de prorata), 1 transaction. */
+  async changeSubscription(id: string, clubId: string, body: {
+    planId?: string; method?: string; payerName?: string; voucherRef?: string; voucherIssuer?: string; createdByUserId?: string;
+  }) {
+    const current = await prisma.subscription.findUnique({ where: { id }, select: { id: true, clubId: true, userId: true } });
+    if (!current || current.clubId !== clubId) throw new Error('SUBSCRIPTION_NOT_FOUND');
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: body.planId ?? '' } });
+    if (!plan || plan.clubId !== clubId || !plan.isActive) throw new Error('PLAN_NOT_FOUND');
+    const method = this.buildSaleMethod(body);
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + plan.commitmentMonths);
+    return prisma.$transaction(async (tx) => {
+      await tx.subscription.update({ where: { id }, data: { status: 'CANCELLED' } });
+      return this.createPeriodTx(tx, { clubId, userId: current.userId, plan, method, body, expiresAt, note: `Changement d'abonnement → ${plan.name} — 1re mensualité` });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async listMySubscriptionsBySlug(slug: string, userId: string) {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
