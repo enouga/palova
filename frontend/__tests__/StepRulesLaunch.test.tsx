@@ -94,6 +94,9 @@ describe('StepLaunch', () => {
     expect(screen.getByText(/Paiement en ligne · plus tard/)).toBeInTheDocument();
     expect(screen.getByText(/Découvrir mon club-house/).closest('a')).toHaveAttribute('href', '/');
     expect(screen.getByText(/Aller à l’espace de gestion/).closest('a')).toHaveAttribute('href', '/admin');
+    // rappel rôles : inviter son équipe, le staff voit moins
+    expect(screen.getByText(/Invitez votre équipe/)).toBeInTheDocument();
+    expect(screen.getByText(/ne voit ni l’abonnement Palova ni ce guide/)).toBeInTheDocument();
   });
 
   it('décocher l’annuaire → envoie listedInDirectory: false', async () => {
