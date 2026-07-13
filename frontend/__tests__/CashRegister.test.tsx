@@ -45,6 +45,13 @@ const renderReg = (r: ClubReservation, props = baseProps()) =>
 
 beforeEach(() => { jest.clearAllMocks(); });
 
+it('l\'en-tête affiche la DATE du créneau (pas seulement l\'heure) — on sait sur quel jour on encaisse', () => {
+  renderReg(rv());
+  // même formatage que le composant (fuseau local de la machine → assertion indépendante du fuseau)
+  const day = new Date('2099-06-22T16:00:00.000Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  expect(screen.getByText(day, { exact: false })).toBeInTheDocument();
+});
+
 it('pré-sélectionne la première place non réglée et affiche sa part en grand', () => {
   renderReg(rv());
   const tiles = screen.getAllByRole('checkbox');

@@ -17,6 +17,7 @@ const METHOD_ICON: Record<string, IconName> = { CASH: 'euro', CARD: 'card', VOUC
 const METHOD_LABEL_FULL: Record<string, string> = { CASH: 'Espèces', CARD: 'CB', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement' };
 
 function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+function fmtDay(iso: string): string { return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); }
 function mapPayError(e: unknown, perPlayer: boolean): string {
   const m = (e as Error).message;
   if (m === 'PAYMENT_EXCEEDS_DUE') return perPlayer ? 'Le montant dépasse la part du joueur.' : 'Le montant dépasse le reste dû.';
@@ -359,7 +360,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
       {/* ── en-tête ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px 12px', borderBottom: `1px solid ${th.line}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: th.textMute }}><span style={{ color: th.accent }}>{fmtTime(reservation.startTime)}</span> — {reservation.resource.name}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: th.textMute }}><span style={{ color: th.accent }}>{fmtDay(reservation.startTime)} · {fmtTime(reservation.startTime)}</span> — {reservation.resource.name}</div>
           <div style={{ fontSize: 12, color: th.textMute, marginTop: 2 }}>
             {who}{isCourt && players > 0 ? ` · ${players} joueurs` : ''}{due > 0 ? ` · ${fmtEuros(due)}` : ''}
           </div>
