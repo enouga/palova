@@ -533,6 +533,18 @@ router.patch('/reservations/:id/participants/:participantId', async (req: ClubSc
   } catch (err) { handleError(err, res, next); }
 });
 
+// Balayage automatique (Caisse/Planning) : couvre par abonnement les places non réglées du jour.
+router.post('/reservations/auto-apply-subscriptions', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { date } = req.body;
+    const out = await reservationService.autoApplySubscriptionCoverage(
+      req.membership!.clubId,
+      typeof date === 'string' && date ? date : undefined,
+    );
+    res.json(out);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Encaissement manuel sur une réservation (espèces/carte/ticket CE/carnet/porte-monnaie).
 router.post('/reservations/:id/payments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {

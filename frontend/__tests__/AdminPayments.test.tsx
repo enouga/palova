@@ -78,6 +78,20 @@ describe('AdminPaymentsPage', () => {
     expect(screen.queryByRole('button', { name: 'Changer de compte Stripe' })).not.toBeInTheDocument();
   });
 
+  it('état NONE : le guide « Comment activer le paiement en ligne ? » est ouvert', async () => {
+    api.adminGetClub.mockResolvedValue(clubWith({ stripeAccountId: null, stripeAccountStatus: 'NONE' }));
+    await wrap();
+    expect(await screen.findByText('Comment activer le paiement en ligne ?')).toBeInTheDocument();
+    expect(screen.getByText('Préparez vos informations')).toBeVisible();
+  });
+
+  it('état ACTIVE : le guide est présent mais replié', async () => {
+    api.adminGetClub.mockResolvedValue(clubWith());
+    await wrap();
+    expect(await screen.findByText('Comment activer le paiement en ligne ?')).toBeInTheDocument();
+    expect(screen.queryByText('Préparez vos informations')).not.toBeInTheDocument();
+  });
+
   it('changement de compte : confirme, appelle disconnectStripe puis repasse en NONE', async () => {
     api.adminGetClub
       .mockResolvedValueOnce(clubWith())

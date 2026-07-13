@@ -17,7 +17,8 @@ jest.mock('../lib/useAuth', () => ({
 // Objets club STABLES (identité préservée entre les rendus, cf. deps du useEffect des droits).
 const clubOn = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null };
 const clubOff = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, levelSystemEnabled: false };
-const mockClubCtx = { slug: 'demo', club: clubOn as Record<string, unknown>, loading: false };
+const mockClubCtx: { slug: string | null; club: Record<string, unknown> | null; loading: boolean } =
+  { slug: 'demo', club: clubOn as Record<string, unknown>, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubCtx }));
 
 jest.mock('../lib/api', () => ({
@@ -51,8 +52,40 @@ describe('AdminLayout — toggle de la sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockClubCtx.slug = 'demo'; // hôte club par défaut
     mockClubCtx.club = clubOn; // restaure le club ON par défaut (objet stable)
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
+  });
+
+  it("filet anti-blocage : après le délai, propose de recharger/se reconnecter si la garde ne se résout jamais", async () => {
+    jest.useFakeTimers();
+    // getMyClubs ne se résout JAMAIS → `allowed` reste null → la garde reste bloquée.
+    api.getMyClubs.mockReturnValue(new Promise(() => {}));
+    render(
+      <ThemeProvider>
+        <AdminLayout><div>Contenu admin</div></AdminLayout>
+      </ThemeProvider>,
+    );
+    // Au départ : « Chargement… », aucun bouton de secours.
+    expect(screen.getByText('Chargement…')).toBeInTheDocument();
+    expect(screen.queryByText('Recharger')).not.toBeInTheDocument();
+    // Après le délai de secours, l'écran devient actionnable (plus de spinner infini).
+    act(() => { jest.advanceTimersByTime(12000); });
+    expect(screen.getByText('Recharger')).toBeInTheDocument();
+    expect(screen.getByText('Se reconnecter')).toBeInTheDocument();
+    expect(screen.queryByText('Chargement…')).not.toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
+  it("hôte plateforme (slug null) : redirige vers l'accueil au lieu de « Chargement… » infini", async () => {
+    // Sur l'hôte plateforme, aucun slug → le club ne se chargera jamais. La garde ne doit
+    // pas laisser la page tourner indéfiniment : elle renvoie à l'accueil.
+    mockClubCtx.slug = null;
+    mockClubCtx.club = null;
+    await wrap();
+    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    // On n'atteint jamais la vérification des droits (getMyClubs) sur cet hôte.
+    expect(api.getMyClubs).not.toHaveBeenCalled();
   });
 
   it('club OFF : pas de lien nav « Matchs »', async () => {
@@ -137,6 +170,7 @@ describe('AdminLayout — sections repliables', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockClubCtx.slug = 'demo';
     mockClubCtx.club = clubOn;
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
   });

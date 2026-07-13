@@ -7,6 +7,12 @@ import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClub
 import { localInputToISO } from '@/lib/datetimeLocal';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
+import { ACCENTS } from '@/lib/theme';
+import { GENDER_LABEL } from '@/lib/events';
+import { formatDateShortTimeRange, fillRatio, waitlistPosition } from '@/lib/tournament';
+import { groupAdminAgenda, agendaItemGroup } from '@/lib/adminAgenda';
+import { AgendaAdminCard } from '@/components/admin/AgendaAdminCard';
+import { AgendaAdminList } from '@/components/admin/AgendaAdminList';
 
 const CATEGORIES = ['P25', 'P50', 'P100', 'P250', 'P500', 'P1000', 'P1500', 'P2000'];
 const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
@@ -29,6 +35,9 @@ export default function AdminTournamentsPage() {
   const [detail, setDetail] = useState<AdminTournamentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stripeActive, setStripeActive] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => { setNow(new Date()); }, []);
 
   const reload = useCallback(() => {
     if (!club || !token) return;
@@ -85,7 +94,43 @@ export default function AdminTournamentsPage() {
   const label = { fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 5, marginTop: 12 } as const;
   const input = { width: '100%', boxSizing: 'border-box' as const, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 10, padding: '9px 11px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const btn = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 10, padding: '10px 14px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14 };
-  const ghost = { border: `1px solid ${th.line}`, cursor: 'pointer', background: 'transparent', color: th.textMute, borderRadius: 9, padding: '7px 11px', fontFamily: th.fontUI, fontSize: 13 };
+  const ghost = { border: `1px solid ${th.line}`, cursor: 'pointer', background: 'transparent', color: th.textMute, borderRadius: 9, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 };
+  const primarySm = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 9, padding: '7px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 };
+
+  const genderTag = (t: Tournament) => {
+    const g = GENDER_LABEL[t.gender];
+    return t.gender === 'MEN' && t.openToWomen ? `${t.category} · ${g} · open` : `${t.category} · ${g}`;
+  };
+
+  const renderCard = (t: Tournament) => {
+    const key = agendaItemGroup(t.status, t.startTime, t.endTime, now!);
+    const actions = (
+      <>
+        <button onClick={() => openDetail(t)} style={ghost}>Inscrits</button>
+        {(key === 'draft' || key === 'cancelled') && <button onClick={() => publish(t, 'PUBLISHED')} style={primarySm}>Publier</button>}
+        {key === 'upcoming' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
+      </>
+    );
+    return (
+      <AgendaAdminCard
+        icon="trophy"
+        accent={ACCENTS.apricot}
+        stripe={key}
+        faded={key === 'past' || key === 'cancelled'}
+        tag={genderTag(t)}
+        title={t.name}
+        dateLabel={formatDateShortTimeRange(t.startTime, t.endTime, club.timezone)}
+        deadline={t.registrationDeadline}
+        now={now}
+        ratio={fillRatio(t)}
+        full={t.maxTeams != null && t.confirmedCount >= t.maxTeams}
+        countLabel={`${t.confirmedCount}${t.maxTeams != null ? ` / ${t.maxTeams}` : ''} binômes`}
+        waitlist={t.waitlistCount}
+        chips={[t.entryFee ? `${Number(t.entryFee)} €` : null, t.requirePrepayment ? 'CB en ligne' : null]}
+        actions={actions}
+      />
+    );
+  };
 
   return (
     <div>
@@ -94,11 +139,14 @@ export default function AdminTournamentsPage() {
         <button onClick={() => setForm(emptyForm(padelSportId))} style={btn}><Icon name="plus" size={15} color={th.onAccent} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Nouveau tournoi</button>
       </div>
 
-      {error && <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>{error}</div>}
+      {error && (
+        <div style={{ background: `${ACCENTS.coral}1f`, color: th.mode === 'floodlit' ? ACCENTS.coral : '#a83214', boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`, borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginBottom: 14 }}>{error}</div>
+      )}
 
       {/* Formulaire de création */}
       {form && (
-        <div style={{ background: th.surface, borderRadius: 14, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 20 }}>
+        <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow, marginBottom: 22 }}>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>Nouveau tournoi</div>
           <div style={label}>Nom</div>
           <input style={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Open de printemps" />
           <div style={{ display: 'flex', gap: 12 }}>
@@ -164,24 +212,14 @@ export default function AdminTournamentsPage() {
         </div>
       )}
 
-      {/* Liste des tournois */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {list.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun tournoi.</div>}
-        {list.map((t) => (
-          <div key={t.id} style={{ background: th.surface, borderRadius: 12, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>
-                {t.category} · {t.name} <span style={{ color: th.textFaint, fontWeight: 400 }}>· {t.status}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => openDetail(t)} style={ghost}>Inscrits ({t.confirmedCount}{t.maxTeams ? `/${t.maxTeams}` : ''}{t.waitlistCount ? ` +${t.waitlistCount}` : ''})</button>
-                {t.status !== 'PUBLISHED' && <button onClick={() => publish(t, 'PUBLISHED')} style={ghost}>Publier</button>}
-                {t.status === 'PUBLISHED' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Liste des tournois, groupée par statut */}
+      <AgendaAdminList
+        ready={now != null}
+        groups={now ? groupAdminAgenda(list, now, { status: (t) => t.status, start: (t) => t.startTime, end: (t) => t.endTime }) : []}
+        renderCard={renderCard}
+        itemKey={(t) => t.id}
+        emptyLabel="Aucun tournoi."
+      />
 
       {/* Panneau inscrits */}
       {detail && (
@@ -192,20 +230,26 @@ export default function AdminTournamentsPage() {
               <button onClick={() => setDetail(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}><Icon name="x" size={20} color={th.textMute} /></button>
             </div>
             {detail.registrations.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun inscrit.</div>}
-            {detail.registrations.map((r) => (
-              <div key={r.id} style={{ background: th.surface, borderRadius: 11, padding: '12px 14px', marginBottom: 10, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-                <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: r.status === 'CONFIRMED' ? th.accent : th.textMute }}>{r.status === 'CONFIRMED' ? 'Confirmé' : 'Liste d\'attente'}</div>
-                {[{ p: r.captain, lic: r.captainLicense }, { p: r.partner, lic: r.partnerLicense }].map(({ p, lic }) => (
-                  <div key={p.id} style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>
-                    {p.firstName} {p.lastName} <span style={{ color: th.textMute }}>· {p.phone ?? '—'} · licence {lic ?? '—'} · {p.sex === 'MALE' ? 'H' : p.sex === 'FEMALE' ? 'F' : '—'}</span>
+            {detail.registrations.map((r) => {
+              const confirmed = r.status === 'CONFIRMED';
+              const pos = waitlistPosition(detail.registrations, r.id);
+              return (
+                <div key={r.id} style={{ background: th.surface, borderRadius: 13, padding: '12px 14px', marginBottom: 10, boxShadow: th.shadow }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '3px 9px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, background: confirmed ? `${ACCENTS.emerald}22` : th.surface2, color: confirmed ? (th.mode === 'floodlit' ? ACCENTS.emerald : '#1c7a4f') : th.textMute }}>
+                    {confirmed ? 'Confirmé' : pos ? `Liste d'attente · ${pos}` : "Liste d'attente"}
+                  </span>
+                  {[{ p: r.captain, lic: r.captainLicense }, { p: r.partner, lic: r.partnerLicense }].map(({ p, lic }) => (
+                    <div key={p.id} style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>
+                      {p.firstName} {p.lastName} <span style={{ color: th.textMute }}>· {p.phone ?? '—'} · licence {lic ?? '—'} · {p.sex === 'MALE' ? 'H' : p.sex === 'FEMALE' ? 'F' : '—'}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    {r.status === 'WAITLISTED' && <button onClick={() => promote(r.id)} style={ghost}>Promouvoir</button>}
+                    <button onClick={() => remove(r.id)} style={ghost}>Désinscrire</button>
                   </div>
-                ))}
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  {r.status === 'WAITLISTED' && <button onClick={() => promote(r.id)} style={ghost}>Promouvoir</button>}
-                  <button onClick={() => remove(r.id)} style={ghost}>Désinscrire</button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

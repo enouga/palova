@@ -1,8 +1,8 @@
 'use client';
 import { CSSProperties } from 'react';
 import { ClubReservation } from '@/lib/api';
-import { fmtEuros, paymentDots } from '@/lib/caisse';
-import { QueueEntry } from '@/lib/caisseRegister';
+import { fmtEuros } from '@/lib/caisse';
+import { QueueEntry, placePaymentDots } from '@/lib/caisseRegister';
 import { useTheme } from '@/lib/ThemeProvider';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
@@ -33,7 +33,7 @@ export function QueueList({ toCollect, settled, playersOf, selectedId, onSelect 
     const r = e.r;
     const who = r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement';
     const sel = r.id === selectedId;
-    const dots = paymentDots(r, playersOf(r), e.due);
+    const dots = placePaymentDots(r, playersOf(r), e.due);
     const st: CSSProperties = {
       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
       background: th.surface, border: 'none', borderRadius: 12, padding: '10px 12px', cursor: 'pointer',

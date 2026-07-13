@@ -6,7 +6,8 @@ import { deadlineCountdown } from '@/lib/tournament';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ACCENTS } from '@/lib/theme';
-import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
+import { HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
+import { clubPanelWash } from '@/lib/authShell';
 
 // Type d'annonce → étiquette de chip (INFO n'a pas de chip).
 const KIND_LABEL: Partial<Record<AnnouncementKind, string>> = {
@@ -18,10 +19,13 @@ const cssSafe = (url: string | null | undefined) => url?.replace(/['"\\()]/g, ''
 
 // Le Kiosque « À la une » : scène cinéma des annonces du club. Une diapo à la fois,
 // défilement auto (façon stories, respecte prefers-reduced-motion), segments de
-// progression cliquables + flèches. Annonce AVEC affiche → l'affiche portrait entière
-// posée devant son propre reflet flouté (encre blanche) ; annonce SANS image → panneau
-// signature « brume bleue ». Clic → affiche en grand (image) ou feuille du texte complet.
-// Aucune annonce → repli brume bleue fin (nom du club + accroche). `now` null (avant
+// progression cliquables + flèches. Toutes les diapos (avec ou sans affiche) partagent le
+// même fond : un lavis clair teinté par la couleur d'accent du club (`clubPanelWash`,
+// réutilisé des pages d'auth) — coloré et à l'identité du club, jamais dépendant des
+// couleurs (parfois sombres) de l'affiche uploadée, encre fixe HERO_INK toujours lisible.
+// Annonce AVEC affiche → l'affiche portrait entière posée dessus, à côté du texte.
+// Clic → affiche en grand (image) ou feuille du texte complet.
+// Aucune annonce → repli même lavis, fin (nom du club + accroche). `now` null (avant
 // hydratation) → pas de compte à rebours. `intervalSeconds` = vitesse d'auto-défilement
 // réglée par le club (0 = manuel, pas de défilement auto ; défaut 6 s).
 export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }: {
@@ -51,10 +55,12 @@ export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }
 
   const shell = (children: React.ReactNode) => <div style={{ padding: '16px 20px 0' }}>{children}</div>;
 
-  // Repli : aucune annonce active → bandeau brume bleue fin.
+  const wash = clubPanelWash(th.accent);
+
+  // Repli : aucune annonce active → bandeau lavis fin.
   if (slides.length === 0) {
     return shell(
-      <div data-testid="clubhouse-kiosk" style={{ background: HERO_GRADIENT, borderRadius: 22, padding: '26px 22px', color: HERO_INK }}>
+      <div data-testid="clubhouse-kiosk" style={{ background: wash, borderRadius: 22, padding: '26px 22px', color: HERO_INK }}>
         <div style={{ fontFamily: th.fontBrand, fontSize: 14, letterSpacing: 0.6, color: HERO_INK_MUTED }}>{clubName}</div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 27, lineHeight: 1.12, letterSpacing: -0.5, marginTop: 8 }}>
           Réservez, jouez, retrouvez-vous.
@@ -67,12 +73,12 @@ export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }
   const a = slides[safeIndex];
   const img = cssSafe(assetUrl(a.imageUrl));
   const hasImage = !!img;
-  const ink = hasImage ? '#fff' : HERO_INK;
-  const inkMuted = hasImage ? 'rgba(255,255,255,0.82)' : HERO_INK_MUTED;
-  const chipBg = hasImage ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.55)';
-  const segActive = hasImage ? '#fff' : HERO_INK;
-  const segDim = hasImage ? 'rgba(255,255,255,0.4)' : 'rgba(24,21,16,0.22)';
-  const arrowBg = hasImage ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.6)';
+  const ink = HERO_INK;
+  const inkMuted = HERO_INK_MUTED;
+  const chipBg = 'rgba(255,255,255,0.55)';
+  const segActive = HERO_INK;
+  const segDim = 'rgba(24,21,16,0.22)';
+  const arrowBg = 'rgba(255,255,255,0.6)';
   const countdown = now && a.validUntil ? deadlineCountdown(a.validUntil, now) : null;
   const multi = slides.length > 1;
   const go = (i: number) => setIndex(((i % slides.length) + slides.length) % slides.length);
@@ -83,7 +89,6 @@ export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }
         <span style={{
           display: 'inline-block', fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, letterSpacing: 1,
           textTransform: 'uppercase', color: ink, background: chipBg, borderRadius: 99, padding: '4px 11px',
-          ...(hasImage ? { backdropFilter: 'blur(6px)' } : {}),
         }}>{KIND_LABEL[a.kind]}</span>
       )}
       {countdown && (
@@ -135,20 +140,14 @@ export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(a); } }}
           // Marge latérale élargie quand les flèches sont là (multi) : le contenu (titre
           // ET affiche) reste dans la gouttière, jamais sous une flèche.
-          style={{ position: 'relative', padding: multi ? '34px 46px 24px' : '26px 22px 24px', minHeight: 210, cursor: 'pointer', color: ink, ...(hasImage ? {} : { background: HERO_GRADIENT }) }}
+          style={{ position: 'relative', padding: multi ? '34px 46px 24px' : '26px 22px 24px', minHeight: 210, cursor: 'pointer', color: ink, background: wash }}
         >
-          {hasImage && (
-            <>
-              <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url('${img}')`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(34px) saturate(1.2)', transform: 'scale(1.25)' }} />
-              <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(100deg, rgba(16,14,10,0.66) 34%, rgba(16,14,10,0.34))' }} />
-            </>
-          )}
           <div style={{ position: 'relative', zIndex: 1 }}>
             {hasImage ? (
               <div className="kio-scene">
                 <div className="kio-poster" style={{ flex: '0 0 auto' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img ?? ''} alt="" style={{ display: 'block', maxHeight: 240, maxWidth: '100%', width: 'auto', borderRadius: 12, boxShadow: '0 20px 40px rgba(0,0,0,0.42)', outline: '1px solid rgba(255,255,255,0.3)' }} />
+                  <img src={img ?? ''} alt="" style={{ display: 'block', maxHeight: 240, maxWidth: '100%', width: 'auto', borderRadius: 12, boxShadow: '0 12px 30px rgba(24,21,16,0.2)', outline: '1px solid rgba(24,21,16,0.08)' }} />
                 </div>
                 {textCol}
               </div>

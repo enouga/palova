@@ -347,8 +347,8 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
           ) : null}
         </span>
         {!s.paid && <span style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: th.text, whiteSpace: 'nowrap' }}>{fmtEuros(s.amountCents)}</span>}
-        {(isSel || s.paid) && (
-          <span aria-hidden style={{ position: 'absolute', top: -7, right: -6, width: 20, height: 20, borderRadius: '50%', background: s.paid ? SETTLED_COLOR : th.accent, color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: th.shadow }}>✓</span>
+        {s.paid && (
+          <span aria-hidden style={{ position: 'absolute', top: -7, right: -6, width: 20, height: 20, borderRadius: '50%', background: SETTLED_COLOR, color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: th.shadow }}>✓</span>
         )}
       </div>
     );

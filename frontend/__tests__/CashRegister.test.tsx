@@ -53,6 +53,24 @@ it('pré-sélectionne la première place non réglée et affiche sa part en gran
   expect(screen.getByTestId('cx-total')).toHaveTextContent('13 €');
 });
 
+it('tuile sélectionnée mais non payée : pas de pastille ✓ (seul l\'anneau signale la sélection, pour ne pas laisser croire que c\'est réglé)', () => {
+  renderReg(rv());
+  const tiles = screen.getAllByRole('checkbox');
+  expect(tiles[0]).toHaveAttribute('aria-checked', 'true');
+  expect(tiles[0].querySelector('span[aria-hidden]')).toBeNull();
+});
+
+it('tuile réglée : la pastille ✓ reste affichée', () => {
+  const r = rv({
+    participants: [part('pt-1', 'u1', 'Léa', 'Roy', '13.00'), part('pt-2', 'u2', 'Max', 'Bo')],
+    payments: [{ id: 'p1', amount: '13.00', method: 'CASH', participantId: 'pt-1', payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2099-06-22T15:00:00.000Z', refundedAmount: '0.00', receiptNo: null }],
+    paidAmount: '13.00',
+  });
+  renderReg(r);
+  const paidTile = screen.getByRole('checkbox', { name: /Léa Roy/ });
+  expect(paidTile.querySelector('span[aria-hidden]')).not.toBeNull();
+});
+
 it('multi-sélection : cocher une 2e tuile cumule le montant', () => {
   renderReg(rv());
   fireEvent.click(screen.getAllByRole('checkbox')[1]);

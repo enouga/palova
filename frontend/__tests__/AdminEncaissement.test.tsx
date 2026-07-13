@@ -13,6 +13,7 @@ jest.mock('../lib/api', () => ({
     adminGetMembers: jest.fn().mockResolvedValue([]),
     adminGetReservations: jest.fn(),
     adminGetActivePackages: jest.fn().mockResolvedValue([]),
+    adminAutoApplySubscriptions: jest.fn().mockResolvedValue({ applied: 0 }),
     adminAddPayment: jest.fn().mockResolvedValue({ id: 'p-new' }),
     adminCancelReservation: jest.fn().mockResolvedValue({}),
     adminAssignReservationMember: jest.fn().mockResolvedValue({ id: 'rv-1' }),
@@ -120,5 +121,83 @@ it('bandeau KPI présent (Encaissé / Reste / Total)', async () => {
   expect(screen.getByText('Encaissé')).toBeInTheDocument();
   expect(screen.getByText('Reste')).toBeInTheDocument();
   expect(screen.getByText('Total')).toBeInTheDocument();
+});
+
+it('auto-sélection : jamais une résa masquée par les filtres (résa passée avec « À venir »)', async () => {
+  // Une vieille résa impayée est chargée mais masquée par la période « À venir » (défaut).
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+    mkResa('rv-old', '2001-06-22T16:00:00.000Z'),
+  ]));
+  renderPage();
+  expect(await screen.findByText('Aucune réservation')).toBeInTheDocument();
+  // File vide → la caisse ne doit RIEN auto-sélectionner (cohérence file/caisse).
+  const register = screen.getByTestId('cx-register');
+  await waitFor(() => expect(within(register).getByText('Sélectionnez une réservation dans la file')).toBeInTheDocument());
+  expect(within(register).queryByText(/Padel int 1/)).not.toBeInTheDocument();
+});
+
+it('filtre qui masque la résa sélectionnée (reste dû > 0) → la caisse se désélectionne', async () => {
+  renderPage();
+  const register = await screen.findByTestId('cx-register');
+  await waitFor(() => expect(within(register).getByText(new RegExp(hm('2099-06-22T16:00:00.000Z')))).toBeInTheDocument());
+  fireEvent.change(screen.getByPlaceholderText(/Rechercher un client/i), { target: { value: 'zzz' } });
+  expect(screen.getByText('Aucune réservation')).toBeInTheDocument();
+  await waitFor(() => expect(within(register).getByText('Sélectionnez une réservation dans la file')).toBeInTheDocument());
+});
+
+it('annulation depuis la caisse → la caisse passe à la suivante (jamais une annulée)', async () => {
+  (api.adminGetReservations as jest.Mock)
+    .mockResolvedValueOnce(resp([
+      mkResa('rv-b', '2099-06-22T18:00:00.000Z'),
+      mkResa('rv-a', '2099-06-22T16:00:00.000Z'),
+    ]))
+    .mockResolvedValue(resp([
+      mkResa('rv-b', '2099-06-22T18:00:00.000Z'),
+      mkResa('rv-a', '2099-06-22T16:00:00.000Z', { status: 'CANCELLED' }),
+    ]));
+  renderPage();
+  const register = await screen.findByTestId('cx-register');
+  await waitFor(() => expect(within(register).getByText(new RegExp(hm('2099-06-22T16:00:00.000Z')))).toBeInTheDocument());
+  fireEvent.click(within(register).getByRole('button', { name: 'Annuler la réservation' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annuler la réservation' }));
+  await waitFor(() => expect(api.adminCancelReservation).toHaveBeenCalledWith('club-1', 'rv-a', 'tok'));
+  // rv-a annulée ne doit plus être affichée ; la caisse avance sur rv-b (18:00)
+  await waitFor(() => expect(within(register).getByText(new RegExp(hm('2099-06-22T18:00:00.000Z')))).toBeInTheDocument());
+});
+
+it('« À encaisser » coché : la résa que l\'on vient de solder reste dans la caisse (le temps du toast)', async () => {
+  (api.adminGetReservations as jest.Mock)
+    .mockResolvedValueOnce(resp([
+      mkResa('rv-a', '2099-06-22T16:00:00.000Z'),
+      mkResa('rv-b', '2099-06-22T18:00:00.000Z'),
+    ]))
+    .mockResolvedValue(resp([
+      mkResa('rv-a', '2099-06-22T16:00:00.000Z', { paidAmount: '52.00', payments: [{ id: 'p-new', amount: '52.00', method: 'CARD', participantId: null, payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2099-06-22T14:00:00.000Z', refundedAmount: '0.00', receiptNo: null }] }),
+      mkResa('rv-b', '2099-06-22T18:00:00.000Z'),
+    ]));
+  renderPage();
+  const register = await screen.findByTestId('cx-register');
+  await waitFor(() => expect(within(register).getByText(new RegExp(hm('2099-06-22T16:00:00.000Z')))).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('checkbox', { name: 'À encaisser' }));
+  // solder toute la résa : « Tout le reste » puis CB
+  fireEvent.click(within(register).getByRole('button', { name: /Tout le reste/ }));
+  fireEvent.click(within(register).getByRole('button', { name: /CB/ }));
+  // la résa quitte la file (soldée + filtre « À encaisser ») mais la caisse la garde affichée
+  await waitFor(() => expect(within(register).getByText(/Soldé/)).toBeInTheDocument());
+  expect(within(register).getByText(new RegExp(hm('2099-06-22T16:00:00.000Z')))).toBeInTheDocument();
+});
+
+it('couverture auto abonnement : balaie le jour affiché avant de charger les réservations', async () => {
+  renderPage();
+  await screen.findByTestId('cx-queue');
+  const dateArg = (api.adminGetReservations as jest.Mock).mock.calls[0][1].date;
+  expect(api.adminAutoApplySubscriptions).toHaveBeenCalledWith('club-1', dateArg, 'tok');
+});
+
+it('couverture auto abonnement : un échec ne bloque pas le chargement de la page', async () => {
+  (api.adminAutoApplySubscriptions as jest.Mock).mockRejectedValue(new Error('boom'));
+  renderPage();
+  expect(await screen.findByRole('heading', { name: 'Caisse' })).toBeInTheDocument();
+  expect(await screen.findByText("À encaisser d'abord")).toBeInTheDocument();
 });
 

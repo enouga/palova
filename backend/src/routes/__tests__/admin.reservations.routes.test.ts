@@ -156,3 +156,34 @@ describe('PATCH /api/clubs/:clubId/admin/reservations/:id/schedule', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /api/clubs/:clubId/admin/reservations/auto-apply-subscriptions', () => {
+  const aurl = `${url}/auto-apply-subscriptions`;
+
+  it('200 balaye le jour donné et renvoie le nombre appliqué', async () => {
+    asMember();
+    const spy = jest.spyOn(ReservationService.prototype, 'autoApplySubscriptionCoverage')
+      .mockResolvedValue({ applied: 2 });
+    const res = await request(app).post(aurl).set('Authorization', `Bearer ${token}`).send({ date: '2026-07-12' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ applied: 2 });
+    expect(spy).toHaveBeenCalledWith('club-demo', '2026-07-12');
+    spy.mockRestore();
+  });
+
+  it('sans date : appelle le service avec undefined', async () => {
+    asMember();
+    const spy = jest.spyOn(ReservationService.prototype, 'autoApplySubscriptionCoverage')
+      .mockResolvedValue({ applied: 0 });
+    const res = await request(app).post(aurl).set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('club-demo', undefined);
+    spy.mockRestore();
+  });
+
+  it('403 si l utilisateur n est pas membre du club', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    const res = await request(app).post(aurl).set('Authorization', `Bearer ${token}`).send({ date: '2026-07-12' });
+    expect(res.status).toBe(403);
+  });
+});

@@ -58,10 +58,17 @@ export function BookingSuccess({ reservationId, token, summary, slot, timezone, 
         <span style={{ fontFamily: th.fontUI, fontSize: 15.5, fontWeight: 700 }}>Réservation confirmée !</span>
       </div>
 
-      <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 10, lineHeight: 1.5 }}>
-        <span style={{ textTransform: 'capitalize' }}>{dateLabel}</span> · {hour(slot.startTime)} → {hour(slot.endTime)} · {durationLabel(duration)}
-        {resourceName ? <> · {resourceName}</> : null}
-        <span style={{ display: 'block', marginTop: 2, fontWeight: 600, color: th.text }}>{summary}</span>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontFamily: th.fontDisplay, fontSize: 16, fontWeight: 700, color: th.text, textTransform: 'capitalize', letterSpacing: -0.3 }}>{dateLabel}</div>
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 500, color: th.textMute }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+            <Icon name="clock" size={13} color={th.textFaint} />
+            {hour(slot.startTime)} → {hour(slot.endTime)}
+          </span>
+          <span style={{ whiteSpace: 'nowrap' }}>· {durationLabel(duration)}</span>
+          {resourceName ? <span style={{ whiteSpace: 'nowrap' }}>· {resourceName}</span> : null}
+        </div>
+        <div style={{ marginTop: 7, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>{summary}</div>
       </div>
 
       {showPartners && (

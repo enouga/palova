@@ -425,6 +425,10 @@ export const api = {
   adminAddPayment: (clubId: string, reservationId: string, body: AddPaymentBody, token: string) =>
     request<Payment>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/payments`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  // Balayage automatique (Caisse/Planning) : couvre par abonnement les places non réglées du jour.
+  adminAutoApplySubscriptions: (clubId: string, date: string, token: string) =>
+    request<{ applied: number }>(`/api/clubs/${clubId}/admin/reservations/auto-apply-subscriptions`, { method: 'POST', body: JSON.stringify({ date }) }, token),
+
   adminAssignReservationMember: (clubId: string, reservationId: string, memberUserId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/member`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
 
@@ -1983,8 +1987,8 @@ export interface Sponsor {
   createdAt: string;
 }
 
-export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string; imageUrl: string | null; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
-export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
+export type AnnouncementBody = Partial<{ title: string; body: string; linkUrl: string | null; imageUrl: string | null; isPublished: boolean; pinned: boolean; kind: AnnouncementKind; validUntil: string | null; }>;
+export type SponsorBody = Partial<{ name: string; logoUrl: string; linkUrl: string | null; sortOrder: number; isActive: boolean; offerText: string; offerCode: string; offerUntil: string; pinned: boolean; }>;
 
 export type ReservationType = 'COURT' | 'COACHING' | 'TOURNAMENT' | 'EVENT';
 

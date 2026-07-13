@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import AdminPlanningPage from '../app/admin/planning/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api } from '../lib/api';
@@ -15,6 +15,7 @@ jest.mock('../lib/api', () => ({
     adminGetMembers: jest.fn().mockResolvedValue([]),
     adminGetReservations: jest.fn(),
     adminGetActivePackages: jest.fn().mockResolvedValue([]),
+    adminAutoApplySubscriptions: jest.fn().mockResolvedValue({ applied: 0 }),
     adminGetMemberSubscriptions: jest.fn().mockResolvedValue([]),
     adminListCoaches: jest.fn().mockResolvedValue([]),
     adminAddPayment: jest.fn().mockResolvedValue({ id: 'p1' }),
@@ -62,6 +63,23 @@ const openModal = async () => {
 };
 
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); });
+
+it('couverture auto abonnement : balaie le jour affiché avant de charger les réservations', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+  renderPage();
+  await screen.findByText('Jean Test');
+  const dateArg = (api.adminGetReservations as jest.Mock).mock.calls[0][1].date;
+  expect(api.adminAutoApplySubscriptions).toHaveBeenCalledWith('club-1', dateArg, 'tok');
+});
+
+it('couverture auto abonnement : un échec ne bloque pas le chargement de la grille', async () => {
+  (api.adminAutoApplySubscriptions as jest.Mock).mockRejectedValue(new Error('boom'));
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+  renderPage();
+  expect(await screen.findByText('Jean Test')).toBeInTheDocument();
+});
 
 it("encaisse la part du joueur présélectionné (tuile) avec un moyen, sans fermer la modale", async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
@@ -124,6 +142,75 @@ it("permet de sélectionner une place SANS joueur et d'encaisser sa part (anonym
     const call = (api.adminAddPayment as jest.Mock).mock.calls.at(-1)!;
     expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4), anonyme
     expect(call[2].participantId).toBeUndefined();
+  });
+});
+
+describe('pastilles-initiales de paiement + panneau au survol', () => {
+  it('les vignettes affichent des pastilles-initiales (qui a payé) au lieu de points anonymes', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+    renderPage();
+    await screen.findByText('Jean Test');
+    expect(screen.getByText('JT')).toBeInTheDocument();
+    expect(screen.getByText('LR')).toBeInTheDocument();
+  });
+
+  it("le title natif est retiré quand le panneau au survol est disponible (évite le doublon d'infobulle)", async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+    renderPage();
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    expect(block.title).toBe('');
+  });
+
+  it('un survol prolongé (~400ms) ouvre un panneau détaillant qui a payé et le reste dû', async () => {
+    jest.useFakeTimers();
+    // Double (52 €, 4 places) : pt-1 (Jean Test) réglé, pt-2 (Léa Roy) doit encore, 2 places
+    // vides — le "reste" du total (39 €) diffère de celui de Léa Roy (13 €) : pas d'ambiguïté
+    // de texte entre la ligne joueur et la ligne de total.
+    (api.adminGetResources as jest.Mock).mockResolvedValue([doubleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa({
+      totalPrice: '52.00', dueAmount: '52.00', paidAmount: '13.00',
+      participants: [
+        { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Test', share: '13.00', paid: '13.00', outstanding: '0.00' },
+        { id: 'pt-2', userId: 'u2', isOrganizer: false, firstName: 'Léa', lastName: 'Roy', share: '13.00', paid: '0.00', outstanding: '13.00' },
+      ],
+    })]));
+    renderPage();
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    fireEvent.mouseEnter(block);
+    expect(screen.queryByText(/Léa Roy/)).toBeNull();          // pas immédiat
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(screen.getByText(/Léa Roy/)).toBeInTheDocument();
+    expect(screen.getByText(/reste 13/)).toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
+  it('le panneau ne s’ouvre pas si la souris quitte le bloc avant le délai', async () => {
+    jest.useFakeTimers();
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+    renderPage();
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    fireEvent.mouseEnter(block);
+    fireEvent.mouseLeave(block);
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(screen.queryByText(/Léa Roy/)).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('un mousedown (début de drag) annule un survol en cours', async () => {
+    jest.useFakeTimers();
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+    renderPage();
+    const block = (await screen.findByText('Jean Test')).closest('button') as HTMLElement;
+    fireEvent.mouseEnter(block);
+    fireEvent.mouseDown(block, { clientY: 300 });
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(screen.queryByText(/Léa Roy/)).toBeNull();
+    fireEvent.mouseUp(window);
+    jest.useRealTimers();
   });
 });
 

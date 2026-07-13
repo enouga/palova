@@ -36,12 +36,19 @@ describe('AnnouncementKiosk', () => {
     expect(screen.queryByText('Tournoi')).not.toBeInTheDocument();
   });
 
-  it('diapo avec affiche → image entière + fond flouté (backgroundImage)', () => {
+  it('diapo avec affiche → image entière sur le lavis teinté par l\'accent du club (pas de voile sombre)', () => {
     wrap([ann({ imageUrl: '/uploads/announcements/x.jpg' })]);
     const kiosk = screen.getByTestId('clubhouse-kiosk');
     expect(kiosk.querySelector('img')).toBeTruthy();
     expect(kiosk.innerHTML).toContain('x.jpg');
-    expect(kiosk.innerHTML).toContain('blur(34px'); // reflet flouté de l'affiche
+    expect(kiosk.innerHTML).toContain('color-mix(in srgb, #5e93da'); // lavis clubPanelWash (accent défaut)
+    expect(kiosk.innerHTML).not.toContain('rgba(16,14,10'); // plus de voile sombre
+  });
+
+  it('diapo sans affiche partage le même lavis que la diapo avec affiche', () => {
+    wrap([ann({ imageUrl: null })]);
+    const kiosk = screen.getByTestId('clubhouse-kiosk');
+    expect(kiosk.innerHTML).toContain('color-mix(in srgb, #5e93da');
   });
 
   it('validUntil proche + now fourni → chip compte à rebours ; now null → pas de countdown', () => {

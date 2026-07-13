@@ -48,13 +48,17 @@ export async function seedDefaultOffers(prisma: PrismaClient, clubId: string): P
   return DEFAULT_PACKAGE_OFFERS.length;
 }
 
-/** Plans d'abonnement « heures creuses incluses » créés par défaut sur chaque club de test. */
+/** Plans d'abonnement créés par défaut sur chaque club de test. */
 export const DEFAULT_SUBSCRIPTION_PLANS: Array<{
   name: string; sportKeys: string[]; monthlyPrice: number; commitmentMonths: number;
   offPeakOnly: boolean; benefit: 'INCLUDED' | 'DISCOUNT';
 }> = [
   { name: 'Abonnement Padel — heures creuses',  sportKeys: ['padel'],  monthlyPrice: 69, commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED' },
   { name: 'Abonnement Squash — heures creuses', sportKeys: ['squash'], monthlyPrice: 59, commitmentMonths: 12, offPeakOnly: true, benefit: 'INCLUDED' },
+  // Toutes heures : le compte de démo test@palova.fr y est abonné, pour que la couverture
+  // automatique par abonnement (Caisse/Planning) soit visible sur n'importe quel créneau —
+  // les plans « heures creuses » ne couvrent rien tant que le club n'a pas configuré de plages creuses.
+  { name: 'Abonnement Padel — illimité',        sportKeys: ['padel'],  monthlyPrice: 89, commitmentMonths: 12, offPeakOnly: false, benefit: 'INCLUDED' },
 ];
 
 /** Crée (ou met à jour) les plans d'abonnement par défaut d'un club. Idempotent, sans suppression. */

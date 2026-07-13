@@ -104,6 +104,21 @@ describe('/admin/announcements — annonces enrichies', () => {
     expect(mocked.adminUploadAnnouncementImage).not.toHaveBeenCalled();
   });
 
+  it('modifier : vider le champ Lien envoie linkUrl null (et non omis)', async () => {
+    mocked.adminGetAnnouncements.mockResolvedValue([
+      { id: 'a1', title: 'Avec lien', body: 'corps', linkUrl: 'https://club.fr/x', imageUrl: null, kind: 'INFO', validUntil: null, isPublished: true, pinned: false, createdAt: '2026-07-01', updatedAt: '' },
+    ] as never);
+    mocked.adminUpdateAnnouncement.mockResolvedValue({ id: 'a1' } as never);
+    wrap();
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+    expect(screen.getByPlaceholderText('https://…')).toHaveValue('https://club.fr/x');
+    fireEvent.change(screen.getByPlaceholderText('https://…'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateAnnouncement).toHaveBeenCalledWith(
+      'c1', 'a1', expect.objectContaining({ linkUrl: null }), 't',
+    ));
+  });
+
   it('Publier sans contenu → message clair, aucun appel de création', async () => {
     mocked.adminGetAnnouncements.mockResolvedValue([] as never);
     wrap();

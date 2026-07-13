@@ -6,6 +6,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StripeSetupGuide } from '@/components/admin/StripeSetupGuide';
 
 const STATUS_META: Record<string, { dot: string; label: string }> = {
   NONE:       { dot: '#9ca3af', label: 'Non connecté' },
@@ -200,6 +201,8 @@ export default function AdminPaymentsPage() {
           </div>
         )}
       </div>
+
+      <StripeSetupGuide status={status} />
 
       {linked && (
         <div style={card}>

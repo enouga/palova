@@ -83,3 +83,30 @@ it('cocher la case et créer envoie requirePrepayment: true', async () => {
   const [, body] = adminCreateTournament.mock.calls[0];
   expect(body.requirePrepayment).toBe(true);
 });
+
+const iso = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+const tournament = (over: Record<string, unknown>) => ({
+  id: 'x', clubId: 'c1', clubSportId: 'cs', category: 'P100', name: 'X', gender: 'MIXED',
+  openToWomen: true, description: null, contactInfo: null, endTime: null,
+  registrationDeadline: iso(1), maxTeams: 10, entryFee: null, requirePrepayment: false,
+  confirmedCount: 0, waitlistCount: 0, ...over,
+});
+
+it('groupe les tournois par statut et montre les actions contextuelles', async () => {
+  adminGetTournaments.mockResolvedValue([
+    tournament({ id: 'd1', name: 'Brouillon Test', status: 'DRAFT', startTime: iso(10) }),
+    tournament({ id: 'u1', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5) }),
+    tournament({ id: 'p1', name: 'Passe Test', status: 'PUBLISHED', startTime: iso(-5) }),
+  ]);
+  renderPage();
+
+  expect(await screen.findByText('Brouillon Test')).toBeInTheDocument();
+  expect(screen.getByText('Brouillons')).toBeInTheDocument();
+  expect(screen.getByText('Publiés · à venir')).toBeInTheDocument();
+  expect(screen.getByText('Passés')).toBeInTheDocument();
+
+  // Un seul « Publier » (le brouillon) et un seul « Annuler » (le publié à venir) ;
+  // le passé n'a ni l'un ni l'autre → getByRole ne trouve qu'une occurrence de chaque.
+  expect(screen.getByRole('button', { name: 'Publier' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
+});

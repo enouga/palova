@@ -1,5 +1,5 @@
-import type { ClubReservation, Payment, PaymentMethod } from '@/lib/api';
-import { deriveSlots, SlotEntry, toCents } from '@/lib/caisse';
+import type { ClubReservation, Payment, PaymentMethod, ReservationType } from '@/lib/api';
+import { deriveSlots, SlotEntry, toCents, PaymentDotsModel } from '@/lib/caisse';
 
 // Helpers purs de la page « Caisse express » (/admin/encaissement).
 // Miroir extrait de la logique de statut par place de ReservationCollect :
@@ -26,7 +26,7 @@ export interface SlotStatus {
   participantId: string | null;
 }
 
-type RegisterReservation = Pick<ClubReservation, 'id' | 'user' | 'participants' | 'payments' | 'paidAmount'>;
+export type RegisterReservation = Pick<ClubReservation, 'id' | 'user' | 'participants' | 'payments' | 'paidAmount'>;
 
 /** Statut de paiement de chaque place d'une réservation COURT. */
 export function slotStatuses(rv: RegisterReservation, players: number, due: number): SlotStatus[] {
@@ -70,6 +70,83 @@ export function slotStatuses(rv: RegisterReservation, players: number, due: numb
       participantId: null,
     };
   });
+}
+
+export interface PastilleSeat {
+  seed: string;
+  initials: string;
+  name: string;
+  paid: boolean;
+  paidCents: number;
+  outstandingCents: number;
+}
+
+export interface PastillesModel {
+  /** Une entrée par place (capacité du terrain) ; `null` = place vide (non couverte). */
+  seats: (PastilleSeat | null)[];
+  settled: boolean;
+  totalPaidCents: number;
+  totalDueCents: number;
+}
+
+/**
+ * Modèle des pastilles-initiales de paiement d'un bloc du planning : une
+ * pastille par place, dérivée de `slotStatuses` — donc couvre aussi bien les
+ * participants nommés que les places génériques (titulaire seul, ou réglées
+ * par un paiement anonyme au comptoir), qui sont vertes dès qu'elles sont
+ * couvertes même sans identité. Une place reste grise pointillée seulement
+ * si elle n'est ni nommée ni couverte par un paiement. `null` si non
+ * applicable (pas un créneau COURT payant) — miroir de `paymentDots`.
+ */
+export function participantPastilles(
+  rv: RegisterReservation & { type: ReservationType },
+  players: number,
+  due: number,
+): PastillesModel | null {
+  if (rv.type !== 'COURT' || due <= 0) return null;
+  const totalPaidCents = toCents(rv.paidAmount);
+  const settled = totalPaidCents >= due;
+  const capShare = players > 0 ? Math.round(due / players) : due;
+  const seats: (PastilleSeat | null)[] = slotStatuses(rv, players, due).map((st) => {
+    const s = st.slot;
+    if (s.kind === 'empty') {
+      if (!st.paid) return null;
+      return { seed: `anon:${s.index}`, initials: '', name: `Joueur ${s.index + 1}`, paid: true, paidCents: capShare, outstandingCents: 0 };
+    }
+    return {
+      seed: s.seed,
+      initials: `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase(),
+      name: `${s.firstName} ${s.lastName}`.trim(),
+      paid: st.paid,
+      paidCents: s.kind === 'participant' ? s.paidCents : (st.paid ? capShare : 0),
+      outstandingCents: st.amountCents,
+    };
+  });
+  return { seats, settled, totalPaidCents, totalDueCents: due };
+}
+
+/**
+ * Pastilles de paiement de la file « Caisse express » (QueueList) : une pastille
+ * par PLACE, pleine dès que la place est réglée — dérivé de `slotStatuses`, comme
+ * les tuiles du CashRegister et les pastilles du planning (`participantPastilles`).
+ * On compte les PLACES payées, PAS le nombre de transactions : un règlement annulé
+ * (remboursé) ou fait en plusieurs fois ne gonfle donc plus le nombre de points
+ * pleins — contrairement à `paymentDots` (planning historique) qui comptait
+ * `payments.length`. `null` si non applicable (pas un créneau COURT payant).
+ */
+export function placePaymentDots(
+  rv: RegisterReservation & { type: ReservationType },
+  players: number,
+  due: number,
+): PaymentDotsModel | null {
+  if (rv.type !== 'COURT' || due <= 0) return null;
+  const paidPlaces = slotStatuses(rv, players, due).filter((s) => s.paid).length;
+  return {
+    filled: Math.min(paidPlaces, players),
+    slots: players,
+    overflow: 0,
+    settled: toCents(rv.paidAmount) >= due,
+  };
 }
 
 /**

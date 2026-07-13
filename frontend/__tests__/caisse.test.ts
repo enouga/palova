@@ -1,4 +1,4 @@
-import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId, hhmm, isSalePayment, trendSeries } from '@/lib/caisse';
+import { toCents, remainingCents, centsToInput, centsToStr, fmtEuros, tariffCents, dueCents, quickAmounts, paymentDots, popoverPosition, validatePaymentAmount, deriveSlots, applyOptimisticPayment, applyOptimisticRefund, isOptimisticId, hhmm, isSalePayment, trendSeries } from '@/lib/caisse';
 import { playerCount } from '@/lib/courtType';
 import type { ReservationType, ClubReservation } from '@/lib/api';
 
@@ -182,6 +182,24 @@ describe('paymentDots', () => {
   it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
     expect(paymentDots(resa({ type: 'TOURNAMENT', payments: 1 }), 4, 5200)).toBeNull();
     expect(paymentDots(resa({ totalPrice: '0.00' }), 4, 0)).toBeNull();
+  });
+});
+
+describe('popoverPosition', () => {
+  it('place le panneau à droite du bloc quand il y a la place', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 50 }, 1280)).toEqual({ left: 228, top: 50 });
+  });
+
+  it('bascule à gauche quand le panneau déborderait à droite du viewport', () => {
+    expect(popoverPosition({ left: 700, right: 790, top: 50 }, 800)).toEqual({ left: 462, top: 50 });
+  });
+
+  it('clamp vertical : ne dépasse pas le bas du viewport quand hauteur/viewport fournis', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 700 }, 1280, 230, 8, 800, 200)).toEqual({ left: 228, top: 592 });
+  });
+
+  it('sans viewportHeight/panelHeight fournis, pas de clamp vertical (rétro-compatible)', () => {
+    expect(popoverPosition({ left: 100, right: 220, top: 700 }, 1280)).toEqual({ left: 228, top: 700 });
   });
 });
 
