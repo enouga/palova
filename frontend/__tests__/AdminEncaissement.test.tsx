@@ -116,6 +116,25 @@ it('caisse express : tous les moyens de paiement proposés (au-delà des rapides
   expect(within(register).getByRole('button', { name: /Abo/ })).toBeInTheDocument();
 });
 
+it('« À encaisser » coché SANS encaissement récent : la soldée sélectionnée est désélectionnée (file vide = caisse vide)', async () => {
+  // Tout est soldé → l'auto-sélection affiche la 1re soldée. Cocher « À encaisser » vide la
+  // file : la caisse ne doit PAS garder la soldée (la grâce ne vaut qu'après un encaissement).
+  const paid = (id: string, start: string) => mkResa(id, start, {
+    paidAmount: '52.00',
+    payments: [{ id: `p-${id}`, amount: '52.00', method: 'CARD', participantId: null, payerName: null, note: null, voucherRef: null, voucherIssuer: null, voucherStatus: null, createdAt: '2099-06-22T14:00:00.000Z', refundedAmount: '0.00', receiptNo: null }],
+  });
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
+    paid('rv-s1', '2099-06-22T15:00:00.000Z'),
+    paid('rv-s2', '2099-06-22T16:00:00.000Z'),
+  ]));
+  renderPage();
+  const register = await screen.findByTestId('cx-register');
+  await waitFor(() => expect(within(register).getByText(new RegExp(hm('2099-06-22T15:00:00.000Z')))).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('checkbox', { name: 'À encaisser' }));
+  expect(await screen.findByText('Aucune réservation')).toBeInTheDocument();
+  await waitFor(() => expect(within(register).getByText('Sélectionnez une réservation dans la file')).toBeInTheDocument());
+});
+
 it('file : séparateurs de DATE par groupe de jours (on sait sur quel jour on est)', async () => {
   (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([
     mkResa('rv-j2', '2099-06-23T16:00:00.000Z'),
