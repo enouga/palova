@@ -99,6 +99,12 @@ export default function NewClubPage() {
           <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
           <Field label="Mot de passe (8+ caractères)" icon="lock" type="password" value={password} onChange={setPassword} required autoComplete="new-password" />
 
+          <p style={{ margin: 0, fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.55, color: th.textMute }}>
+            Ce compte sera le <strong style={{ color: th.text, fontWeight: 700 }}>compte gérant (administrateur)</strong> de
+            votre club : lui seul gère l’abonnement Palova et pilote la configuration. Vous pourrez ensuite
+            nommer des admins et du staff depuis la page Membres — le staff gère le quotidien sans voir ces informations.
+          </p>
+
           <div style={{ ...sectionLabel, marginTop: 8 }}>Club</div>
           <Field label="Nom du club" icon="pin" value={clubName} onChange={setClubName} required />
           <Field label="Ville" value={city} onChange={setCity} />
