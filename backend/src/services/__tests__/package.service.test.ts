@@ -490,3 +490,39 @@ describe('PackageService — correction d’un solde (sans argent)', () => {
     await expect(service.adjustPackage('club-1', 'user-1', 'pkg-1', { newCredits: 5, reason: 'x' }, 's')).rejects.toThrow('PACKAGE_NOT_FOUND');
   });
 });
+
+describe('PackageService — listTemplates + stats', () => {
+  let service: PackageService;
+  beforeEach(() => { service = new PackageService(); });
+
+  it('agrège vendus / actifs / outstanding par template', async () => {
+    prismaMock.packageTemplate.findMany.mockResolvedValue([
+      { id: 'tpl-e', clubId: 'club-1', kind: 'ENTRIES', name: 'Carte 10' },
+      { id: 'tpl-w', clubId: 'club-1', kind: 'WALLET', name: 'Avoir 200' },
+      { id: 'tpl-none', clubId: 'club-1', kind: 'ENTRIES', name: 'Jamais vendue' },
+    ] as any);
+    const future = new Date(Date.now() + 86_400_000);
+    const past = new Date(Date.now() - 86_400_000);
+    prismaMock.memberPackage.findMany.mockResolvedValue([
+      { templateId: 'tpl-e', kind: 'ENTRIES', creditsRemaining: 3, amountRemaining: null, expiresAt: future },
+      { templateId: 'tpl-e', kind: 'ENTRIES', creditsRemaining: 0, amountRemaining: null, expiresAt: future },
+      { templateId: 'tpl-w', kind: 'WALLET', creditsRemaining: null, amountRemaining: new Prisma.Decimal(130), expiresAt: future },
+      { templateId: 'tpl-w', kind: 'WALLET', creditsRemaining: null, amountRemaining: new Prisma.Decimal(50), expiresAt: past },
+    ] as any);
+
+    const out = await service.listTemplates('club-1');
+
+    const byId = Object.fromEntries(out.map((t: any) => [t.id, t.stats]));
+    expect(byId['tpl-e']).toEqual({ soldCount: 2, activeCount: 1, outstandingAmount: '0.00' });
+    expect(byId['tpl-w']).toEqual({ soldCount: 2, activeCount: 1, outstandingAmount: '130.00' });
+    expect(byId['tpl-none']).toEqual({ soldCount: 0, activeCount: 0, outstandingAmount: '0.00' });
+  });
+
+  it('ne lit que les member_packages du club', async () => {
+    prismaMock.packageTemplate.findMany.mockResolvedValue([] as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+    await service.listTemplates('club-1');
+    const arg = prismaMock.memberPackage.findMany.mock.calls[0][0] as any;
+    expect(arg.where.clubId).toBe('club-1');
+  });
+});

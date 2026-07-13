@@ -22,8 +22,45 @@ function deleteUploadedOfferImage(imageUrl: string | null | undefined): void {
 export class PackageService {
   // --- Offres (templates) ---
 
+  /**
+   * Offres du club, chacune enrichie du pouls de ventes (agrégat MemberPackage) :
+   * soldCount = tous les exemplaires vendus, activeCount = encore utilisables,
+   * outstandingAmount = € restant en circulation (WALLET actifs). Le détail vit
+   * sur /admin/members ; ici juste le chiffre au moment de décider.
+   */
   async listTemplates(clubId: string) {
-    return prisma.packageTemplate.findMany({ where: { clubId }, orderBy: { createdAt: 'asc' } });
+    const templates = await prisma.packageTemplate.findMany({ where: { clubId }, orderBy: { createdAt: 'asc' } });
+    const pkgs = await prisma.memberPackage.findMany({
+      where: { clubId },
+      select: { templateId: true, kind: true, creditsRemaining: true, amountRemaining: true, expiresAt: true },
+    });
+    const now = Date.now();
+    const acc = new Map<string, { soldCount: number; activeCount: number; outstanding: Prisma.Decimal }>();
+    for (const p of pkgs) {
+      const s = acc.get(p.templateId) ?? { soldCount: 0, activeCount: 0, outstanding: new Prisma.Decimal(0) };
+      s.soldCount += 1;
+      const notExpired = !p.expiresAt || p.expiresAt.getTime() > now;
+      const usable = notExpired && (
+        (p.kind === 'ENTRIES' && (p.creditsRemaining ?? 0) >= 1) ||
+        (p.kind === 'WALLET' && p.amountRemaining != null && p.amountRemaining.greaterThan(0))
+      );
+      if (usable) {
+        s.activeCount += 1;
+        if (p.kind === 'WALLET' && p.amountRemaining) s.outstanding = s.outstanding.plus(p.amountRemaining);
+      }
+      acc.set(p.templateId, s);
+    }
+    return templates.map((t) => {
+      const s = acc.get(t.id);
+      return {
+        ...t,
+        stats: {
+          soldCount: s?.soldCount ?? 0,
+          activeCount: s?.activeCount ?? 0,
+          outstandingAmount: (s?.outstanding ?? new Prisma.Decimal(0)).toFixed(2),
+        },
+      };
+    });
   }
 
   async createTemplate(clubId: string, body: {
