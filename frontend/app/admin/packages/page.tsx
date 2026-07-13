@@ -129,61 +129,61 @@ export default function AdminPackagesPage() {
 
       {error && <div style={{ marginTop: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
 
-      {empty && (
+      {loading ? (
+        <div style={{ marginTop: 20, fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+      ) : empty ? (
         <div style={{ marginTop: 30, background: th.surface, borderRadius: 16, boxShadow: th.shadow, padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, color: th.text }}>Créez votre première offre</div>
           <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 6 }}>Abonnements, carnets d’entrées ou porte-monnaie — vos joueurs les verront sur le Club-house.</div>
           <button type="button" onClick={openCreate} style={{ marginTop: 16, border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '10px 18px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 800 }}>＋ Créer une offre</button>
         </div>
-      )}
-
-      <Kicker>Abonnements</Kicker>
-      {loading ? (
-        <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-      ) : orderedPlans.length === 0 ? (
-        <div style={{ fontFamily: th.fontUI, color: th.textMute, fontSize: 13 }}>Aucun abonnement pour l’instant.</div>
       ) : (
-        <div style={grid}>
-          {orderedPlans.map((p, i) => (
-            <OfferCard key={p.id} tint={offerAccent(i)} kindLabel="Abonnement" name={p.name}
-              price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
-              features={[
-                p.sportKeys.length > 0 ? p.sportKeys.join(', ') : 'Tous sports',
-                p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
-                p.benefit === 'INCLUDED' ? 'inclus' : `−${p.discountPercent} %`,
-              ].join(' · ')}
-              pulse={
-                activeCountFor(p.id) > 0 ? (
-                  <a href={membersHref(p.id)} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    {planPulse(activeCountFor(p.id), planRevenueCents(subscribers, p.id, nowMs))}
-                  </a>
-                ) : planPulse(0, 0)
-              }
-              isActive={p.isActive} busy={busy} onEdit={() => openEditPlan(p)} onToggleActive={() => togglePlan(p)} />
-          ))}
-        </div>
-      )}
+        <>
+          {orderedPlans.length > 0 && (
+            <>
+              <Kicker>Abonnements</Kicker>
+              <div style={grid}>
+                {orderedPlans.map((p, i) => (
+                  <OfferCard key={p.id} tint={offerAccent(i)} kindLabel="Abonnement" name={p.name}
+                    price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
+                    features={[
+                      p.sportKeys.length > 0 ? p.sportKeys.join(', ') : 'Tous sports',
+                      p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
+                      p.benefit === 'INCLUDED' ? 'inclus' : `−${p.discountPercent} %`,
+                    ].join(' · ')}
+                    pulse={
+                      activeCountFor(p.id) > 0 ? (
+                        <a href={membersHref(p.id)} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {planPulse(activeCountFor(p.id), planRevenueCents(subscribers, p.id, nowMs))} <span aria-hidden>→</span>
+                        </a>
+                      ) : planPulse(0, 0)
+                    }
+                    isActive={p.isActive} busy={busy} onEdit={() => openEditPlan(p)} onToggleActive={() => togglePlan(p)} />
+                ))}
+              </div>
+            </>
+          )}
 
-      <Kicker>Carnets &amp; Porte-monnaie</Kicker>
-      {loading ? (
-        <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-      ) : orderedTpls.length === 0 ? (
-        <div style={{ fontFamily: th.fontUI, color: th.textMute, fontSize: 13 }}>Aucun carnet ni porte-monnaie pour l’instant.</div>
-      ) : (
-        <div style={grid}>
-          {orderedTpls.map((t, i) => (
-            <OfferCard key={t.id} tint={offerAccent(orderedPlans.length + i)}
-              kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
-              price={euro(t.price)}
-              priceSuffix={t.kind === 'ENTRIES' ? `· ${t.entriesCount} entrées` : `· ${euro(t.walletAmount ?? 0)} crédités`}
-              features={[
-                t.sportKeys.length > 0 ? t.sportKeys.join(', ') : 'Tous sports',
-                t.validityDays ? `valable ${t.validityDays} j` : 'sans expiration',
-              ].join(' · ')}
-              pulse={packagePulse(t.stats, t.kind)}
-              isActive={t.isActive} busy={busy} onEdit={() => openEditTpl(t)} onToggleActive={() => toggleTpl(t)} />
-          ))}
-        </div>
+          {orderedTpls.length > 0 && (
+            <>
+              <Kicker>Carnets &amp; Porte-monnaie</Kicker>
+              <div style={grid}>
+                {orderedTpls.map((t, i) => (
+                  <OfferCard key={t.id} tint={offerAccent(orderedPlans.length + i)}
+                    kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
+                    price={euro(t.price)}
+                    priceSuffix={t.kind === 'ENTRIES' ? `· ${t.entriesCount} entrées` : `· ${euro(t.walletAmount ?? 0)} crédités`}
+                    features={[
+                      t.sportKeys.length > 0 ? t.sportKeys.join(', ') : 'Tous sports',
+                      t.validityDays ? `valable ${t.validityDays} j` : 'sans expiration',
+                    ].join(' · ')}
+                    pulse={packagePulse(t.stats, t.kind)}
+                    isActive={t.isActive} busy={busy} onEdit={() => openEditTpl(t)} onToggleActive={() => toggleTpl(t)} />
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       <OfferStudio open={studioOpen} editing={editing} previewIndex={editing ? 0 : orderedPlans.length + orderedTpls.length}

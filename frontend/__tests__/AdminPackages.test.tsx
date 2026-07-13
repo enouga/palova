@@ -51,7 +51,7 @@ const mount = () => render(<ThemeProvider><AdminPackagesPage /></ThemeProvider>)
 it('affiche le titre « Offres » et les deux sections', async () => {
   mount();
   expect(await screen.findByRole('heading', { name: 'Offres' })).toBeInTheDocument();
-  expect(screen.getByText('Abonnements')).toBeInTheDocument();
+  expect(await screen.findByText('Abonnements')).toBeInTheDocument();
   expect(screen.getByText('Carnets & Porte-monnaie')).toBeInTheDocument();
 });
 
@@ -60,7 +60,7 @@ it('rend une carte par offre avec son pouls', async () => {
   expect(await screen.findByText('Carte 10 parties')).toBeInTheDocument();
   expect(screen.getByText('Padel illimité')).toBeInTheDocument();
   expect(screen.getByText('8 en circulation · 23 vendus')).toBeInTheDocument();
-  expect(screen.getByText('12 abonnés actifs · 588 €/mois')).toBeInTheDocument();
+  expect(screen.getByText(/12 abonnés actifs · 588 €\/mois/)).toBeInTheDocument();
 });
 
 it('« Créer une offre » ouvre le studio', async () => {
@@ -109,4 +109,23 @@ it('« Retirer » désactive l’offre', async () => {
   await waitFor(() => expect(api.adminUpdatePackageTemplate).toHaveBeenCalledWith(
     'club-1', 'tpl-1', { isActive: false }, 'tok',
   ));
+});
+
+it('une section vide ne rend pas son intitulé', async () => {
+  (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([]);
+  (api.adminGetSubscriptionOverview as jest.Mock).mockResolvedValue({ kpis: { activeCount: 0, monthlyRevenueCents: 0, expiringSoonCount: 0 }, plans: [], subscribers: [] });
+  mount();
+  await screen.findByText('Carte 10 parties');
+  expect(screen.getByText('Carnets & Porte-monnaie')).toBeInTheDocument();
+  expect(screen.queryByText('Abonnements')).toBeNull();
+});
+
+it('aucune offre → carte d’état vide seule, pas d’intitulés de section', async () => {
+  (api.adminGetPackageTemplates as jest.Mock).mockResolvedValue([]);
+  (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([]);
+  (api.adminGetSubscriptionOverview as jest.Mock).mockResolvedValue({ kpis: { activeCount: 0, monthlyRevenueCents: 0, expiringSoonCount: 0 }, plans: [], subscribers: [] });
+  mount();
+  expect(await screen.findByText('Créez votre première offre')).toBeInTheDocument();
+  expect(screen.queryByText('Abonnements')).toBeNull();
+  expect(screen.queryByText('Carnets & Porte-monnaie')).toBeNull();
 });
