@@ -155,11 +155,18 @@ export default function AdminEncaissementPage() {
     else await Promise.all([reloadReservations(), reloadPackages()]);
   }, [patchReservation, reloadReservations, reloadPackages]);
 
+  // Fenêtre de grâce après un encaissement fait ICI : la résa qui vient d'être soldée peut
+  // rester affichée dans la caisse le temps du toast « Annuler » même si « À encaisser »
+  // la masque de la file (≥ TOAST_MS du CashRegister, 6 s).
+  const GRACE_MS = 8000;
+  const settleGrace = useRef<{ id: string; until: number } | null>(null);
+
   // Encaissement OPTIMISTE : reflète le paiement dans la liste DÈS le clic et renvoie
   // l'id synthétique (le CashRegister s'en sert pour annuler avant réconciliation).
   const applyPaymentLocally = useCallback((reservationId: string, intent: PaymentIntent): string => {
     const id = `opt:${(optSeq.current += 1)}`;
     const iso = new Date().toISOString();
+    settleGrace.current = { id: reservationId, until: Date.now() + GRACE_MS };
     setData((cur) => (cur ? { ...cur, reservations: cur.reservations.map((r) => (r.id === reservationId ? applyOptimisticPayment(r, intent, id, iso) : r)) } : cur));
     return id;
   }, []);
@@ -269,28 +276,46 @@ export default function AdminEncaissementPage() {
   useEffect(() => { groupsRef.current = groups; });
 
   // La caisse ne montre JAMAIS une résa incohérente avec la file : disparue (autre jour),
-  // annulée, ou masquée par les filtres alors qu'elle doit encore de l'argent → on
-  // désélectionne. Seule exception : la résa que l'on VIENT de solder (masquée par
-  // « À encaisser ») reste affichée le temps du toast — `selectNextDue` avancera ensuite.
+  // annulée, ou masquée par les filtres → on désélectionne. Seule exception : la résa que
+  // l'on VIENT de solder ICI (masquée par « À encaisser ») reste affichée **le temps du
+  // toast d'annulation** — fenêtre de grâce posée par `applyPaymentLocally`, jamais au-delà.
+  // Sans grâce (soldée par le balayage abonnement, la modale Détails, ou simple sélection
+  // d'une soldée avant de cocher le filtre), la désélection est immédiate.
   const selectedResa = selectedRvId ? dayResas.find((r) => r.id === selectedRvId) ?? null : null;
   const visibleIds = new Set(visible.map((r) => r.id));
+  const settledInvisible = !!selectedResa && selectedResa.status !== 'CANCELLED' &&
+    !visibleIds.has(selectedResa.id) && dueOf(selectedResa) > 0 && remainingOf(selectedResa) <= 0;
   const selectionOrphan = selectedRvId !== null && (
     !selectedResa ||
     selectedResa.status === 'CANCELLED' ||
-    (!visibleIds.has(selectedRvId) && !(dueOf(selectedResa) > 0 && remainingOf(selectedResa) <= 0))
+    (!visibleIds.has(selectedRvId) && !settledInvisible)
   );
   const currentRv = selectionOrphan ? null : selectedResa;
   useEffect(() => {
     if (!loading && selectionOrphan) setSelectedRvId(null);
   }, [loading, selectionOrphan]);
 
-  // Desktop : auto-sélection de la première résa à encaisser DE LA FILE VISIBLE — jamais
-  // une résa que les filtres masquent (jamais sur mobile).
-  const firstDueId = groups.toCollect[0]?.r.id ?? null;
+  // Fin de la tolérance « soldée invisible » : sans encaissement récent au comptoir la
+  // désélection est immédiate ; sinon un minuteur prend le relais à l'expiration de la
+  // grâce (utile sur mobile où `onSettled` ne se déclenche pas).
   useEffect(() => {
-    if (!isDesktop || loading || selectedRvId || !firstDueId) return;
-    setSelectedRvId(firstDueId);
-  }, [isDesktop, loading, selectedRvId, firstDueId]);
+    if (loading || !selectedRvId || !settledInvisible) return;
+    const g = settleGrace.current;
+    const left = g && g.id === selectedRvId ? g.until - Date.now() : 0;
+    if (left <= 0) { setSelectedRvId(null); return; }
+    const t = setTimeout(() => setSelectedRvId((cur) => (cur === selectedRvId ? null : cur)), left + 100);
+    return () => clearTimeout(t);
+  }, [loading, selectedRvId, settledInvisible]);
+
+  // Desktop : auto-sélection de la première résa DE LA FILE VISIBLE — celles à encaisser
+  // d'abord, sinon (tout soldé) la première soldée. Jamais une résa masquée par les filtres
+  // (les deux groupes dérivent de `visible`), jamais sur mobile. Le placeholder
+  // « Sélectionnez… » ne subsiste donc que si la file est réellement vide.
+  const firstQueueId = (groups.toCollect[0] ?? groups.settled[0])?.r.id ?? null;
+  useEffect(() => {
+    if (!isDesktop || loading || selectedRvId || !firstQueueId) return;
+    setSelectedRvId(firstQueueId);
+  }, [isDesktop, loading, selectedRvId, firstQueueId]);
 
   // Résa soldée (toast expiré) → prochaine à encaisser de la file. Si l'utilisateur est
   // déjà passé sur une autre résa à encaisser on ne bouge pas ; sinon on avance, et à

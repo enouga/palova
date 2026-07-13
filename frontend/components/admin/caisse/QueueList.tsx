@@ -1,14 +1,15 @@
 'use client';
-import { CSSProperties } from 'react';
+import { CSSProperties, ReactNode } from 'react';
 import { ClubReservation } from '@/lib/api';
 import { fmtEuros } from '@/lib/caisse';
-import { QueueEntry, placePaymentDots } from '@/lib/caisseRegister';
+import { QueueEntry, placePaymentDots, queueDayKey } from '@/lib/caisseRegister';
 import { useTheme } from '@/lib/ThemeProvider';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
 const CORAL = '#ff7a4d';
 
 function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+function fmtDay(iso: string): string { return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); }
 
 export interface QueueListProps {
   toCollect: QueueEntry<ClubReservation>[];
@@ -57,12 +58,31 @@ export function QueueList({ toCollect, settled, playersOf, selectedId, onSelect 
     );
   };
 
+  // Séparateur de date : la file est triée par jour (queueGroups) — une ligne de date ouvre
+  // chaque groupe de jours dans chaque zone, pour toujours savoir sur quel jour on encaisse.
+  const dateRow = (iso: string, keyPrefix: string) => (
+    <div key={`${keyPrefix}:${queueDayKey(iso)}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px 0' }}>
+      <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textMute }}>{fmtDay(iso)}</span>
+      <span aria-hidden style={{ flex: 1, height: 1, background: th.line }} />
+    </div>
+  );
+  const zone = (entries: QueueEntry<ClubReservation>[], done: boolean): ReactNode[] => {
+    const out: ReactNode[] = [];
+    let prevDay: string | null = null;
+    for (const e of entries) {
+      const day = queueDayKey(e.r.startTime);
+      if (day !== prevDay) { out.push(dateRow(e.r.startTime, done ? 's' : 'c')); prevDay = day; }
+      out.push(row(e, done));
+    }
+    return out;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {toCollect.length > 0 && header("À encaisser d'abord")}
-      {toCollect.map((e) => row(e, false))}
+      {zone(toCollect, false)}
       {settled.length > 0 && header('Soldées')}
-      {settled.map((e) => row(e, true))}
+      {zone(settled, true)}
       {toCollect.length === 0 && settled.length === 0 && (
         <div style={{ padding: '32px 12px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, background: th.surface, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${th.line}` }}>Aucune réservation</div>
       )}

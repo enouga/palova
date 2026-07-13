@@ -236,6 +236,17 @@ describe('queueGroups', () => {
     expect(g.toCollect).toHaveLength(0);
     expect(g.settled.map((e) => e.r.id)).toEqual(['e']);
   });
+  it('plusieurs jours : groupé PAR JOUR d\'abord, puis ordre des ressources, puis heure', () => {
+    const rows = [
+      entry('d2-c1', '2099-06-23T10:00:00.000Z', '0.00', { resourceId: 'court-1' }),
+      entry('d1-c2', '2099-06-22T16:00:00.000Z', '0.00', { resourceId: 'court-2' }),
+      entry('d1-c1', '2099-06-22T15:00:00.000Z', '0.00', { resourceId: 'court-1' }),
+    ];
+    const rank = (id: string) => (({ 'court-1': 0, 'court-2': 1 }) as Record<string, number>)[id] ?? 99;
+    const g = queueGroups(rows, dueOf, rank);
+    // le 22 en entier d'abord (court-1 puis court-2), PUIS le 23 — le jour domine le rang de terrain
+    expect(g.toCollect.map((e) => e.r.id)).toEqual(['d1-c1', 'd1-c2', 'd2-c1']);
+  });
   it('classé par ordre des ressources (puis par heure) quand resourceRank est fourni', () => {
     const rows = [
       entry('a', '2099-06-22T16:00:00.000Z', '0.00', { resourceId: 'court-2' }),

@@ -174,9 +174,19 @@ export function selectionTotal(statuses: SlotStatus[], selected: ReadonlySet<num
 export interface QueueEntry<R extends { paidAmount: string }> { r: R; due: number; remaining: number }
 
 /**
+ * Clé de jour LOCAL (fuseau de la machine — même repère que les heures affichées par la
+ * file) d'un instant ISO : « YYYY-MM-DD ». Sert au tri et aux séparateurs de date.
+ */
+export function queueDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Groupes de la file : « à encaisser » (reste dû > 0) puis « soldées » (réglées ou dû nul).
- * Les annulées sont exclues. Ordre : par **rang de ressource** (ordre des terrains) si
- * `resourceRank` est fourni, puis par heure de début ; sinon par heure de début seule.
+ * Les annulées sont exclues. Ordre : par **jour** d'abord (une file multi-jours reste groupée
+ * par date), puis par **rang de ressource** (ordre des terrains) si `resourceRank` est fourni,
+ * puis par heure de début.
  */
 export function queueGroups<R extends { status: string; startTime: string; paidAmount: string; resourceId?: string }>(
   reservations: R[],
@@ -192,7 +202,9 @@ export function queueGroups<R extends { status: string; startTime: string; paidA
   const rankOf = (e: QueueEntry<R>) =>
     resourceRank && e.r.resourceId != null ? resourceRank(e.r.resourceId) : 0;
   const cmp = (a: QueueEntry<R>, b: QueueEntry<R>) =>
-    (rankOf(a) - rankOf(b)) || a.r.startTime.localeCompare(b.r.startTime);
+    queueDayKey(a.r.startTime).localeCompare(queueDayKey(b.r.startTime)) ||
+    (rankOf(a) - rankOf(b)) ||
+    a.r.startTime.localeCompare(b.r.startTime);
   return {
     toCollect: entries.filter((e) => e.remaining > 0).sort(cmp),
     settled: entries.filter((e) => e.remaining <= 0).sort(cmp),
