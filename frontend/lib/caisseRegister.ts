@@ -1,5 +1,5 @@
 import type { ClubReservation, Payment, PaymentMethod, ReservationType } from '@/lib/api';
-import { deriveSlots, SlotEntry, toCents } from '@/lib/caisse';
+import { deriveSlots, SlotEntry, toCents, PaymentDotsModel } from '@/lib/caisse';
 
 // Helpers purs de la page « Caisse express » (/admin/encaissement).
 // Miroir extrait de la logique de statut par place de ReservationCollect :
@@ -123,6 +123,30 @@ export function participantPastilles(
     };
   });
   return { seats, settled, totalPaidCents, totalDueCents: due };
+}
+
+/**
+ * Pastilles de paiement de la file « Caisse express » (QueueList) : une pastille
+ * par PLACE, pleine dès que la place est réglée — dérivé de `slotStatuses`, comme
+ * les tuiles du CashRegister et les pastilles du planning (`participantPastilles`).
+ * On compte les PLACES payées, PAS le nombre de transactions : un règlement annulé
+ * (remboursé) ou fait en plusieurs fois ne gonfle donc plus le nombre de points
+ * pleins — contrairement à `paymentDots` (planning historique) qui comptait
+ * `payments.length`. `null` si non applicable (pas un créneau COURT payant).
+ */
+export function placePaymentDots(
+  rv: RegisterReservation & { type: ReservationType },
+  players: number,
+  due: number,
+): PaymentDotsModel | null {
+  if (rv.type !== 'COURT' || due <= 0) return null;
+  const paidPlaces = slotStatuses(rv, players, due).filter((s) => s.paid).length;
+  return {
+    filled: Math.min(paidPlaces, players),
+    slots: players,
+    overflow: 0,
+    settled: toCents(rv.paidAmount) >= due,
+  };
 }
 
 /**

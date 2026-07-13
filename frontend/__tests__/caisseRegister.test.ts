@@ -1,4 +1,5 @@
-import { slotStatuses, nextSelectable, selectionTotal, queueGroups, participantPastilles, SlotStatus } from '../lib/caisseRegister';
+import { slotStatuses, nextSelectable, selectionTotal, queueGroups, participantPastilles, placePaymentDots, SlotStatus } from '../lib/caisseRegister';
+import { paymentDots } from '../lib/caisse';
 
 // ── factories minimales (structurelles, mêmes formes que l'API) ────────────
 const pay = (id: string, amount: string, method = 'CARD', participantId: string | null = null, refunded = '0.00') => ({
@@ -132,6 +133,52 @@ describe('participantPastilles', () => {
   it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
     expect(participantPastilles(rv({ type: 'TOURNAMENT' }), 4, 5200)).toBeNull();
     expect(participantPastilles(rv(), 4, 0)).toBeNull();
+  });
+});
+
+describe('placePaymentDots (file Caisse express : 1 pastille pleine par PLACE réglée)', () => {
+  it('1 place réglée sur 2 → 1 pastille pleine (comme les tuiles du CashRegister)', () => {
+    const r = rv({
+      participants: [part('pt-1', 'u1', 'Jean', 'Dupont', '13.00'), part('pt-2', 'u2', 'Lilou', 'Andre')],
+      payments: [pay('p1', '13.00', 'CASH', 'pt-1')],
+      paidAmount: '13.00',
+    });
+    expect(placePaymentDots(r, 2, 2600)).toEqual({ filled: 1, slots: 2, overflow: 0, settled: false });
+  });
+
+  it('régression : un règlement annulé/refait ne gonfle PAS le nombre de pastilles pleines', () => {
+    // 1 place réglée (pt-1), mais 2 transactions dans l'historique (une remboursée) :
+    // `paymentDots` comptait `payments.length` → 2 pastilles pleines à tort ; on veut 1.
+    const r = rv({
+      participants: [part('pt-1', 'u1', 'Jean', 'Dupont', '13.00'), part('pt-2', 'u2', 'Lilou', 'Andre')],
+      payments: [pay('pRefunded', '13.00', 'CASH', 'pt-1', '13.00'), pay('pActive', '13.00', 'CASH', 'pt-1')],
+      paidAmount: '13.00',
+    });
+    // Le bug d'origine (payment-count) :
+    expect(paymentDots(r, 2, 2600)!.filled).toBe(2);
+    // Le correctif (place-coverage) :
+    expect(placePaymentDots(r, 2, 2600)!.filled).toBe(1);
+  });
+
+  it('régression : une place réglée en plusieurs fois reste UNE pastille pleine', () => {
+    const r = rv({
+      participants: [part('pt-1', 'u1', 'Jean', 'Dupont', '13.00'), part('pt-2', 'u2', 'Lilou', 'Andre')],
+      payments: [pay('p1', '6.50', 'CASH', 'pt-1'), pay('p2', '6.50', 'CARD', 'pt-1')],
+      paidAmount: '13.00',
+    });
+    expect(placePaymentDots(r, 2, 2600)!.filled).toBe(1);
+  });
+
+  it('un paiement anonyme couvrant les DEUX places → 2 pastilles pleines (place-coverage, pas 1)', () => {
+    const r = rv({ payments: [pay('p1', '26.00')], paidAmount: '26.00' });
+    const m = placePaymentDots(r, 2, 2600)!;
+    expect(m.filled).toBe(2);
+    expect(m.settled).toBe(true);
+  });
+
+  it('non applicable : type ≠ COURT ou dû ≤ 0 → null', () => {
+    expect(placePaymentDots(rv({ type: 'TOURNAMENT' }), 2, 2600)).toBeNull();
+    expect(placePaymentDots(rv(), 2, 0)).toBeNull();
   });
 });
 

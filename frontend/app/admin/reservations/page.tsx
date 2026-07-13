@@ -11,7 +11,8 @@ import { ReservationCollect } from '@/components/admin/ReservationCollect';
 import { Receipt } from '@/components/admin/Receipt';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { Icon, IconName } from '@/components/ui/Icon';
-import { dueCents, toCents, fmtEuros, paymentDots, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
+import { dueCents, toCents, fmtEuros, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
+import { placePaymentDots } from '@/lib/caisseRegister';
 import { playerCount } from '@/lib/courtType';
 import { matchesQuery, isUpcoming, nextSlotWindow, isNextSlot, PeriodMode, StatusMode, statusFilter, hasAnyMethod } from '@/lib/collect';
 import { indexPackagesByUser } from '@/lib/packages';
@@ -314,7 +315,7 @@ export default function AdminReservationsPage() {
     const sttld = due > 0 && rem <= 0 && !cancelled;
     const partial = due > 0 && toCents(r.paidAmount) > 0 && rem > 0;
     const rail = cancelled ? th.textFaint : sttld ? SETTLED_COLOR : partial ? th.accentWarm : due > 0 ? CORAL : th.textFaint;
-    const dots = paymentDots(r, playersOf(r), due);
+    const dots = placePaymentDots(r, playersOf(r), due);
     const who = r.title?.trim() ? r.title : r.user ? `${r.user.firstName} ${r.user.lastName}` : 'Événement';
     return (
       <div key={r.id}>
