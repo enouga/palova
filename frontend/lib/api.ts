@@ -479,6 +479,14 @@ export const api = {
     request<Subscription[]>(`/api/clubs/${clubId}/admin/members/${userId}/subscriptions`, {}, token),
   adminSellSubscription: (clubId: string, userId: string, body: SellSubscriptionBody, token: string) =>
     request<{ subscription: Subscription; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/subscriptions`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminGetSubscriptionOverview: (clubId: string, token: string) =>
+    request<SubscriptionOverview>(`/api/clubs/${clubId}/admin/subscriptions/overview`, {}, token),
+  adminRenewSubscription: (clubId: string, id: string, body: RenewSubscriptionBody, token: string) =>
+    request<{ subscription: Subscription; payment: Payment }>(`/api/clubs/${clubId}/admin/subscriptions/${id}/renew`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminChangeSubscription: (clubId: string, id: string, body: ChangeSubscriptionBody, token: string) =>
+    request<{ subscription: Subscription; payment: Payment }>(`/api/clubs/${clubId}/admin/subscriptions/${id}/change`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminCancelSubscription: (clubId: string, id: string, token: string) =>
+    request<{ id: string; status: SubscriptionStatus }>(`/api/clubs/${clubId}/admin/subscriptions/${id}/cancel`, { method: 'POST' }, token),
 
   // --- Offres prépayées & caisse ---
   adminGetPackageTemplates: (clubId: string, token: string) =>
@@ -1824,6 +1832,30 @@ export type UpdateSubscriptionPlanBody = Partial<CreateSubscriptionPlanBody & { 
 export interface SellSubscriptionBody {
   planId: string; method?: PaymentMethod; payerName?: string; voucherRef?: string; voucherIssuer?: string;
 }
+
+// --- Pilotage /admin/abonnes ---
+export interface SubscriberRow {
+  id: string;
+  user: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
+  planId: string;
+  planName: string;
+  status: SubscriptionStatus;
+  startedAt: string;
+  expiresAt: string;
+  monthlyPriceSnapshot: string;
+  sportKeys: string[];
+}
+export interface SubscriptionPlanSummary {
+  id: string; name: string; monthlyPrice: string; benefit: SubscriptionBenefit;
+  discountPercent: number | null; sportKeys: string[]; isActive: boolean; activeCount: number;
+}
+export interface SubscriptionOverview {
+  kpis: { activeCount: number; monthlyRevenueCents: number; expiringSoonCount: number };
+  plans: SubscriptionPlanSummary[];
+  subscribers: SubscriberRow[];
+}
+export interface RenewSubscriptionBody { method?: PaymentMethod; payerName?: string; voucherRef?: string; voucherIssuer?: string; }
+export interface ChangeSubscriptionBody extends RenewSubscriptionBody { planId: string; }
 
 export interface PackageTemplate {
   id: string;
