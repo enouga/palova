@@ -329,9 +329,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               const showPast = expandedPast[resource.id] === true;
                               const bookableCount = rest.filter((s) => s.available && win.slotAllowed(s.startTime)).length;
                               const scarcity = scarcityLabel(bookableCount, date === todayISO());
-                              // Pills pleines : libre = accent du club, creux = apricot (prix inclus),
-                              // pris/passé = « fantôme » (contour fin). L'encre est choisie pour rester
-                              // lisible quel que soit l'accent (inkOn).
+                              // Pills pleines : libre = accent du club, creux = apricot + sticker prix
+                              // sur le coin haut-droit (seulement si le terrain a un tarif creux — même
+                              // condition que la ligne d'en-tête), pris/passé = « fantôme » (contour fin).
+                              // L'encre est choisie pour rester lisible quel que soit l'accent (inkOn).
                               const renderSlot = (s: TimeSlot, forcePast?: boolean) => {
                                 const isPast = forcePast ?? (new Date(s.startTime).getTime() <= nowMs);
                                 const fill = s.offPeak ? th.accentWarm : th.accent;
@@ -340,9 +341,9 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 const slotVars = { '--rv-fill': fill, '--rv-ink': inkOn(fill) } as CSSProperties;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ ...slotVars, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}1f`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}1f`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {formatHour(s.startTime, club.timezone)}
-                                    {s.offPeak && <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, opacity: 0.85 }}>{Number(s.price)}€</span>}
+                                    {s.offPeak && resource.offPeakPrice && <span style={{ position: 'absolute', top: -7, right: -4, background: th.accentWarm, color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 800, lineHeight: 1.2, padding: '2px 7px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.22)' }}>{Number(s.price)}€</span>}
                                   </button>
                                 ) : (
                                   <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
@@ -353,7 +354,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               };
                               return (
                                 <>
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(86px, 1fr))', gap: 8 }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(86px, 1fr))', columnGap: 8, rowGap: 12 }}>
                                     {past.length > 0 && (
                                       <button type="button" aria-label={showPast ? 'Masquer les créneaux passés' : 'Afficher les créneaux passés'} onClick={() => setExpandedPast((m) => ({ ...m, [resource.id]: !showPast }))}
                                         style={{ border: 'none', background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${th.line}`, cursor: 'pointer', borderRadius: 999, padding: '9px 4px', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
