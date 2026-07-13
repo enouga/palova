@@ -1,6 +1,6 @@
 # Couverture automatique par abonnement en Caisse & Planning
 
-Date : 2026-07-12 · Statut : 📝 à implémenter
+Date : 2026-07-12 · Statut : ✅ implémenté (2026-07-13 — avec garde-fous anti-sur-encaissement : plafond au reste dû global de la résa, pas de double soustraction du déjà-payé)
 
 ## Contexte & objectif
 
