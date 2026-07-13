@@ -32,6 +32,9 @@ describe('packagePulse', () => {
     expect(packagePulse(stats({ soldCount: 9, activeCount: 5, outstandingAmount: '1240.00' }), 'WALLET'))
       .toBe('1 240 € en circulation · 9 vendus');
   });
+  it('accord singulier « 1 vendu »', () => {
+    expect(packagePulse(stats({ soldCount: 1, activeCount: 1 }), 'ENTRIES')).toBe('1 en circulation · 1 vendu');
+  });
   it('message neutre à zéro vente', () => {
     expect(packagePulse(stats({}), 'ENTRIES')).toBe('Aucune vente pour l’instant');
     expect(packagePulse(undefined, 'ENTRIES')).toBe('Aucune vente pour l’instant');

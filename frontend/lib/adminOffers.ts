@@ -20,6 +20,8 @@ export function planPulse(activeCount: number, revenueCents: number): string {
   return `${activeCount} ${noun} · ${eurosInt(revenueCents)}/mois`;
 }
 
+const sold = (n: number): string => `${n} ${n === 1 ? 'vendu' : 'vendus'}`;
+
 /** Pouls d'un carnet/porte-monnaie depuis les stats serveur. */
 export function packagePulse(
   stats: { soldCount: number; activeCount: number; outstandingAmount: string } | undefined,
@@ -28,9 +30,9 @@ export function packagePulse(
   if (!stats || stats.soldCount <= 0) return NO_SALE;
   if (kind === 'WALLET') {
     const cents = Math.round(Number(stats.outstandingAmount) * 100);
-    return `${eurosInt(cents)} en circulation · ${stats.soldCount} vendus`;
+    return `${eurosInt(cents)} en circulation · ${sold(stats.soldCount)}`;
   }
-  return `${stats.activeCount} en circulation · ${stats.soldCount} vendus`;
+  return `${stats.activeCount} en circulation · ${sold(stats.soldCount)}`;
 }
 
 /** Revenu mensuel récurrent d'un plan = Σ mensualités des abonnés ACTIFS non expirés. */
