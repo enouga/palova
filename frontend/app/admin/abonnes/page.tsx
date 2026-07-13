@@ -93,9 +93,9 @@ export default function AdminSubscribersPage() {
         const soon = expiresSoon(s, now);
         const active = isActiveSub(s, now);
         return (
-          <div key={s.id} data-sub-row style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface, borderRadius: 12, padding: '11px 13px', marginBottom: 6, borderLeft: `4px solid ${soon ? ACCENTS.coral : 'transparent'}`, boxShadow: th.shadow }}>
+          <div key={s.id} data-sub-row style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface, borderRadius: 12, padding: '11px 13px', marginBottom: 6, borderLeft: `4px solid ${soon ? ACCENTS.coral : 'transparent'}`, boxShadow: th.shadow, flexWrap: 'wrap' }}>
             <Avatar firstName={s.user.firstName} lastName={s.user.lastName} avatarUrl={s.user.avatarUrl} color={colorForSeed(s.user.id)} size={30} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: '1 1 150px', minWidth: 0 }}>
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, color: th.text }}>{s.user.firstName} {s.user.lastName}</div>
               <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>{s.planName} · depuis le {fdate(s.startedAt)}</div>
             </div>
