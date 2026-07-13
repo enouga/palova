@@ -32,9 +32,12 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate }: {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
       className="pl-lift"
       style={{
-        display: 'flex', alignItems: 'center', gap: 13, padding: '11px 14px', borderRadius: 15,
+        // Même langage graphique que le registre /admin/abonnes : carte à ombre douce,
+        // coin 12, liseré latéral d'accent pour les abonnés.
+        display: 'flex', alignItems: 'center', gap: 13, padding: '11px 14px', borderRadius: 12,
         background: th.surface, cursor: 'pointer', opacity: blocked ? 0.6 : 1,
-        boxShadow: selected ? `inset 0 0 0 2px ${th.accent}` : `inset 0 0 0 1px ${th.line}`,
+        borderLeft: `3px solid ${(m.isSubscriber || m.hasActiveSubscription) ? th.accent : 'transparent'}`,
+        boxShadow: selected ? `0 0 0 2px ${th.accent}, ${th.shadow}` : th.shadow,
         fontFamily: th.fontUI,
       }}
     >
