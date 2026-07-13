@@ -1289,6 +1289,15 @@ export interface ClubDetail {
   clubSports: ClubSportPublic[];
 }
 
+export interface MemberSubscription {
+  id: string;                    // id de la Subscription (pour renew/change/cancel)
+  planId: string;
+  planName: string;
+  expiresAt: string;             // ISO
+  monthlyPriceSnapshot: string;  // Decimal sérialisé (tarif figé du membre)
+  sportKeys: string[];
+}
+
 export interface Member {
   id: string;          // id de l'adhésion (ClubMembership)
   userId: string;
@@ -1308,6 +1317,7 @@ export interface Member {
   level?: UserLevel | null;              // niveau padel (null si pas de rating / système désactivé)
   hasActiveSubscription?: boolean;
   subscriptionPlan?: string | null;      // nom de la formule d'abonnement club active
+  subscription?: MemberSubscription | null; // abo actif complet (cycle de vie sur la ligne, contexte abonnés)
   hasActivePackage?: boolean;            // carnet / porte-monnaie encore utilisable
   lastSeenAt?: string | null;            // dernière réservation confirmée passée (ISO), null si aucune
 }
