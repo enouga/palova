@@ -87,6 +87,14 @@ export default function AdminEncaissementPage() {
     color: s === 'CONFIRMED' ? (th.mode === 'floodlit' ? th.accent : th.ink) : s === 'CANCELLED' ? th.textFaint : th.textMute,
   });
 
+  // Couverture automatique par abonnement (Caisse) : balaie le jour affiché avant de charger —
+  // best-effort, ne bloque jamais l'encaissement manuel si ça échoue. Pas de date (« Tout
+  // afficher ») → pas d'appel (éviterait un balayage coûteux sur tout l'historique).
+  const autoApplySubscriptions = useCallback(async () => {
+    if (!token || !clubId || !date) return;
+    try { await api.adminAutoApplySubscriptions(clubId, date, token); } catch { /* ignore */ }
+  }, [token, clubId, date]);
+
   // Chargement COMPLET (1er affichage + changement de jour). Protégé par `loadSeq`.
   const load = useCallback(async (): Promise<ClubReservation[]> => {
     if (!token || !clubId) return [];
@@ -94,6 +102,7 @@ export default function AdminEncaissementPage() {
     const seq = ++loadSeq.current;
     try {
       setError(null);
+      await autoApplySubscriptions();
       const [detail, res, resv, mem, pkgs] = await Promise.all([
         api.adminGetClub(clubId, token),
         api.adminGetResources(clubId, token),
@@ -113,19 +122,20 @@ export default function AdminEncaissementPage() {
       return resv.reservations;
     } catch (e) { if (seq === loadSeq.current) setError((e as Error).message); return []; }
     finally { if (seq === loadSeq.current) setLoading(false); }
-  }, [token, clubId, date]);
+  }, [token, clubId, date, autoApplySubscriptions]);
 
   // Rechargement LÉGER après une mutation : une seule requête (les réservations).
   const reloadReservations = useCallback(async (): Promise<ClubReservation[]> => {
     if (!token || !clubId) return [];
     const seq = ++loadSeq.current;
     try {
+      await autoApplySubscriptions();
       const resv = await api.adminGetReservations(clubId, date ? { date } : {}, token);
       if (seq !== loadSeq.current) return resv.reservations;   // supplanté → ne pas écraser
       setData(resv);
       return resv.reservations;
     } catch (e) { if (seq === loadSeq.current) setError((e as Error).message); return []; }
-  }, [token, clubId, date]);
+  }, [token, clubId, date, autoApplySubscriptions]);
 
   // Remplace UNE réservation dans la liste sans aucune requête.
   const patchReservation = useCallback((updated: ClubReservation) => {
@@ -254,27 +264,46 @@ export default function AdminEncaissementPage() {
   // ── File (deux zones) ─────────────────────────────────────────────────────
   // File sur les résas VISIBLES après filtres — recalculée à chaque rendu.
   const groups = queueGroups(visible, dueOf, rankOf);
-  // La résa affichée dans la caisse : cherchée dans TOUTES les résas du jour (elle peut
-  // sortir de `visible` après un filtre/encaissement sans casser la caisse).
-  const currentRv = selectedRvId ? dayResas.find((r) => r.id === selectedRvId) ?? null : null;
+  // Dernière file en date pour les callbacks différés (auto-avance à l'expiration du toast).
+  const groupsRef = useRef(groups);
+  useEffect(() => { groupsRef.current = groups; });
 
-  // Desktop : auto-sélection de la première résa à encaisser (jamais sur mobile).
+  // La caisse ne montre JAMAIS une résa incohérente avec la file : disparue (autre jour),
+  // annulée, ou masquée par les filtres alors qu'elle doit encore de l'argent → on
+  // désélectionne. Seule exception : la résa que l'on VIENT de solder (masquée par
+  // « À encaisser ») reste affichée le temps du toast — `selectNextDue` avancera ensuite.
+  const selectedResa = selectedRvId ? dayResas.find((r) => r.id === selectedRvId) ?? null : null;
+  const visibleIds = new Set(visible.map((r) => r.id));
+  const selectionOrphan = selectedRvId !== null && (
+    !selectedResa ||
+    selectedResa.status === 'CANCELLED' ||
+    (!visibleIds.has(selectedRvId) && !(dueOf(selectedResa) > 0 && remainingOf(selectedResa) <= 0))
+  );
+  const currentRv = selectionOrphan ? null : selectedResa;
   useEffect(() => {
-    if (!isDesktop || loading || selectedRvId) return;
-    const first = queueGroups(dayResas.filter((r) => r.status !== 'CANCELLED'), dueOf, rankOf).toCollect[0];
-    if (first) setSelectedRvId(first.r.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDesktop, loading, selectedRvId, data]);
+    if (!loading && selectionOrphan) setSelectedRvId(null);
+  }, [loading, selectionOrphan]);
 
-  // Résa soldée (toast expiré) → prochaine à encaisser.
+  // Desktop : auto-sélection de la première résa à encaisser DE LA FILE VISIBLE — jamais
+  // une résa que les filtres masquent (jamais sur mobile).
+  const firstDueId = groups.toCollect[0]?.r.id ?? null;
+  useEffect(() => {
+    if (!isDesktop || loading || selectedRvId || !firstDueId) return;
+    setSelectedRvId(firstDueId);
+  }, [isDesktop, loading, selectedRvId, firstDueId]);
+
+  // Résa soldée (toast expiré) → prochaine à encaisser de la file. Si l'utilisateur est
+  // déjà passé sur une autre résa à encaisser on ne bouge pas ; sinon on avance, et à
+  // défaut la sélection n'est gardée que si elle est encore visible dans la file.
   const selectNextDue = useCallback(() => {
     setSelectedRvId((cur) => {
-      const g = queueGroups((data?.reservations ?? []).filter((r) => r.status !== 'CANCELLED'), dueOf, rankOf);
+      const g = groupsRef.current;
+      if (cur && g.toCollect.some((e) => e.r.id === cur)) return cur;
       const next = g.toCollect.find((e) => e.r.id !== cur);
-      return next ? next.r.id : cur;
+      if (next) return next.r.id;
+      return cur && g.settled.some((e) => e.r.id === cur) ? cur : null;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, []);
 
   // KPI du jour (hors annulées).
   const kpiRows = visible.filter((r) => r.status !== 'CANCELLED');
