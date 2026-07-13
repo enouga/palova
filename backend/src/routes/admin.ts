@@ -115,6 +115,7 @@ const ERROR_STATUS: Record<string, number> = {
   MEMBERSHIP_BLOCKED:     403,
   PLAN_NOT_FOUND:         404,
   SUBSCRIPTION_NOT_FOUND: 404,
+  SUBSCRIPTION_NOT_RENEWABLE: 409,
   EMAIL_TYPE_UNKNOWN:     404,
   PHOTO_LIMIT_REACHED:    409,
   PHOTO_NOT_FOUND:        404,
@@ -920,6 +921,20 @@ router.get('/members/:userId/subscriptions', async (req: ClubScopedRequest, res:
 });
 router.post('/members/:userId/subscriptions', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await subscriptionService.sellSubscription(req.membership!.clubId, asString(req.params.userId), { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Cycle de vie d'un abonnement (pilotage /admin/abonnes) ---
+router.get('/subscriptions/overview', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.overview(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/subscriptions/:id/renew', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.renewSubscription(asString(req.params.id), req.membership!.clubId, { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
+});
+router.post('/subscriptions/:id/change', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.changeSubscription(asString(req.params.id), req.membership!.clubId, { ...req.body, createdByUserId: req.user!.id })); } catch (e) { handleError(e, res, next); }
+});
+router.post('/subscriptions/:id/cancel', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await subscriptionService.cancelSubscription(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 // Soldes d'un membre + vente d'une offre en caisse.
