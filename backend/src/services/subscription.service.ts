@@ -203,6 +203,34 @@ export class SubscriptionService {
     };
   }
 
+  /** Renouvellement : prolonge LA MÊME période au tarif snapshot du membre (pas de trou si expiré). */
+  async renewSubscription(id: string, clubId: string, body: {
+    method?: string; payerName?: string; voucherRef?: string; voucherIssuer?: string; createdByUserId?: string;
+  }) {
+    const sub = await prisma.subscription.findUnique({ where: { id }, include: { plan: { select: { name: true, commitmentMonths: true } } } });
+    if (!sub || sub.clubId !== clubId) throw new Error('SUBSCRIPTION_NOT_FOUND');
+    if (sub.status !== 'ACTIVE')       throw new Error('SUBSCRIPTION_NOT_RENEWABLE');
+    const method = this.buildSaleMethod(body);
+    const newExpiry = new Date(Math.max(Date.now(), sub.expiresAt.getTime()));
+    newExpiry.setMonth(newExpiry.getMonth() + sub.plan.commitmentMonths);
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.subscription.update({ where: { id }, data: { expiresAt: newExpiry } });
+      const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
+      const payment = await tx.payment.create({
+        data: {
+          clubId, amount: sub.monthlyPriceSnapshot, method, subscriptionId: sub.id,
+          payerName: body.payerName?.trim() || null,
+          note: `Renouvellement abonnement ${sub.plan.name} — mensualité`,
+          voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
+          voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
+          voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
+          createdByUserId: body.createdByUserId ?? null, receiptNo,
+        },
+      });
+      return { subscription: updated, payment };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async listMySubscriptionsBySlug(slug: string, userId: string) {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');

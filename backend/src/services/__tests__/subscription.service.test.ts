@@ -251,6 +251,62 @@ describe('overview', () => {
   });
 });
 
+describe('renewSubscription', () => {
+  const svc = new SubscriptionService();
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 7 } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay-r' } as any);
+  });
+
+  it('prolonge depuis expiresAt futur + paiement au tarif snapshot', async () => {
+    const future = new Date(Date.now() + 10 * 86400000);
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      id: 's1', clubId: 'club-1', userId: 'u1', status: 'ACTIVE', expiresAt: future,
+      monthlyPriceSnapshot: '39.00', plan: { name: 'Padel illimité', commitmentMonths: 1 },
+    } as any);
+    prismaMock.subscription.update.mockResolvedValue({ id: 's1' } as any);
+
+    const out = await svc.renewSubscription('s1', 'club-1', { method: 'CARD', createdByUserId: 'staff-1' });
+
+    const newExpiry = (prismaMock.subscription.update.mock.calls[0][0].data as any).expiresAt as Date;
+    const expected = new Date(future); expected.setMonth(expected.getMonth() + 1);
+    expect(newExpiry.getTime()).toBe(expected.getTime());
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ method: 'CARD', subscriptionId: 's1', amount: '39.00' }),
+    }));
+    expect(out.subscription.id).toBe('s1');
+  });
+
+  it('abo expiré (ACTIVE) : prolonge depuis MAINTENANT (pas de trou)', async () => {
+    const past = new Date(Date.now() - 5 * 86400000);
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      id: 's1', clubId: 'club-1', userId: 'u1', status: 'ACTIVE', expiresAt: past,
+      monthlyPriceSnapshot: '39.00', plan: { name: 'X', commitmentMonths: 1 },
+    } as any);
+    prismaMock.subscription.update.mockResolvedValue({ id: 's1' } as any);
+
+    await svc.renewSubscription('s1', 'club-1', { method: 'CASH' });
+    const newExpiry = (prismaMock.subscription.update.mock.calls[0][0].data as any).expiresAt as Date;
+    expect(newExpiry.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('CANCELLED → SUBSCRIPTION_NOT_RENEWABLE', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'club-1', status: 'CANCELLED', plan: { name: 'X', commitmentMonths: 1 } } as any);
+    await expect(svc.renewSubscription('s1', 'club-1', {})).rejects.toThrow('SUBSCRIPTION_NOT_RENEWABLE');
+  });
+
+  it('autre club → SUBSCRIPTION_NOT_FOUND', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'autre', status: 'ACTIVE', plan: { name: 'X', commitmentMonths: 1 } } as any);
+    await expect(svc.renewSubscription('s1', 'club-1', {})).rejects.toThrow('SUBSCRIPTION_NOT_FOUND');
+  });
+
+  it('VOUCHER sans référence → VALIDATION_ERROR', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({ id: 's1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(), monthlyPriceSnapshot: '39.00', plan: { name: 'X', commitmentMonths: 1 } } as any);
+    await expect(svc.renewSubscription('s1', 'club-1', { method: 'VOUCHER' })).rejects.toThrow('VALIDATION_ERROR');
+  });
+});
+
 describe('SubscriptionService.coverageFor', () => {
   const incl = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED' as const, discountPercent: null };
   const disc = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'DISCOUNT' as const, discountPercent: 50 };
