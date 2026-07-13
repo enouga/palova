@@ -971,18 +971,28 @@ describe('ClubService — listMembers (enrichi)', () => {
     expect(rows[1].avatarUrl).toBeNull();
   });
 
-  it('mappe l\'abonnement club actif (+ nom de formule)', async () => {
-    prismaMock.subscription.findMany.mockResolvedValue([{ userId: 'u1', plan: { name: 'Premium' } }] as any);
+  it('mappe l\'abonnement club actif (+ objet subscription pour le cycle de vie sur la ligne)', async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([{
+      id: 'sub-1', userId: 'u1', planId: 'plan-1', expiresAt: new Date('2027-01-01T00:00:00Z'),
+      monthlyPriceSnapshot: '39.00', sportKeys: ['padel'], plan: { name: 'Premium' },
+    }] as any);
     const rows = await service.listMembers('club-demo');
     expect(rows[0].hasActiveSubscription).toBe(true);
     expect(rows[0].subscriptionPlan).toBe('Premium');
+    expect(rows[0].subscription).toEqual({
+      id: 'sub-1', planId: 'plan-1', planName: 'Premium',
+      expiresAt: '2027-01-01T00:00:00.000Z', monthlyPriceSnapshot: '39.00', sportKeys: ['padel'],
+    });
     expect(rows[1].hasActiveSubscription).toBe(false);
     expect(rows[1].subscriptionPlan).toBeNull();
-    // prédicat : ACTIVE + non expiré
+    expect(rows[1].subscription).toBeNull();
+    // prédicat : ACTIVE + non expiré ; select élargi pour la ligne
     const arg = (prismaMock.subscription.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.clubId).toBe('club-demo');
     expect(arg.where.status).toBe('ACTIVE');
     expect(arg.where.expiresAt.gt).toBeInstanceOf(Date);
+    expect(arg.select.monthlyPriceSnapshot).toBe(true);
+    expect(arg.select.sportKeys).toBe(true);
   });
 
   it('mappe hasActivePackage via isUsable (valide / expiré / vide)', async () => {

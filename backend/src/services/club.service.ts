@@ -412,9 +412,10 @@ export class ClubService {
       // rôle back-office (table ClubMember) mappé par userId — une requête pour tout le club
       prisma.clubMember.findMany({ where: { clubId }, select: { userId: true, role: true } }),
       // abonnements club actifs (prédicat miroir de subscription.service.listMySubscriptionsBySlug)
+      // select élargi : la ligne membre porte le cycle de vie (échéance/prix/sport/id) en contexte abonnés.
       prisma.subscription.findMany({
         where: { clubId, status: 'ACTIVE', expiresAt: { gt: now } },
-        select: { userId: true, plan: { select: { name: true } } },
+        select: { id: true, userId: true, planId: true, expiresAt: true, monthlyPriceSnapshot: true, sportKeys: true, plan: { select: { name: true } } },
       }),
       // carnets / porte-monnaie — utilisabilité calculée en JS (isUsable, miroir de memberStats.service)
       prisma.memberPackage.findMany({
@@ -451,8 +452,12 @@ export class ClubService {
           `),
     ]);
 
-    const subByUser = new Map<string, string | null>();
-    for (const s of subs) if (!subByUser.has(s.userId)) subByUser.set(s.userId, s.plan?.name ?? null);
+    type MemberSub = { id: string; planId: string; planName: string; expiresAt: string; monthlyPriceSnapshot: string; sportKeys: string[] };
+    const subByUser = new Map<string, MemberSub>();
+    for (const s of subs) if (!subByUser.has(s.userId)) subByUser.set(s.userId, {
+      id: s.id, planId: s.planId, planName: s.plan?.name ?? '',
+      expiresAt: s.expiresAt.toISOString(), monthlyPriceSnapshot: s.monthlyPriceSnapshot.toString(), sportKeys: s.sportKeys,
+    });
 
     const num = (v: unknown) => (v == null ? 0 : Number(v));
     const isUsable = (p: { creditsRemaining: number | null; amountRemaining: unknown; expiresAt: Date | null }) =>
@@ -471,7 +476,8 @@ export class ClubService {
       staffRole: roleByUser.get(m.user.id) ?? null,
       level: levels[m.user.id] ?? null,
       hasActiveSubscription: subByUser.has(m.user.id),
-      subscriptionPlan: subByUser.get(m.user.id) ?? null,
+      subscriptionPlan: subByUser.get(m.user.id)?.planName ?? null,
+      subscription: subByUser.get(m.user.id) ?? null,
       hasActivePackage: usableByUser.has(m.user.id),
       lastSeenAt: lastSeenBy.get(m.user.id)?.toISOString() ?? null,
     }));
@@ -552,7 +558,7 @@ export class ClubService {
       avatarUrl: user.avatarUrl ?? null,
       isSubscriber: membership.isSubscriber, membershipNo: membership.membershipNo,
       status: membership.status, note: membership.note, watch: membership.watch, since: membership.createdAt,
-      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null,
+      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, subscription: null,
       hasActivePackage: false, lastSeenAt: null,
     };
   }
