@@ -9,7 +9,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { AdminRoleContext, isClubAdmin, type ClubStaffRole } from '@/lib/adminRole';
+import { AdminRoleContext, isClubAdmin, isClubOwner, type ClubStaffRole } from '@/lib/adminRole';
 
 // Permet à une page (ex. Planning) de replier la barre latérale et d'élargir le contenu.
 export const AdminChromeContext = createContext<{ collapsed: boolean; setCollapsed: (v: boolean) => void }>({
@@ -157,7 +157,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
       { href: '/admin/reservations', label: 'Paiements',         icon: 'ticket' },
-      { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
+      // Réservé au gérant : gère le compte Stripe/bancaire du club (page OWNER-only côté serveur).
+      ...(isClubOwner(role)
+        ? [{ href: '/admin/payments', label: 'Paiement en ligne', icon: 'lock' } as NavItem]
+        : []),
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres prépayées', icon: 'card' },
       // Réservé aux admins : la page /admin/billing répond 403 au staff (requireClubMember('ADMIN')).

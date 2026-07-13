@@ -13,6 +13,15 @@ export function isClubAdmin(role: ClubStaffRole | null | undefined): boolean {
 }
 
 /**
+ * Le viewer est-il le gérant (« compte super » du club) ? Réservé aux surfaces les plus
+ * sensibles — compte Stripe/bancaire du club (paiement en ligne), souscription. Miroir
+ * front de requireClubMember('OWNER').
+ */
+export function isClubOwner(role: ClubStaffRole | null | undefined): boolean {
+  return role === 'OWNER';
+}
+
+/**
  * Rôle du viewer sur le club courant, posé par le layout /admin (qui le lit dans le
  * getMyClubs de sa garde d'accès — aucun appel API supplémentaire). null = inconnu,
  * traité partout comme « pas admin » (sûr par défaut).

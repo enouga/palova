@@ -242,4 +242,23 @@ describe('AdminLayout — entrées gatées par rôle', () => {
     expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
     expect(screen.queryByText('Abonnement Palova')).not.toBeInTheDocument();
   });
+
+  it('OWNER : entrée « Paiement en ligne » présente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
+    await wrap();
+    expect(screen.getByText('Paiement en ligne')).toBeInTheDocument();
+  });
+
+  it('ADMIN : pas d’entrée « Paiement en ligne » (réservée au gérant)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
+    expect(screen.queryByText('Paiement en ligne')).not.toBeInTheDocument();
+  });
+
+  it('STAFF : pas d’entrée « Paiement en ligne »', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.queryByText('Paiement en ligne')).not.toBeInTheDocument();
+  });
 });

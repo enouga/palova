@@ -1031,9 +1031,12 @@ router.get('/accounting/export', async (req: ClubScopedRequest, res: Response, n
 });
 
 // --- Stripe Connect ---
+// Réservé au GÉRANT (OWNER) : gère le compte Stripe/bancaire du club — argent réel,
+// même exigence que le checkout de facturation. Le router monte requireClubMember('STAFF') ;
+// on renforce ici à OWNER route par route.
 const stripeService = new StripeService();
 
-router.post('/stripe/connect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/stripe/connect', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { refreshUrl, returnUrl } = req.body;
     if (!refreshUrl || !returnUrl) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
@@ -1046,21 +1049,21 @@ router.post('/stripe/connect', async (req: ClubScopedRequest, res: Response, nex
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/stripe/status', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/stripe/status', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const stripeAccountStatus = await stripeService.syncAccountStatus(req.membership!.clubId);
     res.json({ stripeAccountStatus });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/stripe/login-link', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const url = await stripeService.createLoginLink(req.membership!.clubId);
     res.json({ url });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/stripe/disconnect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/stripe/disconnect', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     await stripeService.disconnectAccount(req.membership!.clubId);
     res.json({ ok: true });

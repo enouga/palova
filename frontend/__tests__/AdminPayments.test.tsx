@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import AdminPaymentsPage from '../app/admin/payments/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
+import { AdminRoleContext, type ClubStaffRole } from '../lib/adminRole';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
@@ -32,14 +33,26 @@ const clubWith = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const wrap = async () => {
-  render(<ThemeProvider><AdminPaymentsPage /></ThemeProvider>);
+const wrap = async (role: ClubStaffRole = 'OWNER') => {
+  render(
+    <ThemeProvider>
+      <AdminRoleContext.Provider value={role}>
+        <AdminPaymentsPage />
+      </AdminRoleContext.Provider>
+    </ThemeProvider>,
+  );
   await act(async () => {});
 };
 
 beforeEach(() => jest.clearAllMocks());
 
 describe('AdminPaymentsPage', () => {
+  it('non-gérant (ADMIN) : message « réservée au gérant », aucun chargement du club', async () => {
+    await wrap('ADMIN');
+    expect(screen.getByText('Cette page est réservée au gérant du club.')).toBeInTheDocument();
+    expect(api.adminGetClub).not.toHaveBeenCalled();
+  });
+
   it('état ACTIVE : affiche les réglages et le bouton de changement de compte', async () => {
     api.adminGetClub.mockResolvedValue(clubWith());
     await wrap();
