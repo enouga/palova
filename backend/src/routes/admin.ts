@@ -1031,9 +1031,12 @@ router.get('/accounting/export', async (req: ClubScopedRequest, res: Response, n
 });
 
 // --- Stripe Connect ---
+// Réservé au GÉRANT (OWNER) : gère le compte Stripe/bancaire du club — argent réel,
+// même exigence que le checkout de facturation. Le router monte requireClubMember('STAFF') ;
+// on renforce ici à OWNER route par route.
 const stripeService = new StripeService();
 
-router.post('/stripe/connect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/stripe/connect', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { refreshUrl, returnUrl } = req.body;
     if (!refreshUrl || !returnUrl) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
@@ -1046,21 +1049,21 @@ router.post('/stripe/connect', async (req: ClubScopedRequest, res: Response, nex
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/stripe/status', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/stripe/status', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const stripeAccountStatus = await stripeService.syncAccountStatus(req.membership!.clubId);
     res.json({ stripeAccountStatus });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/stripe/login-link', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/stripe/login-link', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const url = await stripeService.createLoginLink(req.membership!.clubId);
     res.json({ url });
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/stripe/disconnect', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/stripe/disconnect', requireClubMember('OWNER'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     await stripeService.disconnectAccount(req.membership!.clubId);
     res.json({ ok: true });
@@ -1226,8 +1229,9 @@ router.get('/members/:userId/level', requireClubMember('ADMIN'), async (req: Clu
 });
 
 // --- Broadcast (message à tous les membres actifs) ---
-// Réservé OWNER/ADMIN : action à fort impact (notifie tous les membres).
-router.post('/broadcast', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Ouvert au STAFF (décision 2026-07-13, même mouvement que /emails) : le staff anime la
+// communication du club au quotidien. Action à fort impact (notifie tous les membres).
+router.post('/broadcast', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { title, body, url } = req.body;
     const result = await broadcastService.send(
@@ -1239,7 +1243,7 @@ router.post('/broadcast', requireClubMember('ADMIN'), async (req: ClubScopedRequ
   } catch (err) { handleError(err, res, next); }
 });
 
-router.get('/broadcasts', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/broadcasts', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const [recipientCount, items] = await Promise.all([
       broadcastService.countActiveMembers(req.membership!.clubId),
@@ -1325,16 +1329,16 @@ router.post('/emails/images', requireClubMember('STAFF'), (req: ClubScopedReques
   });
 });
 
-// --- Page club (présentation + galerie) — réservé ADMIN/OWNER ---
+// --- Page club (présentation + galerie) — ouvert au STAFF (décision 2026-07-13) ---
 const clubPhotoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-router.get('/presentation', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/presentation', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await presentationService.getAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
-router.patch('/presentation', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/presentation', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await presentationService.updateText(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
-router.post('/photos', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/photos', requireClubMember('STAFF'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   clubPhotoUpload.single('photo')(req, res, async (err: unknown) => {
     try {
       if (err) {
@@ -1354,10 +1358,10 @@ router.post('/photos', requireClubMember('ADMIN'), (req: ClubScopedRequest, res:
     } catch (e) { handleError(e, res, next); }
   });
 });
-router.patch('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/photos/:id', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await presentationService.updatePhoto(req.membership!.clubId, asString(req.params.id), req.body)); } catch (e) { handleError(e, res, next); }
 });
-router.delete('/photos/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.delete('/photos/:id', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await presentationService.removePhoto(req.membership!.clubId, asString(req.params.id)); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 

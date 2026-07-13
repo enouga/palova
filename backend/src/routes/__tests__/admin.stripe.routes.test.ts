@@ -55,6 +55,26 @@ describe('Admin Stripe Connect routes', () => {
 
       expect(res.status).toBe(403);
     });
+
+    it('403 pour ADMIN (compte Stripe réservé au gérant)', async () => {
+      asMember('ADMIN');
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/connect')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ refreshUrl: 'https://r.fr', returnUrl: 'https://ret.fr' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('403 pour STAFF', async () => {
+      asMember('STAFF');
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/connect')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ refreshUrl: 'https://r.fr', returnUrl: 'https://ret.fr' });
+
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('GET /api/clubs/club-demo/admin/stripe/status', () => {
@@ -120,6 +140,15 @@ describe('Admin Stripe Connect routes', () => {
 
     it('403 si non membre du club', async () => {
       prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+      const res = await request(app)
+        .post('/api/clubs/club-demo/admin/stripe/disconnect')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('403 pour STAFF (déliaison réservée au gérant)', async () => {
+      asMember('STAFF');
       const res = await request(app)
         .post('/api/clubs/club-demo/admin/stripe/disconnect')
         .set('Authorization', `Bearer ${token}`);

@@ -54,7 +54,7 @@ describe('AdminLayout — toggle de la sidebar', () => {
     localStorage.clear();
     mockClubCtx.slug = 'demo'; // hôte club par défaut
     mockClubCtx.club = clubOn; // restaure le club ON par défaut (objet stable)
-    api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
   });
 
   it("filet anti-blocage : après le délai, propose de recharger/se reconnecter si la garde ne se résout jamais", async () => {
@@ -172,7 +172,7 @@ describe('AdminLayout — sections repliables', () => {
     localStorage.clear();
     mockClubCtx.slug = 'demo';
     mockClubCtx.club = clubOn;
-    api.getMyClubs.mockResolvedValue([{ clubId: 'c1' }]);
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
   });
 
   it('tout déplié par défaut : les entrées de section sont visibles', async () => {
@@ -213,5 +213,52 @@ describe('AdminLayout — sections repliables', () => {
     await wrap();
     expect(screen.queryByText('Planning')).not.toBeInTheDocument();
     expect(screen.getByTitle('Déplier Au quotidien')).toBeInTheDocument();
+  });
+});
+
+describe('AdminLayout — entrées gatées par rôle', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    mockClubCtx.slug = 'demo';
+    mockClubCtx.club = clubOn;
+  });
+
+  it('OWNER : entrée « Abonnement Palova » présente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
+    await wrap();
+    expect(screen.getByText('Abonnement Palova')).toBeInTheDocument();
+  });
+
+  it('ADMIN : entrée « Abonnement Palova » présente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Abonnement Palova')).toBeInTheDocument();
+  });
+
+  it('STAFF : pas d’entrée « Abonnement Palova » (le reste de Finances est rendu)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
+    expect(screen.queryByText('Abonnement Palova')).not.toBeInTheDocument();
+  });
+
+  it('OWNER : entrée « Paiement en ligne » présente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
+    await wrap();
+    expect(screen.getByText('Paiement en ligne')).toBeInTheDocument();
+  });
+
+  it('ADMIN : pas d’entrée « Paiement en ligne » (réservée au gérant)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
+    expect(screen.queryByText('Paiement en ligne')).not.toBeInTheDocument();
+  });
+
+  it('STAFF : pas d’entrée « Paiement en ligne »', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.queryByText('Paiement en ligne')).not.toBeInTheDocument();
   });
 });

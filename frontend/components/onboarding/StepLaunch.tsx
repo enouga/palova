@@ -151,6 +151,11 @@ export function StepLaunch({ club, preview, clubId, token, onPatched, onFinished
         </a>
       </div>
 
+      <p style={{ margin: '18px auto 0', maxWidth: 520, color: WIZ.mute, fontFamily: th.fontUI, fontSize: 12.5, lineHeight: 1.55 }}>
+        Invitez votre équipe : nommez des admins ou du staff depuis la page Membres. Le staff gère
+        le quotidien (planning, caisse) mais ne voit ni l’abonnement Palova ni ce guide.
+      </p>
+
       <div style={{ marginTop: 30, display: 'flex', justifyContent: 'center', opacity: 0.95 }}>
         <LivePhonePreview preview={preview} />
       </div>

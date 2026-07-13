@@ -33,4 +33,11 @@ describe('Page création de club (NewClubPage)', () => {
     await waitFor(() => expect(screen.getByLabelText('Sport principal')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Créer mon club' })).toBeInTheDocument();
   });
+
+  it('explique que le compte créé est le compte gérant (admin) du club', async () => {
+    render(<ThemeProvider><NewClubPage /></ThemeProvider>);
+    expect(screen.getByText(/compte gérant \(administrateur\)/)).toBeInTheDocument();
+    expect(screen.getByText(/nommer des admins et du staff/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Sport principal')).toBeInTheDocument());
+  });
 });

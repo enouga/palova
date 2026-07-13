@@ -9,6 +9,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { AdminRoleContext, isClubAdmin, isClubOwner, type ClubStaffRole } from '@/lib/adminRole';
 
 // Permet à une page (ex. Planning) de replier la barre latérale et d'élargir le contenu.
 export const AdminChromeContext = createContext<{ collapsed: boolean; setCollapsed: (v: boolean) => void }>({
@@ -37,6 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [role, setRole] = useState<ClubStaffRole | null>(null);
   // Pas de mismatch d'hydration : le premier rendu est « Chargement… », indépendant de cette valeur.
   const [collapsed, setCollapsedState] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -75,8 +77,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (slug === null) { router.replace('/'); return; }
     if (!club) return; // attend le fetch du club (host)
     api.getMyClubs(token)
-      .then((cs) => setAllowed(cs.some((c) => c.clubId === club.id)))
-      .catch(() => setAllowed(false));
+      .then((cs) => {
+        const mine = cs.find((c) => c.clubId === club.id);
+        setAllowed(!!mine);
+        setRole(mine?.role ?? null);
+      })
+      .catch(() => { setAllowed(false); setRole(null); });
   }, [ready, token, slug, club, router]);
 
   useEffect(() => { if (allowed === false) router.replace('/'); }, [allowed, router]);
@@ -114,7 +120,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Le wizard d'onboarding est plein écran : pas de chrome admin (la garde ci-dessus s'applique déjà).
-  if (pathname === '/admin/onboarding') return <>{children}</>;
+  if (pathname === '/admin/onboarding') return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
 
   // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
   // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).
@@ -151,10 +157,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
       { href: '/admin/reservations', label: 'Paiements',         icon: 'ticket' },
-      { href: '/admin/payments',     label: 'Paiement en ligne', icon: 'lock' },
+      // Réservé au gérant : gère le compte Stripe/bancaire du club (page OWNER-only côté serveur).
+      ...(isClubOwner(role)
+        ? [{ href: '/admin/payments', label: 'Paiement en ligne', icon: 'lock' } as NavItem]
+        : []),
       { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
       { href: '/admin/packages',     label: 'Offres', icon: 'card' },
-      { href: '/admin/billing',      label: 'Abonnement Palova', icon: 'wallet' },
+      // Réservé aux admins : la page /admin/billing répond 403 au staff (requireClubMember('ADMIN')).
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/billing', label: 'Abonnement Palova', icon: 'wallet' } as NavItem]
+        : []),
     ] },
     { title: 'Configuration', color: '#9b8cf0', items: [
       { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
@@ -181,6 +193,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
+    <AdminRoleContext.Provider value={role}>
     <AdminChromeContext.Provider value={{ collapsed, setCollapsed }}>
     <div style={{ minHeight: '100vh', background: th.bg, color: th.text, fontFamily: th.fontUI, display: 'flex' }}>
       {!collapsed && (
@@ -281,5 +294,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </main>
     </div>
     </AdminChromeContext.Provider>
+    </AdminRoleContext.Provider>
   );
 }

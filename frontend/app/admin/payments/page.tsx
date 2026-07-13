@@ -4,6 +4,7 @@ import { api, ClubAdminDetail } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubOwner, useAdminRole } from '@/lib/adminRole';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StripeSetupGuide } from '@/components/admin/StripeSetupGuide';
@@ -20,6 +21,8 @@ export default function AdminPaymentsPage() {
   const { token, ready } = useAuth();
   const { club: hostClub } = useClub();
   const clubId = hostClub?.id;
+  const role = useAdminRole();
+  const owner = isClubOwner(role);
 
   const [club, setClub]       = useState<ClubAdminDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,11 +48,11 @@ export default function AdminPaymentsPage() {
     finally { setLoading(false); }
   }, [token, clubId]);
 
-  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  useEffect(() => { if (ready && token && clubId && owner) load(); }, [ready, token, clubId, owner, load]);
 
   // Retour d'onboarding Stripe (?stripe=return|refresh) → resync du statut.
   useEffect(() => {
-    if (!ready || !token || !clubId) return;
+    if (!ready || !token || !clubId || !owner) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('stripe') === 'return' || params.get('stripe') === 'refresh') {
       api.getStripeStatus(clubId, token).then(() => {
@@ -57,7 +60,7 @@ export default function AdminPaymentsPage() {
         load();
       }).catch(() => {});
     }
-  }, [ready, token, clubId, load]);
+  }, [ready, token, clubId, owner, load]);
 
   const handleConnect = async () => {
     if (!token || !clubId) return;
@@ -126,6 +129,9 @@ export default function AdminPaymentsPage() {
     }
   };
 
+  // Réservé au gérant : le compte Stripe/bancaire du club n'est géré que par le OWNER
+  // (les routes /stripe/* répondent 403 aux autres — défense en profondeur).
+  if (!owner) return <div style={{ padding: 24, fontFamily: th.fontUI, color: th.textMute }}>Cette page est réservée au gérant du club.</div>;
   if (loading) return <div style={{ padding: 24, fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>;
   if (error || !club) return <div style={{ padding: 24, fontFamily: th.fontUI, color: '#ef4444' }}>{error ?? 'Erreur de chargement'}</div>;
 
