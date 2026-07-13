@@ -2,6 +2,7 @@
 
 import { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { Icon } from './Icon';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -29,13 +30,13 @@ interface TimePickerProps {
   placeholder?: string;
   /** Heure adoptée à la 1re interaction quand value est vide. */
   defaultTime?: string;
-  /** Élément posé à gauche des tuiles HH:MM (ex. un input date). */
+  /** Élément posé à gauche du champ HH:MM (ex. un input date). */
   leading?: ReactNode;
 }
 
-// Sélecteur d'heure « affichage géant + raccourcis » : deux grandes tuiles HH:MM
-// avec steppers ▲/▼, puces de minutes et presets d'heures pleines. Cohérent avec le
-// design Palova (styles inline + tokens de thème), sans dépendre du picker natif.
+// Sélecteur d'heure « champ unifié » : une pastille arrondie (icône horloge + HH:MM)
+// avec micro-steppers −/+ de part et d'autre de chaque nombre, puis une rangée de
+// puces de minutes rapides. Styles inline + tokens de thème (aucun picker natif).
 export function TimePicker({
   value,
   onChange,
@@ -52,10 +53,7 @@ export function TimePicker({
 
   const emit = (nh: number, nm: number) => onChange(`${pad(nh)}:${pad(nm)}`);
 
-  const stepHour = (delta: number) => {
-    const nh = (h + delta + 24) % 24; // bouclage 23↔0
-    emit(nh, m);
-  };
+  const stepHour = (delta: number) => emit((h + delta + 24) % 24, m); // bouclage 23↔0
   const stepMinute = (delta: number) => {
     // Retenue sur l'heure (bornée 0–23), minutes alignées sur le pas.
     const total = (((h * 60 + m + delta * minuteStep) % 1440) + 1440) % 1440;
@@ -63,18 +61,14 @@ export function TimePicker({
   };
 
   const stepBtn: CSSProperties = {
-    width: '100%', height: 18, border: `1px solid ${th.line}`, background: 'transparent',
-    color: th.textMute, borderRadius: 6, cursor: 'pointer', fontSize: 9, lineHeight: 1,
+    width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: 'none',
+    background: th.surfaceHi, color: th.text, cursor: 'pointer',
+    fontFamily: th.fontUI, fontSize: 18, fontWeight: 600, lineHeight: 1,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   };
-  const tileBox: CSSProperties = {
-    minWidth: 44, padding: '5px 0', background: th.surface2, borderRadius: 9,
-    fontFamily: th.fontMono, fontSize: 17, fontWeight: 600, color: has ? th.text : th.textFaint,
-    textAlign: 'center', outline: 'none', userSelect: 'none',
-  };
 
-  // Une tuile (heure ou minute) : ▲ / grand nombre (spinbutton) / ▼.
-  const tile = (kind: 'h' | 'm') => {
+  // Un segment : [−] grand nombre (spinbutton) [+].
+  const segment = (kind: 'h' | 'm') => {
     const cur = kind === 'h' ? h : m;
     const step = kind === 'h' ? stepHour : stepMinute;
     const noun = kind === 'h' ? 'Heures' : 'Minutes';
@@ -83,14 +77,15 @@ export function TimePicker({
       else if (e.key === 'ArrowDown') { e.preventDefault(); step(-1); }
     };
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 44 }}>
-        <button type="button" aria-label={`${noun} +`} onClick={() => step(1)} style={stepBtn}>▲</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <button type="button" aria-label={`${noun} -`} onClick={() => step(-1)} style={stepBtn}>−</button>
         <div role="spinbutton" tabIndex={0} aria-label={noun}
           aria-valuenow={has ? cur : undefined} aria-valuetext={has ? pad(cur) : placeholder}
-          onKeyDown={onKey} style={tileBox}>
+          onKeyDown={onKey}
+          style={{ minWidth: 30, textAlign: 'center', fontFamily: th.fontMono, fontSize: 19, fontWeight: 600, color: has ? th.text : th.textFaint, outline: 'none', userSelect: 'none' }}>
           {has ? pad(cur) : '--'}
         </div>
-        <button type="button" aria-label={`${noun} -`} onClick={() => step(-1)} style={stepBtn}>▼</button>
+        <button type="button" aria-label={`${noun} +`} onClick={() => step(1)} style={stepBtn}>+</button>
       </div>
     );
   };
@@ -98,55 +93,48 @@ export function TimePicker({
   const chip = (active: boolean): CSSProperties => ({
     border: `1px solid ${active ? th.accent : th.line}`,
     background: active ? th.accent : th.surface2,
-    color: active ? th.onAccent : th.text,
-    borderRadius: 999, padding: '4px 9px', cursor: 'pointer',
-    fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 600,
+    color: active ? th.onAccent : th.textMute,
+    borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
+    fontFamily: th.fontUI, fontSize: 13, fontWeight: 700,
   });
 
-  const caption: CSSProperties = {
-    fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5,
-    textTransform: 'uppercase', color: th.textFaint, marginBottom: 4,
-  };
+  const timeField = (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 12, padding: '5px 10px 5px 12px',
+    }}>
+      <Icon name="clock" size={17} color={th.textMute} style={{ marginRight: 5, flexShrink: 0 }} />
+      {segment('h')}
+      <span style={{ fontFamily: th.fontMono, fontSize: 19, fontWeight: 600, color: th.textFaint }}>:</span>
+      {segment('m')}
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Élément optionnel (ex. champ date) posé sur sa propre ligne, au-dessus des
-          tuiles : la rangée HH:MM + puces garde alors toute la largeur disponible. */}
-      {leading}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {tile('h')}
-          <span style={{ fontFamily: th.fontMono, fontSize: 17, fontWeight: 600, color: th.textFaint }}>:</span>
-          {tile('m')}
-        </div>
-        {/* Puces de minutes posées juste à droite de la tuile minutes (même rangée).
-            La colonne reprend la rythmique des steppers (caption à hauteur du ▲ + gap 4)
-            pour que les puces tombent pile au niveau de la tuile-nombre. */}
-        {minuteChips.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ ...caption, marginBottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>Minutes</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-              {minuteChips.map((mm) => (
-                <button key={mm} type="button" onClick={() => emit(h, mm)}
-                  style={{ ...chip(has && m === mm), padding: '8px 12px', fontSize: 14 }}>
-                  :{pad(mm)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      {/* Date (leading) + champ heure sur une rangée qui passe à la ligne en mobile. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {leading}
+        {timeField}
       </div>
 
+      {minuteChips.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {minuteChips.map((mm) => (
+            <button key={mm} type="button" onClick={() => emit(h, mm)} style={chip(has && m === mm)}>
+              :{pad(mm)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {presets && presets.length > 0 && (
-        <div>
-          <div style={caption}>Raccourcis</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {presets.map((p) => (
-              <button key={p} type="button" onClick={() => onChange(p)} style={chip(value === p)}>
-                {p.replace(':', 'h')}
-              </button>
-            ))}
-          </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {presets.map((p) => (
+            <button key={p} type="button" onClick={() => onChange(p)} style={chip(value === p)}>
+              {p.replace(':', 'h')}
+            </button>
+          ))}
         </div>
       )}
     </div>

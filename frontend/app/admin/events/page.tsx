@@ -8,6 +8,11 @@ import { KIND_LABEL } from '@/lib/events';
 import { localInputToISO, isoToLocalInput } from '@/lib/datetimeLocal';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
+import { ACCENTS } from '@/lib/theme';
+import { formatDateShortTimeRange, waitlistPosition } from '@/lib/tournament';
+import { groupAdminAgenda, agendaItemGroup } from '@/lib/adminAgenda';
+import { AgendaAdminCard } from '@/components/admin/AgendaAdminCard';
+import { AgendaAdminList } from '@/components/admin/AgendaAdminList';
 
 const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE'];
 
@@ -27,6 +32,9 @@ export default function AdminEventsPage() {
   const [detail, setDetail] = useState<AdminEventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stripeActive, setStripeActive] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => { setNow(new Date()); }, []);
 
   const reload = useCallback(() => {
     if (!club || !token) return;
@@ -90,10 +98,41 @@ export default function AdminEventsPage() {
   const label = { fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 5, marginTop: 12 } as const;
   const input = { width: '100%', boxSizing: 'border-box' as const, background: th.surface2, border: `1px solid ${th.line}`, borderRadius: 10, padding: '9px 11px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const btn = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 10, padding: '10px 14px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14 };
-  const ghost = { border: `1px solid ${th.line}`, cursor: 'pointer', background: 'transparent', color: th.textMute, borderRadius: 9, padding: '7px 11px', fontFamily: th.fontUI, fontSize: 13 };
+  const ghost = { border: `1px solid ${th.line}`, cursor: 'pointer', background: 'transparent', color: th.textMute, borderRadius: 9, padding: '7px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 };
+  const primarySm = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 9, padding: '7px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 };
 
-  const fmtDate = (iso: string) =>
-    new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(iso));
+  const renderCard = (e: ClubEvent) => {
+    const key = agendaItemGroup(e.status, e.startTime, e.endTime, now!);
+    const actions = (
+      <>
+        <button onClick={() => openDetail(e.id)} style={ghost}>Inscrits</button>
+        <button onClick={() => startEdit(e)} style={ghost}>Modifier</button>
+        {(key === 'draft' || key === 'cancelled') && <button onClick={() => setStatus(e.id, 'PUBLISHED')} style={primarySm}>Publier</button>}
+        {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'DRAFT')} style={ghost}>Repasser en brouillon</button>}
+        {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'CANCELLED')} style={ghost}>Annuler</button>}
+        {e.confirmedCount === 0 && e.waitlistCount === 0 && <button onClick={() => removeEvent(e.id)} style={ghost}>Supprimer</button>}
+      </>
+    );
+    return (
+      <AgendaAdminCard
+        icon="bolt"
+        accent={ACCENTS.cyan}
+        stripe={key}
+        faded={key === 'past' || key === 'cancelled'}
+        tag={KIND_LABEL[e.kind]}
+        title={e.name}
+        dateLabel={formatDateShortTimeRange(e.startTime, e.endTime, club.timezone)}
+        deadline={e.registrationDeadline}
+        now={now}
+        ratio={e.capacity != null && e.capacity > 0 ? Math.min(1, e.confirmedCount / e.capacity) : null}
+        full={e.capacity != null && e.confirmedCount >= e.capacity}
+        countLabel={`${e.confirmedCount}${e.capacity != null ? ` / ${e.capacity}` : ''} inscrits`}
+        waitlist={e.waitlistCount}
+        chips={[e.sport?.name ?? null, e.price != null ? `${Number(e.price)} €` : null, e.memberOnly ? 'Membres' : null, e.requirePrepayment ? 'CB en ligne' : null]}
+        actions={actions}
+      />
+    );
+  };
 
   return (
     <div>
@@ -102,11 +141,14 @@ export default function AdminEventsPage() {
         <button onClick={() => { setEditingId(null); setForm(emptyForm()); }} style={btn}><Icon name="plus" size={15} color={th.onAccent} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Nouvel event</button>
       </div>
 
-      {error && <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>{error}</div>}
+      {error && (
+        <div style={{ background: `${ACCENTS.coral}1f`, color: th.mode === 'floodlit' ? ACCENTS.coral : '#a83214', boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`, borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginBottom: 14 }}>{error}</div>
+      )}
 
       {/* Formulaire création / édition */}
       {form && (
-        <div style={{ background: th.surface, borderRadius: 14, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 20 }}>
+        <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow, marginBottom: 22 }}>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>{editingId ? "Modifier l'event" : 'Nouvel event'}</div>
           <div style={label}>Nom</div>
           <input style={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Mêlée du vendredi" />
           <div style={{ display: 'flex', gap: 12 }}>
@@ -174,27 +216,14 @@ export default function AdminEventsPage() {
         </div>
       )}
 
-      {/* Liste des events */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {list.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun event.</div>}
-        {list.map((e) => (
-          <div key={e.id} style={{ background: th.surface, borderRadius: 12, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>
-                {KIND_LABEL[e.kind]} · {e.name} <span style={{ color: th.textFaint, fontWeight: 400 }}>· {fmtDate(e.startTime)} · {e.status}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={() => openDetail(e.id)} style={ghost}>Inscrits ({e.confirmedCount}{e.capacity ? `/${e.capacity}` : ''}{e.waitlistCount ? ` +${e.waitlistCount}` : ''})</button>
-                <button onClick={() => startEdit(e)} style={ghost}>Modifier</button>
-                {e.status !== 'PUBLISHED' && <button onClick={() => setStatus(e.id, 'PUBLISHED')} style={ghost}>Publier</button>}
-                {e.status === 'PUBLISHED' && <button onClick={() => setStatus(e.id, 'DRAFT')} style={ghost}>Repasser en brouillon</button>}
-                {e.status === 'PUBLISHED' && <button onClick={() => setStatus(e.id, 'CANCELLED')} style={ghost}>Annuler</button>}
-                {e.confirmedCount === 0 && e.waitlistCount === 0 && <button onClick={() => removeEvent(e.id)} style={ghost}>Supprimer</button>}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Liste des events, groupée par statut */}
+      <AgendaAdminList
+        ready={now != null}
+        groups={now ? groupAdminAgenda(list, now, { status: (e) => e.status, start: (e) => e.startTime, end: (e) => e.endTime }) : []}
+        renderCard={renderCard}
+        itemKey={(e) => e.id}
+        emptyLabel="Aucun event."
+      />
 
       {/* Panneau inscrits */}
       {detail && (
@@ -205,18 +234,24 @@ export default function AdminEventsPage() {
               <button onClick={() => setDetail(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}><Icon name="x" size={20} color={th.textMute} /></button>
             </div>
             {detail.registrations.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun inscrit.</div>}
-            {detail.registrations.map((r) => (
-              <div key={r.id} style={{ background: th.surface, borderRadius: 11, padding: '12px 14px', marginBottom: 10, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-                <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: r.status === 'CONFIRMED' ? th.accent : th.textMute }}>{r.status === 'CONFIRMED' ? 'Confirmé' : 'Liste d\'attente'}</div>
-                <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>
-                  {r.user.firstName} {r.user.lastName} <span style={{ color: th.textMute }}>· {r.user.email} · {r.user.phone ?? '—'}</span>
+            {detail.registrations.map((r) => {
+              const confirmed = r.status === 'CONFIRMED';
+              const pos = waitlistPosition(detail.registrations, r.id);
+              return (
+                <div key={r.id} style={{ background: th.surface, borderRadius: 13, padding: '12px 14px', marginBottom: 10, boxShadow: th.shadow }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '3px 9px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, background: confirmed ? `${ACCENTS.emerald}22` : th.surface2, color: confirmed ? (th.mode === 'floodlit' ? ACCENTS.emerald : '#1c7a4f') : th.textMute }}>
+                    {confirmed ? 'Confirmé' : pos ? `Liste d'attente · ${pos}` : "Liste d'attente"}
+                  </span>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>
+                    {r.user.firstName} {r.user.lastName} <span style={{ color: th.textMute }}>· {r.user.email} · {r.user.phone ?? '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    {r.status === 'WAITLISTED' && <button onClick={() => promoteReg(detail.event.id, r.id)} style={ghost}>Promouvoir</button>}
+                    <button onClick={() => removeReg(detail.event.id, r.id)} style={ghost}>Retirer</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  {r.status === 'WAITLISTED' && <button onClick={() => promoteReg(detail.event.id, r.id)} style={ghost}>Promouvoir</button>}
-                  <button onClick={() => removeReg(detail.event.id, r.id)} style={ghost}>Retirer</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
