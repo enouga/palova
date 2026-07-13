@@ -11,7 +11,7 @@ jest.mock('../components/clubhouse/OpenMatchesShowcase', () => ({ OpenMatchesSho
 jest.mock('../components/clubhouse/OffersShowcase', () => ({ OffersShowcase: () => <div data-testid="sec-offers" /> }));
 jest.mock('../components/clubhouse/TopOfMonth', () => ({ TopOfMonth: () => <div data-testid="sec-top" /> }));
 jest.mock('../components/clubhouse/ClubShowcase', () => ({ ClubShowcase: () => <div data-testid="sec-club" /> }));
-jest.mock('../components/clubhouse/SponsorMarquee', () => ({ SponsorMarquee: () => <div data-testid="sec-sponsors" /> }));
+jest.mock('../components/clubhouse/SponsorFlipDeck', () => ({ SponsorFlipDeck: () => <div data-testid="sec-sponsors" /> }));
 
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,

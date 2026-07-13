@@ -17,7 +17,7 @@ import { OffersShowcase } from '@/components/clubhouse/OffersShowcase';
 import { TopOfMonth } from '@/components/clubhouse/TopOfMonth';
 import { ClubShowcase } from '@/components/clubhouse/ClubShowcase';
 import { showShowcase } from '@/lib/clubShowcase';
-import { SponsorMarquee } from '@/components/clubhouse/SponsorMarquee';
+import { SponsorFlipDeck } from '@/components/clubhouse/SponsorFlipDeck';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 
@@ -170,7 +170,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
       {order.map((k) => wrap(k, sections[k]))}
 
-      {sponsorsVisible && <SponsorMarquee sponsors={spons} now={clock} />}
+      {sponsorsVisible && <SponsorFlipDeck sponsors={spons} now={clock} />}
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
