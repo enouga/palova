@@ -181,15 +181,18 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     MEMBER_NOT_FOUND: "Ce joueur n'est pas membre actif du club.",
   }[code] ?? code);
 
+  // Ajout/remplacement d'un joueur → reload COMPLET (pas un patch local avec la résa renvoyée) :
+  // le reload rappelle la couverture auto par abonnement côté page, sinon la place d'un abonné
+  // qu'on vient d'associer resterait « à encaisser » jusqu'au prochain chargement.
   const assignPlayer = async (m: Member) => {
     setBusy(true);
-    try { onChanged(await api.adminAssignReservationMember(clubId, reservation.id, m.userId, token)); }
+    try { await api.adminAssignReservationMember(clubId, reservation.id, m.userId, token); onChanged(); }
     catch (e) { fail((e as Error).message === 'MEMBER_NOT_FOUND' ? "Ce joueur n'est pas membre actif du club." : (e as Error).message); }
     finally { setBusy(false); }
   };
   const addParticipant = async (m: Member) => {
     setBusy(true);
-    try { onChanged(await api.adminAddReservationParticipant(clubId, reservation.id, m.userId, token)); }
+    try { await api.adminAddReservationParticipant(clubId, reservation.id, m.userId, token); onChanged(); }
     catch (e) { fail(participantErr((e as Error).message)); }
     finally { setBusy(false); }
   };
@@ -206,10 +209,10 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
   const changeParticipant = async (participantId: string, m: Member) => {
     setBusy(true);
     try {
-      const updated = await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, m.userId, token);
+      await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, m.userId, token);
       setChangingId(null);
       if (payParticipantId === participantId) setPayParticipantId(null);
-      onChanged(updated);
+      onChanged();
     } catch (e) { fail(participantErr((e as Error).message)); }
     finally { setBusy(false); }
   };
@@ -234,7 +237,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     setBusy(true);
     try {
       const updated = await api.adminAssignReservationMemberNew(clubId, reservation.id, body, token);
-      onChanged(updated);
+      onChanged();
       return updated.createdMember ?? { tempPassword: null, existed: false };
     } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
     finally { setBusy(false); }
@@ -243,7 +246,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
     setBusy(true);
     try {
       const updated = await api.adminAddReservationParticipantNew(clubId, reservation.id, body, token);
-      onChanged(updated);
+      onChanged();
       return updated.createdMember ?? { tempPassword: null, existed: false };
     } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
     finally { setBusy(false); }
@@ -329,7 +332,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
                           const updated = await api.adminChangeReservationParticipantNew(clubId, reservation.id, p.id, body, token);
                           setChangingId(null);
                           if (payParticipantId === p.id) setPayParticipantId(null);
-                          onChanged(updated);
+                          onChanged();
                           return updated.createdMember ?? { tempPassword: null, existed: false };
                         } catch (e) { fail(participantErr((e as Error).message)); return { tempPassword: null, existed: false }; }
                         finally { setBusy(false); }

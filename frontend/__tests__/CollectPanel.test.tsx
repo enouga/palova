@@ -150,6 +150,22 @@ describe('CollectPanel', () => {
     await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalledWith('club-1', 'rv-1', 'u9', 'tok'));
   });
 
+  it('« associer » force un rechargement complet (onChanged sans résa) → la couverture par abonnement s\'applique', async () => {
+    (api.adminAddReservationParticipant as jest.Mock).mockResolvedValue({ id: 'rv-1' });
+    const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };
+    const members = [{ userId: 'u9', firstName: 'Marie', lastName: 'Curie', email: 'marie@x.fr' }];
+    const { onChanged } = renderPanel({ participants: [part] }, { members });
+    fireEvent.click(screen.getAllByRole('button', { name: /Associer un membre/ })[0]);
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un membre…'));
+    fireEvent.click(screen.getByText(/Marie Curie/));
+    await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalled());
+    // onChanged SANS la résa → la page recharge et rappelle autoApplySubscriptions ; un patch
+    // local (onChanged(updated)) laisserait la place d'un abonné « à encaisser » jusqu'au reload.
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(onChanged).toHaveBeenCalledWith();
+    expect(onChanged).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rv-1' }));
+  });
+
   it('« associer » une place libre en créant un nouveau joueur : UN SEUL appel réseau (pas de refetch annuaire)', async () => {
     (api.adminAddReservationParticipantNew as jest.Mock).mockResolvedValue({ id: 'rv-1' });
     const part = { id: 'pt-1', userId: 'u1', isOrganizer: true, firstName: 'Jean', lastName: 'Dupont', share: '13.00', paid: '0.00', outstanding: '13.00' };

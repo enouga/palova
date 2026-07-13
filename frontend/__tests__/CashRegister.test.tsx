@@ -268,3 +268,21 @@ it('payAtClubOnly : un seul bouton « Encaissé » (moyen CLUB), pas de choix de
   await waitFor(() => expect(api.adminAddPayment).toHaveBeenCalledWith('club-1', 'rv-1',
     expect.objectContaining({ method: 'CLUB', amount: 13, participantId: 'pt-1' }), 'tok'));
 });
+
+it('associer un joueur force un rechargement complet (onChanged sans résa) → la couverture par abonnement s\'applique', async () => {
+  // Une place tout juste associée à un abonné doit devenir « réglé · Abonnement » sans
+  // rechargement manuel. Le composant doit donc rappeler onChanged SANS la résa à jour, ce qui
+  // déclenche côté page reloadReservations() → autoApplySubscriptions(). Un patch local
+  // (onChanged(updated)) laisserait la place « à encaisser » jusqu'au prochain chargement.
+  (api.searchClubMembers as jest.Mock).mockResolvedValueOnce([
+    { id: 'u9', firstName: 'Nora', lastName: 'Kaci', level: null },
+  ]);
+  const props = baseProps();
+  renderReg(rv(), props);
+  fireEvent.click(screen.getAllByRole('button', { name: /associer/i })[0]);
+  fireEvent.click(await screen.findByRole('button', { name: /Nora Kaci/ }));
+  await waitFor(() => expect(api.adminAddReservationParticipant).toHaveBeenCalled());
+  await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+  expect(props.onChanged).toHaveBeenCalledWith();                                   // reload complet
+  expect(props.onChanged).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'rv-1' }));  // pas un patch local
+});

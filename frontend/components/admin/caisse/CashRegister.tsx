@@ -208,20 +208,24 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
   // La place associée reste sélectionnée ensuite (focus) : `idx` est capturé avant la remise
   // à zéro de `associatingIndex`, `statuses[idx]` retombe forcément non payé.
   const needsHolder = !reservation.user && (reservation.participants ?? []).length === 0;
-  const finishAssociation = async (idx: number | null, updated: ClubReservation) => {
+  const finishAssociation = async (idx: number | null) => {
     setAssociatingIndex(null);
     if (idx !== null) setSelected(new Set([idx]));
-    await onChanged(updated);
+    // Composition modifiée (ajout/remplacement de joueur) : reload COMPLET — qui rappelle la
+    // couverture auto par abonnement côté page (reloadReservations → autoApplySubscriptions) —
+    // plutôt qu'un patch local. Sinon la place d'un joueur abonné tout juste associé resterait
+    // affichée « à encaisser » jusqu'au prochain chargement (la résa renvoyée par la mutation
+    // n'a pas encore le paiement d'abonnement, posé par le balayage).
+    await onChanged();
   };
   const associate = async (userId: string) => {
     if (assocBusy) return;
     setAssocBusy(true);
     const idx = associatingIndex;
     try {
-      const updated = needsHolder
-        ? await api.adminAssignReservationMember(clubId, reservation.id, userId, token)
-        : await api.adminAddReservationParticipant(clubId, reservation.id, userId, token);
-      await finishAssociation(idx, updated);
+      if (needsHolder) await api.adminAssignReservationMember(clubId, reservation.id, userId, token);
+      else await api.adminAddReservationParticipant(clubId, reservation.id, userId, token);
+      await finishAssociation(idx);
     } catch (e) { onError(mapAssocError(e)); }
     finally { setAssocBusy(false); }
   };
@@ -231,8 +235,8 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
     setAssocBusy(true);
     const idx = associatingIndex;
     try {
-      const updated = await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, userId, token);
-      await finishAssociation(idx, updated);
+      await api.adminChangeReservationParticipant(clubId, reservation.id, participantId, userId, token);
+      await finishAssociation(idx);
     } catch (e) { onError(mapAssocError(e)); }
     finally { setAssocBusy(false); }
   };
@@ -248,7 +252,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
         : needsHolder
           ? await api.adminAssignReservationMemberNew(clubId, reservation.id, body, token)
           : await api.adminAddReservationParticipantNew(clubId, reservation.id, body, token);
-      await finishAssociation(idx, updated);
+      await finishAssociation(idx);
       return updated.createdMember ?? { tempPassword: null, existed: false, userId: '' };
     } catch (e) {
       onError(mapAssocError(e));
