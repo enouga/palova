@@ -425,6 +425,10 @@ export const api = {
   adminAddPayment: (clubId: string, reservationId: string, body: AddPaymentBody, token: string) =>
     request<Payment>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/payments`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  // Balayage automatique (Caisse/Planning) : couvre par abonnement les places non réglées du jour.
+  adminAutoApplySubscriptions: (clubId: string, date: string, token: string) =>
+    request<{ applied: number }>(`/api/clubs/${clubId}/admin/reservations/auto-apply-subscriptions`, { method: 'POST', body: JSON.stringify({ date }) }, token),
+
   adminAssignReservationMember: (clubId: string, reservationId: string, memberUserId: string, token: string) =>
     request<ClubReservation>(`/api/clubs/${clubId}/admin/reservations/${reservationId}/member`, { method: 'PATCH', body: JSON.stringify({ memberUserId }) }, token),
 

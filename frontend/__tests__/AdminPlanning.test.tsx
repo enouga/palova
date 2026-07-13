@@ -15,6 +15,7 @@ jest.mock('../lib/api', () => ({
     adminGetMembers: jest.fn().mockResolvedValue([]),
     adminGetReservations: jest.fn(),
     adminGetActivePackages: jest.fn().mockResolvedValue([]),
+    adminAutoApplySubscriptions: jest.fn().mockResolvedValue({ applied: 0 }),
     adminGetMemberSubscriptions: jest.fn().mockResolvedValue([]),
     adminListCoaches: jest.fn().mockResolvedValue([]),
     adminAddPayment: jest.fn().mockResolvedValue({ id: 'p1' }),
@@ -62,6 +63,23 @@ const openModal = async () => {
 };
 
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); });
+
+it('couverture auto abonnement : balaie le jour affiché avant de charger les réservations', async () => {
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+  renderPage();
+  await screen.findByText('Jean Test');
+  const dateArg = (api.adminGetReservations as jest.Mock).mock.calls[0][1].date;
+  expect(api.adminAutoApplySubscriptions).toHaveBeenCalledWith('club-1', dateArg, 'tok');
+});
+
+it('couverture auto abonnement : un échec ne bloque pas le chargement de la grille', async () => {
+  (api.adminAutoApplySubscriptions as jest.Mock).mockRejectedValue(new Error('boom'));
+  (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+  (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([twoPlayerResa()]));
+  renderPage();
+  expect(await screen.findByText('Jean Test')).toBeInTheDocument();
+});
 
 it("encaisse la part du joueur présélectionné (tuile) avec un moyen, sans fermer la modale", async () => {
   (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);

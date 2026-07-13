@@ -2394,6 +2394,230 @@ describe('ReservationService', () => {
       await expect(service.confirmReservation('res-1', 'user-1', { paymentSource: { subscriptionId: 'sub-1' } }))
         .rejects.toThrow('SUBSCRIPTION_CAP_REACHED');
     });
+
+    it('paymentSource abonnement couvrant → pas de ONLINE_PAYMENT_REQUIRED même si le club impose le paiement en ligne', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseRes,
+        resource: { ...baseRes.resource, club: { ...baseRes.resource.club, offPeakHours: offAll, requireOnlinePayment: true } },
+      } as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
+        sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+      } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const r = await service.confirmReservation('res-1', 'user-1', { paymentSource: { subscriptionId: 'sub-1' } });
+
+      expect(r.status).toBe('CONFIRMED');
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'SUBSCRIPTION', sourceSubscriptionId: 'sub-1' }),
+      }));
+    });
+
+    it('paymentSource carnet/porte-monnaie → pas de ONLINE_PAYMENT_REQUIRED même si le club impose le paiement en ligne', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseRes,
+        resource: { ...baseRes.resource, club: { ...baseRes.resource.club, requireOnlinePayment: true } },
+      } as any);
+      prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-1', userId: 'user-1', kind: 'ENTRIES' } as any);
+      prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-2' } as any);
+
+      const r = await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
+
+      expect(r.status).toBe('CONFIRMED');
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pkg-1' }),
+      }));
+    });
+
+    it('sans paymentSource ni PI, le paiement en ligne imposé bloque toujours (ONLINE_PAYMENT_REQUIRED)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        ...baseRes,
+        resource: { ...baseRes.resource, club: { ...baseRes.resource.club, requireOnlinePayment: true } },
+      } as any);
+      await expect(service.confirmReservation('res-1', 'user-1', {}))
+        .rejects.toThrow('ONLINE_PAYMENT_REQUIRED');
+    });
+  });
+
+  describe('autoApplySubscriptionCoverage', () => {
+    // 2026-07-01 = mercredi (weekday Luxon 3), 8h-9h UTC → entièrement en heures creuses.
+    const club = { offPeakHours: { '3': [{ start: 8, end: 22 }] }, timezone: 'Europe/Paris' };
+    const baseReservation = (over: Record<string, unknown> = {}) => ({
+      id: 'r1', userId: 'user-1', totalPrice: '20.00',
+      startTime: new Date('2026-07-01T08:00:00Z'), endTime: new Date('2026-07-01T09:00:00Z'),
+      resource: { price: '20.00', offPeakPrice: null, clubSport: { sport: { key: 'padel' } }, club },
+      participants: [] as unknown[],
+      payments: [] as unknown[],
+      ...over,
+    });
+    const activeSub = (over: Record<string, unknown> = {}) => ({
+      id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
+      sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null,
+      ...over,
+    });
+
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 0 } } as any);
+      prismaMock.refund.aggregate.mockResolvedValue({ _sum: { amount: 0 } } as any);
+      prismaMock.payment.count.mockResolvedValue(0);
+      prismaMock.subscription.findMany.mockResolvedValue([] as any);
+      prismaMock.reservation.findMany.mockResolvedValue([] as any);
+    });
+
+    it('résa à titulaire seul + abo INCLUDED couvrant → paiement SUBSCRIPTION pour le total', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(1);
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ reservationId: 'r1', participantId: null, method: 'SUBSCRIPTION', sourceSubscriptionId: 'sub-1' }),
+      }));
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(20);
+    });
+
+    it('par participant : chaque place vérifiée séparément, seul le joueur abonné est couvert', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        userId: null,
+        participants: [
+          { id: 'pp1', userId: 'user-1', share: '10.00' },
+          { id: 'pp2', userId: 'user-2', share: '10.00' },
+        ],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub({ userId: 'user-1' })] as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(1);
+      expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ participantId: 'pp1', method: 'SUBSCRIPTION' }),
+      }));
+      expect(prismaMock.payment.create).not.toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ participantId: 'pp2' }),
+      }));
+    });
+
+    it('abo DISCOUNT → seule la part remisée est réglée, le reste reste dû', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub({ benefit: 'DISCOUNT', discountPercent: 50 })] as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(1);
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(10);
+    });
+
+    it('place déjà réglée → ignorée, aucune requête d\'abonnement', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        payments: [{ amount: '20.00', refundedAmount: '0.00', participantId: null }],
+      })] as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.subscription.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('résa déjà soldée par des paiements ANONYMES → aucune place couverte (jamais de sur-encaissement)', async () => {
+      // La part du participant n'a aucun paiement lié, mais la résa est intégralement réglée
+      // au comptoir (paiements sans participantId) : il n'y a plus rien à couvrir.
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        userId: null,
+        participants: [{ id: 'pp1', userId: 'user-1', share: '20.00' }],
+        payments: [{ amount: '20.00', refundedAmount: '0.00', participantId: null }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('part partiellement payée → couvre exactement le reste (pas de double soustraction)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        userId: null,
+        participants: [{ id: 'pp1', userId: 'user-1', share: '20.00' }],
+        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: 'pp1' }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(1);
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(15);
+    });
+
+    it('titulaire partiellement payé → couvre exactement le reste (pas de double soustraction)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: null }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(1);
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(15);
+    });
+
+    it('heures pleines + abo offPeakOnly → non couvert, rien créé', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        resource: { price: '20.00', offPeakPrice: null, clubSport: { sport: { key: 'padel' } }, club: { offPeakHours: null, timezone: 'Europe/Paris' } },
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('plafond jour atteint → rien créé', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub({ dailyCap: 1 })] as any);
+      prismaMock.payment.count.mockResolvedValue(1);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('aucun abonnement pour le joueur → rien créé', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('filtre sur le jour, les résa COURT confirmées uniquement', async () => {
+      await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      expect(arg.where.startTime).toBeDefined();
+      expect(arg.where.endTime).toBeDefined();
+      expect(arg.where.type).toBe('COURT');
+      expect(arg.where.status).toBe('CONFIRMED');
+    });
   });
 
   describe('applyHoldSetup', () => {

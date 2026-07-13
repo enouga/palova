@@ -176,11 +176,19 @@ export default function AdminPlanningPage() {
   const [coaches, setCoaches]               = useState<Coach[]>([]);
   const [students, setStudents]             = useState<LessonStudent[]>([]);
 
+  // Couverture automatique par abonnement (Planning) : balaie le jour affiché avant de charger —
+  // best-effort, ne bloque jamais l'encaissement manuel si ça échoue.
+  const autoApplySubscriptions = useCallback(async () => {
+    if (!token || !clubId || !date) return;
+    try { await api.adminAutoApplySubscriptions(clubId, date, token); } catch { /* ignore */ }
+  }, [token, clubId, date]);
+
   const load = useCallback(async (): Promise<ClubReservation[]> => {
     if (!token || !clubId) return [] as ClubReservation[];
     setLoading(true);
     try {
       setError(null);
+      await autoApplySubscriptions();
       const [c, res, resv, mem, pkgs] = await Promise.all([
         api.adminGetClub(clubId, token),
         api.adminGetResources(clubId, token),
@@ -200,18 +208,19 @@ export default function AdminPlanningPage() {
       return resv.reservations;
     } catch (e) { setError((e as Error).message); return [] as ClubReservation[]; }
     finally { setLoading(false); }
-  }, [token, clubId, date]);
+  }, [token, clubId, date, autoApplySubscriptions]);
 
   // Rechargement LÉGER des réservations après un encaissement (pas de setLoading → la
   // modale ne se démonte pas ; une seule requête au lieu des quatre de `load`).
   const reloadReservations = useCallback(async (): Promise<ClubReservation[]> => {
     if (!token || !clubId) return [];
     try {
+      await autoApplySubscriptions();
       const resv = await api.adminGetReservations(clubId, { date }, token);
       setRes(resv.reservations);
       return resv.reservations;
     } catch (e) { setError((e as Error).message); return []; }
-  }, [token, clubId, date]);
+  }, [token, clubId, date, autoApplySubscriptions]);
 
   // Recharge les soldes prépayés (après un règlement carnet/porte-monnaie). Best-effort.
   const reloadPackages = useCallback(async () => {

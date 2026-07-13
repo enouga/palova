@@ -448,8 +448,11 @@ export class ReservationService {
       stripeAccountId: string | null;
     } | undefined;
 
-    // Vérifications Stripe (hors transaction — appels HTTP interdits dans $transaction)
-    if (club?.requireOnlinePayment && !options?.stripePaymentIntentId) {
+    // Vérifications Stripe (hors transaction — appels HTTP interdits dans $transaction).
+    // Un paiement prépayé (paymentSource : carnet/porte-monnaie/abonnement) exempte l'exigence
+    // de paiement en ligne — même raisonnement que l'empreinte juste en dessous : l'argent (ou
+    // l'engagement d'abonnement) est déjà sécurisé, aucun risque de no-show à couvrir par CB.
+    if (club?.requireOnlinePayment && !options?.stripePaymentIntentId && !options?.paymentSource) {
       throw new Error('ONLINE_PAYMENT_REQUIRED');
     }
     // fingerprint seulement si paiement en ligne non requis (sinon le PI couvre les deux)
@@ -1678,6 +1681,177 @@ export class ReservationService {
         })),
       };
     });
+  }
+
+  /**
+   * Balayage automatique (Caisse/Planning) : couvre par abonnement toute place non réglée
+   * (titulaire ou participant) d'une réservation COURT confirmée du jour, quand le joueur a un
+   * abonnement actif qui couvre le créneau (sport + heures pleines/creuses, plafond jour/semaine).
+   * Un vrai paiement `SUBSCRIPTION` est créé — même mécanisme que la réservation en ligne
+   * (`confirmReservation`), mais appliqué joueur par joueur plutôt qu'au seul organisateur.
+   * Best-effort par place : la vérification du reste dû est refaite dans la transaction pour
+   * rester safe si un encaissement manuel arrive entre le balayage et l'écriture.
+   */
+  async autoApplySubscriptionCoverage(clubId: string, date?: string): Promise<{ applied: number }> {
+    const where: Prisma.ReservationWhereInput = { resource: { clubId }, type: 'COURT', status: 'CONFIRMED' };
+    if (date) {
+      where.startTime = { lt: new Date(`${date}T23:59:59.999Z`) };
+      where.endTime   = { gt: new Date(`${date}T00:00:00.000Z`) };
+    }
+
+    const reservations = await prisma.reservation.findMany({
+      where,
+      select: {
+        id: true, userId: true, totalPrice: true, startTime: true, endTime: true,
+        resource: {
+          select: {
+            price: true, offPeakPrice: true,
+            clubSport: { select: { sport: { select: { key: true } } } },
+            club: { select: { offPeakHours: true, timezone: true } },
+          },
+        },
+        participants: { select: { id: true, userId: true, share: true } },
+        payments: { select: { amount: true, refundedAmount: true, participantId: true } },
+      },
+    });
+    if (reservations.length === 0) return { applied: 0 };
+
+    const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const refundableCents = (p: { amount: unknown; refundedAmount: unknown }) =>
+      Math.round(num(p.amount) * 100) - Math.round(num(p.refundedAmount) * 100);
+
+    interface Slot {
+      reservationId: string; participantId: string | null; userId: string;
+      /** reste dû de la place au moment du scan (assiette de la décision de couverture) */
+      dueCents: number;
+      /** dû TOTAL de la place (share du participant, ou dû de la résa pour le titulaire) */
+      fullDueCents: number;
+      /** dû TOTAL de la réservation — plafond global re-vérifié en transaction : la somme des
+       *  paiements (anonymes au comptoir compris) ne doit JAMAIS dépasser le dû de la résa. */
+      reservationDueCents: number;
+      sportKey: string; isOffPeak: boolean; startTime: Date; tz: string;
+    }
+    const slots: Slot[] = [];
+
+    for (const r of reservations) {
+      const sportKey = r.resource.clubSport?.sport?.key ?? '';
+      const off = r.resource.club.offPeakHours as OffPeakHours | null;
+      const tz = r.resource.club.timezone;
+      const isOffPeak = classifySlot(off, r.startTime, r.endTime, tz) === 'OFF_PEAK';
+
+      let reservationDueCents = Math.round(num(r.totalPrice) * 100);
+      if (reservationDueCents <= 0) {
+        reservationDueCents = slotPriceCents(
+          off, r.startTime, r.endTime, tz,
+          Math.round(num(r.resource.price) * 100),
+          r.resource.offPeakPrice != null ? Math.round(num(r.resource.offPeakPrice) * 100) : null,
+        );
+      }
+      if (reservationDueCents <= 0) continue;
+      // Résa déjà soldée au niveau GLOBAL (paiements anonymes au comptoir compris) → rien à
+      // couvrir, même si la place nommée du joueur n'a aucun paiement qui lui est lié.
+      const totalPaidCents = r.payments.reduce((s, p) => s + refundableCents(p), 0);
+      if (reservationDueCents - totalPaidCents <= 0) continue;
+
+      if (r.participants.length === 0) {
+        if (!r.userId) continue;
+        const paidCents = r.payments.filter((p) => !p.participantId).reduce((s, p) => s + refundableCents(p), 0);
+        const remaining = reservationDueCents - paidCents;
+        if (remaining <= 0) continue;
+        slots.push({ reservationId: r.id, participantId: null, userId: r.userId, dueCents: remaining, fullDueCents: reservationDueCents, reservationDueCents, sportKey, isOffPeak, startTime: r.startTime, tz });
+      } else {
+        for (const p of r.participants) {
+          const fullDueCents = Math.round(num(p.share) * 100);
+          if (fullDueCents <= 0) continue;
+          const paidCents = r.payments.filter((pay) => pay.participantId === p.id).reduce((s, pay) => s + refundableCents(pay), 0);
+          const remaining = fullDueCents - paidCents;
+          if (remaining <= 0) continue;
+          slots.push({ reservationId: r.id, participantId: p.id, userId: p.userId, dueCents: remaining, fullDueCents, reservationDueCents, sportKey, isOffPeak, startTime: r.startTime, tz });
+        }
+      }
+    }
+    if (slots.length === 0) return { applied: 0 };
+
+    const userIds = [...new Set(slots.map((s) => s.userId))];
+    const subs = await prisma.subscription.findMany({
+      where: { clubId, userId: { in: userIds }, status: 'ACTIVE', expiresAt: { gt: new Date() } },
+    });
+    const subsByUser = new Map<string, typeof subs>();
+    for (const sub of subs) {
+      const list = subsByUser.get(sub.userId) ?? [];
+      list.push(sub);
+      subsByUser.set(sub.userId, list);
+    }
+
+    let applied = 0;
+    for (const slot of slots) {
+      let covering: typeof subs[number] | null = null;
+      let coverCents = 0;
+      for (const sub of subsByUser.get(slot.userId) ?? []) {
+        const decision = SubscriptionService.coverageFor(
+          { sportKeys: sub.sportKeys, offPeakOnly: sub.offPeakOnly, benefit: sub.benefit, discountPercent: sub.discountPercent },
+          { sportKey: slot.sportKey, isOffPeak: slot.isOffPeak, dueCents: slot.dueCents },
+        );
+        if (decision.covered && decision.coverCents > 0) { covering = sub; coverCents = decision.coverCents; break; }
+      }
+      if (!covering) continue;
+
+      const day = DateTime.fromJSDate(slot.startTime, { zone: slot.tz });
+      let capOk = true;
+      for (const [cap, start, end] of [
+        [covering.dailyCap, day.startOf('day'), day.startOf('day').plus({ days: 1 })] as const,
+        [covering.weeklyCap, day.startOf('week'), day.startOf('week').plus({ weeks: 1 })] as const,
+      ]) {
+        if (cap == null) continue;
+        const used = await prisma.payment.count({
+          where: {
+            method: 'SUBSCRIPTION', sourceSubscriptionId: covering.id,
+            reservation: { id: { not: slot.reservationId }, startTime: { gte: start.toJSDate(), lt: end.toJSDate() } },
+          },
+        });
+        if (used >= cap) { capOk = false; break; }
+      }
+      if (!capOk) continue;
+
+      const sub = covering;
+      try {
+        await prisma.$transaction(async (tx) => {
+          // Reste dû GLOBAL de la résa (tous paiements, anonymes compris) : plafond absolu —
+          // on n'encaisse jamais au-delà du dû de la réservation, même quand la place du
+          // joueur n'a aucun paiement qui lui est lié.
+          const resWhere = { reservationId: slot.reservationId };
+          const [paidAllAgg, refundAllAgg] = await Promise.all([
+            tx.payment.aggregate({ _sum: { amount: true }, where: resWhere }),
+            tx.refund.aggregate({ _sum: { amount: true }, where: { payment: resWhere } }),
+          ]);
+          const paidAllCents = Math.round(num(paidAllAgg._sum.amount) * 100) - Math.round(num(refundAllAgg._sum.amount) * 100);
+          let remaining = slot.reservationDueCents - paidAllCents;
+          // Place nommée : borné aussi au reste dû de la place elle-même (recalculé à neuf —
+          // dû total de la place moins ses paiements, pas de double soustraction du scan).
+          if (slot.participantId) {
+            const pWhere = { participantId: slot.participantId };
+            const [paidAgg, refundAgg] = await Promise.all([
+              tx.payment.aggregate({ _sum: { amount: true }, where: pWhere }),
+              tx.refund.aggregate({ _sum: { amount: true }, where: { payment: pWhere } }),
+            ]);
+            const paidCents = Math.round(num(paidAgg._sum.amount) * 100) - Math.round(num(refundAgg._sum.amount) * 100);
+            remaining = Math.min(remaining, slot.fullDueCents - paidCents);
+          }
+          const amountCents = Math.min(coverCents, remaining);
+          if (amountCents <= 0) return;
+          const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
+          await tx.payment.create({
+            data: {
+              reservationId: slot.reservationId, participantId: slot.participantId, clubId,
+              amount: new Prisma.Decimal(amountCents / 100), method: 'SUBSCRIPTION', sourceSubscriptionId: sub.id,
+              receiptNo,
+            },
+          });
+          applied += 1;
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch { /* une place en échec ne doit pas bloquer les autres ; retentée au prochain chargement */ }
+    }
+    return { applied };
   }
 
   /** Planning club : toutes les réservations d'un club, filtrables. */
