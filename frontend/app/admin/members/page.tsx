@@ -1,21 +1,33 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo, CSSProperties } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, Member } from '@/lib/api';
+import { api, Member, SubscriptionPlan, SubscriptionPlanSummary } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { computeVirtualRange } from '@/lib/virtualList';
+import { daysUntil } from '@/lib/subscriptionAdmin';
+import { clubIsMultiSport } from '@/lib/sportBadge';
 import { Pill } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaffRole } from '@/components/admin/StaffRoleMenu';
-import { MemberRow } from '@/components/admin/members/MemberRow';
+import { MemberRow, SubActionKind } from '@/components/admin/members/MemberRow';
 import { MemberPanel, MemberDraft } from '@/components/admin/members/MemberPanel';
 import { AddMemberDialog } from '@/components/admin/members/AddMemberDialog';
+import { SubscriberInsights } from '@/components/admin/members/SubscriberInsights';
+import { SubscriptionActions } from '@/components/admin/subscriptions/SubscriptionActions';
 import {
   MemberSeg, MemberSort, filterMembers, segCounts, sortMembers, memberKpis, membersCsv,
 } from '@/lib/members';
+
+// Hauteur d'une MemberRow (mesurée) + gap de la grille — sert de pas fixe à la virtualisation.
+const ROW_HEIGHT = 64;
+const ROW_GAP = 8;
+const ROW_STRIDE = ROW_HEIGHT + ROW_GAP;
+const LIST_MAX_HEIGHT = 'calc(100vh - 300px)';
 
 const STAFF_ERRORS: Record<string, string> = {
   CANNOT_CHANGE_OWNER: 'Le rôle du gérant ne peut pas être modifié.',
@@ -44,6 +56,18 @@ export default function AdminMembersPage() {
   const [confirmRemove, setConfirmRemove] = useState<Member | null>(null);
   const [nowMs, setNowMs] = useState(0);
 
+  // Contexte abonnés (pastille « Abonnés ») : sous-filtres + cycle de vie sur la ligne.
+  const [planFilter, setPlanFilter]       = useState<string | null>(null);
+  const [expiringOnly, setExpiringOnly]   = useState(false);
+  const [sportFilter, setSportFilter]     = useState<string | null>(null);
+  const [plans, setPlans]                 = useState<SubscriptionPlan[]>([]);
+  const [subAction, setSubAction]         = useState<{ kind: SubActionKind; m: Member } | null>(null);
+  const multiSport = clubIsMultiSport(club as Parameters<typeof clubIsMultiSport>[0]);
+  const sportName = (key: string) => {
+    const cs = (club as { clubSports?: { sport?: { key: string; name: string } }[] } | null)?.clubSports?.find((c) => c.sport?.key === key)?.sport?.name;
+    return cs ?? key.charAt(0).toUpperCase() + key.slice(1);
+  };
+
   // Viewer (gestion staff réservée OWNER/ADMIN ; jamais sur sa propre ligne).
   const [viewer, setViewer] = useState<{ userId: string; role: 'OWNER' | 'ADMIN' | 'STAFF' } | null>(null);
   const canManageStaff = viewer !== null && (viewer.role === 'OWNER' || viewer.role === 'ADMIN');
@@ -68,10 +92,62 @@ export default function AdminMembersPage() {
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
-  const searchAll = useMemo(() => filterMembers(members, query, 'all'), [members, query]);
+  // Contexte abonnés : réinitialise les sous-filtres en sortant, charge les forfaits (paresseux, pour les cartes vides comprises).
+  useEffect(() => { if (seg !== 'subs') { setPlanFilter(null); setExpiringOnly(false); setSportFilter(null); } }, [seg]);
+  useEffect(() => {
+    if (seg === 'subs' && token && clubId && plans.length === 0) {
+      api.adminGetSubscriptionPlans(clubId, token).then(setPlans).catch(() => {});
+    }
+  }, [seg, token, clubId, plans.length]);
+
+  // Débouncée : la frappe reste instantanée dans le champ, mais le filtre/tri (coûteux à
+  // grande échelle) ne recalcule et ne re-rend qu'une fois la saisie stabilisée.
+  const debouncedQuery = useDebouncedValue(query, 200);
+  const searchAll = useMemo(() => filterMembers(members, debouncedQuery, 'all'), [members, debouncedQuery]);
   const counts = useMemo(() => segCounts(searchAll), [searchAll]);
-  const visible = useMemo(() => sortMembers(filterMembers(members, query, seg), sort), [members, query, seg, sort]);
+  // Base abonnés (recherche appliquée, AVANT les sous-filtres) → KPIs/cartes du bandeau.
+  const subsBase = useMemo(() => filterMembers(members, debouncedQuery, 'subs'), [members, debouncedQuery]);
+  const visible = useMemo(() => {
+    let rows = sortMembers(filterMembers(members, debouncedQuery, seg), sort);
+    if (seg === 'subs') {
+      rows = rows.filter((m) => {
+        const s = m.subscription;
+        if (!s) return false;
+        if (planFilter && s.planId !== planFilter) return false;
+        if (sportFilter && !s.sportKeys.includes(sportFilter)) return false;
+        if (expiringOnly && daysUntil(s.expiresAt, nowMs) > 30) return false;
+        return true;
+      });
+    }
+    return rows;
+  }, [members, debouncedQuery, seg, sort, planFilter, sportFilter, expiringOnly, nowMs]);
   const kpis = useMemo(() => memberKpis(members, nowMs), [members, nowMs]);
+
+  // Virtualisation de la liste : seule la fenêtre visible (+ overscan) est montée dans le DOM.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const measure = () => setViewportHeight(el.clientHeight);
+    measure();
+    const onScroll = () => setScrollTop(el.scrollTop);
+    el.addEventListener('scroll', onScroll);
+    window.addEventListener('resize', measure);
+    return () => { el.removeEventListener('scroll', onScroll); window.removeEventListener('resize', measure); };
+  }, [loading]);
+  // Nouvelle recherche/segment/tri → on repart du haut (un scrollTop hérité resterait cohérent
+  // grâce au clamp de computeVirtualRange, mais visuellement mieux vaut réafficher depuis le début).
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+    setScrollTop(0);
+  }, [debouncedQuery, seg, sort]);
+  const range = useMemo(
+    () => computeVirtualRange({ itemCount: visible.length, itemHeight: ROW_STRIDE, scrollTop, viewportHeight }),
+    [visible.length, scrollTop, viewportHeight],
+  );
+  const rowsToRender = useMemo(() => visible.slice(range.start, range.end), [visible, range.start, range.end]);
 
   const selected = useMemo(() => members.find((m) => m.userId === selectedUserId) ?? null, [members, selectedUserId]);
 
@@ -187,22 +263,38 @@ export default function AdminMembersPage() {
             ))}
           </div>
 
+          {/* Bandeau de pilotage abonnés (contexte « Abonnés » uniquement) */}
+          {seg === 'subs' && (
+            <SubscriberInsights th={th} subscribers={subsBase} plans={plans} nowMs={nowMs} multiSport={multiSport} sportName={sportName}
+              planFilter={planFilter} onPlanFilter={setPlanFilter}
+              expiringOnly={expiringOnly} onToggleExpiring={() => setExpiringOnly((v) => !v)}
+              sportFilter={sportFilter} onSportFilter={setSportFilter} />
+          )}
+
           {/* Liste + panneau */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {visible.length === 0 ? (
                 <div style={{ padding: '28px 14px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>
                   {members.length === 0 ? "Aucun membre pour l'instant." : `Aucun membre ne correspond${query.trim() ? ` à « ${query.trim()} »` : ''}.`}
                 </div>
               ) : (
-                visible.map((m) => (
-                  <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
-                    onOpen={() => setSelectedUserId(m.userId)}
-                    onNavigate={() => router.push(`/admin/members/${m.userId}`)} />
-                ))
+                <div ref={listRef} style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
+                    {range.paddingTop > 0 && <div style={{ height: range.paddingTop }} />}
+                    {rowsToRender.map((m) => (
+                      <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
+                        onOpen={() => setSelectedUserId(m.userId)}
+                        onNavigate={() => router.push(`/admin/members/${m.userId}`)}
+                        subscriptionContext={seg === 'subs'}
+                        onSubAction={(kind, mm) => setSubAction({ kind, m: mm })} />
+                    ))}
+                    {range.paddingBottom > 0 && <div style={{ height: range.paddingBottom }} />}
+                  </div>
+                </div>
               )}
               {query.trim() && visible.length > 0 && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, padding: '2px 4px' }}>{visible.length} sur {members.length}</div>
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, padding: '6px 4px 0' }}>{visible.length} sur {members.length}</div>
               )}
             </div>
 
@@ -221,6 +313,21 @@ export default function AdminMembersPage() {
 
       {addOpen && token && clubId && (
         <AddMemberDialog clubId={clubId} token={token} onClose={() => setAddOpen(false)} onAdded={load} />
+      )}
+
+      {subAction && subAction.m.subscription && token && clubId && (
+        <SubscriptionActions
+          action={subAction.kind}
+          sub={{
+            id: subAction.m.subscription.id, planId: subAction.m.subscription.planId, planName: subAction.m.subscription.planName,
+            expiresAt: subAction.m.subscription.expiresAt, monthlyPriceSnapshot: subAction.m.subscription.monthlyPriceSnapshot,
+          }}
+          plans={plans.map((p): SubscriptionPlanSummary => ({
+            id: p.id, name: p.name, monthlyPrice: p.monthlyPrice, benefit: p.benefit,
+            discountPercent: p.discountPercent, sportKeys: p.sportKeys, isActive: p.isActive, activeCount: 0,
+          }))}
+          clubId={clubId} token={token}
+          onClose={() => setSubAction(null)} onDone={() => { setSubAction(null); load(); }} />
       )}
 
       {confirmRemove && (
