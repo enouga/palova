@@ -13,7 +13,7 @@ export const STAFF_LABEL: Record<'OWNER' | 'ADMIN' | 'STAFF', string> = { OWNER:
 
 const inSeg = (m: Member, seg: MemberSeg): boolean => {
   switch (seg) {
-    case 'subs': return m.isSubscriber;
+    case 'subs': return !!m.hasActiveSubscription; // « Abonnés » = forfait actif géré (pas le flag booking-window)
     case 'staff': return m.staffRole != null;
     case 'watch': return !!m.watch;
     case 'blocked': return m.status === 'BLOCKED';
@@ -37,7 +37,7 @@ export function segCounts(members: Member[]): Record<MemberSeg, number> {
   const c: Record<MemberSeg, number> = { all: 0, subs: 0, staff: 0, watch: 0, blocked: 0 };
   for (const m of members) {
     c.all++;
-    if (m.isSubscriber) c.subs++;
+    if (m.hasActiveSubscription) c.subs++;
     if (m.staffRole != null) c.staff++;
     if (m.watch) c.watch++;
     if (m.status === 'BLOCKED') c.blocked++;
@@ -78,7 +78,7 @@ export function memberKpis(members: Member[], nowMs: number): {
 } {
   let subscribers = 0, activeRecent = 0, blocked = 0;
   for (const m of members) {
-    if (m.isSubscriber) subscribers++;
+    if (m.hasActiveSubscription) subscribers++;
     if (m.status === 'BLOCKED') blocked++;
     const d = daysSince(m.lastSeenAt, nowMs);
     if (d != null && d < 30) activeRecent++;

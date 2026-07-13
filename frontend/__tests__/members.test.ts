@@ -20,7 +20,7 @@ describe('norm', () => {
 
 describe('filterMembers', () => {
   const ms = [
-    mk({ userId: 'u1', firstName: 'Benoît', lastName: 'Roy', email: 'benoit@x.fr', isSubscriber: true }),
+    mk({ userId: 'u1', firstName: 'Benoît', lastName: 'Roy', email: 'benoit@x.fr', hasActiveSubscription: true }),
     mk({ userId: 'u2', firstName: 'Zoé', lastName: 'Diaz', email: 'zoe@x.fr', status: 'BLOCKED' }),
     mk({ userId: 'u3', firstName: 'Léo', lastName: 'Costa', email: 'leo@x.fr', staffRole: 'STAFF' }),
     mk({ userId: 'u4', firstName: 'Ana', lastName: 'Bernard', watch: true }),
@@ -48,10 +48,10 @@ describe('filterMembers', () => {
 describe('segCounts', () => {
   it('compte chaque segment (sur l\'ensemble donné)', () => {
     const ms = [
-      mk({ userId: 'u1', isSubscriber: true }),
+      mk({ userId: 'u1', hasActiveSubscription: true }),
       mk({ userId: 'u2', status: 'BLOCKED' }),
       mk({ userId: 'u3', staffRole: 'ADMIN' }),
-      mk({ userId: 'u4', watch: true, isSubscriber: true }),
+      mk({ userId: 'u4', watch: true, hasActiveSubscription: true }),
     ];
     expect(segCounts(ms)).toEqual({ all: 4, subs: 2, staff: 1, watch: 1, blocked: 1 });
   });
@@ -91,10 +91,10 @@ describe('daysSince', () => {
 describe('memberKpis', () => {
   it('total / abonnés / actifs 30j / bloqués', () => {
     const ms = [
-      mk({ userId: 'u1', isSubscriber: true, lastSeenAt: '2026-07-05T00:00:00Z' }), // actif
-      mk({ userId: 'u2', lastSeenAt: '2026-01-01T00:00:00Z' }),                     // > 30j
+      mk({ userId: 'u1', hasActiveSubscription: true, lastSeenAt: '2026-07-05T00:00:00Z' }), // actif
+      mk({ userId: 'u2', lastSeenAt: '2026-01-01T00:00:00Z' }),                              // > 30j
       mk({ userId: 'u3', status: 'BLOCKED' }),
-      mk({ userId: 'u4', isSubscriber: true, lastSeenAt: null }),
+      mk({ userId: 'u4', hasActiveSubscription: true, lastSeenAt: null }),
     ];
     expect(memberKpis(ms, NOW)).toEqual({ total: 4, subscribers: 2, activeRecent: 1, blocked: 1 });
   });
