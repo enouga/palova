@@ -40,8 +40,18 @@ export default function AdminSubscribersPage() {
   const rows = filterRegistry(data.subscribers, { query, mode, planId }, now);
   const totalActive = data.kpis.activeCount || 1;
 
+  // Regroupement par sport (le sport d'un abonnement = le snapshot de son forfait).
+  const sportName = (key: string) => {
+    const cs = (club as { clubSports?: { sport?: { key: string; name: string } }[] } | null)?.clubSports?.find((c) => c.sport?.key === key)?.sport?.name;
+    return cs ?? key.charAt(0).toUpperCase() + key.slice(1);
+  };
+  const bySport = new Map<string, SubscriberRow[]>();
+  for (const s of rows) { const k = s.sportKeys[0] ?? 'autre'; const a = bySport.get(k); if (a) a.push(s); else bySport.set(k, [s]); }
+  const sportGroups = [...bySport.entries()];
+  const showSportHeaders = sportGroups.length > 1;
+
   return (
-    <div style={{ padding: '20px 22px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1080 }}>
       <h1 style={{ fontFamily: th.fontDisplay, fontSize: 28, fontWeight: 800, letterSpacing: -0.6, color: th.text, margin: '0 0 4px' }}>Abonnés</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 18 }}>Les abonnements vendus par le club — qui, à quel forfait, jusqu’à quand.</p>
 
@@ -86,35 +96,47 @@ export default function AdminSubscribersPage() {
         ))}
       </div>
 
-      {/* Registre */}
+      {/* Registre groupé par sport */}
       {rows.length === 0 ? (
         <div style={{ padding: 30, textAlign: 'center', color: th.textFaint, fontFamily: th.fontUI, fontSize: 13, background: th.surface, borderRadius: 14 }}>Aucun abonné.</div>
-      ) : rows.map((s) => {
-        const soon = expiresSoon(s, now);
-        const active = isActiveSub(s, now);
-        return (
-          <div key={s.id} data-sub-row style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface, borderRadius: 12, padding: '11px 13px', marginBottom: 6, borderLeft: `4px solid ${soon ? ACCENTS.coral : 'transparent'}`, boxShadow: th.shadow, flexWrap: 'wrap' }}>
-            <Avatar firstName={s.user.firstName} lastName={s.user.lastName} avatarUrl={s.user.avatarUrl} color={colorForSeed(s.user.id)} size={30} />
-            <div style={{ flex: '1 1 150px', minWidth: 0 }}>
-              <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, color: th.text }}>{s.user.firstName} {s.user.lastName}</div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textMute }}>{s.planName} · depuis le {fdate(s.startedAt)}</div>
+      ) : sportGroups.map(([sportKey, list]) => (
+        <div key={sportKey} style={{ marginBottom: 8 }}>
+          {showSportHeaders && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 8px' }}>
+              <Icon name="ball" size={14} color={th.textMute} />
+              <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.6, color: th.textMute }}>{sportName(sportKey)}</span>
+              <span style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textFaint }}>{list.length}</span>
+              <div style={{ flex: 1, height: 1, background: th.line }} />
             </div>
-            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {active
-                ? <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '2px 9px', background: soon ? '#fdeee2' : '#e3f0e6', color: soon ? '#b45309' : '#2c7a44' }}>{soon ? `Expire J-${daysUntil(s.expiresAt, now)}` : 'Actif'}</span>
-                : <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '2px 9px', background: th.surface2, color: th.textMute }}>Terminé</span>}
-              <div style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, marginTop: 2 }}>{fdate(s.expiresAt)}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {active && <>
-                <IconBtn th={th} label="Renouveler" onClick={() => setAction({ kind: 'renew', sub: s })}><Icon name="arrowR" size={14} color={th.textMute} /></IconBtn>
-                <IconBtn th={th} label="Changer" onClick={() => setAction({ kind: 'change', sub: s })}><Icon name="settings" size={14} color={th.textMute} /></IconBtn>
-                <IconBtn th={th} label="Résilier" onClick={() => setAction({ kind: 'cancel', sub: s })}><Icon name="x" size={14} color={ACCENTS.coral} /></IconBtn>
-              </>}
-            </div>
-          </div>
-        );
-      })}
+          )}
+          {list.map((s) => {
+            const soon = expiresSoon(s, now);
+            const active = isActiveSub(s, now);
+            return (
+              <div key={s.id} data-sub-row style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface, borderRadius: 12, padding: '11px 14px', marginBottom: 6, borderLeft: `3px solid ${soon ? ACCENTS.coral : active ? th.accent : th.lineStrong}`, boxShadow: th.shadow, flexWrap: 'wrap' }}>
+                <Avatar firstName={s.user.firstName} lastName={s.user.lastName} avatarUrl={s.user.avatarUrl} color={colorForSeed(s.user.id)} size={34} />
+                <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                  <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, color: th.text }}>{s.user.firstName} {s.user.lastName}</div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 1 }}>{s.planName} · {eurStr(s.monthlyPriceSnapshot)} €/mois</div>
+                </div>
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {active
+                    ? <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: soon ? '#fdeee2' : '#e3f0e6', color: soon ? '#b45309' : '#2c7a44' }}>{soon ? `Expire dans ${daysUntil(s.expiresAt, now)} j` : 'Actif'}</span>
+                    : <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: th.surface2, color: th.textMute }}>Terminé</span>}
+                  <div style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, marginTop: 3 }}>{active ? `échéance ${fdate(s.expiresAt)}` : `depuis le ${fdate(s.startedAt)}`}</div>
+                </div>
+                {active && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => setAction({ kind: 'renew', sub: s })} style={actionBtn(th, false)}>Renouveler</button>
+                    <button type="button" onClick={() => setAction({ kind: 'change', sub: s })} style={actionBtn(th, false)}>Changer</button>
+                    <button type="button" onClick={() => setAction({ kind: 'cancel', sub: s })} style={actionBtn(th, true)}>Résilier</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
 
       {action && (
         <SubscriptionActions action={action.kind} sub={action.sub} plans={data.plans} clubId={clubId!} token={token!}
@@ -135,6 +157,8 @@ function Kpi({ th, icon, tint, value, label }: { th: Theme; icon: IconName; tint
     </div>
   );
 }
-function IconBtn({ th, label, onClick, children }: { th: Theme; label: string; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" aria-label={label} onClick={onClick} style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${th.lineStrong}`, background: th.surface, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</button>;
-}
+const actionBtn = (th: Theme, danger: boolean): React.CSSProperties => ({
+  border: `1px solid ${danger ? '#f0b8a4' : th.lineStrong}`, background: th.surface,
+  color: danger ? ACCENTS.coral : th.textMute, borderRadius: 999, padding: '6px 13px',
+  fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+});
