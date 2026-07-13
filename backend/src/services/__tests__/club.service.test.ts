@@ -1078,7 +1078,7 @@ describe('ClubService — createMember renvoie directement la ligne membre (évi
     expect(r.member).toEqual({
       id: 'mb-new', userId: 'u-new', firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr', phone: null, avatarUrl: null,
       isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, since: createdAt,
-      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, hasActivePackage: false, lastSeenAt: null,
+      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, subscription: null, hasActivePackage: false, lastSeenAt: null,
     });
   });
 
