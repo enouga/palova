@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/lib/useAuth';
+import { useAuth, logout } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { th } = useTheme();
   const { token, ready } = useAuth();
-  const { club } = useClub();
+  const { slug, club } = useClub();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   // Pas de mismatch d'hydration : le premier rendu est « Chargement… », indépendant de cette valeur.
   const [collapsed, setCollapsedState] = useState(() => {
@@ -69,18 +69,46 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!ready) return;
     if (!token) { router.replace('/login'); return; }
+    // Le back-office n'existe que sur un hôte club (sous-domaine). Sur l'hôte plateforme,
+    // `slug` est null et le club ne se chargera JAMAIS → sans ça, la garde ci-dessous
+    // resterait figée sur « Chargement… » indéfiniment. On renvoie donc à l'accueil.
+    if (slug === null) { router.replace('/'); return; }
     if (!club) return; // attend le fetch du club (host)
     api.getMyClubs(token)
       .then((cs) => setAllowed(cs.some((c) => c.clubId === club.id)))
       .catch(() => setAllowed(false));
-  }, [ready, token, club, router]);
+  }, [ready, token, slug, club, router]);
 
   useEffect(() => { if (allowed === false) router.replace('/'); }, [allowed, router]);
 
-  if (!ready || !token || !club || allowed !== true) {
+  // Filet anti-blocage : la garde ci-dessous peut rester en attente (session périmée,
+  // requête réseau qui pend, état client corrompu…). On ne laisse JAMAIS un « Chargement… »
+  // infini : au bout de 12 s, l'écran devient actionnable (recharger / se reconnecter).
+  const blocked = !ready || !token || !club || allowed !== true;
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (!blocked) { setStalled(false); return; }
+    const t = setTimeout(() => setStalled(true), 12000);
+    return () => clearTimeout(t);
+  }, [blocked]);
+
+  if (blocked) {
+    const btn = {
+      padding: '9px 16px', borderRadius: 10, cursor: 'pointer', fontFamily: th.fontUI,
+      fontSize: 14, fontWeight: 600, border: `1px solid ${th.line}`,
+    } as const;
     return (
       <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
-        Chargement…
+        {stalled ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center', padding: 24 }}>
+            <span style={{ color: th.text }}>Le chargement prend trop de temps.</span>
+            <span style={{ fontSize: 13 }}>Rechargez la page ; si le problème persiste, reconnectez-vous.</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" onClick={() => window.location.reload()} style={{ ...btn, background: th.accent, color: '#fff', borderColor: th.accent }}>Recharger</button>
+              <button type="button" onClick={() => logout()} style={{ ...btn, background: 'transparent', color: th.text }}>Se reconnecter</button>
+            </div>
+          </div>
+        ) : 'Chargement…'}
       </div>
     );
   }
