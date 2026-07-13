@@ -80,6 +80,13 @@ describe('AdminBillingPage', () => {
     await waitFor(() => expect(api.adminBillingPortal).toHaveBeenCalled());
   });
 
+  it('échec de chargement (403 staff) : message « réservée aux administrateurs », pas de Chargement… infini', async () => {
+    (api.adminGetBilling as jest.Mock).mockRejectedValue(new Error('FORBIDDEN'));
+    render(<AdminBillingPage />);
+    expect(await screen.findByText('Cette page est réservée aux administrateurs du club.')).toBeInTheDocument();
+    expect(screen.queryByText('Chargement…')).not.toBeInTheDocument();
+  });
+
   it('affiche l historique des snapshots', async () => {
     render(<AdminBillingPage />);
     await waitFor(() => expect(screen.getByText('2026-06')).toBeInTheDocument());

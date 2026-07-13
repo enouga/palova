@@ -95,13 +95,23 @@ export default function AdminBillingPage() {
   const clubId = club?.id;
 
   const [billing, setBilling] = useState<ClubBilling | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready || !token || !clubId) return;
-    api.adminGetBilling(clubId, token).then(setBilling).catch(() => setBilling(null));
+    setLoadError(null);
+    api.adminGetBilling(clubId, token)
+      .then(setBilling)
+      .catch((err) => {
+        setBilling(null);
+        // Un STAFF qui deep-link ici reçoit 403 (route ADMIN) : message clair, jamais de « Chargement… » infini.
+        setLoadError((err as Error).message === 'FORBIDDEN'
+          ? 'Cette page est réservée aux administrateurs du club.'
+          : 'Impossible de charger l’abonnement. Rechargez la page.');
+      });
     api.getMyClubs(token)
       .then((clubs) => setIsOwner(clubs.find((c) => c.clubId === clubId)?.role === 'OWNER'))
       .catch(() => setIsOwner(false));
@@ -134,6 +144,7 @@ export default function AdminBillingPage() {
     fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, background: th.accent, color: '#fff',
   };
 
+  if (loadError) return <div style={{ color: th.textMute, fontFamily: th.fontUI }}>{loadError}</div>;
   if (!billing) return <div style={{ color: th.textFaint, fontFamily: th.fontUI }}>Chargement…</div>;
 
   const sub = billing.subscription;
