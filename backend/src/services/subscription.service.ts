@@ -111,49 +111,96 @@ export class SubscriptionService {
     return prisma.subscriptionPlan.update({ where: { id }, data: { imageUrl } });
   }
 
+  /** Valide/normalise le moyen d'une VENTE d'abonnement (whitelist SALE_METHODS ; VOUCHER ⇒ réf.). */
+  private buildSaleMethod(body: { method?: string; voucherRef?: string }): PaymentMethod {
+    const method = (SALE_METHODS.includes(body.method as typeof SALE_METHODS[number]) ? body.method : 'CASH') as PaymentMethod;
+    if (method === 'VOUCHER' && !body.voucherRef?.trim()) throw new Error('VALIDATION_ERROR');
+    return method;
+  }
+
+  /** Crée une période d'abonnement (snapshot du plan) + son paiement, dans une transaction fournie. */
+  private async createPeriodTx(
+    tx: Prisma.TransactionClient,
+    args: {
+      clubId: string; userId: string;
+      plan: { id: string; name: string; monthlyPrice: Prisma.Decimal; sportKeys: string[]; offPeakOnly: boolean; benefit: SubscriptionBenefit; discountPercent: number | null; dailyCap: number | null; weeklyCap: number | null };
+      method: PaymentMethod; body: { payerName?: string; voucherRef?: string; voucherIssuer?: string; createdByUserId?: string }; expiresAt: Date; note: string;
+    },
+  ) {
+    const { clubId, userId, plan, method, body, expiresAt, note } = args;
+    const membership = await tx.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } } });
+    if (!membership) throw new Error('MEMBER_NOT_FOUND');
+    const sub = await tx.subscription.create({
+      data: {
+        clubId, userId, planId: plan.id, status: 'ACTIVE', expiresAt,
+        monthlyPriceSnapshot: plan.monthlyPrice,
+        sportKeys: plan.sportKeys, offPeakOnly: plan.offPeakOnly, benefit: plan.benefit,
+        discountPercent: plan.discountPercent, dailyCap: plan.dailyCap, weeklyCap: plan.weeklyCap,
+      },
+    });
+    const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
+    const payment = await tx.payment.create({
+      data: {
+        clubId, amount: plan.monthlyPrice, method, subscriptionId: sub.id,
+        payerName: body.payerName?.trim() || null, note,
+        voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
+        voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
+        voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
+        createdByUserId: body.createdByUserId ?? null, receiptNo,
+      },
+    });
+    return { subscription: sub, payment };
+  }
+
   async sellSubscription(clubId: string, userId: string, body: {
     planId?: string; method?: string; payerName?: string;
     voucherRef?: string; voucherIssuer?: string; createdByUserId?: string;
   }) {
     const plan = await prisma.subscriptionPlan.findUnique({ where: { id: body.planId ?? '' } });
     if (!plan || plan.clubId !== clubId || !plan.isActive) throw new Error('PLAN_NOT_FOUND');
-
-    const membership = await prisma.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } } });
-    if (!membership) throw new Error('MEMBER_NOT_FOUND');
-
-    const method = (SALE_METHODS.includes(body.method as typeof SALE_METHODS[number]) ? body.method : 'CASH') as PaymentMethod;
-    if (method === 'VOUCHER' && !body.voucherRef?.trim()) throw new Error('VALIDATION_ERROR');
-
+    const method = this.buildSaleMethod(body);
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + plan.commitmentMonths);
+    return prisma.$transaction((tx) =>
+      this.createPeriodTx(tx, { clubId, userId, plan, method, body, expiresAt, note: `Vente abonnement ${plan.name} — 1re mensualité` }),
+    );
+  }
 
-    return prisma.$transaction(async (tx) => {
-      const sub = await tx.subscription.create({
-        data: {
-          clubId, userId, planId: plan.id, status: 'ACTIVE', expiresAt,
-          monthlyPriceSnapshot: plan.monthlyPrice,
-          sportKeys: plan.sportKeys, offPeakOnly: plan.offPeakOnly, benefit: plan.benefit,
-          discountPercent: plan.discountPercent, dailyCap: plan.dailyCap, weeklyCap: plan.weeklyCap,
+  /** Pilotage : KPIs, forfaits (avec compteur d'abonnés actifs), registre complet des abonnements. */
+  async overview(clubId: string) {
+    const [subs, plans] = await Promise.all([
+      prisma.subscription.findMany({
+        where: { clubId },
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          plan: { select: { name: true } },
         },
-      });
-      const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
-      const payment = await tx.payment.create({
-        data: {
-          clubId,
-          amount: plan.monthlyPrice,
-          method,
-          subscriptionId: sub.id,
-          payerName: body.payerName?.trim() || null,
-          note: `Vente abonnement ${plan.name} — 1re mensualité`,
-          voucherRef:    method === 'VOUCHER' ? body.voucherRef!.trim() : null,
-          voucherIssuer: method === 'VOUCHER' ? body.voucherIssuer?.trim() || null : null,
-          voucherStatus: method === 'VOUCHER' ? 'PENDING_REIMBURSEMENT' : null,
-          createdByUserId: body.createdByUserId ?? null,
-          receiptNo,
-        },
-      });
-      return { subscription: sub, payment };
-    });
+        orderBy: { expiresAt: 'asc' },
+      }),
+      prisma.subscriptionPlan.findMany({ where: { clubId }, orderBy: { createdAt: 'asc' } }),
+    ]);
+    const now = Date.now();
+    const isActive = (s: { status: string; expiresAt: Date }) => s.status === 'ACTIVE' && s.expiresAt.getTime() > now;
+    const active = subs.filter(isActive);
+    const countByPlan = new Map<string, number>();
+    for (const s of active) countByPlan.set(s.planId, (countByPlan.get(s.planId) ?? 0) + 1);
+    return {
+      kpis: {
+        activeCount: new Set(active.map((s) => s.userId)).size,
+        monthlyRevenueCents: active.reduce((sum, s) => sum + Math.round(Number(s.monthlyPriceSnapshot) * 100), 0),
+        expiringSoonCount: active.filter((s) => s.expiresAt.getTime() <= now + 30 * 86_400_000).length,
+      },
+      plans: plans.map((p) => ({
+        id: p.id, name: p.name, monthlyPrice: p.monthlyPrice.toString(), benefit: p.benefit,
+        discountPercent: p.discountPercent, sportKeys: p.sportKeys, isActive: p.isActive,
+        activeCount: countByPlan.get(p.id) ?? 0,
+      })),
+      subscribers: subs.map((s) => ({
+        id: s.id, user: s.user, planId: s.planId, planName: s.plan.name, status: s.status,
+        startedAt: s.startedAt.toISOString(), expiresAt: s.expiresAt.toISOString(),
+        monthlyPriceSnapshot: s.monthlyPriceSnapshot.toString(), sportKeys: s.sportKeys,
+      })),
+    };
   }
 
   async listMySubscriptionsBySlug(slug: string, userId: string) {

@@ -217,6 +217,40 @@ describe('SubscriptionService — listes & cancel', () => {
   });
 });
 
+describe('overview', () => {
+  const svc = new SubscriptionService();
+  const now = Date.now();
+  const activeSub = (over = {}) => ({
+    id: 's1', userId: 'u1', clubId: 'club-1', planId: 'p1', status: 'ACTIVE',
+    startedAt: new Date(now - 5 * 86400000), expiresAt: new Date(now + 20 * 86400000),
+    monthlyPriceSnapshot: '39.00', sportKeys: ['padel'],
+    user: { id: 'u1', firstName: 'Jean', lastName: 'Dupont', avatarUrl: null },
+    plan: { name: 'Padel illimité' }, ...over,
+  });
+
+  it('KPIs : abonnés actifs distincts, revenu mensuel, expirations < 30 j', async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([
+      activeSub(),
+      activeSub({ id: 's2', userId: 'u1', expiresAt: new Date(now + 10 * 86400000) }), // même user
+      activeSub({ id: 's3', userId: 'u2', monthlyPriceSnapshot: '29.00', expiresAt: new Date(now + 60 * 86400000) }), // actif mais > 30 j
+
+      activeSub({ id: 's4', userId: 'u3', status: 'CANCELLED' }),                       // exclu
+      activeSub({ id: 's5', userId: 'u4', expiresAt: new Date(now - 86400000) }),       // ACTIVE mais expiré → exclu
+    ] as any);
+    prismaMock.subscriptionPlan.findMany.mockResolvedValue([
+      { id: 'p1', name: 'Padel illimité', monthlyPrice: '39.00', benefit: 'INCLUDED', discountPercent: null, sportKeys: ['padel'], isActive: true, createdAt: new Date() },
+    ] as any);
+
+    const out = await svc.overview('club-1');
+    expect(out.kpis.activeCount).toBe(2);                 // u1 (2 subs) + u2
+    expect(out.kpis.monthlyRevenueCents).toBe(39_00 + 39_00 + 29_00);
+    expect(out.kpis.expiringSoonCount).toBe(2);           // s1 (20j) + s2 (10j)
+    expect(out.plans[0].activeCount).toBe(3);             // s1+s2+s3 sur p1
+    expect(out.subscribers).toHaveLength(5);
+    expect(out.subscribers[0].planName).toBe('Padel illimité');
+  });
+});
+
 describe('SubscriptionService.coverageFor', () => {
   const incl = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED' as const, discountPercent: null };
   const disc = { sportKeys: ['padel'], offPeakOnly: true, benefit: 'DISCOUNT' as const, discountPercent: 50 };
