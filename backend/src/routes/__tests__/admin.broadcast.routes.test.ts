@@ -62,10 +62,11 @@ describe('POST /api/clubs/:clubId/admin/broadcast', () => {
     expect(res.body).toEqual({ recipientCount: 5, broadcastId: 'bc-1' });
   });
 
-  it('returns 403 for STAFF member (broadcast réservé OWNER/ADMIN)', async () => {
+  it('returns 200 for STAFF member (page Messages ouverte au staff, 2026-07-13)', async () => {
     prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
     const res = await request(app).post(`${base}/broadcast`).set(auth).send({ title: 'Hi', body: 'Msg' });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ recipientCount: 5, broadcastId: 'bc-1' });
   });
 
   it('returns 400 with VALIDATION_ERROR on empty title', async () => {
@@ -101,9 +102,10 @@ describe('GET /api/clubs/:clubId/admin/broadcasts', () => {
     expect(res.body).toEqual({ recipientCount: 5, items: [] });
   });
 
-  it('returns 403 for STAFF member (broadcasts réservé OWNER/ADMIN)', async () => {
+  it('returns 200 for STAFF member (page Messages ouverte au staff, 2026-07-13)', async () => {
     prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
     const res = await request(app).get(`${base}/broadcasts`).set(auth);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ recipientCount: 5, items: [] });
   });
 });
