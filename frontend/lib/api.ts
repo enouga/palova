@@ -1880,6 +1880,8 @@ export interface PackageTemplate {
   validityDays: number | null;
   isActive: boolean;
   createdAt: string;
+  /** Pouls de ventes (agrégat serveur). Absent des vieux payloads → optionnel. */
+  stats?: { soldCount: number; activeCount: number; outstandingAmount: string };
 }
 
 export interface MemberPackage {
@@ -1970,7 +1972,11 @@ export type CreatePackageTemplateBody = {
   kind: PackageKind; name: string; description?: string | null; price: number;
   entriesCount?: number; walletAmount?: number; validityDays?: number | null; sportKeys?: string[];
 };
-export type UpdatePackageTemplateBody = Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; validityDays: number | null; isActive: boolean }>;
+export type UpdatePackageTemplateBody = Partial<{
+  name: string; description: string | null; imageUrl: string | null; price: number;
+  validityDays: number | null; isActive: boolean; sportKeys: string[];
+  entriesCount: number; walletAmount: number;
+}>;
 
 export type AnnouncementKind = 'INFO' | 'OFFER' | 'TOURNAMENT' | 'EVENT';
 
