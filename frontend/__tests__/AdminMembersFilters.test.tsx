@@ -141,3 +141,13 @@ it('export CSV : déclenche un téléchargement', async () => {
   expect(clickSpy).toHaveBeenCalledTimes(1);
   clickSpy.mockRestore();
 });
+
+it('?plan=<id> ouvre le contexte Abonnés pré-filtré sur le forfait', async () => {
+  window.history.replaceState({}, '', '/admin/members?plan=p1');
+  mount();
+  await screen.findByText('Ana Bernard');
+  // Le segment Abonnés est actif → seule Ana (abonnée p1) est visible
+  expect(screen.getByText('Ana Bernard')).toBeInTheDocument();
+  expect(screen.queryByText('Zoé Diaz')).toBeNull();
+  window.history.replaceState({}, '', '/admin/members');
+});

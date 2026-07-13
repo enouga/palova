@@ -92,6 +92,14 @@ export default function AdminMembersPage() {
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
+  // Lien profond depuis /admin/offres : ?plan=<id> → contexte Abonnés pré-filtré (one-shot au montage).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const planId = new URLSearchParams(window.location.search).get('plan');
+    if (planId) { setSeg('subs'); setPlanFilter(planId); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Contexte abonnés : réinitialise les sous-filtres en sortant, charge les forfaits (paresseux, pour les cartes vides comprises).
   useEffect(() => { if (seg !== 'subs') { setPlanFilter(null); setExpiringOnly(false); setSportFilter(null); } }, [seg]);
   useEffect(() => {
