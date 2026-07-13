@@ -23,6 +23,12 @@ jest.mock('../lib/api', () => ({
     getMyClubs: jest.fn(),
     adminRechargePackage: jest.fn(),
     adminAdjustPackage: jest.fn(),
+    // Onglet Abonnement (cycle de vie).
+    adminGetMemberSubscriptions: jest.fn(),
+    adminGetSubscriptionPlans: jest.fn(),
+    adminRenewSubscription: jest.fn(),
+    adminChangeSubscription: jest.fn(),
+    adminCancelSubscription: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -62,6 +68,12 @@ beforeEach(() => {
   (api.adminSetMemberWatch as jest.Mock).mockResolvedValue({ userId: 'u1', watch: true });
   (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({ levels: {}, history: [] });
   (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'ADMIN' }]);
+  (api.adminGetMemberSubscriptions as jest.Mock).mockResolvedValue([
+    { id: 's1', planId: 'p1', status: 'ACTIVE', startedAt: '2099-01-01T00:00:00Z', expiresAt: '2099-12-01T00:00:00Z', monthlyPriceSnapshot: '39.00', sportKeys: ['padel'], offPeakOnly: false, benefit: 'INCLUDED', discountPercent: null, dailyCap: null, weeklyCap: null, plan: { name: 'Padel illimité' } },
+  ]);
+  (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([
+    { id: 'p1', name: 'Padel illimité', monthlyPrice: '39.00', isActive: true, sportKeys: ['padel'], benefit: 'INCLUDED', discountPercent: null, commitmentMonths: 1, offPeakOnly: false, dailyCap: null, weeklyCap: null, description: null, imageUrl: null, createdAt: '2026-01-01T00:00:00Z' },
+  ]);
 });
 
 it('affiche identité, badge « à risque » et chip « Carnet actif »', async () => {
@@ -154,6 +166,25 @@ it('onglet Finances : un ADMIN corrige un solde (adminAdjustPackage)', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
   await waitFor(() => expect(api.adminAdjustPackage).toHaveBeenCalledWith(
     'club-1', 'u1', 'pk1', { newCredits: 8, reason: 'erreur' }, 'tok'));
+});
+
+it('onglet Abonnement : affiche l\'abo actif', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: /Abonnement/ }));
+  expect(await screen.findByText('Padel illimité')).toBeInTheDocument();
+  expect(screen.getByText(/gratuit|39/)).toBeInTheDocument();
+});
+
+it('onglet Abonnement : résilier appelle adminCancelSubscription', async () => {
+  (api.adminCancelSubscription as jest.Mock).mockResolvedValue({ id: 's1', status: 'CANCELLED' });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: /Abonnement/ }));
+  await screen.findByText('Padel illimité');
+  fireEvent.click(screen.getByRole('button', { name: /^Résilier$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Résilier l’abonnement|Résilier l'abonnement/ }));
+  await waitFor(() => expect(api.adminCancelSubscription).toHaveBeenCalledWith('club-1', 's1', 'tok'));
 });
 
 it('membre introuvable → message d\'erreur', async () => {

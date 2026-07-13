@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef, CSSProperties, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import { api, MemberHistory, MemberNote, AdminMemberLevel, UserLevel } from '@/lib/api';
+import { api, MemberHistory, MemberNote, AdminMemberLevel, UserLevel, Subscription, SubscriptionPlanSummary } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -17,11 +17,14 @@ import { MonthlyRevenueChart } from '@/components/admin/stats/MonthlyRevenueChar
 import { DayHourHeatmap } from '@/components/admin/stats/DayHourHeatmap';
 import { PaymentMethodChart } from '@/components/admin/stats/PaymentMethodChart';
 import { PackageBalanceDialog } from '@/components/admin/members/PackageBalanceDialog';
+import { SubscriptionActions } from '@/components/admin/subscriptions/SubscriptionActions';
+import { coverageLabel } from '@/lib/subscriptions';
 import {
   winRate, lastVisitLabel, cancellationLabel, tenureLabel, weekdayLabel, methodLabel,
 } from '@/lib/memberStats';
 
-type Tab = 'activite' | 'finances' | 'niveau' | 'fidelite' | 'notes';
+type Tab = 'activite' | 'finances' | 'niveau' | 'fidelite' | 'notes' | 'abonnement';
+type SubActionSub = { id: string; planId: string; planName: string; expiresAt: string; monthlyPriceSnapshot: string };
 
 const money = (v: string) => fmtEuros(toCents(v));
 const fmtDate = (iso: string) =>
@@ -116,6 +119,24 @@ export default function MemberHistoryPage() {
 
   useEffect(() => { if (ready && token && clubId && userId) load(); }, [ready, token, clubId, userId, load]);
 
+  // Onglet « Abonnement » : chargé paresseusement à la sélection de l'onglet.
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlanSummary[]>([]);
+  const [subAction, setSubAction] = useState<{ kind: 'renew' | 'change' | 'cancel'; sub: SubActionSub } | null>(null);
+  const loadSubs = useCallback(async () => {
+    if (!token || !clubId || !userId) return;
+    const [s, p] = await Promise.all([
+      api.adminGetMemberSubscriptions(clubId, userId, token),
+      api.adminGetSubscriptionPlans(clubId, token),
+    ]);
+    setSubs(s);
+    setPlans(p.map((pl) => ({
+      id: pl.id, name: pl.name, monthlyPrice: pl.monthlyPrice, benefit: pl.benefit,
+      discountPercent: pl.discountPercent, sportKeys: pl.sportKeys, isActive: pl.isActive, activeCount: 0,
+    })));
+  }, [token, clubId, userId]);
+  useEffect(() => { if (tab === 'abonnement') loadSubs(); }, [tab, loadSubs]);
+
   const toggleWatch = async () => {
     if (!token || !clubId) return;
     const next = !watch;
@@ -189,7 +210,11 @@ export default function MemberHistoryPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {m.isSubscriber && <Chip tone="accent">Abonné</Chip>}
+          {m.isSubscriber && (
+            <button type="button" onClick={() => setTab('abonnement')} aria-label="Voir l’abonnement" style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
+              <Chip tone="accent">Abonné</Chip>
+            </button>
+          )}
           {m.hasActivePackage && <Chip tone="accent">Carnet actif</Chip>}
           <Chip tone={m.status === 'BLOCKED' ? 'line' : 'accent'}>{m.status === 'BLOCKED' ? 'Bloqué' : 'Actif'}</Chip>
           <Chip tone="mute">Membre depuis {fmtDate(m.since)}</Chip>
@@ -220,6 +245,7 @@ export default function MemberHistoryPage() {
           { value: 'niveau', label: 'Niveau' },
           { value: 'fidelite', label: 'Fidélité' },
           { value: 'notes', label: `Notes${notes.length ? ` (${notes.length})` : ''}` },
+          { value: 'abonnement', label: 'Abonnement' },
         ]}
       />
 
@@ -505,6 +531,41 @@ export default function MemberHistoryPage() {
               </div>
             )}
           </Section>
+        )}
+
+        {/* ───────── Abonnement (cycle de vie) ───────── */}
+        {tab === 'abonnement' && (
+          <div>
+            {subs.length === 0 && <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, margin: 0 }}>Aucun abonnement.</p>}
+            {subs.map((s) => {
+              const active = s.status === 'ACTIVE' && new Date(s.expiresAt).getTime() > Date.now();
+              const asSub: SubActionSub = { id: s.id, planId: s.planId, planName: s.plan.name, expiresAt: s.expiresAt, monthlyPriceSnapshot: s.monthlyPriceSnapshot };
+              return (
+                <div key={s.id} style={{ background: th.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderLeft: `4px solid ${active ? th.accent : th.lineStrong}`, boxShadow: th.shadow }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                    <div>
+                      <b style={{ fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{s.plan.name}</b>{' '}
+                      <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}>{active ? 'Actif' : 'Terminé'}</span>
+                      <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 3 }}>
+                        {Number(s.monthlyPriceSnapshot)} €/mois · {coverageLabel(s)} · du {fmtDate(s.startedAt)} au {fmtDate(s.expiresAt)}
+                      </div>
+                    </div>
+                    {active && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <Btn variant="surface" onClick={() => setSubAction({ kind: 'renew', sub: asSub })}>Renouveler</Btn>
+                        <Btn variant="surface" onClick={() => setSubAction({ kind: 'change', sub: asSub })}>Changer</Btn>
+                        <Btn variant="surface" onClick={() => setSubAction({ kind: 'cancel', sub: asSub })}>Résilier</Btn>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {subAction && token && clubId && (
+              <SubscriptionActions action={subAction.kind} sub={subAction.sub} plans={plans} clubId={clubId} token={token}
+                onClose={() => setSubAction(null)} onDone={() => { setSubAction(null); loadSubs(); }} />
+            )}
+          </div>
         )}
       </div>
 
