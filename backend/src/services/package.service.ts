@@ -101,9 +101,11 @@ export class PackageService {
     });
   }
 
-  /** kind/entriesCount/walletAmount sont immuables (des soldes vendus y réfèrent). */
+  /** kind est immuable (des soldes vendus y réfèrent) ; le reste est éditable. */
   async updateTemplate(id: string, clubId: string, body: {
-    name?: string; description?: string | null; imageUrl?: string | null; price?: number; validityDays?: number | null; isActive?: boolean;
+    name?: string; description?: string | null; imageUrl?: string | null; price?: number;
+    validityDays?: number | null; isActive?: boolean; sportKeys?: string[];
+    entriesCount?: number; walletAmount?: number;
   }) {
     const tpl = await prisma.packageTemplate.findUnique({ where: { id } });
     if (!tpl || tpl.clubId !== clubId) throw new Error('TEMPLATE_NOT_FOUND');
@@ -126,6 +128,24 @@ export class PackageService {
     if (body.validityDays !== undefined) {
       if (body.validityDays != null && (!Number.isInteger(body.validityDays) || body.validityDays <= 0)) throw new Error('VALIDATION_ERROR');
       data.validityDays = body.validityDays;
+    }
+    if (body.sportKeys !== undefined) {
+      if (!Array.isArray(body.sportKeys)) throw new Error('VALIDATION_ERROR');
+      if (body.sportKeys.length > 0) {
+        const known = await prisma.sport.findMany({ where: { key: { in: body.sportKeys } }, select: { key: true } });
+        const knownKeys = new Set(known.map(s => s.key));
+        if (!body.sportKeys.every(k => knownKeys.has(k))) throw new Error('VALIDATION_ERROR');
+      }
+      data.sportKeys = body.sportKeys;
+    }
+    // entriesCount ne s'applique qu'à un carnet, walletAmount qu'à un porte-monnaie (kind figé).
+    if (body.entriesCount !== undefined && tpl.kind === 'ENTRIES') {
+      if (!Number.isInteger(body.entriesCount) || body.entriesCount <= 0) throw new Error('VALIDATION_ERROR');
+      data.entriesCount = body.entriesCount;
+    }
+    if (body.walletAmount !== undefined && tpl.kind === 'WALLET') {
+      if (typeof body.walletAmount !== 'number' || isNaN(body.walletAmount) || body.walletAmount <= 0) throw new Error('VALIDATION_ERROR');
+      data.walletAmount = new Prisma.Decimal(body.walletAmount);
     }
     if (body.isActive !== undefined) data.isActive = body.isActive;
 

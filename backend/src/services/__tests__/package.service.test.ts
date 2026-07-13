@@ -54,6 +54,42 @@ describe('PackageService — offres (templates)', () => {
     expect(data).not.toHaveProperty('entriesCount');
   });
 
+  it('updateTemplate met à jour sportKeys (validés)', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1', kind: 'ENTRIES' } as any);
+    prismaMock.sport.findMany.mockResolvedValue([{ key: 'padel' }, { key: 'tennis' }] as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1' } as any);
+    await service.updateTemplate('tpl-1', 'club-1', { sportKeys: ['padel', 'tennis'] });
+    expect(prismaMock.packageTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sportKeys: ['padel', 'tennis'] }),
+    }));
+  });
+
+  it('updateTemplate refuse un sportKeys inconnu', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1', kind: 'ENTRIES' } as any);
+    prismaMock.sport.findMany.mockResolvedValue([{ key: 'padel' }] as any);
+    await expect(service.updateTemplate('tpl-1', 'club-1', { sportKeys: ['inconnu'] }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('updateTemplate met à jour entriesCount sur un carnet, refuse ≤ 0', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-1', clubId: 'club-1', kind: 'ENTRIES' } as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-1' } as any);
+    await service.updateTemplate('tpl-1', 'club-1', { entriesCount: 12 });
+    expect(prismaMock.packageTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ entriesCount: 12 }),
+    }));
+    await expect(service.updateTemplate('tpl-1', 'club-1', { entriesCount: 0 })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('updateTemplate ignore entriesCount sur un porte-monnaie et walletAmount sur un carnet', async () => {
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({ id: 'tpl-w', clubId: 'club-1', kind: 'WALLET' } as any);
+    prismaMock.packageTemplate.update.mockResolvedValue({ id: 'tpl-w' } as any);
+    await service.updateTemplate('tpl-w', 'club-1', { entriesCount: 99, walletAmount: 250 });
+    const data = prismaMock.packageTemplate.update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data).not.toHaveProperty('entriesCount');
+    expect(Number(data.walletAmount)).toBe(250);
+  });
+
   it('crée une offre avec description complète (trim), null si absente', async () => {
     prismaMock.packageTemplate.create.mockResolvedValue({ id: 'tpl-3' } as any);
     await service.createTemplate('club-1', { kind: 'ENTRIES', name: '10 entrées', price: 200, entriesCount: 10, description: '  Valable 1 an, non cessible.  ' });
