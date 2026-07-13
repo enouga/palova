@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { StartChecklist } from '@/components/admin/StartChecklist';
 import { BillingBanner } from '@/components/admin/BillingBanner';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 
 function StatCard({ label, value, unit, hint, icon, big }: { label: string; value: string | number; unit?: string; hint?: string; icon: IconName; big?: boolean }) {
   const { th } = useTheme();
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { club } = useClub();
+  const role = useAdminRole();
   const clubId = club?.id;
   const [data, setData] = useState<ClubReservationsResponse | null>(null);
 
@@ -72,8 +74,9 @@ export default function AdminDashboard() {
         {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
       </p>
 
-      {clubId && token && <StartChecklist clubId={clubId} token={token} />}
-      {clubId && token && <BillingBanner clubId={clubId} token={token} />}
+      {/* Réservé aux admins : le backend répond 403 au staff sur ces deux endpoints. */}
+      {isClubAdmin(role) && clubId && token && <StartChecklist clubId={clubId} token={token} />}
+      {isClubAdmin(role) && clubId && token && <BillingBanner clubId={clubId} token={token} />}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
         <StatCard label="Réservations du jour" value={confirmed} icon="ticket" big hint={`${pending} en attente`} />
