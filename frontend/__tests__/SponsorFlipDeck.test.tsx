@@ -93,6 +93,16 @@ describe('SponsorFlipDeck', () => {
     }
   });
 
+  it('pastille « Offre disponible » sur la face avant quand une offre est active', () => {
+    wrap([sponsor({ offerText: '-15 % raquettes', offerCode: 'PADEL15' })], now);
+    expect(screen.getByLabelText('Offre disponible')).toBeInTheDocument();
+  });
+
+  it('pas de pastille sans offre ou offre expirée', () => {
+    wrap([sponsor({}), sponsor({ id: 's2', name: 'Nox', offerText: '-5 %', offerUntil: '2026-07-01T00:00:00.000Z' })], now);
+    expect(screen.queryByLabelText('Offre disponible')).toBeNull();
+  });
+
   it('rien sans sponsor', () => {
     const { container } = wrap([], now);
     expect(container.firstChild).toBeNull();

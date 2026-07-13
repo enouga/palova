@@ -89,6 +89,24 @@ Les 2 sponsors seedés (`club-demo`) n'ont pas d'offre → j'insère une offre d
 dev (SQL direct via `prisma db execute`, sans toucher `seed.ts`/`seed-demo.ts` qui ont du WIP
 parallèle) pour visualiser le dos « offre ».
 
+## Évolution v2 (même jour) — sensation « carte physique »
+
+Passe de polish sur le même concept, toujours 100 % frontend :
+- **Tilt 3D au survol** (desktop seulement, `@media (hover:hover) and (pointer:fine)`) — la
+  carte s'incline vers le curseur (vars CSS `--mx`/`--my` posées au mousemove, consommées en
+  `rotateY/rotateX` sur `.fd-scene` ; `perspective` sur `.fd-cell`).
+- **Entrée « distribution »** — les cartes arrivent tournées (`rotate(-5deg)`) et se posent
+  avec un ressort (`cubic-bezier(.34,1.56,.64,1)`), stagger 90 ms.
+- **Dos façon coupon** (offres seulement) : **encoches latérales** (2 pastilles couleur
+  `th.bg` → semblent découpées, robustes clair/sombre), **filigrane « % »**, **reflet** qui
+  balaie le dos une fois à l'ouverture (`fd-sheen`), ombre bleutée renforcée.
+- **Pastille « % » apricot** (`th.accentWarm` + `inkOn`) en haut-droite de la **face avant**
+  des cartes à offre active, avec battement discret — on sait qu'il y a une offre avant de
+  retourner, et les utilisateurs `reduced-motion` (qui ne voient jamais la cascade) ne la
+  ratent plus. Testée (`aria-label="Offre disponible"`, absente si pas d'offre/expirée).
+- **Pop d'ouverture** (`fd-pop` sur `.fd-scene.is-open`) + micro-pop sur « ✓ Copié ».
+- Reduced-motion : tous les nouveaux effets désactivés (tilt, deal, pop, sheen, battement).
+
 ## Hors périmètre
 
 Édition admin des offres inchangée ; pas de récurrence/vidéo ; pas de nouveau modèle.
