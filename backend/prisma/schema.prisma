@@ -351,6 +351,7 @@ model Club {
   photos            ClubPhoto[]
   platformSubscription PlatformSubscription?
   memberSnapshots      ClubMemberSnapshot[]
+  matchAlerts          MatchAlert[]
   platformInvoices     PlatformInvoice[]
 
   @@map("clubs")
@@ -506,6 +507,7 @@ model User {
   authoredMemberNotes     MemberNote[] @relation("MemberNoteAuthor")
   subscriptions           Subscription[]
   openMatchMessages       OpenMatchMessage[]
+  matchAlerts             MatchAlert[]
   followsGiven            Follow[] @relation("FollowsGiven")
   followsReceived         Follow[] @relation("FollowsReceived")
   friendshipsA           Friendship[] @relation("FriendshipA")
@@ -755,6 +757,7 @@ model Reservation {
   series       ReservationSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   lesson       Lesson?
   openMatchMessages  OpenMatchMessage[]
+  matchAlertHits     MatchAlertHit[]
 
   @@index([resourceId, startTime, endTime])
   @@index([status, createdAt])
@@ -1434,6 +1437,42 @@ model OpenMatchMessage {
 
   @@index([reservationId, createdAt])
   @@map("open_match_messages")
+}
+
+/// Alerte ponctuelle datée : un joueur veut être prévenu qu'une partie ouverte (padel)
+/// à son niveau s'ouvre — ou libère une place — dans une fenêtre horaire précise.
+/// Active tant que windowEnd > now (pas de champ statut) ; purgée par le job minute.
+model MatchAlert {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  clubId      String   @map("club_id")
+  windowStart DateTime @map("window_start") @db.Timestamptz
+  windowEnd   DateTime @map("window_end") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  hits MatchAlertHit[]
+
+  @@index([clubId, windowEnd])
+  @@index([userId])
+  @@map("match_alerts")
+}
+
+/// Déduplication : mémorise qu'une alerte a déjà sonné pour une partie donnée
+/// (une place libérée deux fois dans la même partie ne re-notifie pas).
+model MatchAlertHit {
+  id            String   @id @default(cuid())
+  alertId       String   @map("alert_id")
+  reservationId String   @map("reservation_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  alert       MatchAlert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, reservationId])
+  @@index([reservationId])
+  @@map("match_alert_hits")
 }
 
 // Suivi de joueur à sens unique (« ami »). Friendship GLOBALE (pas de clubId) ;
