@@ -174,4 +174,47 @@ describe('MemberStatsService.getMemberHistory', () => {
     expect(out.loyalty.cancellationRate).toBeCloseTo(0.5, 5);
     expect(out.loyalty.atRisk).toBe(true);                 // dernière visite le 1er avril
   });
+
+  it('finance.unpaid : une ligne par résa CONFIRMED à reste dû, Σ = outstanding ; soldées et annulées absentes', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { // titulaire, payé 12/20 → reste 8
+        id: 'r1', status: 'CONFIRMED', type: 'COURT',
+        startTime: D('2026-06-20T18:00:00Z'), endTime: D('2026-06-20T19:00:00Z'),
+        totalPrice: 20, cancelledAt: null, userId: 'u1',
+        resource: { name: 'Court 1', price: 20, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [],
+        payments: [{ amount: 12, method: 'CARD', participantId: null, createdAt: D('2026-06-20T19:00:00Z'), refunds: [] }],
+      },
+      { // participant avec share 5, rien payé → reste 5 (attribué à SA place)
+        id: 'r2', status: 'CONFIRMED', type: 'COURT',
+        startTime: D('2026-06-21T18:00:00Z'), endTime: D('2026-06-21T19:00:00Z'),
+        totalPrice: 20, cancelledAt: null, userId: 'other',
+        resource: { name: 'Court 2', price: 20, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [{ id: 'p-me', userId: 'u1', share: 5, isOrganizer: false }],
+        payments: [],
+      },
+      { // soldée → absente
+        id: 'r3', status: 'CONFIRMED', type: 'COURT',
+        startTime: D('2026-06-22T18:00:00Z'), endTime: D('2026-06-22T19:00:00Z'),
+        totalPrice: 20, cancelledAt: null, userId: 'u1',
+        resource: { name: 'Court 3', price: 20, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [],
+        payments: [{ amount: 20, method: 'CASH', participantId: null, createdAt: D('2026-06-22T19:00:00Z'), refunds: [] }],
+      },
+      { // annulée → absente
+        id: 'r4', status: 'CANCELLED', type: 'COURT',
+        startTime: D('2026-06-23T08:00:00Z'), endTime: D('2026-06-23T09:00:00Z'),
+        totalPrice: 20, cancelledAt: D('2026-06-22T08:00:00Z'), userId: 'u1',
+        resource: { name: 'Court 1', price: 20, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [], payments: [],
+      },
+    ] as any);
+
+    const out = await service.getMemberHistory('club-1', 'u1');
+    expect(out.finance.unpaid).toEqual([
+      { reservationId: 'r1', participantId: null, startTime: '2026-06-20T18:00:00.000Z', resourceName: 'Court 1', dueAmount: '8.00' },
+      { reservationId: 'r2', participantId: 'p-me', startTime: '2026-06-21T18:00:00.000Z', resourceName: 'Court 2', dueAmount: '5.00' },
+    ]);
+    expect(out.finance.outstanding).toBe('13.00'); // Σ unpaid === outstanding
+  });
 });
