@@ -180,6 +180,7 @@ describe('AdminLayout — sections repliables', () => {
     expect(screen.getByText('Planning')).toBeInTheDocument();
     expect(screen.getByText('Caisse')).toBeInTheDocument();            // /admin/encaissement (comptoir)
     expect(screen.getByText('Ventes & journée')).toBeInTheDocument();  // /admin/caisse
+    expect(screen.getByText('Signalements')).toBeInTheDocument();     // /admin/moderation
     expect(screen.getByText('Paiements')).toBeInTheDocument();         // /admin/reservations (Finances)
     expect(screen.getByText('Réglages')).toBeInTheDocument();
   });
