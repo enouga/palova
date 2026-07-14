@@ -35,6 +35,7 @@ jest.mock('@/lib/api', () => ({
     markConversationRead: jest.fn().mockResolvedValue({ lastReadAt: '2026-07-04T12:00:00Z' }),
     sendTyping: jest.fn().mockResolvedValue({ ok: true }),
     uploadDmImage: jest.fn().mockResolvedValue(MSG('m4', 'u1', '', { imageUrl: 'c1/x.jpg' })),
+    reportDmMessage: jest.fn().mockResolvedValue({ id: 'rep-1' }),
   },
 }));
 const apiMock = jest.requireMock('@/lib/api').api;
@@ -113,4 +114,39 @@ it('pagination : « Messages précédents » visible si hasMore, charge avec bef
   fireEvent.click(screen.getByRole('button', { name: /précédents/i }));
   await waitFor(() => expect(apiMock.getDmMessages).toHaveBeenCalledWith('c1', 't', 'm5'));
   expect(await screen.findByText('ancien')).toBeInTheDocument();
+});
+
+it('affiche « Signaler » sur le message de l autre, pas sur le sien', async () => {
+  renderThread();
+  await screen.findByText('salut'); // m1 de u2
+  const reportButtons = screen.getAllByRole('button', { name: /signaler/i });
+  expect(reportButtons).toHaveLength(1); // un seul message n est pas de moi (m1) sur les 2 chargés
+});
+
+it('signale un message et affiche la confirmation', async () => {
+  renderThread();
+  await screen.findByText('salut');
+  fireEvent.click(screen.getAllByRole('button', { name: /signaler/i })[0]);
+  fireEvent.click(screen.getByRole('button', { name: /envoyer le signalement/i }));
+  await waitFor(() => expect(apiMock.reportDmMessage).toHaveBeenCalledWith('c1', 'm1', 'HARASSMENT', null, 't'));
+  expect(await screen.findByText(/signalement envoyé/i)).toBeInTheDocument();
+});
+
+it('NOT_CO_MEMBERS à l envoi remplace le composer par le bandeau bloqué', async () => {
+  apiMock.postDmMessage.mockRejectedValueOnce(new Error('NOT_CO_MEMBERS'));
+  renderThread();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'salut' } });
+  fireEvent.keyDown(screen.getByPlaceholderText(/message/i), { key: 'Enter' });
+  expect(await screen.findByText(/vous ne pouvez plus écrire à ce joueur/i)).toBeInTheDocument();
+});
+
+it('RATE_LIMITED à l envoi affiche un message inline (composer reste actif)', async () => {
+  apiMock.postDmMessage.mockRejectedValueOnce(new Error('RATE_LIMITED'));
+  renderThread();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'vite vite' } });
+  fireEvent.keyDown(screen.getByPlaceholderText(/message/i), { key: 'Enter' });
+  expect(await screen.findByText(/trop de messages/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/message/i)).toBeInTheDocument();
 });

@@ -4,6 +4,7 @@ import { api, conversationStreamUrl, dmImageUrl, DmMessage, DmMeta, DmUserInfo, 
 import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReportDialog } from '@/components/moderation/ReportDialog';
 import { colorForSeed } from '@/lib/playerColors';
 import { QUICK_REACTIONS } from '@/lib/chatEmojis';
 import { dayKey, dayLabel, isReadByOther, applyReactionToggle } from '@/lib/messages';
@@ -34,6 +35,9 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
   const [typingUntil, setTypingUntil] = useState(0);
   const [reactFor, setReactFor] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DmMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<DmMessage | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [writeBlocked, setWriteBlocked] = useState(false);
   const [lightbox, setLightbox] = useState<DmMessage | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -95,13 +99,20 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
 
   useEffect(() => { listRef.current?.scrollTo?.({ top: listRef.current.scrollHeight }); }, [messages, typingUntil]);
 
+  const handleSendError = (err: unknown) => {
+    const msg = (err as Error).message;
+    if (msg === 'NOT_CO_MEMBERS') setWriteBlocked(true);
+    else if (msg === 'RATE_LIMITED') setSendError('Vous envoyez trop de messages, patientez un instant.');
+  };
   const send = async (body: string) => {
+    setSendError(null);
     try { upsert(await api.postDmMessage(conversationId, body, token)); return true; }
-    catch { return false; }
+    catch (err) { handleSendError(err); return false; }
   };
   const sendImage = async (file: File, caption: string) => {
+    setSendError(null);
     try { upsert(await api.uploadDmImage(conversationId, file, caption, token)); return true; }
-    catch { return false; }
+    catch (err) { handleSendError(err); return false; }
   };
   const typing = () => { api.sendTyping(conversationId, token).catch(() => {}); };
 
@@ -216,6 +227,13 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                           Supprimer
                         </button>
                       )}
+                      {!mine && (
+                        <button type="button" onClick={() => setReportTarget(m)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint,
+                            fontFamily: th.fontUI, fontSize: 11.5, padding: 0, marginTop: 2 }}>
+                          Signaler
+                        </button>
+                      )}
                     </div>
                   )}
                   {reactFor === m.id && (
@@ -249,12 +267,17 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
         )}
       </div>
 
-      {meta?.blocked ? (
+      {meta?.blocked || writeBlocked ? (
         <div style={{ borderTop: `1px solid ${th.line}`, padding: '14px 16px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, textAlign: 'center' }}>
-          Vous ne pouvez pas échanger avec ce membre.
+          {writeBlocked && !meta?.blocked ? 'Vous ne pouvez plus écrire à ce joueur.' : 'Vous ne pouvez pas échanger avec ce membre.'}
         </div>
       ) : (
-        <MessageComposer onSend={send} onSendImage={sendImage} onTyping={typing} initialDraft={initialDraft} />
+        <>
+          {sendError && (
+            <div style={{ padding: '6px 16px 0', fontFamily: th.fontUI, fontSize: 12.5, color: '#e0554f' }}>{sendError}</div>
+          )}
+          <MessageComposer onSend={send} onSendImage={sendImage} onTyping={typing} initialDraft={initialDraft} />
+        </>
       )}
 
       {pendingDelete && (
@@ -264,6 +287,14 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
           confirmLabel="Supprimer" cancelLabel="Annuler"
           onConfirm={() => doDelete(pendingDelete)}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+      {reportTarget && (
+        <ReportDialog
+          onCancel={() => setReportTarget(null)}
+          onSubmit={async (reason, detail) => {
+            await api.reportDmMessage(conversationId, reportTarget.id, reason, detail || null, token);
+          }}
         />
       )}
       {lightbox && (
