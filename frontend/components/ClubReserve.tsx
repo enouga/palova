@@ -352,9 +352,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 // couleur/encre passées en variables car l'accent est propre à chaque club.
                                 // Le lavis est assez soutenu pour se voir sans survol (mobile = pas de hover).
                                 const slotVars = { '--rv-fill': fill, '--rv-ink': inkOn(fill) } as CSSProperties;
-                                // Créneau pris/passé : cliquable pour créer une alerte SEULEMENT en padel,
-                                // à venir, connecté. Sinon inerte (passé ou non-padel restent des <span>).
-                                const canAlert = cs.sport.key === 'padel' && !isPast && !!token;
+                                // Créneau vraiment PRIS (pas seulement hors fenêtre de réservation) :
+                                // cliquable pour créer une alerte SEULEMENT en padel, à venir, connecté.
+                                // Sinon inerte (passé / non-padel / libre-mais-non-réservable restent des <span>).
+                                const canAlert = cs.sport.key === 'padel' && !isPast && !!token && !s.available;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>

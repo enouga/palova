@@ -75,9 +75,9 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
                         </td>
                       );
                     }
-                    // Cellule « prise » (à venir, padel, connecté) : cliquable pour créer une alerte.
-                    // Parité avec la vue cartes. Passé / non-padel / anonyme (prop absente) restent inertes.
-                    if (slot && !isPast && sportKey === 'padel' && onTakenSlot) {
+                    // Cellule vraiment PRISE (à venir, padel, connecté) : cliquable pour créer une alerte.
+                    // Parité avec la vue cartes. Passé / non-padel / libre-non-réservable / anonyme restent inertes.
+                    if (slot && !isPast && !slot.available && sportKey === 'padel' && onTakenSlot) {
                       return (
                         <td key={c}>
                           <button type="button" aria-label={`${resource.name} ${fmtHour(c, timezone)} — pris, être alerté`}
