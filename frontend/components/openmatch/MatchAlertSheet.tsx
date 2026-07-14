@@ -4,6 +4,8 @@ import { api } from '@/lib/api';
 import type { ClubDetail } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
+import { DateField } from '@/components/ui/DateField';
+import { TimePicker } from '@/components/ui/TimePicker';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 
 interface Props {
@@ -55,20 +57,17 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
 
   const caption: React.CSSProperties = {
     display: 'block', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3,
-    textTransform: 'uppercase', color: th.textMute, marginBottom: 7,
+    textTransform: 'uppercase', color: th.textMute, marginBottom: 8,
   };
-  // Champ natif dénudé, posé dans une pastille (th.surface) : bord doux + coins arrondis.
-  const field: React.CSSProperties = {
-    width: '100%', border: `1px solid ${th.line}`, background: th.surface, borderRadius: 12,
-    padding: '11px 13px', color: th.text, fontFamily: th.fontUI, fontSize: 15, fontWeight: 600,
-    boxSizing: 'border-box', colorScheme: th.mode === 'floodlit' ? 'dark' : 'light', accentColor: th.accent,
+  const timeLabel: React.CSSProperties = {
+    fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.textMute, minWidth: 24,
   };
 
   return (
     <div role="dialog" aria-label="Créer une alerte" aria-modal="true" onClick={onClose}
       style={{ position: 'fixed', inset: 0, background: 'rgba(12,10,6,.5)', backdropFilter: 'blur(2px)', zIndex: 60, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: th.bg, width: '100%', maxWidth: 460, borderRadius: '0 0 22px 22px', overflow: 'hidden', boxShadow: th.shadow, boxSizing: 'border-box' }}>
+        style={{ background: th.bg, width: '100%', maxWidth: 460, borderRadius: '0 0 22px 22px', boxShadow: th.shadow, boxSizing: 'border-box' }}>
 
         {/* En-tête « brume bleue » : identité + promesse de l'alerte. */}
         <div style={{ background: HERO_GRADIENT, padding: '20px 22px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -83,19 +82,13 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
           </div>
         </div>
 
-        {/* Corps : jour + plage horaire + plages rapides. */}
+        {/* Corps : jour (calendrier maison) + plage horaire (steppers maison) + plages rapides. */}
         <div style={{ padding: '20px 22px 22px' }}>
-          <label style={caption} htmlFor="alert-date">Jour</label>
-          <input id="alert-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
+          <label style={caption}>Jour</label>
+          <DateField value={date} onChange={setDate} width="100%" ariaLabel="Jour" />
 
-          <label style={{ ...caption, marginTop: 18 }} htmlFor="alert-from">Créneau horaire</label>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <input id="alert-from" aria-label="De" type="time" value={from} onChange={(e) => setFrom(e.target.value)} style={{ ...field, flex: 1, minWidth: 0 }} />
-            <Icon name="arrowR" size={16} color={th.textMute} />
-            <input id="alert-to" aria-label="À" type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...field, flex: 1, minWidth: 0 }} />
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
+          <label style={{ ...caption, marginTop: 20 }}>Créneau horaire</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
             {TIME_PRESETS.map((p) => {
               const active = from === p.from && to === p.to;
               return (
@@ -109,6 +102,12 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
                 </button>
               );
             })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <TimePicker value={from} onChange={setFrom} minuteChips={[]}
+              leading={<span style={timeLabel}>De</span>} />
+            <TimePicker value={to} onChange={setTo} minuteChips={[]}
+              leading={<span style={timeLabel}>À</span>} />
           </div>
 
           {error && (
