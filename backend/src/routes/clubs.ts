@@ -24,6 +24,7 @@ import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
 import { PresentationService } from '../services/presentation.service';
 import { OfferService } from '../services/offer.service';
+import { MatchAlertService } from '../services/matchAlert.service';
 import { ensureActiveMembership } from '../services/membership';
 import { entryFeeCents, MIN_STRIPE_CENTS } from '../services/registrationPayment';
 import { PaymentHistoryService } from '../services/paymentHistory.service';
@@ -56,6 +57,7 @@ const friendshipService = new FriendshipService();
 const socialHubService = new SocialHubService();
 const presentationService = new PresentationService();
 const offerService = new OfferService();
+const matchAlertService = new MatchAlertService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
@@ -95,6 +97,8 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_PAYABLE:              409,
   UNAUTHORIZED:             403,
   RATE_LIMITED:             429,
+  ALERT_LIMIT_REACHED:      409,
+  ALERT_WINDOW_INVALID:     400,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -323,6 +327,23 @@ router.get('/:slug/me/friends-agenda', authMiddleware, async (req: AuthRequest, 
 });
 router.get('/:slug/me/player-suggestions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await socialHubService.playerSuggestions(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// --- Alertes de parties ouvertes (recherche ponctuelle datée) ---
+router.get('/:slug/match-alerts', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await matchAlertService.listMine(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.post('/:slug/match-alerts', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await matchAlertService.create(asString(req.params.slug), req.user!.id, {
+      date: asString(req.body?.date), from: asString(req.body?.from), to: asString(req.body?.to),
+    }));
+  } catch (err) { handleError(err, res, next); }
+});
+router.delete('/:slug/match-alerts/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await matchAlertService.remove(asString(req.params.slug), req.user!.id, asString(req.params.id))); }
   catch (err) { handleError(err, res, next); }
 });
 

@@ -6,8 +6,10 @@ import { MatchService } from '../services/match.service';
 import { HOLD_EXPIRY_MINUTES } from '../services/holdWindow';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
+import { MatchAlertService } from '../services/matchAlert.service';
 
 const matchService = new MatchService();
+const matchAlertService = new MatchAlertService();
 
 export async function releaseExpiredRegistrations(now: Date): Promise<void> {
   const tournamentSvc = new TournamentService();
@@ -67,6 +69,13 @@ export function startCleanupJob(): void {
       await releaseExpiredRegistrations(new Date());
     } catch (err) {
       console.error('[cleanup] inscriptions DUE:', (err as Error).message);
+    }
+
+    try {
+      const purged = await matchAlertService.purgeExpired();
+      if (purged > 0) console.log(`[cleanup] ${purged} alerte(s) de partie expirée(s) purgée(s)`);
+    } catch (err) {
+      console.error('[cleanup] alertes:', (err as Error).message);
     }
   });
 
