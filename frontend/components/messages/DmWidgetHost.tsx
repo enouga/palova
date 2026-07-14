@@ -11,7 +11,7 @@ import { colorForSeed } from '@/lib/playerColors';
 import { MessageThread } from './MessageThread';
 
 // Hôte GLOBAL du widget de conversation (monté une fois dans le layout racine).
-// Écoute l'event window `palova:open-dm` ({ detail: { userId } }) émis par openDm() :
+// Écoute l'event window `palova:open-dm` ({ detail: { userId, draft? } }) émis par openDm() :
 // desktop → widget ancré bas-droite (pattern OpenMatchChatSheet, la page reste cliquable) ;
 // mobile → navigation vers /me/messages?with=. Rien n'est rendu hors connexion.
 // L'id du viewer est résolu via getMyProfile AU PREMIER open seulement (mémorisé) —
@@ -24,18 +24,23 @@ export function DmWidgetHost() {
   const isDesktop = useIsDesktop();
   const [conv, setConv] = useState<ConversationSummary | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | undefined>(undefined);
   const viewerAsked = useRef(false);
 
   useEffect(() => {
     if (!ready || !token) return;
     const onOpen = (e: Event) => {
-      const userId = (e as CustomEvent<{ userId?: string }>).detail?.userId;
+      const { userId, draft: draftText } = (e as CustomEvent<{ userId?: string; draft?: string }>).detail ?? {};
       if (!userId) return;
-      if (!isDesktop) { router.push(`/me/messages?with=${userId}`); return; }
+      if (!isDesktop) {
+        router.push(`/me/messages?with=${userId}${draftText ? `&draft=${encodeURIComponent(draftText)}` : ''}`);
+        return;
+      }
       if (!viewerAsked.current) {
         viewerAsked.current = true;
         api.getMyProfile(token).then((p) => setViewerId(p.id)).catch(() => { viewerAsked.current = false; });
       }
+      setDraft(draftText);
       api.openConversation(userId, token, slug ?? null).then(setConv).catch(() => {});
     };
     window.addEventListener('palova:open-dm', onOpen);
@@ -64,7 +69,7 @@ export function DmWidgetHost() {
           <button type="button" aria-label="Fermer" onClick={() => setConv(null)}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 20 }}>×</button>
         </div>
-        <MessageThread conversationId={conv.id} token={token} viewerUserId={viewerId} other={conv.other} />
+        <MessageThread conversationId={conv.id} token={token} viewerUserId={viewerId} other={conv.other} initialDraft={draft} />
       </div>
     </div>
   );

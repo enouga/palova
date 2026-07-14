@@ -19,13 +19,13 @@ const props: any = { timezone: 'Europe/Paris', slug: 'demo', token: 't', busy: f
   onJoin: noop, onLeave: noop, onRemovePlayer: noop, onSetTeams: noop, onAddPlayer: noop, onToggleAdd: noop, onCancelAdd: noop,
   onRecordResult: noop, canRecordResult: false, onOpenChat: noop, onAuthPrompt: noop };
 
-describe('OpenMatchCard — preuve sociale amis', () => {
-  it('affiche « X de vos amis » quand des amis jouent', () => {
+describe('OpenMatchCard — preuve sociale favoris', () => {
+  it('affiche « X de vos favoris » quand des favoris jouent', () => {
     render(<OpenMatchCard match={baseMatch} friendIds={new Set(['u2'])} {...props} />);
-    expect(screen.getByText(/ami/i)).toBeInTheDocument();
+    expect(screen.getByText(/favori/i)).toBeInTheDocument();
   });
-  it('n\'affiche rien quand aucun ami ne joue', () => {
+  it('n\'affiche rien quand aucun favori ne joue', () => {
     render(<OpenMatchCard match={baseMatch} friendIds={new Set()} {...props} />);
-    expect(screen.queryByText(/de vos amis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/de vos favoris/i)).not.toBeInTheDocument();
   });
 });

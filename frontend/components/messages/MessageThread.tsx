@@ -18,13 +18,14 @@ function hhmm(iso: string): string {
 // Fil d'une conversation privée : bulles groupées par jour, envoi optimiste, réactions,
 // ✓/✓✓ Lu, « X écrit… », pierre tombale, pagination par curseur, photos.
 // Le parent (hub ou widget) rend l'en-tête ; onMeta lui remonte { blocked } pour le menu.
-export function MessageThread({ conversationId, token, viewerUserId, other, onMeta, onUnreadCleared }: {
+export function MessageThread({ conversationId, token, viewerUserId, other, onMeta, onUnreadCleared, initialDraft }: {
   conversationId: string;
   token: string;
   viewerUserId: string;
   other: DmUserInfo;
   onMeta?: (meta: DmMeta) => void;
   onUnreadCleared?: () => void;
+  initialDraft?: string;
 }) {
   const { th } = useTheme();
   const [messages, setMessages] = useState<DmMessage[]>([]);
@@ -253,7 +254,7 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
           Vous ne pouvez pas échanger avec ce membre.
         </div>
       ) : (
-        <MessageComposer onSend={send} onSendImage={sendImage} onTyping={typing} />
+        <MessageComposer onSend={send} onSendImage={sendImage} onTyping={typing} initialDraft={initialDraft} />
       )}
 
       {pendingDelete && (

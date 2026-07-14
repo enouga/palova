@@ -39,7 +39,7 @@ export function FriendsQuickRow({ slug, token, excludeIds, query, onPick, fadeCo
   const fade = fadeColor ?? th.surface;
   return (
     <div style={{ marginBottom: 8 }}>
-      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Mes amis</div>
+      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Favoris ★</div>
       <div style={{ position: 'relative' }}>
         <div className="sp-scroll-x" style={{ display: 'flex', gap: 8, paddingBottom: 6 }}>
           {visible.map((f) => (

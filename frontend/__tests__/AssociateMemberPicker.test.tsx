@@ -25,13 +25,13 @@ const renderPicker = (props: Record<string, unknown> = {}) => render(
 
 beforeEach(() => { jest.clearAllMocks(); (api.searchClubMembers as jest.Mock).mockResolvedValue([]); });
 
-it('affiche l\'annuaire (avatars + niveau) SANS la rangée « Mes amis »', async () => {
+it('affiche l\'annuaire (avatars + niveau) SANS la rangée « Favoris ★ »', async () => {
   (api.searchClubMembers as jest.Mock).mockResolvedValueOnce([
     { id: 'u2', firstName: 'Nora', lastName: 'Kaci', level: null },
   ]);
   renderPicker();
   expect(await screen.findByText('Nora Kaci')).toBeInTheDocument();
-  expect(screen.queryByText('Mes amis')).not.toBeInTheDocument();
+  expect(screen.queryByText('Favoris ★')).not.toBeInTheDocument();
 });
 
 it('exclut les joueurs déjà présents', async () => {

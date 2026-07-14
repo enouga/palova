@@ -14,6 +14,14 @@ export function cardStyle(th: Theme): React.CSSProperties {
   };
 }
 
+/** Ligne de liste commune (avatar + contenu + actions) : bordure basse fine, wrap mobile-safe. */
+export function listRowStyle(th: Theme): React.CSSProperties {
+  return {
+    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, rowGap: 6,
+    padding: '8px 4px', borderBottom: `1px solid ${th.line}`,
+  };
+}
+
 /** Titre de section éditorial : display 21px + action optionnelle à droite. */
 export function SectionHeader({ title, action }: { title: string; action?: { label: string; href: string } }) {
   const { th } = useTheme();

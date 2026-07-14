@@ -13,11 +13,12 @@ import { NewConversationPanel } from './NewConversationPanel';
 
 // QG de la messagerie (/me/messages) : split view desktop (liste ~320px + fil),
 // liste → fil plein écran en mobile. Deeplink initialWith = get-or-create + ouverture.
-export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
+export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initialDraft }: {
   token: string;
   viewerUserId: string;
   clubSlug: string | null;
   initialWith?: string | null;
+  initialDraft?: string | null;
 }) {
   const { th } = useTheme();
   const isDesktop = useIsDesktop(900);
@@ -111,7 +112,8 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith }: {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {threadHeader}
       <MessageThread conversationId={selected.id} token={token} viewerUserId={viewerUserId}
-        other={selected.other} onMeta={setMeta} onUnreadCleared={reload} />
+        other={selected.other} onMeta={setMeta} onUnreadCleared={reload}
+        initialDraft={selected.other.userId === initialWith ? initialDraft ?? undefined : undefined} />
     </div>
   );
 

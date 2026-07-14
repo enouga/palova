@@ -102,3 +102,31 @@ it('sans clubSlug, le bouton « Nouveau » est masqué', async () => {
   await screen.findByText('Marie Dupont');
   expect(screen.queryByRole('button', { name: 'Nouvelle conversation' })).not.toBeInTheDocument();
 });
+
+it('deeplink avec draft : le brouillon est pré-rempli dans le fil ouvert', async () => {
+  apiMock.listConversations.mockResolvedValue([CONV()]);
+  apiMock.openConversation.mockResolvedValue(CONV());
+  renderHub({ initialWith: 'u2', initialDraft: 'On se fait une partie ?' });
+  await waitFor(() => expect(apiMock.openConversation).toHaveBeenCalledWith('u2', 't', 'demo'));
+  expect(await screen.findByPlaceholderText('Votre message…')).toHaveValue('On se fait une partie ?');
+});
+
+it('sélection d\'une autre conversation après le deeplink : le brouillon ne fuit pas dans la nouvelle sélection', async () => {
+  const other = {
+    id: 'c4', other: { userId: 'u7', firstName: 'Léo', lastName: 'B', avatarUrl: null },
+    clubId: 'club-demo', lastMessageAt: '2026-07-05T09:00:00Z', unreadCount: 0,
+    lastMessage: { body: 'salut', hasImage: false, mine: false, deleted: false },
+  };
+  apiMock.listConversations.mockResolvedValue([CONV(), other]);
+  apiMock.openConversation.mockResolvedValue(CONV());
+  renderHub({ initialWith: 'u2', initialDraft: 'On se fait une partie ?' });
+  await waitFor(() => expect(apiMock.openConversation).toHaveBeenCalledWith('u2', 't', 'demo'));
+  expect(await screen.findByPlaceholderText('Votre message…')).toHaveValue('On se fait une partie ?');
+
+  // Retour à la liste (dépile complètement le fil, cf. mobile = `{selected ? thread : list}`),
+  // puis sélection MANUELLE d'une conversation différente de celle du deeplink.
+  fireEvent.click(screen.getByRole('button', { name: /retour/i }));
+  fireEvent.click(await screen.findByText('Léo B'));
+  await waitFor(() => expect(apiMock.getDmMessages).toHaveBeenCalledWith('c4', 't'));
+  expect(screen.getByPlaceholderText('Votre message…')).toHaveValue('');
+});
