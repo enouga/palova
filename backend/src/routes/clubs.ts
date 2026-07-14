@@ -17,6 +17,7 @@ import { OpenMatchService } from '../services/openMatch.service';
 import { OpenMatchChatService } from '../services/openMatchChat.service';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
+import { SocialHubService } from '../services/socialHub.service';
 import { ReservationService } from '../services/reservation.service';
 import { StripeService } from '../services/stripe.service';
 import { PaymentMethodService } from '../services/paymentMethod.service';
@@ -50,6 +51,7 @@ const paymentMethodService = new PaymentMethodService();
 const paymentHistoryService = new PaymentHistoryService();
 const followService = new FollowService();
 const friendshipService = new FriendshipService();
+const socialHubService = new SocialHubService();
 const presentationService = new PresentationService();
 const offerService = new OfferService();
 
@@ -308,6 +310,16 @@ router.post('/:slug/friends/:userId/respond', authMiddleware, async (req: AuthRe
 });
 router.delete('/:slug/friends/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await friendshipService.removeFriend(req.user!.id, asString(req.params.userId))); }
+  catch (err) { handleError(err, res, next); }
+});
+
+// --- Hub social : « ça joue bientôt » chez mon cercle + suggestions de joueurs ---
+router.get('/:slug/me/friends-agenda', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await socialHubService.friendsAgenda(asString(req.params.slug), req.user!.id)); }
+  catch (err) { handleError(err, res, next); }
+});
+router.get('/:slug/me/player-suggestions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await socialHubService.playerSuggestions(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
 });
 
