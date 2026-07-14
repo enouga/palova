@@ -137,6 +137,55 @@ describe('OpenMatchChatService', () => {
   });
 
   // ─────────────────────────────
+  // EDITION (auteur seul)
+  // ─────────────────────────────
+
+  describe('editMessage', () => {
+    it("l auteur peut modifier son message, edited=true, rebroadcast chat_message", async () => {
+      primeAccessOk({ participantUserId: 'org', isOrganizer: true });
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1', reservationId: 'resa-1', userId: 'org', deletedAt: null,
+      } as any);
+      prismaMock.openMatchMessage.update.mockResolvedValue({
+        id: 'm1', body: 'corrigé', createdAt: new Date('2026-06-28T10:00:00Z'), editedAt: new Date('2026-06-28T10:05:00Z'), deletedAt: null,
+        user: { id: 'org', firstName: 'A', lastName: 'B', avatarUrl: null },
+      } as any);
+      const broadcastSpy = jest.spyOn(SSEService.getInstance(), 'broadcastMatch').mockImplementation(() => {});
+
+      const dto = await service.editMessage('club-demo', 'resa-1', 'org', 'm1', '  corrigé  ');
+
+      expect(dto.body).toBe('corrigé');
+      expect(dto.edited).toBe(true);
+      expect(prismaMock.openMatchMessage.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'm1' }, data: { body: 'corrigé', editedAt: expect.any(Date) },
+      }));
+      expect(broadcastSpy).toHaveBeenCalledWith('resa-1', expect.objectContaining({ type: 'chat_message' }));
+      broadcastSpy.mockRestore();
+    });
+
+    it('body vide/whitespace → VALIDATION_ERROR', async () => {
+      primeAccessOk();
+      await expect(service.editMessage('club-demo', 'resa-1', 'org', 'm1', '   ')).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('non-auteur → NOT_ALLOWED', async () => {
+      primeAccessOk({ participantUserId: 'curious', isOrganizer: false });
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1', reservationId: 'resa-1', userId: 'someoneElse', deletedAt: null,
+      } as any);
+      await expect(service.editMessage('club-demo', 'resa-1', 'curious', 'm1', 'x')).rejects.toThrow('NOT_ALLOWED');
+    });
+
+    it('message supprimé ou étranger → MESSAGE_NOT_FOUND', async () => {
+      primeAccessOk();
+      prismaMock.openMatchMessage.findUnique.mockResolvedValue({
+        id: 'm1', reservationId: 'resa-1', userId: 'org', deletedAt: new Date(),
+      } as any);
+      await expect(service.editMessage('club-demo', 'resa-1', 'org', 'm1', 'x')).rejects.toThrow('MESSAGE_NOT_FOUND');
+    });
+  });
+
+  // ─────────────────────────────
   // SUPPRESSION (moderation)
   // ─────────────────────────────
 

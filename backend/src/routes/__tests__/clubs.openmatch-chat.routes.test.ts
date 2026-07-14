@@ -26,6 +26,7 @@ jest.mock('../../services/openMatchChat.service', () => {
   const stubMsg = { id: 'msg-1', body: 'hi', createdAt: '2026-01-01T10:00:00.000Z', deleted: false, author: { userId: 'u1', firstName: 'A', lastName: 'B', avatarUrl: null } };
   const listMessages           = jest.fn().mockResolvedValue([]);
   const postMessage            = jest.fn().mockResolvedValue(stubMsg);
+  const editMessage            = jest.fn().mockResolvedValue({ ...stubMsg, body: 'edité', edited: true });
   const deleteMessage          = jest.fn().mockResolvedValue({ ...stubMsg, body: '', deleted: true });
   const assertChatAccessPublic = jest.fn().mockResolvedValue(undefined);
   const markRead               = jest.fn().mockResolvedValue({ count: 0 });
@@ -35,6 +36,7 @@ jest.mock('../../services/openMatchChat.service', () => {
       assertChatAccessPublic,
       listMessages,
       postMessage,
+      editMessage,
       deleteMessage,
       markRead,
       unreadCount,
@@ -67,6 +69,7 @@ const setTeams         = omInst.setTeams         as jest.Mock;
 const chatInst  = new (OpenMatchChatService as any)();
 const listMessages           = chatInst.listMessages           as jest.Mock;
 const postMessage            = chatInst.postMessage            as jest.Mock;
+const editMessage            = chatInst.editMessage            as jest.Mock;
 const deleteMessage          = chatInst.deleteMessage          as jest.Mock;
 const markRead               = chatInst.markRead               as jest.Mock;
 const unreadCount            = chatInst.unreadCount            as jest.Mock;
@@ -86,6 +89,7 @@ beforeEach(() => {
   setTeams.mockResolvedValue({ id: MATCH_ID });
   listMessages.mockResolvedValue([]);
   postMessage.mockResolvedValue(stubMsg);
+  editMessage.mockResolvedValue({ ...stubMsg, body: 'edité', edited: true });
   deleteMessage.mockResolvedValue({ ...stubMsg, body: '', deleted: true });
   markRead.mockResolvedValue({ count: 0 });
   unreadCount.mockResolvedValue({ count: 0 });
@@ -201,6 +205,23 @@ describe('POST /api/clubs/:slug/open-matches/:id/chat/messages', () => {
       .send({ body: 'hi' });
     expect(res.status).toBe(200);
     expect(postMessage).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', 'hi');
+  });
+});
+
+describe('PATCH /api/clubs/:slug/open-matches/:id/chat/messages/:messageId', () => {
+  it('200 — appelle editMessage(slug, id, userId, messageId, body)', async () => {
+    const res = await request(app)
+      .patch(`${base}/chat/messages/msg-1`)
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ body: 'edité' });
+    expect(res.status).toBe(200);
+    expect(res.body.edited).toBe(true);
+    expect(editMessage).toHaveBeenCalledWith(SLUG, MATCH_ID, 'u1', 'msg-1', 'edité');
+  });
+
+  it('401 sans token', async () => {
+    const res = await request(app).patch(`${base}/chat/messages/msg-1`).send({ body: 'x' });
+    expect(res.status).toBe(401);
   });
 });
 

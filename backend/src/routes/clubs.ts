@@ -430,6 +430,12 @@ router.post('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req:
     res.json(await openMatchChatService.postMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, body));
   } catch (err) { handleError(err, res, next); }
 });
+router.patch('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = typeof (req.body as { body?: unknown }).body === 'string' ? (req.body as { body: string }).body : '';
+    res.json(await openMatchChatService.editMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId), body));
+  } catch (err) { handleError(err, res, next); }
+});
 router.delete('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchChatService.deleteMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
   catch (err) { handleError(err, res, next); }

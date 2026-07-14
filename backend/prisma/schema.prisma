@@ -1429,6 +1429,7 @@ model OpenMatchMessage {
   userId        String    @map("user_id") // auteur
   body          String
   createdAt     DateTime  @default(now()) @map("created_at")
+  editedAt      DateTime? @map("edited_at")
   deletedAt     DateTime? @map("deleted_at")
   deletedById   String?   @map("deleted_by_id")
 
@@ -1561,6 +1562,7 @@ model DirectMessage {
   body           String
   imageUrl       String?   @map("image_url")
   createdAt      DateTime  @default(now()) @map("created_at")
+  editedAt       DateTime? @map("edited_at")
   deletedAt      DateTime? @map("deleted_at")
   deletedById    String?   @map("deleted_by_id")
 

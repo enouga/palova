@@ -94,6 +94,13 @@ conversationsRouter.post('/:id/messages', authMiddleware, async (req: AuthReques
   } catch (err) { handleError(err, res, next); }
 });
 
+conversationsRouter.patch('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = typeof (req.body as { body?: unknown }).body === 'string' ? (req.body as { body: string }).body : '';
+    res.json(await messagingService.editMessage(asString(req.params.id), req.user!.id, asString(req.params.messageId), body));
+  } catch (err) { handleError(err, res, next); }
+});
+
 conversationsRouter.delete('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await messagingService.deleteMessage(asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
   catch (err) { handleError(err, res, next); }

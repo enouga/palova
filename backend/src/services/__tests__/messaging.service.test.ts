@@ -277,6 +277,28 @@ describe('MessagingService — messages', () => {
     await expect(service.postMessage('c1', 'u1', 'yo')).resolves.toMatchObject({ id: 'm3' });
   });
 
+  it('editMessage : l auteur peut modifier son message, edited=true, rebroadcast dm_message', async () => {
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', authorId: 'u1', deletedAt: null } as any);
+    prismaMock.directMessage.update.mockResolvedValue(MSG_ROW('m1', 'u1', 'corrigé', { editedAt: new Date() }) as any);
+    const dto = await service.editMessage('c1', 'u1', 'm1', '  corrigé  ');
+    expect(dto.body).toBe('corrigé');
+    expect(dto.edited).toBe(true);
+    expect(prismaMock.directMessage.update).toHaveBeenCalledWith({
+      where: { id: 'm1' }, data: { body: 'corrigé', editedAt: expect.any(Date) }, select: expect.anything(),
+    });
+    expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_message', message: expect.objectContaining({ id: 'm1', edited: true }) });
+  });
+
+  it('editMessage : body vide → VALIDATION_ERROR ; non-auteur → NOT_ALLOWED ; supprimé → MESSAGE_NOT_FOUND', async () => {
+    await expect(service.editMessage('c1', 'u1', 'm1', '   ')).rejects.toThrow('VALIDATION_ERROR');
+
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', authorId: 'u2', deletedAt: null } as any);
+    await expect(service.editMessage('c1', 'u1', 'm1', 'x')).rejects.toThrow('NOT_ALLOWED');
+
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', authorId: 'u1', deletedAt: new Date() } as any);
+    await expect(service.editMessage('c1', 'u1', 'm1', 'x')).rejects.toThrow('MESSAGE_NOT_FOUND');
+  });
+
   it('deleteMessage : auteur seul, pierre tombale + broadcast', async () => {
     prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u1', 'a'), conversationId: 'c1', authorId: 'u1' } as any);
     prismaMock.directMessage.update.mockResolvedValue(MSG_ROW('m1', 'u1', 'a', { deletedAt: new Date() }) as any);

@@ -12,6 +12,7 @@ export interface ChatMessageDTO {
   body: string;
   createdAt: string;
   deleted: boolean;
+  edited: boolean;
 }
 
 interface ChatContext {
@@ -21,7 +22,7 @@ interface ChatContext {
 }
 
 type MsgRow = {
-  id: string; body: string; createdAt: Date; deletedAt: Date | null;
+  id: string; body: string; createdAt: Date; editedAt?: Date | null; deletedAt: Date | null;
   user: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
 };
 
@@ -33,6 +34,7 @@ function toDTO(m: MsgRow): ChatMessageDTO {
     body: deleted ? '' : m.body,
     createdAt: m.createdAt.toISOString(),
     deleted,
+    edited: !deleted && m.editedAt != null,
   };
 }
 
@@ -69,7 +71,7 @@ export class OpenMatchChatService {
       where: { reservationId },
       orderBy: { createdAt: 'asc' },
       select: {
-        id: true, body: true, createdAt: true, deletedAt: true,
+        id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
         user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
       },
     });
@@ -86,7 +88,7 @@ export class OpenMatchChatService {
     const created = await prisma.openMatchMessage.create({
       data: { reservationId, userId, body },
       select: {
-        id: true, body: true, createdAt: true, deletedAt: true,
+        id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
         user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
       },
     });
@@ -94,6 +96,33 @@ export class OpenMatchChatService {
     SSEService.getInstance().broadcastMatch(reservationId, { type: 'chat_message', message: dto });
     try { await notifyOpenMatchChatMessage(reservationId, created.id, userId); }
     catch (err) { console.error('[openMatchChat] notification échouée', err); }
+    return dto;
+  }
+
+  /** Modifie un message : AUTEUR SEUL (pas de modération sur l'édition, contrairement à la
+   *  suppression). Message vivant de cette résa, sinon MESSAGE_NOT_FOUND. */
+  async editMessage(slug: string, reservationId: string, userId: string, messageId: string, rawBody: string): Promise<ChatMessageDTO> {
+    await this.assertChatAccess(slug, reservationId, userId);
+    const body = (rawBody ?? '').trim();
+    if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+
+    const msg = await prisma.openMatchMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, reservationId: true, userId: true, deletedAt: true },
+    });
+    if (!msg || msg.reservationId !== reservationId || msg.deletedAt) throw new Error('MESSAGE_NOT_FOUND');
+    if (msg.userId !== userId) throw new Error('NOT_ALLOWED');
+
+    const updated = await prisma.openMatchMessage.update({
+      where: { id: messageId },
+      data: { body, editedAt: new Date() },
+      select: {
+        id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+    });
+    const dto = toDTO(updated);
+    SSEService.getInstance().broadcastMatch(reservationId, { type: 'chat_message', message: dto });
     return dto;
   }
 
@@ -158,7 +187,7 @@ export class OpenMatchChatService {
       where: { id: messageId },
       data: { deletedAt: new Date(), deletedById: userId },
       select: {
-        id: true, body: true, createdAt: true, deletedAt: true,
+        id: true, body: true, createdAt: true, editedAt: true, deletedAt: true,
         user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
       },
     });

@@ -15,7 +15,7 @@ export interface DmUser { userId: string; firstName: string; lastName: string; a
 export interface DmReactionDTO { emoji: string; userIds: string[] }
 export interface DmMessageDTO {
   id: string; author: DmUser; body: string; imageUrl: string | null;
-  createdAt: string; deleted: boolean; reactions: DmReactionDTO[];
+  createdAt: string; deleted: boolean; edited: boolean; reactions: DmReactionDTO[];
 }
 export interface ConversationSummaryDTO {
   id: string; other: DmUser; clubId: string | null; lastMessageAt: string | null;
@@ -31,13 +31,13 @@ function canonical(a: string, b: string): { userAId: string; userBId: string } {
 
 const USER_SELECT = { id: true, firstName: true, lastName: true, avatarUrl: true } as const;
 const MSG_SELECT = {
-  id: true, body: true, imageUrl: true, createdAt: true, deletedAt: true,
+  id: true, body: true, imageUrl: true, createdAt: true, editedAt: true, deletedAt: true,
   author: { select: USER_SELECT },
   reactions: { select: { emoji: true, userId: true } },
 } as const;
 
 type MsgRow = {
-  id: string; body: string; imageUrl: string | null; createdAt: Date; deletedAt: Date | null;
+  id: string; body: string; imageUrl: string | null; createdAt: Date; editedAt: Date | null; deletedAt: Date | null;
   author: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
   reactions: { emoji: string; userId: string }[];
 };
@@ -60,6 +60,7 @@ function toMessageDTO(m: MsgRow): DmMessageDTO {
     imageUrl: deleted ? null : m.imageUrl,
     createdAt: m.createdAt.toISOString(),
     deleted,
+    edited: !deleted && m.editedAt != null,
     reactions: [...byEmoji.entries()].map(([emoji, userIds]) => ({ emoji, userIds })),
   };
 }
@@ -362,6 +363,29 @@ export class MessagingService {
     const ext = msg.imageUrl.split('.').pop()!.toLowerCase();
     const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
     return { absPath: path.join(DM_DIR, msg.imageUrl), mime };
+  }
+
+  /** Modifie un message : AUTEUR SEUL. Message vivant de cette conversation, sinon MESSAGE_NOT_FOUND. */
+  async editMessage(conversationId: string, meId: string, messageId: string, rawBody: string): Promise<DmMessageDTO> {
+    await this.assertParticipant(conversationId, meId);
+    const body = (rawBody ?? '').trim();
+    if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, conversationId: true, authorId: true, deletedAt: true },
+    });
+    if (!msg || msg.conversationId !== conversationId || msg.deletedAt) throw new Error('MESSAGE_NOT_FOUND');
+    if (msg.authorId !== meId) throw new Error('NOT_ALLOWED');
+
+    const updated = await prisma.directMessage.update({
+      where: { id: messageId },
+      data: { body, editedAt: new Date() },
+      select: MSG_SELECT,
+    });
+    const dto = toMessageDTO(updated);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_message', message: dto });
+    return dto;
   }
 
   /** Supprime un message : AUTEUR SEUL (pas de modération staff en privé). Pierre tombale idempotente. */

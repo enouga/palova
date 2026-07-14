@@ -21,7 +21,7 @@ const token = jwt.sign({ id: 'u1', email: 'u1@test.fr' }, process.env.JWT_SECRET
 describe('routes conversations', () => {
   beforeEach(() => { mocks = {
     getOrCreateConversation: jest.fn(), listConversations: jest.fn(), unreadTotal: jest.fn(),
-    listMessages: jest.fn(), postMessage: jest.fn(), deleteMessage: jest.fn(),
+    listMessages: jest.fn(), postMessage: jest.fn(), editMessage: jest.fn(), deleteMessage: jest.fn(),
     addReaction: jest.fn(), removeReaction: jest.fn(), markRead: jest.fn(), typing: jest.fn(),
     block: jest.fn(), unblock: jest.fn(), listBlocks: jest.fn(),
     assertParticipantPublic: jest.fn(),
@@ -62,6 +62,10 @@ describe('routes conversations', () => {
     mocks.postMessage.mockResolvedValue({ id: 'm1' });
     await request(app).post('/api/conversations/c1/messages').send({ body: 'yo' }).set('Authorization', `Bearer ${token}`);
     expect(mocks.postMessage).toHaveBeenCalledWith('c1', 'u1', 'yo');
+
+    mocks.editMessage.mockResolvedValue({ id: 'm1', body: 'corrigé', edited: true });
+    await request(app).patch('/api/conversations/c1/messages/m1').send({ body: 'corrigé' }).set('Authorization', `Bearer ${token}`);
+    expect(mocks.editMessage).toHaveBeenCalledWith('c1', 'u1', 'm1', 'corrigé');
 
     mocks.deleteMessage.mockResolvedValue({ id: 'm1', deleted: true });
     await request(app).delete('/api/conversations/c1/messages/m1').set('Authorization', `Bearer ${token}`);
