@@ -197,7 +197,10 @@ export class SocialHubService {
     if (keptIds.length === 0) return [];
 
     const users = await prisma.user.findMany({
-      where: { id: { in: keptIds }, deletedAt: null, isSuperAdmin: false },
+      where: {
+        id: { in: keptIds }, deletedAt: null, isSuperAdmin: false,
+        clubMemberships: { some: { clubId, status: 'ACTIVE' } },
+      },
       select: { ...USER_SEL, acceptsFriendRequests: true },
     });
     const sportKey = await resolvePreferredSportKey(userId);

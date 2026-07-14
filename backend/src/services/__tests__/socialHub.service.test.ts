@@ -141,12 +141,19 @@ describe('SocialHubService — playerSuggestions', () => {
     expect(p1.requestable).toBe(false);
   });
 
-  it('exclut les joueurs déjà suivis ou en relation d\'amitié (PENDING compris)', async () => {
+  it('exclut les joueurs déjà suivis ou en relation d\'amitié (PENDING compris), dans les 2 sens de la paire', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([
-      { userId: null, startTime: new Date('2026-07-12T10:00:00Z'), participants: [{ userId: 'u1' }, { userId: 'suivi' }, { userId: 'pending' }, { userId: 'neuf' }] },
+      {
+        userId: null, startTime: new Date('2026-07-12T10:00:00Z'),
+        participants: [{ userId: 'u1' }, { userId: 'suivi' }, { userId: 'pending' }, { userId: 'anotherPending' }, { userId: 'neuf' }],
+      },
     ] as any);
     prismaMock.follow.findMany.mockResolvedValue([{ followingId: 'suivi' }] as any);
-    prismaMock.friendship.findMany.mockResolvedValue([{ userAId: 'pending', userBId: 'u1' }] as any);
+    // les 2 branches du ternaire d'exclusion : caller en userBId ('pending') ET en userAId ('anotherPending')
+    prismaMock.friendship.findMany.mockResolvedValue([
+      { userAId: 'pending', userBId: 'u1' },
+      { userAId: 'u1', userBId: 'anotherPending' },
+    ] as any);
     prismaMock.user.findMany.mockResolvedValue([
       { id: 'neuf', firstName: 'N', lastName: 'X', avatarUrl: null, acceptsFriendRequests: true },
     ] as any);
@@ -156,6 +163,19 @@ describe('SocialHubService — playerSuggestions', () => {
     const userArgs = prismaMock.user.findMany.mock.calls[0][0] as any;
     expect(userArgs.where.id.in).toEqual(['neuf']);
     expect(userArgs.where.deletedAt).toBeNull();
+  });
+
+  it('une seule résa : la ligne participant du propre organisateur ne double pas son compte (dédup Set intra-résa)', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      // p1 organise ET figure aussi dans ses propres participants (cas réel, cf. splitShares)
+      { userId: 'p1', startTime: new Date('2026-07-11T10:00:00Z'), participants: [{ userId: 'u1' }, { userId: 'p1' }] },
+    ] as any);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'p1', firstName: 'P', lastName: 'X', avatarUrl: null, acceptsFriendRequests: true },
+    ] as any);
+    const out = await service.playerSuggestions('demo', 'u1', now);
+    const p1 = out.find((s) => s.id === 'p1')!;
+    expect(p1.playedCount).toBe(1);
   });
 
   it('cap 8 suggestions', async () => {
