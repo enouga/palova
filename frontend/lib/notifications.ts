@@ -4,7 +4,7 @@ import { ACCENTS } from '@/lib/theme';
 
 export type NotifCategory =
   | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'DIRECT_MESSAGES' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
-  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL';
+  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL' | 'MODERATION';
 export type NotifChannel = 'INAPP' | 'PUSH' | 'EMAIL';
 
 export interface CategoryMeta { key: NotifCategory; label: string; desc: string; staffOnly?: boolean }
@@ -19,6 +19,7 @@ export const CATEGORY_META: CategoryMeta[] = [
   { key: 'PAYMENTS', label: 'Paiements', desc: 'Remboursements' },
   { key: 'CLUB_MESSAGES', label: 'Messages du club', desc: "Annonces de l’équipe du club" },
   { key: 'ORGANIZER', label: 'Activité de mes events', desc: "Inscriptions/désinscriptions sur ce que j’organise", staffOnly: true },
+  { key: 'MODERATION', label: 'Signalements', desc: 'Un message du chat de partie a été signalé', staffOnly: true },
   { key: 'REMINDERS', label: 'Rappels', desc: 'Avant une partie ou un event' },
   { key: 'SOCIAL', label: 'Amis & suivi', desc: 'Quand un joueur commence à vous suivre' },
 ];
@@ -69,6 +70,7 @@ export function notificationVisual(category: string, type: string): NotifVisual 
     case 'MY_MATCHES':        return { icon: 'ball', accent: ACCENTS.blue };
     case 'DIRECT_MESSAGES':   return { icon: 'chat', accent: ACCENTS.blue };
     case 'CLUB_MESSAGES':     return { icon: 'info', accent: ACCENTS.cyan };
+    case 'MODERATION':        return { icon: 'flag', accent: ACCENTS.coral };
     default:                  return { icon: 'bell', accent: ACCENTS.blue };
   }
 }
