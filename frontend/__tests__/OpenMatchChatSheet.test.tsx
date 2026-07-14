@@ -20,6 +20,7 @@ jest.mock('@/lib/api', () => ({
     ]),
     postChatMessage: jest.fn().mockResolvedValue({ id: 'm2', author: { userId: 'u1', firstName: 'Moi', lastName: 'X', avatarUrl: null }, body: 'yo', createdAt: '2026-06-28T10:01:00Z', deleted: false }),
     deleteChatMessage: jest.fn().mockResolvedValue({}),
+    reportChatMessage: jest.fn().mockResolvedValue({ id: 'rep-1' }),
   },
 }));
 
@@ -65,4 +66,29 @@ it('insère un emoji dans le champ via le sélecteur', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Emojis' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Emoji 🎾' }));
   expect(input.value).toBe('bravo 🎾');
+});
+
+it('affiche « Signaler » sur le message d un autre, pas sur le sien', async () => {
+  renderSheet();
+  await screen.findByText('salut'); // message de u2 (Bob)
+  expect(screen.getByRole('button', { name: /signaler/i })).toBeInTheDocument();
+});
+
+it('signale un message : ouvre ReportDialog, envoie le motif, confirme', async () => {
+  renderSheet();
+  await screen.findByText('salut');
+  fireEvent.click(screen.getByRole('button', { name: /signaler/i }));
+  fireEvent.click(screen.getByRole('button', { name: /envoyer le signalement/i }));
+  await waitFor(() => expect(require('@/lib/api').api.reportChatMessage).toHaveBeenCalledWith('demo', 'resa1', 'm1', 'HARASSMENT', null, 't'));
+  expect(await screen.findByText(/signalement envoyé/i)).toBeInTheDocument();
+});
+
+it('RATE_LIMITED à l envoi affiche un message inline', async () => {
+  const { api } = require('@/lib/api');
+  api.postChatMessage.mockRejectedValueOnce(new Error('RATE_LIMITED'));
+  renderSheet();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'trop vite' } });
+  fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+  expect(await screen.findByText(/trop de messages/i)).toBeInTheDocument();
 });

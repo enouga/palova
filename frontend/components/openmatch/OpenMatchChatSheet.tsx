@@ -6,6 +6,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReportDialog } from '@/components/moderation/ReportDialog';
 import { colorForSeed } from '@/lib/playerColors';
 import { CHAT_EMOJIS } from '@/lib/chatEmojis';
 
@@ -33,6 +34,8 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<OpenMatchMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<OpenMatchMessage | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const addEmoji = (e: string) => setDraft((d) => (d + e).slice(0, 2000));
@@ -68,9 +71,12 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
   const send = async () => {
     const body = draft.trim();
     if (!body || sending) return;
-    setSending(true); setDraft('');
+    setSending(true); setDraft(''); setSendError(null);
     try { upsert(await api.postChatMessage(slug, reservationId, body, token)); }
-    catch { setDraft(body); }
+    catch (err) {
+      setDraft(body);
+      if ((err as Error).message === 'RATE_LIMITED') setSendError('Vous envoyez trop de messages, patientez un instant.');
+    }
     finally { setSending(false); }
   };
 
@@ -120,11 +126,21 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
                   <div style={{ background: mine ? th.accent : th.surface, color: mine ? th.onAccent : th.text, borderRadius: 14, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 14, fontStyle: m.deleted ? 'italic' : 'normal', opacity: m.deleted ? 0.6 : 1 }}>
                     {m.deleted ? 'message supprimé' : m.body}
                   </div>
-                  {canDelete(m) && (
-                    <button type="button" onClick={() => setPendingDelete(m)}
-                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, marginTop: 2, padding: 0, textAlign: mine ? 'right' : 'left', width: '100%' }}>
-                      Supprimer
-                    </button>
+                  {(canDelete(m) || (!m.deleted && !mine)) && (
+                    <div style={{ display: 'flex', gap: 10, justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                      {canDelete(m) && (
+                        <button type="button" onClick={() => setPendingDelete(m)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                          Supprimer
+                        </button>
+                      )}
+                      {!m.deleted && !mine && (
+                        <button type="button" onClick={() => setReportTarget(m)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                          Signaler
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -133,6 +149,9 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
         </div>
 
         <div style={{ position: 'relative', borderTop: `1px solid ${th.line}` }}>
+          {sendError && (
+            <div style={{ padding: '6px 16px 0', fontFamily: th.fontUI, fontSize: 12.5, color: '#e0554f' }}>{sendError}</div>
+          )}
           {emojiOpen && (
             <div role="menu" aria-label="Choisir un emoji"
               style={{ position: 'absolute', bottom: '100%', left: 12, right: 12, marginBottom: 8, background: th.surface,
@@ -171,6 +190,14 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
           confirmLabel="Supprimer" cancelLabel="Annuler"
           onConfirm={() => doDelete(pendingDelete)}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+      {reportTarget && (
+        <ReportDialog
+          onCancel={() => setReportTarget(null)}
+          onSubmit={async (reason, detail) => {
+            await api.reportChatMessage(slug, reservationId, reportTarget.id, reason, detail || null, token);
+          }}
         />
       )}
     </div>
