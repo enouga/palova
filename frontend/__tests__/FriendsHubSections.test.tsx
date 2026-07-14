@@ -39,6 +39,13 @@ describe('SuggestionsRow', () => {
     // le libellé exact vient de FriendButton (état none/requestable)
     expect(screen.getByText(/Ajouter/)).toBeInTheDocument();
   });
+
+  it('le bouton message déclenche onMessage', () => {
+    const onMessage = jest.fn();
+    render(<SuggestionsRow suggestions={[sugg]} slug="demo" token="t" now={NOW} onChange={jest.fn()} onMessage={onMessage} />);
+    fireEvent.click(screen.getByLabelText('Écrire à Karim B'));
+    expect(onMessage).toHaveBeenCalledWith(sugg);
+  });
 });
 
 describe('FavoritesRow', () => {
@@ -49,6 +56,36 @@ describe('FavoritesRow', () => {
     fireEvent.click(screen.getByText('⚡ Inviter'));
     expect(onInvite).toHaveBeenCalled();
   });
+
+  it('re-cliquer la même chip referme la barre', () => {
+    render(<FavoritesRow favorites={[friend('u2', 'Léa')]} onMessage={jest.fn()} onInvite={jest.fn()} onRemove={jest.fn()} />);
+    fireEvent.click(screen.getByText('Léa'));
+    expect(screen.getByText('⚡ Inviter')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Léa'));
+    expect(screen.queryByText('⚡ Inviter')).not.toBeInTheDocument();
+  });
+
+  it("cliquer une autre chip ferme la première et ouvre la seconde", () => {
+    render(<FavoritesRow favorites={[friend('u2', 'Léa'), friend('u3', 'Marc')]} onMessage={jest.fn()} onInvite={jest.fn()} onRemove={jest.fn()} />);
+    fireEvent.click(screen.getByText('Léa'));
+    expect(screen.getByText(/Léa X :/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Marc'));
+    expect(screen.queryByText(/Léa X :/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Marc X :/)).toBeInTheDocument();
+  });
+
+  it('onMessage et onRemove sont appelés ; retirer referme la barre', () => {
+    const f = friend('u2', 'Léa');
+    const onMessage = jest.fn();
+    const onRemove = jest.fn();
+    render(<FavoritesRow favorites={[f]} onMessage={onMessage} onInvite={jest.fn()} onRemove={onRemove} />);
+    fireEvent.click(screen.getByText('Léa'));
+    fireEvent.click(screen.getByText('💬 Message'));
+    expect(onMessage).toHaveBeenCalledWith(f);
+    fireEvent.click(screen.getByText('Retirer ★'));
+    expect(onRemove).toHaveBeenCalledWith(f);
+    expect(screen.queryByText('💬 Message')).not.toBeInTheDocument();
+  });
 });
 
 describe('FollowersFooter', () => {
@@ -58,5 +95,17 @@ describe('FollowersFooter', () => {
     rerender(<FollowersFooter followers={[friend('u2', 'Léa')]} slug="demo" token="t" anchorOpen onChange={jest.fn()} />);
     expect(screen.getByText('Léa X')).toBeInTheDocument();
     expect(screen.getByText('☆ Favori')).toBeInTheDocument();
+  });
+
+  it('un follower mutuel ne montre pas de bouton Favori', () => {
+    render(<FollowersFooter followers={[{ ...friend('u2', 'Léa'), mutual: true }]} slug="demo" token="t" anchorOpen onChange={jest.fn()} />);
+    expect(screen.getByText('Léa X')).toBeInTheDocument();
+    expect(screen.queryByText('☆ Favori')).not.toBeInTheDocument();
+  });
+
+  it('état vide déplié : 0 followers', () => {
+    render(<FollowersFooter followers={[]} slug="demo" token="t" anchorOpen onChange={jest.fn()} />);
+    expect(screen.getByText('Qui me suit · 0', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Personne ne vous suit pour l'instant.")).toBeInTheDocument();
   });
 });

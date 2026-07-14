@@ -5,7 +5,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { LevelChip } from '@/components/player/LevelChip';
 import { colorForSeed } from '@/lib/playerColors';
-import { SectionHeader } from '@/components/clubhouse/SectionHeader';
+import { SectionHeader, listRowStyle } from '@/components/clubhouse/SectionHeader';
 import { FollowButton } from '@/components/social/FollowButton';
 import { FriendButton } from '@/components/social/FriendButton';
 import { suggestionReason } from '@/lib/social';
@@ -25,7 +25,7 @@ export function SuggestionsRow({ suggestions, slug, token, now, onChange, onMess
     <section aria-label="Suggestions">
       <SectionHeader title="Suggestions" />
       {suggestions.map((s) => (
-        <div key={s.id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, rowGap: 6, padding: '8px 4px', borderBottom: `1px solid ${th.line}` }}>
+        <div key={s.id} style={listRowStyle(th)}>
           <Avatar firstName={s.firstName} lastName={s.lastName} avatarUrl={s.avatarUrl} size={36} color={colorForSeed(s.id)} />
           <div style={{ flex: 1, minWidth: 150 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>

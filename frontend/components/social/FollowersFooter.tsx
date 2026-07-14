@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
 import { FollowButton } from '@/components/social/FollowButton';
+import { listRowStyle } from '@/components/clubhouse/SectionHeader';
 
 // Pied discret « Qui me suit · N » (remplace l'onglet Abonnés) : repliable,
 // « ★ Favori » en retour pour ceux que je ne suis pas encore.
@@ -29,7 +30,7 @@ export function FollowersFooter({ followers, slug, token, anchorOpen, onChange }
       {open && (followers.length === 0
         ? <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, padding: '10px 0' }}>Personne ne vous suit pour l&apos;instant.</div>
         : followers.map((f) => (
-          <div key={f.id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, rowGap: 6, padding: '8px 4px', borderBottom: `1px solid ${th.line}` }}>
+          <div key={f.id} style={listRowStyle(th)}>
             <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl} size={32} color={colorForSeed(f.id)} />
             <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text, fontWeight: 600 }}>{f.firstName} {f.lastName}</span>
             {!f.mutual && <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: false }} size="xs" onChange={onChange} />}
