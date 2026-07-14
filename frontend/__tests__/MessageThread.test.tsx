@@ -29,6 +29,7 @@ jest.mock('@/lib/api', () => ({
       meta: { myLastReadAt: null, otherLastReadAt: '2026-07-04T11:00:00Z', blocked: false, hasMore: false },
     }),
     postDmMessage: jest.fn().mockResolvedValue(MSG('m3', 'u1', 'nouveau')),
+    editDmMessage: jest.fn().mockResolvedValue(MSG('m2', 'u1', 'corrigé', { edited: true })),
     deleteDmMessage: jest.fn().mockResolvedValue(MSG('m2', 'u1', '', { deleted: true })),
     addDmReaction: jest.fn().mockResolvedValue([{ emoji: '👍', userIds: ['u1'] }]),
     removeDmReaction: jest.fn().mockResolvedValue([]),
@@ -114,6 +115,34 @@ it('pagination : « Messages précédents » visible si hasMore, charge avec bef
   fireEvent.click(screen.getByRole('button', { name: /précédents/i }));
   await waitFor(() => expect(apiMock.getDmMessages).toHaveBeenCalledWith('c1', 't', 'm5'));
   expect(await screen.findByText('ancien')).toBeInTheDocument();
+});
+
+it('affiche « Modifier » sur son propre message (m2, u1), pas sur celui de l autre (m1, u2)', async () => {
+  renderThread();
+  await screen.findByText('salut');
+  expect(screen.getAllByRole('button', { name: /^modifier$/i })).toHaveLength(1);
+});
+
+it('modifie son message : bascule en édition, enregistre, affiche « modifié »', async () => {
+  renderThread();
+  await screen.findByText('yo');
+  fireEvent.click(screen.getByRole('button', { name: /^modifier$/i }));
+  const editBox = screen.getByDisplayValue('yo');
+  fireEvent.change(editBox, { target: { value: 'corrigé' } });
+  fireEvent.click(screen.getByRole('button', { name: /enregistrer/i }));
+  await waitFor(() => expect(apiMock.editDmMessage).toHaveBeenCalledWith('c1', 'm2', 'corrigé', 't'));
+  expect(await screen.findByText('corrigé')).toBeInTheDocument();
+  expect(screen.getByText(/modifié/i)).toBeInTheDocument();
+});
+
+it('Annuler l édition restaure l affichage normal sans appeler l API', async () => {
+  renderThread();
+  await screen.findByText('yo');
+  const callsBefore = apiMock.editDmMessage.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: /^modifier$/i }));
+  fireEvent.click(screen.getByRole('button', { name: /annuler/i }));
+  expect(screen.getByText('yo')).toBeInTheDocument();
+  expect(apiMock.editDmMessage.mock.calls.length).toBe(callsBefore);
 });
 
 it('affiche « Signaler » sur le message de l autre, pas sur le sien', async () => {

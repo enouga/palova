@@ -301,6 +301,8 @@ export const api = {
     request<OpenMatchMessage[]>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, {}, token),
   postChatMessage: (slug: string, id: string, body: string, token: string) =>
     request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+  editChatMessage: (slug: string, id: string, messageId: string, body: string, token: string) =>
+    request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ body }) }, token),
   deleteChatMessage: (slug: string, id: string, messageId: string, token: string) =>
     request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}`, { method: 'DELETE' }, token),
   reportChatMessage: (slug: string, id: string, messageId: string, reason: ReportReason, detail: string | null, token: string) =>
@@ -785,6 +787,8 @@ export const api = {
       `/api/conversations/${conversationId}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`, {}, token),
   postDmMessage: (conversationId: string, body: string, token: string) =>
     request<DmMessage>(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
+  editDmMessage: (conversationId: string, messageId: string, body: string, token: string) =>
+    request<DmMessage>(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ body }) }, token),
   deleteDmMessage: (conversationId: string, messageId: string, token: string) =>
     request<DmMessage>(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' }, token),
   reportDmMessage: (conversationId: string, messageId: string, reason: ReportReason, detail: string | null, token: string) =>
@@ -1540,6 +1544,7 @@ export interface OpenMatchMessage {
   body: string;
   createdAt: string;
   deleted: boolean;
+  edited: boolean;
 }
 
 export interface MatchAlert {
@@ -2392,7 +2397,7 @@ export interface DmUserInfo { userId: string; firstName: string; lastName: strin
 export interface DmReaction { emoji: string; userIds: string[] }
 export interface DmMessage {
   id: string; author: DmUserInfo; body: string; imageUrl: string | null;
-  createdAt: string; deleted: boolean; reactions: DmReaction[];
+  createdAt: string; deleted: boolean; edited: boolean; reactions: DmReaction[];
 }
 export interface DmMeta { myLastReadAt: string | null; otherLastReadAt: string | null; blocked: boolean; hasMore: boolean }
 export interface ConversationSummary {

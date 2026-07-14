@@ -36,6 +36,10 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
   const [pendingDelete, setPendingDelete] = useState<OpenMatchMessage | null>(null);
   const [reportTarget, setReportTarget] = useState<OpenMatchMessage | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const addEmoji = (e: string) => setDraft((d) => (d + e).slice(0, 2000));
@@ -88,6 +92,17 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
     finally { setPendingDelete(null); }
   };
 
+  const startEdit = (m: OpenMatchMessage) => { setEditingId(m.id); setEditDraft(m.body); setEditError(null); };
+  const cancelEdit = () => { setEditingId(null); setEditError(null); };
+  const saveEdit = async (m: OpenMatchMessage) => {
+    const body = editDraft.trim();
+    if (!body) return;
+    setEditBusy(true); setEditError(null);
+    try { upsert(await api.editChatMessage(slug, reservationId, m.id, body, token)); setEditingId(null); }
+    catch { setEditError('Échec de la modification, réessayez.'); }
+    finally { setEditBusy(false); }
+  };
+
   return (
     <div role="dialog" aria-label="Discussion de la partie"
       style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
@@ -121,26 +136,53 @@ export function OpenMatchChatSheet({ slug, token, reservationId, viewerUserId, v
                 <Avatar firstName={m.author.firstName} lastName={m.author.lastName} avatarUrl={m.author.avatarUrl} size={28} color={colorForSeed(m.author.userId)} />
                 <div style={{ maxWidth: '72%' }}>
                   <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginBottom: 2, textAlign: mine ? 'right' : 'left' }}>
-                    {m.author.firstName} · {hhmm(m.createdAt, timezone)}
+                    {m.author.firstName} · {hhmm(m.createdAt, timezone)}{m.edited ? ' · modifié' : ''}
                   </div>
-                  <div style={{ background: mine ? th.accent : th.surface, color: mine ? th.onAccent : th.text, borderRadius: 14, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 14, fontStyle: m.deleted ? 'italic' : 'normal', opacity: m.deleted ? 0.6 : 1 }}>
-                    {m.deleted ? 'message supprimé' : m.body}
-                  </div>
-                  {(canDelete(m) || (!m.deleted && !mine)) && (
-                    <div style={{ display: 'flex', gap: 10, justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
-                      {canDelete(m) && (
-                        <button type="button" onClick={() => setPendingDelete(m)}
+                  {editingId === m.id ? (
+                    <div>
+                      <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value.slice(0, 2000))} rows={2} autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m); } }}
+                        style={{ width: '100%', border: `1px solid ${th.line}`, borderRadius: 12, padding: '8px 12px', resize: 'vertical', fontFamily: th.fontUI, fontSize: 14, background: th.surface, color: th.text }} />
+                      {editError && <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: '#e0554f', marginTop: 3 }}>{editError}</div>}
+                      <div style={{ display: 'flex', gap: 10, marginTop: 3, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+                        <button type="button" onClick={cancelEdit} disabled={editBusy}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
-                          Supprimer
+                          Annuler
                         </button>
-                      )}
-                      {!m.deleted && !mine && (
-                        <button type="button" onClick={() => setReportTarget(m)}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
-                          Signaler
+                        <button type="button" onClick={() => saveEdit(m)} disabled={editBusy || !editDraft.trim()}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, padding: 0 }}>
+                          {editBusy ? '…' : 'Enregistrer'}
                         </button>
-                      )}
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      <div style={{ background: mine ? th.accent : th.surface, color: mine ? th.onAccent : th.text, borderRadius: 14, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 14, fontStyle: m.deleted ? 'italic' : 'normal', opacity: m.deleted ? 0.6 : 1 }}>
+                        {m.deleted ? 'message supprimé' : m.body}
+                      </div>
+                      {(mine || canDelete(m) || (!m.deleted && !mine)) && (
+                        <div style={{ display: 'flex', gap: 10, justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                          {mine && !m.deleted && (
+                            <button type="button" onClick={() => startEdit(m)}
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                              Modifier
+                            </button>
+                          )}
+                          {canDelete(m) && (
+                            <button type="button" onClick={() => setPendingDelete(m)}
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                              Supprimer
+                            </button>
+                          )}
+                          {!m.deleted && !mine && (
+                            <button type="button" onClick={() => setReportTarget(m)}
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                              Signaler
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

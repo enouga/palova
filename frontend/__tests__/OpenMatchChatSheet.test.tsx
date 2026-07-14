@@ -19,6 +19,7 @@ jest.mock('@/lib/api', () => ({
       { id: 'm1', author: { userId: 'u2', firstName: 'Bob', lastName: 'Y', avatarUrl: null }, body: 'salut', createdAt: '2026-06-28T10:00:00Z', deleted: false },
     ]),
     postChatMessage: jest.fn().mockResolvedValue({ id: 'm2', author: { userId: 'u1', firstName: 'Moi', lastName: 'X', avatarUrl: null }, body: 'yo', createdAt: '2026-06-28T10:01:00Z', deleted: false }),
+    editChatMessage: jest.fn().mockResolvedValue({ id: 'm2', author: { userId: 'u1', firstName: 'Moi', lastName: 'X', avatarUrl: null }, body: 'corrigé', createdAt: '2026-06-28T10:01:00Z', deleted: false, edited: true }),
     deleteChatMessage: jest.fn().mockResolvedValue({}),
     reportChatMessage: jest.fn().mockResolvedValue({ id: 'rep-1' }),
   },
@@ -92,6 +93,48 @@ it('cliquer dans ReportDialog ne ferme PAS la feuille de discussion (pas de bubb
   fireEvent.click(screen.getByRole('button', { name: /envoyer le signalement/i }));
   await screen.findByText(/signalement envoyé/i);
   expect(onClose).not.toHaveBeenCalled();
+});
+
+it('affiche « Modifier » sur son propre message envoyé, pas sur celui d un autre', async () => {
+  renderSheet();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'yo' } });
+  fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+  await screen.findByText('yo'); // mon message (u1)
+  expect(screen.getAllByRole('button', { name: /^modifier$/i })).toHaveLength(1);
+});
+
+it('modifie son message : bascule en édition, enregistre, met à jour le fil (« modifié »)', async () => {
+  const { api } = require('@/lib/api');
+  renderSheet();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'yo' } });
+  fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+  await screen.findByText('yo');
+
+  fireEvent.click(screen.getByRole('button', { name: /^modifier$/i }));
+  const editBox = screen.getByDisplayValue('yo');
+  fireEvent.change(editBox, { target: { value: 'corrigé' } });
+  fireEvent.click(screen.getByRole('button', { name: /enregistrer/i }));
+
+  await waitFor(() => expect(api.editChatMessage).toHaveBeenCalledWith('demo', 'resa1', 'm2', 'corrigé', 't'));
+  expect(await screen.findByText('corrigé')).toBeInTheDocument();
+  expect(screen.getByText(/modifié/i)).toBeInTheDocument();
+});
+
+it('échec de la modification : reste en édition avec un message d erreur', async () => {
+  const { api } = require('@/lib/api');
+  api.editChatMessage.mockRejectedValueOnce(new Error('boom'));
+  renderSheet();
+  await screen.findByText('salut');
+  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: 'yo' } });
+  fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+  await screen.findByText('yo');
+
+  fireEvent.click(screen.getByRole('button', { name: /^modifier$/i }));
+  fireEvent.click(screen.getByRole('button', { name: /enregistrer/i }));
+  expect(await screen.findByText(/échec de la modification/i)).toBeInTheDocument();
+  expect(screen.getByDisplayValue('yo')).toBeInTheDocument(); // toujours en édition
 });
 
 it('RATE_LIMITED à l envoi affiche un message inline', async () => {

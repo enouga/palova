@@ -36,7 +36,7 @@ describe('isReadByOther', () => {
 
 describe('applyReactionToggle (patch local optimiste)', () => {
   const msg: DmMessage = { id: 'm1', author: { userId: 'u2', firstName: 'M', lastName: 'D', avatarUrl: null },
-    body: 'x', imageUrl: null, createdAt: '2026-07-04T10:00:00Z', deleted: false,
+    body: 'x', imageUrl: null, createdAt: '2026-07-04T10:00:00Z', deleted: false, edited: false,
     reactions: [{ emoji: '👍', userIds: ['u2'] }] };
   it('ajoute ma réaction', () => {
     const r = applyReactionToggle(msg.reactions, '👍', 'u1');

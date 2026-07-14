@@ -38,6 +38,10 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
   const [reportTarget, setReportTarget] = useState<DmMessage | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [writeBlocked, setWriteBlocked] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<DmMessage | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -135,6 +139,17 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
     finally { setPendingDelete(null); }
   };
 
+  const startEdit = (m: DmMessage) => { setEditingId(m.id); setEditDraft(m.body); setEditError(null); };
+  const cancelEdit = () => { setEditingId(null); setEditError(null); };
+  const saveEdit = async (m: DmMessage) => {
+    const body = editDraft.trim();
+    if (!body) return;
+    setEditBusy(true); setEditError(null);
+    try { upsert(await api.editDmMessage(conversationId, m.id, body, token)); setEditingId(null); }
+    catch { setEditError('Échec de la modification, réessayez.'); }
+    finally { setEditBusy(false); }
+  };
+
   const loadMore = async () => {
     if (loadingMore || !messages.length) return;
     setLoadingMore(true);
@@ -180,8 +195,26 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                   size={28} color={colorForSeed(m.author.userId)} />
                 <div style={{ maxWidth: '72%', position: 'relative' }}>
                   <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginBottom: 2, textAlign: mine ? 'right' : 'left' }}>
-                    {hhmm(m.createdAt)}
+                    {hhmm(m.createdAt)}{m.edited ? ' · modifié' : ''}
                   </div>
+                  {editingId === m.id ? (
+                    <div>
+                      <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value.slice(0, 2000))} rows={2} autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m); } }}
+                        style={{ width: '100%', border: `1px solid ${th.line}`, borderRadius: 12, padding: '8px 12px', resize: 'vertical', fontFamily: th.fontUI, fontSize: 14, background: th.surface, color: th.text }} />
+                      {editError && <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: '#e0554f', marginTop: 3 }}>{editError}</div>}
+                      <div style={{ display: 'flex', gap: 10, marginTop: 3, justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={cancelEdit} disabled={editBusy}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
+                          Annuler
+                        </button>
+                        <button type="button" onClick={() => saveEdit(m)} disabled={editBusy || !editDraft.trim()}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.accent, fontFamily: th.fontUI, fontWeight: 700, fontSize: 11.5, padding: 0 }}>
+                          {editBusy ? '…' : 'Enregistrer'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                   <div style={{ background: mine ? th.accent : th.surface, color: mine ? th.onAccent : th.text,
                     borderRadius: 14, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 14,
                     fontStyle: m.deleted ? 'italic' : 'normal', opacity: m.deleted ? 0.6 : 1 }}>
@@ -199,6 +232,7 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                       </>
                     )}
                   </div>
+                  )}
                   {m.reactions.length > 0 && (
                     <div style={{ display: 'flex', gap: 4, marginTop: 3, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
                       {m.reactions.map((r) => (
@@ -212,7 +246,7 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                       ))}
                     </div>
                   )}
-                  {!m.deleted && (
+                  {!m.deleted && editingId !== m.id && (
                     <div style={{ display: 'flex', gap: 8, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
                       <button type="button" aria-label={`Réagir au message de ${m.author.firstName}`}
                         onClick={() => setReactFor(reactFor === m.id ? null : m.id)}
@@ -220,6 +254,13 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                           fontFamily: th.fontUI, fontSize: 11.5, padding: 0, marginTop: 2 }}>
                         Réagir
                       </button>
+                      {mine && (
+                        <button type="button" onClick={() => startEdit(m)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint,
+                            fontFamily: th.fontUI, fontSize: 11.5, padding: 0, marginTop: 2 }}>
+                          Modifier
+                        </button>
+                      )}
                       {mine && (
                         <button type="button" onClick={() => setPendingDelete(m)}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint,
