@@ -6,6 +6,7 @@ import { durationLabel } from '@/lib/duration';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ReservationPlayersInline } from '@/components/reservations/ReservationPlayersInline';
+import { OpenMatchQuickSwitch } from '@/components/reservations/OpenMatchQuickSwitch';
 
 /**
  * Écran de succès de la modale de réservation : la confirmation devient le moment
@@ -73,6 +74,9 @@ export function BookingSuccess({ reservationId, token, summary, slot, timezone, 
 
       {showPartners && (
         <div style={{ marginTop: 18 }}>
+          {!failed && resa && (
+            <OpenMatchQuickSwitch reservation={resa} token={token} onChanged={reload} />
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
             <Icon name="users" size={13} color={th.textMute} />
             <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>Organisez votre partie</span>
@@ -80,7 +84,7 @@ export function BookingSuccess({ reservationId, token, summary, slot, timezone, 
           {failed ? (
             <a href="/me/reservations" style={{ fontFamily: th.fontUI, fontSize: 13, color: th.accent, fontWeight: 600 }}>Gérer ma réservation →</a>
           ) : resa ? (
-            <ReservationPlayersInline reservation={resa} token={token} now={now} onChanged={reload} />
+            <ReservationPlayersInline reservation={resa} token={token} now={now} onChanged={reload} hideOpenMatchToggle />
           ) : (
             <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>Chargement…</div>
           )}

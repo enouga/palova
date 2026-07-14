@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BookingSuccess } from '../components/booking/BookingSuccess';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { api, TimeSlot } from '../lib/api';
@@ -6,12 +6,13 @@ import { api, TimeSlot } from '../lib/api';
 jest.mock('../lib/api', () => ({
   api: {
     getMyReservations:        jest.fn().mockResolvedValue([]),
-    setReservationVisibility: jest.fn(),
+    setReservationVisibility: jest.fn().mockResolvedValue({ id: 'res-1', visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null }),
     setReservationTeams:      jest.fn(),
     addReservationPlayer:     jest.fn(),
     removeReservationPlayer:  jest.fn(),
     searchClubMembers:        jest.fn().mockResolvedValue([]),
     listClubFriends:          jest.fn().mockResolvedValue([]),
+    getMyRating:              jest.fn().mockResolvedValue(null),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -51,12 +52,24 @@ describe('BookingSuccess', () => {
     expect(onDone).toHaveBeenCalled();
   });
 
-  it('showPartners → charge la résa et rend le bloc d organisation (équipes + ouvrir la partie)', async () => {
+  it('showPartners → charge la résa et rend le bloc d organisation (équipes + interrupteur partie ouverte)', async () => {
     renderSuccess();
     expect(await screen.findByText(/Organisez votre partie/i)).toBeInTheDocument();
     expect(await screen.findByText(/Alice/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
+    const sw = screen.getByRole('switch', { name: /Partie ouverte aux membres/ });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
     expect(api.getMyReservations).toHaveBeenCalledWith('jwt');
+  });
+
+  it('bascule l interrupteur « Partie ouverte » → appelle setReservationVisibility PUBLIC', async () => {
+    renderSuccess();
+    const sw = await screen.findByRole('switch', { name: /Partie ouverte aux membres/ });
+    fireEvent.click(sw);
+    // Pas de préférence mémorisée ni de niveau connu (getMyRating → null) : OpenMatchQuickSwitch
+    // garde ses valeurs par défaut (limiter le niveau ON, fourchette 3–5).
+    await waitFor(() => expect(api.setReservationVisibility).toHaveBeenCalledWith(
+      'res-1', 'PUBLIC', 'jwt', { targetLevelMin: 3, targetLevelMax: 5 },
+    ));
   });
 
   it('showPartners=false → pas de fetch ni de bloc d organisation', async () => {
