@@ -30,6 +30,7 @@ import { SubscriptionService } from '../services/subscription.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
 import { PresentationService } from '../services/presentation.service';
 import { OnboardingService } from '../services/onboarding.service';
+import { ModerationService } from '../services/moderation.service';
 import { billingState } from '../services/platformBilling/platformBilling.service';
 import { createBillingCheckout, createBillingPortal } from '../services/platformBilling/stripeBilling';
 import { tierFor, tierPriceCents, tierLabel } from '../services/platformBilling/tiers';
@@ -56,6 +57,7 @@ const subscriptionService = new SubscriptionService();
 const emailTemplateService = new EmailTemplateService();
 const presentationService = new PresentationService();
 const onboardingService = new OnboardingService();
+const moderationService = new ModerationService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -117,6 +119,7 @@ const ERROR_STATUS: Record<string, number> = {
   SUBSCRIPTION_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_RENEWABLE: 409,
   EMAIL_TYPE_UNKNOWN:     404,
+  REPORT_NOT_FOUND:       404,
   PHOTO_LIMIT_REACHED:    409,
   PHOTO_NOT_FOUND:        404,
   ALREADY_SUBSCRIBED:     409,
@@ -1425,6 +1428,24 @@ router.post('/billing/portal', requireClubMember('OWNER'), async (req: ClubScope
     const url = await createBillingPortal(req.membership!.clubId, returnUrl);
     res.json({ url });
   } catch (e) { handleError(e, res, next); }
+});
+
+// --- Modération (signalements du chat de partie) ---
+
+router.get('/moderation/reports', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const items = await moderationService.listClubReports(req.membership!.clubId, { status });
+    res.json({ items });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/moderation/reports/:reportId/resolve', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const action = (req.body as { action?: unknown })?.action;
+    if (action !== 'DELETE' && action !== 'REJECT') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await moderationService.resolveClubReport(req.membership!.clubId, asString(req.params.reportId), req.user!.id, action));
+  } catch (err) { handleError(err, res, next); }
 });
 
 export default router;

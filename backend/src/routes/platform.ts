@@ -6,11 +6,14 @@ import { syncAllInvoices } from '../services/platformBilling/platformInvoices';
 import {
   setClubSubscriptionTier, cancelClubSubscription, resumeClubSubscription,
 } from '../services/platformBilling/subscriptionAdmin';
+import { ModerationService } from '../services/moderation.service';
+import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const platform = new PlatformService();
 const platformStats = new PlatformStatsService();
 const sportCatalog = new SportCatalogService();
+const moderationService = new ModerationService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR: 400,
@@ -24,7 +27,14 @@ const ERROR_STATUS: Record<string, number> = {
   SPORT_KEY_TAKEN:  409,
   SPORT_IN_USE:     409,
   SPORT_NOT_FOUND:  404,
+  REPORT_NOT_FOUND: 404,
 };
+
+function asString(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
+  return '';
+}
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
   const message = (err as Error).message;
@@ -118,6 +128,31 @@ router.patch('/sports/:id', async (req, res, next) => {
 router.delete('/sports/:id', async (req, res, next) => {
   try { res.json(await sportCatalog.deleteSport(req.params.id)); }
   catch (err) { handleError(err, res, next); }
+});
+
+// --- Modération (signalements de messagerie privée — jamais le chat de partie, réservé au staff club) ---
+
+router.get('/moderation/reports', async (req, res, next) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const items = await moderationService.listPlatformReports({ status });
+    res.json({ items });
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.post('/moderation/reports/:reportId/resolve', async (req: AuthRequest, res, next) => {
+  try {
+    const action = (req.body as { action?: unknown })?.action;
+    if (action !== 'DELETE' && action !== 'REJECT') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await moderationService.resolvePlatformReport(asString(req.params.reportId), req.user!.id, action));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.get('/moderation/reports/:id/image', async (req, res) => {
+  try {
+    const { absPath, mime } = await moderationService.platformReportImagePath(asString(req.params.id));
+    res.sendFile(absPath, { dotfiles: 'allow', headers: { 'Content-Type': mime, 'Cache-Control': 'private, max-age=60' } });
+  } catch { res.status(404).end(); }
 });
 
 export default router;
