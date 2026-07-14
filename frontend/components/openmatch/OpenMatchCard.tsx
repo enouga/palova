@@ -98,7 +98,7 @@ export function OpenMatchCard({
       {friendCount > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>
           <Icon name="users" size={14} color={th.accent} />
-          {friendCount === 1 ? '1 de vos amis joue ici' : `${friendCount} de vos amis jouent ici`}
+          {friendCount === 1 ? '1 de vos favoris joue ici' : `${friendCount} de vos favoris jouent ici`}
         </div>
       )}
       <MatchTeams

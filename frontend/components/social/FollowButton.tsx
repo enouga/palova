@@ -2,9 +2,8 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Icon } from '@/components/ui/Icon';
 
-// Toggle de suivi réutilisable, optimiste. 3 états : Suivre / Suivi(e) / Amis (mutuel).
+// Toggle de suivi réutilisable, optimiste. Libellé « ☆ Favori » / « ★ Favori ».
 export function FollowButton({ slug, userId, token, initial, size = 'sm', onChange }: {
   slug: string;
   userId: string;
@@ -39,7 +38,7 @@ export function FollowButton({ slug, userId, token, initial, size = 'sm', onChan
 
   const pad = size === 'xs' ? '3px 8px' : '5px 11px';
   const fs  = size === 'xs' ? 12 : 13;
-  const label = iFollow ? 'Suivi(e)' : 'Suivre';
+  const label = iFollow ? '★ Favori' : '☆ Favori';
   const filled = iFollow;
   const style: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 5, border: `1px solid ${th.accent}`,
@@ -49,7 +48,6 @@ export function FollowButton({ slug, userId, token, initial, size = 'sm', onChan
   };
   return (
     <button type="button" onClick={toggle} disabled={busy} style={style} aria-pressed={iFollow}>
-      <Icon name={iFollow ? 'check' : 'plus'} size={fs} color={filled ? th.onAccent : th.accent} />
       {label}
     </button>
   );

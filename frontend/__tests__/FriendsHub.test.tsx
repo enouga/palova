@@ -65,11 +65,11 @@ describe('FriendsHub', () => {
     expect(await screen.findByText('Zoé K')).toBeInTheDocument();
   });
 
-  it('onglet Abonnés : un follower que je suis en retour affiche « Suivi(e) », pas « Suivre »', async () => {
+  it('onglet Abonnés : un follower que je suis en retour affiche « ★ Favori », pas « ☆ Favori »', async () => {
     listFollowers.mockResolvedValue([{ id: 'u5', firstName: 'Max', lastName: 'R', avatarUrl: null, mutual: true }]);
     render(<FriendsHub slug="demo" token="t" initialTab="followers" />);
     expect(await screen.findByText('Max R')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Suivi\(e\)/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Suivre$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '★ Favori' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '☆ Favori' })).not.toBeInTheDocument();
   });
 });
