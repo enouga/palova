@@ -15,6 +15,7 @@ import { SubscriptionService } from '../services/subscription.service';
 import jwt from 'jsonwebtoken';
 import { OpenMatchService } from '../services/openMatch.service';
 import { OpenMatchChatService } from '../services/openMatchChat.service';
+import { ModerationService } from '../services/moderation.service';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
 import { SocialHubService } from '../services/socialHub.service';
@@ -45,6 +46,7 @@ const eventService = new EventService();
 const packageService = new PackageService();
 const openMatchService = new OpenMatchService();
 const openMatchChatService = new OpenMatchChatService();
+const moderationService = new ModerationService();
 const reservationService = new ReservationService();
 const subscriptionService = new SubscriptionService();
 const paymentMethodService = new PaymentMethodService();
@@ -92,6 +94,7 @@ const ERROR_STATUS: Record<string, number> = {
   STRIPE_NOT_CONFIGURED:    409,
   NOT_PAYABLE:              409,
   UNAUTHORIZED:             403,
+  RATE_LIMITED:             429,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -409,6 +412,18 @@ router.post('/:slug/open-matches/:id/chat/messages', authMiddleware, async (req:
 router.delete('/:slug/open-matches/:id/chat/messages/:messageId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await openMatchChatService.deleteMessage(asString(req.params.slug), asString(req.params.id), req.user!.id, asString(req.params.messageId))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Signalement d'un message du chat (DSA/LCEN) — jamais son propre message, dédup par signaleur.
+router.post('/:slug/open-matches/:id/chat/messages/:messageId/report', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as { reason?: unknown; detail?: unknown };
+    const r = await moderationService.reportOpenMatchMessage(
+      asString(req.params.slug), asString(req.params.id), asString(req.params.messageId), req.user!.id,
+      { reason: body.reason, detail: typeof body.detail === 'string' ? body.detail : null },
+    );
+    res.json(r);
+  } catch (err) { handleError(err, res, next); }
 });
 
 // Marque lus les messages de chat d'une partie pour l'utilisateur.

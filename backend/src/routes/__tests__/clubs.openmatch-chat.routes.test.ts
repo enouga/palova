@@ -42,6 +42,13 @@ jest.mock('../../services/openMatchChat.service', () => {
   };
 });
 
+const reportImpl = jest.fn().mockResolvedValue({ id: 'rep-1' });
+jest.mock('../../services/moderation.service', () => ({
+  ModerationService: jest.fn().mockImplementation(() => ({
+    reportOpenMatchMessage: (...a: unknown[]) => reportImpl(...a),
+  })),
+}));
+
 import app from '../../app';
 import { OpenMatchService }     from '../../services/openMatch.service';
 import { OpenMatchChatService } from '../../services/openMatchChat.service';
@@ -343,5 +350,36 @@ describe('GET /api/clubs/:slug/open-matches/:id', () => {
     (getOpenMatch as jest.Mock).mockRejectedValue(new Error('RESERVATION_NOT_FOUND'));
     const res = await request(app).get('/api/clubs/demo/open-matches/nope');
     expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/clubs/:slug/open-matches/:id/chat/messages/:messageId/report', () => {
+  const reportUrl = `/api/clubs/${SLUG}/open-matches/${MATCH_ID}/chat/messages/m1/report`;
+  beforeEach(() => { reportImpl.mockReset().mockResolvedValue({ id: 'rep-1' }); });
+
+  it('401 sans token', async () => {
+    const res = await request(app).post(reportUrl).send({ reason: 'SPAM' });
+    expect(res.status).toBe(401);
+  });
+
+  it('200 avec un token valide', async () => {
+    const res = await request(app).post(reportUrl)
+      .set('Authorization', `Bearer ${token()}`).send({ reason: 'SPAM', detail: 'gênant' });
+    expect(res.status).toBe(200);
+    expect(reportImpl).toHaveBeenCalledWith(SLUG, MATCH_ID, 'm1', 'u1', { reason: 'SPAM', detail: 'gênant' });
+  });
+
+  it('429 quand le service lève RATE_LIMITED', async () => {
+    reportImpl.mockRejectedValue(new Error('RATE_LIMITED'));
+    const res = await request(app).post(reportUrl)
+      .set('Authorization', `Bearer ${token()}`).send({ reason: 'SPAM' });
+    expect(res.status).toBe(429);
+  });
+
+  it('400 quand le service lève VALIDATION_ERROR', async () => {
+    reportImpl.mockRejectedValue(new Error('VALIDATION_ERROR'));
+    const res = await request(app).post(reportUrl)
+      .set('Authorization', `Bearer ${token()}`).send({ reason: 'NAWAK' });
+    expect(res.status).toBe(400);
   });
 });

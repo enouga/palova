@@ -3,9 +3,11 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { MessagingService } from '../services/messaging.service';
+import { ModerationService } from '../services/moderation.service';
 import { SSEService } from '../services/sse.service';
 
 const messagingService = new MessagingService();
+const moderationService = new ModerationService();
 
 const ERROR_STATUS: Record<string, number> = {
   CONVERSATION_NOT_FOUND: 404,
@@ -16,6 +18,7 @@ const ERROR_STATUS: Record<string, number> = {
   CANNOT_MESSAGE_SELF:    400,
   CANNOT_BLOCK_SELF:      400,
   VALIDATION_ERROR:       400,
+  RATE_LIMITED:           429,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -107,6 +110,17 @@ conversationsRouter.delete('/:id/messages/:messageId/reactions', authMiddleware,
   try {
     const emoji = typeof req.query.emoji === 'string' ? req.query.emoji : '';
     res.json(await messagingService.removeReaction(asString(req.params.id), req.user!.id, asString(req.params.messageId), emoji));
+  } catch (err) { handleError(err, res, next); }
+});
+
+conversationsRouter.post('/:id/messages/:messageId/report', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body as { reason?: unknown; detail?: unknown };
+    const r = await moderationService.reportDirectMessage(
+      asString(req.params.id), asString(req.params.messageId), req.user!.id,
+      { reason: body.reason, detail: typeof body.detail === 'string' ? body.detail : null },
+    );
+    res.json(r);
   } catch (err) { handleError(err, res, next); }
 });
 

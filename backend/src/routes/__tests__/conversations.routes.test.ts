@@ -9,6 +9,13 @@ jest.mock('../../services/messaging.service', () => ({
   })),
 }));
 
+const reportImpl = jest.fn();
+jest.mock('../../services/moderation.service', () => ({
+  ModerationService: jest.fn().mockImplementation(() => ({
+    reportDirectMessage: (...a: unknown[]) => reportImpl(...a),
+  })),
+}));
+
 const token = jwt.sign({ id: 'u1', email: 'u1@test.fr' }, process.env.JWT_SECRET!);
 
 describe('routes conversations', () => {
@@ -19,7 +26,9 @@ describe('routes conversations', () => {
     block: jest.fn(), unblock: jest.fn(), listBlocks: jest.fn(),
     assertParticipantPublic: jest.fn(),
     createImageMessage: jest.fn(), imagePathFor: jest.fn(),
-  }; });
+  };
+    reportImpl.mockReset().mockResolvedValue({ id: 'rep-1' });
+  });
 
   it('GET /api/me/conversations (auth requise)', async () => {
     mocks.listConversations.mockResolvedValue([]);
@@ -131,6 +140,34 @@ describe('routes conversations', () => {
       mocks.imagePathFor.mockRejectedValue(new Error('MESSAGE_NOT_FOUND'));
       const res = await request(app).get(`/api/conversations/c1/messages/m1/image?token=${token}`);
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/conversations/:id/messages/:messageId/report', () => {
+    it('401 sans token', async () => {
+      const res = await request(app).post('/api/conversations/c1/messages/m1/report').send({ reason: 'SPAM' });
+      expect(res.status).toBe(401);
+    });
+
+    it('200 avec un token valide', async () => {
+      const res = await request(app).post('/api/conversations/c1/messages/m1/report')
+        .set('Authorization', `Bearer ${token}`).send({ reason: 'HARASSMENT', detail: 'insultes' });
+      expect(res.status).toBe(200);
+      expect(reportImpl).toHaveBeenCalledWith('c1', 'm1', 'u1', { reason: 'HARASSMENT', detail: 'insultes' });
+    });
+
+    it('429 quand le service lève RATE_LIMITED', async () => {
+      reportImpl.mockRejectedValue(new Error('RATE_LIMITED'));
+      const res = await request(app).post('/api/conversations/c1/messages/m1/report')
+        .set('Authorization', `Bearer ${token}`).send({ reason: 'SPAM' });
+      expect(res.status).toBe(429);
+    });
+
+    it('400 quand le service lève VALIDATION_ERROR', async () => {
+      reportImpl.mockRejectedValue(new Error('VALIDATION_ERROR'));
+      const res = await request(app).post('/api/conversations/c1/messages/m1/report')
+        .set('Authorization', `Bearer ${token}`).send({ reason: 'NAWAK' });
+      expect(res.status).toBe(400);
     });
   });
 });
