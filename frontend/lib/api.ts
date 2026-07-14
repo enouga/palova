@@ -291,6 +291,12 @@ export const api = {
     request<{ count: number }>(`/api/clubs/${slug}/open-matches/${id}/chat/read`, { method: 'POST' }, token),
   getOpenMatchUnread: (slug: string, token: string) =>
     request<{ count: number }>(`/api/clubs/${slug}/open-matches/unread-count`, {}, token),
+  listMyMatchAlerts: (slug: string, token: string) =>
+    request<MatchAlert[]>(`/api/clubs/${slug}/match-alerts`, {}, token),
+  createMatchAlert: (slug: string, body: { date: string; from: string; to: string }, token: string) =>
+    request<MatchAlert>(`/api/clubs/${slug}/match-alerts`, { method: 'POST', body: JSON.stringify(body) }, token),
+  deleteMatchAlert: (slug: string, id: string, token: string) =>
+    request<{ ok: boolean }>(`/api/clubs/${slug}/match-alerts/${id}`, { method: 'DELETE' }, token),
   getChatMessages: (slug: string, id: string, token: string) =>
     request<OpenMatchMessage[]>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, {}, token),
   postChatMessage: (slug: string, id: string, body: string, token: string) =>
@@ -1534,6 +1540,12 @@ export interface OpenMatchMessage {
   body: string;
   createdAt: string;
   deleted: boolean;
+}
+
+export interface MatchAlert {
+  id: string;
+  windowStart: string; // ISO UTC
+  windowEnd: string;   // ISO UTC
 }
 
 export interface CreateClubBody {
