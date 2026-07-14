@@ -101,14 +101,32 @@ export default function SuperAdminModerationPage() {
             </div>
           ))}
           {resolved.length > 0 && (
-            <details style={{ marginTop: 8 }}>
+            <details open style={{ marginTop: 8 }}>
               <summary style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, cursor: 'pointer' }}>
                 Historique ({resolved.length})
               </summary>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
                 {resolved.map((r) => (
-                  <div key={r.id} style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, padding: '8px 0', borderTop: `1px solid ${th.line}` }}>
-                    {REASON_LABEL[r.reason]} · {r.resolution === 'DELETED' ? 'Supprimé' : 'Rejeté'} · {r.resolvedAt && fmt(r.resolvedAt)}
+                  <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${th.line}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 600, color: th.textMute }}>{REASON_LABEL[r.reason]}</span>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                        background: r.resolution === 'DELETED' ? `${th.accent}22` : `${th.textFaint}22`,
+                        color: r.resolution === 'DELETED' ? th.accent : th.textFaint,
+                      }}>{r.resolution === 'DELETED' ? 'Supprimé' : 'Rejeté'}</span>
+                      <span style={{ color: th.textFaint, marginLeft: 'auto' }}>{r.resolvedAt && fmt(r.resolvedAt)}</span>
+                    </div>
+                    {r.message.body && (
+                      <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>{r.message.body}</div>
+                    )}
+                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 4 }}>
+                      {r.message.author.firstName} {r.message.author.lastName}
+                    </div>
+                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 2 }}>
+                      Signalé par {r.reporter.firstName} {r.reporter.lastName} le {fmt(r.createdAt)}
+                      {r.detail ? ` — « ${r.detail} »` : ''}
+                    </div>
                   </div>
                 ))}
               </div>
