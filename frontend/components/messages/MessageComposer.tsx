@@ -5,6 +5,9 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Icon } from '@/components/ui/Icon';
 import { CHAT_EMOJIS } from '@/lib/chatEmojis';
 
+const MAX_DRAFT_LEN = 2000;
+const clamp = (s: string) => s.slice(0, MAX_DRAFT_LEN);
+
 // Composer de message privé : textarea auto-grow, Entrée = envoyer (Maj+Entrée = saut de
 // ligne), 🙂 emojis (desktop seulement — sur mobile le clavier a les siens, et chaque
 // bouton mange la largeur de la textarea), 📷 photo avec préview, envoi = bouton-icône.
@@ -18,9 +21,9 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping, initi
 }) {
   const { th } = useTheme();
   const isDesktop = useIsDesktop();
-  const [draft, setDraft] = useState((initialDraft ?? '').slice(0, 2000));
+  const [draft, setDraft] = useState(clamp(initialDraft ?? ''));
   useEffect(() => {
-    if (initialDraft) setDraft((d) => (d ? d : initialDraft.slice(0, 2000)));
+    if (initialDraft) setDraft((d) => (d ? d : clamp(initialDraft)));
   }, [initialDraft]);
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -59,7 +62,7 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping, initi
             boxShadow: `inset 0 0 0 1px ${th.line}, 0 8px 24px rgba(0,0,0,0.18)`, borderRadius: 12, padding: 8,
             display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 180, overflowY: 'auto' }}>
           {CHAT_EMOJIS.map((e) => (
-            <button key={e} type="button" aria-label={`Emoji ${e}`} onClick={() => setDraft((d) => (d + e).slice(0, 2000))}
+            <button key={e} type="button" aria-label={`Emoji ${e}`} onClick={() => setDraft((d) => clamp(d + e))}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 6, borderRadius: 8 }}>
               {e}
             </button>
@@ -90,7 +93,7 @@ export function MessageComposer({ disabled, onSend, onSendImage, onTyping, initi
           📷
         </button>
         <textarea value={draft} rows={1} disabled={disabled}
-          onChange={(e) => { setDraft(e.target.value.slice(0, 2000)); throttledTyping(); }}
+          onChange={(e) => { setDraft(clamp(e.target.value)); throttledTyping(); }}
           onFocus={() => setEmojiOpen(false)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') setEmojiOpen(false);

@@ -11,7 +11,7 @@ import { colorForSeed } from '@/lib/playerColors';
 import { MessageThread } from './MessageThread';
 
 // Hôte GLOBAL du widget de conversation (monté une fois dans le layout racine).
-// Écoute l'event window `palova:open-dm` ({ detail: { userId } }) émis par openDm() :
+// Écoute l'event window `palova:open-dm` ({ detail: { userId, draft? } }) émis par openDm() :
 // desktop → widget ancré bas-droite (pattern OpenMatchChatSheet, la page reste cliquable) ;
 // mobile → navigation vers /me/messages?with=. Rien n'est rendu hors connexion.
 // L'id du viewer est résolu via getMyProfile AU PREMIER open seulement (mémorisé) —
