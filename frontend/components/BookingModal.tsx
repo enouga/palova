@@ -9,10 +9,7 @@ import { ACCENTS, Theme } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn } from '@/components/ui/atoms';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
-import { loadLevelPref } from '@/lib/levelPrefs';
-import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-import { sportHasLevels } from '@/lib/level';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
 import { hasAcceptedCgv, rememberCgvAccepted } from '@/lib/cgv';
@@ -159,9 +156,6 @@ export default function BookingModal({
 }: BookingModalProps) {
   const { th } = useTheme();
   const isDesktop = useIsDesktop();
-  const levelEnabled = useLevelSystemEnabled();
-  // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel.
-  const levelForSport = levelEnabled && sportHasLevels(sportKey);
 
   const [phase, setPhase]             = useState<'holding' | 'held' | 'error' | 'confirmed'>('holding');
   // Résa confirmée + résumé du paiement (affichage succès) + note pour onConfirmed.
@@ -205,19 +199,11 @@ export default function BookingModal({
   const [fingerprintForced, setFingerprintForced] = useState(false);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
-  // Interrupteur « Partie ouverte » : seule décision d'organisation restée dans la modale.
-  const [openMatch, setOpenMatch] = useState(false);
-  // Fourchette de niveau d'une partie ouverte : interrupteur + bornes, mémorisés (pré-remplis).
-  // Limite ACTIVE par défaut (sauf si un choix mémorisé dit le contraire).
-  const [levelLimited, setLevelLimited] = useState(true);
-  const [levelMin, setLevelMin] = useState(3);
-  const [levelMax, setLevelMax] = useState(5);
-
-  // Multi-joueurs : l'interrupteur « Partie ouverte » n'apparaît que sur un court padel multi-joueurs.
+  // Multi-joueurs : bloc « Organisez votre partie » (joueurs + ouverture aux membres, cette
+  // dernière restreinte au padel) affiché sur l'écran de succès dès qu'un court a plusieurs
+  // places et un club connu.
   const cap = maxPlayers ?? 1;
   const showPartners = !!slug && cap > 1;
-  // Parties ouvertes = padel uniquement → l'option « Partie ouverte » n'est offerte que sur un court padel.
-  const isPadel = sportKey === 'padel';
   const euros = (cents: number) => (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2).replace('.', ','));
 
   // Prix du créneau calculé par le backend (slot.price : tarif creux ssi
@@ -299,21 +285,6 @@ export default function BookingModal({
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pré-remplissage de la fourchette de niveau : dernier choix mémorisé, sinon
-  // défaut centré sur mon niveau ±1 (borné 1–8), interrupteur OFF (ouvert à tous).
-  useEffect(() => {
-    if (!showPartners || !levelForSport) return;
-    const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
-    const pref = loadLevelPref();
-    if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); }
-    if (!token) return;
-    if (pref) return; // choix mémorisé prioritaire : pas besoin du niveau pour le défaut
-    api.getMyRating(token, sportKey).then((r) => {
-      const lvl = r?.level ?? null;
-      if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
-    }).catch(() => {});
-  }, [showPartners, token, levelForSport]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Abonnement couvrant : sélectionné par défaut dès qu'il existe (le joueur peut le désélectionner
   // en choisissant un autre mode de paiement). Réinitialise quand l'abo couvrant change.
   useEffect(() => {
@@ -354,26 +325,11 @@ export default function BookingModal({
   }, [phase, secondsLeft]);
   const urgent = secondsLeft <= 60;
 
-  // Publie la visibilité « partie ouverte » sur la résa PENDING avant confirmation (directe
-  // OU Stripe via beforeSubmit) — les joueurs, eux, s'ajoutent après coup (écran de succès).
-  // Interrupteur OFF → aucun appel : une réservation naît PRIVATE.
-  const persistHoldSetup = async () => {
-    if (!showPartners || !isPadel || !openMatch || !reservation) return;
-    const limiting = levelForSport && levelLimited;
-    await api.applyHoldSetup(reservation.id, token, {
-      partnerUserIds: [],
-      visibility: 'PUBLIC',
-      targetLevelMin: limiting ? levelMin : null,
-      targetLevelMax: limiting ? levelMax : null,
-    });
-  };
-
   const handleConfirm = async () => {
     if (!reservation || busy) return;
     setBusy(true);
     setErrorMsg('');
     try {
-      await persistHoldSetup();
       // Source de paiement : abonnement couvrant prioritaire, sinon carnet, sinon rien (régler au club).
       const paymentSource = useSub && cover ? { subscriptionId: cover.id }
         : paySource ? { packageId: paySource } : undefined;
@@ -514,31 +470,6 @@ export default function BookingModal({
               {/* Contenu interactif : visible une fois le créneau sécurisé (phase held). */}
               {phase === 'held' && (
               <>
-              {/* Partie ouverte — seule décision d'organisation dans la modale (padel multi-joueurs).
-                  Partenaires/équipes/niveau s'organisent sur l'écran de succès, sans timer. */}
-              {showPartners && isPadel && (
-                <div style={{ marginTop: 20 }}>
-                  {sectionLabel('users', 'Votre partie')}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <span style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>Partie ouverte aux membres</span>
-                    <button type="button" role="switch" aria-checked={openMatch} aria-label="Partie ouverte aux membres"
-                      onClick={() => setOpenMatch((v) => !v)}
-                      style={{ width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', padding: 0, position: 'relative', background: openMatch ? th.accent : th.lineStrong, transition: 'background .15s', flex: '0 0 auto' }}>
-                      <span style={{ position: 'absolute', top: 3, left: openMatch ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
-                    </button>
-                  </div>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-                    {openMatch
-                      ? (levelForSport
-                          ? (levelLimited
-                              ? `Niveau ${levelMin}–${levelMax} · réglable après confirmation.`
-                              : 'Ouverte à tous les niveaux · réglable après confirmation.')
-                          : 'Visible et rejoignable par les membres du club.')
-                      : 'Vos partenaires s’ajoutent après la confirmation.'}
-                  </div>
-                </div>
-              )}
-
               {/* Quota : affiché seulement s'il mord (≤ 1 résa possible pour la classe du créneau). */}
               {quotaStatus && quotaBites(quotaStatus, isOffPeak) && (
                 <div style={{ marginTop: 16 }}>
@@ -703,7 +634,7 @@ export default function BookingModal({
                       <StripePaymentStep
                         type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
                         amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
-                        cgvAccepted={cgvAccepted} beforeSubmit={persistHoldSetup}
+                        cgvAccepted={cgvAccepted}
                         createIntent={async () => {
                           const intentType = (payMode === 'online' && onlineAvailable) ? 'payment' : 'setup';
                           const r = await api.createStripeIntent(
