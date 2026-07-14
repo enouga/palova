@@ -76,6 +76,21 @@ describe('/admin/club', () => {
     expect(body.clubHouseSections[1].key).toBe('matches');
   });
 
+  it('carte Sections : Partenaires est réordonnable comme les autres (flèche ↑)', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    expect(screen.getByText('Rivière de logos')).toBeInTheDocument();
+    expect(screen.queryByText(/toujours en bas de page/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Descendre Partenaires')).toBeDisabled();
+    expect(screen.getByLabelText('Monter Partenaires')).not.toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Monter Partenaires'));
+    await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
+    const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
+    expect(body.clubHouseSections).toHaveLength(6);
+    expect(body.clubHouseSections[4].key).toBe('sponsors');
+    expect(body.clubHouseSections[5].key).toBe('clubCard');
+  });
+
   it('carte Sections : curseur de vitesse du kiosque → PATCH clubHouseKioskSeconds (débouncé)', async () => {
     wrap();
     await waitFor(() => expect(screen.getByText('Défilement des annonces')).toBeInTheDocument());
