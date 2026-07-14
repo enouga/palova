@@ -1,6 +1,7 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Member } from '@/lib/api';
+import { Theme } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -10,17 +11,25 @@ import { STAFF_LABEL, daysSince } from '@/lib/members';
 import { lastVisitLabel } from '@/lib/memberStats';
 import { daysUntil } from '@/lib/subscriptionAdmin';
 
+export type SubActionKind = 'renew' | 'change' | 'cancel';
 const fdate = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
+const subActionBtn = (th: Theme, danger: boolean): React.CSSProperties => ({
+  border: `1px solid ${danger ? '#f0b8a4' : th.lineStrong}`, background: th.surface,
+  color: danger ? '#ff7a4d' : th.textMute, borderRadius: 999, padding: '5px 11px',
+  fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+});
 
-// Une rangée-carte de la liste des membres : toute la ligne ouvre la fiche cockpit (une seule
-// zone cliquable — le cycle de vie abonné vit désormais dans la carte Argent de la fiche).
-export function MemberRow({ m, selected, nowMs, onOpen, subscriptionContext }: {
+// Une rangée-carte de la liste des membres. Un clic (n'importe où) ouvre le panneau d'édition ;
+// le nom reste un lien distinct vers la fiche « passif » (stopPropagation).
+export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscriptionContext, onSubAction }: {
   m: Member;
   selected: boolean;
   nowMs: number;
   onOpen: () => void;
-  /** En contexte abonnés : la ligne montre l'échéance de l'abonnement (les actions vivent dans la fiche). */
+  onNavigate: () => void;
+  /** En contexte abonnés : la ligne porte échéance + Renouveler/Changer/Résilier. */
   subscriptionContext?: boolean;
+  onSubAction?: (kind: SubActionKind, m: Member) => void;
 }) {
   const { th } = useTheme();
   const blocked = m.status === 'BLOCKED';
@@ -49,7 +58,14 @@ export function MemberRow({ m, selected, nowMs, onOpen, subscriptionContext }: {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: th.text }}>
+          <span
+            role="link"
+            tabIndex={0}
+            aria-label={`Voir le passif de ${m.firstName} ${m.lastName}`}
+            onClick={(e) => { e.stopPropagation(); onNavigate(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onNavigate(); } }}
+            style={{ fontSize: 15, fontWeight: 700, color: th.text, cursor: 'pointer' }}
+          >
             {m.firstName} {m.lastName}
           </span>
           {m.watch && <span title="À surveiller" style={{ fontSize: 13 }}>👁</span>}
@@ -77,18 +93,25 @@ export function MemberRow({ m, selected, nowMs, onOpen, subscriptionContext }: {
       </div>
 
       {subscriptionContext && m.subscription ? (
-        (() => {
-          const days = daysUntil(m.subscription.expiresAt, nowMs);
-          const soon = days <= 30;
-          return (
-            <div style={{ textAlign: 'right', whiteSpace: 'nowrap', marginLeft: 'auto' }}>
-              <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: soon ? '#fdeee2' : '#e3f0e6', color: soon ? '#b45309' : '#2c7a44' }}>
-                {soon ? `Expire dans ${days} j` : 'Actif'}
-              </span>
-              <div style={{ fontSize: 11, color: th.textFaint, marginTop: 3 }}>échéance {fdate(m.subscription.expiresAt)}</div>
-            </div>
-          );
-        })()
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {(() => {
+            const days = daysUntil(m.subscription.expiresAt, nowMs);
+            const soon = days <= 30;
+            return (
+              <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: soon ? '#fdeee2' : '#e3f0e6', color: soon ? '#b45309' : '#2c7a44' }}>
+                  {soon ? `Expire dans ${days} j` : 'Actif'}
+                </span>
+                <div style={{ fontSize: 11, color: th.textFaint, marginTop: 3 }}>échéance {fdate(m.subscription.expiresAt)}</div>
+              </div>
+            );
+          })()}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onSubAction?.('renew', m); }} style={subActionBtn(th, false)}>Renouveler</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onSubAction?.('change', m); }} style={subActionBtn(th, false)}>Changer</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onSubAction?.('cancel', m); }} style={subActionBtn(th, true)}>Résilier</button>
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <LevelChip level={m.level} />

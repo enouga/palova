@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, CSSProperties } from 'react';
-import { api, Member, SubscriptionPlan, ClubAdminDetail } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, Member, SubscriptionPlan, SubscriptionPlanSummary } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -9,16 +10,15 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { computeVirtualRange } from '@/lib/virtualList';
 import { daysUntil } from '@/lib/subscriptionAdmin';
 import { clubIsMultiSport } from '@/lib/sportBadge';
-import { DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { Pill } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaffRole } from '@/components/admin/StaffRoleMenu';
-import { MemberRow } from '@/components/admin/members/MemberRow';
-import { MemberCockpit } from '@/components/admin/members/MemberCockpit';
-import { FileDashboard } from '@/components/admin/members/FileDashboard';
+import { MemberRow, SubActionKind } from '@/components/admin/members/MemberRow';
+import { MemberPanel, MemberDraft } from '@/components/admin/members/MemberPanel';
 import { AddMemberDialog } from '@/components/admin/members/AddMemberDialog';
 import { SubscriberInsights } from '@/components/admin/members/SubscriberInsights';
+import { SubscriptionActions } from '@/components/admin/subscriptions/SubscriptionActions';
 import {
   MemberSeg, MemberSort, filterMembers, segCounts, sortMembers, memberKpis, membersCsv,
 } from '@/lib/members';
@@ -35,8 +35,11 @@ const STAFF_ERRORS: Record<string, string> = {
   MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bouton « Rôle… ») avant de le supprimer.',
 };
 
+const CORAL = '#ff7a4d';
+
 export default function AdminMembersPage() {
   const { th } = useTheme();
+  const router = useRouter();
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
@@ -53,26 +56,17 @@ export default function AdminMembersPage() {
   const [confirmRemove, setConfirmRemove] = useState<Member | null>(null);
   const [nowMs, setNowMs] = useState(0);
 
-  // Contexte abonnés (pastille « Abonnés ») : sous-filtres + forfaits (pour les cartes vides comprises).
+  // Contexte abonnés (pastille « Abonnés ») : sous-filtres + cycle de vie sur la ligne.
   const [planFilter, setPlanFilter]       = useState<string | null>(null);
   const [expiringOnly, setExpiringOnly]   = useState(false);
   const [sportFilter, setSportFilter]     = useState<string | null>(null);
   const [plans, setPlans]                 = useState<SubscriptionPlan[]>([]);
+  const [subAction, setSubAction]         = useState<{ kind: SubActionKind; m: Member } | null>(null);
   const multiSport = clubIsMultiSport(club as Parameters<typeof clubIsMultiSport>[0]);
   const sportName = (key: string) => {
     const cs = (club as { clubSports?: { sport?: { key: string; name: string } }[] } | null)?.clubSports?.find((c) => c.sport?.key === key)?.sport?.name;
     return cs ?? key.charAt(0).toUpperCase() + key.slice(1);
   };
-
-  // Réglages admin du club (moyens rapides / paiement au club) — vivent sur ClubAdminDetail
-  // (pas la ClubDetail publique de useClub()), nécessaires pour l'encaissement inline du cockpit.
-  const [clubAdmin, setClubAdmin] = useState<ClubAdminDetail | null>(null);
-  useEffect(() => {
-    if (!ready || !token || !clubId) return;
-    api.adminGetClub(clubId, token).then(setClubAdmin).catch(() => {});
-  }, [ready, token, clubId]);
-  const quickMethods = clubAdmin?.quickPaymentMethods?.length ? clubAdmin.quickPaymentMethods : DEFAULT_QUICK_METHODS;
-  const payAtClubOnly = clubAdmin?.payAtClubOnly ?? false;
 
   // Viewer (gestion staff réservée OWNER/ADMIN ; jamais sur sa propre ligne).
   const [viewer, setViewer] = useState<{ userId: string; role: 'OWNER' | 'ADMIN' | 'STAFF' } | null>(null);
@@ -98,22 +92,11 @@ export default function AdminMembersPage() {
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
-  // Sélection + URL : ?m=<userId> reflète la fiche ouverte (lien profond, retour arrière navigateur).
-  const select = useCallback((uid: string | null) => {
-    setSelectedUserId(uid);
-    const url = new URL(window.location.href);
-    if (uid) url.searchParams.set('m', uid); else url.searchParams.delete('m');
-    window.history.replaceState(null, '', url.toString());
-  }, []);
-
-  // Deep-link ?m= (et ?plan= existant) — one-shot au montage.
+  // Lien profond depuis /admin/offres : ?plan=<id> → contexte Abonnés pré-filtré (one-shot au montage).
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const sp = new URLSearchParams(window.location.search);
-    const planId = sp.get('plan');
+    const planId = new URLSearchParams(window.location.search).get('plan');
     if (planId) { setSeg('subs'); setPlanFilter(planId); }
-    const m = sp.get('m');
-    if (m) setSelectedUserId(m);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -176,21 +159,14 @@ export default function AdminMembersPage() {
 
   const selected = useMemo(() => members.find((m) => m.userId === selectedUserId) ?? null, [members, selectedUserId]);
 
-  // Navigation clavier : ↑↓ change la sélection dans la liste visible, Échap revient au tableau de bord.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-      if (e.key === 'Escape') { select(null); return; }
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-      e.preventDefault();
-      const idx = visible.findIndex((m) => m.userId === selectedUserId);
-      const next = e.key === 'ArrowDown' ? Math.min(visible.length - 1, idx + 1) : Math.max(0, idx - 1);
-      if (visible[next]) select(visible[next].userId);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [visible, selectedUserId, select]);
+  const save = async (draft: MemberDraft) => {
+    if (!token || !clubId || !selected) return;
+    try {
+      setError(null);
+      await api.adminUpdateMember(clubId, selected.id, { phone: draft.phone, membershipNo: draft.membershipNo, note: draft.note, isSubscriber: draft.isSubscriber }, token);
+      await load();
+    } catch (e) { setError((e as Error).message); }
+  };
 
   const toggleBlocked = async () => {
     if (!token || !clubId || !selected) return;
@@ -207,7 +183,7 @@ export default function AdminMembersPage() {
 
   const remove = async (m: Member) => {
     if (!token || !clubId) return;
-    try { setError(null); await api.adminRemoveMember(clubId, m.id, token); setConfirmRemove(null); select(null); await load(); }
+    try { setError(null); await api.adminRemoveMember(clubId, m.id, token); setConfirmRemove(null); await load(); }
     catch (e) { const msg = (e as Error).message; setError(STAFF_ERRORS[msg] ?? msg); setConfirmRemove(null); }
   };
 
@@ -224,6 +200,14 @@ export default function AdminMembersPage() {
   const searchInput: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 10, padding: '0 10px', fontFamily: th.fontUI, fontSize: 14, height: 40, width: '100%' };
   const toolBtn: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 14px', borderRadius: 10, border: `1px solid ${th.line}`, background: th.surface, color: th.text, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap' };
 
+  const kpiStat = (label: string, value: number, color: string) => (
+    <div style={{ padding: '2px 14px', minWidth: 74 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.05, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    </div>
+  );
+  const kpiSep = <div style={{ width: 1, alignSelf: 'stretch', background: th.line, margin: '4px 0' }} />;
+
   const SEG_OPTS: { value: MemberSeg; label: string; n: number }[] = [
     { value: 'all', label: 'Tous', n: counts.all },
     { value: 'subs', label: 'Abonnés', n: counts.subs },
@@ -232,118 +216,126 @@ export default function AdminMembersPage() {
     { value: 'blocked', label: 'Bloqués', n: counts.blocked },
   ];
 
-  const subscriberInsights = (
-    <SubscriberInsights th={th} subscribers={subsBase} plans={plans} nowMs={nowMs} multiSport={multiSport} sportName={sportName}
-      planFilter={planFilter} onPlanFilter={setPlanFilter}
-      expiringOnly={expiringOnly} onToggleExpiring={() => setExpiringOnly((v) => !v)}
-      sportFilter={sportFilter} onSportFilter={setSportFilter} />
-  );
-
   return (
     <div>
-      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 6px', color: th.text }}>Membres</h1>
+      {/* Titre + bandeau KPI */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', margin: '0 0 6px' }}>
+        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text }}>Membres</h1>
+        {!loading && members.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', background: th.surface, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '6px 2px' }}>
+            {kpiStat('Membres', kpis.total, th.text)}
+            {kpiSep}
+            {kpiStat('Abonnés', kpis.subscribers, th.accent)}
+            {kpiSep}
+            {kpiStat('Actifs 30 j', kpis.activeRecent, th.mode === 'floodlit' ? th.accent : th.text)}
+            {kpiSep}
+            {kpiStat('Bloqués', kpis.blocked, kpis.blocked > 0 ? CORAL : th.textFaint)}
+          </div>
+        )}
+      </div>
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 20px' }}>
         Le fichier-membres de votre club. Être membre (non bloqué) permet de réserver. « Abonné » ouvre la fenêtre de réservation élargie (voir Réglages).
       </p>
 
-      {/* Erreurs des actions au niveau page (bloquer/rôle/suppression) — MemberCockpit gère ses propres
-          erreurs de chargement/actions inline, donc pas de doublon même quand une fiche est ouverte. */}
-      {error && (
+      {error && !selected && (
         <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
       )}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
       ) : (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          {/* Colonne liste */}
-          <div style={{ flex: isDesktop ? '0 0 360px' : 1, minWidth: 0 }}>
-            {/* Toolbar */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un membre (nom, email, tél., n° adhérent)…" aria-label="Rechercher un membre" style={{ ...searchInput, paddingRight: query ? 30 : 10 }} />
-                {query && <button onClick={() => setQuery('')} aria-label="Effacer la recherche" style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>}
-              </div>
-              <select value={sort} onChange={(e) => setSort(e.target.value as MemberSort)} aria-label="Trier" style={{ ...toolBtn, appearance: 'auto' }}>
-                <option value="name">Nom A–Z</option>
-                <option value="recent">Plus récents</option>
-                <option value="activity">Dernière activité</option>
-              </select>
-              <button onClick={exportCsv} disabled={visible.length === 0} style={{ ...toolBtn, opacity: visible.length === 0 ? 0.5 : 1, cursor: visible.length === 0 ? 'default' : 'pointer' }}>
-                <Icon name="download" size={16} color={th.text} />Exporter CSV
-              </button>
-              <button onClick={() => setAddOpen(true)} style={{ ...toolBtn, background: th.accent, color: th.onAccent, border: 'none' }}>
-                <Icon name="plus" size={17} color={th.onAccent} />Ajouter un membre
-              </button>
+        <>
+          {/* Toolbar */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 340 }}>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un membre (nom, email, tél., n° adhérent)…" aria-label="Rechercher un membre" style={{ ...searchInput, paddingRight: query ? 30 : 10 }} />
+              {query && <button onClick={() => setQuery('')} aria-label="Effacer la recherche" style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>}
             </div>
-
-            {/* Segments */}
-            <div className="sp-scroll-x" style={{ display: 'flex', gap: 8, marginBottom: 16, paddingBottom: 2 }}>
-              {SEG_OPTS.map((o) => (
-                <Pill key={o.value} label={`${o.label} · ${o.n}`} active={seg === o.value} size="sm" onClick={() => setSeg(o.value)} />
-              ))}
-            </div>
-
-            {/* Bandeau de pilotage abonnés — mobile (desktop : vit dans le panneau droit) */}
-            {!isDesktop && seg === 'subs' && subscriberInsights}
-
-            {visible.length === 0 ? (
-              <div style={{ padding: '28px 14px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>
-                {members.length === 0 ? "Aucun membre pour l'instant." : `Aucun membre ne correspond${query.trim() ? ` à « ${query.trim()} »` : ''}.`}
-              </div>
-            ) : (
-              <div ref={listRef} style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
-                  {range.paddingTop > 0 && <div style={{ height: range.paddingTop }} />}
-                  {rowsToRender.map((m) => (
-                    <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
-                      onOpen={() => select(m.userId)}
-                      subscriptionContext={seg === 'subs'} />
-                  ))}
-                  {range.paddingBottom > 0 && <div style={{ height: range.paddingBottom }} />}
-                </div>
-              </div>
-            )}
-            {query.trim() && visible.length > 0 && (
-              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, padding: '6px 4px 0' }}>{visible.length} sur {members.length}</div>
-            )}
+            <select value={sort} onChange={(e) => setSort(e.target.value as MemberSort)} aria-label="Trier" style={{ ...toolBtn, appearance: 'auto' }}>
+              <option value="name">Nom A–Z</option>
+              <option value="recent">Plus récents</option>
+              <option value="activity">Dernière activité</option>
+            </select>
+            <button onClick={exportCsv} disabled={visible.length === 0} style={{ ...toolBtn, opacity: visible.length === 0 ? 0.5 : 1, cursor: visible.length === 0 ? 'default' : 'pointer' }}>
+              <Icon name="download" size={16} color={th.text} />Exporter CSV
+            </button>
+            <button onClick={() => setAddOpen(true)} style={{ ...toolBtn, background: th.accent, color: th.onAccent, border: 'none' }}>
+              <Icon name="plus" size={17} color={th.onAccent} />Ajouter un membre
+            </button>
           </div>
 
-          {/* Panneau droit (desktop) */}
-          {isDesktop && (
+          {/* Segments */}
+          <div className="sp-scroll-x" style={{ display: 'flex', gap: 8, marginBottom: 16, paddingBottom: 2 }}>
+            {SEG_OPTS.map((o) => (
+              <Pill key={o.value} label={`${o.label} · ${o.n}`} active={seg === o.value} size="sm" onClick={() => setSeg(o.value)} />
+            ))}
+          </div>
+
+          {/* Bandeau de pilotage abonnés (contexte « Abonnés » uniquement) */}
+          {seg === 'subs' && (
+            <SubscriberInsights th={th} subscribers={subsBase} plans={plans} nowMs={nowMs} multiSport={multiSport} sportName={sportName}
+              planFilter={planFilter} onPlanFilter={setPlanFilter}
+              expiringOnly={expiringOnly} onToggleExpiring={() => setExpiringOnly((v) => !v)}
+              sportFilter={sportFilter} onSportFilter={setSportFilter} />
+          )}
+
+          {/* Liste + panneau */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              {selected ? (
-                <MemberCockpit
-                  key={selected.userId}
-                  member={selected} viewerUserId={viewer?.userId ?? null} canManageStaff={canManageStaff}
-                  quickMethods={quickMethods} payAtClubOnly={payAtClubOnly}
-                  onChanged={load} onSetRole={setRole} onToggleBlocked={toggleBlocked}
-                  onDelete={() => setConfirmRemove(selected)}
-                />
-              ) : seg === 'subs' ? (
-                subscriberInsights
+              {visible.length === 0 ? (
+                <div style={{ padding: '28px 14px', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>
+                  {members.length === 0 ? "Aucun membre pour l'instant." : `Aucun membre ne correspond${query.trim() ? ` à « ${query.trim()} »` : ''}.`}
+                </div>
               ) : (
-                <FileDashboard kpis={kpis} watchCount={counts.watch} />
+                <div ref={listRef} style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
+                    {range.paddingTop > 0 && <div style={{ height: range.paddingTop }} />}
+                    {rowsToRender.map((m) => (
+                      <MemberRow key={m.id} m={m} nowMs={nowMs} selected={selectedUserId === m.userId}
+                        onOpen={() => setSelectedUserId(m.userId)}
+                        onNavigate={() => router.push(`/admin/members/${m.userId}`)}
+                        subscriptionContext={seg === 'subs'}
+                        onSubAction={(kind, mm) => setSubAction({ kind, m: mm })} />
+                    ))}
+                    {range.paddingBottom > 0 && <div style={{ height: range.paddingBottom }} />}
+                  </div>
+                </div>
+              )}
+              {query.trim() && visible.length > 0 && (
+                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, padding: '6px 4px 0' }}>{visible.length} sur {members.length}</div>
               )}
             </div>
-          )}
-        </div>
+
+            {selected && isDesktop && (
+              <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop error={error}
+                onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
+            )}
+          </div>
+        </>
       )}
 
       {selected && !isDesktop && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: th.bg, overflowY: 'auto', padding: 16, animation: 'sp-sheet-in .25s ease' }}>
-          <MemberCockpit
-            key={selected.userId}
-            member={selected} viewerUserId={viewer?.userId ?? null} canManageStaff={canManageStaff}
-            quickMethods={quickMethods} payAtClubOnly={payAtClubOnly}
-            onChanged={load} onSetRole={setRole} onToggleBlocked={toggleBlocked}
-            onDelete={() => setConfirmRemove(selected)} onClose={() => select(null)}
-          />
-        </div>
+        <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop={false} error={error}
+          onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
       )}
 
       {addOpen && token && clubId && (
         <AddMemberDialog clubId={clubId} token={token} onClose={() => setAddOpen(false)} onAdded={load} />
+      )}
+
+      {subAction && subAction.m.subscription && token && clubId && (
+        <SubscriptionActions
+          action={subAction.kind}
+          sub={{
+            id: subAction.m.subscription.id, planId: subAction.m.subscription.planId, planName: subAction.m.subscription.planName,
+            expiresAt: subAction.m.subscription.expiresAt, monthlyPriceSnapshot: subAction.m.subscription.monthlyPriceSnapshot,
+          }}
+          plans={plans.map((p): SubscriptionPlanSummary => ({
+            id: p.id, name: p.name, monthlyPrice: p.monthlyPrice, benefit: p.benefit,
+            discountPercent: p.discountPercent, sportKeys: p.sportKeys, isActive: p.isActive, activeCount: 0,
+          }))}
+          clubId={clubId} token={token}
+          onClose={() => setSubAction(null)} onDone={() => { setSubAction(null); load(); }} />
       )}
 
       {confirmRemove && (

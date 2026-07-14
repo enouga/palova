@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { MemberRow } from '../components/admin/members/MemberRow';
 import type { Member } from '../lib/api';
@@ -14,27 +14,32 @@ const base: Member = {
 };
 const wrap = (props: Partial<Parameters<typeof MemberRow>[0]> = {}) => render(
   <ThemeProvider>
-    <MemberRow m={base} selected={false} nowMs={NOW} onOpen={jest.fn()} {...props} />
+    <MemberRow m={base} selected={false} nowMs={NOW} onOpen={jest.fn()} onNavigate={jest.fn()} {...props} />
   </ThemeProvider>,
 );
 
-it('clic sur la ligne → onOpen (une seule zone cliquable)', () => {
-  const onOpen = jest.fn();
-  wrap({ onOpen });
-  screen.getByRole('button', { name: 'Ouvrir la fiche de Jean Dupont' }).click();
-  expect(onOpen).toHaveBeenCalled();
-});
-
-it('hors contexte abonnés : pas de pastille échéance', () => {
+it('hors contexte abonnés : pas de boutons de cycle de vie', () => {
   wrap();
-  expect(screen.queryByText(/Expire dans/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/échéance/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Renouveler' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Résilier' })).not.toBeInTheDocument();
 });
 
-it('en contexte abonnés : pastille échéance (compte à rebours si proche)', () => {
+it('en contexte abonnés : échéance + Renouveler/Changer/Résilier', () => {
   wrap({ subscriptionContext: true });
   expect(screen.getByText(/Expire dans 8 j/)).toBeInTheDocument(); // 21/07 − 13/07 = 8 j
   expect(screen.getByText(/échéance/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Renouveler' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Changer' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Résilier' })).toBeInTheDocument();
+});
+
+it('clic Résilier → onSubAction("cancel", m) sans ouvrir la ligne', () => {
+  const onSubAction = jest.fn();
+  const onOpen = jest.fn();
+  wrap({ subscriptionContext: true, onSubAction, onOpen });
+  fireEvent.click(screen.getByRole('button', { name: 'Résilier' }));
+  expect(onSubAction).toHaveBeenCalledWith('cancel', base);
+  expect(onOpen).not.toHaveBeenCalled(); // stopPropagation : le clic bouton n'ouvre pas le panneau
 });
 
 it('abonné lointain : pastille « Actif » (pas de compte à rebours)', () => {

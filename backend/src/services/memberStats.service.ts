@@ -30,14 +30,6 @@ export interface MemberHistoryReservation {
   attributedAmount: string;      // argent net (string décimale) attribué à ce joueur sur cette résa
 }
 
-export interface MemberUnpaidReservation {
-  reservationId: string;
-  participantId: string | null; // part d'un participant, null = dû du titulaire
-  startTime: string;
-  resourceName: string;
-  dueAmount: string;            // reste dû du joueur (string décimale)
-}
-
 export interface MemberHistory {
   member: {
     userId: string; firstName: string; lastName: string; email: string;
@@ -56,7 +48,6 @@ export interface MemberHistory {
     totalSpent: string;
     averageBasket: string;
     outstanding: string;
-    unpaid: MemberUnpaidReservation[];
     paymentsByMethod: Record<string, string>;
     revenueByMonth: Array<{ month: string; net: string }>;
     prepaid: {
@@ -150,7 +141,6 @@ export class MemberStatsService {
 
     const monthKey = (d: Date) => DateTime.fromJSDate(d).setZone(tz).toFormat('yyyy-MM');
 
-    const unpaid: MemberUnpaidReservation[] = [];
     const rows: MemberHistoryReservation[] = reservations.map((r) => {
       const mine = r.participants.find((p) => p.userId === userId);
       const isOrganizer = mine?.isOrganizer ?? r.userId === userId;
@@ -183,19 +173,7 @@ export class MemberStatsService {
         : slotPriceCents(offPeak, r.startTime, r.endTime, tz, cents(r.resource.price),
             r.resource.offPeakPrice != null ? cents(r.resource.offPeakPrice) : null);
       const myDue = mine && num(mine.share) > 0 ? cents(mine.share) : (isOrganizer ? dueWhole : 0);
-      if (r.status === 'CONFIRMED') {
-        const restCents = Math.max(0, myDue - attrCents);
-        outstandingCents += restCents;
-        if (restCents > 0) {
-          unpaid.push({
-            reservationId: r.id,
-            participantId: mine?.id ?? null,
-            startTime: r.startTime.toISOString(),
-            resourceName: r.resource.name,
-            dueAmount: euros(restCents),
-          });
-        }
-      }
+      if (r.status === 'CONFIRMED') outstandingCents += Math.max(0, myDue - attrCents);
 
       // Compteurs + habitudes (sur le passé/confirmé).
       const startMs = r.startTime.getTime();
@@ -327,7 +305,6 @@ export class MemberStatsService {
         totalSpent: euros(totalSpentCents),
         averageBasket: euros(paidReservations ? Math.round(totalSpentCents / paidReservations) : 0),
         outstanding: euros(outstandingCents),
-        unpaid,
         paymentsByMethod,
         revenueByMonth,
         prepaid: {
