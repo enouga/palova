@@ -3,7 +3,7 @@ import { prisma } from '../db/prisma';
 import { OpenMatchChatService } from './openMatchChat.service';
 import { MessagingService } from './messaging.service';
 import { assertRateLimit } from './rateLimit';
-import { sendMail } from '../email/mailer';
+import { dispatch } from './notification/dispatcher';
 import { brandFromClub } from '../email/registry';
 import { PALOVA_BRAND } from '../email/templates/layout';
 import { clubAppUrl, formatDateFr, platformAsset } from '../email/links';
@@ -170,20 +170,32 @@ export class ModerationService {
     if (!club) return;
     const staff = await prisma.clubMember.findMany({
       where: { clubId, role: { in: [ClubRole.OWNER, ClubRole.ADMIN] } },
-      select: { user: { select: { email: true } } },
+      select: { user: { select: { id: true, email: true } } },
     });
-    const emails = staff.map((s) => s.user.email).filter((e): e is string => !!e);
-    if (!emails.length) return;
+    if (!staff.length) return;
     const brand = brandFromClub(club);
+    const authorName = `${msg.user.firstName} ${msg.user.lastName}`.trim();
+    const url = clubAppUrl(club.slug, '/admin/moderation');
     const mail = buildClubMessageReportEmail({
-      authorName: `${msg.user.firstName} ${msg.user.lastName}`.trim(),
+      authorName,
       excerpt: excerptOf(msg.body),
       court: msg.reservation.resource.name,
       when: formatDateFr(msg.reservation.startTime, club.timezone),
-      url: clubAppUrl(club.slug, '/admin/moderation'),
+      url,
       brand,
     });
-    for (const to of emails) await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
+    for (const s of staff) {
+      await dispatch({
+        userId: s.user.id,
+        clubId,
+        category: 'MODERATION',
+        type: 'moderation.report',
+        title: 'Nouveau signalement',
+        body: `Message de ${authorName} signalé dans le chat d'une partie (${msg.reservation.resource.name}).`,
+        url,
+        email: s.user.email ? { to: s.user.email, subject: mail.subject, html: mail.html, text: mail.text } : null,
+      });
+    }
   }
 
   async listClubReports(clubId: string, opts: { status?: string } = {}): Promise<ClubReportRow[]> {
@@ -268,17 +280,29 @@ export class ModerationService {
       select: { body: true, imageUrl: true, author: { select: { firstName: true, lastName: true } } },
     });
     if (!msg) return;
-    const admins = await prisma.user.findMany({ where: { isSuperAdmin: true, deletedAt: null }, select: { email: true } });
-    const emails = admins.map((a) => a.email).filter((e): e is string => !!e);
-    if (!emails.length) return;
+    const admins = await prisma.user.findMany({ where: { isSuperAdmin: true, deletedAt: null }, select: { id: true, email: true } });
+    if (!admins.length) return;
+    const authorName = `${msg.author.firstName} ${msg.author.lastName}`.trim();
+    const url = platformAsset('/superadmin/moderation');
     const mail = buildPlatformMessageReportEmail({
-      authorName: `${msg.author.firstName} ${msg.author.lastName}`.trim(),
+      authorName,
       excerpt: excerptOf(msg.body),
       hasImage: !!msg.imageUrl,
-      url: platformAsset('/superadmin/moderation'),
+      url,
       brand: PALOVA_BRAND,
     });
-    for (const to of emails) await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
+    for (const admin of admins) {
+      await dispatch({
+        userId: admin.id,
+        clubId: null,
+        category: 'MODERATION',
+        type: 'moderation.report_dm',
+        title: 'Nouveau signalement (message privé)',
+        body: `Message privé de ${authorName} signalé.`,
+        url,
+        email: admin.email ? { to: admin.email, subject: mail.subject, html: mail.html, text: mail.text } : null,
+      });
+    }
   }
 
   async listPlatformReports(opts: { status?: string } = {}): Promise<PlatformReportRow[]> {

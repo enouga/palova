@@ -1273,6 +1273,7 @@ enum NotificationCategory {
   OPEN_MATCH_CHAT
   SOCIAL
   DIRECT_MESSAGES
+  MODERATION
 }
 
 enum NotificationChannel {

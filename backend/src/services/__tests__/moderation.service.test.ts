@@ -2,8 +2,8 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import '../../__mocks__/redis';
 
-const mockSendMail = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../email/mailer', () => ({ sendMail: (...a: unknown[]) => mockSendMail(...a) }));
+const mockDispatch = jest.fn();
+jest.mock('../notification/dispatcher', () => ({ dispatch: (...a: unknown[]) => mockDispatch(...a) }));
 
 import { ModerationService } from '../moderation.service';
 
@@ -13,7 +13,7 @@ describe('ModerationService — reportOpenMatchMessage', () => {
   let service: ModerationService;
   beforeEach(() => {
     service = new ModerationService();
-    mockSendMail.mockClear();
+    mockDispatch.mockReset().mockResolvedValue(undefined);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     prismaMock.reservation.findUnique.mockResolvedValue({
@@ -26,7 +26,7 @@ describe('ModerationService — reportOpenMatchMessage', () => {
     } as any);
   });
 
-  it('crée le signalement et notifie le staff par email', async () => {
+  it('crée le signalement et notifie le staff par email + notification in-app (dispatch)', async () => {
     prismaMock.messageReport.create.mockResolvedValue({ id: 'rep-1' } as any);
     prismaMock.openMatchMessage.findUnique
       .mockResolvedValueOnce({ id: 'm1', reservationId: 'resa-1', userId: 'author-1', deletedAt: null } as any)
@@ -35,7 +35,7 @@ describe('ModerationService — reportOpenMatchMessage', () => {
         reservation: { startTime: new Date('2026-07-14T18:00:00Z'), resource: { name: 'Court 1' } },
       } as any);
     prismaMock.club.findUnique.mockResolvedValueOnce({ id: 'club-1', status: 'ACTIVE' } as any).mockResolvedValueOnce(CLUB as any);
-    prismaMock.clubMember.findMany.mockResolvedValue([{ user: { email: 'owner@x.fr' } }] as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([{ user: { id: 'owner-1', email: 'owner@x.fr' } }] as any);
 
     const r = await service.reportOpenMatchMessage('club-demo', 'resa-1', 'm1', 'reporter-1', { reason: 'SPAM', detail: 'gênant' });
     expect(r.id).toBe('rep-1');
@@ -43,7 +43,10 @@ describe('ModerationService — reportOpenMatchMessage', () => {
       data: { openMatchMessageId: 'm1', reporterId: 'reporter-1', clubId: 'club-1', reason: 'SPAM', detail: 'gênant' },
     });
     await new Promise((r2) => setImmediate(r2)); // laisse le .catch best-effort se résoudre
-    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'owner@x.fr' }));
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'owner-1', clubId: 'club-1', category: 'MODERATION', type: 'moderation.report',
+      email: expect.objectContaining({ to: 'owner@x.fr' }),
+    }));
   });
 
   it('auto-signalement refusé → VALIDATION_ERROR', async () => {
@@ -179,7 +182,7 @@ describe('ModerationService — reportDirectMessage / platform', () => {
   let service: ModerationService;
   beforeEach(() => {
     service = new ModerationService();
-    mockSendMail.mockClear();
+    mockDispatch.mockReset().mockResolvedValue(undefined);
     prismaMock.conversation.findUnique.mockResolvedValue({
       id: 'c1', clubId: 'club-1', userAId: 'reporter-1', userBId: 'author-1',
       participants: [{ userId: 'reporter-1', lastReadAt: null, user: {} }, { userId: 'author-1', lastReadAt: null, user: {} }],
@@ -189,17 +192,20 @@ describe('ModerationService — reportDirectMessage / platform', () => {
     } as any);
   });
 
-  it('crée le signalement DM et notifie les superadmins', async () => {
+  it('crée le signalement DM et notifie les superadmins par email + notification in-app (dispatch, clubId null)', async () => {
     prismaMock.messageReport.create.mockResolvedValue({ id: 'rep-2' } as any);
     prismaMock.directMessage.findUnique
       .mockResolvedValueOnce({ id: 'dm1', conversationId: 'c1', authorId: 'author-1', deletedAt: null } as any)
       .mockResolvedValueOnce({ body: 'message', imageUrl: null, author: { firstName: 'A', lastName: 'B' } } as any);
-    prismaMock.user.findMany.mockResolvedValue([{ email: 'super@palova.fr' }] as any);
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'super-1', email: 'super@palova.fr' }] as any);
 
     const r = await service.reportDirectMessage('c1', 'dm1', 'reporter-1', { reason: 'HARASSMENT', detail: null });
     expect(r.id).toBe('rep-2');
     await new Promise((r2) => setImmediate(r2));
-    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'super@palova.fr' }));
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'super-1', clubId: null, category: 'MODERATION', type: 'moderation.report_dm',
+      email: expect.objectContaining({ to: 'super@palova.fr' }),
+    }));
   });
 
   it('tiers non-participant → CONVERSATION_NOT_FOUND', async () => {
