@@ -155,10 +155,13 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
       />
     ),
     top: topMonth.length >= 3 && <TopOfMonth entries={topMonth} />,
+    // SponsorFlipDeck gère déjà son propre padding de bord (contrairement aux autres sections,
+    // wrappées par `wrap()`) — rendu tel quel dans la boucle, jamais passé à `wrap()`.
+    sponsors: spons.length > 0 && <SponsorFlipDeck key="sponsors" sponsors={spons} now={clock} />,
   };
 
   // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
-  const { order, sponsorsVisible } = resolveSections(club.clubHouseSections, !!token);
+  const { order } = resolveSections(club.clubHouseSections, !!token);
 
   return (
     <>
@@ -168,9 +171,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         <ResultsToRecord token={token} clubSlug={club.slug} />
       )}
 
-      {order.map((k) => wrap(k, sections[k]))}
-
-      {sponsorsVisible && <SponsorFlipDeck sponsors={spons} now={clock} />}
+      {order.map((k) => (k === 'sponsors' ? sections[k] : wrap(k, sections[k])))}
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
