@@ -4,10 +4,12 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
-jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' } }) }));
+jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1', levelSystemEnabled: true, clubSports: [] } }) }));
+jest.mock('../lib/useIsDesktop', () => ({ useIsDesktop: () => true }));
 jest.mock('../lib/api', () => ({
   api: {
     adminGetMembers: jest.fn(),
+    adminGetClub: jest.fn().mockResolvedValue({ id: 'club-1', quickPaymentMethods: [], payAtClubOnly: false }),
     getMyClubs: jest.fn(),
     getMyProfile: jest.fn(),
     adminAddMemberByEmail: jest.fn(),
@@ -17,6 +19,10 @@ jest.mock('../lib/api', () => ({
     adminRenewSubscription: jest.fn(),
     adminChangeSubscription: jest.fn(),
     adminCancelSubscription: jest.fn(),
+    // Fiche cockpit — chargée dès qu'un membre est sélectionné.
+    adminGetMemberHistory: jest.fn(),
+    adminGetMemberNotes: jest.fn().mockResolvedValue([]),
+    adminGetMemberLevel: jest.fn().mockResolvedValue(null),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -32,13 +38,25 @@ const members = [
 const plans = [
   { id: 'p1', name: 'Padel illimité', monthlyPrice: '39.00', isActive: true, sportKeys: ['padel'], benefit: 'INCLUDED', discountPercent: null, commitmentMonths: 1, offPeakOnly: false, dailyCap: null, weeklyCap: null, description: null, imageUrl: null, createdAt: '2026-01-01T00:00:00Z' },
 ];
+const HISTORY = {
+  member: { userId: 'u1', firstName: 'Ana', lastName: 'Bernard', email: 'ana@x.fr', phone: null, avatarUrl: null, isSubscriber: true, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: false, since: '2024-01-01T00:00:00Z' },
+  reservations: [], counts: { total: 0, confirmed: 0, cancelled: 0, lateCancelled: 0, noShow: 0, upcoming: 0 },
+  heatmap: Array.from({ length: 7 }, () => new Array(24).fill(0)),
+  favorites: { resource: null, sportKey: null, weekday: null },
+  finance: { totalSpent: '0.00', averageBasket: '0.00', outstanding: '0.00', unpaid: [], paymentsByMethod: {}, revenueByMonth: [], prepaid: { balances: [], consumption: [] } },
+  game: { sportKey: 'padel', level: null, tier: null, isProvisional: false, matchesPlayed: 0, levelPoints: [], wins: 0, losses: 0, frequentPartners: [] },
+  loyalty: { firstVisitAt: null, lastVisitAt: null, daysSinceLastVisit: null, tenureDays: 0, playsPerMonth: 0, cancellationRate: 0, atRisk: false },
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.history.replaceState(null, '', '/admin/members');
   (api.adminGetMembers as jest.Mock).mockResolvedValue(members);
+  (api.adminGetClub as jest.Mock).mockResolvedValue({ id: 'club-1', quickPaymentMethods: [], payAtClubOnly: false });
   (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', slug: 'c', name: 'Club', role: 'ADMIN' }]);
   (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'u-viewer' });
   (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue(plans);
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(JSON.parse(JSON.stringify(HISTORY)));
 });
 
 const mount = () => render(<ThemeProvider><AdminMembersPage /></ThemeProvider>);
@@ -61,33 +79,42 @@ it('le segment « Bloqués » ne montre que les membres bloqués', async () => {
   expect(screen.queryByText('Léo Costa')).toBeNull();
 });
 
-it('le bandeau KPI est présent (club entier)', async () => {
+it('le tableau de bord du fichier (panneau droit, sans sélection) affiche les KPI du club entier', async () => {
   mount();
   await screen.findByText('Ana Bernard');
-  // Labels propres au bandeau KPI (« Membres » collisionne avec le <h1>, « Actifs 30 j » est sans ambiguïté).
+  // Labels propres au tableau de bord (« Membres » collisionne avec le <h1>, « Actifs 30 j » est sans ambiguïté).
   expect(screen.getByText('Actifs 30 j')).toBeInTheDocument();
   expect(screen.getByText('Abonnés')).toBeInTheDocument();
 });
 
-it('contexte « Abonnés » : bandeau de pilotage + cycle de vie sur la ligne', async () => {
+it('contexte « Abonnés » : bandeau de pilotage sans sélection', async () => {
   mount();
   await screen.findByText('Ana Bernard');
   fireEvent.click(screen.getByRole('button', { name: 'Abonnés · 1' }));
-  // Bandeau : KPI revenu + carte forfait
+  // Bandeau : KPI revenu + carte forfait, dans le panneau droit (aucune fiche sélectionnée).
   expect(await screen.findByText('Revenu / mois')).toBeInTheDocument();
   expect(screen.getByText('39 €')).toBeInTheDocument();
-  // Ligne enrichie : boutons de cycle de vie
-  expect(screen.getByRole('button', { name: 'Renouveler' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Résilier' })).toBeInTheDocument();
   // Zoé (non abonnée) n'apparaît pas dans ce contexte
   expect(screen.queryByText('Zoé Diaz')).toBeNull();
 });
 
-it('contexte « Abonnés » : Résilier appelle adminCancelSubscription', async () => {
+it('contexte « Abonnés » : sélectionner Ana ouvre sa fiche avec le cycle de vie de l\'abonnement dans la carte Argent', async () => {
+  mount();
+  await screen.findByText('Ana Bernard');
+  fireEvent.click(screen.getByRole('button', { name: 'Abonnés · 1' }));
+  fireEvent.click(screen.getByText('Ana Bernard'));
+  await waitFor(() => expect(api.adminGetMemberHistory).toHaveBeenCalledWith('club-1', 'u1', 'tok'));
+  expect(await screen.findByRole('button', { name: 'Renouveler' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Changer' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Résilier' })).toBeInTheDocument();
+});
+
+it('contexte « Abonnés » : Résilier (depuis la fiche) appelle adminCancelSubscription', async () => {
   (api.adminCancelSubscription as jest.Mock).mockResolvedValue({ id: 'sub-a', status: 'CANCELLED' });
   mount();
   await screen.findByText('Ana Bernard');
   fireEvent.click(screen.getByRole('button', { name: 'Abonnés · 1' }));
+  fireEvent.click(screen.getByText('Ana Bernard'));
   fireEvent.click(await screen.findByRole('button', { name: 'Résilier' }));
   fireEvent.click(await screen.findByRole('button', { name: /Résilier l’abonnement|Résilier l'abonnement/ }));
   await waitFor(() => expect(api.adminCancelSubscription).toHaveBeenCalledWith('club-1', 'sub-a', 'tok'));
