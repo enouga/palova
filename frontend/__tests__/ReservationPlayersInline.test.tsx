@@ -36,13 +36,13 @@ const wrap = (over = {}, onChanged = () => {}) =>
 describe('ReservationPlayersInline', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('affiche un × de retrait sur un joueur non-organisateur, mais pas sur l’organisateur (édition ouverte)', () => {
+  it('affiche un x de retrait sur un joueur non-organisateur, mais pas sur l organisateur (edition ouverte)', () => {
     wrap();
     expect(screen.getByRole('button', { name: 'Retirer Ines B' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retirer Org A' })).not.toBeInTheDocument();
   });
 
-  it('montre le bouton « Ajouter un joueur » quand il reste une place et que l’édition est ouverte, et ajoute via la recherche', async () => {
+  it('montre le bouton Ajouter un joueur quand il reste une place et que l edition est ouverte, et ajoute via la recherche', async () => {
     mocked.searchClubMembers.mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }] as never);
     const onChanged = jest.fn();
     wrap({}, onChanged);
@@ -53,7 +53,7 @@ describe('ReservationPlayersInline', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it('retire un joueur via le ×', async () => {
+  it('retire un joueur via le x', async () => {
     const onChanged = jest.fn();
     wrap({}, onChanged);
     fireEvent.click(screen.getByRole('button', { name: 'Retirer Ines B' }));
@@ -61,7 +61,7 @@ describe('ReservationPlayersInline', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it('quand l’édition est fermée (résa non confirmée), ni bouton d’ajout ni ×', () => {
+  it('quand l edition est fermee (resa non confirmee), ni bouton d ajout ni x', () => {
     wrap({ status: 'PENDING' });
     expect(screen.queryByRole('button', { name: /Ajouter un joueur/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retirer Ines B' })).not.toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('ReservationPlayersInline', () => {
     resource: { id: 'res1', name: 'Terrain 1', sport: { key: 'padel', name: 'Padel' }, club: { name: 'Club', slug: 'demo', timezone: 'Europe/Paris' } },
   };
 
-  it("padel : tap joueur → feuille d'actions → Retirer", async () => {
+  it('padel : tap joueur -> feuille d actions -> Retirer', async () => {
     const onChanged = jest.fn();
     wrap(padel, onChanged);
     fireEvent.click(screen.getByRole('button', { name: 'Modifier Ines B' }));
@@ -81,39 +81,48 @@ describe('ReservationPlayersInline', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it("padel : l'organisateur n'a pas d'action Retirer dans sa feuille", () => {
+  it('padel : l organisateur n a pas d action Retirer dans sa feuille', () => {
     wrap(padel);
     fireEvent.click(screen.getByRole('button', { name: 'Modifier Org A' }));
     expect(screen.queryByRole('button', { name: /Retirer de la partie/ })).not.toBeInTheDocument();
   });
 
-  it("padel : « + » d'équipe ouvre la feuille d'ajout, ajoute et épingle l'équipe", async () => {
+  it('padel : + d equipe ouvre la feuille d ajout, ajoute et epingle l equipe', async () => {
     mocked.searchClubMembers.mockResolvedValue([{ id: 'u-new', firstName: 'New', lastName: 'Player' }] as never);
     const onChanged = jest.fn();
     wrap(padel, onChanged);
-    // Org et Ines sont team 1 (défaut) → 2 places libres côté 2.
-    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur à l'équipe 2/ })[0]);
+    // Org et Ines sont team 1 (defaut) -> 2 places libres cote 2.
+    fireEvent.click(screen.getAllByRole('button', { name: /Ajouter un joueur a l equipe 2/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /New Player/ }));
-    // La feuille d'ajout se referme après le pick (la place visée est libérée).
+    // La feuille d ajout se referme apres le pick (la place visee est liberee).
     expect(screen.queryByPlaceholderText(/Rechercher un membre/)).not.toBeInTheDocument();
     await waitFor(() => expect(mocked.addReservationPlayer).toHaveBeenCalledWith('r1', 'u-new', 'abc'));
-    // La place tapée (équipe 2, 1re libre = G) est transmise avec les places existantes.
+    // La place tapee (equipe 2, 1re libre = G) est transmise avec les places existantes.
     await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith(
       'r1', { 'u-org': 1, u2: 1, 'u-new': 2 }, 'abc', { 'u-org': 0, u2: 1, 'u-new': 0 }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it("padel : « Passer dans l'équipe 2 » envoie les équipes ET les places (slots)", async () => {
+  it('padel : Passer dans l equipe 2 envoie les equipes ET les places (slots)', async () => {
     wrap(padel);
     fireEvent.click(screen.getByRole('button', { name: 'Modifier Ines B' }));
-    fireEvent.click(screen.getByRole('button', { name: /Passer dans l'équipe 2/ }));
-    // Ines (Éq.1 D) part en Éq.2 : sa place D est libre en face → elle la garde (slot 1).
+    fireEvent.click(screen.getByRole('button', { name: /Passer dans l equipe 2/ }));
+    // Ines (Eq.1 D) part en Eq.2 : sa place D est libre en face -> elle la garde (slot 1).
     await waitFor(() => expect(mocked.setReservationTeams).toHaveBeenCalledWith(
       'r1', { 'u-org': 1, u2: 2 }, 'abc', { 'u-org': 0, u2: 1 }));
   });
 
-  it('padel : propose d’ouvrir la partie', () => {
+  it('padel : propose d ouvrir la partie', () => {
     wrap(padel);
     expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
+  });
+
+  it('hideOpenMatchToggle masque le controle Ouvrir la partie', () => {
+    render(
+      <ThemeProvider>
+        <ReservationPlayersInline reservation={resa(padel)} token="abc" now={now} onChanged={() => {}} hideOpenMatchToggle />
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole('button', { name: /Ouvrir la partie/ })).not.toBeInTheDocument();
   });
 });
