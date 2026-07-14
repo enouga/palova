@@ -83,6 +83,17 @@ it('signale un message : ouvre ReportDialog, envoie le motif, confirme', async (
   expect(await screen.findByText(/signalement envoyé/i)).toBeInTheDocument();
 });
 
+it('cliquer dans ReportDialog ne ferme PAS la feuille de discussion (pas de bubbling vers onClose)', async () => {
+  const onClose = jest.fn();
+  renderSheet({ onClose });
+  await screen.findByText('salut');
+  fireEvent.click(screen.getByRole('button', { name: /signaler/i }));
+  fireEvent.click(screen.getByRole('radio', { name: /spam/i }));
+  fireEvent.click(screen.getByRole('button', { name: /envoyer le signalement/i }));
+  await screen.findByText(/signalement envoyé/i);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
 it('RATE_LIMITED à l envoi affiche un message inline', async () => {
   const { api } = require('@/lib/api');
   api.postChatMessage.mockRejectedValueOnce(new Error('RATE_LIMITED'));
