@@ -134,6 +134,9 @@ describe('ModerationService — resolveClubReport', () => {
       where: { openMatchMessageId: 'm1', status: 'OPEN' },
       data: { status: 'RESOLVED', resolution: 'DELETED', resolvedById: 'mod-1', resolvedAt: expect.any(Date) },
     });
+    // vue staff : le corps du message reste visible même après suppression (audit du signalement)
+    expect(row.message.body).toBe('x');
+    expect(row.message.deleted).toBe(true);
   });
 
   it('REJECT : ne touche pas au message', async () => {
@@ -251,6 +254,8 @@ describe('ModerationService — reportDirectMessage / platform', () => {
     const row = await service.resolvePlatformReport('rep-2', 'super-1', 'DELETE');
     expect(row.status).toBe('RESOLVED');
     expect(row.message.deleted).toBe(true);
+    // vue superadmin : le corps du message reste visible même après suppression (audit du signalement)
+    expect(row.message.body).toBe('msg');
   });
 
   it('platformReportImagePath : anti-traversée déjà couverte par imagePathForModerator', async () => {

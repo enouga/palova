@@ -82,7 +82,9 @@ function toClubReportRow(r: ClubReportSrc): ClubReportRow {
     id: r.id, reason: r.reason, detail: r.detail, status: r.status, resolution: r.resolution,
     createdAt: r.createdAt.toISOString(), resolvedAt: r.resolvedAt?.toISOString() ?? null,
     reporter: r.reporter,
-    message: { id: m.id, body: m.deletedAt ? '' : m.body, deleted: m.deletedAt != null, createdAt: m.createdAt.toISOString(), author: m.user },
+    // body TOUJOURS visible (même supprimé) : vue staff de modération, pas le chat public —
+    // le contenu réel du message signalé doit rester consultable pour l'audit/la décision.
+    message: { id: m.id, body: m.body, deleted: m.deletedAt != null, createdAt: m.createdAt.toISOString(), author: m.user },
     match: { reservationId: m.reservationId, startTime: m.reservation.startTime.toISOString(), resourceName: m.reservation.resource.name },
   };
 }
@@ -113,8 +115,11 @@ function toPlatformReportRow(r: PlatformReportSrc): PlatformReportRow {
     id: r.id, reason: r.reason, detail: r.detail, status: r.status, resolution: r.resolution,
     createdAt: r.createdAt.toISOString(), resolvedAt: r.resolvedAt?.toISOString() ?? null,
     reporter: r.reporter,
+    // body TOUJOURS visible (même supprimé) : vue superadmin de modération, pas le fil privé —
+    // hasImage reste conditionné à deletedAt car le FICHIER est réellement effacé du disque
+    // à la suppression (unlinkImage), contrairement au texte qui reste en base.
     message: {
-      id: m.id, body: m.deletedAt ? '' : m.body, deleted: m.deletedAt != null, createdAt: m.createdAt.toISOString(),
+      id: m.id, body: m.body, deleted: m.deletedAt != null, createdAt: m.createdAt.toISOString(),
       author: m.author, hasImage: !m.deletedAt && !!m.imageUrl,
     },
     conversationId: m.conversationId,

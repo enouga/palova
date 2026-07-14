@@ -52,15 +52,17 @@ it('Rejeter appelle adminResolveReport avec REJECT', async () => {
   await waitFor(() => expect(api.adminResolveReport).toHaveBeenCalledWith('club-demo', 'rep-1', 'REJECT', 't'));
 });
 
-it('historique déplié par défaut, avec le detail complet (auteur, terrain, signaleur)', async () => {
+it('historique déplié par défaut, avec le detail complet (message, auteur, terrain, signaleur)', async () => {
   const { api } = require('@/lib/api');
   const resolved = {
     ...REPORT, id: 'rep-2', status: 'RESOLVED', resolution: 'DELETED', resolvedAt: '2026-07-14T22:30:00.000Z',
-    message: { ...REPORT.message, id: 'm2', body: '' }, // tombstoné : plus de contenu
+    // même tombstoné, le backend renvoie le corps réel à la vue staff (audit du signalement) :
+    message: { ...REPORT.message, id: 'm2', body: 'contenu signalé' },
   };
   api.adminListReports.mockResolvedValue({ items: [resolved] });
   render(<ThemeProvider><AdminModerationPage /></ThemeProvider>);
   expect(await screen.findByText('Supprimé')).toBeInTheDocument();
+  expect(screen.getByText('contenu signalé')).toBeInTheDocument();
   expect(screen.getByText(/léo b/i)).toBeInTheDocument();
   expect(screen.getByText(/court 1/i)).toBeInTheDocument();
   expect(screen.getByText(/signalé par marie d/i)).toBeInTheDocument();
