@@ -9,7 +9,7 @@ import { Btn, Field } from '@/components/ui/atoms';
 const NOUNS = ['terrain', 'court', 'table', 'piste', 'baie'];
 const DURATION_PRESETS = [30, 45, 60, 90, 120];
 const STEP_OPTIONS = [15, 30, 60];
-const emptyForm = (): SportCatalogBody => ({ name: '', icon: '', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90], surfaces: [], hasLighting: false });
+const emptyForm = (): SportCatalogBody => ({ name: '', icon: '', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90], surfaces: [], hasLighting: true });
 
 export default function SuperAdminSportsPage() {
   const { th } = useTheme();

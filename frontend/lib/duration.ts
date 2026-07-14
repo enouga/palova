@@ -24,9 +24,9 @@ export function proposableDurations(sportDefaults: number[]): number[] {
   return Array.from(new Set([...DURATION_PRESETS, ...sportDefaults])).sort((a, b) => a - b);
 }
 
-/** Durée par défaut sélectionnée : 1h30 si proposée, sinon la première. */
+/** Durée par défaut sélectionnée : la plus courte durée proposée par le sport. */
 export function defaultDuration(durations: number[]): number {
-  return durations.includes(90) ? 90 : (durations[0] ?? 90);
+  return durations.length ? Math.min(...durations) : 90;
 }
 
 /** Heure de fin "HH:mm" = début + durée (minutes), plafonnée à l'heure de fermeture. */

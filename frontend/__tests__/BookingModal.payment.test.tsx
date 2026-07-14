@@ -131,7 +131,7 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     expect(step).toHaveAttribute('data-amount', '10€');
   });
 
-  it('en ligne paie toujours la part par personne (10€ = 40€/4), jamais le total', async () => {
+  it('en ligne : par défaut la part par personne (10€ = 40€/4)', async () => {
     renderModal({ stripeActive: true });
     await screen.findByText(/Créneau bloqué/);
     fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
@@ -139,8 +139,19 @@ describe('BookingModal — choix du mode de paiement (Lot 2)', () => {
     expect(screen.getByText(/Votre part/)).toBeInTheDocument();
     acceptCgv();
     const step = await screen.findByTestId('stripe-step');
-    // amountLabel prouve que createIntent utilisera la part, pas le total.
+    // amountLabel prouve que createIntent utilisera la part par défaut, pas le total.
     expect(step).toHaveAttribute('data-amount', '10€');
+  });
+
+  it('en ligne : option « Toute la partie » facture le total (40€)', async () => {
+    renderModal({ stripeActive: true });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+    // Bascule « Toute la partie » → le montant Stripe passe de la part au total.
+    fireEvent.click(screen.getByRole('button', { name: /Toute la partie/ }));
+    acceptCgv();
+    const step = await screen.findByTestId('stripe-step');
+    expect(step).toHaveAttribute('data-amount', '40€');
   });
 
   it('empreinte requise (sans paiement en ligne) → étape Stripe setup', async () => {

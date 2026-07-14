@@ -23,7 +23,7 @@ export default function AdminResourcesPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
-  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: '', coverage: 'outdoor', lighting: false, format: 'double', price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' });
+  const [nr, setNr] = useState({ name: '', clubSportId: '', surface: '', coverage: 'indoor', lighting: true, format: 'double', price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' });
   const [creating, setCreating] = useState(false);
   const [createErrors, setCreateErrors] = useState<ResourceFieldErrors>({});
   const [rowErrors, setRowErrors] = useState<Record<string, ResourceFieldErrors>>({});
@@ -33,7 +33,7 @@ export default function AdminResourcesPage() {
   const [toDelete, setToDelete] = useState<AdminResource | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const cell: CSSProperties = { padding: '14px 18px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+  const cell: CSSProperties = { padding: '10px 8px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 8, padding: '6px 8px', fontFamily: th.fontUI, fontSize: 14 };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 5 };
   const errText: CSSProperties = { color: ACCENTS.coral, fontSize: 11.5, fontWeight: 600, fontFamily: th.fontUI, marginTop: 2, maxWidth: 170, lineHeight: 1.25 };
@@ -187,6 +187,11 @@ export default function AdminResourcesPage() {
   const clearCreateErr = (k: ResourceFieldKey) =>
     setCreateErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
 
+  // Colonnes masquées quand elles n'apportent rien : « Surface » si aucun sport n'a de
+  // matériaux (ex. club 100 % padel), « Sport » si le club n'a qu'un seul sport.
+  const showSurface = sports.some((cs) => (cs.sport.surfaces?.length ?? 0) > 0);
+  const showSport = sports.length > 1;
+
   const create = async () => {
     if (!token || !clubId || !nr.clubSportId) return;
     const errs = validateResourceFields(nr);
@@ -202,7 +207,7 @@ export default function AdminResourcesPage() {
         openHour: Number(nr.openHour), closeHour: Number(nr.closeHour),
         slotStepMin: nr.slotStepMin ? Number(nr.slotStepMin) : undefined,
       }, token);
-      setNr((n) => ({ ...n, name: '', surface: surfacesFor(n.clubSportId)[0] ?? '', coverage: 'outdoor', lighting: false, price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
+      setNr((n) => ({ ...n, name: '', surface: surfacesFor(n.clubSportId)[0] ?? '', coverage: 'indoor', lighting: true, price: '25', offPeakPrice: '', openHour: '8', closeHour: '22', slotStepMin: '' }));
       await load();
     } catch (e) {
       setError(`Création : ${(e as Error).message}`);
@@ -229,10 +234,10 @@ export default function AdminResourcesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                {['', 'Ressource', 'Sport', 'Surface', 'Couverture', 'Éclairage', 'Format', '€ créneau plein', '€ créneau creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
-                  <th key={i} style={{ padding: '14px 18px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap', textAlign: (h === 'Couverture' || h === 'Éclairage') ? 'center' : 'left' }}>{h}</th>
+                {['', 'Ressource', ...(showSport ? ['Sport'] : []), ...(showSurface ? ['Surface'] : []), 'Couverture', 'Éclairage', 'Format', '€ plein', '€ creux', 'Ouv.', 'Ferm.', 'Créneau', 'Statut'].map((h, i) => (
+                  <th key={i} style={{ padding: '10px 8px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, whiteSpace: 'nowrap', textAlign: (h === 'Couverture' || h === 'Éclairage') ? 'center' : 'left' }}>{h}</th>
                 ))}
-                <th aria-hidden style={{ padding: '14px 18px', width: 40 }} />
+                <th aria-hidden style={{ padding: '10px 8px', width: 30 }} />
               </tr>
             </thead>
             <tbody>
@@ -249,22 +254,24 @@ export default function AdminResourcesPage() {
                     <Icon name="grip" size={18} color={th.textFaint} />
                   </td>
                   <td style={cell}>
-                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 200, fontWeight: 600, ...errBorder(rowErrors[r.id]?.name) }} />
+                    <input value={r.name} onChange={(e) => editField(r.id, 'name', e.target.value)} placeholder="Nom du terrain" style={{ ...input, width: 160, fontWeight: 600, ...errBorder(rowErrors[r.id]?.name) }} />
                     {rowErrors[r.id]?.name && <div style={errText}>{rowErrors[r.id]!.name}</div>}
                   </td>
-                  <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>
-                  <td style={cell}>
-                    {(r.clubSport.sport.surfaces ?? []).length > 0 ? (
-                      <select value={typeof r.attributes?.surface === 'string' ? r.attributes.surface : ''} onChange={(e) => editAttr(r.id, 'surface', e.target.value)} style={{ ...input, width: 130 }}>
-                        <option value="">—</option>
-                        {(r.clubSport.sport.surfaces ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <span style={{ color: th.textFaint }}>—</span>
-                    )}
-                  </td>
+                  {showSport && <td style={{ ...cell, color: th.textMute }}>{r.clubSport.sport.name}</td>}
+                  {showSurface && (
+                    <td style={cell}>
+                      {(r.clubSport.sport.surfaces ?? []).length > 0 ? (
+                        <select value={typeof r.attributes?.surface === 'string' ? r.attributes.surface : ''} onChange={(e) => editAttr(r.id, 'surface', e.target.value)} style={{ ...input, width: 120 }}>
+                          <option value="">—</option>
+                          {(r.clubSport.sport.surfaces ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      ) : (
+                        <span style={{ color: th.textFaint }}>—</span>
+                      )}
+                    </td>
+                  )}
                   <td style={{ ...cell, textAlign: 'center' }}>
-                    <select aria-label="Couverture" value={typeof r.attributes?.coverage === 'string' ? r.attributes.coverage : 'outdoor'} onChange={(e) => editCoverage(r.id, e.target.value)} style={{ ...input, width: 130 }}>
+                    <select aria-label="Couverture" value={typeof r.attributes?.coverage === 'string' ? r.attributes.coverage : 'outdoor'} onChange={(e) => editCoverage(r.id, e.target.value)} style={{ ...input, width: 104 }}>
                       {COVERAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </td>
@@ -276,28 +283,28 @@ export default function AdminResourcesPage() {
                     )}
                   </td>
                   <td style={cell}>
-                    <select value={typeof r.attributes?.format === 'string' ? r.attributes.format : 'double'} onChange={(e) => editAttr(r.id, 'format', e.target.value)} style={{ ...input, width: 100 }}>
+                    <select value={typeof r.attributes?.format === 'string' ? r.attributes.format : 'double'} onChange={(e) => editAttr(r.id, 'format', e.target.value)} style={{ ...input, width: 92 }}>
                       {COURT_FORMATS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </td>
                   <td style={cell}>
-                    <input type="number" min={1} step="0.5" value={r.price} onChange={(e) => editField(r.id, 'price', e.target.value)} style={{ ...input, width: 90, ...errBorder(rowErrors[r.id]?.price) }} />
+                    <input type="number" min={1} step="0.5" value={r.price} onChange={(e) => editField(r.id, 'price', e.target.value)} style={{ ...input, width: 76, ...errBorder(rowErrors[r.id]?.price) }} />
                     {rowErrors[r.id]?.price && <div style={errText}>{rowErrors[r.id]!.price}</div>}
                   </td>
                   <td style={cell}>
-                    <input type="number" min={1} step="0.5" placeholder="—" value={r.offPeakPrice ?? ''} onChange={(e) => editField(r.id, 'offPeakPrice', e.target.value)} style={{ ...input, width: 90, ...errBorder(rowErrors[r.id]?.offPeakPrice) }} />
+                    <input type="number" min={1} step="0.5" placeholder="—" value={r.offPeakPrice ?? ''} onChange={(e) => editField(r.id, 'offPeakPrice', e.target.value)} style={{ ...input, width: 76, ...errBorder(rowErrors[r.id]?.offPeakPrice) }} />
                     {rowErrors[r.id]?.offPeakPrice && <div style={errText}>{rowErrors[r.id]!.offPeakPrice}</div>}
                   </td>
                   <td style={cell}>
-                    <input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 60, ...errBorder(rowErrors[r.id]?.openHour) }} />
+                    <input type="number" min={0} max={24} value={r.openHour} onChange={(e) => editField(r.id, 'openHour', e.target.value)} style={{ ...input, width: 50, ...errBorder(rowErrors[r.id]?.openHour) }} />
                     {rowErrors[r.id]?.openHour && <div style={errText}>{rowErrors[r.id]!.openHour}</div>}
                   </td>
                   <td style={cell}>
-                    <input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 60, ...errBorder(rowErrors[r.id]?.closeHour) }} />
+                    <input type="number" min={0} max={24} value={r.closeHour} onChange={(e) => editField(r.id, 'closeHour', e.target.value)} style={{ ...input, width: 50, ...errBorder(rowErrors[r.id]?.closeHour) }} />
                     {rowErrors[r.id]?.closeHour && <div style={errText}>{rowErrors[r.id]!.closeHour}</div>}
                   </td>
                   <td style={cell}>
-                    <select value={r.slotStepMin ?? ''} onChange={(e) => editStep(r.id, e.target.value)} style={{ ...input, width: 110 }}>
+                    <select value={r.slotStepMin ?? ''} onChange={(e) => editStep(r.id, e.target.value)} style={{ ...input, width: 96 }}>
                       <option value="">Défaut ({defaultStep(r)} min)</option>
                       {STEP_OPTIONS.map((s) => <option key={s} value={s}>{s} min</option>)}
                     </select>

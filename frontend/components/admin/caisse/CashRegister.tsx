@@ -421,7 +421,11 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
             </button>
           ) : (
             <>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {/* Largeur bornée : la rangée de moyens tombe de la MÊME façon (≈ 4/rangée)
+                  quel que soit le conteneur — colonne « Caisse » étroite OU modale Planning
+                  large OU grand écran (le register a maxWidth 900). Avec flex-basis 130 + gap 10,
+                  660 fait tenir 4 boutons (550) et pas 5 (690) → disposition identique partout. */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, maxWidth: 660 }}>
                 {methods.map((m, i) => (
                   <button key={m} type="button" disabled={selTotal <= 0} onClick={() => paySelection(m)}
                     style={{ ...payBtn(i === 0), flex: '1 1 130px', width: 'auto', opacity: selTotal <= 0 ? 0.45 : 1 }}>

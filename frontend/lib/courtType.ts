@@ -20,6 +20,15 @@ export const COVERAGE_OPTIONS = [
 /** Badge éclairage (attributes.lighting). */
 export const LIGHTING_BADGE = { label: 'Éclairage', icon: 'bolt' as IconName, color: '#e6b84d' };
 
+/**
+ * Le badge Éclairage n'est utile que pour DISTINGUER des terrains — si tous ceux du
+ * groupe affiché ont l'éclairage, l'afficher partout n'apporte rien (bruit visuel).
+ * Vrai dès qu'au moins un terrain du groupe n'a pas l'éclairage.
+ */
+export function lightingIsInformative(resources: { attributes?: { lighting?: boolean } }[]): boolean {
+  return resources.some((r) => r.attributes?.lighting !== true);
+}
+
 /** Format du terrain (attributes.format) : double (standard) / single (2 joueurs). */
 export function courtFormat(format?: string): string | null {
   return format === 'single' ? 'Single' : null; // on n'affiche un badge que pour les single

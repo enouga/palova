@@ -199,6 +199,8 @@ export default function BookingModal({
   const [fingerprintForced, setFingerprintForced] = useState(false);
   // Avenue de paiement (mutuellement exclusive avec un carnet) : régler au club ou en ligne.
   const [payMode, setPayMode]         = useState<'club' | 'online'>(requireOnlinePayment ? 'online' : 'club');
+  // Paiement en ligne : régler sa PART (défaut) ou TOUTE la partie (payer pour le court entier).
+  const [payWholeMatch, setPayWholeMatch] = useState(false);
   // Multi-joueurs : bloc « Organisez votre partie » (joueurs + ouverture aux membres, cette
   // dernière restreinte au padel) affiché sur l'écran de succès dès qu'un court a plusieurs
   // places et un club connu.
@@ -229,8 +231,9 @@ export default function BookingModal({
   const onlineAvailable = !!stripeActive || !!requireOnlinePayment;
   // Cas défensif : le club EXIGE le paiement en ligne mais son compte Stripe n'est pas actif.
   const onlineRequiredButUnavailable = !!requireOnlinePayment && !stripeActive;
-  // En ligne : toujours la part par personne (sauf si trop faible → total).
-  const onlineShare = !shareTooSmall;
+  // En ligne : la part par personne par défaut ; l'utilisateur peut choisir de régler
+  // toute la partie (payWholeMatch). Part trop faible (< 0,50 €) → total forcé.
+  const onlineShare = !shareTooSmall && !payWholeMatch;
   const onlineAmountLabel = onlineShare ? `${perPerson}€` : `${totalPrice}€`;
 
   // Y a-t-il autre chose à choisir que le défaut ? (sinon, pas de bouton « changer »)
@@ -340,7 +343,7 @@ export default function BookingModal({
       settled.current = true; // réservation confirmée → le cleanup ne doit pas l'annuler
       setConfirmedInfo({
         reservation: confirmed,
-        summary: useSub && cover ? 'Couverte par votre abonnement'
+        summary: useSub && cover ? 'Votre part couverte par votre abonnement'
           : usedPkg ? paidWithLabel(usedPkg, totalEuros)
           : 'À régler au club',
         paid: usedPkg ? { label: paidWithLabel(usedPkg, totalEuros) } : undefined,
@@ -486,7 +489,7 @@ export default function BookingModal({
                   const online = !useSub && !selPkg && payMode === 'online' && onlineAvailable;
                   const icon: IconName = useSub ? 'bolt' : selPkg ? (selPkg.kind === 'ENTRIES' ? 'ticket' : 'wallet') : online ? 'card' : 'home';
                   const title = useSub ? 'Couvert par votre abonnement' : selPkg ? packageLabel(selPkg) : online ? 'Payer en ligne' : 'Régler au club';
-                  const desc = useSub && cover ? coverageLabel(cover)
+                  const desc = useSub && cover ? `Votre part : ${perPerson}€ · ${coverageLabel(cover)}`
                     : selPkg ? `Après paiement : ${remainingAfterLabel(selPkg, totalEuros)}`
                     : online ? (onlineRequiredButUnavailable ? 'Paiement en ligne momentanément indisponible — contactez le club.'
                         : onlineShare ? `Votre part : ${perPerson}€ · ${totalPrice}€ ÷ ${capacity} joueurs` : `Montant : ${totalPrice}€`)
@@ -517,7 +520,7 @@ export default function BookingModal({
                       <span style={payTile(useSub)}><Icon name="bolt" size={18} color={useSub ? th.onAccent : th.accent} /></span>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text }}>Couvert par votre abonnement</span>
-                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 2 }}>{coverageLabel(cover)}</span>
+                        <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 2 }}>Votre part : {perPerson}€ · {coverageLabel(cover)}</span>
                       </span>
                       {useSub && checkBadge}
                     </button>
@@ -599,6 +602,33 @@ export default function BookingModal({
                 </div>) }
               </div>
 
+              {/* Paiement en ligne : régler sa part ou toute la partie (courts multi-places).
+                  Un abonnement, lui, ne couvre jamais que la part — pas de choix ici. */}
+              {!useSub && !paySource && payMode === 'online' && onlineAvailable && !onlineRequiredButUnavailable && !shareTooSmall && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, marginBottom: 8 }}>Montant à régler en ligne</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {([
+                      { whole: false, label: 'Ma part', amt: `${perPerson}€`, sub: `${totalPrice}€ ÷ ${capacity} joueurs` },
+                      { whole: true,  label: 'Toute la partie', amt: `${totalPrice}€`, sub: `pour ${capacity} joueurs` },
+                    ] as const).map((opt) => {
+                      const active = payWholeMatch === opt.whole;
+                      return (
+                        <button key={String(opt.whole)} type="button" aria-pressed={active}
+                          onClick={() => setPayWholeMatch(opt.whole)}
+                          style={{ flex: 1, textAlign: 'left', cursor: 'pointer', borderRadius: 12, padding: '10px 12px',
+                            border: `1.5px solid ${active ? th.accent : th.lineStrong}`, background: active ? `${th.accent}14` : th.surface,
+                            transition: 'border-color .15s, background .15s' }}>
+                          <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text }}>{opt.label}</span>
+                          <span style={{ display: 'block', fontFamily: th.fontDisplay, fontSize: 18, fontWeight: 800, letterSpacing: -0.5, color: active ? th.accent : th.text, marginTop: 1 }}>{opt.amt}</span>
+                          <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 1 }}>{opt.sub}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Conditions d'annulation — toujours affiché */}
               <CancellationNotice text={cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)} th={th} />
 
@@ -632,6 +662,9 @@ export default function BookingModal({
                   {cgvAccepted && reservation ? (
                     <div style={{ marginTop: 16 }}>
                       <StripePaymentStep
+                        // Remonte (donc recrée l'intent) si le type OU le montant part/total change,
+                        // même après affichage du formulaire — l'intent est figé à sa création.
+                        key={(payMode === 'online' && onlineAvailable) ? (onlineShare ? 'pay-share' : 'pay-full') : 'setup'}
                         type={(payMode === 'online' && onlineAvailable) ? 'payment' : 'setup'}
                         amountLabel={(payMode === 'online' && onlineAvailable) ? onlineAmountLabel : `${totalPrice}€`}
                         cgvAccepted={cgvAccepted}

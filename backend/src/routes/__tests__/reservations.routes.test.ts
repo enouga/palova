@@ -5,6 +5,7 @@ import { redisMock } from '../../__mocks__/redis';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
+import { ReservationService } from '../../services/reservation.service';
 
 const SECRET = process.env.JWT_SECRET!;
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
@@ -116,6 +117,23 @@ describe('POST /api/reservations/:id/confirm — garde CGV', () => {
     expect(res.status).toBe(402);
     expect(res.body.error).toBe('CGV_NOT_ACCEPTED');
     expect(prismaMock.reservation.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/reservations/:id/confirm — couverture par abonnement', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('transmet paymentSource.subscriptionId au service (et ne le perd pas au passage de la route)', async () => {
+    const spy = jest.spyOn(ReservationService.prototype, 'confirmReservation')
+      .mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' } as any);
+
+    const res = await request(app).post('/api/reservations/res-1/confirm').set('Authorization', `Bearer ${token}`)
+      .send({ paymentSource: { subscriptionId: 'sub-1' } });
+
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith('res-1', 'user-1', expect.objectContaining({
+      paymentSource: { subscriptionId: 'sub-1' },
+    }));
   });
 });
 

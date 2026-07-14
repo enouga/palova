@@ -10,7 +10,7 @@ import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { SubscriptionService } from './subscription.service';
 import { maxBookableInstant, BookingReleaseMode } from './booking-window';
-import { playerCount } from '../utils/courtType';
+import { playerCount, capacityFor } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed, notifyReservationRescheduled } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
@@ -420,6 +420,7 @@ export class ReservationService {
         resource: {
           select: {
             clubId: true,
+            attributes: true, // format (single/double) → capacité pour la part abonnement
             club: {
               select: {
                 requireOnlinePayment: true,
@@ -575,7 +576,13 @@ export class ReservationService {
         const tz  = (reservation as any).resource.club.timezone as string;
         const sportKey = (reservation as any).resource.clubSport?.sport?.key as string | undefined;
         const isOffPeak = classifySlot(off, reservation.startTime, reservation.endTime, tz) === 'OFF_PEAK';
-        const dueCents = Math.round(Number(reservation.totalPrice) * 100);
+        // Un abonnement est un avantage PERSONNEL : il ne couvre que la PART du joueur
+        // (prix ÷ capacité du terrain), jamais toute la partie. Les autres joueurs règlent
+        // leurs parts au club. Miroir de la part « paiement en ligne » (route /stripe/intent)
+        // et de la couverture par place du balayage autoApplySubscriptionCoverage.
+        const format = ((reservation as any).resource.attributes as { format?: string } | null)?.format;
+        const capacity = capacityFor(sportKey, format);
+        const dueCents = Math.round(Math.round(Number(reservation.totalPrice) * 100) / capacity);
 
         const { covered, coverCents } = SubscriptionService.coverageFor(
           { sportKeys: sub.sportKeys, offPeakOnly: sub.offPeakOnly, benefit: sub.benefit, discountPercent: sub.discountPercent },
@@ -1706,12 +1713,13 @@ export class ReservationService {
         resource: {
           select: {
             price: true, offPeakPrice: true,
+            attributes: true, // format → capacité pour la part d'abonnement
             clubSport: { select: { sport: { select: { key: true } } } },
             club: { select: { offPeakHours: true, timezone: true } },
           },
         },
         participants: { select: { id: true, userId: true, share: true } },
-        payments: { select: { amount: true, refundedAmount: true, participantId: true } },
+        payments: { select: { amount: true, refundedAmount: true, participantId: true, method: true } },
       },
     });
     if (reservations.length === 0) return { applied: 0 };
@@ -1729,9 +1737,21 @@ export class ReservationService {
       /** dû TOTAL de la réservation — plafond global re-vérifié en transaction : la somme des
        *  paiements (anonymes au comptoir compris) ne doit JAMAIS dépasser le dû de la résa. */
       reservationDueCents: number;
+      /** une PART nominale = prix ÷ capacité du terrain : un abonnement (avantage personnel)
+       *  ne couvre jamais plus d'une part, même pour une résa jouée en solo. */
+      nominalShareCents: number;
+      /** part déjà couverte par un abonnement sur cette place (paiement au booking ou balayage
+       *  précédent) → on ne complète jamais au-delà d'UNE part. */
+      subOnPlaceCents: number;
+      /** déjà payé sur la place TOUS MOYENS confondus (CB en ligne, espèces, abo…) : une part
+       *  déjà réglée ne reçoit JAMAIS de complément d'abonnement — sinon l'abonnement financerait
+       *  invisiblement la place d'un autre joueur (place « réglée » sans paiement propre). */
+      paidOnPlaceCents: number;
       sportKey: string; isOffPeak: boolean; startTime: Date; tz: string;
     }
     const slots: Slot[] = [];
+    const subCents = (p: { amount: unknown; refundedAmount: unknown; method?: unknown }) =>
+      p.method === 'SUBSCRIPTION' ? refundableCents(p) : 0;
 
     for (const r of reservations) {
       const sportKey = r.resource.clubSport?.sport?.key ?? '';
@@ -1753,12 +1773,16 @@ export class ReservationService {
       const totalPaidCents = r.payments.reduce((s, p) => s + refundableCents(p), 0);
       if (reservationDueCents - totalPaidCents <= 0) continue;
 
+      const format = (r.resource.attributes as { format?: string } | null)?.format;
+      const nominalShareCents = Math.round(reservationDueCents / capacityFor(sportKey, format));
+
       if (r.participants.length === 0) {
         if (!r.userId) continue;
         const paidCents = r.payments.filter((p) => !p.participantId).reduce((s, p) => s + refundableCents(p), 0);
         const remaining = reservationDueCents - paidCents;
         if (remaining <= 0) continue;
-        slots.push({ reservationId: r.id, participantId: null, userId: r.userId, dueCents: remaining, fullDueCents: reservationDueCents, reservationDueCents, sportKey, isOffPeak, startTime: r.startTime, tz });
+        const subOnPlaceCents = r.payments.filter((p) => !p.participantId).reduce((s, p) => s + subCents(p), 0);
+        slots.push({ reservationId: r.id, participantId: null, userId: r.userId, dueCents: remaining, fullDueCents: reservationDueCents, reservationDueCents, nominalShareCents, subOnPlaceCents, paidOnPlaceCents: paidCents, sportKey, isOffPeak, startTime: r.startTime, tz });
       } else {
         for (const p of r.participants) {
           const fullDueCents = Math.round(num(p.share) * 100);
@@ -1766,7 +1790,8 @@ export class ReservationService {
           const paidCents = r.payments.filter((pay) => pay.participantId === p.id).reduce((s, pay) => s + refundableCents(pay), 0);
           const remaining = fullDueCents - paidCents;
           if (remaining <= 0) continue;
-          slots.push({ reservationId: r.id, participantId: p.id, userId: p.userId, dueCents: remaining, fullDueCents, reservationDueCents, sportKey, isOffPeak, startTime: r.startTime, tz });
+          const subOnPlaceCents = r.payments.filter((pay) => pay.participantId === p.id).reduce((s, pay) => s + subCents(pay), 0);
+          slots.push({ reservationId: r.id, participantId: p.id, userId: p.userId, dueCents: remaining, fullDueCents, reservationDueCents, nominalShareCents, subOnPlaceCents, paidOnPlaceCents: paidCents, sportKey, isOffPeak, startTime: r.startTime, tz });
         }
       }
     }
@@ -1788,11 +1813,20 @@ export class ReservationService {
       let covering: typeof subs[number] | null = null;
       let coverCents = 0;
       for (const sub of subsByUser.get(slot.userId) ?? []) {
+        // Assiette = UNE part nominale (prix ÷ capacité), jamais la part réelle inflée d'une
+        // résa jouée en solo. Deux bornes : ce que l'abonnement peut couvrir moins ce qu'un
+        // abonnement a déjà posé sur la place (un DISCOUNT ne s'applique qu'une fois), ET le
+        // reste dû de la part TOUS MOYENS confondus (une part déjà réglée en CB/espèces ne
+        // reçoit aucun complément — l'abonnement ne finance jamais la place d'un autre joueur).
+        // Le complément ne dépasse pas non plus le reste dû réel de la place.
         const decision = SubscriptionService.coverageFor(
           { sportKeys: sub.sportKeys, offPeakOnly: sub.offPeakOnly, benefit: sub.benefit, discountPercent: sub.discountPercent },
-          { sportKey: slot.sportKey, isOffPeak: slot.isOffPeak, dueCents: slot.dueCents },
+          { sportKey: slot.sportKey, isOffPeak: slot.isOffPeak, dueCents: slot.nominalShareCents },
         );
-        if (decision.covered && decision.coverCents > 0) { covering = sub; coverCents = decision.coverCents; break; }
+        const nominalRemaining = Math.max(0, slot.nominalShareCents - slot.paidOnPlaceCents);
+        const allowed = Math.min(Math.max(0, decision.coverCents - slot.subOnPlaceCents), nominalRemaining);
+        const toCover = Math.min(allowed, slot.dueCents);
+        if (decision.covered && toCover > 0) { covering = sub; coverCents = toCover; break; }
       }
       if (!covering) continue;
 
@@ -1827,7 +1861,9 @@ export class ReservationService {
           const paidAllCents = Math.round(num(paidAllAgg._sum.amount) * 100) - Math.round(num(refundAllAgg._sum.amount) * 100);
           let remaining = slot.reservationDueCents - paidAllCents;
           // Place nommée : borné aussi au reste dû de la place elle-même (recalculé à neuf —
-          // dû total de la place moins ses paiements, pas de double soustraction du scan).
+          // dû total de la place moins ses paiements, pas de double soustraction du scan),
+          // ET au reste de sa part NOMINALE tous moyens confondus (course : un encaissement
+          // de la part arrivé entre le scan et l'écriture annule le complément).
           if (slot.participantId) {
             const pWhere = { participantId: slot.participantId };
             const [paidAgg, refundAgg] = await Promise.all([
@@ -1835,7 +1871,11 @@ export class ReservationService {
               tx.refund.aggregate({ _sum: { amount: true }, where: { payment: pWhere } }),
             ]);
             const paidCents = Math.round(num(paidAgg._sum.amount) * 100) - Math.round(num(refundAgg._sum.amount) * 100);
-            remaining = Math.min(remaining, slot.fullDueCents - paidCents);
+            remaining = Math.min(remaining, slot.fullDueCents - paidCents, Math.max(0, slot.nominalShareCents - paidCents));
+          } else {
+            // Titulaire : sa part nominale est couverte en premier par les paiements anonymes
+            // (attribution haut-en-bas, miroir de slotStatuses côté caisse).
+            remaining = Math.min(remaining, Math.max(0, slot.nominalShareCents - paidAllCents));
           }
           const amountCents = Math.min(coverCents, remaining);
           if (amountCents <= 0) return;

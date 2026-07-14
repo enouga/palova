@@ -2335,10 +2335,11 @@ describe('ReservationService', () => {
   describe('confirmReservation — couverture abonnement', () => {
     let service: ReservationService;
     const baseRes = {
-      id: 'res-1', userId: 'user-1', status: 'PENDING', createdAt: new Date(), totalPrice: '13.00',
+      id: 'res-1', userId: 'user-1', status: 'PENDING', createdAt: new Date(), totalPrice: '52.00',
       startTime: new Date('2026-07-01T08:00:00Z'), endTime: new Date('2026-07-01T09:30:00Z'),
       resource: {
         clubId: 'club-1',
+        attributes: { format: 'double' }, // padel double → capacité 4
         club: { requireOnlinePayment: false, requireCardFingerprint: false, stripeAccountId: null, offPeakHours: null, timezone: 'Europe/Paris' },
         clubSport: { sport: { key: 'padel' } },
       },
@@ -2357,7 +2358,7 @@ describe('ReservationService', () => {
     // qui couvre 8h-22h pour ce test d'INCLUDED.
     const offAll = { '3': [{ start: 8, end: 22 }] }; // 2026-07-01 = mercredi (weekday Luxon 3)
 
-    it('créneau creux + abo INCLUDED → Payment SUBSCRIPTION = prix, reste dû 0', async () => {
+    it('créneau creux + abo INCLUDED → Payment SUBSCRIPTION = la PART du joueur (52 ÷ 4 = 13), pas le total', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({ ...baseRes, resource: { ...baseRes.resource, club: { ...baseRes.resource.club, offPeakHours: offAll } } } as any);
       prismaMock.subscription.findUnique.mockResolvedValue({
         id: 'sub-1', userId: 'user-1', clubId: 'club-1', status: 'ACTIVE', expiresAt: new Date(Date.now() + 1e9),
@@ -2468,7 +2469,7 @@ describe('ReservationService', () => {
       prismaMock.reservation.findMany.mockResolvedValue([] as any);
     });
 
-    it('résa à titulaire seul + abo INCLUDED couvrant → paiement SUBSCRIPTION pour le total', async () => {
+    it('résa à titulaire seul + abo INCLUDED couvrant → SUBSCRIPTION = UNE part (20 ÷ 4 = 5), jamais le total', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
       prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
@@ -2480,7 +2481,7 @@ describe('ReservationService', () => {
         data: expect.objectContaining({ reservationId: 'r1', participantId: null, method: 'SUBSCRIPTION', sourceSubscriptionId: 'sub-1' }),
       }));
       const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
-      expect(amount).toBe(20);
+      expect(amount).toBe(5); // padel double, capacité 4 → une part = 20 ÷ 4
     });
 
     it('par participant : chaque place vérifiée séparément, seul le joueur abonné est couvert', async () => {
@@ -2503,9 +2504,12 @@ describe('ReservationService', () => {
       expect(prismaMock.payment.create).not.toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ participantId: 'pp2' }),
       }));
+      // Une seule part couverte (20 ÷ 4 = 5), pas la part réelle de 10 € du joueur.
+      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
+      expect(amount).toBe(5);
     });
 
-    it('abo DISCOUNT → seule la part remisée est réglée, le reste reste dû', async () => {
+    it('abo DISCOUNT → remise sur UNE part seulement (50 % de 20 ÷ 4 = 2,5), le reste reste dû', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
       prismaMock.subscription.findMany.mockResolvedValue([activeSub({ benefit: 'DISCOUNT', discountPercent: 50 })] as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
@@ -2514,7 +2518,7 @@ describe('ReservationService', () => {
 
       expect(out.applied).toBe(1);
       const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
-      expect(amount).toBe(10);
+      expect(amount).toBe(2.5); // 50 % d'UNE part (5 €), pas 50 % du total
     });
 
     it('place déjà réglée → ignorée, aucune requête d\'abonnement', async () => {
@@ -2545,36 +2549,86 @@ describe('ReservationService', () => {
       expect(prismaMock.payment.create).not.toHaveBeenCalled();
     });
 
-    it('part partiellement payée → couvre exactement le reste (pas de double soustraction)', async () => {
+    it('part déjà réglée TOUS MOYENS confondus (CB/espèces) → aucun complément d\'abonnement', async () => {
+      // Le joueur a payé SA part (20 ÷ 4 = 5 €) en espèces : l'abonnement (avantage personnel)
+      // n'a plus rien à couvrir — sinon il financerait invisiblement la place d'un autre joueur
+      // (place « réglée » sans paiement propre, encaissée « à distance »).
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
         userId: null,
         participants: [{ id: 'pp1', userId: 'user-1', share: '20.00' }],
-        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: 'pp1' }],
+        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: 'pp1', method: 'CASH' }],
       })] as any);
       prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
       prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
-      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
 
       const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
 
-      expect(out.applied).toBe(1);
-      const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
-      expect(amount).toBe(15);
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
     });
 
-    it('titulaire partiellement payé → couvre exactement le reste (pas de double soustraction)', async () => {
+    it('part partiellement payée (2 €) → l\'abo complète jusqu\'à UNE part (3 €), pas plus', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
-        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: null }],
+        userId: null,
+        participants: [{ id: 'pp1', userId: 'user-1', share: '20.00' }],
+        payments: [{ amount: '2.00', refundedAmount: '0.00', participantId: 'pp1', method: 'CASH' }],
       })] as any);
       prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
-      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 2 } } as any);
       prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
 
       const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
 
       expect(out.applied).toBe(1);
       const amount = Number((prismaMock.payment.create.mock.calls[0][0].data as any).amount);
-      expect(amount).toBe(15);
+      expect(amount).toBe(3); // 5 (part nominale) − 2 (déjà payé sur la place)
+    });
+
+    it('titulaire dont la part est réglée (paiement anonyme au comptoir) → aucun complément', async () => {
+      // Attribution haut-en-bas des paiements anonymes (miroir de slotStatuses) : les 5 €
+      // encaissés couvrent la place du titulaire → son abonnement n'a rien à compléter.
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: null, method: 'CASH' }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('part d\'abonnement déjà posée au booking → PAS de complément par le balayage (une seule part max)', async () => {
+      // Résa jouée en solo : share 20 €, mais l'abo a déjà couvert UNE part (5 €) à la réservation.
+      // Le balayage ne doit RIEN ajouter — sinon il compléterait jusqu'à couvrir tout le court.
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        userId: null,
+        participants: [{ id: 'pp1', userId: 'user-1', share: '20.00' }],
+        payments: [{ amount: '5.00', refundedAmount: '0.00', participantId: 'pp1', method: 'SUBSCRIPTION' }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 5 } } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it('17 € déjà encaissés sur 20 → la part du titulaire est couverte, l\'abo ne règle PAS le reliquat des autres', async () => {
+      // Le reste (3 €) appartient aux autres joueurs : l'abonnement du titulaire (avantage
+      // personnel, une part max) ne doit jamais servir à solder la place de quelqu'un d'autre.
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation({
+        payments: [{ amount: '17.00', refundedAmount: '0.00', participantId: null, method: 'CASH' }],
+      })] as any);
+      prismaMock.subscription.findMany.mockResolvedValue([activeSub()] as any);
+      prismaMock.payment.aggregate.mockResolvedValue({ _sum: { amount: 17 } } as any);
+
+      const out = await service.autoApplySubscriptionCoverage('club-1', '2026-07-01');
+
+      expect(out.applied).toBe(0);
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
     });
 
     it('heures pleines + abo offPeakOnly → non couvert, rien créé', async () => {

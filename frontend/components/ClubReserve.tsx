@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
-import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE } from '@/lib/courtType';
+import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE, lightingIsInformative } from '@/lib/courtType';
 import { effectiveDurations, defaultDuration, durationLabel } from '@/lib/duration';
 import { Screen } from '@/components/ui/Screen';
 import { Chip, Placeholder, PillTabs } from '@/components/ui/atoms';
@@ -276,6 +276,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                 const selDur = durationBySport[cs.id];
                 const items = availBySport[cs.id];
                 const loading = loadingBySport[cs.id];
+                const showLighting = lightingIsInformative((items ?? []).map(({ resource }) => resource));
                 return (
                   <div key={cs.id} style={{ marginTop: 14 }}>
                     {/* titre de section : si plusieurs sports affichés (pour les distinguer) ou club mono-sport (cosmétique) */}
@@ -312,7 +313,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                               <span style={{ fontFamily: th.fontUI, fontWeight: 750, fontSize: 16.5, color: th.text, letterSpacing: '-0.2px' }}>{resource.name}</span>
                               <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
-                              {resource.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
+                              {showLighting && resource.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
                               {courtFormat(typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
                               {typeof resource.attributes?.surface === 'string' && resource.attributes.surface && (
                                 <span title="Surface" style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{resource.attributes.surface}</span>
@@ -336,12 +337,13 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                               const renderSlot = (s: TimeSlot, forcePast?: boolean) => {
                                 const isPast = forcePast ?? (new Date(s.startTime).getTime() <= nowMs);
                                 const fill = s.offPeak ? th.accentWarm : th.accent;
-                                // Lavis d'accent au repos (calme), remplissage plein au survol via CSS (.rv-slot) —
+                                // Lavis d'accent au repos, remplissage plein au survol via CSS (.rv-slot) —
                                 // couleur/encre passées en variables car l'accent est propre à chaque club.
+                                // Le lavis est assez soutenu pour se voir sans survol (mobile = pas de hover).
                                 const slotVars = { '--rv-fill': fill, '--rv-ink': inkOn(fill) } as CSSProperties;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}1f`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && resource.offPeakPrice && <span style={{ position: 'absolute', top: -7, right: -4, background: th.accentWarm, color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 800, lineHeight: 1.2, padding: '2px 7px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.22)' }}>{Number(s.price)}€</span>}
                                   </button>
@@ -386,7 +388,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             <div key={cs.id} style={{ padding: '18px 20px 0' }}>
               <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>{cs.sport.icon ? `${cs.sport.icon} ` : ''}{cs.sport.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-                {cs.resources.map((r) => {
+                {(() => { const showLighting = lightingIsInformative(cs.resources); return cs.resources.map((r) => {
                   const ct = coverageType(r.attributes?.coverage);
                   return (
                     <Link key={r.id} href={`/courts/${r.id}`} style={{ textDecoration: 'none' }}>
@@ -395,7 +397,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                           <Placeholder label={r.name} height={92} radius={0} />
                           <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6 }}>
                             <Chip color={ct.color} icon={ct.icon}>{ct.label}</Chip>
-                            {r.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
+                            {showLighting && r.attributes?.lighting === true && <Chip color={LIGHTING_BADGE.color} icon={LIGHTING_BADGE.icon}>{LIGHTING_BADGE.label}</Chip>}
                             {courtFormat(typeof r.attributes?.format === 'string' ? r.attributes.format : undefined) && <Chip color={SINGLE_COLOR}>Single</Chip>}
                             {typeof r.attributes?.surface === 'string' && r.attributes.surface && (
                               <Chip>{r.attributes.surface}</Chip>
@@ -409,7 +411,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                       </div>
                     </Link>
                   );
-                })}
+                }); })()}
               </div>
             </div>
           ))

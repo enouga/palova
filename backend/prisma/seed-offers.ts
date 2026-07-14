@@ -1,4 +1,19 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
+
+/**
+ * Heures creuses par défaut des clubs de démo : journée en semaine (lun-ven 8h→17h),
+ * plein tarif le soir et le week-end. SANS cette config, un abonnement « heures creuses »
+ * (offPeakOnly) ne couvre AUCUN créneau — la couverture auto par abonnement (Caisse/Planning)
+ * reste alors muette. Format = plages par weekday Luxon (1=lundi..7=dimanche), cf.
+ * pricing.OffPeakHours. Partagé par seed.ts et seed-demo.ts.
+ */
+export const DEFAULT_OFF_PEAK_HOURS: Prisma.InputJsonValue = {
+  1: [{ start: 8, end: 17 }],
+  2: [{ start: 8, end: 17 }],
+  3: [{ start: 8, end: 17 }],
+  4: [{ start: 8, end: 17 }],
+  5: [{ start: 8, end: 17 }],
+};
 
 /**
  * Offres prépayées « carte digitale » créées par défaut sur chaque club de test.

@@ -104,11 +104,20 @@ router.post('/hold', authMiddleware, async (req: AuthRequest, res: Response, nex
 
 router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    // Source de paiement prépayée : carnet (packageId) OU abonnement (subscriptionId).
+    // Les deux exemptent l'exigence de paiement en ligne côté service ; on relaie donc
+    // aussi subscriptionId (jusqu'ici perdu → « Confirmer avec mon abonnement » échouait
+    // en ONLINE_PAYMENT_REQUIRED sur un club qui impose le paiement en ligne).
     const packageId = req.body?.paymentSource?.packageId;
+    const subscriptionId = req.body?.paymentSource?.subscriptionId;
+    const paymentSource =
+      typeof packageId === 'string' && packageId ? { packageId }
+      : typeof subscriptionId === 'string' && subscriptionId ? { subscriptionId }
+      : undefined;
     const confirmed = await reservationService.confirmReservation(
       asString(req.params.id), req.user!.id,
       {
-        paymentSource: typeof packageId === 'string' && packageId ? { packageId } : undefined,
+        paymentSource,
         stripePaymentIntentId: typeof req.body?.stripePaymentIntentId === 'string' ? req.body.stripePaymentIntentId : undefined,
         stripeSetupIntentId:   typeof req.body?.stripeSetupIntentId   === 'string' ? req.body.stripeSetupIntentId   : undefined,
         cgvAccepted:           req.body?.cgvAccepted === true,

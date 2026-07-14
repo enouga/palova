@@ -1,4 +1,4 @@
-import { coverageType, COVERAGE_OPTIONS, LIGHTING_BADGE, capacityFor } from '@/lib/courtType';
+import { coverageType, COVERAGE_OPTIONS, LIGHTING_BADGE, capacityFor, lightingIsInformative } from '@/lib/courtType';
 
 describe('coverageType', () => {
   it('indoor → Intérieur', () => expect(coverageType('indoor').label).toBe('Intérieur'));
@@ -20,6 +20,18 @@ describe('COVERAGE_OPTIONS', () => {
 });
 describe('LIGHTING_BADGE', () => {
   it('porte le libellé Éclairage', () => expect(LIGHTING_BADGE.label).toBe('Éclairage'));
+});
+describe('lightingIsInformative', () => {
+  it('faux si tous les terrains ont l\'éclairage (badge redondant)', () => {
+    expect(lightingIsInformative([{ attributes: { lighting: true } }, { attributes: { lighting: true } }])).toBe(false);
+  });
+  it("vrai si au moins un terrain n'a pas l'éclairage", () => {
+    expect(lightingIsInformative([{ attributes: { lighting: true } }, { attributes: { lighting: false } }])).toBe(true);
+  });
+  it('lighting absent compte comme non éclairé', () => {
+    expect(lightingIsInformative([{ attributes: { lighting: true } }, { attributes: {} }])).toBe(true);
+  });
+  it('liste vide → faux (rien à distinguer)', () => expect(lightingIsInformative([])).toBe(false));
 });
 describe('capacityFor', () => {
   it('padel → 4', () => expect(capacityFor('padel')).toBe(4));

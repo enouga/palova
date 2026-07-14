@@ -2,14 +2,12 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_PACKAGE_OFFERS } from './seed-offers';
+import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_PACKAGE_OFFERS, DEFAULT_OFF_PEAK_HOURS } from './seed-offers';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 // Catalogue de sports géré par la plateforme.
-// Matériaux de surface disponibles pour le padel (utilisés dans Resource.attributes.surface).
-const PADEL_SURFACES = ['Béton poreux', 'Résine', 'Gazon synthétique'] as const;
 // Matériaux de surface disponibles pour le tennis.
 const TENNIS_SURFACES = [
   'Béton poreux', 'Dalles plastiques', 'Enrobé poreux', 'Gazon naturel', 'Gazon synthétique',
@@ -19,12 +17,12 @@ const TENNIS_SURFACES = [
 ] as const;
 
 const SPORTS = [
-  { key: 'padel',      name: 'Padel',          resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾', surfaces: [...PADEL_SURFACES] },
+  { key: 'padel',      name: 'Padel',          resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾', surfaces: [], hasLighting: true },
   { key: 'tennis',     name: 'Tennis',         resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [60, 90, 120], icon: '🎾', surfaces: [...TENNIS_SURFACES], hasLighting: true },
-  { key: 'pickleball', name: 'Pickleball',     resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [60, 90],      icon: '🥒' },
-  { key: 'squash',     name: 'Squash',         resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [45, 60],      icon: '🟦' },
-  { key: 'badminton',  name: 'Badminton',      resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [60, 90],      icon: '🏸' },
-  { key: 'pingpong',   name: 'Tennis de table', resourceNoun: 'table',  defaultSlotStepMin: 30, defaultDurationsMin: [30, 60],      icon: '🏓' },
+  { key: 'pickleball', name: 'Pickleball',     resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [60, 90],      icon: '🥒', hasLighting: true },
+  { key: 'squash',     name: 'Squash',         resourceNoun: 'court',   defaultSlotStepMin: 30, defaultDurationsMin: [45, 60],      icon: '🟦', hasLighting: true },
+  { key: 'badminton',  name: 'Badminton',      resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [45, 60, 90], icon: '🏸', hasLighting: true },
+  { key: 'pingpong',   name: 'Tennis de table', resourceNoun: 'table',  defaultSlotStepMin: 30, defaultDurationsMin: [30, 60],      icon: '🏓', hasLighting: true },
 ];
 
 async function main() {
@@ -42,10 +40,11 @@ async function main() {
   const club = await prisma.club.upsert({
     where: { id: 'club-demo' },
     // Branding Palova autoritaire pour la démo (bleu + mode clair/paper).
-    update: { accentColor: '#5e93da', defaultThemeMode: 'daylight', listTournamentsNationally: true },
+    update: { accentColor: '#5e93da', defaultThemeMode: 'daylight', listTournamentsNationally: true, offPeakHours: DEFAULT_OFF_PEAK_HOURS },
     create: {
       id: 'club-demo',
       slug: 'padel-arena-paris',
+      offPeakHours: DEFAULT_OFF_PEAK_HOURS,
       name: 'Padel Arena Paris',
       address: '12 rue du Padel, 75011 Paris',
       city: 'Paris',
@@ -65,13 +64,13 @@ async function main() {
   });
 
   // 4. Ressources (anciens "terrains")
-  // coverage: 'indoor'|'outdoor'|'semi' ; surface = matériau (doit figurer dans Sport.surfaces)
+  // coverage: 'indoor'|'outdoor'|'semi' ; lighting = terrain éclairé (jouable le soir). Padel : pas de surface.
   const resources = [
-    { id: 'court-1', name: 'Terrain 1', attributes: { coverage: 'indoor',  surface: PADEL_SURFACES[0], format: 'double' }, price: 25 },
-    { id: 'court-2', name: 'Terrain 2', attributes: { coverage: 'indoor',  surface: PADEL_SURFACES[0], format: 'double' }, price: 25 },
-    { id: 'court-3', name: 'Terrain 3', attributes: { coverage: 'outdoor', surface: PADEL_SURFACES[2], format: 'double' }, price: 20 },
-    { id: 'court-4', name: 'Terrain 4', attributes: { coverage: 'indoor',  surface: PADEL_SURFACES[0], format: 'single' }, price: 18 },
-    { id: 'court-5', name: 'Terrain 5', attributes: { coverage: 'outdoor', surface: PADEL_SURFACES[2], format: 'single' }, price: 16 },
+    { id: 'court-1', name: 'Terrain 1', attributes: { coverage: 'indoor',  format: 'double', lighting: true }, price: 25 },
+    { id: 'court-2', name: 'Terrain 2', attributes: { coverage: 'indoor',  format: 'double', lighting: true }, price: 25 },
+    { id: 'court-3', name: 'Terrain 3', attributes: { coverage: 'outdoor', format: 'double', lighting: true }, price: 20 },
+    { id: 'court-4', name: 'Terrain 4', attributes: { coverage: 'indoor',  format: 'single', lighting: true }, price: 18 },
+    { id: 'court-5', name: 'Terrain 5', attributes: { coverage: 'outdoor', format: 'single', lighting: true }, price: 16 },
   ];
   for (const r of resources) {
     await prisma.resource.upsert({

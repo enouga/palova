@@ -20,10 +20,11 @@ describe('proposableDurations', () => {
   });
 });
 
-describe('duree par defaut une ressource (existant)', () => {
-  it('1h30 si proposee, sinon la premiere duree du sport', () => {
-    expect(defaultDuration(effectiveDurations([60, 90, 120], undefined))).toBe(90);
+describe('duree par defaut une ressource', () => {
+  it('la plus courte duree proposee', () => {
+    expect(defaultDuration(effectiveDurations([60, 90, 120], undefined))).toBe(60);
     expect(defaultDuration(effectiveDurations([60], [90]))).toBe(60);
     expect(defaultDuration(effectiveDurations(undefined, [45, 60]))).toBe(45);
+    expect(defaultDuration(effectiveDurations(undefined, [90]))).toBe(90);
   });
 });

@@ -12,7 +12,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import { seedDefaultOffers, seedDefaultSubscriptionPlans } from './seed-offers';
+import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_OFF_PEAK_HOURS } from './seed-offers';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -88,15 +88,12 @@ function daysFromNow(d: number): Date {
   return new Date(Date.now() + d * 24 * 60 * 60 * 1000);
 }
 
-// Matériaux de surface disponibles pour le padel (doit rester synchronisé avec seed.ts).
-const PADEL_SURFACES = ['Béton poreux', 'Résine', 'Gazon synthétique'] as const;
-
 async function main() {
-  // Sport padel (idempotent — au cas où la base n'aurait pas le seed de base).
+  // Sport padel (idempotent — au cas où la base n'aurait pas le seed de base). Padel : pas de surface, éclairage par défaut.
   const padel = await prisma.sport.upsert({
     where: { key: 'padel' },
-    update: { surfaces: [...PADEL_SURFACES], published: true },
-    create: { key: 'padel', name: 'Padel', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾', surfaces: [...PADEL_SURFACES], published: true },
+    update: { surfaces: [], hasLighting: true, published: true },
+    create: { key: 'padel', name: 'Padel', resourceNoun: 'terrain', defaultSlotStepMin: 30, defaultDurationsMin: [90], icon: '🎾', surfaces: [], hasLighting: true, published: true },
   });
 
   const hashed = await bcrypt.hash(PASSWORD, 10);
@@ -108,13 +105,14 @@ async function main() {
 
     const club = await prisma.club.upsert({
       where: { slug: cdef.slug },
-      update: { accentColor: cdef.accent, defaultThemeMode: cdef.theme, listTournamentsNationally: true },
+      update: { accentColor: cdef.accent, defaultThemeMode: cdef.theme, listTournamentsNationally: true, offPeakHours: DEFAULT_OFF_PEAK_HOURS },
       create: {
         slug: cdef.slug, name: cdef.name, city: cdef.city, country: 'FR',
         address: `1 avenue du Padel, ${cdef.city}`, timezone: 'Europe/Paris',
         accentColor: cdef.accent, defaultThemeMode: cdef.theme,
         description: `Club de padel à ${cdef.city} — réservations et tournois.`,
         listTournamentsNationally: true,
+        offPeakHours: DEFAULT_OFF_PEAK_HOURS,
       },
     });
     createdClubs.push({ id: club.id, slug: cdef.slug, name: cdef.name });
@@ -125,17 +123,16 @@ async function main() {
       create: { clubId: club.id, sportId: padel.id, durationsMin: [90] },
     });
 
-    // Terrains — coverage: 'indoor'|'semi'|'outdoor' ; surface = matériau parmi PADEL_SURFACES
+    // Terrains — coverage: 'indoor'|'semi'|'outdoor' ; padel éclairé, sans surface.
     for (let n = 1; n <= 5; n++) {
       const coverage = n <= 3 ? 'indoor' : n === 4 ? 'semi' : 'outdoor';
-      const material = coverage === 'outdoor' ? PADEL_SURFACES[2] : PADEL_SURFACES[0];
       const format = n <= 3 ? 'double' : 'single';
       await prisma.resource.upsert({
         where: { id: `${cdef.slug}-court-${n}` },
         update: { name: `Terrain ${n}` },
         create: {
           id: `${cdef.slug}-court-${n}`, clubId: club.id, clubSportId: clubSport.id,
-          name: `Terrain ${n}`, attributes: { coverage, surface: material, format }, price: n <= 3 ? 25 : 18,
+          name: `Terrain ${n}`, attributes: { coverage, format, lighting: true }, price: n <= 3 ? 25 : 18,
         },
       });
     }
