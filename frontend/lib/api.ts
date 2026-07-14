@@ -297,6 +297,9 @@ export const api = {
     request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
   deleteChatMessage: (slug: string, id: string, messageId: string, token: string) =>
     request<OpenMatchMessage>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}`, { method: 'DELETE' }, token),
+  reportChatMessage: (slug: string, id: string, messageId: string, reason: ReportReason, detail: string | null, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/open-matches/${id}/chat/messages/${messageId}/report`,
+      { method: 'POST', body: JSON.stringify({ reason, detail }) }, token),
 
   // --- Back-office club (scopé par clubId) ---
   adminGetClub: (clubId: string, token: string) =>
@@ -304,6 +307,12 @@ export const api = {
 
   adminGetOnboardingStatus: (clubId: string, token: string) =>
     request<OnboardingStatus>(`/api/clubs/${clubId}/admin/onboarding-status`, {}, token),
+
+  adminListReports: (clubId: string, token: string, status?: ReportStatus) =>
+    request<{ items: MessageReportRow[] }>(`/api/clubs/${clubId}/admin/moderation/reports${status ? `?status=${status}` : ''}`, {}, token),
+  adminResolveReport: (clubId: string, reportId: string, action: 'DELETE' | 'REJECT', token: string) =>
+    request<MessageReportRow>(`/api/clubs/${clubId}/admin/moderation/reports/${reportId}/resolve`,
+      { method: 'POST', body: JSON.stringify({ action }) }, token),
 
   // --- Abonnement Palova du club (facturation SaaS) ---
   adminGetBilling: (clubId: string, token: string) =>
@@ -772,6 +781,9 @@ export const api = {
     request<DmMessage>(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }, token),
   deleteDmMessage: (conversationId: string, messageId: string, token: string) =>
     request<DmMessage>(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' }, token),
+  reportDmMessage: (conversationId: string, messageId: string, reason: ReportReason, detail: string | null, token: string) =>
+    request<{ id: string }>(`/api/conversations/${conversationId}/messages/${messageId}/report`,
+      { method: 'POST', body: JSON.stringify({ reason, detail }) }, token),
   addDmReaction: (conversationId: string, messageId: string, emoji: string, token: string) =>
     request<DmReaction[]>(`/api/conversations/${conversationId}/messages/${messageId}/reactions`,
       { method: 'POST', body: JSON.stringify({ emoji }) }, token),
@@ -883,6 +895,19 @@ export const api = {
 
   // --- Plateforme (super-admin) ---
   platformStats: (token: string) => request<PlatformStats>('/api/platform/stats', {}, token),
+
+  platformListReports: (token: string, status?: ReportStatus) =>
+    request<{ items: MessageReportRow[] }>(`/api/platform/moderation/reports${status ? `?status=${status}` : ''}`, {}, token),
+  platformResolveReport: (reportId: string, action: 'DELETE' | 'REJECT', token: string) =>
+    request<MessageReportRow>(`/api/platform/moderation/reports/${reportId}/resolve`,
+      { method: 'POST', body: JSON.stringify({ action }) }, token),
+  platformReportImage: async (reportId: string, token: string): Promise<Blob> => {
+    const res = await fetch(`${BASE_URL}/api/platform/moderation/reports/${reportId}/image`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  },
 
   platformClubs: (token: string) => request<PlatformClub[]>('/api/platform/clubs', {}, token),
 
@@ -2362,6 +2387,28 @@ export interface ConversationSummary {
   id: string; other: DmUserInfo; clubId: string | null; lastMessageAt: string | null;
   unreadCount: number;
   lastMessage: { body: string; hasImage: boolean; mine: boolean; deleted: boolean } | null;
+}
+
+export type ReportReason = 'HARASSMENT' | 'ILLEGAL' | 'SPAM' | 'OTHER';
+export type ReportStatus = 'OPEN' | 'RESOLVED';
+export type ReportResolution = 'DELETED' | 'REJECTED';
+
+export interface MessageReportRow {
+  id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: ReportStatus;
+  resolution: ReportResolution | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  reporter: { id: string; firstName: string; lastName: string };
+  message: {
+    id: string; body: string; deleted: boolean; createdAt: string;
+    author: { id: string; firstName: string; lastName: string };
+    hasImage?: boolean;
+  };
+  match?: { reservationId: string; startTime: string; resourceName: string };
+  conversationId?: string;
 }
 
 export interface MyClubMembership {
