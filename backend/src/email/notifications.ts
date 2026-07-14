@@ -13,7 +13,7 @@ import { SSEService } from '../services/sse.service';
 const ratingService = new RatingService();
 
 /** Select club partagé par tous les emails (identité + coordonnées du pied de page). */
-const EMAIL_CLUB_SELECT = {
+export const EMAIL_CLUB_SELECT = {
   id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true,
   address: true, city: true, contactPhone: true, contactEmail: true,
 } as const;
