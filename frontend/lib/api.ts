@@ -1348,6 +1348,14 @@ export interface MemberHistoryReservation {
   attributedAmount: string;
 }
 
+export interface MemberUnpaidReservation {
+  reservationId: string;
+  participantId: string | null;
+  startTime: string;
+  resourceName: string;
+  dueAmount: string;
+}
+
 export interface MemberHistory {
   member: {
     userId: string; firstName: string; lastName: string; email: string;
@@ -1361,6 +1369,7 @@ export interface MemberHistory {
   favorites: { resource: { name: string; count: number } | null; sportKey: string | null; weekday: number | null };
   finance: {
     totalSpent: string; averageBasket: string; outstanding: string;
+    unpaid: MemberUnpaidReservation[];
     paymentsByMethod: Record<string, string>;
     revenueByMonth: Array<{ month: string; net: string }>;
     prepaid: {
