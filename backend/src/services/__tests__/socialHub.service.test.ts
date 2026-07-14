@@ -106,3 +106,66 @@ describe('SocialHubService — friendsAgenda', () => {
     expect(items).toEqual([]);
   });
 });
+
+describe('SocialHubService — playerSuggestions', () => {
+  let service: SocialHubService;
+  const now = new Date('2026-07-14T10:00:00Z');
+
+  beforeEach(() => {
+    service = new SocialHubService();
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.follow.findMany.mockResolvedValue([]);
+    prismaMock.friendship.findMany.mockResolvedValue([]);
+    prismaMock.user.findMany.mockResolvedValue([]);
+  });
+
+  it('aucune résa récente → []', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+    expect(await service.playerSuggestions('demo', 'u1', now)).toEqual([]);
+  });
+
+  it('agrège les co-joueurs (organisateur + participants), compte et date du dernier match', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { userId: 'orga', startTime: new Date('2026-07-12T10:00:00Z'), participants: [{ userId: 'u1' }, { userId: 'p1' }] },
+      { userId: 'u1', startTime: new Date('2026-07-10T10:00:00Z'), participants: [{ userId: 'u1' }, { userId: 'p1' }] },
+    ] as any);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'orga', firstName: 'O', lastName: 'X', avatarUrl: null, acceptsFriendRequests: true },
+      { id: 'p1', firstName: 'P', lastName: 'X', avatarUrl: null, acceptsFriendRequests: false },
+    ] as any);
+    const out = await service.playerSuggestions('demo', 'u1', now);
+    expect(out.map((s) => s.id).sort()).toEqual(['orga', 'p1']);
+    const p1 = out.find((s) => s.id === 'p1')!;
+    expect(p1.playedCount).toBe(2);
+    expect(p1.lastPlayedAt).toEqual(new Date('2026-07-12T10:00:00Z'));
+    expect(p1.requestable).toBe(false);
+  });
+
+  it('exclut les joueurs déjà suivis ou en relation d\'amitié (PENDING compris)', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { userId: null, startTime: new Date('2026-07-12T10:00:00Z'), participants: [{ userId: 'u1' }, { userId: 'suivi' }, { userId: 'pending' }, { userId: 'neuf' }] },
+    ] as any);
+    prismaMock.follow.findMany.mockResolvedValue([{ followingId: 'suivi' }] as any);
+    prismaMock.friendship.findMany.mockResolvedValue([{ userAId: 'pending', userBId: 'u1' }] as any);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'neuf', firstName: 'N', lastName: 'X', avatarUrl: null, acceptsFriendRequests: true },
+    ] as any);
+    const out = await service.playerSuggestions('demo', 'u1', now);
+    expect(out.map((s) => s.id)).toEqual(['neuf']);
+    // le filtre users ne reçoit que les candidats non exclus
+    const userArgs = prismaMock.user.findMany.mock.calls[0][0] as any;
+    expect(userArgs.where.id.in).toEqual(['neuf']);
+    expect(userArgs.where.deletedAt).toBeNull();
+  });
+
+  it('cap 8 suggestions', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `p${i}`);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { userId: null, startTime: new Date('2026-07-12T10:00:00Z'), participants: [{ userId: 'u1' }, ...ids.map((id) => ({ userId: id }))] },
+    ] as any);
+    prismaMock.user.findMany.mockResolvedValue(
+      ids.map((id) => ({ id, firstName: id, lastName: 'X', avatarUrl: null, acceptsFriendRequests: true })) as any);
+    const out = await service.playerSuggestions('demo', 'u1', now);
+    expect(out).toHaveLength(8);
+  });
+});

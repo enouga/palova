@@ -1,4 +1,7 @@
 import { prisma } from '../db/prisma';
+import { RatingService } from './rating.service';
+import { resolvePreferredSportKey } from './rating/preferredSport';
+import type { UserLevel } from './rating.service';
 
 const USER_SEL = { id: true, firstName: true, lastName: true, avatarUrl: true } as const;
 
@@ -12,11 +15,26 @@ export interface FriendsAgendaItem {
   friends: AgendaFriend[];
 }
 
+export interface PlayerSuggestion {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  level: UserLevel | null;
+  lastPlayedAt: Date;
+  playedCount: number;
+  requestable: boolean;
+}
+
 const AGENDA_CAP = 6;
 const AGENDA_FRIENDS_CAP = 4;
+const SUGGESTIONS_CAP = 8;
+const SUGGESTION_WINDOW_DAYS = 90;
 
 /** Hub social « Mes amis » : agenda du cercle (amis ∪ favoris). */
 export class SocialHubService {
+  private ratingService = new RatingService();
+
   private async activeClubId(slug: string): Promise<string> {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
@@ -124,5 +142,75 @@ export class SocialHubService {
 
     items.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     return items.slice(0, AGENDA_CAP);
+  }
+
+  /** Suggestions « vous avez joué ensemble » : partenaires récents pas encore dans mon cercle. */
+  async playerSuggestions(slug: string, userId: string, now: Date = new Date()): Promise<PlayerSuggestion[]> {
+    const clubId = await this.activeClubId(slug);
+    const since = new Date(now.getTime() - SUGGESTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const myReservations = await prisma.reservation.findMany({
+      where: {
+        status: 'CONFIRMED', startTime: { gte: since, lt: now },
+        resource: { clubId },
+        OR: [{ userId }, { participants: { some: { userId } } }],
+      },
+      orderBy: { startTime: 'desc' },
+      take: 200,
+      select: { userId: true, startTime: true, participants: { select: { userId: true } } },
+    });
+
+    // Agrège les co-joueurs : dernier match partagé + nombre de matchs partagés.
+    const byPlayer = new Map<string, { lastPlayedAt: Date; playedCount: number }>();
+    for (const r of myReservations) {
+      const others = new Set<string>();
+      if (r.userId && r.userId !== userId) others.add(r.userId);
+      for (const p of r.participants) if (p.userId !== userId) others.add(p.userId);
+      for (const other of others) {
+        const cur = byPlayer.get(other);
+        if (cur) {
+          cur.playedCount += 1;
+          if (r.startTime > cur.lastPlayedAt) cur.lastPlayedAt = r.startTime;
+        } else {
+          byPlayer.set(other, { lastPlayedAt: r.startTime, playedCount: 1 });
+        }
+      }
+    }
+    const candidates = [...byPlayer.keys()];
+    if (candidates.length === 0) return [];
+
+    // Exclusions : déjà suivi (favori) OU toute relation d'amitié (PENDING comme ACCEPTED).
+    const [follows, friendships] = await Promise.all([
+      prisma.follow.findMany({
+        where: { followerId: userId, followingId: { in: candidates } },
+        select: { followingId: true },
+      }),
+      prisma.friendship.findMany({
+        where: { OR: [{ userAId: userId, userBId: { in: candidates } }, { userBId: userId, userAId: { in: candidates } }] },
+        select: { userAId: true, userBId: true },
+      }),
+    ]);
+    const excluded = new Set<string>(follows.map((f) => f.followingId));
+    for (const f of friendships) excluded.add(f.userAId === userId ? f.userBId : f.userAId);
+
+    const keptIds = candidates.filter((id) => !excluded.has(id));
+    if (keptIds.length === 0) return [];
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: keptIds }, deletedAt: null, isSuperAdmin: false },
+      select: { ...USER_SEL, acceptsFriendRequests: true },
+    });
+    const sportKey = await resolvePreferredSportKey(userId);
+    const levels = await this.ratingService.getLevelsForUsers(users.map((u) => u.id), sportKey);
+
+    return users
+      .map((u) => ({
+        id: u.id, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl,
+        level: levels[u.id] ?? null,
+        requestable: u.acceptsFriendRequests,
+        ...byPlayer.get(u.id)!,
+      }))
+      .sort((a, b) => b.lastPlayedAt.getTime() - a.lastPlayedAt.getTime())
+      .slice(0, SUGGESTIONS_CAP);
   }
 }
