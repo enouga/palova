@@ -34,7 +34,7 @@ export function ReportDialog({ onSubmit, onCancel }: {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 96, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 96, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', pointerEvents: 'auto' }}>
       <div onClick={phase === 'sending' ? undefined : onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }} />
       <div role="dialog" aria-modal="true" aria-label="Signaler ce message" style={{ position: 'relative', width: '100%', maxWidth: 460, margin: '0 auto', background: th.bgElev, borderRadius: '0 0 24px 24px', padding: '20px 20px 28px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
         {phase === 'sent' ? (
