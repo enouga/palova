@@ -19,7 +19,7 @@ export const EMAIL_CLUB_SELECT = {
 } as const;
 
 /** Libellé français d'une fourchette de niveau (0–8) pour l'email « partie à ton niveau ». */
-function levelRangeLabel(min: number | null, max: number | null): string {
+export function levelRangeLabel(min: number | null, max: number | null): string {
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
   if (min != null && max != null) return `Niveau ${fmt(min)} à ${fmt(max)}`;
   if (min != null) return `Niveau ${fmt(min)} et +`;

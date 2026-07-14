@@ -87,8 +87,8 @@ describe('collectPlaceholders', () => {
 describe('EMAIL_DEFS', () => {
   const entries = Object.entries(EMAIL_DEFS);
 
-  it('contient 18 définitions et la clé == type', () => {
-    expect(entries).toHaveLength(18);
+  it('contient 19 définitions et la clé == type', () => {
+    expect(entries).toHaveLength(19);
     for (const [key, def] of entries) expect(def.type).toBe(key);
   });
 
@@ -222,5 +222,18 @@ describe('brandFromClub — coordonnées & manageUrl', () => {
     expect(b.phone).toBeNull();
     expect(b.email).toBeNull();
     expect(b.manageUrl).toBeNull();
+  });
+});
+
+describe("email open_match.alert", () => {
+  it('est déclaré avec ses variables et rend un sujet substitué', () => {
+    const def = EMAIL_DEFS['open_match.alert'];
+    expect(def).toBeDefined();
+    expect(def.group).toBe('parties');
+    const keys = def.vars.map((v) => v.key).sort();
+    expect(keys).toEqual(['club', 'date', 'lien', 'niveau', 'phrase_places', 'prenom', 'terrain'].sort());
+    const mail = renderClubEmail('open_match.alert', sampleVars(def), brand);
+    expect(mail.subject).toContain('alerte');
+    expect(mail.html).toContain(sampleVars(def).terrain);
   });
 });

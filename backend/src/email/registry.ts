@@ -385,6 +385,29 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Niveau', v.niveau), row('Club', v.club)],
   },
 
+  'open_match.alert': {
+    type: 'open_match.alert', group: 'parties',
+    title: 'Partie — alerte horaire',
+    description: 'Au joueur ayant créé une alerte, quand une partie correspond à son créneau.',
+    hasCta: true,
+    vars: [
+      { key: 'prenom', label: 'Prénom', sample: 'Marie' },
+      { key: 'terrain', label: 'Terrain', sample: 'Court 2' },
+      { key: 'date', label: 'Date', sample: 'jeudi 16 juillet 2026 · 18h30 → 20h00' },
+      { key: 'club', label: 'Club', sample: 'Padel Arena Paris' },
+      { key: 'niveau', label: 'Fourchette de niveau', sample: 'Niveau 2 à 5' },
+      { key: 'phrase_places', label: 'Places restantes (auto)', sample: 'Il reste 2 places.' },
+      { key: 'lien', label: 'Lien', sample: 'https://club.palova.fr/parties/1' },
+    ],
+    defaults: {
+      subject: 'Une partie pour ton alerte — {{club}}',
+      heading: 'Ça joue à ton créneau ! 🔔',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Une partie ouverte correspond à ton alerte et cherche des joueurs. {{phrase_places}}</p>',
+      ctaLabel: 'Voir la partie',
+    },
+    infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Niveau', v.niveau), row('Club', v.club)],
+  },
+
   'open_match.message': {
     type: 'open_match.message', group: 'parties',
     title: 'Partie — nouveau message (chat)',
