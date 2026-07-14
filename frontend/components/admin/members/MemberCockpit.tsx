@@ -85,10 +85,11 @@ export function MemberCockpit({ member, viewerUserId, canManageStaff, quickMetho
   if (!history || !token || !clubId) return null;
 
   const unpaidCents = unpaidTotalCents(history.finance.unpaid);
-  const kpi = (label: string, value: string, coral?: boolean) => (
+  const kpi = (label: string, value: string, coral?: boolean, badge?: string) => (
     <div style={{ flex: 1, minWidth: 96, background: th.surface, borderRadius: 12, padding: '8px 12px', boxShadow: th.shadow }}>
       <div style={{ fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>{label}</div>
       <div style={{ fontFamily: th.fontDisplay, fontSize: 19, fontWeight: 600, marginTop: 2, color: coral ? CORAL : th.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      {badge && <div style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: CORAL, marginTop: 2 }}>⚠ {badge}</div>}
     </div>
   );
 
@@ -108,7 +109,7 @@ export function MemberCockpit({ member, viewerUserId, canManageStaff, quickMetho
         {kpi('Résas 30 j', String(resasLast30(history.reservations, nowMs)))}
         {kpi('Reste dû', fmtEuros(unpaidCents), unpaidCents > 0)}
         {kpi('Niveau', history.game.level != null ? history.game.level.toFixed(1) : '—')}
-        {kpi('Fiabilité', `${reliabilityPct(history.loyalty.cancellationRate)} %`)}
+        {kpi('Fiabilité', `${reliabilityPct(history.loyalty.cancellationRate)} %`, false, history.loyalty.atRisk ? 'à risque' : undefined)}
         {kpi('Dépensé 12 mois', fmtEuros(spent12moCents(history.finance.revenueByMonth, nowMs)))}
       </div>
 

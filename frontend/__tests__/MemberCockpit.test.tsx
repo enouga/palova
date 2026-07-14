@@ -114,6 +114,22 @@ describe('MemberCockpit', () => {
     expect(screen.queryByText(/🎾 Jeu/)).not.toBeInTheDocument();
   });
 
+  it('loyalty.atRisk : badge « à risque » sur le KPI Fiabilité', async () => {
+    api.adminGetMemberHistory.mockResolvedValue({
+      ...JSON.parse(JSON.stringify(HISTORY)),
+      loyalty: { ...HISTORY.loyalty, atRisk: true },
+    });
+    renderCockpit();
+    await screen.findByText('Jean Dupont');
+    expect(screen.getByText(/à risque/)).toBeInTheDocument();
+  });
+
+  it('loyalty.atRisk faux : pas de badge « à risque »', async () => {
+    renderCockpit();
+    await screen.findByText('Jean Dupont');
+    expect(screen.queryByText(/à risque/)).not.toBeInTheDocument();
+  });
+
   it('payAtClubOnly : un seul bouton « Encaissé » par ligne, méthode CLUB', async () => {
     renderCockpit({ payAtClubOnly: true });
     await screen.findByText('Jean Dupont');
