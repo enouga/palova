@@ -23,9 +23,14 @@ describe('SocialHubService — friendsAgenda', () => {
     prismaMock.clubEvent.findMany.mockResolvedValue([]);
   });
 
-  it('club inconnu ou suspendu → CLUB_NOT_FOUND', async () => {
+  it('club introuvable → CLUB_NOT_FOUND', async () => {
     prismaMock.club.findUnique.mockResolvedValue(null);
     await expect(service.friendsAgenda('nope', 'u1', now)).rejects.toThrow('CLUB_NOT_FOUND');
+  });
+
+  it('club suspendu → CLUB_NOT_FOUND', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'SUSPENDED' } as any);
+    await expect(service.friendsAgenda('demo', 'u1', now)).rejects.toThrow('CLUB_NOT_FOUND');
   });
 
   it('cercle vide → [] sans requête agenda', async () => {
@@ -76,5 +81,28 @@ describe('SocialHubService — friendsAgenda', () => {
     }] as any);
     const items = await service.friendsAgenda('demo', 'u1', now);
     expect(items[0].friends.map((f) => f.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('cap 6 items au total, en ordre chronologique', async () => {
+    prismaMock.follow.findMany.mockResolvedValue([{ followingId: 'fav1' }] as any);
+    prismaMock.reservation.findMany.mockResolvedValue(
+      Array.from({ length: 8 }, (_, i) => ({
+        id: `r${i}`,
+        startTime: new Date(`2026-07-15T${String(10 + i).padStart(2, '0')}:00:00Z`),
+        endTime: null,
+        resource: { name: `C${i}` },
+        participants: [{ user: U('fav1') }],
+      })) as any,
+    );
+    const items = await service.friendsAgenda('demo', 'u1', now);
+    expect(items).toHaveLength(6);
+    expect(items.map((i) => i.id)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4', 'r5']);
+    const times = items.map((i) => i.startTime.getTime());
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+
+  it('sans 3e argument « now » → utilise la date courante, ne jette pas', async () => {
+    const items = await service.friendsAgenda('demo', 'u1');
+    expect(items).toEqual([]);
   });
 });

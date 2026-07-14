@@ -49,7 +49,7 @@ export class SocialHubService {
       prisma.reservation.findMany({
         where: {
           visibility: 'PUBLIC', status: 'CONFIRMED', startTime: { gt: now },
-          resource: { clubId },
+          resource: { clubId, clubSport: { sport: { key: 'padel' } } },
           participants: { some: { userId: { in: ids } } },
         },
         orderBy: { startTime: 'asc' },
@@ -57,7 +57,7 @@ export class SocialHubService {
         select: {
           id: true, startTime: true, endTime: true,
           resource: { select: { name: true } },
-          participants: { select: { userId: true, user: { select: USER_SEL } } },
+          participants: { select: { user: { select: USER_SEL } } },
         },
       }),
       prisma.tournament.findMany({
@@ -72,7 +72,7 @@ export class SocialHubService {
         select: {
           id: true, name: true, startTime: true, endTime: true,
           registrations: {
-            where: { status: { not: 'CANCELLED' } },
+            where: { status: { not: 'CANCELLED' }, OR: [{ captainUserId: { in: ids } }, { partnerUserId: { in: ids } }] },
             select: { captain: { select: USER_SEL }, partner: { select: USER_SEL } },
           },
         },
@@ -86,7 +86,7 @@ export class SocialHubService {
         take: AGENDA_CAP,
         select: {
           id: true, name: true, startTime: true, endTime: true,
-          registrations: { where: { status: { not: 'CANCELLED' } }, select: { user: { select: USER_SEL } } },
+          registrations: { where: { status: { not: 'CANCELLED' }, userId: { in: ids } }, select: { user: { select: USER_SEL } } },
         },
       }),
     ]);
