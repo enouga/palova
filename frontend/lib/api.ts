@@ -755,6 +755,10 @@ export const api = {
     request<Friend[]>(`/api/me/friendships${q ? `?q=${encodeURIComponent(q)}` : ''}`, {}, token),
   listFriendRequests: (token: string) =>
     request<FriendRequests>(`/api/me/friend-requests`, {}, token),
+  getFriendsAgenda: (slug: string, token: string) =>
+    request<FriendsAgendaItem[]>(`/api/clubs/${slug}/me/friends-agenda`, {}, token),
+  getPlayerSuggestions: (slug: string, token: string) =>
+    request<PlayerSuggestion[]>(`/api/clubs/${slug}/me/player-suggestions`, {}, token),
 
   // --- Messagerie privée ---
   listConversations: (token: string) => request<ConversationSummary[]>('/api/me/conversations', {}, token),
@@ -2306,6 +2310,8 @@ export interface Friend {
   avatarUrl: string | null;
   level?: UserLevel | null;
   mutual: boolean;
+  playedTogetherCount?: number;
+  lastPlayedTogetherAt?: string | null;
 }
 
 export interface FollowRelation {
@@ -2322,6 +2328,26 @@ export interface FriendRelation {
 export interface FriendRequests {
   received: Friend[];
   sent: Friend[];
+}
+
+// --- Hub social « Mes amis » ---
+export interface FriendsAgendaItem {
+  kind: 'match' | 'tournament' | 'event';
+  id: string;
+  startTime: string;
+  endTime: string | null;
+  label: string;
+  friends: { id: string; firstName: string; lastName: string; avatarUrl: string | null }[];
+}
+export interface PlayerSuggestion {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  level: UserLevel | null;
+  lastPlayedAt: string;
+  playedCount: number;
+  requestable: boolean;
 }
 
 // --- Messagerie privée 1-à-1 ---
