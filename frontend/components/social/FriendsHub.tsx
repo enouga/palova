@@ -1,55 +1,85 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, ClubMemberSearchResult, Friend, FriendRequests } from '@/lib/api';
+import { api, ClubMemberSearchResult, Friend, FriendRequests, FriendsAgendaItem, PlayerSuggestion } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SectionHeader, listRowStyle } from '@/components/clubhouse/SectionHeader';
 import { FollowButton } from '@/components/social/FollowButton';
 import { FriendButton } from '@/components/social/FriendButton';
 import { LevelChip } from '@/components/player/LevelChip';
 import { colorForSeed } from '@/lib/playerColors';
 import { openDm } from '@/lib/messages';
+import { dedupFavorites, FriendsAnchor } from '@/lib/social';
+import { FriendRequestsBanner } from './FriendRequestsBanner';
+import { FriendsAgendaRail } from './FriendsAgendaRail';
+import { FriendCard } from './FriendCard';
+import { SuggestionsRow } from './SuggestionsRow';
+import { FavoritesRow } from './FavoritesRow';
+import { FollowersFooter } from './FollowersFooter';
 
-type Tab = 'amis' | 'demandes' | 'following' | 'followers' | 'search';
+export const INVITE_DRAFT = 'On se fait une partie ?';
 
-// Hub social du joueur : Amis (amitiés confirmées) / Demandes (reçues+envoyées) /
-// Abonnements / Abonnés (suivi à sens unique) / Trouver (annuaire). Actions club-scoped via `slug`.
-export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string; token: string; initialTab?: Tab }) {
+// Hub social « Mes amis » : scroll unique sans onglet — recherche (filtre mes joueurs +
+// annuaire), bannière demandes, « ça joue bientôt », amis enrichis, suggestions,
+// favoris ★ (dédupliqués des amis), pied « qui me suit ». Actions club-scoped via `slug`.
+export function FriendsHub({ slug, token, timezone, anchor = null }: {
+  slug: string;
+  token: string;
+  timezone: string;
+  anchor?: FriendsAnchor;
+}) {
   const { th } = useTheme();
   const isDesktop = useIsDesktop();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>(initialTab);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequests>({ received: [], sent: [] });
   const [following, setFollowing] = useState<Friend[]>([]);
   const [followers, setFollowers] = useState<Friend[]>([]);
+  const [agenda, setAgenda] = useState<FriendsAgendaItem[]>([]);
+  const [suggestions, setSuggestions] = useState<PlayerSuggestion[]>([]);
   const [q, setQ] = useState('');
   const [searchResults, setSearchResults] = useState<ClubMemberSearchResult[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Friend | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => { setNow(new Date()); }, []);
 
-  // Recharge toutes mes listes — au montage ET après chaque action (accepter/refuser/suivre/retirer),
-  // pour que les compteurs d'onglets se mettent à jour en direct.
+  // Chaque brique échoue en silence : une section en erreur n'empêche pas le reste.
   const reload = useCallback(() => {
-    api.listFriendships(token).then(setFriends).catch(() => {});
-    api.listFriendRequests(token).then(setRequests).catch(() => {});
-    api.listFollowing(token).then(setFollowing).catch(() => {});
-    api.listFollowers(token).then(setFollowers).catch(() => {});
-  }, [token]);
+    Promise.allSettled([
+      api.listFriendships(token).then(setFriends),
+      api.listFriendRequests(token).then(setRequests),
+      api.listFollowing(token).then(setFollowing),
+      api.listFollowers(token).then(setFollowers),
+      api.getFriendsAgenda(slug, token).then(setAgenda),
+      api.getPlayerSuggestions(slug, token).then(setSuggestions),
+    ]).then(() => setLoaded(true));
+  }, [slug, token]);
   useEffect(() => { reload(); }, [reload]);
 
-  // Debounced directory search — only active on the 'search' tab.
+  // Annuaire débouncé (250 ms) dès qu'on tape — remplace l'onglet « Trouver ».
   useEffect(() => {
-    if (tab !== 'search') return;
     const query = q.trim();
+    if (!query) { setSearchResults([]); return; }
     const handle = setTimeout(() => {
-      api.searchClubMembers(slug, query, token)
-        .then(setSearchResults)
-        .catch(() => setSearchResults([]));
-    }, query ? 250 : 0);
+      api.searchClubMembers(slug, query, token).then(setSearchResults).catch(() => setSearchResults([]));
+    }, 250);
     return () => clearTimeout(handle);
-  }, [tab, q, slug, token]);
+  }, [q, slug, token]);
+
+  // Deep-link ?tab= : scroll une seule fois, une fois les données chargées.
+  const didAnchor = useRef(false);
+  useEffect(() => {
+    if (!anchor || !loaded || didAnchor.current) return;
+    didAnchor.current = true;
+    document.getElementById(anchor === 'demandes' ? 'fh-demandes' : 'fh-followers')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [anchor, loaded]);
 
   const respond = async (userId: string, accept: boolean) => {
     setBusyId(userId);
@@ -63,117 +93,100 @@ export function FriendsHub({ slug, token, initialTab = 'amis' }: { slug: string;
     catch { /* noop */ }
     finally { setBusyId(null); }
   };
+  const removeFriend = async (f: Friend) => {
+    setBusyId(f.id);
+    try { await api.removeFriend(slug, f.id, token); reload(); }
+    catch { /* noop */ }
+    finally { setBusyId(null); setRemoveTarget(null); }
+  };
+  const removeFavorite = async (f: Friend) => {
+    setBusyId(f.id);
+    try { await api.unfollowUser(slug, f.id, token); reload(); }
+    catch { /* noop */ }
+    finally { setBusyId(null); }
+  };
+  const message = (f: { id: string }) => openDm(f.id, { isDesktop, navigate: (h) => router.push(h) });
+  const invite = (f: { id: string }) => openDm(f.id, { isDesktop, navigate: (h) => router.push(h), draft: INVITE_DRAFT });
 
-  const tabs: { key: Tab; label: string; n?: number }[] = [
-    { key: 'amis',      label: 'Amis',        n: friends.length },
-    { key: 'demandes',  label: 'Demandes',    n: requests.received.length },
-    { key: 'following', label: 'Abonnements', n: following.length },
-    { key: 'followers', label: 'Abonnés',     n: followers.length },
-    { key: 'search',    label: 'Trouver' },
-  ];
-
-  // flexWrap — sur mobile, les actions (💬 + Suivre + bouton ami) replient EN BLOC sous le
-  // nom au lieu de déborder de la carte (les boutons sont tous en white-space: nowrap).
-  const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, rowGap: 6, padding: '8px 4px', borderBottom: `1px solid ${th.line}` };
-  const actionsStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto' };
-  const identity = (f: { id: string; firstName: string; lastName: string; avatarUrl?: string | null; level?: Friend['level'] }) => (
-    <>
-      <Avatar firstName={f.firstName} lastName={f.lastName} avatarUrl={f.avatarUrl ?? null} size={36} color={colorForSeed(f.id)} />
-      <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14.5, color: th.text, fontWeight: 600 }}>{f.firstName} {f.lastName}</span>
-      {f.level != null && <LevelChip level={f.level} />}
-    </>
-  );
-
-  const btnStyle = (fill: boolean): React.CSSProperties => ({
-    border: `1px solid ${th.accent}`, background: fill ? th.accent : 'transparent', color: fill ? th.onAccent : th.accent,
-    borderRadius: 999, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-  });
-
-  // Bouton 💬 « Envoyer un message » : widget ancré en desktop, page /me/messages en mobile.
-  const message = (userId: string) => openDm(userId, { isDesktop, navigate: (h) => router.push(h) });
-  const msgBtn = (f: { id: string; firstName: string; lastName: string }) => (
-    <button type="button" aria-label={`Écrire à ${f.firstName} ${f.lastName}`} title="Envoyer un message"
-      onClick={() => message(f.id)}
-      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 999,
-        padding: '5px 9px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-      <Icon name="chat" size={15} color={th.textMute} />
-    </button>
-  );
+  const searching = q.trim().length > 0;
+  const norm = q.trim().toLowerCase();
+  const matchName = (f: Friend) => `${f.firstName} ${f.lastName}`.toLowerCase().includes(norm);
+  const visibleFriends = searching ? friends.filter(matchName) : friends;
+  const favorites = dedupFavorites(following, friends);
+  const visibleFavorites = searching ? favorites.filter(matchName) : favorites;
+  const emptyHub = loaded && !searching && friends.length === 0 && favorites.length === 0
+    && suggestions.length === 0 && requests.received.length === 0 && requests.sent.length === 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {tabs.map((t) => (
-          <button key={t.key} type="button" onClick={() => setTab(t.key)}
-            style={{ flex: 1, minWidth: 90, border: `1px solid ${tab === t.key ? th.accent : th.line}`, background: tab === t.key ? th.accent : 'transparent', color: tab === t.key ? th.onAccent : th.text, borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
-            {t.label}{t.n != null ? <span style={{ opacity: 0.7 }}> {t.n}</span> : null}
-          </button>
-        ))}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher ou ajouter un joueur…"
+        aria-label="Rechercher un joueur"
+        style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 12,
+          padding: '11px 13px', fontFamily: th.fontUI, fontSize: 14.5 }} />
 
-      {tab === 'demandes' ? (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {requests.received.length === 0 && requests.sent.length === 0 && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '16px 4px' }}>Aucune demande en attente.</div>
-          )}
-          {requests.received.map((f) => (
-            <div key={`rec-${f.id}`} style={rowStyle}>
-              {identity(f)}
-              <span style={actionsStyle}>
-                {msgBtn(f)}
-                <button type="button" disabled={busyId === f.id} style={btnStyle(true)} onClick={() => respond(f.id, true)}>Accepter</button>
-                <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => respond(f.id, false)}>Refuser</button>
-              </span>
-            </div>
-          ))}
-          {requests.sent.length > 0 && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, padding: '12px 4px 4px' }}>Envoyées</div>
-          )}
-          {requests.sent.map((f) => (
-            <div key={`sent-${f.id}`} style={rowStyle}>
-              {identity(f)}
-              <span style={actionsStyle}>
-                {msgBtn(f)}
-                <button type="button" disabled={busyId === f.id} style={btnStyle(false)} onClick={() => cancelSent(f.id)}>Annuler</button>
-              </span>
-            </div>
-          ))}
+      <FriendRequestsBanner requests={requests} busyId={busyId} onRespond={respond} onCancelSent={cancelSent} />
+
+      {!searching && <FriendsAgendaRail items={agenda} timezone={timezone} />}
+
+      {emptyHub && (
+        <div style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.5 }}>
+          Retrouvez ici vos partenaires de jeu : cherchez un joueur ci-dessus pour l&apos;ajouter en favori ★ ou en ami.
         </div>
-      ) : tab === 'search' ? (
-        <>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un joueur…"
-            style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 14 }} />
+      )}
+
+      {visibleFriends.length > 0 && (
+        <section aria-label="Amis">
+          <SectionHeader title={`Amis · ${visibleFriends.length}`} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {visibleFriends.map((f) => (
+              <FriendCard key={f.id} friend={f} now={now} busy={busyId === f.id}
+                onInvite={invite} onMessage={message} onRemove={setRemoveTarget} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!searching && (
+        <SuggestionsRow suggestions={suggestions} slug={slug} token={token} now={now} onChange={reload} onMessage={message} />
+      )}
+
+      <FavoritesRow favorites={visibleFavorites} onMessage={message} onInvite={invite} onRemove={removeFavorite} />
+
+      {searching && (
+        <section aria-label="Dans le club">
+          <SectionHeader title="Dans le club" />
           {searchResults.length === 0
-            ? <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '16px 4px' }}>Aucun membre trouvé.</div>
+            ? <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>Aucun membre trouvé.</div>
             : searchResults.map((r) => (
-                <div key={r.id} style={rowStyle}>
-                  {identity(r)}
-                  <span style={actionsStyle}>
-                    {msgBtn(r)}
-                    <FollowButton slug={slug} userId={r.id} token={token} initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
-                    <FriendButton slug={slug} userId={r.id} token={token} relation={r.friend ?? { status: 'none', requestable: false }} onChange={reload} />
-                  </span>
-                </div>
-              ))}
-        </>
-      ) : (
-        (() => {
-          const list = tab === 'amis' ? friends : tab === 'following' ? following : followers;
-          const empty = tab === 'amis' ? "Aucun ami confirmé pour l'instant." : tab === 'following' ? 'Vous ne suivez personne.' : 'Personne ne vous suit encore.';
-          return list.length === 0
-            ? <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, padding: '16px 4px' }}>{empty}</div>
-            : list.map((f) => (
-                <div key={f.id} style={rowStyle}>
-                  {identity(f)}
-                  <span style={actionsStyle}>
-                    {msgBtn(f)}
-                    {tab === 'amis'
-                      ? <FriendButton slug={slug} userId={f.id} token={token} relation={{ status: 'friends', requestable: false }} onChange={reload} />
-                      : <FollowButton slug={slug} userId={f.id} token={token} initial={{ iFollow: tab === 'following' || f.mutual, mutual: f.mutual }} onChange={reload} />}
-                  </span>
-                </div>
-              ));
-        })()
+              <div key={r.id} style={listRowStyle(th)}>
+                {/* ClubMemberSearchResult n'expose pas d'avatarUrl (searchMembers ne le sélectionne pas côté backend) */}
+                <Avatar firstName={r.firstName} lastName={r.lastName} avatarUrl={null} size={36} color={colorForSeed(r.id)} />
+                <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14.5, color: th.text, fontWeight: 600 }}>{r.firstName} {r.lastName}</span>
+                {r.level != null && <LevelChip level={r.level} />}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                  <button type="button" aria-label={`Écrire à ${r.firstName} ${r.lastName}`} title="Envoyer un message" onClick={() => message(r)}
+                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 999,
+                      padding: '5px 9px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                    <Icon name="chat" size={15} color={th.textMute} />
+                  </button>
+                  <FollowButton slug={slug} userId={r.id} token={token} initial={{ iFollow: !!r.iFollow, mutual: !!r.mutual }} onChange={reload} />
+                  {/* opt-out → aucun bouton ami (plus jamais de gros bouton grisé négatif) */}
+                  {r.friend && (r.friend.requestable || r.friend.status !== 'none') && (
+                    <FriendButton slug={slug} userId={r.id} token={token} relation={r.friend} onChange={reload} />
+                  )}
+                </span>
+              </div>
+            ))}
+        </section>
+      )}
+
+      {!searching && <FollowersFooter followers={followers} slug={slug} token={token} anchorOpen={anchor === 'followers'} onChange={reload} />}
+
+      {removeTarget && (
+        <ConfirmDialog title="Retirer cet ami ?" detail={`${removeTarget.firstName} ${removeTarget.lastName}`}
+          message="Vous pourrez renvoyer une demande plus tard."
+          confirmLabel="Retirer" busy={busyId === removeTarget.id}
+          onConfirm={() => removeFriend(removeTarget)} onCancel={() => setRemoveTarget(null)} />
       )}
     </div>
   );

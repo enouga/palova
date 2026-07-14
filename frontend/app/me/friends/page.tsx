@@ -6,16 +6,16 @@ import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { FriendsHub } from '@/components/social/FriendsHub';
+import { friendsAnchor } from '@/lib/social';
 
-// Hub social du joueur (amis / je suis / me suivent). Disponible sur un hôte club
-// (le suivi est défini club-scoped). Shell calqué sur /me/profile.
+// Hub social du joueur. Disponible sur un hôte club (les actions sont club-scoped).
+// Shell calqué sur /me/profile. ?tab=demandes|followers = ancre de scroll (deep-links notifs).
 export default function FriendsPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
 
-  const tabParam = useSearchParams().get('tab');
-  const initialTab = tabParam === 'followers' ? 'followers' : tabParam === 'following' ? 'following' : tabParam === 'demandes' ? 'demandes' : 'amis';
+  const anchor = friendsAnchor(useSearchParams().get('tab'));
 
   if (!ready) return null;
   if (!token || !slug || !club) return null; // hub disponible sur un hôte club, connecté
@@ -30,7 +30,7 @@ export default function FriendsPage() {
         </div>
 
         <div style={{ padding: '18px 20px 0' }}>
-          <FriendsHub slug={slug} token={token} initialTab={initialTab} />
+          <FriendsHub slug={slug} token={token} timezone={club.timezone ?? 'Europe/Paris'} anchor={anchor} />
         </div>
       </div>
     </Screen>
