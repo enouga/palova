@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, CSSProperties } from 'react';
 import { api, ClubHouseSectionKey, ClubHouseSectionSetting } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { fullSectionSettings, SECTION_DEFS, SPONSORS_DEF } from '@/lib/clubhouse';
+import { fullSectionSettings, SECTION_DEFS } from '@/lib/clubhouse';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -62,33 +62,28 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
 
   if (!items) return null;
 
-  const rows = items.filter((s) => s.key !== 'sponsors');
-  const sponsors = items.find((s) => s.key === 'sponsors') ?? { key: 'sponsors' as ClubHouseSectionKey, visible: true };
-  const rebuild = (nextRows: ClubHouseSectionSetting[], nextSponsors = sponsors) => [...nextRows, nextSponsors];
-
   const move = (idx: number, dir: -1 | 1) => {
-    const next = [...rows];
+    const next = [...items];
     const target = idx + dir;
     if (target < 0 || target >= next.length) return;
     [next[idx], next[target]] = [next[target], next[idx]];
-    persist(rebuild(next));
+    persist(next);
   };
 
   const onDropRow = (targetKey: ClubHouseSectionKey) => {
     if (!dragKey || dragKey === targetKey) { setDragKey(null); return; }
-    const next = [...rows];
+    const next = [...items];
     const from = next.findIndex((r) => r.key === dragKey);
     const to = next.findIndex((r) => r.key === targetKey);
     setDragKey(null);
     if (from < 0 || to < 0) return;
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    persist(rebuild(next));
+    persist(next);
   };
 
   const toggle = (key: ClubHouseSectionKey) => {
-    if (key === 'sponsors') { persist(rebuild(rows, { key, visible: !sponsors.visible })); return; }
-    persist(rebuild(rows.map((r) => (r.key === key ? { ...r, visible: !r.visible } : r))));
+    persist(items.map((r) => (r.key === key ? { ...r, visible: !r.visible } : r)));
   };
 
   const reset = async () => {
@@ -102,7 +97,7 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
   };
 
   const defs = new Map<ClubHouseSectionKey, { label: string; hint?: string }>(
-    [...SECTION_DEFS, SPONSORS_DEF].map((d) => [d.key, d]),
+    SECTION_DEFS.map((d) => [d.key, d]),
   );
   const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: `1px solid ${th.line}`, background: th.bg };
   const arrowStyle = (disabled: boolean): CSSProperties => ({
@@ -140,7 +135,7 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
 
       {error && <div style={{ marginBottom: 12, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {rows.map((s, idx) => {
+        {items.map((s, idx) => {
           const def = defs.get(s.key);
           return (
             <div key={s.key} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropRow(s.key)}
@@ -154,7 +149,7 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
                 {def?.hint && <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{def.hint}</div>}
               </div>
               <button onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Monter ${def?.label}`} style={arrowStyle(idx === 0)}>↑</button>
-              <button onClick={() => move(idx, 1)} disabled={idx === rows.length - 1} aria-label={`Descendre ${def?.label}`} style={arrowStyle(idx === rows.length - 1)}>↓</button>
+              <button onClick={() => move(idx, 1)} disabled={idx === items.length - 1} aria-label={`Descendre ${def?.label}`} style={arrowStyle(idx === items.length - 1)}>↓</button>
               <label style={toggleLabel}>
                 <input type="checkbox" checked={s.visible} onChange={() => toggle(s.key)} aria-label={`Afficher ${def?.label}`} />
                 Afficher
@@ -162,17 +157,6 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
             </div>
           );
         })}
-        <div style={{ ...rowStyle, opacity: sponsors.visible ? 1 : 0.55 }}>
-          <span style={{ width: 18 }} aria-hidden />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 600, color: th.text }}>{SPONSORS_DEF.label}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{SPONSORS_DEF.hint} — toujours en bas de page</div>
-          </div>
-          <label style={toggleLabel}>
-            <input type="checkbox" checked={sponsors.visible} onChange={() => toggle('sponsors')} aria-label="Afficher Partenaires" />
-            Afficher
-          </label>
-        </div>
       </div>
       {customized && (
         <button onClick={() => setConfirmReset(true)}

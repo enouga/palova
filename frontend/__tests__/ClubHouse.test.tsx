@@ -197,6 +197,21 @@ describe('ClubHouse', () => {
     expect(mocked.getOpenMatches).not.toHaveBeenCalled();
   });
 
+  it('config custom : sponsors peut être réordonné (pas seulement en dernier)', async () => {
+    fullSections();
+    wrapWith(clubWith([
+      { key: 'sponsors', visible: true },
+      { key: 'matches', visible: true },
+      { key: 'agenda', visible: true },
+      { key: 'top', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'clubCard', visible: true },
+    ]));
+    await waitFor(() => expect(screen.getByTestId('sec-sponsors')).toBeInTheDocument());
+    const ids = screen.getAllByTestId(/^sec-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids[0]).toBe('sec-sponsors');
+  });
+
   it('sponsors masqués : rivière absente, fetch sponsors sauté ; clés manquantes complétées visibles', async () => {
     fullSections();
     wrapWith(clubWith([{ key: 'sponsors', visible: false }]));

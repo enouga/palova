@@ -58,14 +58,11 @@ export const SECTION_DEFS: { key: ClubHouseSectionKey; label: string; hint?: str
   { key: 'top', label: 'Top du mois', hint: 'Podium des victoires du mois' },
   { key: 'offers', label: 'Offres du club', hint: 'Dépend aussi de « Vendre les offres en ligne » (Réglages)' },
   { key: 'clubCard', label: 'Le club', hint: 'Présentation et photos' },
+  { key: 'sponsors', label: 'Partenaires', hint: 'Rivière de logos' },
 ];
 
-/** La rivière partenaires : visibilité configurable, position fixe en bas de page. */
-export const SPONSORS_DEF: { key: ClubHouseSectionKey; label: string; hint: string } =
-  { key: 'sponsors', label: 'Partenaires', hint: 'Rivière de logos' };
-
-const MEMBER_ORDER: ClubHouseSectionKey[] = ['matches', 'agenda', 'top', 'offers', 'clubCard'];
-const VISITOR_ORDER: ClubHouseSectionKey[] = ['matches', 'clubCard', 'agenda', 'offers', 'top'];
+const MEMBER_ORDER: ClubHouseSectionKey[] = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'];
+const VISITOR_ORDER: ClubHouseSectionKey[] = ['matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors'];
 
 /** Ordre + visibilité effectifs. config null → ordre adaptatif historique (visiteur/membre) ;
  *  sinon la config s'applique à tous. Clé inconnue ignorée, clé connue absente ajoutée en
@@ -73,41 +70,36 @@ const VISITOR_ORDER: ClubHouseSectionKey[] = ['matches', 'clubCard', 'agenda', '
 export function resolveSections(
   config: ClubHouseSectionSetting[] | null | undefined,
   isMember: boolean,
-): { order: ClubHouseSectionKey[]; sponsorsVisible: boolean } {
+): { order: ClubHouseSectionKey[] } {
   if (!Array.isArray(config) || config.length === 0) {
-    return { order: isMember ? MEMBER_ORDER : VISITOR_ORDER, sponsorsVisible: true };
+    return { order: isMember ? MEMBER_ORDER : VISITOR_ORDER };
   }
   const seen = new Set<string>();
   const order: ClubHouseSectionKey[] = [];
-  let sponsorsVisible = true;
   for (const e of config) {
     const key = e?.key as ClubHouseSectionKey | undefined;
     if (!key || seen.has(key) || !SECTION_KEYS.includes(key)) continue;
     seen.add(key);
-    if (key === 'sponsors') { sponsorsVisible = e.visible !== false; continue; }
     if (e.visible !== false) order.push(key);
   }
   for (const key of SECTION_KEYS) {
-    if (key !== 'sponsors' && !seen.has(key)) order.push(key);
+    if (!seen.has(key)) order.push(key);
   }
-  return { order, sponsorsVisible };
+  return { order };
 }
 
 /** Clés masquées par la config (sert à sauter les fetchs inutiles). null → rien de masqué. */
 export function hiddenSectionKeys(config: ClubHouseSectionSetting[] | null | undefined): Set<ClubHouseSectionKey> {
-  const { order, sponsorsVisible } = resolveSections(config, true); // la visibilité ne dépend pas de l'audience
+  const { order } = resolveSections(config, true); // la visibilité ne dépend pas de l'audience
   const hidden = new Set<ClubHouseSectionKey>();
-  for (const key of SECTION_KEYS) {
-    if (key === 'sponsors') { if (!sponsorsVisible) hidden.add(key); }
-    else if (!order.includes(key)) hidden.add(key);
-  }
+  for (const key of SECTION_KEYS) if (!order.includes(key)) hidden.add(key);
   return hidden;
 }
 
-/** Liste complète (8 entrées) pour l'éditeur admin : config complétée ; null → défaut membre + sponsors en fin. */
+/** Liste complète (6 entrées) pour l'éditeur admin : config complétée ; null → défaut membre. */
 export function fullSectionSettings(config: ClubHouseSectionSetting[] | null | undefined): ClubHouseSectionSetting[] {
   if (!Array.isArray(config) || config.length === 0) {
-    return [...MEMBER_ORDER, 'sponsors' as ClubHouseSectionKey].map((key) => ({ key, visible: true }));
+    return MEMBER_ORDER.map((key) => ({ key, visible: true }));
   }
   const seen = new Set<string>();
   const out: ClubHouseSectionSetting[] = [];

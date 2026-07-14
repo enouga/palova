@@ -1,4 +1,4 @@
-import { announcementExpired, fullSectionSettings, hiddenSectionKeys, kiosqueSlides, matchSeats, offerIsActive, resolveSections, SECTION_DEFS, SECTION_KEYS, SPONSORS_DEF, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
+import { announcementExpired, fullSectionSettings, hiddenSectionKeys, kiosqueSlides, matchSeats, offerIsActive, resolveSections, SECTION_DEFS, SECTION_KEYS, tournamentPlacesLabel, todayISO } from '../lib/clubhouse';
 import { Announcement, ClubHouseSectionSetting, Tournament } from '../lib/api';
 
 const NOW = new Date('2026-06-10T12:00:00Z');
@@ -78,13 +78,13 @@ describe('matchSeats', () => {
 });
 
 describe('resolveSections', () => {
-  it('config null → ordres adaptatifs historiques (membre ≠ visiteur), sponsors visibles', () => {
-    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'top', 'offers', 'clubCard']);
-    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'offers', 'top']);
-    expect(resolveSections(undefined, false).sponsorsVisible).toBe(true);
+  it('config null → ordres adaptatifs historiques (membre ≠ visiteur), sponsors inclus en fin', () => {
+    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors']);
+    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors']);
+    expect(resolveSections(undefined, false).order).toContain('sponsors');
   });
 
-  it('config custom → même ordre pour tous, sections masquées exclues, sponsorsVisible', () => {
+  it('config custom → même ordre pour tous, sections masquées exclues (sponsors compris)', () => {
     const config: ClubHouseSectionSetting[] = [
       { key: 'top', visible: true },
       { key: 'matches', visible: false },
@@ -99,13 +99,34 @@ describe('resolveSections', () => {
     expect(member.order[0]).toBe('top');
     expect(member.order).not.toContain('matches');
     expect(member.order).not.toContain('sponsors');
-    expect(member.sponsorsVisible).toBe(false);
+  });
+
+  it('sponsors réordonnable : peut être placé en tête ou au milieu, pas seulement en fin', () => {
+    const front = resolveSections([
+      { key: 'sponsors', visible: true },
+      { key: 'matches', visible: true },
+      { key: 'agenda', visible: true },
+      { key: 'top', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'clubCard', visible: true },
+    ], true);
+    expect(front.order[0]).toBe('sponsors');
+
+    const middle = resolveSections([
+      { key: 'matches', visible: true },
+      { key: 'sponsors', visible: true },
+      { key: 'agenda', visible: true },
+      { key: 'top', visible: true },
+      { key: 'offers', visible: true },
+      { key: 'clubCard', visible: true },
+    ], true);
+    expect(middle.order[1]).toBe('sponsors');
   });
 
   it('clé connue absente de la config → ajoutée en fin, visible (tolérance versions)', () => {
     const { order } = resolveSections([{ key: 'clubCard', visible: true }], true);
     expect(order[0]).toBe('clubCard');
-    expect(order).toHaveLength(5);
+    expect(order).toHaveLength(6);
   });
 
   it('clé inconnue (dont anciennes posters/announcements) ignorée', () => {
@@ -146,7 +167,7 @@ describe('fullSectionSettings / SECTION_DEFS', () => {
     expect(full[0]).toEqual({ key: 'top', visible: false });
   });
 
-  it('SECTION_DEFS + sponsors couvrent exactement SECTION_KEYS', () => {
-    expect([...SECTION_DEFS.map((d) => d.key), SPONSORS_DEF.key].sort()).toEqual([...SECTION_KEYS].sort());
+  it('SECTION_DEFS couvre exactement SECTION_KEYS (sponsors compris)', () => {
+    expect(SECTION_DEFS.map((d) => d.key).sort()).toEqual([...SECTION_KEYS].sort());
   });
 });
