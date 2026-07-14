@@ -10,6 +10,7 @@ import { Icon } from '@/components/ui/Icon';
 const ERR: Record<string, string> = {
   UNAUTHORIZED: "Seul l'organisateur peut ouvrir cette partie.",
   RESERVATION_NOT_ACTIVE: "Cette réservation n'est pas ouvrable.",
+  RESERVATION_IN_PAST: 'Trop tard pour ouvrir cette partie.',
   OPEN_MATCH_PADEL_ONLY: 'Seules les parties de padel peuvent être ouvertes.',
 };
 const msg = (e: string) => ERR[e] ?? e;

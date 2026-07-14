@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OpenMatchQuickSwitch } from '../components/reservations/OpenMatchQuickSwitch';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -57,6 +57,20 @@ describe('OpenMatchQuickSwitch', () => {
       'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6 },
     ));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it('sans préférence mémorisée, la fourchette vient du niveau du joueur (getMyRating) ±1', async () => {
+    mocked.getMyRating.mockResolvedValue({ level: 5 } as never);
+    const onChanged = jest.fn();
+    wrap({}, onChanged);
+    // Laisse le temps à l'effet (getMyRating -> setLevelMin/Max) de committer son état avant
+    // de cliquer : ce setState survient dans un .then() hors d'un event handler React, donc
+    // pas garanti flush avant la résolution (synchrone) de findByRole sur le switch déjà monté.
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(await screen.findByRole('switch', { name: /Partie ouverte aux membres/ }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6 },
+    ));
   });
 
   it('préférence « ouverte à tous » → targetLevel null', async () => {
