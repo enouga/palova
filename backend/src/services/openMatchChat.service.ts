@@ -2,6 +2,7 @@ import { prisma } from '../db/prisma';
 import { SSEService } from './sse.service';
 import { notifyOpenMatchChatMessage } from '../email/notifications';
 import { ensureActiveMembership } from './membership';
+import { assertRateLimit } from './rateLimit';
 
 const MAX_BODY = 2000;
 
@@ -78,6 +79,7 @@ export class OpenMatchChatService {
   /** Poste un message : valide, crée, diffuse en SSE, notifie les absents (best-effort). */
   async postMessage(slug: string, reservationId: string, userId: string, rawBody: string): Promise<ChatMessageDTO> {
     await this.assertChatAccess(slug, reservationId, userId);
+    await assertRateLimit('match:post', userId, 12, 60);
     const body = (rawBody ?? '').trim();
     if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
 

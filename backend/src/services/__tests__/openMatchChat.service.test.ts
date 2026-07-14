@@ -1,5 +1,6 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+import { redisMock } from '../../__mocks__/redis';
 import { OpenMatchChatService } from '../openMatchChat.service';
 import { SSEService } from '../sse.service';
 
@@ -126,6 +127,12 @@ describe('OpenMatchChatService', () => {
       );
 
       broadcastSpy.mockRestore();
+    });
+
+    it('au-delà de 12 messages/min → RATE_LIMITED', async () => {
+      primeAccessOk();
+      redisMock.incr.mockResolvedValue(13);
+      await expect(service.postMessage('club-demo', 'resa-1', 'org', 'spam')).rejects.toThrow('RATE_LIMITED');
     });
   });
 
