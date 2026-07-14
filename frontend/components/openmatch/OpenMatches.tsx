@@ -16,6 +16,9 @@ import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions'
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
+import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
+import { alertChipLabel } from '@/lib/matchAlerts';
+import type { MatchAlert } from '@/lib/api';
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -42,6 +45,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [viewerUserId, setViewerUserId] = useState('');
   const [canModerate, setCanModerate] = useState(false);
   const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
+  const [alerts, setAlerts] = useState<MatchAlert[]>([]);
+  const [alertSheet, setAlertSheet] = useState<{ date: string; from: string; to: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +56,12 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   }, [club.slug, token]);
 
   useEffect(() => { if (ready) load(); }, [ready, load]);
+
+  const loadAlerts = useCallback(() => {
+    if (!token) { setAlerts([]); return; }
+    api.listMyMatchAlerts(club.slug, token).then(setAlerts).catch(() => setAlerts([]));
+  }, [token, club.slug]);
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
 
   // Deeplink ?vue=matchs (menu profil, redirection de /me/matches, notifications).
   // L'event window couvre le cas « déjà sur /parties » : router.push ne remonte pas le composant.
@@ -145,6 +156,28 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               À mon niveau
             </label>
           )}
+          {token && (
+            <div style={{ marginTop: 14 }}>
+              <button
+                onClick={() => setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${th.line}`, background: th.surface, borderRadius: 999, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
+                🔔 Créer une alerte
+              </button>
+              {alerts.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  {alerts.map((al) => (
+                    <span key={al.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: th.surface2, borderRadius: 999, padding: '6px 10px 6px 12px', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
+                      {alertChipLabel(al, club.timezone)}
+                      <button aria-label="Supprimer l'alerte" onClick={async () => {
+                        setAlerts((xs) => xs.filter((x) => x.id !== al.id)); // optimiste
+                        try { await api.deleteMatchAlert(club.slug, al.id, token); } catch { loadAlerts(); }
+                      }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontSize: 15, lineHeight: 1 }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {a.error && (
@@ -192,6 +225,14 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             ) : (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
                 {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
+                {token && (
+                  <div style={{ marginTop: 12 }}>
+                    <button onClick={() => setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' })}
+                      style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '9px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
+                      🔔 Créer une alerte
+                    </button>
+                  </div>
+                )}
               </div>
             )
           ) : (
@@ -254,6 +295,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         )}
       </div>
       <OpenMatchModals club={club} token={token} viewerUserId={viewerUserId} canModerate={canModerate} actions={a} reload={load} authNextPath="/parties" />
+      {alertSheet && token && (
+        <MatchAlertSheet club={club} token={token} initial={alertSheet}
+          onClose={() => setAlertSheet(null)}
+          onCreated={() => { setAlertSheet(null); loadAlerts(); }} />
+      )}
     </Screen>
   );
 }

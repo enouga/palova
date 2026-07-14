@@ -39,6 +39,10 @@ jest.mock('../lib/api', () => ({
     listFollowing: jest.fn().mockResolvedValue([]),
     // Chargé par FriendsQuickRow (monté via AddPlayerSheet dans le flux d'ajout de joueur).
     listClubFriends: jest.fn().mockResolvedValue([]),
+    // Alertes de parties ouvertes (bouton + chips sur /parties).
+    listMyMatchAlerts: jest.fn().mockResolvedValue([]),
+    createMatchAlert: jest.fn(),
+    deleteMatchAlert: jest.fn(),
     // consommés par ClubNav (badge « à venir » = réservations + tournois + events + cours)
     getMyReservations: jest.fn().mockResolvedValue([]),
     getMyTournaments: jest.fn().mockResolvedValue([]),
@@ -83,6 +87,12 @@ describe('OpenMatches', () => {
     // org occupe (éq.1, G) → la 1re cellule libre rendue est (éq.1, D).
     fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
+  });
+
+  it('affiche le bouton « Créer une alerte » pour un connecté', async () => {
+    mocked.getOpenMatches.mockResolvedValue([match()] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    expect(await screen.findByRole('button', { name: /créer une alerte/i })).toBeInTheDocument();
   });
 
   it('niveau hors fourchette : avertissement, puis « Rejoindre quand même » rejoint à la place tapée', async () => {
