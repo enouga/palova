@@ -49,8 +49,12 @@ export function applyReactionToggle(reactions: DmReaction[], emoji: string, meId
     .filter((r) => r.userIds.length > 0);
 }
 
-/** Ouvre une conversation : widget ancré en desktop (event window), page en mobile. */
-export function openDm(userId: string, opts: { isDesktop: boolean; navigate: (href: string) => void }): void {
-  if (opts.isDesktop) window.dispatchEvent(new CustomEvent('palova:open-dm', { detail: { userId } }));
-  else opts.navigate(`/me/messages?with=${userId}`);
+/** Ouvre une conversation : widget ancré en desktop (event window), page en mobile.
+ *  `draft` (optionnel) pré-remplit le composer — appliqué seulement si le brouillon est vide. */
+export function openDm(userId: string, opts: { isDesktop: boolean; navigate: (href: string) => void; draft?: string }): void {
+  if (opts.isDesktop) {
+    window.dispatchEvent(new CustomEvent('palova:open-dm', { detail: { userId, draft: opts.draft } }));
+  } else {
+    opts.navigate(`/me/messages?with=${userId}${opts.draft ? `&draft=${encodeURIComponent(opts.draft)}` : ''}`);
+  }
 }

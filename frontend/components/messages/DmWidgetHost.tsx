@@ -24,18 +24,23 @@ export function DmWidgetHost() {
   const isDesktop = useIsDesktop();
   const [conv, setConv] = useState<ConversationSummary | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | undefined>(undefined);
   const viewerAsked = useRef(false);
 
   useEffect(() => {
     if (!ready || !token) return;
     const onOpen = (e: Event) => {
-      const userId = (e as CustomEvent<{ userId?: string }>).detail?.userId;
+      const { userId, draft: draftText } = (e as CustomEvent<{ userId?: string; draft?: string }>).detail ?? {};
       if (!userId) return;
-      if (!isDesktop) { router.push(`/me/messages?with=${userId}`); return; }
+      if (!isDesktop) {
+        router.push(`/me/messages?with=${userId}${draftText ? `&draft=${encodeURIComponent(draftText)}` : ''}`);
+        return;
+      }
       if (!viewerAsked.current) {
         viewerAsked.current = true;
         api.getMyProfile(token).then((p) => setViewerId(p.id)).catch(() => { viewerAsked.current = false; });
       }
+      setDraft(draftText);
       api.openConversation(userId, token, slug ?? null).then(setConv).catch(() => {});
     };
     window.addEventListener('palova:open-dm', onOpen);
@@ -64,7 +69,7 @@ export function DmWidgetHost() {
           <button type="button" aria-label="Fermer" onClick={() => setConv(null)}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 20 }}>×</button>
         </div>
-        <MessageThread conversationId={conv.id} token={token} viewerUserId={viewerId} other={conv.other} />
+        <MessageThread conversationId={conv.id} token={token} viewerUserId={viewerId} other={conv.other} initialDraft={draft} />
       </div>
     </div>
   );

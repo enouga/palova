@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Icon } from '@/components/ui/Icon';
@@ -9,15 +9,19 @@ import { CHAT_EMOJIS } from '@/lib/chatEmojis';
 // ligne), 🙂 emojis (desktop seulement — sur mobile le clavier a les siens, et chaque
 // bouton mange la largeur de la textarea), 📷 photo avec préview, envoi = bouton-icône.
 // Throttle « typing » 3 s (fire-and-forget).
-export function MessageComposer({ disabled, onSend, onSendImage, onTyping }: {
+export function MessageComposer({ disabled, onSend, onSendImage, onTyping, initialDraft }: {
   disabled?: boolean;
   onSend: (body: string) => Promise<boolean>; // false = échec → draft restauré
   onSendImage: (file: File, caption: string) => Promise<boolean>;
   onTyping: () => void;
+  initialDraft?: string;
 }) {
   const { th } = useTheme();
   const isDesktop = useIsDesktop();
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState((initialDraft ?? '').slice(0, 2000));
+  useEffect(() => {
+    if (initialDraft) setDraft((d) => (d ? d : initialDraft.slice(0, 2000)));
+  }, [initialDraft]);
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState<File | null>(null);

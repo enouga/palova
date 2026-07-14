@@ -15,7 +15,9 @@ export default function MessagesPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
-  const initialWith = useSearchParams().get('with');
+  const sp = useSearchParams();
+  const initialWith = sp.get('with');
+  const initialDraft = sp.get('draft');
 
   // useAuth n'expose pas l'id du viewer → résolu via le profil (pattern OpenMatches).
   const [viewerUserId, setViewerUserId] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function MessagesPage() {
 
         <div style={{ padding: '18px 20px 0' }}>
           {viewerUserId && (
-            <MessagesHub token={token} viewerUserId={viewerUserId} clubSlug={slug} initialWith={initialWith} />
+            <MessagesHub token={token} viewerUserId={viewerUserId} clubSlug={slug} initialWith={initialWith} initialDraft={initialDraft} />
           )}
         </div>
       </div>
