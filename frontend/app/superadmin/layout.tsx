@@ -42,6 +42,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/superadmin/clubs',     label: 'Clubs',           icon: 'indoor' as const },
     { href: '/superadmin/billing',   label: 'Facturation',     icon: 'euro' as const },
     { href: '/superadmin/stats',     label: 'Statistiques',    icon: 'chart' as const },
+    { href: '/superadmin/moderation', label: 'Modération',     icon: 'flag' as const },
     { href: '/superadmin/sports',    label: 'Sports',          icon: 'trophy' as const },
     { href: '/superadmin/clubs/new', label: 'Créer un club',   icon: 'bolt' as const },
   ];
