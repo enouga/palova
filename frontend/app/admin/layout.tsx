@@ -137,7 +137,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/planning',     label: 'Planning',          icon: 'calendar' },
       { href: '/admin/encaissement', label: 'Caisse',            icon: 'euro' },
       { href: '/admin/caisse',       label: 'Ventes & journée',  icon: 'card' },
-      { href: '/admin/moderation',   label: 'Signalements',      icon: 'flag' },
+      // Réservé aux admins : la page /admin/moderation répond 403 au staff (requireClubMember('ADMIN')).
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/moderation', label: 'Signalements', icon: 'flag' } as NavItem]
+        : []),
     ] },
     { title: 'Animations & jeu', color: '#e6a93c', items: [
       { href: '/admin/tournaments', label: 'Tournois', icon: 'trophy' },

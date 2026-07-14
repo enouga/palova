@@ -18,14 +18,17 @@ export default function SuperAdminModerationPage() {
 
   const [items, setItems] = useState<MessageReportRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<MessageReportRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<{ id: string; url: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
-    setLoading(true);
+    setLoading(true); setLoadError(null);
     try { setItems((await api.platformListReports(token)).items); }
+    catch { setLoadError('Impossible de charger les signalements. Réessayez.'); }
     finally { setLoading(false); }
   }, [token]);
 
@@ -33,10 +36,12 @@ export default function SuperAdminModerationPage() {
 
   const resolve = async (report: MessageReportRow, action: 'DELETE' | 'REJECT') => {
     if (!token) return;
-    setBusy(report.id);
+    setBusy(report.id); setActionError(null);
     try {
       const updated = await api.platformResolveReport(report.id, action, token);
       setItems((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch {
+      setActionError('Échec de l\'action, réessayez.');
     } finally { setBusy(null); setConfirmDelete(null); }
   };
 
@@ -56,8 +61,14 @@ export default function SuperAdminModerationPage() {
         Messages privés signalés par les joueurs, tous clubs confondus.
       </div>
 
+      {actionError && (
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: '#e0554f', marginBottom: 14 }}>{actionError}</div>
+      )}
+
       {loading ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>
+      ) : loadError ? (
+        <div style={{ fontFamily: th.fontUI, color: '#e0554f' }}>{loadError}</div>
       ) : items.length === 0 ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun signalement.</div>
       ) : (

@@ -21,13 +21,20 @@ export default function AdminModerationPage() {
 
   const [items, setItems] = useState<MessageReportRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<MessageReportRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
-    setLoading(true);
+    setLoading(true); setLoadError(null);
     try { setItems((await api.adminListReports(clubId, token)).items); }
+    catch (err) {
+      setLoadError((err as Error).message === 'FORBIDDEN'
+        ? 'Cette page est réservée aux administrateurs du club.'
+        : 'Impossible de charger les signalements. Réessayez.');
+    }
     finally { setLoading(false); }
   }, [token, clubId]);
 
@@ -35,10 +42,12 @@ export default function AdminModerationPage() {
 
   const resolve = async (report: MessageReportRow, action: 'DELETE' | 'REJECT') => {
     if (!token || !clubId) return;
-    setBusy(report.id);
+    setBusy(report.id); setActionError(null);
     try {
       const updated = await api.adminResolveReport(clubId, report.id, action, token);
       setItems((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch {
+      setActionError('Échec de l\'action, réessayez.');
     } finally { setBusy(null); setConfirmDelete(null); }
   };
 
@@ -52,8 +61,14 @@ export default function AdminModerationPage() {
         Messages du chat de partie signalés par les membres.
       </div>
 
+      {actionError && (
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: '#e0554f', marginBottom: 14 }}>{actionError}</div>
+      )}
+
       {loading ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>
+      ) : loadError ? (
+        <div style={{ fontFamily: th.fontUI, color: '#e0554f' }}>{loadError}</div>
       ) : items.length === 0 ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun signalement.</div>
       ) : (

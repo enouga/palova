@@ -244,6 +244,19 @@ describe('AdminLayout — entrées gatées par rôle', () => {
     expect(screen.queryByText('Abonnement Palova')).not.toBeInTheDocument();
   });
 
+  it('STAFF : pas d’entrée « Signalements » (réservée ADMIN+, comme la route backend)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText('Caisse')).toBeInTheDocument(); // le reste de « Au quotidien » est là
+    expect(screen.queryByText('Signalements')).not.toBeInTheDocument();
+  });
+
+  it('ADMIN : entrée « Signalements » présente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Signalements')).toBeInTheDocument();
+  });
+
   // « Paiement en ligne » mise de côté (2026-07-13) : masquée pour tous les rôles, y compris le gérant.
   it('OWNER : « Paiement en ligne » masquée (page mise de côté)', async () => {
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);

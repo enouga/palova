@@ -51,3 +51,11 @@ it('Rejeter appelle adminResolveReport avec REJECT', async () => {
   fireEvent.click(screen.getByRole('button', { name: /rejeter/i }));
   await waitFor(() => expect(api.adminResolveReport).toHaveBeenCalledWith('club-demo', 'rep-1', 'REJECT', 't'));
 });
+
+it('erreur de chargement (ex: FORBIDDEN) affiche un message au lieu de « Aucun signalement » silencieux', async () => {
+  const { api } = require('@/lib/api');
+  api.adminListReports.mockRejectedValue(new Error('FORBIDDEN'));
+  render(<ThemeProvider><AdminModerationPage /></ThemeProvider>);
+  expect(await screen.findByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+  expect(screen.queryByText('Aucun signalement.')).not.toBeInTheDocument();
+});
