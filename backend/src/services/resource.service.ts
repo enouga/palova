@@ -53,9 +53,14 @@ function sortOrderOf(attributes: unknown): number {
   return typeof v === 'number' ? v : 0;
 }
 
-/** Trie une liste de ressources par sortOrder, puis par nom (stable). */
-export function bySortOrder<T extends { attributes: unknown; name: string }>(a: T, b: T): number {
-  return sortOrderOf(a.attributes) - sortOrderOf(b.attributes) || a.name.localeCompare(b.name, 'fr', { numeric: true });
+/**
+ * Trie une liste de ressources par sortOrder, puis par id (stable et immuable).
+ * Le tiebreak NE DOIT PAS porter sur `name` : pour deux ressources à égalité de sortOrder
+ * (valeur manquante = 0 par défaut), renommer l'une d'elles changerait son rang alphabétique
+ * et la ferait sauter de ligne au rechargement — l'édition semble alors ne pas avoir marché.
+ */
+export function bySortOrder<T extends { attributes: unknown; id: string }>(a: T, b: T): number {
+  return sortOrderOf(a.attributes) - sortOrderOf(b.attributes) || a.id.localeCompare(b.id);
 }
 
 export class ResourceService {
