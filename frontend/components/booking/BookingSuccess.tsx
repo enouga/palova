@@ -11,7 +11,7 @@ import { OpenMatchQuickSwitch } from '@/components/reservations/OpenMatchQuickSw
 /**
  * Écran de succès de la modale de réservation : la confirmation devient le moment
  * d'organisation de la partie — joueurs/équipes/partie ouverte via les briques
- * post-confirmation existantes (ReservationPlayersInline + OpenMatchToggle), sans timer.
+ * post-confirmation existantes (ReservationPlayersInline + OpenMatchQuickSwitch), sans timer.
  */
 export function BookingSuccess({ reservationId, token, summary, slot, timezone, resourceName, duration, showPartners, onDone }: {
   reservationId: string;

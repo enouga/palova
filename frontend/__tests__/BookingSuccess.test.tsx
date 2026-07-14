@@ -58,6 +58,7 @@ describe('BookingSuccess', () => {
     expect(await screen.findByText(/Alice/)).toBeInTheDocument();
     const sw = screen.getByRole('switch', { name: /Partie ouverte aux membres/ });
     expect(sw).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('button', { name: /Ouvrir la partie/ })).not.toBeInTheDocument();
     expect(api.getMyReservations).toHaveBeenCalledWith('jwt');
   });
 
