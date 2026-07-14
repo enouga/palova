@@ -470,7 +470,7 @@ model User {
   /// Opt-in : « Propose-moi les parties à mon niveau » — notification (jamais d'inscription auto).
   autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
   /// Opt-in : autoriser les autres membres à m'envoyer une demande d'ami (ne concerne PAS le chat).
-  acceptsFriendRequests Boolean @default(false) @map("accepts_friend_requests")
+  acceptsFriendRequests Boolean @default(true) @map("accepts_friend_requests")
   preferredSportId String? @map("preferred_sport_id")
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
