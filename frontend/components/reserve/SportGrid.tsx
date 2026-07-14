@@ -11,7 +11,7 @@ function fmtHour(iso: string, tz: string): string {
 // Vue « grille » d'une section sport : lignes = terrains, colonnes = heures à venir.
 // Colonne terrain figée (sticky), la table défile horizontalement (.sp-scroll-x).
 // Mêmes données et même onSlot que la vue cartes → clic d'une cellule libre = même confirmation.
-export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKey, duration }: {
+export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKey, duration, onTakenSlot }: {
   items: ClubAvailability[];
   nowMs: number;
   timezone: string;
@@ -20,6 +20,8 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
            format: string | undefined, sportKey: string, resourceName: string) => void;
   sportKey: string;
   duration: number;
+  // Créneau padel « pris » (à venir) : ouvre la feuille d'alerte. Absent = cellules inertes.
+  onTakenSlot?: (startIso: string, endIso: string) => void;
 }) {
   const { th } = useTheme();
   const cols = gridColumns(items, nowMs);
@@ -70,6 +72,19 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
                             onClick={() => onSlot(resource.id, slot.price, slot, duration, format, sportKey, resource.name)}
                             style={{ border: 'none', cursor: 'pointer', width: '100%', minWidth: 44, height: 34,
                               borderRadius: 7, background: slot.offPeak ? offPeakBg : freeBg }} />
+                        </td>
+                      );
+                    }
+                    // Cellule « prise » (à venir, padel, connecté) : cliquable pour créer une alerte.
+                    // Parité avec la vue cartes. Passé / non-padel / anonyme (prop absente) restent inertes.
+                    if (slot && !isPast && sportKey === 'padel' && onTakenSlot) {
+                      return (
+                        <td key={c}>
+                          <button type="button" aria-label={`${resource.name} ${fmtHour(c, timezone)} — pris, être alerté`}
+                            title="Créneau pris — être alerté si une partie s'ouvre"
+                            onClick={() => onTakenSlot(slot.startTime, slot.endTime)}
+                            style={{ border: 'none', cursor: 'pointer', width: '100%', minWidth: 44, height: 34,
+                              borderRadius: 7, background: takenFill, boxShadow: takenBorder }} />
                         </td>
                       );
                     }

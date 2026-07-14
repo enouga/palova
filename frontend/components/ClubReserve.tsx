@@ -21,6 +21,8 @@ import { ACCENTS, inkOn } from '@/lib/theme';
 import { splitPastSlots, scarcityLabel, RESERVE_VIEW_KEY, type ReserveView } from '@/lib/reserveView';
 import { ViewToggle } from '@/components/reserve/ViewToggle';
 import { SportGrid } from '@/components/reserve/SportGrid';
+import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
+import { slotToAlertWindow } from '@/lib/matchAlerts';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -60,6 +62,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
+  // Feuille d'alerte pré-remplie (créneau padel « pris » cliqué → fenêtre = créneau ±1 h).
+  const [alertSheet, setAlertSheet] = useState<{ date: string; from: string; to: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   // Repli des créneaux du jour déjà commencés, par terrain (clé = resource.id). Réinitialisé au
   // changement de date (le passé n'existe que le jour même).
@@ -198,6 +202,12 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     setBooking({ resourceId, price, slot, duration, format, sportKey, resourceName });
   };
 
+  // Créneau padel « pris » (à venir, connecté) : ouvre la feuille d'alerte sur ce créneau ±1 h.
+  const onTakenSlot = useCallback((startIso: string, endIso: string) => {
+    if (!token) return; // anonyme : pas d'alerte (le bouton n'apparaît pas)
+    setAlertSheet(slotToAlertWindow(startIso, endIso, club.timezone));
+  }, [token, club.timezone]);
+
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
@@ -302,6 +312,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                         onSlot={onSlot}
                         sportKey={cs.sport.key}
                         duration={selDur}
+                        onTakenSlot={token ? onTakenSlot : undefined}
                       />
                     </div>
                     ) : (
@@ -341,11 +352,20 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 // couleur/encre passées en variables car l'accent est propre à chaque club.
                                 // Le lavis est assez soutenu pour se voir sans survol (mobile = pas de hover).
                                 const slotVars = { '--rv-fill': fill, '--rv-ink': inkOn(fill) } as CSSProperties;
+                                // Créneau pris/passé : cliquable pour créer une alerte SEULEMENT en padel,
+                                // à venir, connecté. Sinon inerte (passé ou non-padel restent des <span>).
+                                const canAlert = cs.sport.key === 'padel' && !isPast && !!token;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
                                     style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && resource.offPeakPrice && <span style={{ position: 'absolute', top: -7, right: -4, background: th.accentWarm, color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 800, lineHeight: 1.2, padding: '2px 7px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.22)' }}>{Number(s.price)}€</span>}
+                                  </button>
+                                ) : canAlert ? (
+                                  <button key={s.startTime} type="button" title="Créneau pris — être alerté si une partie s'ouvre"
+                                    onClick={() => onTakenSlot(s.startTime, s.endTime)}
+                                    style={{ border: 'none', borderRadius: 999, padding: '9px 4px', background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${th.line}`, color: th.textFaint, fontFamily: th.fontMono, fontSize: 13, fontWeight: 600, textAlign: 'center', textDecoration: `line-through ${th.textFaint}`, cursor: 'pointer' }}>
+                                    {formatHour(s.startTime, club.timezone)}
                                   </button>
                                 ) : (
                                   <span key={s.startTime} title={isPast ? 'Passé' : 'Réservé'}
@@ -451,6 +471,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             reloadAll();
           }}
         />
+      )}
+
+      {alertSheet && token && (
+        <MatchAlertSheet club={club} token={token} initial={alertSheet}
+          onClose={() => setAlertSheet(null)} onCreated={() => setAlertSheet(null)} />
       )}
     </Screen>
   );
