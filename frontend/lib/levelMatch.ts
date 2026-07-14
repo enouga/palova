@@ -16,6 +16,12 @@ export function rangeLabel(min: number | null, max: number | null): string {
   if (max != null) return `Niveau ${fmtLevel(max)} et -`;
   return 'Tous niveaux';
 }
+/** Deux fourchettes se chevauchent-elles ? Une borne null = non bornée de ce côté (miroir back). */
+export function rangesOverlap(aMin: number | null, aMax: number | null, bMin: number | null, bMax: number | null): boolean {
+  if (aMax != null && bMin != null && aMax < bMin) return false; // A entièrement sous B
+  if (aMin != null && bMax != null && aMin > bMax) return false; // A entièrement au-dessus de B
+  return true;
+}
 /** Distance d'un niveau à une cible (tri « à mon niveau »). Niveau inconnu = Infinity. */
 export function levelDistance(level: number | null, target: number | null): number {
   if (level == null || target == null) return Infinity;

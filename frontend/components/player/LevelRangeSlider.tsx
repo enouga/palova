@@ -11,6 +11,8 @@ interface Props {
   max: number;                       // borne haute courante (1–8)
   onChange: (min: number, max: number) => void;
   disabled?: boolean;
+  /** Version filtre : masque la description de palier + la note de source (juste le curseur). */
+  compact?: boolean;
 }
 
 const MIN = 1;
@@ -21,7 +23,7 @@ const pct = (v: number) => ((Math.max(MIN, Math.min(MAX, v)) - MIN) / (MAX - MIN
 // Curseur double sobre (fourchette de niveau d'une partie ouverte), 1,0–8,0 au dixième.
 // Sous le curseur, on n'affiche QUE la description du palier de la poignée déplacée
 // (mêmes phrases que la grille d'auto-évaluation des nouveaux — LEVEL_TIERS.blurb).
-export function LevelRangeSlider({ min, max, onChange, disabled }: Props) {
+export function LevelRangeSlider({ min, max, onChange, disabled, compact }: Props) {
   const { th } = useTheme();
   const [active, setActive] = useState<'min' | 'max'>('min'); // poignée décrite (dernière touchée)
   const activeVal = active === 'min' ? min : max;
@@ -70,13 +72,15 @@ export function LevelRangeSlider({ min, max, onChange, disabled }: Props) {
         <span>1</span><span>8</span>
       </div>
 
-      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${th.line}` }}>
-        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>
-          {active === 'min' ? 'Niveau minimum' : 'Niveau maximum'} · <b style={{ color: th.text, fontWeight: 600 }}>{tier.name}</b>
+      {!compact && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${th.line}` }}>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>
+            {active === 'min' ? 'Niveau minimum' : 'Niveau maximum'} · <b style={{ color: th.text, fontWeight: 600 }}>{tier.name}</b>
+          </div>
+          <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, lineHeight: 1.45, marginTop: 3, fontStyle: 'italic' }}>{quip}</div>
+          <LevelSourceNote humor style={{ marginTop: 10 }} />
         </div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, lineHeight: 1.45, marginTop: 3, fontStyle: 'italic' }}>{quip}</div>
-        <LevelSourceNote humor style={{ marginTop: 10 }} />
-      </div>
+      )}
     </div>
   );
 }

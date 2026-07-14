@@ -1,4 +1,4 @@
-import { inRange, rangeLabel, levelDistance, fmtLevel } from '@/lib/levelMatch';
+import { inRange, rangeLabel, levelDistance, fmtLevel, rangesOverlap } from '@/lib/levelMatch';
 
 describe('inRange', () => {
   it('null fourchette → toujours dans la zone', () => expect(inRange(4, null, null)).toBe(true));
@@ -23,4 +23,11 @@ describe('rangeLabel', () => {
 describe('levelDistance', () => {
   it('distance absolue', () => expect(levelDistance(4, 4.5)).toBeCloseTo(0.5));
   it('niveau inconnu → Infinity', () => expect(levelDistance(null, 4)).toBe(Infinity));
+});
+describe('rangesOverlap', () => {
+  it('fourchettes qui se chevauchent', () => expect(rangesOverlap(2, 5, 4, 6)).toBe(true));
+  it('fourchettes disjointes', () => expect(rangesOverlap(2, 5, 6, 8)).toBe(false));
+  it('adjacentes (bornes égales) → chevauchent', () => expect(rangesOverlap(2, 4, 4, 6)).toBe(true));
+  it('« ouverte à tous » (null,null) chevauche toute fourchette', () => expect(rangesOverlap(null, null, 3, 5)).toBe(true));
+  it('borne du filtre non bornée d\'un côté', () => expect(rangesOverlap(6, 8, 3, null)).toBe(true));
 });

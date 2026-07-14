@@ -10,7 +10,8 @@ import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { clubIsMultiSport } from '@/lib/sportBadge';
-import { inRange } from '@/lib/levelMatch';
+import { rangesOverlap } from '@/lib/levelMatch';
+import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { recommendMatches } from '@/lib/recommend';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
@@ -38,7 +39,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [myLevel, setMyLevel] = useState<number | null>(null);
-  const [filterMyLevel, setFilterMyLevel] = useState(false);
+  // Filtre par niveau = jauge (fourchette) ; [1,8] = tous. Une partie passe si sa fourchette
+  // chevauche [fMin,fMax] (les parties « ouvertes à tous » passent toujours).
+  const [fMin, setFMin] = useState(1);
+  const [fMax, setFMax] = useState(8);
   const [view, setView] = useState<'parties' | 'matchs' | 'classement'>('parties');
   // Mes matchs (résultats) : chargés à la 1re ouverture de la vue. null = pas encore chargé.
   const [myMatches, setMyMatches] = useState<MyMatch[] | null>(null);
@@ -112,15 +116,16 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   const a = useOpenMatchActions({ club, token, myLevel, reload: load });
 
-  const visibleMatches = filterMyLevel
-    ? matches.filter((m) => inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null))
+  const levelFilterActive = fMin > 1 || fMax < 8;
+  const filtered = levelFilterActive
+    ? matches.filter((m) => rangesOverlap(m.targetLevelMin ?? null, m.targetLevelMax ?? null, fMin, fMax))
     : matches;
 
   // Section « Pour toi » : parties recommandées à mon niveau, retirées de la liste « Autres ».
-  // Désactivée si le club n'utilise pas le système de niveau.
-  const recommended = levelEnabled ? recommendMatches(matches, myLevel, new Date()) : [];
+  // Désactivée si le club n'utilise pas le système de niveau. Respecte le filtre de la jauge.
+  const recommended = levelEnabled ? recommendMatches(filtered, myLevel, new Date()) : [];
   const recoIds = new Set(recommended.map((m) => m.id));
-  const otherMatches = visibleMatches.filter((m) => !recoIds.has(m.id));
+  const otherMatches = filtered.filter((m) => !recoIds.has(m.id));
 
   return (
     <Screen>
@@ -150,11 +155,27 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             Rejoignez la partie publique d&apos;un autre membre, ou créez la vôtre en choisissant « Partie ouverte » au moment de réserver.
           </p>
           {levelEnabled && token && (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, userSelect: 'none' }}>
-              <input type="checkbox" checked={filterMyLevel} onChange={(e) => setFilterMyLevel(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
-              À mon niveau
-            </label>
+            <div style={{ marginTop: 14, maxWidth: 430 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+                <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Filtrer par niveau</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {myLevel != null && (
+                    <button type="button"
+                      onClick={() => { setFMin(Math.max(1, Math.round(myLevel) - 1)); setFMax(Math.min(8, Math.round(myLevel) + 1)); }}
+                      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 999, padding: '4px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
+                      À mon niveau
+                    </button>
+                  )}
+                  {levelFilterActive && (
+                    <button type="button" onClick={() => { setFMin(1); setFMax(8); }}
+                      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 999, padding: '4px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
+                      Tous
+                    </button>
+                  )}
+                </div>
+              </div>
+              <LevelRangeSlider compact min={fMin} max={fMax} onChange={(mn, mx) => { setFMin(mn); setFMax(mx); }} />
+            </div>
           )}
           {token && (
             <div style={{ marginTop: 14 }}>
@@ -224,7 +245,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Pas d&apos;autre partie ouverte.</div>
             ) : (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
-                {filterMyLevel && matches.length > 0 ? 'Aucune partie à ton niveau pour le moment.' : 'Aucune partie ouverte pour le moment.'}
+                {levelFilterActive && matches.length > 0 ? 'Aucune partie dans cette fourchette de niveau.' : 'Aucune partie ouverte pour le moment.'}
                 {token && (
                   <div style={{ marginTop: 12 }}>
                     <button onClick={() => setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' })}
