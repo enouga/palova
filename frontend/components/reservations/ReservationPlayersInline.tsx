@@ -27,11 +27,14 @@ const msg = (e: string) => ERR[e] ?? e;
 
 // Édition inline des joueurs d'une réservation. Padel → MatchTeams (équipes G/D, ajout ciblé,
 // remplacer / déplacer). Autres sports → liste plate PlayerPills.
-export function ReservationPlayersInline({ reservation, token, now, onChanged }: {
+export function ReservationPlayersInline({ reservation, token, now, onChanged, hideOpenMatchToggle }: {
   reservation: MyReservation;
   token: string;
   now: number;
   onChanged: () => void;
+  /** Masque le contrôle d'ouverture interne — utilisé par l'écran de succès de réservation,
+   *  qui affiche son propre interrupteur juste au-dessus (cf. OpenMatchQuickSwitch). */
+  hideOpenMatchToggle?: boolean;
 }) {
   const { th } = useTheme();
   // Cible de la recherche : ajouter à une équipe précise, ou remplacer un joueur.
@@ -88,7 +91,9 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged }:
 
   return (
     <div style={{ marginTop: 9 }}>
-      <OpenMatchToggle reservation={reservation} token={token} now={now} onChanged={onChanged} />
+      {!hideOpenMatchToggle && (
+        <OpenMatchToggle reservation={reservation} token={token} now={now} onChanged={onChanged} />
+      )}
       {error && (
         <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
       )}

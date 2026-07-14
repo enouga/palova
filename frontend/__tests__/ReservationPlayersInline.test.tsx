@@ -116,4 +116,13 @@ describe('ReservationPlayersInline', () => {
     wrap(padel);
     expect(screen.getByRole('button', { name: /Ouvrir la partie/ })).toBeInTheDocument();
   });
+
+  it('hideOpenMatchToggle masque le contrôle « Ouvrir la partie »', () => {
+    render(
+      <ThemeProvider>
+        <ReservationPlayersInline reservation={resa(padel)} token="abc" now={now} onChanged={() => {}} hideOpenMatchToggle />
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole('button', { name: /Ouvrir la partie/ })).not.toBeInTheDocument();
+  });
 });

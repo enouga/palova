@@ -119,53 +119,6 @@ describe('BookingModal — page unique', () => {
     expect(screen.getByText(/24\s*h avant le début/)).toBeInTheDocument();
   });
 
-  it('padel multi-joueurs : interrupteur « Partie ouverte aux membres » présent, OFF par défaut', async () => {
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    await screen.findByText(/Créneau bloqué/);
-    const sw = screen.getByRole('switch', { name: /Partie ouverte aux membres/ });
-    expect(sw).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/partenaires s.ajoutent après la confirmation/i)).toBeInTheDocument();
-  });
-
-  it('non-padel : pas d interrupteur « Partie ouverte »', async () => {
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'tennis' });
-    await screen.findByText(/Créneau bloqué/);
-    expect(screen.queryByRole('switch', { name: /Partie ouverte/ })).not.toBeInTheDocument();
-  });
-
-  it('interrupteur OFF → confirmation sans applyHoldSetup', async () => {
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    await screen.findByText(/Créneau bloqué/);
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.confirmReservation).toHaveBeenCalled());
-    expect(api.applyHoldSetup).not.toHaveBeenCalled();
-  });
-
-  it('interrupteur ON → applyHoldSetup PUBLIC, partnerUserIds vide, niveaux de la préférence', async () => {
-    localStorage.setItem('palova:open-match-level', JSON.stringify({ enabled: true, min: 4, max: 6 }));
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    await screen.findByText(/Créneau bloqué/);
-    fireEvent.click(screen.getByRole('switch', { name: /Partie ouverte aux membres/ }));
-    expect(screen.getByText(/Niveau 4–6 · réglable après confirmation/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
-      'res-1', 'jwt-token',
-      { partnerUserIds: [], visibility: 'PUBLIC', targetLevelMin: 4, targetLevelMax: 6 },
-    ));
-  });
-
-  it('interrupteur ON, préférence « ouverte à tous » → targetLevel null', async () => {
-    localStorage.setItem('palova:open-match-level', JSON.stringify({ enabled: false, min: 3, max: 5 }));
-    renderModal({ slug: 'club-demo', maxPlayers: 4, sportKey: 'padel' });
-    await screen.findByText(/Créneau bloqué/);
-    fireEvent.click(screen.getByRole('switch', { name: /Partie ouverte aux membres/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Confirmer la réservation/ }));
-    await waitFor(() => expect(api.applyHoldSetup).toHaveBeenCalledWith(
-      'res-1', 'jwt-token',
-      { partnerUserIds: [], visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null },
-    ));
-  });
-
   it('le timer expiré bascule en erreur', async () => {
     (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '25' });
     jest.useFakeTimers();
@@ -190,7 +143,7 @@ describe('BookingModal — page unique', () => {
     // Paiement en ligne possible → avenues affichées directement ; on choisit « Payer en ligne ».
     await screen.findByText(/Créneau bloqué/);
     fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
-    // Regex avec « : » pour cibler « Votre part : 7,50€ » sans capter le titre de section « Votre partie ».
+    // Regex avec « : » pour cibler « Votre part : 7,50€ » précisément.
     expect(screen.getByText(/Votre part :/)).toBeInTheDocument();
     expect(screen.getAllByText(/7,50/).length).toBeGreaterThan(0);
   });
@@ -219,9 +172,4 @@ describe('BookingModal — page unique', () => {
     expect(onConfirmed).toHaveBeenCalled();
   });
 
-  // NB : les parties ouvertes sont désormais padel-only (feat/parties-padel-only, sur main).
-  // Les tests « partie ouverte sur non-padel » de la branche niveau sont donc devenus
-  // sans objet — le bouton « Partie ouverte » n'apparaît plus hors padel (couvert par le
-  // test « cache Partie ouverte sur un terrain non-padel » ci-dessus), et le limiteur de
-  // niveau sur partie ouverte padel reste testé plus haut. Retirés à la fusion.
 });
