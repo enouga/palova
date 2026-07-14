@@ -1450,6 +1450,10 @@ model MatchAlert {
   clubId      String   @map("club_id")
   windowStart DateTime @map("window_start") @db.Timestamptz
   windowEnd   DateTime @map("window_end") @db.Timestamptz
+  // Fourchette de niveau optionnelle (1–8) : si posée, l'alerte cible les parties dont
+  // la fourchette chevauche celle-ci ; null = « à mon niveau » (niveau calculé du joueur).
+  targetLevelMin Float? @map("target_level_min")
+  targetLevelMax Float? @map("target_level_max")
   createdAt   DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

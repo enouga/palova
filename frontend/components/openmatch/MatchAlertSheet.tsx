@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
 import { DateField } from '@/components/ui/DateField';
 import { TimePicker } from '@/components/ui/TimePicker';
+import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 
 interface Props {
@@ -38,6 +39,10 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
   const [to, setTo] = useState(initial.to);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Jauge de niveau optionnelle : OFF = « à mon niveau » (niveau calculé côté serveur).
+  const [limitLevel, setLimitLevel] = useState(false);
+  const [lvlMin, setLvlMin] = useState(3);
+  const [lvlMax, setLvlMax] = useState(6);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -48,7 +53,8 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
   const submit = async () => {
     setBusy(true); setError(null);
     try {
-      await api.createMatchAlert(club.slug, { date, from, to }, token);
+      const level = limitLevel ? { targetLevelMin: lvlMin, targetLevelMax: lvlMax } : {};
+      await api.createMatchAlert(club.slug, { date, from, to, ...level }, token);
       onCreated();
     } catch (e) {
       setError(ALERT_ERRORS[(e as Error).message] ?? 'Impossible de créer l’alerte pour le moment.');
@@ -109,6 +115,22 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
             <TimePicker value={to} onChange={setTo} minuteChips={[]}
               leading={<span style={timeLabel}>À</span>} />
           </div>
+
+          {/* Jauge de niveau optionnelle : par défaut « à mon niveau ». */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 22, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, userSelect: 'none' }}>
+            <input type="checkbox" checked={limitLevel} onChange={(e) => setLimitLevel(e.target.checked)}
+              style={{ width: 17, height: 17, accentColor: th.accent, cursor: 'pointer' }} />
+            Cibler une fourchette de niveau
+          </label>
+          {limitLevel ? (
+            <div style={{ marginTop: 14 }}>
+              <LevelRangeSlider min={lvlMin} max={lvlMax} onChange={(mn, mx) => { setLvlMin(mn); setLvlMax(mx); }} />
+            </div>
+          ) : (
+            <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '6px 0 0', lineHeight: 1.45 }}>
+              Sinon, on cible les parties à votre niveau.
+            </p>
+          )}
 
           {error && (
             <div role="alert" style={{ marginTop: 14, background: `${th.accent}1f`, color: th.text, border: `1px solid ${th.accent}`, borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, lineHeight: 1.4 }}>

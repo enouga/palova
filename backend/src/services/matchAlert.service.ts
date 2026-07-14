@@ -12,14 +12,37 @@ import { placesPhrase, levelRangeLabel, EMAIL_CLUB_SELECT } from '../email/notif
 export const MAX_ACTIVE_ALERTS = 5;
 export const MAX_WINDOW_DAYS = 7;
 export const MAX_LEAD_DAYS = 30;
+export const LEVEL_MIN = 1;
+export const LEVEL_MAX = 8;
 
-export interface AlertWindowInput { date: string; from: string; to: string; } // date=YYYY-MM-DD, from/to=HH:mm (heure du club)
+export interface AlertWindowInput {
+  date: string; from: string; to: string; // date=YYYY-MM-DD, from/to=HH:mm (heure du club)
+  targetLevelMin?: number | null;          // fourchette optionnelle : les DEUX ou AUCUNE
+  targetLevelMax?: number | null;
+}
 
-interface AlertDTO { id: string; windowStart: string; windowEnd: string; }
+interface AlertDTO { id: string; windowStart: string; windowEnd: string; targetLevelMin: number | null; targetLevelMax: number | null; }
 
-const toDTO = (a: { id: string; windowStart: Date; windowEnd: Date }): AlertDTO => ({
+const toDTO = (a: { id: string; windowStart: Date; windowEnd: Date; targetLevelMin: number | null; targetLevelMax: number | null }): AlertDTO => ({
   id: a.id, windowStart: a.windowStart.toISOString(), windowEnd: a.windowEnd.toISOString(),
+  targetLevelMin: a.targetLevelMin, targetLevelMax: a.targetLevelMax,
 });
+
+/** Valide une fourchette de niveau optionnelle : les deux bornes ou aucune, 1–8, min ≤ max. */
+export function normalizeLevelRange(min: unknown, max: unknown): { min: number | null; max: number | null } {
+  const empty = (v: unknown) => v == null;
+  if (empty(min) && empty(max)) return { min: null, max: null };
+  const ok = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= LEVEL_MIN && v <= LEVEL_MAX;
+  if (!ok(min) || !ok(max) || min > max) throw new Error('ALERT_LEVEL_INVALID');
+  return { min, max };
+}
+
+/** Deux fourchettes se chevauchent-elles ? `a` est bornée ; `b` peut avoir des bornes null (non bornées). */
+export function rangesOverlap(aMin: number, aMax: number, bMin: number | null, bMax: number | null): boolean {
+  if (bMax != null && aMin > bMax) return false;
+  if (bMin != null && aMax < bMin) return false;
+  return true;
+}
 
 export class MatchAlertService {
   private ratingService = new RatingService();
@@ -48,12 +71,17 @@ export class MatchAlertService {
     if (end.diff(start, 'days').days > MAX_WINDOW_DAYS) throw new Error('ALERT_WINDOW_INVALID');
     if (start.diff(now, 'days').days > MAX_LEAD_DAYS) throw new Error('ALERT_WINDOW_INVALID');
 
+    const level = normalizeLevelRange(input.targetLevelMin, input.targetLevelMax);
+
     const active = await prisma.matchAlert.count({ where: { userId, clubId: club.id, windowEnd: { gt: new Date() } } });
     if (active >= MAX_ACTIVE_ALERTS) throw new Error('ALERT_LIMIT_REACHED');
 
     const created = await prisma.matchAlert.create({
-      data: { userId, clubId: club.id, windowStart: start.toUTC().toJSDate(), windowEnd: end.toUTC().toJSDate() },
-      select: { id: true, windowStart: true, windowEnd: true },
+      data: {
+        userId, clubId: club.id, windowStart: start.toUTC().toJSDate(), windowEnd: end.toUTC().toJSDate(),
+        targetLevelMin: level.min, targetLevelMax: level.max,
+      },
+      select: { id: true, windowStart: true, windowEnd: true, targetLevelMin: true, targetLevelMax: true },
     });
     return toDTO(created);
   }
@@ -64,7 +92,7 @@ export class MatchAlertService {
     const rows = await prisma.matchAlert.findMany({
       where: { clubId: club.id, userId, windowEnd: { gt: new Date() } },
       orderBy: { windowStart: 'asc' },
-      select: { id: true, windowStart: true, windowEnd: true },
+      select: { id: true, windowStart: true, windowEnd: true, targetLevelMin: true, targetLevelMax: true },
     });
     return rows.map(toDTO);
   }
@@ -121,7 +149,7 @@ export class MatchAlertService {
         windowStart: { lte: resa.startTime },
         windowEnd:   { gte: resa.endTime },
       },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, targetLevelMin: true, targetLevelMax: true },
     });
     if (alerts.length === 0) return [];
 
@@ -147,17 +175,24 @@ export class MatchAlertService {
     });
     const activeSet = new Set(active.map((m) => m.userId));
 
-    // Niveaux (batch). Sans fourchette → tout le monde ; avec fourchette → niveau connu in-range.
+    // Niveaux (batch) — nécessaires pour les alertes SANS fourchette (repli « à mon niveau »).
     const levels = await this.ratingService.getLevelsBySport(userIds.map((userId) => ({ userId, sportKey })));
     const min = resa.targetLevelMin, max = resa.targetLevelMax;
-    const levelOk = (userId: string): boolean => {
-      if (min == null && max == null) return true;
-      const lvl = levels[`${userId}:${sportKey}`]?.level ?? null;
+    const matchOpenToAll = min == null && max == null;
+    // Une alerte « prend » la partie si : partie ouverte à tous (sans fourchette) → toujours ;
+    // sinon alerte AVEC fourchette → elle doit chevaucher celle de la partie ; sinon (alerte
+    // sans fourchette) → repli sur le niveau calculé du joueur (comportement « à mon niveau »).
+    const alertFires = (a: { userId: string; targetLevelMin: number | null; targetLevelMax: number | null }): boolean => {
+      if (matchOpenToAll) return true;
+      if (a.targetLevelMin != null && a.targetLevelMax != null) {
+        return rangesOverlap(a.targetLevelMin, a.targetLevelMax, min, max);
+      }
+      const lvl = levels[`${a.userId}:${sportKey}`]?.level ?? null;
       return lvl != null && inRange(lvl, min, max);
     };
 
     // Regroupe par utilisateur retenu : hits pour TOUTES ses alertes couvrantes, 1 notif.
-    const keep = candidates.filter((a) => activeSet.has(a.userId) && levelOk(a.userId));
+    const keep = candidates.filter((a) => activeSet.has(a.userId) && alertFires(a));
     if (keep.length === 0) return [];
 
     await prisma.matchAlertHit.createMany({

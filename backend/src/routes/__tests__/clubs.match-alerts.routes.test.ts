@@ -58,7 +58,7 @@ describe('routes match-alerts', () => {
     const res = await request(app).post('/api/clubs/arena/match-alerts').send({ date: '2026-07-16', from: '18:00', to: '21:00' });
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('a1');
-    expect(create).toHaveBeenCalledWith('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00' });
+    expect(create).toHaveBeenCalledWith('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00', targetLevelMin: null, targetLevelMax: null });
   });
 
   it('POST fenêtre invalide → 400', async () => {

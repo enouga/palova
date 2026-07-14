@@ -19,8 +19,16 @@ describe('slotToAlertWindow — fenêtre ±1h autour d\'un créneau (fuseau du c
 
 describe('alertChipLabel', () => {
   it('rend « jeu. 16 juil. · 18h30 → 20h00 »', () => {
-    const label = alertChipLabel({ id: 'a', windowStart: '2026-07-16T16:30:00.000Z', windowEnd: '2026-07-16T18:00:00.000Z' }, 'Europe/Paris');
+    const label = alertChipLabel({ id: 'a', windowStart: '2026-07-16T16:30:00.000Z', windowEnd: '2026-07-16T18:00:00.000Z', targetLevelMin: null, targetLevelMax: null }, 'Europe/Paris');
     expect(label).toContain('18h30');
     expect(label).toContain('20h00');
+    expect(label).not.toContain('Niv.');
+  });
+
+  it('ajoute la fourchette de niveau quand elle est posée', () => {
+    const label = alertChipLabel({ id: 'a', windowStart: '2026-07-16T16:30:00.000Z', windowEnd: '2026-07-16T18:00:00.000Z', targetLevelMin: 3, targetLevelMax: 6 }, 'Europe/Paris');
+    expect(label).toContain('Niv.');
+    expect(label).toContain('3');
+    expect(label).toContain('6');
   });
 });

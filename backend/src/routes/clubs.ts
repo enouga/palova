@@ -99,6 +99,7 @@ const ERROR_STATUS: Record<string, number> = {
   RATE_LIMITED:             429,
   ALERT_LIMIT_REACHED:      409,
   ALERT_WINDOW_INVALID:     400,
+  ALERT_LEVEL_INVALID:      400,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -339,6 +340,7 @@ router.post('/:slug/match-alerts', authMiddleware, async (req: AuthRequest, res:
   try {
     res.json(await matchAlertService.create(asString(req.params.slug), req.user!.id, {
       date: asString(req.body?.date), from: asString(req.body?.from), to: asString(req.body?.to),
+      targetLevelMin: req.body?.targetLevelMin ?? null, targetLevelMax: req.body?.targetLevelMax ?? null,
     }));
   } catch (err) { handleError(err, res, next); }
 });

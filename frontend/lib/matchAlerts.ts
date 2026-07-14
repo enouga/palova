@@ -1,4 +1,5 @@
 import type { MatchAlert } from '@/lib/api';
+import { fmtLevel } from '@/lib/levelMatch';
 
 const MS_HOUR = 3_600_000;
 
@@ -24,9 +25,12 @@ export function slotToAlertWindow(startIso: string, endIso: string, tz: string):
   return { date: s.date, from: s.hm, to: e.hm };
 }
 
-/** Libellé de chip « jeu. 16 juil. · 18h30 → 20h00 » (fuseau du club). */
+/** Libellé de chip « jeu. 16 juil. · 18h30 → 20h00 » (+ « · Niv. 3–6 » si fourchette). */
 export function alertChipLabel(alert: MatchAlert, tz: string): string {
   const day = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(alert.windowStart));
   const hm = (iso: string) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
-  return `${day} · ${hm(alert.windowStart)} → ${hm(alert.windowEnd)}`;
+  const base = `${day} · ${hm(alert.windowStart)} → ${hm(alert.windowEnd)}`;
+  return alert.targetLevelMin != null && alert.targetLevelMax != null
+    ? `${base} · Niv. ${fmtLevel(alert.targetLevelMin)}–${fmtLevel(alert.targetLevelMax)}`
+    : base;
 }

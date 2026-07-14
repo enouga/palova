@@ -7,6 +7,8 @@ jest.mock('@/lib/api', () => ({
   assetUrl: (u: string) => u,
 }));
 jest.mock('@/lib/ThemeProvider', () => ({ useTheme: () => ({ th: new Proxy({}, { get: () => '#000' }) }) }));
+// Stub la jauge (testée à part) : le toggle pilote l'état, la valeur par défaut vient du sheet.
+jest.mock('@/components/player/LevelRangeSlider', () => ({ LevelRangeSlider: () => null }));
 
 const club = { slug: 'arena', timezone: 'Europe/Paris' } as any;
 
@@ -20,6 +22,14 @@ describe('MatchAlertSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: /créer l.alerte/i }));
     await waitFor(() => expect(api.createMatchAlert).toHaveBeenCalledWith('arena', { date: '2026-07-16', from: '18:00', to: '21:00' }, 't'));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
+  });
+
+  it('avec la fourchette de niveau activée, envoie targetLevelMin/Max', async () => {
+    (api.createMatchAlert as jest.Mock).mockResolvedValue({ id: 'a1', windowStart: 'x', windowEnd: 'y', targetLevelMin: 3, targetLevelMax: 6 });
+    render(<MatchAlertSheet club={club} token="t" initial={{ date: '2026-07-16', from: '18:00', to: '21:00' }} onClose={() => {}} onCreated={() => {}} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /fourchette de niveau/i }));
+    fireEvent.click(screen.getByRole('button', { name: /créer l.alerte/i }));
+    await waitFor(() => expect(api.createMatchAlert).toHaveBeenCalledWith('arena', { date: '2026-07-16', from: '18:00', to: '21:00', targetLevelMin: 3, targetLevelMax: 6 }, 't'));
   });
 
   it('affiche le message d\'erreur ALERT_LIMIT_REACHED', async () => {

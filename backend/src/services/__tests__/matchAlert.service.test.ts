@@ -85,6 +85,26 @@ describe('MatchAlertService — create/list/remove', () => {
     expect(prismaMock.matchAlert.deleteMany).toHaveBeenCalledWith({ where: { id: 'a1', userId: 'u1', clubId: 'club-demo' } });
     expect(r).toEqual({ ok: true });
   });
+
+  it('crée une alerte avec fourchette de niveau (stockée et renvoyée)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
+    prismaMock.matchAlert.create.mockResolvedValue({ id: 'a1', windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z'), targetLevelMin: 3, targetLevelMax: 6 } as any);
+
+    const created = await service.create('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00', targetLevelMin: 3, targetLevelMax: 6 });
+
+    expect(prismaMock.matchAlert.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ targetLevelMin: 3, targetLevelMax: 6 }),
+    }));
+    expect(created).toEqual({ id: 'a1', windowStart: '2026-07-16T16:00:00.000Z', windowEnd: '2026-07-16T19:00:00.000Z', targetLevelMin: 3, targetLevelMax: 6 });
+  });
+
+  it('refuse une fourchette de niveau invalide (une seule borne / hors 1–8 / min>max)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
+    const base = { date: '2026-07-16', from: '18:00', to: '21:00' };
+    await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 3, targetLevelMax: null })).rejects.toThrow('ALERT_LEVEL_INVALID');
+    await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 0, targetLevelMax: 5 })).rejects.toThrow('ALERT_LEVEL_INVALID');
+    await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 6, targetLevelMax: 3 })).rejects.toThrow('ALERT_LEVEL_INVALID');
+  });
 });
 
 const CLUB_FULL = {
@@ -108,7 +128,10 @@ function joinableMatch(overrides: Record<string, unknown> = {}) {
 // Alerte de u1 couvrant 18:00–21:00 (club) = 16:00–19:00 UTC → contient la partie.
 const alertRow = (id: string, userId: string) => ({
   id, userId, windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z'),
+  targetLevelMin: null as number | null, targetLevelMax: null as number | null,
 });
+// Variante avec fourchette de niveau propre à l'alerte.
+const rangedAlert = (id: string, userId: string, min: number, max: number) => ({ ...alertRow(id, userId), targetLevelMin: min, targetLevelMax: max });
 
 describe('MatchAlertService.matchAndNotify', () => {
   let service: MatchAlertService;
@@ -212,5 +235,30 @@ describe('MatchAlertService.matchAndNotify', () => {
     const notified = await service.matchAndNotify('res-1');
     expect(dispatchMock).toHaveBeenCalledTimes(2);
     expect(notified).toContain('u2');
+  });
+
+  it('alerte AVEC fourchette chevauchant la partie → notifie (peu importe le niveau du joueur)', async () => {
+    // Partie [2,5] × alerte [4,6] → se chevauchent. Niveau joueur inconnu → n'intervient pas.
+    prismaMock.matchAlert.findMany.mockResolvedValue([rangedAlert('a1', 'u1', 4, 6)] as any);
+    getLevelsBySportMock.mockResolvedValue({});
+    const notified = await service.matchAndNotify('res-1');
+    expect(notified).toEqual(['u1']);
+  });
+
+  it('alerte AVEC fourchette disjointe de la partie → ne notifie pas', async () => {
+    // Partie [2,5] × alerte [6,8] → disjointes ; un niveau in-range ne compte pas (l'alerte a sa propre fourchette).
+    prismaMock.matchAlert.findMany.mockResolvedValue([rangedAlert('a1', 'u1', 6, 8)] as any);
+    getLevelsBySportMock.mockResolvedValue({ 'u1:padel': { level: 3 } });
+    const notified = await service.matchAndNotify('res-1');
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(notified).toEqual([]);
+  });
+
+  it('partie ouverte à tous + alerte AVEC fourchette → notifie (open-to-all prime)', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(joinableMatch({ targetLevelMin: null, targetLevelMax: null }) as any);
+    prismaMock.matchAlert.findMany.mockResolvedValue([rangedAlert('a1', 'u1', 6, 8)] as any);
+    getLevelsBySportMock.mockResolvedValue({});
+    const notified = await service.matchAndNotify('res-1');
+    expect(notified).toEqual(['u1']);
   });
 });
