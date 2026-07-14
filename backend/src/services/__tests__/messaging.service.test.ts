@@ -1,5 +1,8 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
+import { redisMock } from '../../__mocks__/redis';
+import sharp from 'sharp';
+import fs from 'fs';
 import { MessagingService } from '../messaging.service';
 import { SSEService } from '../sse.service';
 
@@ -68,6 +71,19 @@ describe('MessagingService — getOrCreateConversation', () => {
   it('interlocuteur supprimé (RGPD) → CONVERSATION_NOT_FOUND', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: new Date() } as any);
     await expect(service.getOrCreateConversation('u1', 'u2')).rejects.toThrow('CONVERSATION_NOT_FOUND');
+  });
+
+  it('au-delà de 15 nouvelles conversations/h → RATE_LIMITED (compté SEULEMENT à la création)', async () => {
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    redisMock.incr.mockResolvedValue(16);
+    await expect(service.getOrCreateConversation('u1', 'u2')).rejects.toThrow('RATE_LIMITED');
+  });
+
+  it('la limite dm:newconv n est PAS vérifiée quand la conversation existe déjà (pas de create)', async () => {
+    prismaMock.conversation.findUnique.mockResolvedValue({ id: 'c1', clubId: 'club-demo', lastMessageAt: null } as any);
+    redisMock.incr.mockResolvedValue(16); // dépassé, mais ne doit jamais être appelé
+    await expect(service.getOrCreateConversation('u1', 'u2')).resolves.toMatchObject({ id: 'c1' });
+    expect(redisMock.incr).not.toHaveBeenCalled();
   });
 });
 
@@ -177,6 +193,8 @@ describe('MessagingService — messages', () => {
     broadcast = jest.spyOn(SSEService.getInstance(), 'broadcastConversation').mockImplementation(() => {});
     prismaMock.conversation.findUnique.mockResolvedValue(CONV as any);
     prismaMock.userBlock.findFirst.mockResolvedValue(null);
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ clubId: 'club-demo' }] as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue({ clubId: 'club-demo' } as any);
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
   });
   afterEach(() => broadcast.mockRestore());
@@ -286,6 +304,122 @@ describe('MessagingService — messages', () => {
     prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m1', 'u1', 'a'), conversationId: 'cX', authorId: 'u1' } as any);
     await expect(service.deleteMessage('c1', 'u1', 'm1')).rejects.toThrow('MESSAGE_NOT_FOUND');
   });
+
+  it('postMessage : plus aucun club actif commun → NOT_CO_MEMBERS', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    await expect(service.postMessage('c1', 'u1', 'yo')).rejects.toThrow('NOT_CO_MEMBERS');
+  });
+
+  it('postMessage : club commun mais l autre a perdu son adhésion ACTIVE (BLOCKED) → NOT_CO_MEMBERS', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ clubId: 'club-demo' }] as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue(null);
+    await expect(service.postMessage('c1', 'u1', 'yo')).rejects.toThrow('NOT_CO_MEMBERS');
+  });
+
+  it('postMessage : un AUTRE club actif commun suffit encore', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ clubId: 'club-autre' }] as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue({ clubId: 'club-autre' } as any);
+    prismaMock.directMessage.create.mockResolvedValue(MSG_ROW('m3', 'u1', 'yo') as any);
+    prismaMock.conversation.update.mockResolvedValue({} as any);
+    await expect(service.postMessage('c1', 'u1', 'yo')).resolves.toMatchObject({ id: 'm3' });
+  });
+
+  it('postMessage : au-delà de 12 messages/min → RATE_LIMITED', async () => {
+    redisMock.incr.mockResolvedValue(13);
+    await expect(service.postMessage('c1', 'u1', 'yo')).rejects.toThrow('RATE_LIMITED');
+  });
+
+  describe('createImageMessage', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('détecte le format RÉEL via sharp (mimetype menteur), stocke la bonne extension, plafonne 2048×2048, retire l EXIF', async () => {
+      const bigPng = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: { r: 10, g: 200, b: 30 } } })
+        .png().toBuffer();
+      const writeSpy = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      jest.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined as any);
+      prismaMock.directMessage.create.mockResolvedValue(MSG_ROW('m5', 'u1', '') as any);
+      prismaMock.conversation.update.mockResolvedValue({} as any);
+
+      await service.createImageMessage('c1', 'u1', { buffer: bigPng, mimetype: 'image/jpeg' }, '');
+
+      expect(prismaMock.directMessage.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ imageUrl: expect.stringMatching(/^c1\/\d+-\d+\.png$/) }),
+      }));
+      const written = writeSpy.mock.calls[0][1] as Buffer;
+      const outMeta = await sharp(written).metadata();
+      expect(outMeta.format).toBe('png');
+      expect(outMeta.width).toBeLessThanOrEqual(2048);
+      expect(outMeta.height).toBeLessThanOrEqual(2048);
+      expect(outMeta.exif).toBeUndefined();
+    });
+
+    it('fichier corrompu / non-image → VALIDATION_ERROR', async () => {
+      await expect(
+        service.createImageMessage('c1', 'u1', { buffer: Buffer.from('pas une image'), mimetype: 'image/png' }, ''),
+      ).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('légende > 2000 caractères → VALIDATION_ERROR (avant même le décodage image)', async () => {
+      await expect(
+        service.createImageMessage('c1', 'u1', { buffer: Buffer.from('x'), mimetype: 'image/jpeg' }, 'x'.repeat(2001)),
+      ).rejects.toThrow('VALIDATION_ERROR');
+    });
+
+    it('petite image sous le plafond n est pas agrandie', async () => {
+      const small = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 5, g: 5, b: 5 } } }).jpeg().toBuffer();
+      const writeSpy = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      jest.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined as any);
+      prismaMock.directMessage.create.mockResolvedValue(MSG_ROW('m6', 'u1', '') as any);
+      prismaMock.conversation.update.mockResolvedValue({} as any);
+
+      await service.createImageMessage('c1', 'u1', { buffer: small, mimetype: 'image/jpeg' }, '');
+
+      const written = writeSpy.mock.calls[0][1] as Buffer;
+      const outMeta = await sharp(written).metadata();
+      expect(outMeta.width).toBe(40);
+      expect(outMeta.height).toBe(30);
+    });
+  });
+
+  describe('deleteMessageAsModerator / imagePathForModerator', () => {
+    it('deleteMessageAsModerator : tombstone sans garde auteur/participant, unlink photo', async () => {
+      prismaMock.directMessage.findUnique.mockResolvedValue({
+        ...MSG_ROW('m7', 'u2', 'msg', { imageUrl: 'c1/x.jpg' }), conversationId: 'c1',
+      } as any);
+      prismaMock.directMessage.update.mockResolvedValue(MSG_ROW('m7', 'u2', 'msg', { deletedAt: new Date() }) as any);
+      const dto = await service.deleteMessageAsModerator('c1', 'm7', 'super-1');
+      expect(dto.deleted).toBe(true);
+      expect(broadcast).toHaveBeenCalledWith('c1', { type: 'dm_deleted', message: expect.objectContaining({ id: 'm7' }) });
+    });
+
+    it('deleteMessageAsModerator : déjà supprimé → idempotent, pas de re-broadcast', async () => {
+      prismaMock.directMessage.findUnique.mockResolvedValue({
+        ...MSG_ROW('m7', 'u2', 'msg', { deletedAt: new Date() }), conversationId: 'c1',
+      } as any);
+      const dto = await service.deleteMessageAsModerator('c1', 'm7', 'super-1');
+      expect(dto.deleted).toBe(true);
+      expect(prismaMock.directMessage.update).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+    });
+
+    it('deleteMessageAsModerator : message d une autre conversation → MESSAGE_NOT_FOUND', async () => {
+      prismaMock.directMessage.findUnique.mockResolvedValue({ ...MSG_ROW('m7', 'u2', 'msg'), conversationId: 'cX' } as any);
+      await expect(service.deleteMessageAsModerator('c1', 'm7', 'super-1')).rejects.toThrow('MESSAGE_NOT_FOUND');
+    });
+
+    it('imagePathForModerator : chemin + mime sans garde participant', async () => {
+      prismaMock.directMessage.findUnique.mockResolvedValue({ imageUrl: 'c1/photo.png', deletedAt: null } as any);
+      const r = await service.imagePathForModerator('m7');
+      expect(r.mime).toBe('image/png');
+      expect(r.absPath).toContain('c1');
+      expect(r.absPath).toContain('photo.png');
+    });
+
+    it('imagePathForModerator : message supprimé ou sans image → MESSAGE_NOT_FOUND', async () => {
+      prismaMock.directMessage.findUnique.mockResolvedValue({ imageUrl: null, deletedAt: null } as any);
+      await expect(service.imagePathForModerator('m7')).rejects.toThrow('MESSAGE_NOT_FOUND');
+    });
+  });
 });
 
 describe('MessagingService — lecture, réactions, frappe, blocages', () => {
@@ -296,6 +430,8 @@ describe('MessagingService — lecture, réactions, frappe, blocages', () => {
     broadcast = jest.spyOn(SSEService.getInstance(), 'broadcastConversation').mockImplementation(() => {});
     prismaMock.conversation.findUnique.mockResolvedValue(CONV as any);
     prismaMock.userBlock.findFirst.mockResolvedValue(null);
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ clubId: 'club-demo' }] as any);
+    prismaMock.clubMembership.findFirst.mockResolvedValue({ clubId: 'club-demo' } as any);
   });
   afterEach(() => broadcast.mockRestore());
 
@@ -330,6 +466,22 @@ describe('MessagingService — lecture, réactions, frappe, blocages', () => {
     await expect(service.addReaction('c1', 'u1', 'm1', '👍')).rejects.toThrow('MESSAGE_NOT_FOUND');
     prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: null } as any);
     await expect(service.addReaction('c1', 'u1', 'm1', '')).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('addReaction : plus de club actif commun → NOT_CO_MEMBERS', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    await expect(service.addReaction('c1', 'u1', 'm1', '👍')).rejects.toThrow('NOT_CO_MEMBERS');
+  });
+
+  it('removeReaction et markRead restent accessibles même sans club commun (lecture/nettoyage)', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([]);
+    prismaMock.directMessage.findUnique.mockResolvedValue({ id: 'm1', conversationId: 'c1', deletedAt: null } as any);
+    prismaMock.messageReaction.deleteMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.messageReaction.findMany.mockResolvedValue([] as any);
+    await expect(service.removeReaction('c1', 'u1', 'm1', '👍')).resolves.toEqual([]);
+    prismaMock.conversationParticipant.update.mockResolvedValue({ lastReadAt: new Date('2026-07-04T11:00:00Z') } as any);
+    prismaMock.notification.updateMany.mockResolvedValue({ count: 0 } as any);
+    await expect(service.markRead('c1', 'u1')).resolves.toMatchObject({ lastReadAt: expect.any(String) });
   });
 
   it('removeReaction : deleteMany idempotent + broadcast', async () => {

@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import { prisma } from '../db/prisma';
 import { SSEService } from './sse.service';
 import { notifyDirectMessage } from '../email/notifications';
-import { DM_DIR, EXT_BY_MIME } from '../utils/uploads';
+import { DM_DIR } from '../utils/uploads';
+import { assertRateLimit } from './rateLimit';
 
 const MAX_BODY = 2000;
 const PAGE_DEFAULT = 50;
@@ -86,6 +88,15 @@ export class MessagingService {
     if (await this.pairBlocked(a, b)) throw new Error('USER_BLOCKED');
   }
 
+  /** Écriture autorisée : pas bloqué + un club ACTIF commun où les DEUX adhésions sont ACTIVES,
+   *  re-vérifié à CHAQUE envoi (pas seulement à la création de la conversation) — un membre
+   *  BLOCKED du seul club commun perd l'écriture même sans blocage de paire. Réutilise
+   *  sharedActiveClubId (throw NOT_CO_MEMBERS si plus aucun club commun). */
+  private async assertCanWrite(a: string, b: string): Promise<void> {
+    await this.assertNotBlocked(a, b);
+    await this.sharedActiveClubId(a, b);
+  }
+
   private async pairBlocked(a: string, b: string): Promise<boolean> {
     const block = await prisma.userBlock.findFirst({
       where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] },
@@ -127,6 +138,7 @@ export class MessagingService {
     if (!conv) {
       const clubId = await this.sharedActiveClubId(meId, otherUserId, clubSlug);
       await this.assertNotBlocked(meId, otherUserId);
+      await assertRateLimit('dm:newconv', meId, 15, 3600);
       try {
         conv = await prisma.conversation.create({
           data: { ...pair, clubId },
@@ -244,7 +256,8 @@ export class MessagingService {
   /** Poste un message texte : valide, crée, avance lastMessageAt, broadcast, notifie (best-effort). */
   async postMessage(conversationId: string, meId: string, rawBody: string): Promise<DmMessageDTO> {
     const { otherId } = await this.assertParticipant(conversationId, meId);
-    await this.assertNotBlocked(meId, otherId);
+    await this.assertCanWrite(meId, otherId);
+    await assertRateLimit('dm:post', meId, 12, 60);
     const body = (rawBody ?? '').trim();
     if (!body || body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
     // create + avance de lastMessageAt atomiques : pas de conversation « en retard » si l'update échoue
@@ -272,16 +285,18 @@ export class MessagingService {
   async createImageMessage(conversationId: string, meId: string,
     file: { buffer: Buffer; mimetype: string }, caption?: string | null): Promise<DmMessageDTO> {
     const { otherId } = await this.assertParticipant(conversationId, meId);
-    await this.assertNotBlocked(meId, otherId);
-    const ext = EXT_BY_MIME[file.mimetype];
-    if (!ext) throw new Error('VALIDATION_ERROR');
+    await this.assertCanWrite(meId, otherId);
+    await assertRateLimit('dm:post', meId, 12, 60);
+    await assertRateLimit('dm:image', meId, 20, 3600);
     const body = (caption ?? '').trim();
     if (body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
+
+    const { buffer: processed, ext } = await this.reencodeImage(file.buffer);
 
     const relPath = `${conversationId}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
     const absPath = path.join(DM_DIR, relPath);
     await fs.promises.mkdir(path.dirname(absPath), { recursive: true });
-    await fs.promises.writeFile(absPath, file.buffer);
+    await fs.promises.writeFile(absPath, processed);
 
     let created: MsgRow;
     try {
@@ -300,6 +315,27 @@ export class MessagingService {
     return this.finishSend(conversationId, meId, created);
   }
 
+  /** Détecte le format RÉEL (sharp, pas le mimetype déclaré par le client), applique
+   *  l'orientation EXIF puis ré-encode SANS métadonnées (EXIF/GPS/ICC retirés par défaut),
+   *  plafonne 2048×2048 sans agrandir. Fichier corrompu / non jpeg-png-webp → VALIDATION_ERROR. */
+  private async reencodeImage(input: Buffer): Promise<{ buffer: Buffer; ext: string }> {
+    try {
+      const img = sharp(input).rotate();
+      const meta = await img.metadata();
+      if (meta.format !== 'jpeg' && meta.format !== 'png' && meta.format !== 'webp') {
+        throw new Error('VALIDATION_ERROR');
+      }
+      const resized = img.resize(2048, 2048, { fit: 'inside', withoutEnlargement: true });
+      const buffer = meta.format === 'jpeg' ? await resized.jpeg({ quality: 82 }).toBuffer()
+        : meta.format === 'webp' ? await resized.webp({ quality: 82 }).toBuffer()
+        : await resized.png().toBuffer();
+      return { buffer, ext: meta.format === 'jpeg' ? 'jpg' : meta.format };
+    } catch (err) {
+      if ((err as Error).message === 'VALIDATION_ERROR') throw err;
+      throw new Error('VALIDATION_ERROR');
+    }
+  }
+
   /** Chemin absolu + mime d'une image de message, APRÈS garde participant. Anti-traversée. */
   async imagePathFor(conversationId: string, meId: string, messageId: string): Promise<{ absPath: string; mime: string }> {
     await this.assertParticipant(conversationId, meId);
@@ -309,6 +345,20 @@ export class MessagingService {
     });
     if (!msg || msg.conversationId !== conversationId || msg.deletedAt || !msg.imageUrl) throw new Error('MESSAGE_NOT_FOUND');
     if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(msg.imageUrl)) throw new Error('MESSAGE_NOT_FOUND'); // anti-traversée
+    const ext = msg.imageUrl.split('.').pop()!.toLowerCase();
+    const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
+    return { absPath: path.join(DM_DIR, msg.imageUrl), mime };
+  }
+
+  /** Chemin absolu + mime d'une image de DM, pour un MODÉRATEUR superadmin (pas de garde
+   *  participant — il n'est jamais membre de la conversation). Réutilise la regex anti-traversée. */
+  async imagePathForModerator(messageId: string): Promise<{ absPath: string; mime: string }> {
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { imageUrl: true, deletedAt: true },
+    });
+    if (!msg || msg.deletedAt || !msg.imageUrl) throw new Error('MESSAGE_NOT_FOUND');
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9.-]+$/.test(msg.imageUrl)) throw new Error('MESSAGE_NOT_FOUND');
     const ext = msg.imageUrl.split('.').pop()!.toLowerCase();
     const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp';
     return { absPath: path.join(DM_DIR, msg.imageUrl), mime };
@@ -330,6 +380,26 @@ export class MessagingService {
       select: MSG_SELECT,
     });
     // Unlink APRÈS l'update pierre tombale : le fichier n'est supprimé que si le message l'est.
+    if (msg.imageUrl) this.unlinkImage(msg.imageUrl);
+    const dto = toMessageDTO(updated);
+    SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
+    return dto;
+  }
+
+  /** Suppression par le SUPERADMIN plateforme (résolution d'un signalement) : pas de garde
+   *  participant ni auteur — réservée à ModerationService après vérification du signalement. */
+  async deleteMessageAsModerator(conversationId: string, messageId: string, moderatorUserId: string): Promise<DmMessageDTO> {
+    const msg = await prisma.directMessage.findUnique({
+      where: { id: messageId },
+      select: { ...MSG_SELECT, conversationId: true },
+    });
+    if (!msg || msg.conversationId !== conversationId) throw new Error('MESSAGE_NOT_FOUND');
+    if (msg.deletedAt) return toMessageDTO(msg);
+    const updated = await prisma.directMessage.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date(), deletedById: moderatorUserId },
+      select: MSG_SELECT,
+    });
     if (msg.imageUrl) this.unlinkImage(msg.imageUrl);
     const dto = toMessageDTO(updated);
     SSEService.getInstance().broadcastConversation(conversationId, { type: 'dm_deleted', message: dto });
@@ -392,7 +462,7 @@ export class MessagingService {
   /** Ajoute une réaction (idempotent) et renvoie l'état complet des réactions du message. */
   async addReaction(conversationId: string, meId: string, messageId: string, emoji: string): Promise<DmReactionDTO[]> {
     const { otherId } = await this.assertParticipant(conversationId, meId);
-    await this.assertNotBlocked(meId, otherId);
+    await this.assertCanWrite(meId, otherId);
     const e = (emoji ?? '').trim();
     if (!e || e.length > 16) throw new Error('VALIDATION_ERROR');
     await this.assertLiveMessage(conversationId, messageId);
