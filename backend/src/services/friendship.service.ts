@@ -1,5 +1,8 @@
 import { prisma } from '../db/prisma';
 import { notifyFriendRequest, notifyFriendAccepted } from '../email/notifications';
+import { RatingService } from './rating.service';
+import { resolvePreferredSportKey } from './rating/preferredSport';
+import type { UserLevel } from './rating.service';
 
 export type FriendStatus = 'none' | 'pending_out' | 'pending_in' | 'friends';
 export interface FriendRelation {
@@ -12,11 +15,15 @@ export interface Friend {
   lastName: string;
   avatarUrl: string | null;
   mutual: boolean;
+  level?: UserLevel | null;
+  playedTogetherCount?: number;
+  lastPlayedTogetherAt?: Date | null;
 }
 
 const USER_SEL = { id: true, firstName: true, lastName: true, avatarUrl: true } as const;
 
 export class FriendshipService {
+  private ratingService = new RatingService();
   /** Paire canonique (userAId < userBId) pour l'unicité. */
   private pair(a: string, b: string): { userAId: string; userBId: string } {
     return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a };
@@ -104,8 +111,10 @@ export class FriendshipService {
     return { status: row.requestedById === a ? 'pending_out' : 'pending_in', requestable: false };
   }
 
-  /** Mes amitiés confirmées (ACCEPTED). Global. Filtrable par nom. */
-  async listFriends(userId: string, q?: string): Promise<Friend[]> {
+  /** Mes amitiés confirmées (ACCEPTED). Global. Filtrable par nom.
+   *  Enrichi : niveau (sport préféré du caller) + stats « joué ensemble »
+   *  (résas CONFIRMED passées, tous clubs — une requête groupée, pas de N+1). */
+  async listFriends(userId: string, q?: string, now: Date = new Date()): Promise<Friend[]> {
     const query = (q ?? '').trim().toLowerCase();
     const rows = await prisma.friendship.findMany({
       where: { status: 'ACCEPTED', OR: [{ userAId: userId }, { userBId: userId }] },
@@ -114,7 +123,49 @@ export class FriendshipService {
     let others = rows.map((r) => (r.userAId === userId ? r.userB : r.userA));
     if (query) others = others.filter((o) => `${o.firstName} ${o.lastName}`.toLowerCase().includes(query));
     others.sort((x, y) => `${x.lastName}${x.firstName}`.localeCompare(`${y.lastName}${y.firstName}`));
-    return others.map((o) => ({ id: o.id, firstName: o.firstName, lastName: o.lastName, avatarUrl: o.avatarUrl, mutual: true }));
+    if (others.length === 0) return [];
+    const ids = others.map((o) => o.id);
+
+    // « joué ensemble » : l'ami figure comme participant (moi organisateur OU participant)…
+    // …ou comme organisateur d'une résa où je suis participant (vieilles résas sans sa ligne participant).
+    const [viaParticipants, viaOrganizer, sportKey] = await Promise.all([
+      prisma.reservationParticipant.findMany({
+        where: {
+          userId: { in: ids },
+          reservation: {
+            status: 'CONFIRMED', startTime: { lt: now },
+            OR: [{ userId }, { participants: { some: { userId } } }],
+          },
+        },
+        select: { userId: true, reservationId: true, reservation: { select: { startTime: true } } },
+      }),
+      prisma.reservation.findMany({
+        where: { userId: { in: ids }, status: 'CONFIRMED', startTime: { lt: now }, participants: { some: { userId } } },
+        select: { id: true, userId: true, startTime: true },
+      }),
+      resolvePreferredSportKey(userId),
+    ]);
+
+    const stats = new Map<string, { count: number; last: Date; seen: Set<string> }>();
+    const add = (friendId: string, resId: string, startTime: Date) => {
+      const cur = stats.get(friendId) ?? { count: 0, last: startTime, seen: new Set<string>() };
+      if (cur.seen.has(resId)) return;
+      cur.seen.add(resId);
+      cur.count += 1;
+      if (startTime > cur.last) cur.last = startTime;
+      stats.set(friendId, cur);
+    };
+    for (const p of viaParticipants) add(p.userId, p.reservationId, p.reservation.startTime);
+    for (const r of viaOrganizer) if (r.userId) add(r.userId, r.id, r.startTime);
+
+    const levels = await this.ratingService.getLevelsForUsers(ids, sportKey);
+
+    return others.map((o) => ({
+      id: o.id, firstName: o.firstName, lastName: o.lastName, avatarUrl: o.avatarUrl, mutual: true,
+      level: levels[o.id] ?? null,
+      playedTogetherCount: stats.get(o.id)?.count ?? 0,
+      lastPlayedTogetherAt: stats.get(o.id)?.last ?? null,
+    }));
   }
 
   /** Demandes en attente : reçues (l'autre a demandé) et envoyées (moi). Global. */

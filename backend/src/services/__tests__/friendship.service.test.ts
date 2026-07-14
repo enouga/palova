@@ -8,6 +8,12 @@ jest.mock('../../email/notifications', () => ({
   notifyFriendRequest:  (...a: unknown[]) => mockNotifyRequest(...a),
   notifyFriendAccepted: (...a: unknown[]) => mockNotifyAccepted(...a),
 }));
+jest.mock('../rating/preferredSport', () => ({ resolvePreferredSportKey: jest.fn().mockResolvedValue('padel') }));
+jest.mock('../rating.service', () => ({
+  RatingService: jest.fn().mockImplementation(() => ({
+    getLevelsForUsers: jest.fn().mockResolvedValue({ u2: { value: 3.7, tier: 'CONFIRMED' } }),
+  })),
+}));
 
 const ACTIVE = { status: 'ACTIVE' } as any;
 
@@ -110,7 +116,11 @@ describe('FriendshipService — respond / remove / relations', () => {
 
 describe('FriendshipService — listes', () => {
   let service: FriendshipService;
-  beforeEach(() => { service = new FriendshipService(); });
+  beforeEach(() => {
+    service = new FriendshipService();
+    prismaMock.reservationParticipant.findMany.mockResolvedValue([]);
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+  });
 
   it('listFriends renvoie « l\'autre » de chaque amitié ACCEPTED', async () => {
     prismaMock.friendship.findMany.mockResolvedValue([
@@ -130,5 +140,47 @@ describe('FriendshipService — listes', () => {
     const { received, sent } = await service.listRequests('u1');
     expect(received.map((f) => f.id)).toEqual(['u2']);
     expect(sent.map((f) => f.id)).toEqual(['u3']);
+  });
+});
+
+describe('FriendshipService — listFriends enrichi', () => {
+  let service: FriendshipService;
+  const now = new Date('2026-07-14T10:00:00Z');
+
+  beforeEach(() => {
+    service = new FriendshipService();
+    prismaMock.friendship.findMany.mockResolvedValue([
+      { userAId: 'u1', userA: { id: 'u1', firstName: 'Moi', lastName: 'A', avatarUrl: null }, userB: { id: 'u2', firstName: 'Léa', lastName: 'M', avatarUrl: null } },
+    ] as any);
+    prismaMock.reservationParticipant.findMany.mockResolvedValue([]);
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+  });
+
+  it('renvoie level + playedTogetherCount + lastPlayedTogetherAt', async () => {
+    prismaMock.reservationParticipant.findMany.mockResolvedValue([
+      { userId: 'u2', reservationId: 'r1', reservation: { startTime: new Date('2026-07-01T10:00:00Z') } },
+      { userId: 'u2', reservationId: 'r2', reservation: { startTime: new Date('2026-07-08T10:00:00Z') } },
+    ] as any);
+    const [lea] = await service.listFriends('u1', undefined, now);
+    expect(lea.level).toEqual({ value: 3.7, tier: 'CONFIRMED' });
+    expect(lea.playedTogetherCount).toBe(2);
+    expect(lea.lastPlayedTogetherAt).toEqual(new Date('2026-07-08T10:00:00Z'));
+  });
+
+  it('déduplique une résa comptée deux fois (participant + organisateur)', async () => {
+    prismaMock.reservationParticipant.findMany.mockResolvedValue([
+      { userId: 'u2', reservationId: 'r1', reservation: { startTime: new Date('2026-07-01T10:00:00Z') } },
+    ] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { id: 'r1', userId: 'u2', startTime: new Date('2026-07-01T10:00:00Z') },
+    ] as any);
+    const [lea] = await service.listFriends('u1', undefined, now);
+    expect(lea.playedTogetherCount).toBe(1);
+  });
+
+  it('ami sans partie commune → count 0, last null', async () => {
+    const [lea] = await service.listFriends('u1', undefined, now);
+    expect(lea.playedTogetherCount).toBe(0);
+    expect(lea.lastPlayedTogetherAt).toBeNull();
   });
 });
