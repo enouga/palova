@@ -53,9 +53,9 @@ export function MatchAlertSheet({ club, token, initial, onClose, onCreated }: Pr
 
   return (
     <div role="dialog" aria-label="Créer une alerte" aria-modal="true" onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 60, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: th.bg, width: '100%', maxWidth: 520, borderRadius: '18px 18px 0 0', padding: 20, boxSizing: 'border-box' }}>
+        style={{ background: th.bg, width: '100%', maxWidth: 520, borderRadius: '0 0 18px 18px', padding: 20, boxSizing: 'border-box' }}>
         <h2 style={{ fontFamily: th.fontDisplay, fontSize: 20, color: th.text, margin: '0 0 12px' }}>Créer une alerte</h2>
         <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 14px', lineHeight: 1.45 }}>
           On vous prévient dès qu’une partie à votre niveau s’ouvre — ou libère une place — sur ce créneau.
