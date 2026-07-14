@@ -13,6 +13,12 @@ jest.mock('../../email/notifications', () => ({
   notifyOpenMatchAdded: (...args: unknown[]) => mockNotifyAdded(...args),
 }));
 
+// Le matcheur d'alertes est câblé sur la libération de place (best-effort) : on le mocke.
+const matchAndNotifyMock = jest.fn().mockResolvedValue([]);
+jest.mock('../matchAlert.service', () => ({
+  MatchAlertService: jest.fn().mockImplementation(() => ({ matchAndNotify: matchAndNotifyMock })),
+}));
+
 const future = (h = 48) => new Date(Date.now() + h * 3_600_000);
 
 describe('OpenMatchService', () => {
@@ -23,6 +29,7 @@ describe('OpenMatchService', () => {
     mockNotifyLeft.mockReset().mockResolvedValue(undefined);
     mockNotifyRemoved.mockReset().mockResolvedValue(undefined);
     mockNotifyAdded.mockReset().mockResolvedValue(undefined);
+    matchAndNotifyMock.mockReset().mockResolvedValue([]);
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
     // Default: sport found (needed by RatingService.getLevelsBySport in listOpenMatches)
@@ -613,6 +620,8 @@ describe('OpenMatchService', () => {
       expect(updates.every((c) => Number(c[0].data.share) === 12)).toBe(true);
       expect(mockNotifyRemoved).toHaveBeenCalledWith('m1', 'user-3');
       expect(mockNotifyLeft).not.toHaveBeenCalled();
+      // Une place s'est libérée → le matcheur d'alertes horaires est déclenché (best-effort).
+      expect(matchAndNotifyMock).toHaveBeenCalledWith('m1');
     });
 
     it('un non-organisateur ne peut pas retirer un autre joueur (NOT_ORGANIZER)', async () => {

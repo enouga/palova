@@ -157,4 +157,18 @@ describe('notifyOpenMatchProposed → dispatch aux membres opt-in in-range', () 
     expect(dispatchMock).toHaveBeenCalledTimes(2);
     expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'ok' }));
   });
+
+  it('exclut les userId déjà notifiés par une alerte (excludeUserIds)', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue(publicRangedReservation() as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { userId: 'alerted', user: { firstName: 'Al', lastName: 'Erted', email: 'al@x.fr' } },
+      { userId: 'other',   user: { firstName: 'Ot', lastName: 'Her',   email: 'ot@x.fr' } },
+    ] as any);
+    getLevelsBySportMock.mockResolvedValue({ 'alerted:padel': { level: 3 }, 'other:padel': { level: 3 } });
+
+    await notifyOpenMatchProposed('res-1', ['alerted']);
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'other' }));
+  });
 });

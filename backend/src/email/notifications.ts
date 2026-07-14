@@ -464,7 +464,7 @@ export async function notifyOpenMatchChatMessage(reservationId: string, messageI
  * Auto-gardée : si la résa n'est pas une partie ouverte rejoignable, on ne fait rien.
  * Peut lever (DB/SMTP) ; l'appelant (reservation.service) l'enveloppe en best-effort (safeNotify).
  */
-export async function notifyOpenMatchProposed(reservationId: string): Promise<void> {
+export async function notifyOpenMatchProposed(reservationId: string, excludeUserIds: string[] = []): Promise<void> {
   const resa = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
@@ -498,6 +498,8 @@ export async function notifyOpenMatchProposed(reservationId: string): Promise<vo
 
   // Exclut l'organisateur et les participants déjà présents.
   const present = new Set(resa.participants.map((p) => p.userId));
+  // …ainsi que ceux déjà prévenus par une alerte horaire (pas 2 emails pour la même partie).
+  for (const id of excludeUserIds) present.add(id);
   const candidates = optedIn.filter((m) => !present.has(m.userId));
   if (candidates.length === 0) return;
 

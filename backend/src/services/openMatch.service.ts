@@ -6,6 +6,7 @@ import { RatingService, UserLevel } from './rating.service';
 import { effectiveTeams, applyTeams } from './matchTeams';
 import { ensureActiveMembership } from './membership';
 import { matchCardStateHash } from './matchCardState';
+import { MatchAlertService } from './matchAlert.service';
 
 // Include commun à la liste et à la lecture unitaire d'une partie ouverte.
 const MATCH_INCLUDE = {
@@ -40,6 +41,7 @@ const NATIONAL_INCLUDE = {
 // et rejoindre jusqu'à complet. Repose sur les participants (ReservationParticipant).
 export class OpenMatchService {
   private ratingService = new RatingService();
+  private matchAlerts = new MatchAlertService();
   /** Résout un club ACTIVE par slug et vérifie que l'appelant en est membre ACTIVE. */
   private async resolveActiveMember(slug: string, userId: string): Promise<{ id: string }> {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
@@ -356,6 +358,8 @@ export class OpenMatchService {
     // Best-effort après commit : prévenir la bonne personne.
     if (outcome.isSelf) await this.safeNotify(() => notifyOpenMatchLeft(reservationId, targetUserId));
     else                await this.safeNotify(() => notifyOpenMatchRemoved(reservationId, targetUserId));
+    // Une place vient de se libérer : prévenir les alertes horaires correspondantes.
+    await this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
     return { id: reservationId };
   }
 

@@ -14,6 +14,7 @@ import { playerCount, capacityFor } from '../utils/courtType';
 import { notifyMatchPartnersInvited, notifyReservationMemberAssigned, notifyReservationRefunded, notifyReservationCancelled, notifyActivityCancelledByClub, notifyOpenMatchProposed, notifyReservationRescheduled } from '../email/notifications';
 import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
+import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { sportHasLevels } from './rating/level';
 import { effectiveTeams, applyTeams } from './matchTeams';
@@ -34,6 +35,7 @@ const HOLD_EXPIRY_MS = HOLD_TTL_SECONDS * 1000;
 export class ReservationService {
   private refundService = new RefundService();
   private ratingService = new RatingService();
+  private matchAlerts = new MatchAlertService();
 
   private lockKey(resourceId: string, startTime: Date): string {
     return `lock:resource:${resourceId}:${startTime.toISOString()}`;
@@ -672,7 +674,12 @@ export class ReservationService {
     // joinOpenMatch, qui exige status CONFIRMED), proposer la partie ouverte aux membres opt-in
     // « à mon niveau » dont le niveau est dans la fourchette. La fonction s'auto-garde : elle ne
     // fait rien si la résa n'est pas PUBLIC avec fourchette. Jamais d'inscription auto — notif seule.
-    await this.safeNotify(() => notifyOpenMatchProposed(reservationId));
+    // D'abord les alertes horaires (plus spécifiques), puis les propositions « à mon niveau »
+    // en excluant ceux déjà prévenus par une alerte (jamais 2 emails pour la même partie).
+    let alerted: string[] = [];
+    try { alerted = await this.matchAlerts.matchAndNotify(reservationId); }
+    catch (err) { console.error('[reservation] matchAndNotify (confirm) échoué', err); }
+    await this.safeNotify(() => notifyOpenMatchProposed(reservationId, alerted));
 
     return confirmed;
   }
@@ -1447,6 +1454,8 @@ export class ReservationService {
     if (reservation.resource.clubId !== clubId) throw new Error('CLUB_MISMATCH');
 
     await this.applyRemoveParticipant(reservation, participantId);
+    // Une place vient de se libérer : prévenir les alertes horaires correspondantes.
+    await this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
     return this.loadClubReservation(reservationId, clubId);
   }
 
@@ -1583,6 +1592,8 @@ export class ReservationService {
     this.assertWithinCutoff(reservation.startTime, reservation.resource.club.playerChangeCutoffHours, 'PLAYER_CHANGE_TOO_LATE');
 
     await this.applyRemoveParticipant(reservation, participantId);
+    // Une place vient de se libérer : prévenir les alertes horaires correspondantes.
+    await this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
     return this.getOwnReservationPlayers(reservationId, userId);
   }
 
@@ -1633,7 +1644,7 @@ export class ReservationService {
     // Fourchette de niveau conservée uniquement en PUBLIC + padel ; sinon effacée.
     const keepLevel = input.visibility === 'PUBLIC' && sportHasLevels(sportKey);
 
-    return prisma.reservation.update({
+    const updated = await prisma.reservation.update({
       where: { id: reservationId },
       data: {
         visibility: input.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
@@ -1642,6 +1653,11 @@ export class ReservationService {
       },
       select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true },
     });
+    // Publication après coup : une partie devient rejoignable → prévenir les alertes horaires.
+    if (updated.visibility === 'PUBLIC') {
+      await this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
+    }
+    return updated;
   }
 
   /** Réservations d'un joueur (les siennes), pour l'espace « Mes réservations ». */

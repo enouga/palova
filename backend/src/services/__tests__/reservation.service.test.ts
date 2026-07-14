@@ -35,6 +35,13 @@ jest.mock('../../email/notifications', () => ({
   notifyReservationRescheduled: (...a: unknown[]) => mockNotifyRescheduled(...a),
 }));
 
+// Le matcheur d'alertes est câblé aux points de libération/publication (best-effort) :
+// on le mocke pour prouver le câblage sans exécuter le vrai service.
+const matchAndNotifyMock = jest.fn().mockResolvedValue([]);
+jest.mock('../matchAlert.service', () => ({
+  MatchAlertService: jest.fn().mockImplementation(() => ({ matchAndNotify: matchAndNotifyMock })),
+}));
+
 const sseBroadcast = () => mockBroadcast;
 
 describe('ReservationService', () => {
@@ -49,6 +56,7 @@ describe('ReservationService', () => {
     mockNotifyCancelled.mockReset().mockResolvedValue(undefined);
     mockNotifyActivityCancelled.mockReset().mockResolvedValue(undefined);
     mockNotifyRescheduled.mockReset().mockResolvedValue(undefined);
+    matchAndNotifyMock.mockReset().mockResolvedValue([]);
   });
 
   const baseParams = {
@@ -2053,6 +2061,18 @@ describe('ReservationService', () => {
     it('lève UNAUTHORIZED si ce n est pas le propriétaire', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue(resa({ userId: 'autre' }) as any);
       await expect(service.removeOwnReservationParticipant('res-1', 'user-1', 'p2')).rejects.toThrow('UNAUTHORIZED');
+    });
+
+    it('déclenche matchAndNotify après un retrait (place libérée → alertes horaires)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(resa() as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'user-1', isOrganizer: true },
+        { id: 'p2', userId: 'user-2', isOrganizer: false },
+      ] as any);
+
+      await service.removeOwnReservationParticipant('res-1', 'user-1', 'p2');
+
+      expect(matchAndNotifyMock).toHaveBeenCalledWith('res-1');
     });
   });
 
