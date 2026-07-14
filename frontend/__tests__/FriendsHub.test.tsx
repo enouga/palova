@@ -120,6 +120,28 @@ describe('FriendsHub (hub à sections)', () => {
     const buttons = screen.getAllByText('Retirer');
     fireEvent.click(buttons[buttons.length - 1]);
     await waitFor(() => expect(removeFriend).toHaveBeenCalledWith('demo', 'u2', 't'));
+    // succès → le dialog se referme (pas de titre résiduel)
+    await waitFor(() => expect(screen.queryByText('Retirer cet ami ?')).not.toBeInTheDocument());
+  });
+
+  it('échec de la suppression : le dialog reste ouvert avec un message, pas de fermeture silencieuse', async () => {
+    removeFriend.mockRejectedValue(new Error('boom'));
+    mount();
+    fireEvent.click(await screen.findByText('Retirer'));
+    expect(screen.getByText('Retirer cet ami ?')).toBeInTheDocument();
+    const buttons = screen.getAllByText('Retirer');
+    fireEvent.click(buttons[buttons.length - 1]);
+    await waitFor(() => expect(removeFriend).toHaveBeenCalledWith('demo', 'u2', 't'));
+    // le dialog reste ouvert (pas de faux succès) et affiche un message d'erreur
+    expect(await screen.findByText('Impossible de retirer cet ami. Réessayez.')).toBeInTheDocument();
+    expect(screen.getByText('Retirer cet ami ?')).toBeInTheDocument();
+  });
+
+  it('recherche « Amis » insensible aux accents : « Lea » trouve « Léa »', async () => {
+    mount();
+    await screen.findByText('Léa X');
+    fireEvent.change(screen.getByLabelText('Rechercher un joueur'), { target: { value: 'Lea' } });
+    expect(await screen.findByText('Léa X')).toBeInTheDocument();
   });
 
   it('deep-link ?tab=followers déplie le pied', async () => {

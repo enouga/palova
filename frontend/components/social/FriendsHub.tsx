@@ -14,6 +14,7 @@ import { LevelChip } from '@/components/player/LevelChip';
 import { colorForSeed } from '@/lib/playerColors';
 import { openDm } from '@/lib/messages';
 import { dedupFavorites, FriendsAnchor } from '@/lib/social';
+import { norm } from '@/lib/members';
 import { FriendRequestsBanner } from './FriendRequestsBanner';
 import { FriendsAgendaRail } from './FriendsAgendaRail';
 import { FriendCard } from './FriendCard';
@@ -45,6 +46,7 @@ export function FriendsHub({ slug, token, timezone, anchor = null }: {
   const [searchResults, setSearchResults] = useState<ClubMemberSearchResult[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Friend | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => { setNow(new Date()); }, []);
@@ -93,11 +95,14 @@ export function FriendsHub({ slug, token, timezone, anchor = null }: {
     catch { /* noop */ }
     finally { setBusyId(null); }
   };
+  // Destructif + confirmé par dialog : contrairement à respond/cancelSent/removeFavorite
+  // (pas de dialog impliquant un succès), un échec ici DOIT garder le dialog ouvert avec un
+  // message — sinon il se referme comme si le retrait avait réussi (cf. DeleteAccountSection).
   const removeFriend = async (f: Friend) => {
-    setBusyId(f.id);
-    try { await api.removeFriend(slug, f.id, token); reload(); }
-    catch { /* noop */ }
-    finally { setBusyId(null); setRemoveTarget(null); }
+    setBusyId(f.id); setRemoveError(null);
+    try { await api.removeFriend(slug, f.id, token); reload(); setRemoveTarget(null); }
+    catch { setRemoveError('Impossible de retirer cet ami. Réessayez.'); }
+    finally { setBusyId(null); }
   };
   const removeFavorite = async (f: Friend) => {
     setBusyId(f.id);
@@ -109,8 +114,8 @@ export function FriendsHub({ slug, token, timezone, anchor = null }: {
   const invite = (f: { id: string }) => openDm(f.id, { isDesktop, navigate: (h) => router.push(h), draft: INVITE_DRAFT });
 
   const searching = q.trim().length > 0;
-  const norm = q.trim().toLowerCase();
-  const matchName = (f: Friend) => `${f.firstName} ${f.lastName}`.toLowerCase().includes(norm);
+  const normQ = norm(q.trim());
+  const matchName = (f: Friend) => norm(`${f.firstName} ${f.lastName}`).includes(normQ);
   const visibleFriends = searching ? friends.filter(matchName) : friends;
   const favorites = dedupFavorites(following, friends);
   const visibleFavorites = searching ? favorites.filter(matchName) : favorites;
@@ -140,7 +145,7 @@ export function FriendsHub({ slug, token, timezone, anchor = null }: {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
             {visibleFriends.map((f) => (
               <FriendCard key={f.id} friend={f} now={now} busy={busyId === f.id}
-                onInvite={invite} onMessage={message} onRemove={setRemoveTarget} />
+                onInvite={invite} onMessage={message} onRemove={(target) => { setRemoveError(null); setRemoveTarget(target); }} />
             ))}
           </div>
         </section>
@@ -184,9 +189,15 @@ export function FriendsHub({ slug, token, timezone, anchor = null }: {
 
       {removeTarget && (
         <ConfirmDialog title="Retirer cet ami ?" detail={`${removeTarget.firstName} ${removeTarget.lastName}`}
-          message="Vous pourrez renvoyer une demande plus tard."
+          message={
+            <>
+              Vous pourrez renvoyer une demande plus tard.
+              {removeError && <div style={{ color: th.accent, fontWeight: 600, marginTop: 8 }}>{removeError}</div>}
+            </>
+          }
           confirmLabel="Retirer" busy={busyId === removeTarget.id}
-          onConfirm={() => removeFriend(removeTarget)} onCancel={() => setRemoveTarget(null)} />
+          onConfirm={() => removeFriend(removeTarget)}
+          onCancel={() => { setRemoveTarget(null); setRemoveError(null); }} />
       )}
     </div>
   );
