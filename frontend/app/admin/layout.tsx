@@ -6,6 +6,7 @@ import { useAuth, logout } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -87,6 +88,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => { if (allowed === false) router.replace('/'); }, [allowed, router]);
 
+  // Badge de compteur sur « Signalements » (nb. de signalements OPEN) — ADMIN+ seulement,
+  // même garde que la visibilité du lien (le staff n'a jamais accès à la route).
+  const [openReportCount, setOpenReportCount] = useState(0);
+  useEffect(() => {
+    if (!token || !club?.id || !isClubAdmin(role)) return;
+    api.adminListReports(club.id, token, 'OPEN').then((r) => setOpenReportCount(r.items.length)).catch(() => {});
+  }, [token, club?.id, role]);
+
   // Filet anti-blocage : la garde ci-dessous peut rester en attente (session périmée,
   // requête réseau qui pend, état client corrompu…). On ne laisse JAMAIS un « Chargement… »
   // infini : au bout de 12 s, l'écran devient actionnable (recharger / se reconnecter).
@@ -124,7 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
   // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).
-  type NavItem = { href: string; label: string; icon: IconName };
+  type NavItem = { href: string; label: string; icon: IconName; badge?: number };
   // Une couleur par famille (palette du thème) — appliquée à la pastille + au titre de section.
   const sections: { title?: string; color?: string; items: NavItem[] }[] = [
     { items: [
@@ -139,7 +148,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/caisse',       label: 'Ventes & journée',  icon: 'card' },
       // Réservé aux admins : la page /admin/moderation répond 403 au staff (requireClubMember('ADMIN')).
       ...(isClubAdmin(role)
-        ? [{ href: '/admin/moderation', label: 'Signalements', icon: 'flag' } as NavItem]
+        ? [{ href: '/admin/moderation', label: 'Signalements', icon: 'flag', badge: openReportCount } as NavItem]
         : []),
     ] },
     { title: 'Animations & jeu', color: '#e6a93c', items: [
@@ -263,7 +272,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       background: active ? th.surface2 : 'transparent',
                       color: active ? th.text : th.textMute,
                     }}>
-                      <Icon name={l.icon} size={18} color={active ? th.accent : th.textMute} />{l.label}
+                      <Icon name={l.icon} size={18} color={active ? th.accent : th.textMute} />
+                      <span style={{ flex: 1 }}>{l.label}</span>
+                      {!!l.badge && (
+                        <span style={{
+                          minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+                          background: ACCENTS.coral, color: '#fff', fontFamily: th.fontUI, fontSize: 11, fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>{l.badge > 99 ? '99+' : l.badge}</span>
+                      )}
                     </Link>
                   );
                 })}

@@ -6,9 +6,10 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type IconName } from '@/components/ui/Icon';
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   const { token, ready } = useAuth();
   const { slug } = useClub();
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [openReportCount, setOpenReportCount] = useState(0);
 
   useEffect(() => {
     if (!ready) return;
@@ -29,6 +31,11 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   useEffect(() => { if (allowed === false) router.replace('/'); }, [allowed, router]);
 
+  useEffect(() => {
+    if (allowed !== true || !token) return;
+    api.platformListReports(token, 'OPEN').then((r) => setOpenReportCount(r.items.length)).catch(() => {});
+  }, [allowed, token]);
+
   if (!ready || slug || !token || allowed !== true) {
     return (
       <div style={{ minHeight: '100vh', background: th.bg, color: th.textFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI }}>
@@ -37,14 +44,15 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     );
   }
 
-  const links = [
-    { href: '/superadmin',           label: 'Tableau de bord', icon: 'grid' as const },
-    { href: '/superadmin/clubs',     label: 'Clubs',           icon: 'indoor' as const },
-    { href: '/superadmin/billing',   label: 'Facturation',     icon: 'euro' as const },
-    { href: '/superadmin/stats',     label: 'Statistiques',    icon: 'chart' as const },
-    { href: '/superadmin/moderation', label: 'Modération',     icon: 'flag' as const },
-    { href: '/superadmin/sports',    label: 'Sports',          icon: 'trophy' as const },
-    { href: '/superadmin/clubs/new', label: 'Créer un club',   icon: 'bolt' as const },
+  type LinkItem = { href: string; label: string; icon: IconName; badge?: number };
+  const links: LinkItem[] = [
+    { href: '/superadmin',           label: 'Tableau de bord', icon: 'grid' },
+    { href: '/superadmin/clubs',     label: 'Clubs',           icon: 'indoor' },
+    { href: '/superadmin/billing',   label: 'Facturation',     icon: 'euro' },
+    { href: '/superadmin/stats',     label: 'Statistiques',    icon: 'chart' },
+    { href: '/superadmin/moderation', label: 'Modération',     icon: 'flag', badge: openReportCount },
+    { href: '/superadmin/sports',    label: 'Sports',          icon: 'trophy' },
+    { href: '/superadmin/clubs/new', label: 'Créer un club',   icon: 'bolt' },
   ];
 
   return (
@@ -72,7 +80,16 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                 textDecoration: 'none', fontSize: 14, fontWeight: 600,
                 color: active ? th.onAccent : th.textMute, background: active ? th.accent : 'transparent',
               }}>
-                <Icon name={l.icon} size={17} /> {l.label}
+                <Icon name={l.icon} size={17} />
+                <span style={{ flex: 1 }}>{l.label}</span>
+                {!!l.badge && (
+                  <span style={{
+                    minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+                    background: active ? th.onAccent : ACCENTS.coral, color: active ? th.accent : '#fff',
+                    fontFamily: th.fontUI, fontSize: 11, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>{l.badge > 99 ? '99+' : l.badge}</span>
+                )}
               </Link>
             );
           })}

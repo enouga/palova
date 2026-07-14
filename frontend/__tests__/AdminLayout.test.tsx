@@ -28,6 +28,7 @@ jest.mock('../lib/api', () => ({
     getMyProfile: jest.fn().mockResolvedValue({ firstName: 'Admin', lastName: 'User', email: 'admin@palova.fr', avatarUrl: null }),
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
+    adminListReports: jest.fn().mockResolvedValue({ items: [] }),
   },
   assetUrl: (p: string | null) => p,
 }));
@@ -255,6 +256,20 @@ describe('AdminLayout — entrées gatées par rôle', () => {
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
     await wrap();
     expect(screen.getByText('Signalements')).toBeInTheDocument();
+  });
+
+  it('ADMIN : badge du nombre de signalements OPEN sur « Signalements »', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    api.adminListReports.mockResolvedValue({ items: [{ id: 'r1' }, { id: 'r2' }] });
+    await wrap();
+    expect(await screen.findByText('2')).toBeInTheDocument();
+    expect(api.adminListReports).toHaveBeenCalledWith('c1', 'abc', 'OPEN');
+  });
+
+  it('STAFF : pas d’appel adminListReports (page non accessible)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(api.adminListReports).not.toHaveBeenCalled();
   });
 
   // « Paiement en ligne » mise de côté (2026-07-13) : masquée pour tous les rôles, y compris le gérant.
