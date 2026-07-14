@@ -3,6 +3,8 @@ export const redisMock = {
   del: jest.fn(),
   get: jest.fn(),
   exists: jest.fn(),
+  incr: jest.fn(),
+  expire: jest.fn(),
   connect: jest.fn(),
   on: jest.fn(),
 };

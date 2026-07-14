@@ -517,6 +517,8 @@ model User {
   messageReactions        MessageReaction[]
   blocksGiven             UserBlock[] @relation("BlocksGiven")
   blocksReceived          UserBlock[] @relation("BlocksReceived")
+  messageReportsFiled     MessageReport[] @relation("MessageReportsFiled")
+  messageReportsResolved  MessageReport[] @relation("MessageReportsResolved")
 
   @@map("users")
 }
@@ -1369,6 +1371,52 @@ model ClubEmailTemplate {
   @@map("club_email_templates")
 }
 
+enum ReportReason {
+  HARASSMENT
+  ILLEGAL
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+}
+
+enum ReportResolution {
+  DELETED
+  REJECTED
+}
+
+/// Signalement d'un message (chat de partie OU DM — exactement une des deux FK est renseignée,
+/// pattern Payment). clubId = routage : club de la résa (chat de partie) ; clubId de la
+/// conversation pour un DM, informatif seulement (le routage DM est superadmin, jamais le staff club).
+model MessageReport {
+  id                 String            @id @default(cuid())
+  openMatchMessageId String?           @map("open_match_message_id")
+  directMessageId    String?           @map("direct_message_id")
+  reporterId         String            @map("reporter_id")
+  clubId             String?           @map("club_id")
+  reason             ReportReason
+  detail             String?
+  status             ReportStatus      @default(OPEN)
+  resolution         ReportResolution?
+  resolvedById       String?           @map("resolved_by_id")
+  resolvedAt         DateTime?         @map("resolved_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+
+  openMatchMessage OpenMatchMessage? @relation(fields: [openMatchMessageId], references: [id], onDelete: Cascade)
+  directMessage    DirectMessage?    @relation(fields: [directMessageId], references: [id], onDelete: Cascade)
+  reporter         User              @relation("MessageReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy       User?             @relation("MessageReportsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([openMatchMessageId, reporterId])
+  @@unique([directMessageId, reporterId])
+  @@index([clubId, status])
+  @@index([status])
+  @@map("message_reports")
+}
+
 /// Message du fil de discussion d'une partie ouverte. Soft-delete (deletedAt) :
 /// un message supprimé reste en base et s'affiche en pierre tombale « message supprimé ».
 model OpenMatchMessage {
@@ -1382,6 +1430,7 @@ model OpenMatchMessage {
 
   reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports     MessageReport[]
 
   @@index([reservationId, createdAt])
   @@map("open_match_messages")
@@ -1478,6 +1527,7 @@ model DirectMessage {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
   reactions    MessageReaction[]
+  reports      MessageReport[]
 
   @@index([conversationId, createdAt])
   @@map("direct_messages")
