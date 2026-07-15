@@ -1,6 +1,6 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, gaugeTrack } from '@/lib/theme';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { deadlineCountdown } from '@/lib/tournament';
 
@@ -70,7 +70,7 @@ export function AgendaCard({ icon, accent, tag, title, dateLabel, deadline, now,
 
         <span style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5 }}>
           {ratio != null && (
-            <span style={{ flex: '0 1 120px', height: 5, borderRadius: 999, background: th.surface2, overflow: 'hidden' }}>
+            <span style={{ flex: '0 1 120px', ...gaugeTrack(th, 5) }}>
               <span data-testid="card-fill" style={{ display: 'block', height: '100%', borderRadius: 999, background: places.urgent ? ACCENTS.coral : th.accent, width: now ? `${Math.round(ratio * 100)}%` : 0, transition: 'width .8s ease' }} />
             </span>
           )}

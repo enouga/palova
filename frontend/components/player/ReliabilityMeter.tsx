@@ -1,4 +1,6 @@
 'use client';
+import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 
 // Jauge de fiabilité réutilisable (façon Pista) : un % + barre. Pur présentationnel.
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
@@ -13,6 +15,7 @@ function tone(pct: number): string {
 export function ReliabilityMeter({
   pct, label = true, width = 80,
 }: { pct: number; label?: boolean; width?: number }) {
+  const { th } = useTheme();
   const v = Math.round(clamp(pct, 0, 100));
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -23,7 +26,7 @@ export function ReliabilityMeter({
         aria-valuemax={100}
         aria-label="Fiabilité du niveau"
         title={`Fiabilité ${v} %`}
-        style={{ position: 'relative', display: 'inline-block', width, height: 6, borderRadius: 999, background: 'rgba(0,0,0,0.12)', overflow: 'hidden' }}
+        style={{ position: 'relative', display: 'inline-block', width, ...gaugeTrack(th, 6) }}
       >
         <span style={{ position: 'absolute', inset: 0, width: `${v}%`, background: tone(v), borderRadius: 999 }} />
       </span>

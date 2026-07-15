@@ -4,6 +4,7 @@ import { api, MonthlySummary } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 import { monthLabel, monthRange, methodLabel, fmtAmount } from '@/lib/accounting';
 import { toCents } from '@/lib/caisse';
 
@@ -181,7 +182,7 @@ export default function AdminComptabilitePage() {
                   return (
                     <div key={d.date} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 12.5, color: th.text }}>
                       <span style={{ width: 68, color: th.textMute, flexShrink: 0 }}>{d.date.slice(5)}</span>
-                      <div style={{ flex: 1, background: th.line, borderRadius: 4, overflow: 'hidden', height: 8 }}>
+                      <div style={{ flex: 1, ...gaugeTrack(th, 8, 4) }}>
                         <div style={{
                           width: `${pct}%`, height: '100%', borderRadius: 4,
                           background: positive ? th.accent : '#ff7a4d',

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 import { tierForLevel } from '@/lib/level';
 import { fmtLevel } from '@/lib/levelMatch';
 import { randomQuip } from '@/lib/levelQuips';
@@ -61,7 +62,7 @@ export function LevelRangeSlider({ min, max, onChange, disabled, compact }: Prop
       </div>
 
       <div style={{ position: 'relative', height: 24 }}>
-        <div style={{ position: 'absolute', top: 10, left: 0, right: 0, height: 4, borderRadius: 999, background: th.surface2 }} />
+        <div style={{ position: 'absolute', top: 10, left: 0, right: 0, ...gaugeTrack(th, 4) }} />
         <div style={{ position: 'absolute', top: 10, height: 4, borderRadius: 999, background: th.accent, left: `${pct(min)}%`, width: `${pct(max) - pct(min)}%` }} />
         <input className="lvlrange" type="range" min={MIN} max={MAX} step={STEP} value={min} disabled={disabled}
           aria-label="Niveau minimum" onFocus={() => setActive('min')} onChange={(e) => onMin(Number(e.target.value))} />

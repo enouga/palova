@@ -4,6 +4,7 @@ import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminRes
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { Receipt } from '@/components/admin/Receipt';
@@ -351,7 +352,7 @@ export default function AdminEncaissementPage() {
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>{label}</div>
       <div style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.1, marginTop: 2, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       <div style={{ fontSize: 11, color: th.textFaint, marginTop: 1 }}>{sub}</div>
-      {bar != null && <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}><div style={{ height: '100%', width: `${bar}%`, background: SETTLED_COLOR, transition: 'width .4s ease' }} /></div>}
+      {bar != null && <div style={{ marginTop: 5, ...gaugeTrack(th, 4, 999, th.surfaceHi) }}><div style={{ height: '100%', width: `${bar}%`, background: SETTLED_COLOR, transition: 'width .4s ease' }} /></div>}
     </div>
   );
   const kpiSep = <div style={{ width: 1, alignSelf: 'stretch', background: th.line, margin: '4px 0' }} />;
@@ -487,7 +488,7 @@ export default function AdminEncaissementPage() {
                     )}
                   </div>
                   {dueC > 0 && (
-                    <div style={{ marginTop: 14, height: 8, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}>
+                    <div style={{ marginTop: 14, ...gaugeTrack(th, 8, 999, th.surfaceHi) }}>
                       <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: SETTLED_COLOR, transition: 'width .35s ease' }} />
                     </div>
                   )}

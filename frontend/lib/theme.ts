@@ -2,6 +2,8 @@
 // Two directions: "floodlit" (dark, night-match) and "daylight" (light, paper).
 // Fonts are loaded by next/font (see app/layout.tsx) and exposed as CSS vars.
 
+import type { CSSProperties } from 'react';
+
 export type ThemeMode = 'floodlit' | 'daylight';
 
 // Geist sur tout le site : titres + UI en Geist Sans, données en Geist Mono.
@@ -122,5 +124,23 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
     shadow: '0 2px 6px rgba(0,0,0,0.4), 0 20px 50px rgba(0,0,0,0.45)',
     shadowSoft: '0 1px 3px rgba(0,0,0,0.4)',
     glow: '0 0 0 1px rgba(214,255,63,0.0)',
+  };
+}
+
+/**
+ * Piste d'une jauge/barre de progression (niveau, remplissage, quota, timer…).
+ * `th.surface2`/`th.surfaceHi`/`th.line` seuls sont quasi invisibles posés sur une
+ * carte claire (daylight : les deux tons sont à quelques points de luminosité l'un
+ * de l'autre) — on garde un fond léger mais on ajoute un liseré net (`lineStrong`)
+ * qui définit le bord de la piste dans les deux thèmes. `radius` = 999 (pilule) par
+ * défaut ; passer 0 pour une piste droite (ex. barre de timer pleine largeur).
+ */
+export function gaugeTrack(th: Theme, height: number, radius = 999, bg = th.surface2): CSSProperties {
+  return {
+    height,
+    borderRadius: radius,
+    background: bg,
+    boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
+    overflow: 'hidden',
   };
 }

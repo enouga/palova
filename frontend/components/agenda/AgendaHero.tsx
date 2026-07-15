@@ -65,7 +65,7 @@ export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, count
 
         <div style={{ marginTop: 18 }}>
           {ratio != null && (
-            <div style={{ height: 6, borderRadius: 999, background: 'rgba(24,21,14,0.10)', overflow: 'hidden' }}>
+            <div style={{ height: 6, borderRadius: 999, background: 'rgba(24,21,14,0.14)', boxShadow: 'inset 0 0 0 1px rgba(24,21,14,0.22)', overflow: 'hidden' }}>
               <div data-testid="hero-fill" style={{ height: '100%', borderRadius: 999, background: ACCENTS.blue, width: now ? `${Math.round(ratio * 100)}%` : 0, transition: 'width .8s ease' }} />
             </div>
           )}

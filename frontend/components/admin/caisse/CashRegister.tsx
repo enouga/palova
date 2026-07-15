@@ -5,7 +5,7 @@ import { toCents, fmtEuros, isOptimisticId, PaymentIntent, QUICK_METHOD_LABEL } 
 import { slotStatuses, nextSelectable, selectionTotal, SlotStatus } from '@/lib/caisseRegister';
 import { pickPackageFor, packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn } from '@/lib/theme';
+import { inkOn, gaugeTrack } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { AssociateMemberPicker } from '@/components/admin/caisse/AssociateMemberPicker';
@@ -371,7 +371,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
         </div>
         {due > 0 && (
           <>
-            <span style={{ flex: '0 1 130px', height: 6, borderRadius: 3, background: th.surfaceHi, overflow: 'hidden' }}>
+            <span style={{ flex: '0 1 130px', ...gaugeTrack(th, 6, 3, th.surfaceHi) }}>
               <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: SETTLED_COLOR, transition: 'width .3s ease' }} />
             </span>
             <div style={{ textAlign: 'right', fontSize: 11.5, color: th.textMute, whiteSpace: 'nowrap' }}>

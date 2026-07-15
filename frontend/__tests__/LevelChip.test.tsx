@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { LevelChip } from '../components/player/LevelChip';
 import { LevelBadge } from '../components/player/LevelBadge';
+import { ThemeProvider } from '../lib/ThemeProvider';
 
 const clubVal: { club: { levelSystemEnabled?: boolean } | null } = { club: { levelSystemEnabled: true } };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => clubVal }));
@@ -24,6 +25,6 @@ it('LevelBadge ne rend rien quand désactivé', () => {
 });
 it('LevelBadge affiche la fiabilité en %', () => {
   clubVal.club = { levelSystemEnabled: true };
-  render(<LevelBadge rating={{ level: 4.2, tier: 'Intermédiaire', isProvisional: true, reliability: 62 } as any} />);
+  render(<ThemeProvider><LevelBadge rating={{ level: 4.2, tier: 'Intermédiaire', isProvisional: true, reliability: 62 } as any} /></ThemeProvider>);
   expect(screen.getByText(/62\s*%/)).toBeInTheDocument();
 });

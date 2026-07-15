@@ -1,7 +1,7 @@
 'use client';
 import { CSSProperties, ReactNode } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Theme, ACCENTS } from '@/lib/theme';
+import { Theme, ACCENTS, gaugeTrack } from '@/lib/theme';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { deadlineCountdown } from '@/lib/tournament';
 import { AgendaGroupKey } from '@/lib/adminAgenda';
@@ -86,7 +86,7 @@ export function AgendaAdminCard(props: AgendaAdminCardProps) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
           {ratio != null && (
-            <span style={{ height: 5, borderRadius: 999, background: th.surface2, overflow: 'hidden', flex: '0 1 120px', minWidth: 70 }}>
+            <span style={{ ...gaugeTrack(th, 5), flex: '0 1 120px', minWidth: 70 }}>
               <span style={{ display: 'block', height: '100%', borderRadius: 999, width: `${Math.round(ratio * 100)}%`, background: faded ? th.textFaint : full ? ACCENTS.coral : th.accent }} />
             </span>
           )}

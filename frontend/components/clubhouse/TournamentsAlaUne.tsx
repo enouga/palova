@@ -4,7 +4,7 @@ import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { AgendaItem, eventPlacesLabel, KIND_LABEL } from '@/lib/events';
 import { deadlineCountdown, fillRatio, formatHourRange } from '@/lib/tournament';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, gaugeTrack } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 import { cardStyle } from '@/components/clubhouse/SectionHeader';
 
@@ -65,7 +65,7 @@ export function TournamentsAlaUne({ items, timezone, now = null, multiSport = fa
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
                 {ratio != null && (
-                  <span style={{ flex: '0 1 90px', height: 4, borderRadius: 999, background: th.line, overflow: 'hidden' }}>
+                  <span style={{ flex: '0 1 90px', ...gaugeTrack(th, 4, 999, th.surface) }}>
                     <span style={{ display: 'block', height: '100%', borderRadius: 999, background: places.urgent ? ACCENTS.coral : th.accent, width: `${Math.round(ratio * 100)}%` }} />
                   </span>
                 )}

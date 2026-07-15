@@ -21,6 +21,7 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
@@ -875,7 +876,7 @@ export default function AdminPlanningPage() {
                     )}
                   </div>
                   {dueC > 0 && (
-                    <div style={{ marginTop: 7, height: 5, borderRadius: 999, background: th.surfaceHi, overflow: 'hidden' }}>
+                    <div style={{ marginTop: 7, ...gaugeTrack(th, 5, 999, th.surfaceHi) }}>
                       <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: SETTLED_COLOR, transition: 'width .35s ease' }} />
                     </div>
                   )}

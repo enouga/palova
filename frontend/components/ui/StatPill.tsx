@@ -1,7 +1,7 @@
 'use client';
 import { ReactNode } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, gaugeTrack } from '@/lib/theme';
 import { Icon, IconName } from '@/components/ui/Icon';
 
 export interface StatPillProps {
@@ -72,7 +72,7 @@ export function StatPill({ icon, accent, label, value, meter, warn, fill, compac
             <span style={{ fontFamily: th.fontMono, fontSize: 13.5, fontWeight: 700, color: th.text, fontVariantNumeric: 'tabular-nums' }}>
               {meter.used}/{meter.limit}
             </span>
-            <span style={{ width: compact ? 34 : 50, height: 5, borderRadius: 999, background: th.surface2, overflow: 'hidden' }}>
+            <span style={{ width: compact ? 34 : 50, ...gaugeTrack(th, 5) }}>
               <span data-testid="statpill-fill" style={{ display: 'block', height: '100%', borderRadius: 999, background: fillColor, width: `${fillPct}%`, transition: 'width .6s ease' }} />
             </span>
             {!compact && <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 500, color: th.textFaint }}>{meter.suffix}</span>}

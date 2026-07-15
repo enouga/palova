@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/useAuth';
 import { api, PlatformBillingOverview, PlatformClub } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { gaugeTrack } from '@/lib/theme';
 import { eurosFromCents } from '@/lib/payments';
 import { KpiCard } from '@/components/superadmin/KpiCard';
 import { MonthlyRevenueChart } from '@/components/admin/stats/MonthlyRevenueChart';
@@ -21,7 +22,7 @@ function TierBars({ title, counts }: { title: string; counts: number[] }) {
       {counts.map((n, tier) => (
         <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textMute, width: 26 }}>T{tier}</span>
-          <div style={{ flex: 1, height: 14, borderRadius: 7, background: th.surface2, overflow: 'hidden' }}>
+          <div style={{ flex: 1, ...gaugeTrack(th, 14, 7) }}>
             <div style={{ height: '100%', width: `${(n / max) * 100}%`, background: th.accent, borderRadius: 7 }} />
           </div>
           <span style={{ fontFamily: th.fontMono, fontSize: 12.5, color: th.text, width: 26, textAlign: 'right' }}>{n}</span>

@@ -62,7 +62,7 @@ function StatTile({ label, value, sub, meter, dot }: {
         <span style={{ fontFamily: th.fontUI, fontSize: 22, fontWeight: 700, color: th.text, lineHeight: 1.1 }}>{value}</span>
       </span>
       {meter != null && (
-        <span aria-hidden="true" style={{ height: 4, borderRadius: 2, background: `${ACCENTS.blue}2e`, overflow: 'hidden', display: 'block' }}>
+        <span aria-hidden="true" style={{ height: 4, borderRadius: 2, background: `${ACCENTS.blue}2e`, boxShadow: `inset 0 0 0 1px ${th.lineStrong}`, overflow: 'hidden', display: 'block' }}>
           <span style={{ display: 'block', height: '100%', width: `${meter}%`, background: ACCENTS.blue, borderRadius: 2 }} />
         </span>
       )}

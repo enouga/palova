@@ -5,7 +5,7 @@ import { api, TimeSlot, Reservation, MemberPackage, MyQuotaStatus, Subscription 
 import { packageLabel, canCover, remainingAfterLabel, paidWithLabel, pickPackageFor } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS, Theme } from '@/lib/theme';
+import { ACCENTS, Theme, gaugeTrack } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn } from '@/components/ui/atoms';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
@@ -431,7 +431,7 @@ export default function BookingModal({
       <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '100dvh', overflowY: 'auto', background: th.bgElev, borderRadius: '0 0 28px 28px', boxShadow: '0 14px 50px rgba(0,0,0,0.34)', animation: 'sp-sheet-in-top .34s cubic-bezier(.2,.8,.2,1)' }}>
         {/* Barre de timer fine (cachée en phase error / confirmed) */}
         {phase !== 'error' && phase !== 'confirmed' && (
-          <div style={{ height: 4, background: th.surface2 }}>
+          <div style={gaugeTrack(th, 4, 0)}>
             <div style={{ height: '100%', width: `${(secondsLeft / HOLD_SECONDS) * 100}%`, background: urgent ? ACCENTS.coral : th.accent, transition: 'width 1s linear' }} />
           </div>
         )}

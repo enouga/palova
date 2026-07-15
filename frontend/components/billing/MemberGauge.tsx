@@ -43,7 +43,7 @@ export function MemberGauge({ count, countedAt }: { count: number; countedAt: st
         </span>
       </div>
 
-      <div style={{ position: 'relative', height: 12, borderRadius: 7, background: 'rgba(24,21,14,0.10)', marginTop: 18 }}>
+      <div style={{ position: 'relative', height: 12, borderRadius: 7, background: 'rgba(24,21,14,0.14)', boxShadow: 'inset 0 0 0 1px rgba(24,21,14,0.22)', marginTop: 18 }}>
         {/* Remplissage */}
         <div style={{
           position: 'absolute', top: 0, bottom: 0, left: 0, width: `${pct}%`,
