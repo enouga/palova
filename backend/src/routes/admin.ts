@@ -108,7 +108,6 @@ const ERROR_STATUS: Record<string, number> = {
   STRIPE_ERROR:           500,
   PAGE_NOT_FOUND:         404,
   FAQ_ITEM_NOT_FOUND:     404,
-  COACH_NOT_FOUND:        404,
   SERIES_NOT_FOUND:       404,
   SERIES_TOO_LONG:        400,
   LESSON_NOT_FOUND:       404,
@@ -718,18 +717,9 @@ router.delete('/sponsors/:id', async (req: ClubScopedRequest, res: Response, nex
   try { await sponsorService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 
-// --- Coachs ---
+// --- Coachs (lecture seule : le statut coach se gère depuis /members/:userId/coach) ---
 router.get('/coaches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await coachService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
-});
-router.post('/coaches', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
-  try { res.status(201).json(await coachService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
-});
-router.patch('/coaches/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
-  try { res.json(await coachService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
-});
-router.delete('/coaches/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
-  try { await coachService.remove(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Séries récurrentes (tous types) ---
@@ -985,6 +975,15 @@ router.patch('/members/:userId/watch', async (req: ClubScopedRequest, res: Respo
 router.patch('/members/:userId/staff-role', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     res.json(await clubService.setMemberStaffRole(req.membership!.clubId, req.user!.id, asString(req.params.userId), req.body?.role));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Statut « coach » d'un membre (table coaches, userId lié) — réservé OWNER/ADMIN, même
+// périmètre que le rôle staff. body { isCoach: boolean }.
+router.patch('/members/:userId/coach', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (typeof req.body?.isCoach !== 'boolean') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await coachService.setMemberCoach(req.membership!.clubId, asString(req.params.userId), req.body.isCoach));
   } catch (e) { handleError(e, res, next); }
 });
 
