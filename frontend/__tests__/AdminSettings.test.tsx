@@ -9,7 +9,11 @@ jest.mock('../lib/ClubProvider', () => ({
 jest.mock('../lib/ThemeProvider', () => ({ useTheme: () => ({ th: new Proxy({}, { get: () => '' }) }) }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
-  api: { adminGetClub: jest.fn(), adminUpdateClub: jest.fn().mockResolvedValue({}), uploadClubLogo: jest.fn(), uploadClubCover: jest.fn() },
+  api: {
+    adminGetClub: jest.fn(), adminUpdateClub: jest.fn().mockResolvedValue({}),
+    uploadClubLogo: jest.fn(), uploadClubCover: jest.fn(),
+    adminGetSports: jest.fn().mockResolvedValue([]), getSports: jest.fn().mockResolvedValue([]),
+  },
 }));
 import { api } from '../lib/api';
 const mocked = api as jest.Mocked<typeof api>;
@@ -72,6 +76,14 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
     expect(screen.getByDisplayValue('Démo')).toBeInTheDocument();
     expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+  });
+
+  it('renders the Sports tab content when selected', async () => {
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    expect(await screen.findByText('Proposés par le club')).toBeInTheDocument();
+    expect(window.location.search).toContain('tab=sports');
   });
 
   it('opens on the tab named in ?tab= at mount', async () => {

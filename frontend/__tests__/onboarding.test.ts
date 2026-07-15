@@ -28,7 +28,7 @@ describe('buildChecklist', () => {
     expect(items.every((i) => i.done)).toBe(true);
     const byKey = Object.fromEntries(items.map((i) => [i.key, i]));
     expect(byKey.logo.href).toBe('/admin/settings?tab=identite');
-    expect(byKey.sports.href).toBe('/admin/sports');
+    expect(byKey.sports.href).toBe('/admin/settings?tab=sports');
     expect(byKey.courts.href).toBe('/admin/courts');
     expect(byKey.page.href).toBe('/admin/club');
     expect(byKey.stripe.href).toBe('/admin/payments');

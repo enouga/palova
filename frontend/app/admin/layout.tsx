@@ -183,7 +183,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ] },
     { title: 'Configuration', color: '#9b8cf0', items: [
       { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
-      { href: '/admin/sports',   label: 'Sports',             icon: 'ball' },
       { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' },
       { href: '/admin/settings', label: 'Réglages',           icon: 'settings' },
     ] },

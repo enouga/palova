@@ -17,8 +17,8 @@ const CLUB: ClubAdminDetail = {
 };
 
 describe('adminSettings helpers', () => {
-  it('exposes 5 tabs in order', () => {
-    expect(SETTINGS_TABS.map((t) => t.key)).toEqual(['identite', 'reservation', 'tarifs', 'caisse', 'visibilite']);
+  it('exposes 6 tabs in order (Sports second)', () => {
+    expect(SETTINGS_TABS.map((t) => t.key)).toEqual(['identite', 'sports', 'reservation', 'tarifs', 'caisse', 'visibilite']);
   });
 
   it('parseTab reads ?tab= and defaults/sanitizes to identite', () => {

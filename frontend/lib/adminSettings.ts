@@ -1,10 +1,11 @@
 // Helpers PURS de la page Réglages du club. Aucune horloge, aucun fetch, aucun JSX.
 import type { ClubAdminDetail, UpdateClubBody, OffPeakRange } from '@/lib/api';
 
-export type SettingsTabKey = 'identite' | 'reservation' | 'tarifs' | 'caisse' | 'visibilite';
+export type SettingsTabKey = 'identite' | 'sports' | 'reservation' | 'tarifs' | 'caisse' | 'visibilite';
 
 export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: 'identite',   label: 'Identité' },
+  { key: 'sports',     label: 'Sports' },
   { key: 'reservation', label: 'Réservation' },
   { key: 'tarifs',     label: 'Tarifs & quotas' },
   { key: 'caisse',     label: 'Caisse & paiement' },

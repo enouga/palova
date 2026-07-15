@@ -11,6 +11,7 @@ import {
 import { SetClubField } from '@/components/admin/settings/shared';
 import { SaveBar } from '@/components/admin/settings/SaveBar';
 import { SettingsIdentity } from '@/components/admin/settings/SettingsIdentity';
+import { SettingsSports } from '@/components/admin/settings/SettingsSports';
 import { SettingsBooking } from '@/components/admin/settings/SettingsBooking';
 import { SettingsPricing } from '@/components/admin/settings/SettingsPricing';
 import { SettingsCollect } from '@/components/admin/settings/SettingsCollect';
@@ -145,6 +146,7 @@ export default function AdminSettingsPage() {
         <SettingsIdentity club={draft} set={set} uploading={uploading}
           logoInputRef={logoInputRef} coverInputRef={coverInputRef} pickLogo={pickLogo} pickCover={pickCover} />
       )}
+      {tab === 'sports' && <SettingsSports />}
       {tab === 'reservation' && <SettingsBooking club={draft} set={set} />}
       {tab === 'tarifs' && <SettingsPricing club={draft} set={set} />}
       {tab === 'caisse' && <SettingsCollect club={draft} set={set} />}
