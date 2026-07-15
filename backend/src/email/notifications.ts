@@ -9,6 +9,7 @@ import { playerCount } from '../utils/courtType';
 import { RatingService } from '../services/rating.service';
 import { inRange } from '../services/rating/range';
 import { SSEService } from '../services/sse.service';
+import { coachDisplay } from '../services/coach.service';
 
 const ratingService = new RatingService();
 
@@ -770,14 +771,14 @@ async function loadLessonEnrollment(enrollmentId: string) {
     include: {
       lesson: {
         include: {
-          coach: { select: { name: true } },
+          coach: { select: { name: true, user: { select: { firstName: true, lastName: true } } } },
           reservation: { select: { startTime: true, endTime: true } },
           club: { select: EMAIL_CLUB_SELECT },
         },
       },
       series: {
         include: {
-          coach: { select: { name: true } },
+          coach: { select: { name: true, user: { select: { firstName: true, lastName: true } } } },
           club: { select: EMAIL_CLUB_SELECT },
         },
       },
@@ -797,7 +798,8 @@ function lessonEmailContext(enr: LessonEnrollmentLoaded) {
   if (!club) return null;
 
   const brand = brandFromClub(club);
-  const coachName = enr.lesson?.coach?.name ?? enr.series?.coach?.name ?? null;
+  const coachName = (enr.lesson?.coach ? coachDisplay(enr.lesson.coach).name : null)
+    ?? (enr.series?.coach ? coachDisplay(enr.series.coach).name : null);
   const activityName = coachName ? `Cours — ${coachName}` : 'Cours';
 
   let dateLabel: string;
@@ -1230,7 +1232,7 @@ export async function notifyActivityCancelledByClub(
       where: { id: activityId },
       include: {
         club: { select: EMAIL_CLUB_SELECT },
-        coach: { select: { name: true } },
+        coach: { select: { name: true, user: { select: { firstName: true, lastName: true } } } },
         reservation: { select: { startTime: true, endTime: true } },
         enrollments: {
           where: { status: { in: ['CONFIRMED', 'WAITLISTED'] } },
@@ -1241,7 +1243,8 @@ export async function notifyActivityCancelledByClub(
     if (!lesson) return;
     const club = lesson.club;
     const brand = brandFromClub(club);
-    const activityName = lesson.coach?.name ? `Cours — ${lesson.coach.name}` : 'Cours';
+    const coachName = lesson.coach ? coachDisplay(lesson.coach).name : null;
+    const activityName = coachName ? `Cours — ${coachName}` : 'Cours';
     const dateLabel = formatDateRangeFr(lesson.reservation.startTime, lesson.reservation.endTime, club.timezone);
     const url = clubAppUrl(club.slug, `/cours/${lesson.id}`);
     const override = await emailTemplates.getOverride(club.id, 'activity.cancelled_by_club');
