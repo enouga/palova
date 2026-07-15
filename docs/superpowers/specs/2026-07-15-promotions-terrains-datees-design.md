@@ -116,21 +116,27 @@ Règles :
 
 ### Points de branchement (existants)
 
-`effectiveSlotPriceCents` enveloppe le résultat de `slotPriceCents` aux endroits
-qui calculent un **prix vivant** pour un créneau réservable :
+`effectiveSlotPriceCents` enveloppe le résultat de `slotPriceCents` aux **deux
+seuls** endroits qui calculent le prix *facturé au joueur* :
 
-- `availability.service.ts:69` — grille de disponibilité (prix affiché au joueur) ;
-- `reservation.service.ts:279` — `holdSlot` (prix figé dans `totalPrice`) ;
-- `reservation.service.ts` reschedule (`:1793` / `:2076`) — prix recalculé au déplacement ;
-- `reservation.service.ts:1225` — repli tarif du « dû » d'une résa COURT sans prix
-  (cohérence de l'affichage du dû sur le planning/caisse).
+- `availability.service.ts:69` — grille de disponibilité (prix affiché au joueur,
+  via `getAvailableSlots`/`getClubAvailability`) ;
+- `reservation.service.ts:279` — `holdSlot` (prix figé dans `totalPrice`).
 
-`memberStats.service.ts:173` (statistiques historiques) reste sur le prix de
-base — les stats reflètent le tarif normal, la promo n'est pas un fait
-historique à recomposer.
+Le prix figé au hold se propage ensuite partout (dû, plafond d'encaissement,
+abonnement, carnet, caisse lisent le `totalPrice` **déjà remisé**) → **aucune
+autre modification**.
 
-Les autres calculs (dû réel, plafond d'encaissement, abonnement, carnet) lisent
-le `totalPrice` **déjà remisé** stocké à la réservation → **aucune modification**.
+**Volontairement non touchés** (découvert au cadrage du plan) :
+
+- Il n'existe **pas** de reschedule joueur qui recalcule le prix ;
+  `adminRescheduleReservation` conserve le `totalPrice` d'origine — rien à faire.
+- Les replis tarif du « dû » (`reservation.service.ts:1225` / `:1793` / `:2076`)
+  ne s'activent que pour un **bloc COURT créé en admin sans prix** (`totalPrice ≤ 0`),
+  hors périmètre promo (l'admin fixe le prix explicitement). Ils restent sur le
+  prix de base pour éviter d'irriguer promotions dans le balayage de couverture
+  abonnement / `addPayment` / `listClubReservations` sans bénéfice réel.
+- `memberStats.service.ts:173` (stats historiques) reste sur le prix de base.
 
 ## Interactions & garanties
 
@@ -180,8 +186,8 @@ le `totalPrice` **déjà remisé** stocké à la réservation → **aucune modif
   fixe, fenêtre horaire dedans/dehors, date dedans/dehors, tous terrains vs
   sélection, chevauchement (meilleur prix), `min` avec la base (prix fixe
   supérieur ignoré), `promoName` retourné.
-- **Service** : `holdSlot` stocke le `totalPrice` remisé ; `availability`
-  retourne `price`/`originalPrice`/`promoName` ; reschedule recalcule remisé.
+- **Service** : `holdSlot` stocke le `totalPrice` remisé (avec et sans promo) ;
+  `availability` retourne `price`/`originalPrice`/`promoName`.
 - **Routes** : CRUD admin + validations (ordre des dates, exclusivité
   `percent`/`fixed`, bornes, appartenance des terrains au club, gating ADMIN).
 - **Frontend** : page `/admin/promotions` (liste + formulaire + groupage), grille
