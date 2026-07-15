@@ -54,3 +54,16 @@ export function openDm(userId: string, opts: { isDesktop: boolean; navigate: (hr
   if (opts.isDesktop) window.dispatchEvent(new CustomEvent('palova:open-dm', { detail: { userId } }));
   else opts.navigate(`/me/messages?with=${userId}`);
 }
+
+/** Codes d'erreur de la messagerie mappés en texte lisible (au moment de la création d'une conversation). */
+export const DM_ERRORS: Record<string, string> = {
+  DM_DISABLED: "Ce joueur n'accepte pas les messages privés.",
+  USER_BLOCKED: "Impossible d'écrire à ce joueur.",
+  NOT_CO_MEMBERS: "Vous n'avez plus de club en commun avec ce joueur.",
+};
+
+/** Message affichable pour une erreur d'ouverture de conversation (repli générique sinon). */
+export function dmErrorMessage(err: unknown): string {
+  const code = err instanceof Error ? err.message : '';
+  return DM_ERRORS[code] ?? "Impossible d'ouvrir cette conversation.";
+}
