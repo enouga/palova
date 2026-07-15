@@ -28,9 +28,11 @@ export default function AdminSettingsPage() {
   // Deux états : baseline serveur + brouillon édité. Le brouillon est dirty quand il diffère.
   const [server, setServer] = useState<ClubAdminDetail | null>(null);
   const [draft, setDraft] = useState<ClubAdminDetail | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // `error` = chargement/upload (bandeau haut) ; `saveError` = échec d'enregistrement (barre sticky).
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tab, setTab] = useState<SettingsTabKey>('identite');
 
@@ -39,14 +41,12 @@ export default function AdminSettingsPage() {
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
-    setLoading(true);
     try {
       setError(null);
       const c = await api.adminGetClub(clubId, token);
       setServer(c);
       setDraft(c);
     } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
   }, [token, clubId]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
@@ -60,9 +60,21 @@ export default function AdminSettingsPage() {
     window.history.replaceState(null, '', url.toString());
   };
 
-  const set: SetClubField = (k, v) => setDraft((c) => (c ? { ...c, [k]: v } : c));
+  // Éditer efface un éventuel échec d'enregistrement et le flash de succès.
+  const set: SetClubField = (k, v) => {
+    setSaveError(null);
+    setJustSaved(false);
+    setDraft((c) => (c ? { ...c, [k]: v } : c));
+  };
 
   const dirty = !!server && !!draft && isDirty(server, draft);
+
+  // Le flash « Enregistré ✓ » s'efface tout seul après 2,5 s.
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [justSaved]);
 
   // Garde beforeunload tant que le brouillon est dirty.
   useEffect(() => {
@@ -101,23 +113,29 @@ export default function AdminSettingsPage() {
     if (!token || !clubId || !draft) return;
     setSaving(true);
     try {
-      setError(null);
+      setSaveError(null);
       await api.adminUpdateClub(clubId, buildUpdateBody(draft), token);
-      setServer(draft);           // le brouillon devient la nouvelle baseline → barre disparaît
+      setServer(draft);           // le brouillon devient la nouvelle baseline → barre passe en « Enregistré ✓ »
+      setJustSaved(true);
       refreshClub();              // rafraîchit le club partagé (réservation, tarifs…)
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setSaveError((e as Error).message); }
     finally { setSaving(false); }
   };
 
-  const cancel = () => { setDraft(server); setError(null); };
+  const cancel = () => { setDraft(server); setSaveError(null); setJustSaved(false); };
 
-  if (loading || !draft) {
-    return <div style={{ fontFamily: th.fontUI, color: th.textFaint, padding: '32px 0' }}>Chargement…</div>;
+  if (!draft) {
+    // Pas encore de brouillon : chargement en cours, ou échec de chargement (on montre l'erreur).
+    return <div style={{ fontFamily: th.fontUI, color: error ? th.text : th.textFaint, padding: '32px 0' }}>{error ?? 'Chargement…'}</div>;
   }
 
   return (
     <div style={{ maxWidth: 900 }}>
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 20px', color: th.text }}>Réglages du club</h1>
+
+      {error && (
+        <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+      )}
 
       <div className="sp-scroll-x" style={{ marginBottom: 20 }}>
         <PillTabs options={SETTINGS_TABS.map((t) => ({ value: t.key, label: t.label }))} value={tab} onChange={changeTab} />
@@ -132,7 +150,7 @@ export default function AdminSettingsPage() {
       {tab === 'caisse' && <SettingsCollect club={draft} set={set} />}
       {tab === 'visibilite' && <SettingsVisibility club={draft} set={set} />}
 
-      <SaveBar dirty={dirty} saving={saving} error={error} onSave={save} onCancel={cancel} />
+      <SaveBar dirty={dirty} saving={saving} error={saveError} saved={justSaved} onSave={save} onCancel={cancel} />
     </div>
   );
 }

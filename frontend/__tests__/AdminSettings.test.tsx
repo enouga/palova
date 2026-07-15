@@ -60,6 +60,8 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     const body = (mocked.adminUpdateClub as jest.Mock).mock.calls[0][1];
     expect(body.name).toBe('Nouveau nom');
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    // La barre passe du « non enregistrées » au flash « Enregistré ✓ ».
+    expect(await screen.findByText(/Enregistré/)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument());
   });
 

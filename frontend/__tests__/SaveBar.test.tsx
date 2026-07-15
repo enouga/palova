@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import { SaveBar } from '@/components/admin/settings/SaveBar';
 
-const base = { dirty: true, saving: false, error: null as string | null, onSave: jest.fn(), onCancel: jest.fn() };
+const base = { dirty: true, saving: false, error: null as string | null, saved: false, onSave: jest.fn(), onCancel: jest.fn() };
 const wrap = (over: Partial<typeof base> = {}) =>
   render(<ThemeProvider><SaveBar {...base} {...over} /></ThemeProvider>);
 
@@ -33,5 +33,12 @@ describe('SaveBar', () => {
   it('shows an error and stays visible even if not dirty', () => {
     wrap({ dirty: false, error: 'Boom' });
     expect(screen.getByRole('alert')).toHaveTextContent('Boom');
+  });
+
+  it('shows the "Enregistré ✓" flash without action buttons when saved and clean', () => {
+    wrap({ dirty: false, saved: true });
+    expect(screen.getByText(/Enregistré/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Annuler' })).not.toBeInTheDocument();
   });
 });
