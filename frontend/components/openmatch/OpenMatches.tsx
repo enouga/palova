@@ -64,6 +64,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   // chevauche [fMin,fMax] (les parties « ouvertes à tous » passent toujours).
   const [fMin, setFMin] = useState(1);
   const [fMax, setFMax] = useState(8);
+  const [kindFilter, setKindFilter] = useState<'all' | 'competitive' | 'friendly'>('all');
   const [view, setView] = useState<'parties' | 'matchs' | 'classement'>('parties');
   // Mes matchs (résultats) : chargés à la 1re ouverture de la vue. null = pas encore chargé.
   const [myMatches, setMyMatches] = useState<MyMatch[] | null>(null);
@@ -153,9 +154,12 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const myLevelMin = myLevel != null ? Math.max(1, Math.round(myLevel) - 1) : null;
   const myLevelMax = myLevel != null ? Math.min(8, Math.round(myLevel) + 1) : null;
   const atMyLevel = myLevelMin != null && fMin === myLevelMin && fMax === myLevelMax;
-  const filtered = levelFilterActive
+  const byLevel = levelFilterActive
     ? matches.filter((m) => rangesOverlap(m.targetLevelMin ?? null, m.targetLevelMax ?? null, fMin, fMax))
     : matches;
+  const filtered = kindFilter === 'all'
+    ? byLevel
+    : byLevel.filter((m) => (m.competitive === false) === (kindFilter === 'friendly'));
 
   // Section « Pour toi » : parties recommandées à mon niveau, retirées de la liste « Autres ».
   // Désactivée si le club n'utilise pas le système de niveau. Respecte le filtre de la jauge.
@@ -206,6 +210,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               <LevelRangeSlider compact min={fMin} max={fMax} onChange={setLevelFilter} />
             </div>
           )}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+            <FilterChip label="Toutes" active={kindFilter === 'all'} onClick={() => setKindFilter('all')} />
+            <FilterChip label="Compétitives" active={kindFilter === 'competitive'} onClick={() => setKindFilter('competitive')} />
+            <FilterChip label="Amicales" active={kindFilter === 'friendly'} onClick={() => setKindFilter('friendly')} />
+          </div>
           {token && (
             <div style={{ marginTop: 14 }}>
               <button

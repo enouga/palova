@@ -95,6 +95,20 @@ describe('OpenMatches', () => {
     expect(await screen.findByRole('button', { name: /créer une alerte/i })).toBeInTheDocument();
   });
 
+  it('filtre les parties amicales via les chips Toutes/Compétitives/Amicales', async () => {
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'm1', resourceName: 'Terrain 1', competitive: true }),
+      match({ id: 'm2', resourceName: 'Terrain 2', competitive: false }),
+    ] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await screen.findByText('Terrain 2');
+    expect(screen.getByText('Terrain 1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Amicales' }));
+    await waitFor(() => expect(screen.queryByText('Terrain 1')).not.toBeInTheDocument());
+    expect(screen.getByText('Terrain 2')).toBeInTheDocument();
+  });
+
   it('niveau hors fourchette : avertissement, puis « Rejoindre quand même » rejoint à la place tapée', async () => {
     mocked.getMyRating.mockResolvedValue({ level: 3 } as never);
     mocked.getOpenMatches.mockResolvedValue([match({ targetLevelMin: 6, targetLevelMax: 8 })] as never);
@@ -209,7 +223,8 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
     const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur à l'équipe/ });
     fireEvent.click(addBtns[0]);
-    fireEvent.click(await screen.findByRole('button', { name: /Ami/ }));
+    // `name: 'Ami'` (exact) et non `/Ami/` : le chip de filtre « Amicales » matcherait aussi la regex.
+    fireEvent.click(await screen.findByRole('button', { name: 'Ami' }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-ami', 'abc'));
   });
 
