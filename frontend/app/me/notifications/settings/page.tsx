@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, NotifPrefRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { useClub } from '@/lib/ClubProvider';
+import { Screen } from '@/components/ui/Screen';
+import { ClubNav } from '@/components/ClubNav';
+import { BackButton, ThemeToggle } from '@/components/ui/atoms';
+import { ProfileMenu } from '@/components/ProfileMenu';
 import { usePush } from '@/lib/usePush';
 import {
   CATEGORY_META, CHANNELS, CHANNEL_LABEL, NotifCategory, NotifChannel, effective, isLocked,
@@ -11,6 +16,7 @@ import {
 export default function NotificationSettingsPage() {
   const { token, ready } = useAuth();
   const { th } = useTheme();
+  const { slug, club } = useClub();
   const { status: pushStatus, subscribe, unsubscribe } = usePush();
   const [prefs, setPrefs] = useState<NotifPrefRow[]>([]);
   const [isStaff, setIsStaff] = useState(false);
@@ -50,8 +56,27 @@ export default function NotificationSettingsPage() {
   const cell: React.CSSProperties = { textAlign: 'center', padding: '10px 8px' };
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: 16 }}>
-      <h1 style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 22, color: th.text, marginBottom: 4 }}>Notifications</h1>
+    <Screen>
+      <div style={{ paddingBottom: 48 }}>
+        {slug && club ? (
+          <ClubNav club={club} />
+        ) : (
+          <div style={{ padding: '28px 20px 6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <BackButton href="/clubs" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ThemeToggle />
+                <ProfileMenu />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
+          Notifications
+        </div>
+
+        <div style={{ padding: '18px 20px 0' }}>
       <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 16 }}>
         Choisis comment tu veux être prévenu. Active le push pour être prévenu même l'app fermée.
       </p>
@@ -125,6 +150,8 @@ export default function NotificationSettingsPage() {
         }}>Enregistrer</button>
         {saved && <span style={{ color: th.textMute, fontFamily: th.fontUI, fontSize: 13 }}>Enregistré ✓</span>}
       </div>
-    </div>
+        </div>
+      </div>
+    </Screen>
   );
 }
