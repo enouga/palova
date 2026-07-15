@@ -1,4 +1,4 @@
-import { splitOffPeakMinutes, slotPriceCents, classifySlot } from '../pricing';
+import { splitOffPeakMinutes, slotPriceCents, classifySlot, effectiveSlotPriceCents, ActivePromo } from '../pricing';
 
 // Lundi : creuses 9h–12h et 14h–17h, le reste en pleines.
 const OFF = { 1: [{ start: 9, end: 12 }, { start: 14, end: 17 }] };
@@ -70,5 +70,49 @@ describe('classifySlot', () => {
   it('précision minute : 9h30-12h15 creux → 9h30-10h30 OFF_PEAK, 9h-10h PEAK', () => {
     expect(classifySlot(OFF_MIN, d('2026-06-08T07:30:00Z'), d('2026-06-08T08:30:00Z'), TZ)).toBe('OFF_PEAK');
     expect(classifySlot(OFF_MIN, d('2026-06-08T07:00:00Z'), d('2026-06-08T08:00:00Z'), TZ)).toBe('PEAK');
+  });
+});
+
+describe('effectiveSlotPriceCents', () => {
+  const promo = (p: Partial<ActivePromo>): ActivePromo => ({
+    name: 'P', kind: 'PERCENT', percentOff: null, fixedPriceCents: null,
+    windowStart: null, windowEnd: null, resourceIds: [], ...p,
+  });
+  const S = d('2026-07-15T16:00:00Z'), E = d('2026-07-15T17:00:00Z'); // 18:00–19:00 Paris
+
+  it('sans promo → prix de base, pas de nom', () => {
+    expect(effectiveSlotPriceCents(2500, [], 'court-1', S, E, TZ)).toEqual({ priceCents: 2500 });
+  });
+  it('pourcentage → base × (100−p)/100 + nom', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ name: 'Été', percentOff: 20 })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 2000, promoName: 'Été' });
+  });
+  it('prix fixe → écrase la base', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ name: 'Fixe', kind: 'FIXED', fixedPriceCents: 1500 })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 1500, promoName: 'Fixe' });
+  });
+  it('prix fixe supérieur à la base → ignoré (min)', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ name: 'Cher', kind: 'FIXED', fixedPriceCents: 3000 })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 2500 });
+  });
+  it('ciblage : promo restreinte à un autre terrain → ignorée', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ percentOff: 50, resourceIds: ['court-2'] })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 2500 });
+  });
+  it('ciblage : promo restreinte au terrain courant → appliquée', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ name: 'C1', percentOff: 50, resourceIds: ['court-1'] })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 1250, promoName: 'C1' });
+  });
+  it('fenêtre : créneau entièrement dedans → appliquée', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ name: 'HH', percentOff: 20, windowStart: 1020, windowEnd: 1200 })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 2000, promoName: 'HH' });
+  });
+  it('fenêtre : créneau qui déborde → ignorée', () => {
+    expect(effectiveSlotPriceCents(2500, [promo({ percentOff: 20, windowStart: 1110, windowEnd: 1200 })], 'court-1', S, E, TZ))
+      .toEqual({ priceCents: 2500 });
+  });
+  it('chevauchement → meilleur prix (le plus bas) gagne', () => {
+    const promos = [promo({ name: 'A', percentOff: 20 }), promo({ name: 'B', kind: 'FIXED', fixedPriceCents: 1200 })];
+    expect(effectiveSlotPriceCents(2500, promos, 'court-1', S, E, TZ)).toEqual({ priceCents: 1200, promoName: 'B' });
   });
 });

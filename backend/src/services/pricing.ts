@@ -79,3 +79,55 @@ export function slotPriceCents(
   if (offPeakCents == null) return priceCents;
   return classifySlot(off, start, end, tz) === 'OFF_PEAK' ? offPeakCents : priceCents;
 }
+
+// ------------------------------------------------------- Promotions datées
+/** Promo active (déjà filtrée sur la date) prête pour le calcul de prix. */
+export interface ActivePromo {
+  name: string;
+  kind: 'PERCENT' | 'FIXED';
+  percentOff: number | null;
+  fixedPriceCents: number | null;
+  windowStart: number | null; // minutes depuis minuit, heure locale ; null = toute la journée
+  windowEnd: number | null;
+  resourceIds: string[];       // vide = tous les terrains
+}
+
+/**
+ * Prix effectif d'un créneau en CENTIMES après application des promotions actives.
+ * `baseCents` = prix normal (déjà calculé par slotPriceCents). `promos` doit déjà être
+ * filtré sur la date du créneau (cf. loadActivePromotions). Le client gagne : on retient
+ * le prix le plus bas, et une promo ne fait jamais monter le prix.
+ */
+export function effectiveSlotPriceCents(
+  baseCents: number,
+  promos: ActivePromo[],
+  resourceId: string,
+  start: Date,
+  end: Date,
+  tz: string,
+): { priceCents: number; promoName?: string } {
+  const s = DateTime.fromJSDate(start, { zone: tz });
+  const e = DateTime.fromJSDate(end, { zone: tz });
+  const startMin = s.hour * 60 + s.minute;
+  const endMin = e.hour * 60 + e.minute;
+
+  let bestCents = baseCents;
+  let bestName: string | undefined;
+  for (const p of promos) {
+    if (p.resourceIds.length > 0 && !p.resourceIds.includes(resourceId)) continue;
+    if (p.windowStart != null && p.windowEnd != null) {
+      if (endMin <= startMin) continue;                       // créneau à cheval sur minuit : hors périmètre
+      if (startMin < p.windowStart || endMin > p.windowEnd) continue; // pas entièrement dans la fenêtre
+    }
+    let candidate: number;
+    if (p.kind === 'PERCENT' && p.percentOff != null) {
+      candidate = Math.round((baseCents * (100 - p.percentOff)) / 100);
+    } else if (p.kind === 'FIXED' && p.fixedPriceCents != null) {
+      candidate = p.fixedPriceCents;
+    } else {
+      continue;
+    }
+    if (candidate < bestCents) { bestCents = candidate; bestName = p.name; }
+  }
+  return bestName ? { priceCents: bestCents, promoName: bestName } : { priceCents: bestCents };
+}
