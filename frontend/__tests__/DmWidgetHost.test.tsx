@@ -55,7 +55,7 @@ it('desktop : conversation refusée (DM_DISABLED) affiche un message d\'erreur f
   (window.matchMedia as unknown as jest.Mock) = jest.fn().mockReturnValue({
     matches: true, addEventListener: jest.fn(), removeEventListener: jest.fn(),
   });
-  apiMock.openConversation.mockRejectedValue(new Error('DM_DISABLED'));
+  apiMock.openConversation.mockRejectedValueOnce(new Error('DM_DISABLED'));
   render(<ThemeProvider><DmWidgetHost /></ThemeProvider>);
   emitOpen('u2');
   expect(await screen.findByRole('alert')).toHaveTextContent("Ce joueur n'accepte pas les messages privés.");
