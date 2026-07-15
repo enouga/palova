@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClub } from '@/lib/ClubProvider';
+import { Screen } from '@/components/ui/Screen';
 import { TournamentFinder } from '@/components/calendar/TournamentFinder';
 
 // L'hôte est décidé par `slug` (posé par le layout depuis x-club-slug) : null = plateforme.
@@ -15,5 +16,9 @@ export default function TournoisPage() {
   }, [slug, router]);
 
   if (slug) return null;            // hôte club : redirection en cours vers /events
-  return <TournamentFinder />;      // hôte plateforme (slug === null)
+  return (
+    <Screen>
+      <TournamentFinder />
+    </Screen>
+  );
 }
