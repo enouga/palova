@@ -328,6 +328,9 @@ export default function MyProfilePage() {
           </div>
         )}
 
+        {/* Clamp desktop : le shell fait 1080, le formulaire reste lisible à 760 centré. */}
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+
         <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
           Mon profil
         </div>
@@ -615,6 +618,7 @@ export default function MyProfilePage() {
             </div>
           </>
         )}
+        </div>{/* /clamp 760 */}
       </div>
     </Screen>
   );
