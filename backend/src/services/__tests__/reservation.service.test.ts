@@ -67,6 +67,7 @@ describe('ReservationService', () => {
     mockNotifyRescheduled.mockReset().mockResolvedValue(undefined);
     matchAndNotifyMock.mockReset().mockResolvedValue([]);
     mockInvalidateAvailability.mockReset();
+    prismaMock.promotion.findMany.mockResolvedValue([] as any);
   });
 
   const baseParams = {
@@ -218,6 +219,24 @@ describe('ReservationService', () => {
 
       const arg = (prismaMock.reservation.create as jest.Mock).mock.calls[0][0];
       expect(Number(arg.data.totalPrice)).toBe(18); // prix du créneau creux
+    });
+
+    it('holdSlot applique une promo % au totalPrice stocké', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ price: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.promotion.findMany.mockResolvedValue([
+        { name: 'Été', kind: 'PERCENT', percentOff: 20, fixedPrice: null, windowStart: null, windowEnd: null, resources: [] },
+      ] as any);
+
+      let createdData: any;
+      prismaMock.reservation.create.mockImplementation((async (args: any) => { createdData = args.data; return { id: 'res-1', ...args.data }; }) as any);
+      prismaMock.reservationParticipant.createMany.mockResolvedValue({ count: 1 } as any);
+
+      await service.holdSlot(baseParams);
+
+      // 25€ − 20% = 20.00
+      expect(Number(createdData.totalPrice)).toBe(20);
     });
 
     // --- Multi-joueurs : partenaires, visibilité, partage du montant ---
