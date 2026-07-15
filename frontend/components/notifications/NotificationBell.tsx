@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, notificationsStreamUrl, AppNotification } from '@/lib/api';
+import { api, AppNotification } from '@/lib/api';
+import { subscribeNotifications } from '@/lib/notificationsStream';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -26,15 +27,8 @@ export function NotificationBell() {
     if (!token) return;
     let alive = true;
     api.getUnreadCount(token).then((r) => { if (alive) setUnread(r.count); }).catch(() => {});
-    const es = new EventSource(notificationsStreamUrl(token));
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data?.type === 'notification') setUnread((n) => n + 1);
-      } catch { /* ping / connected */ }
-    };
-    es.onerror = () => es.close();
-    return () => { alive = false; es.close(); };
+    const unsub = subscribeNotifications(token, () => setUnread((n) => n + 1));
+    return () => { alive = false; unsub(); };
   }, [token]);
 
   // Fermeture au clic extérieur / Échap.

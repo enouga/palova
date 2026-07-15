@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api, notificationsStreamUrl, ConversationSummary, DmMeta, DmUserInfo } from '@/lib/api';
+import { api, ConversationSummary, DmMeta, DmUserInfo } from '@/lib/api';
+import { subscribeNotifications } from '@/lib/notificationsStream';
 import { dmErrorMessage } from '@/lib/messages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -47,14 +48,10 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
 
   // Live : nouveau message ailleurs → cloche SSE ; lecture locale → event window.
   useEffect(() => {
-    const es = new EventSource(notificationsStreamUrl(token));
-    es.onmessage = (e: MessageEvent) => {
-      try { if ((JSON.parse(e.data) as { type: string }).type === 'notification') reload(); } catch { /* ignore */ }
-    };
-    es.onerror = () => {};
+    const unsub = subscribeNotifications(token, reload);
     const onLocal = () => reload();
     window.addEventListener('palova:dm-unread', onLocal);
-    return () => { es.close(); window.removeEventListener('palova:dm-unread', onLocal); };
+    return () => { unsub(); window.removeEventListener('palova:dm-unread', onLocal); };
   }, [token, reload]);
 
   // Deeplink ?with= : get-or-create puis ouverture.

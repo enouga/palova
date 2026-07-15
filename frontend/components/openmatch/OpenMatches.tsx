@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { api, ClubDetail, OpenMatch, MyMatch, notificationsStreamUrl } from '@/lib/api';
+import { api, ClubDetail, OpenMatch, MyMatch } from '@/lib/api';
+import { subscribeNotifications } from '@/lib/notificationsStream';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
@@ -137,13 +138,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   useEffect(() => {
     if (!token) return;
-    const es = new EventSource(notificationsStreamUrl(token));
-    es.onmessage = (e) => {
-      try { if (JSON.parse(e.data)?.type === 'notification') { load(); window.dispatchEvent(new Event('palova:openmatch-unread')); } }
-      catch { /* ping/connected */ }
-    };
-    es.onerror = () => es.close();
-    return () => es.close();
+    return subscribeNotifications(token, () => { load(); window.dispatchEvent(new Event('palova:openmatch-unread')); });
   }, [token, load]);
 
   const a = useOpenMatchActions({ club, token, myLevel, reload: load });

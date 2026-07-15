@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClubDetail, assetUrl, api, notificationsStreamUrl } from '@/lib/api';
+import { ClubDetail, assetUrl, api } from '@/lib/api';
+import { subscribeNotifications } from '@/lib/notificationsStream';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl } from '@/lib/clubUrl';
@@ -57,12 +58,10 @@ export function ClubNav({ club }: { club: ClubDetail }) {
         .then((list) => { if (alive) setOpenPartiesCount(list.length); }).catch(() => {});
     };
     refresh();
-    const es = new EventSource(notificationsStreamUrl(token));
-    es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
-    es.onerror = () => es.close();
+    const unsub = subscribeNotifications(token, refresh);
     const onLocal = () => refresh();
     window.addEventListener('palova:openmatch-unread', onLocal);
-    return () => { alive = false; es.close(); window.removeEventListener('palova:openmatch-unread', onLocal); };
+    return () => { alive = false; unsub(); window.removeEventListener('palova:openmatch-unread', onLocal); };
   }, [showPartiesTab, token, club.slug, pathname]);
 
   // Compteur de messages privés non lus (badge 💬 du header) — route /api/me/* (pas de slug).
@@ -76,12 +75,10 @@ export function ClubNav({ club }: { club: ClubDetail }) {
     const refresh = () => api.getDmUnread(token)
       .then((r) => { if (alive) setDmUnread(r.count); }).catch(() => {});
     refresh();
-    const es = new EventSource(notificationsStreamUrl(token));
-    es.onmessage = (e) => { try { if (JSON.parse(e.data)?.type === 'notification') refresh(); } catch { /* ping */ } };
-    es.onerror = () => es.close();
+    const unsub = subscribeNotifications(token, refresh);
     const onLocal = () => refresh();
     window.addEventListener('palova:dm-unread', onLocal);
-    return () => { alive = false; es.close(); window.removeEventListener('palova:dm-unread', onLocal); };
+    return () => { alive = false; unsub(); window.removeEventListener('palova:dm-unread', onLocal); };
   }, [showMessages, token, pathname]);
 
   // Raccourci « Espace club » dans l'en-tête : visible pour l'OWNER/ADMIN/STAFF du club courant
