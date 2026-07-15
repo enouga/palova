@@ -51,6 +51,18 @@ it('desktop : palova:open-dm ouvre le widget ancré avec le fil', async () => {
   expect(screen.queryByText('Marie D')).toBeNull();
 });
 
+it('desktop : conversation refusée (DM_DISABLED) affiche un message d\'erreur fermable', async () => {
+  (window.matchMedia as unknown as jest.Mock) = jest.fn().mockReturnValue({
+    matches: true, addEventListener: jest.fn(), removeEventListener: jest.fn(),
+  });
+  apiMock.openConversation.mockRejectedValueOnce(new Error('DM_DISABLED'));
+  render(<ThemeProvider><DmWidgetHost /></ThemeProvider>);
+  emitOpen('u2');
+  expect(await screen.findByRole('alert')).toHaveTextContent("Ce joueur n'accepte pas les messages privés.");
+  fireEvent.click(screen.getByRole('button', { name: /fermer/i }));
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
 it('mobile : palova:open-dm route vers /me/messages?with=', async () => {
   (window.matchMedia as unknown as jest.Mock) = jest.fn().mockReturnValue({
     matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn(),

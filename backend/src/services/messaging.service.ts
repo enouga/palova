@@ -98,6 +98,16 @@ export class MessagingService {
     await this.sharedActiveClubId(a, b);
   }
 
+  /** Refus général de nouveaux messages : la cible doit accepter, SAUF amitié confirmée
+   *  (qui passe toujours). Ne s'applique qu'à la CRÉATION d'une conversation — appelée
+   *  uniquement quand !conv dans getOrCreateConversation, jamais sur une conversation existante. */
+  private async assertAcceptsMessages(a: string, b: string, otherAccepts: boolean): Promise<void> {
+    if (otherAccepts) return;
+    const fr = await prisma.friendship.findUnique({ where: { userAId_userBId: canonical(a, b) }, select: { status: true } });
+    if (fr?.status === 'ACCEPTED') return;
+    throw new Error('DM_DISABLED');
+  }
+
   private async pairBlocked(a: string, b: string): Promise<boolean> {
     const block = await prisma.userBlock.findFirst({
       where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] },
@@ -128,7 +138,10 @@ export class MessagingService {
   /** Get-or-create idempotent par paire canonique. Bloqué ⇒ pas de création (l'existante reste lisible). */
   async getOrCreateConversation(meId: string, otherUserId: string, clubSlug?: string | null): Promise<ConversationSummaryDTO> {
     if (!otherUserId || otherUserId === meId) throw new Error('CANNOT_MESSAGE_SELF');
-    const other = await prisma.user.findUnique({ where: { id: otherUserId }, select: { ...USER_SELECT, deletedAt: true } });
+    const other = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { ...USER_SELECT, deletedAt: true, acceptsDirectMessages: true },
+    });
     if (!other || other.deletedAt) throw new Error('CONVERSATION_NOT_FOUND');
 
     const pair = canonical(meId, otherUserId);
@@ -139,6 +152,7 @@ export class MessagingService {
     if (!conv) {
       const clubId = await this.sharedActiveClubId(meId, otherUserId, clubSlug);
       await this.assertNotBlocked(meId, otherUserId);
+      await this.assertAcceptsMessages(meId, otherUserId, other.acceptsDirectMessages);
       await assertRateLimit('dm:newconv', meId, 15, 3600);
       try {
         conv = await prisma.conversation.create({

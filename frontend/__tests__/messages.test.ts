@@ -1,4 +1,4 @@
-import { inboxPreview, dayKey, dayLabel, isReadByOther, applyReactionToggle } from '@/lib/messages';
+import { inboxPreview, dayKey, dayLabel, isReadByOther, applyReactionToggle, dmErrorMessage } from '@/lib/messages';
 import { ConversationSummary, DmMessage } from '@/lib/api';
 
 const NOW = new Date('2026-07-04T15:00:00');
@@ -45,5 +45,17 @@ describe('applyReactionToggle (patch local optimiste)', () => {
   it('retire ma réaction existante (toggle) et purge l\'emoji vide', () => {
     const r = applyReactionToggle([{ emoji: '👍', userIds: ['u1'] }], '👍', 'u1');
     expect(r).toEqual([]);
+  });
+});
+
+describe('dmErrorMessage', () => {
+  it('mappe les codes connus vers un message lisible', () => {
+    expect(dmErrorMessage(new Error('DM_DISABLED'))).toBe("Ce joueur n'accepte pas les messages privés.");
+    expect(dmErrorMessage(new Error('USER_BLOCKED'))).toBe("Impossible d'écrire à ce joueur.");
+    expect(dmErrorMessage(new Error('NOT_CO_MEMBERS'))).toBe("Vous n'avez plus de club en commun avec ce joueur.");
+  });
+  it('repli générique sur un code inconnu ou une valeur qui n\'est pas une Error', () => {
+    expect(dmErrorMessage(new Error('BOOM'))).toBe("Impossible d'ouvrir cette conversation.");
+    expect(dmErrorMessage('pas une Error')).toBe("Impossible d'ouvrir cette conversation.");
   });
 });

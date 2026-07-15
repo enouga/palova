@@ -37,7 +37,7 @@ const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, process.env.JWT_S
 const PROFILE = {
   id: 'u1', email: 'test@x.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: null, sex: null,
   birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
-  autoMatchProposals: false,
+  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: false,
 };
 
 // PNG 1x1 minimal (entête valide suffisante : le backend ne décode pas l'image).
@@ -116,6 +116,18 @@ describe('PATCH /api/me', () => {
 
   it('PATCH /api/me rejette acceptsFriendRequests non booléen', async () => {
     const res = await request(app).patch('/api/me').send({ acceptsFriendRequests: 'oui' }).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH /api/me accepte acceptsDirectMessages (booléen)', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, acceptsDirectMessages: false } as any);
+    const res = await request(app).patch('/api/me').send({ acceptsDirectMessages: false }).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { acceptsDirectMessages: false } }));
+  });
+
+  it('PATCH /api/me rejette acceptsDirectMessages non booléen', async () => {
+    const res = await request(app).patch('/api/me').send({ acceptsDirectMessages: 'non' }).set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(400);
   });
 });

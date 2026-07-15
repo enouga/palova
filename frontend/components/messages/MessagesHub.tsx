@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { api, notificationsStreamUrl, ConversationSummary, DmMeta, DmUserInfo } from '@/lib/api';
+import { dmErrorMessage } from '@/lib/messages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Avatar } from '@/components/ui/Avatar';
@@ -31,6 +32,7 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
   const [blocked, setBlocked] = useState<DmUserInfo[]>([]);
   const [now, setNow] = useState<Date | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [deeplinkError, setDeeplinkError] = useState<string | null>(null);
 
   useEffect(() => { setNow(new Date()); }, []);
 
@@ -59,8 +61,8 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
   useEffect(() => {
     if (!initialWith) return;
     api.openConversation(initialWith, token, clubSlug)
-      .then((c) => { setSelected(c); reload(); })
-      .catch(() => {});
+      .then((c) => { setDeeplinkError(null); setSelected(c); reload(); })
+      .catch((err) => setDeeplinkError(dmErrorMessage(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialWith, token, clubSlug]);
 
@@ -135,36 +137,48 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
         </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }}>
-        <ConversationList conversations={conversations} selectedId={selected?.id ?? null} now={now} onSelect={setSelected} />
+        <ConversationList conversations={conversations} selectedId={selected?.id ?? null} now={now}
+          onSelect={(c) => { setDeeplinkError(null); setSelected(c); }} />
       </div>
     </div>
   );
 
   return (
     <div style={{ border: `1px solid ${th.line}`, borderRadius: 16, background: th.bg, overflow: 'hidden',
-      display: 'flex', height: 'min(680px, calc(100vh - 220px))', minHeight: 380 }}>
-      {isDesktop ? (
-        <>
-          <div style={{ width: 320, borderRight: `1px solid ${th.line}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{list}</div>
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {thread ?? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>
-                Sélectionnez une conversation
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        // minWidth:0 — sans lui, le min-content du composer (textarea+boutons) remonte via
-        // min-width:auto et pousse tout le fil hors de la carte sur mobile (bulles rognées).
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{selected ? thread : list}</div>
+      display: 'flex', flexDirection: 'column', height: 'min(680px, calc(100vh - 220px))', minHeight: 380 }}>
+      {deeplinkError && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '8px 14px', background: '#e5484d1a', borderBottom: `1px solid ${th.line}`,
+          fontFamily: th.fontUI, fontSize: 13, color: '#e5484d' }}>
+          <span>{deeplinkError}</span>
+          <button type="button" aria-label="Fermer" onClick={() => setDeeplinkError(null)}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#e5484d', fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
       )}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {isDesktop ? (
+          <>
+            <div style={{ width: 320, borderRight: `1px solid ${th.line}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{list}</div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              {thread ?? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>
+                  Sélectionnez une conversation
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          // minWidth:0 — sans lui, le min-content du composer (textarea+boutons) remonte via
+          // min-width:auto et pousse tout le fil hors de la carte sur mobile (bulles rognées).
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{selected ? thread : list}</div>
+        )}
+      </div>
 
       {newOpen && clubSlug && (
         <NewConversationPanel slug={clubSlug} token={token} viewerUserId={viewerUserId}
           onClose={() => setNewOpen(false)}
-          onOpened={(c) => { setSelected(c); reload(); setNewOpen(false); }} />
+          onOpened={(c) => { setDeeplinkError(null); setSelected(c); reload(); setNewOpen(false); }} />
       )}
       {blockTarget && (
         <ConfirmDialog

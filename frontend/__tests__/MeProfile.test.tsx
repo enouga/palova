@@ -43,7 +43,7 @@ const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 const profile = {
   id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
   birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
-  autoMatchProposals: false, acceptsFriendRequests: false,
+  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: true,
 };
 
 const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
@@ -158,6 +158,15 @@ describe('Page Mon profil', () => {
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ acceptsFriendRequests: true }, 'abc'));
     // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
     await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
+  });
+
+  it('désactive « Recevoir des messages privés » appelle updateMyProfile({ acceptsDirectMessages: false })', async () => {
+    api.updateMyProfile.mockResolvedValue({ ...profile, acceptsDirectMessages: false });
+    wrap();
+    const group = await screen.findByRole('group', { name: /recevoir des messages privés/i });
+    fireEvent.click(within(group).getByText('Non'));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ acceptsDirectMessages: false }, 'abc'));
+    await waitFor(() => expect(within(group).getByText('Non')).toHaveStyle({ fontWeight: 700 }));
   });
 
   it('le sélecteur de thème bascule en sombre (localStorage)', async () => {

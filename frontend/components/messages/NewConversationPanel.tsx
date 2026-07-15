@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api, ClubMemberSearchResult, ConversationSummary, Friend } from '@/lib/api';
+import { dmErrorMessage } from '@/lib/messages';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { LevelChip } from '@/components/player/LevelChip';
@@ -46,8 +47,8 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
     try {
       const conversation = await api.openConversation(userId, token, slug);
       onOpened(conversation);
-    } catch {
-      setError("Impossible d'ouvrir cette conversation.");
+    } catch (err) {
+      setError(dmErrorMessage(err));
       setBusyId(null);
     }
   };

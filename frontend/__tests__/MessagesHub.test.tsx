@@ -61,6 +61,20 @@ it('deeplink initialWith → openConversation puis fil ouvert', async () => {
   await waitFor(() => expect(apiMock.getDmMessages).toHaveBeenCalled());
 });
 
+it('deeplink refusé (DM_DISABLED) affiche un bandeau d\'erreur explicite', async () => {
+  apiMock.openConversation.mockRejectedValue(new Error('DM_DISABLED'));
+  renderHub({ initialWith: 'u9' });
+  expect(await screen.findByRole('alert')).toHaveTextContent("Ce joueur n'accepte pas les messages privés.");
+});
+
+it('sélectionner une conversation après un deeplink refusé efface le bandeau', async () => {
+  apiMock.openConversation.mockRejectedValue(new Error('DM_DISABLED'));
+  renderHub({ initialWith: 'u9' });
+  await screen.findByRole('alert');
+  fireEvent.click(await screen.findByText('Marie Dupont'));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+});
+
 it('menu ⋮ de l\'en-tête du fil : « Bloquer ce membre » → blockUser après confirmation', async () => {
   renderHub();
   fireEvent.click(await screen.findByText('Marie Dupont'));

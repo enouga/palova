@@ -11,7 +11,7 @@ jest.mock('../../email/notifications', () => ({
   notifyDirectMessage: (...a: unknown[]) => mockNotify(...a),
 }));
 
-const U = (id: string) => ({ id, firstName: 'P', lastName: id.toUpperCase(), avatarUrl: null });
+const U = (id: string) => ({ id, firstName: 'P', lastName: id.toUpperCase(), avatarUrl: null, acceptsDirectMessages: true });
 
 describe('MessagingService — getOrCreateConversation', () => {
   let service: MessagingService;
@@ -84,6 +84,44 @@ describe('MessagingService — getOrCreateConversation', () => {
     redisMock.incr.mockResolvedValue(16); // dépassé, mais ne doit jamais être appelé
     await expect(service.getOrCreateConversation('u1', 'u2')).resolves.toMatchObject({ id: 'c1' });
     expect(redisMock.incr).not.toHaveBeenCalled();
+  });
+
+  it('refuse la création si la cible a coupé les messages et n\'est pas amie', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: null, acceptsDirectMessages: false } as any);
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    prismaMock.friendship.findUnique.mockResolvedValue(null);
+    await expect(service.getOrCreateConversation('u1', 'u2')).rejects.toThrow('DM_DISABLED');
+  });
+
+  it('autorise la création si la cible a coupé les messages MAIS amitié confirmée', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: null, acceptsDirectMessages: false } as any);
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    prismaMock.conversation.create.mockResolvedValue({ id: 'c1', clubId: 'club-demo', lastMessageAt: null } as any);
+    prismaMock.friendship.findUnique.mockResolvedValue({ status: 'ACCEPTED' } as any);
+    await expect(service.getOrCreateConversation('u1', 'u2')).resolves.toMatchObject({ id: 'c1' });
+  });
+
+  it('une demande d\'amitié PENDING (pas encore acceptée) ne suffit pas à contourner le refus', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: null, acceptsDirectMessages: false } as any);
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    prismaMock.friendship.findUnique.mockResolvedValue({ status: 'PENDING' } as any);
+    await expect(service.getOrCreateConversation('u1', 'u2')).rejects.toThrow('DM_DISABLED');
+  });
+
+  it('une conversation déjà EXISTANTE reste accessible même si la cible a coupé les messages depuis (pas de requête friendship)', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...U('u2'), deletedAt: null, acceptsDirectMessages: false } as any);
+    prismaMock.conversation.findUnique.mockResolvedValue({ id: 'c1', clubId: 'club-demo', lastMessageAt: null } as any);
+    const conv = await service.getOrCreateConversation('u1', 'u2');
+    expect(conv.id).toBe('c1');
+    expect(prismaMock.friendship.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('acceptsDirectMessages true (défaut) : aucune requête friendship, création normale', async () => {
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    prismaMock.conversation.create.mockResolvedValue({ id: 'c1', clubId: 'club-demo', lastMessageAt: null } as any);
+    const conv = await service.getOrCreateConversation('u1', 'u2');
+    expect(conv.id).toBe('c1');
+    expect(prismaMock.friendship.findUnique).not.toHaveBeenCalled();
   });
 });
 
