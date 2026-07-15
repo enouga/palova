@@ -54,6 +54,16 @@ it('un match sans confirmation requise ne montre pas les boutons', () => {
   expect(screen.queryByText('Confirmer')).toBeNull();
 });
 
+it('marque un résultat amical (competitive=false)', () => {
+  renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: false }] as any} token="t" onChanged={() => {}} />);
+  expect(screen.getByText('Amicale')).toBeInTheDocument();
+});
+
+it('un match compétitif ne montre pas « Amicale »', () => {
+  renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: true }] as any} token="t" onChanged={() => {}} />);
+  expect(screen.queryByText('Amicale')).toBeNull();
+});
+
 it('affiche Victoire quand mon équipe gagne', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, status: 'CONFIRMED', winningTeam: 2, needsMyConfirmation: false }] as any} token="t" onChanged={() => {}} />);
   expect(screen.getByText('Victoire')).toBeInTheDocument();

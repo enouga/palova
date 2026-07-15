@@ -262,7 +262,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
         confirmation: true, team: true, ratingAfter: true,
         match: {
           select: {
-            id: true, status: true, sets: true, playedAt: true, winningTeam: true,
+            id: true, status: true, sets: true, playedAt: true, winningTeam: true, competitive: true,
             confirmDeadline: true, reservationId: true,
             club: { select: { name: true } },
             sport: { select: { name: true } },
@@ -275,7 +275,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
     });
     res.json(rows.map((r) => ({
       matchId: r.match.id, status: r.match.status, sets: r.match.sets, playedAt: r.match.playedAt,
-      winningTeam: r.match.winningTeam, myTeam: r.team, myConfirmation: r.confirmation,
+      winningTeam: r.match.winningTeam, competitive: r.match.competitive, myTeam: r.team, myConfirmation: r.confirmation,
       ratingAfter: r.ratingAfter,
       needsMyConfirmation: r.match.status === 'PENDING' && r.confirmation === 'PENDING',
       reservationId: r.match.reservationId,

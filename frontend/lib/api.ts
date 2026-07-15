@@ -1195,6 +1195,7 @@ export interface MyMatch {
   sets: [number, number][];
   playedAt: string;
   winningTeam: number | null;
+  competitive?: boolean;
   myTeam: number;
   myConfirmation: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
   ratingAfter: number | null;

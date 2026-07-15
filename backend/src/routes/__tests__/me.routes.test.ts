@@ -172,7 +172,7 @@ describe('GET /api/me/matches', () => {
         confirmation: 'PENDING', team: 2, ratingAfter: null,
         match: {
           id: 'm1', status: 'PENDING', sets: [[6, 4], [6, 3]],
-          playedAt: new Date('2026-06-20T16:30:00Z'), winningTeam: 1,
+          playedAt: new Date('2026-06-20T16:30:00Z'), winningTeam: 1, competitive: false,
           confirmDeadline: new Date('2026-06-23T16:30:00Z'), reservationId: 'r1',
           club: { name: 'Padel Arena Paris' },
           sport: { name: 'Padel' },
@@ -191,6 +191,7 @@ describe('GET /api/me/matches', () => {
     expect(res.status).toBe(200);
     expect(res.body[0]).toEqual(expect.objectContaining({
       matchId: 'm1',
+      competitive: false,
       club: { name: 'Padel Arena Paris' },
       sport: { name: 'Padel' },
       resource: { name: 'Court 2' },
