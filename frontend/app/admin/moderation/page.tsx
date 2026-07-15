@@ -1,16 +1,120 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { CSSProperties, ReactNode, useState, useEffect, useCallback } from 'react';
 import { api, MessageReportRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { Theme, ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
+import { colorForSeed } from '@/lib/playerColors';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const REASON_LABEL: Record<string, string> = { HARASSMENT: 'Harcèlement', ILLEGAL: 'Contenu illicite', SPAM: 'Spam', OTHER: 'Autre' };
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// Coral lisible en petit texte : coral vif en sombre, coral foncé en clair (convention AgendaAdminCard).
+function coralInkOf(th: Theme): string {
+  return th.mode === 'floodlit' ? ACCENTS.coral : '#b23c17';
+}
+
+function errorBanner(th: Theme): CSSProperties {
+  return {
+    background: `${ACCENTS.coral}1f`, color: th.mode === 'floodlit' ? ACCENTS.coral : '#a83214',
+    boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`, borderRadius: 10, padding: '10px 12px',
+    fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginBottom: 14,
+  };
+}
+
+// En-tête de section : point coloré + label + compteur (convention AgendaAdminList).
+function SectionHead({ color, label, count }: { color: string; label: string; count: number }) {
+  const { th } = useTheme();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 2px 10px' }}>
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: color }} />
+      <b style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: th.text }}>{label}</b>
+      <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint }}>· {count}</span>
+    </div>
+  );
+}
+
+// Carte d'un signalement : liseré statut, tuile drapeau, message signalé en bloc
+// citation, auteur avec pastille colorée, ligne signaleur, actions (ouvert seulement).
+function ReportCard({ r, actions }: { r: MessageReportRow; actions?: ReactNode }) {
+  const { th } = useTheme();
+  const resolved = r.status === 'RESOLVED';
+  const coralInk = coralInkOf(th);
+  const stripe = resolved ? th.textFaint : ACCENTS.coral;
+  const authorLine = [
+    `${r.message.author.firstName} ${r.message.author.lastName}`,
+    r.match?.resourceName,
+    r.match ? fmt(r.match.startTime) : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div style={{
+      position: 'relative', overflow: 'hidden', background: th.surface, borderRadius: 16,
+      boxShadow: th.shadow, padding: '15px 16px 15px 21px', opacity: resolved ? 0.72 : 1,
+    }}>
+      <span aria-hidden style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: stripe }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
+        <span aria-hidden style={{
+          flex: 'none', width: 44, height: 44, marginTop: 2, borderRadius: 13,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: th.mode === 'floodlit' ? `${ACCENTS.coral}24` : `${ACCENTS.coral}40`,
+        }}>
+          <Icon name="flag" size={20} color={th.mode === 'floodlit' ? ACCENTS.coral : th.ink} />
+        </span>
+
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{
+              fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.5,
+              textTransform: 'uppercase', color: resolved ? th.textMute : coralInk,
+            }}>{REASON_LABEL[r.reason]}</span>
+            <span style={{ flex: 1 }} />
+            {resolved && (
+              <>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '3px 9px',
+                  fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
+                  background: r.resolution === 'DELETED' ? `${th.accent}22` : `${th.textFaint}22`,
+                  color: r.resolution === 'DELETED' ? th.accent : th.textFaint,
+                }}>{r.resolution === 'DELETED' ? 'Supprimé' : 'Rejeté'}</span>
+                {r.resolvedAt && (
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, whiteSpace: 'nowrap' }}>{fmt(r.resolvedAt)}</span>
+                )}
+              </>
+            )}
+          </div>
+
+          <div style={{
+            background: th.surface2, borderRadius: 10, padding: '9px 12px',
+            boxShadow: `inset 0 0 0 1px ${th.line}`, fontFamily: th.fontUI, fontSize: 14.5,
+            color: th.text, lineHeight: 1.45, overflowWrap: 'anywhere',
+          }}>
+            {r.message.body || <i style={{ color: th.textFaint }}>Message supprimé</i>}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+            <Avatar firstName={r.message.author.firstName} lastName={r.message.author.lastName} avatarUrl={null} size={20} color={colorForSeed(r.message.author.id)} />
+            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, minWidth: 0, alignSelf: 'center' }}>{authorLine}</span>
+          </div>
+
+          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
+            Signalé par {r.reporter.firstName} {r.reporter.lastName} le {fmt(r.createdAt)}
+            {r.detail ? <> — <i>« {r.detail} »</i></> : null}
+          </div>
+
+          {actions && <div style={{ display: 'flex', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>{actions}</div>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminModerationPage() {
@@ -61,66 +165,61 @@ export default function AdminModerationPage() {
         Messages du chat de partie signalés par les membres.
       </div>
 
-      {actionError && (
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: '#e0554f', marginBottom: 14 }}>{actionError}</div>
-      )}
+      {actionError && <div style={errorBanner(th)}>{actionError}</div>}
 
       {loading ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>
       ) : loadError ? (
-        <div style={{ fontFamily: th.fontUI, color: '#e0554f' }}>{loadError}</div>
+        <div style={errorBanner(th)}>{loadError}</div>
       ) : items.length === 0 ? (
-        <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun signalement.</div>
+        <div style={{ textAlign: 'center', padding: '46px 20px' }}>
+          <span aria-hidden style={{
+            width: 44, height: 44, borderRadius: 13, margin: '0 auto 12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: th.mode === 'floodlit' ? `${ACCENTS.emerald}24` : `${ACCENTS.emerald}40`,
+          }}>
+            <Icon name="check" size={20} color={th.mode === 'floodlit' ? ACCENTS.emerald : th.ink} />
+          </span>
+          <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 800, color: th.text }}>Aucun signalement</div>
+          <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 4 }}>
+            Les messages signalés par les membres apparaîtront ici.
+          </div>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {open.map((r) => (
-            <div key={r.id} style={{ background: th.bgElev, borderRadius: 14, padding: 16, boxShadow: th.shadow }}>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>{REASON_LABEL[r.reason]}</div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.text, marginTop: 6 }}>{r.message.body}</div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 8 }}>
-                {r.message.author.firstName} {r.message.author.lastName} · {r.match?.resourceName} · {r.match && fmt(r.match.startTime)}
-              </div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 4 }}>
-                Signalé par {r.reporter.firstName} {r.reporter.lastName} le {fmt(r.createdAt)}
-                {r.detail ? ` — « ${r.detail} »` : ''}
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                <Btn variant="danger" onClick={() => setConfirmDelete(r)} disabled={busy === r.id}>Supprimer le message</Btn>
-                <Btn variant="surface" onClick={() => resolve(r, 'REJECT')} disabled={busy === r.id}>Rejeter</Btn>
-              </div>
-            </div>
-          ))}
-          {resolved.length > 0 && (
-            <details open style={{ marginTop: 8 }}>
-              <summary style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, cursor: 'pointer' }}>
-                Historique ({resolved.length})
-              </summary>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-                {resolved.map((r) => (
-                  <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${th.line}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 600, color: th.textMute }}>{REASON_LABEL[r.reason]}</span>
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                        background: r.resolution === 'DELETED' ? `${th.accent}22` : `${th.textFaint}22`,
-                        color: r.resolution === 'DELETED' ? th.accent : th.textFaint,
-                      }}>{r.resolution === 'DELETED' ? 'Supprimé' : 'Rejeté'}</span>
-                      <span style={{ color: th.textFaint, marginLeft: 'auto' }}>{r.resolvedAt && fmt(r.resolvedAt)}</span>
-                    </div>
-                    {r.message.body && (
-                      <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>{r.message.body}</div>
-                    )}
-                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 4 }}>
-                      {r.message.author.firstName} {r.message.author.lastName} · {r.match?.resourceName} · {r.match && fmt(r.match.startTime)}
-                    </div>
-                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 2 }}>
-                      Signalé par {r.reporter.firstName} {r.reporter.lastName} le {fmt(r.createdAt)}
-                      {r.detail ? ` — « ${r.detail} »` : ''}
-                    </div>
-                  </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {open.length > 0 && (
+            <section>
+              <SectionHead color={ACCENTS.coral} label="À traiter" count={open.length} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {open.map((r) => (
+                  <ReportCard key={r.id} r={r} actions={
+                    <>
+                      <Btn variant="danger" onClick={() => setConfirmDelete(r)} disabled={busy === r.id}>Supprimer le message</Btn>
+                      <Btn variant="surface" onClick={() => resolve(r, 'REJECT')} disabled={busy === r.id}>Rejeter</Btn>
+                    </>
+                  } />
                 ))}
               </div>
-            </details>
+            </section>
+          )}
+
+          {open.length === 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI,
+              fontSize: 13, fontWeight: 600, color: th.mode === 'floodlit' ? ACCENTS.emerald : '#1b7a4e',
+            }}>
+              <Icon name="check" size={15} color={th.mode === 'floodlit' ? ACCENTS.emerald : '#1b7a4e'} />
+              Aucun signalement en attente.
+            </div>
+          )}
+
+          {resolved.length > 0 && (
+            <section>
+              <SectionHead color={th.textFaint} label="Historique" count={resolved.length} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {resolved.map((r) => <ReportCard key={r.id} r={r} />)}
+              </div>
+            </section>
           )}
         </div>
       )}
