@@ -2186,6 +2186,31 @@ describe('ReservationService', () => {
       await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC' }))
         .rejects.toThrow('OPEN_MATCH_PADEL_ONLY');
     });
+
+    it('transmet competitive=false à update', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ competitive: true }) as any);
+      prismaMock.match.findFirst.mockResolvedValue(null as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null, competitive: false } as any);
+      await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', competitive: false });
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ competitive: false }),
+      }));
+    });
+
+    it('refuse le changement de type si un résultat existe déjà (MATCH_ALREADY_RECORDED)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ competitive: true }) as any);
+      prismaMock.match.findFirst.mockResolvedValue({ id: 'm1' } as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', competitive: false }))
+        .rejects.toThrow('MATCH_ALREADY_RECORDED');
+    });
+
+    it('autorise un appel qui ne change PAS competitive même avec un résultat', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ competitive: true }) as any);
+      prismaMock.match.findFirst.mockResolvedValue({ id: 'm1' } as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null, competitive: true } as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', competitive: true }))
+        .resolves.toBeDefined();
+    });
   });
 
   describe('assertMembershipAndWindow — heure d\'ouverture', () => {
@@ -2722,6 +2747,22 @@ describe('ReservationService', () => {
       expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'res-1' },
         data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 }),
+      }));
+    });
+
+    it('transmet competitive à update', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', { visibility: 'PUBLIC', competitive: false });
+
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ competitive: false }),
       }));
     });
 

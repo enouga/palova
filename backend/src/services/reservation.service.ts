@@ -336,6 +336,7 @@ export class ReservationService {
       targetLevelMax?: number | null;
       teams?: Record<string, number>;
       slots?: Record<string, number>;
+      competitive?: boolean;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -401,6 +402,7 @@ export class ReservationService {
           visibility: setup.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
           targetLevelMin: levelOk ? (setup.targetLevelMin ?? null) : null,
           targetLevelMax: levelOk ? (setup.targetLevelMax ?? null) : null,
+          competitive: setup.competitive ?? undefined,
         },
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -1627,7 +1629,7 @@ export class ReservationService {
   async setReservationVisibility(
     reservationId: string,
     userId: string,
-    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null },
+    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -1641,6 +1643,16 @@ export class ReservationService {
     const sportKey = reservation.resource.clubSport.sport.key;
     if (input.visibility === 'PUBLIC' && !sportHasLevels(sportKey)) throw new Error('OPEN_MATCH_PADEL_ONLY');
 
+    // Changer le type Amicale/Compétitive après qu'un résultat a été saisi fausserait
+    // l'audit : refusé s'il diffère ET qu'un match non annulé existe déjà.
+    if (input.competitive !== undefined && input.competitive !== reservation.competitive) {
+      const recorded = await prisma.match.findFirst({
+        where: { reservationId, status: { not: 'CANCELLED' } },
+        select: { id: true },
+      });
+      if (recorded) throw new Error('MATCH_ALREADY_RECORDED');
+    }
+
     // Fourchette de niveau conservée uniquement en PUBLIC + padel ; sinon effacée.
     const keepLevel = input.visibility === 'PUBLIC' && sportHasLevels(sportKey);
 
@@ -1650,8 +1662,9 @@ export class ReservationService {
         visibility: input.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
         targetLevelMin: keepLevel ? (input.targetLevelMin ?? null) : null,
         targetLevelMax: keepLevel ? (input.targetLevelMax ?? null) : null,
+        competitive: input.competitive ?? reservation.competitive,
       },
-      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true },
+      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true, competitive: true },
     });
     // Publication après coup : une partie devient rejoignable → prévenir les alertes horaires.
     if (updated.visibility === 'PUBLIC') {

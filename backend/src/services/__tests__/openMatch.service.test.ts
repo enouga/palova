@@ -111,6 +111,20 @@ describe('OpenMatchService', () => {
       expect(match.sport).toEqual({ key: 'padel', name: 'Padel' });
     });
 
+    it('expose competitive dans le DTO', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'm1', startTime: future(48), endTime: future(49), competitive: false,
+          resource: { id: 'court-1', name: 'Court 1', attributes: { format: 'double' }, clubSport: { sport: { key: 'padel', name: 'Padel' } } },
+          participants: [], openMatchMessages: [], _count: { openMatchMessages: 0 },
+        },
+      ] as any);
+
+      const [match] = await service.listOpenMatches('club-demo', 'viewer');
+
+      expect(match.competitive).toBe(false);
+    });
+
     it('expose cardVersion : stable pour un même état, change après un join', async () => {
       const t0 = future(48); const t1 = future(49);
       const org = { userId: 'org', isOrganizer: true, team: null, user: { firstName: 'Org', lastName: 'A', avatarUrl: null } };

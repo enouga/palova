@@ -120,6 +120,7 @@ export class OpenMatchService {
       viewerIsOrganizer: viewerUserId != null && m.participants.some((p) => p.userId === viewerUserId && p.isOrganizer),
       targetLevelMin: m.targetLevelMin ?? null,
       targetLevelMax: m.targetLevelMax ?? null,
+      competitive: m.competitive,
       players,
       lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
       messageCount: m._count.openMatchMessages,
@@ -218,6 +219,7 @@ export class OpenMatchService {
           full: m.participants.length >= maxPlayers,
           targetLevelMin: m.targetLevelMin ?? null,
           targetLevelMax: m.targetLevelMax ?? null,
+          competitive: m.competitive,
           players: effectiveTeams(m.participants, maxPlayers).map((p) => ({
             userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
             isOrganizer: p.isOrganizer, level: levels[`${p.userId}:${sportKey}`] ?? null, team: p.team, slot: p.slot,

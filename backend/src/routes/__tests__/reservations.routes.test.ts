@@ -6,6 +6,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
 import { ReservationService } from '../../services/reservation.service';
+import { MatchService } from '../../services/match.service';
 
 const SECRET = process.env.JWT_SECRET!;
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
@@ -424,5 +425,17 @@ describe('POST /api/reservations/:id/visibility', () => {
       .send({ visibility: 'PUBLIC' });
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('UNAUTHORIZED');
+  });
+});
+
+describe('POST /api/reservations/:id/match — competitive', () => {
+  it('transmet competitive au service', async () => {
+    const spy = jest.spyOn(MatchService.prototype, 'createFromReservation')
+      .mockResolvedValue({ id: 'm1', status: 'PENDING' } as any);
+    const res = await request(app).post('/api/reservations/res-1/match').set('Authorization', `Bearer ${token}`)
+      .send({ teams: { 1: ['u1', 'u2'], 2: ['u3', 'u4'] }, sets: [[6, 4]], competitive: false });
+    expect(res.status).toBe(201);
+    expect(spy).toHaveBeenCalledWith('res-1', 'user-1', expect.objectContaining({ competitive: false }));
+    spy.mockRestore();
   });
 });

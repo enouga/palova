@@ -105,7 +105,7 @@ export class MatchService {
       },
       orderBy: { endTime: 'desc' },
       select: {
-        id: true, startTime: true, endTime: true,
+        id: true, startTime: true, endTime: true, competitive: true, visibility: true,
         resource: {
           select: {
             name: true, attributes: true,
@@ -130,6 +130,8 @@ export class MatchService {
           reservationId: r.id,
           startTime: r.startTime,
           endTime: r.endTime,
+          competitive: r.competitive,
+          visibility: r.visibility,
           club: { slug: r.resource.club.slug, name: r.resource.club.name, timezone: r.resource.club.timezone },
           resourceName: r.resource.name,
           sport: { key: r.resource.clubSport.sport.key, name: r.resource.clubSport.sport.name },
