@@ -6,8 +6,8 @@ import { useAuth, logout } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
-import { Logotype, ThemeToggle } from '@/components/ui/atoms';
+import { ACCENTS, inkOn } from '@/lib/theme';
+import { ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { AdminRoleContext, isClubAdmin, type ClubStaffRole } from '@/lib/adminRole';
@@ -218,10 +218,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }}>
         {/* marque + identité club */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 6px' }}>
+          {/* Juste le logo (ou une pastille initiale à défaut) — le nom en toutes lettres ne
+              tenait de toute façon pas dans les 244px de la sidebar ; title = nom complet au survol. */}
           {club.logoUrl
-            ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
-            : <Logotype size={22} />}
-          <span title={club.name} style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
+            ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} title={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+            : (
+              <span role="img" aria-label={club.name} title={club.name} style={{
+                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                background: club.accentColor || th.accent, color: inkOn(club.accentColor || th.accent),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: th.fontUI, fontWeight: 700, fontSize: 15,
+              }}>{club.name.trim().charAt(0).toUpperCase() || 'P'}</span>
+            )}
+          <span style={{ flex: 1 }} />
           {/* Note : si l'app PWA du club est installée ET que la « gestion des liens » du
               navigateur est activée pour elle, ce clic peut rouvrir la fenêtre app plutôt
               qu'un onglet — réglage propre à chaque navigateur/poste (chrome://apps,

@@ -101,9 +101,9 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Matchs')).toBeInTheDocument();
   });
 
-  it("affiche le nom du club dans l'en-tête, même sans logo", async () => {
+  it("affiche une pastille identifiant le club dans l'en-tête, même sans logo", async () => {
     await wrap();
-    expect(screen.getByText('Club Démo')).toBeInTheDocument();
+    expect(screen.getByLabelText('Club Démo')).toBeInTheDocument();
   });
 
   it("lien rapide vers le Club-house dans l'en-tête", async () => {
