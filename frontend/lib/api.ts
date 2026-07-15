@@ -554,6 +554,9 @@ export const api = {
   adminSetMemberStaffRole: (clubId: string, userId: string, role: 'ADMIN' | 'STAFF' | null, token: string) =>
     request<{ userId: string; staffRole: 'ADMIN' | 'STAFF' | null }>(`/api/clubs/${clubId}/admin/members/${userId}/staff-role`, { method: 'PATCH', body: JSON.stringify({ role }) }, token),
 
+  adminSetMemberCoach: (clubId: string, userId: string, isCoach: boolean, token: string) =>
+    request<{ userId: string; isCoach: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/coach`, { method: 'PATCH', body: JSON.stringify({ isCoach }) }, token),
+
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -999,18 +1002,9 @@ export const api = {
   adminReorderFaq: (clubId: string, orderedIds: string[], token: string) =>
     request<AdminFaqItem[]>(`/api/clubs/${clubId}/admin/faq/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
 
-  // --- Coachs (back-office club) ---
+  // --- Coachs (lecture seule : le statut coach se gère depuis adminSetMemberCoach) ---
   adminListCoaches: (clubId: string, token: string) =>
     request<Coach[]>(`/api/clubs/${clubId}/admin/coaches`, {}, token),
-
-  adminCreateCoach: (clubId: string, body: CoachBody, token: string) =>
-    request<Coach>(`/api/clubs/${clubId}/admin/coaches`, { method: 'POST', body: JSON.stringify(body) }, token),
-
-  adminUpdateCoach: (clubId: string, id: string, body: CoachBody, token: string) =>
-    request<Coach>(`/api/clubs/${clubId}/admin/coaches/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
-
-  adminDeleteCoach: (clubId: string, id: string, token: string) =>
-    request<{ ok: true }>(`/api/clubs/${clubId}/admin/coaches/${id}`, { method: 'DELETE' }, token),
 
   // --- Séries de réservations (back-office club) ---
   adminCreateSeries: (clubId: string, body: CreateSeriesBody, token: string) =>
@@ -1355,6 +1349,7 @@ export interface Member {
   note: string | null;
   watch?: boolean;     // drapeau « à surveiller »
   staffRole?: 'OWNER' | 'ADMIN' | 'STAFF' | null; // rôle back-office (table ClubMember), null = membre simple
+  isCoach?: boolean;   // anime des cours (table coaches, liée au compte)
   since?: string;
   // --- enrichissements liste (additifs, cf. listMembers) ---
   avatarUrl?: string | null;
@@ -2717,16 +2712,8 @@ export interface Coach {
   clubId: string;
   name: string;
   photoUrl: string | null;
-  bio: string | null;
   isActive: boolean;
   sortOrder: number;
-}
-
-export interface CoachBody {
-  name?: string;
-  bio?: string | null;
-  sortOrder?: number;
-  isActive?: boolean;
 }
 
 // --- Séries de réservations ---
