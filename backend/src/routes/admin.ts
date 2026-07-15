@@ -35,6 +35,7 @@ import { OnboardingService } from '../services/onboarding.service';
 import { ModerationService } from '../services/moderation.service';
 import { SupportService } from '../services/support.service';
 import { assertRateLimit } from '../services/rateLimit';
+import { PromotionService } from '../services/promotion.service';
 import { billingState } from '../services/platformBilling/platformBilling.service';
 import { createBillingCheckout, createBillingPortal } from '../services/platformBilling/stripeBilling';
 import { tierFor, tierPriceCents, tierLabel } from '../services/platformBilling/tiers';
@@ -64,6 +65,7 @@ const presentationService = new PresentationService();
 const onboardingService = new OnboardingService();
 const moderationService = new ModerationService();
 const supportService = new SupportService();
+const promotionService = new PromotionService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -148,6 +150,7 @@ const ERROR_STATUS: Record<string, number> = {
   GENDER_MISMATCH:       400,
   ALREADY_REGISTERED:    409,
   PARTNER_IS_SELF:       400,
+  PROMOTION_NOT_FOUND:    404,
 };
 
 function asString(v: unknown): string {
@@ -1106,6 +1109,20 @@ router.post('/subscription-plans', requireClubMember('ADMIN'), async (req: ClubS
 });
 router.patch('/subscription-plans/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.updatePlan(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Promotions datées (remise sur terrains) ---
+router.get('/promotions', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await promotionService.listPromotions(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+router.post('/promotions', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.status(201).json(await promotionService.createPromotion(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.patch('/promotions/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await promotionService.updatePromotion(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
+});
+router.delete('/promotions/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await promotionService.deletePromotion(asString(req.params.id), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
 // Affiche d'un abonnement : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
