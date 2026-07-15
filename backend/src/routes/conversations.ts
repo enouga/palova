@@ -13,6 +13,7 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_CO_MEMBERS:         403,
   NOT_ALLOWED:            403,
   USER_BLOCKED:           409,
+  DM_DISABLED:            409,
   CANNOT_MESSAGE_SELF:    400,
   CANNOT_BLOCK_SELF:      400,
   VALIDATION_ERROR:       400,

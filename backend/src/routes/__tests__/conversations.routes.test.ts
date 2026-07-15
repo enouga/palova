@@ -87,9 +87,9 @@ describe('routes conversations', () => {
     expect(mocks.listBlocks).toHaveBeenCalledWith('u1');
   });
 
-  it('mapping erreurs : NOT_CO_MEMBERS 403, USER_BLOCKED 409, CANNOT_MESSAGE_SELF 400, CONVERSATION_NOT_FOUND 404', async () => {
+  it('mapping erreurs : NOT_CO_MEMBERS 403, USER_BLOCKED 409, DM_DISABLED 409, CANNOT_MESSAGE_SELF 400, CONVERSATION_NOT_FOUND 404', async () => {
     for (const [code, status] of [
-      ['NOT_CO_MEMBERS', 403], ['USER_BLOCKED', 409], ['CANNOT_MESSAGE_SELF', 400], ['CONVERSATION_NOT_FOUND', 404],
+      ['NOT_CO_MEMBERS', 403], ['USER_BLOCKED', 409], ['DM_DISABLED', 409], ['CANNOT_MESSAGE_SELF', 400], ['CONVERSATION_NOT_FOUND', 404],
     ] as const) {
       mocks.getOrCreateConversation.mockRejectedValue(new Error(code));
       const res = await request(app).post('/api/me/conversations').send({ otherUserId: 'u2' }).set('Authorization', `Bearer ${token}`);
