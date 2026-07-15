@@ -1,11 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { sportHasLevels } from '@/lib/level';
-import { loadLevelPref } from '@/lib/levelPrefs';
+import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { Icon } from '@/components/ui/Icon';
+import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 
 const ERR: Record<string, string> = {
   UNAUTHORIZED: "Seul l'organisateur peut ouvrir cette partie.",
@@ -19,7 +21,8 @@ const msg = (e: string) => ERR[e] ?? e;
  * Bascule rapide « Partie ouverte aux membres » sur l'écran de succès de réservation :
  * reprend l'UI de l'ancien interrupteur pré-confirmation de BookingModal, mais appelle
  * l'API post-confirmation (setReservationVisibility) puisque la résa est déjà CONFIRMED.
- * Ne mémorise jamais la fourchette de niveau — seul OpenMatchToggle (avec son slider) le fait.
+ * Une fois ouverte, la fourchette de niveau reste réglable ici (LevelRangeSlider) — chaque
+ * ajustement republie en direct (débouncé) et mémorise la préférence, comme OpenMatchToggle.
  */
 export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
   reservation: MyReservation;
@@ -37,13 +40,24 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
   const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
+  // Passe à `true` seulement sur une interaction manuelle du switch « Limiter » / du curseur —
+  // jamais depuis le préchargement — pour que l'effet de republication ci-dessous ne se
+  // déclenche jamais tout seul (préférence rechargée, résa déjà publique au montage…).
+  const touchedRef = useRef(false);
 
   const openMatch = reservation.visibility === 'PUBLIC';
 
-  // Préremplissage de la fourchette de niveau : dernier choix mémorisé, sinon défaut centré
-  // sur le niveau du joueur ±1 (borné 1–8). Miroir de l'ancien effet de BookingModal.
+  // Préremplissage de la fourchette de niveau : si la résa est déjà publique, on reprend son
+  // état réel (source de vérité serveur) ; sinon dernier choix mémorisé, sinon défaut centré
+  // sur le niveau du joueur ±1 (borné 1–8).
   useEffect(() => {
     if (!isPadel || !levelForSport) return;
+    if (reservation.visibility === 'PUBLIC') {
+      const hasRange = reservation.targetLevelMin != null && reservation.targetLevelMax != null;
+      setLevelLimited(hasRange);
+      if (hasRange) { setLevelMin(reservation.targetLevelMin as number); setLevelMax(reservation.targetLevelMax as number); }
+      return;
+    }
     const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
     const pref = loadLevelPref();
     if (pref) { setLevelLimited(pref.enabled); setLevelMin(pref.min); setLevelMax(pref.max); return; }
@@ -51,7 +65,26 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
       const lvl = r?.level ?? null;
       if (lvl != null) { setLevelMin(clamp(lvl - 1)); setLevelMax(clamp(lvl + 1)); }
     }).catch(() => {});
-  }, [isPadel, levelForSport, token, sportKey]);
+  }, [isPadel, levelForSport, token, sportKey, reservation.visibility]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Republication en direct d'un ajustement manuel (partie déjà ouverte) : débouncée pour ne
+  // pas spammer l'API pendant le glissement du curseur.
+  const debLimited = useDebouncedValue(levelLimited, 400);
+  const debMin = useDebouncedValue(levelMin, 400);
+  const debMax = useDebouncedValue(levelMax, 400);
+  useEffect(() => {
+    if (!touchedRef.current || !openMatch || !levelForSport) return;
+    saveLevelPref({ enabled: debLimited, min: debMin, max: debMax });
+    setBusy(true);
+    setError(null);
+    api.setReservationVisibility(reservation.id, 'PUBLIC', token, {
+      targetLevelMin: debLimited ? debMin : null,
+      targetLevelMax: debLimited ? debMax : null,
+    }).then(() => onChanged())
+      .catch((e) => setError(msg((e as Error).message)))
+      .finally(() => setBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debLimited, debMin, debMax]);
 
   if (!isPadel) return null;
 
@@ -64,18 +97,26 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
         await api.setReservationVisibility(reservation.id, 'PRIVATE', token);
       } else {
         const limiting = levelForSport && levelLimited;
+        saveLevelPref({ enabled: limiting, min: levelMin, max: levelMax });
         await api.setReservationVisibility(reservation.id, 'PUBLIC', token, {
           targetLevelMin: limiting ? levelMin : null,
           targetLevelMax: limiting ? levelMax : null,
         });
       }
       onChanged();
+      // Le compteur de parties ouvertes de ClubNav (onglet Parties) ne se rafraîchit que sur
+      // notification SSE ou changement de route — une ouverture/fermeture par soi-même n'en
+      // déclenche aucun, d'où ce signal local explicite.
+      window.dispatchEvent(new Event('palova:openmatch-unread'));
     } catch (e) {
       setError(msg((e as Error).message));
     } finally {
       setBusy(false);
     }
   };
+
+  const toggleLimit = () => { touchedRef.current = true; setLevelLimited((v) => !v); };
+  const onRangeChange = (a: number, b: number) => { touchedRef.current = true; setLevelMin(a); setLevelMax(b); };
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -91,13 +132,31 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
           <span style={{ position: 'absolute', top: 3, left: openMatch ? 21 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
         </button>
       </div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>
-        {openMatch
-          ? (levelForSport
-              ? (levelLimited ? `Niveau ${levelMin}–${levelMax}.` : 'Ouverte à tous les niveaux.')
-              : 'Visible et rejoignable par les membres du club.')
-          : 'Réservation privée.'}
-      </div>
+
+      {!openMatch ? (
+        <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Réservation privée.</div>
+      ) : !levelForSport ? (
+        <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Visible et rejoignable par les membres du club.</div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600 }}>Limiter le niveau des joueurs</span>
+            <button type="button" role="switch" aria-checked={levelLimited} aria-label="Limiter le niveau"
+              disabled={busy} onClick={toggleLimit}
+              style={{ width: 40, height: 24, borderRadius: 999, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: levelLimited ? th.accent : th.lineStrong, position: 'relative', flexShrink: 0, opacity: busy ? 0.6 : 1 }}>
+              <span style={{ position: 'absolute', top: 3, left: levelLimited ? 19 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+            </button>
+          </div>
+          {levelLimited ? (
+            <div style={{ marginTop: 12 }}>
+              <LevelRangeSlider min={levelMin} max={levelMax} onChange={onRangeChange} disabled={busy} />
+            </div>
+          ) : (
+            <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Ouverte à tous les niveaux.</div>
+          )}
+        </div>
+      )}
+
       {error && (
         <div style={{ marginTop: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{error}</div>
       )}

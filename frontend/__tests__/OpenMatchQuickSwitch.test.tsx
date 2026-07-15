@@ -96,4 +96,51 @@ describe('OpenMatchQuickSwitch', () => {
     fireEvent.click(await screen.findByRole('switch', { name: /Partie ouverte aux membres/ }));
     expect(await screen.findByText(/Seul l'organisateur/)).toBeInTheDocument();
   });
+
+  it('résa déjà ouverte : le curseur de niveau reprend l’état réel de la résa, pas la préférence mémorisée', async () => {
+    localStorage.setItem('palova:open-match-level', JSON.stringify({ enabled: true, min: 1, max: 2 }));
+    wrap({ visibility: 'PUBLIC', targetLevelMin: 4, targetLevelMax: 7 });
+    expect(await screen.findByRole('slider', { name: 'Niveau minimum' })).toHaveValue('4');
+    expect(screen.getByRole('slider', { name: 'Niveau maximum' })).toHaveValue('7');
+  });
+
+  it('résa déjà ouverte sans fourchette → « Limiter le niveau » OFF, texte « Ouverte à tous les niveaux »', async () => {
+    wrap({ visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null });
+    expect(await screen.findByRole('switch', { name: 'Limiter le niveau' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Ouverte à tous les niveaux/)).toBeInTheDocument();
+  });
+
+  it('ajuster le curseur sur une partie déjà ouverte republie en direct (débouncé) + mémorise la préférence', async () => {
+    jest.useFakeTimers();
+    localStorage.clear();
+    wrap({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 });
+    const maxSlider = screen.getByRole('slider', { name: 'Niveau maximum' });
+    fireEvent.change(maxSlider, { target: { value: '7' } });
+    expect(mocked.setReservationVisibility).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 7 },
+    );
+    expect(JSON.parse(localStorage.getItem('palova:open-match-level')!)).toEqual({ enabled: true, min: 3, max: 7 });
+    jest.useRealTimers();
+  });
+
+  it('désactiver « Limiter le niveau » sur une partie déjà ouverte republie sans fourchette', async () => {
+    jest.useFakeTimers();
+    wrap({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 });
+    fireEvent.click(screen.getByRole('switch', { name: 'Limiter le niveau' }));
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null },
+    );
+    jest.useRealTimers();
+  });
+
+  it('un simple préchargement (pas d’interaction manuelle) ne republie jamais tout seul', async () => {
+    jest.useFakeTimers();
+    wrap({ visibility: 'PUBLIC', targetLevelMin: 3, targetLevelMax: 5 });
+    act(() => { jest.advanceTimersByTime(1000); });
+    expect(mocked.setReservationVisibility).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 });

@@ -45,7 +45,15 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null);
-    try { await fn(); setSheet(false); onChanged(); }
+    try {
+      await fn();
+      setSheet(false);
+      onChanged();
+      // Le compteur de parties ouvertes de ClubNav (onglet Parties) ne se rafraîchit que sur
+      // notification SSE ou changement de route — une ouverture/fermeture par soi-même n'en
+      // déclenche aucun, d'où ce signal local explicite.
+      window.dispatchEvent(new Event('palova:openmatch-unread'));
+    }
     catch (e) { setError(msg((e as Error).message)); }
     finally { setBusy(false); }
   };
@@ -64,7 +72,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   const switchBtn = (
     <button type="button" role="switch" aria-checked={limit} aria-label="Limiter le niveau"
       onClick={() => setLimit((v) => !v)}
-      style={{ width: 40, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', background: limit ? th.accent : th.surface2, position: 'relative', flexShrink: 0 }}>
+      style={{ width: 40, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', background: limit ? th.accent : th.lineStrong, position: 'relative', flexShrink: 0 }}>
       <span style={{ position: 'absolute', top: 3, left: limit ? 19 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
     </button>
   );

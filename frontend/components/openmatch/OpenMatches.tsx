@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ClubDetail, OpenMatch, MyMatch, notificationsStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
@@ -20,6 +21,26 @@ import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
 import { alertChipLabel } from '@/lib/matchAlerts';
 import type { MatchAlert } from '@/lib/api';
+
+// Chip de filtre — même langage que `FacetChip` d'EventsFilterBar (tournois/events) :
+// actif = encre pleine + coche, inactif = pill fine contourée.
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  const { th } = useTheme();
+  const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute;
+  return (
+    <button type="button" aria-pressed={active} onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
+      fontFamily: th.fontUI, fontSize: 12, fontWeight: active ? 700 : 600,
+      background: active ? th.ink : 'transparent', color: fg,
+      boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
+      transition: 'all .15s', WebkitTapHighlightColor: 'transparent',
+    }}>
+      {active && <Icon name="check" size={11} color={fg} />}
+      {label}
+    </button>
+  );
+}
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -86,6 +107,16 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     api.getMyRating(token, 'padel').then((r) => setMyLevel(r?.level ?? null)).catch(() => {});
   }, [token]);
 
+  // Défaut « à mon niveau » dès que le niveau du joueur est connu — sauf si l'utilisateur a
+  // déjà touché le filtre lui-même (chip « Tous », curseur…), auquel cas son choix prime.
+  const filterTouchedRef = useRef(false);
+  useEffect(() => {
+    if (filterTouchedRef.current || myLevel == null) return;
+    setFMin(Math.max(1, Math.round(myLevel) - 1));
+    setFMax(Math.min(8, Math.round(myLevel) + 1));
+  }, [myLevel]);
+  const setLevelFilter = (min: number, max: number) => { filterTouchedRef.current = true; setFMin(min); setFMax(max); };
+
   useEffect(() => {
     if (!token) return;
     api.getMyProfile(token).then((p) => setViewerUserId(p.id)).catch(() => {});
@@ -117,6 +148,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const a = useOpenMatchActions({ club, token, myLevel, reload: load });
 
   const levelFilterActive = fMin > 1 || fMax < 8;
+  // Fourchette « à mon niveau » (±1 autour du niveau arrondi) — sert à savoir si ce raccourci
+  // est la sélection courante, pour le chip « rempli » (même langage que les filtres Events).
+  const myLevelMin = myLevel != null ? Math.max(1, Math.round(myLevel) - 1) : null;
+  const myLevelMax = myLevel != null ? Math.min(8, Math.round(myLevel) + 1) : null;
+  const atMyLevel = myLevelMin != null && fMin === myLevelMin && fMax === myLevelMax;
   const filtered = levelFilterActive
     ? matches.filter((m) => rangesOverlap(m.targetLevelMin ?? null, m.targetLevelMax ?? null, fMin, fMax))
     : matches;
@@ -156,25 +192,18 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           </p>
           {levelEnabled && token && (
             <div style={{ marginTop: 14, maxWidth: 430 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 4 }}>
                 <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Filtrer par niveau</span>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {myLevel != null && (
-                    <button type="button"
-                      onClick={() => { setFMin(Math.max(1, Math.round(myLevel) - 1)); setFMax(Math.min(8, Math.round(myLevel) + 1)); }}
-                      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 999, padding: '4px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
-                      À mon niveau
-                    </button>
+                  {myLevel != null && myLevelMin != null && myLevelMax != null && (
+                    <FilterChip label="À mon niveau" active={atMyLevel}
+                      onClick={() => setLevelFilter(myLevelMin, myLevelMax)} />
                   )}
-                  {levelFilterActive && (
-                    <button type="button" onClick={() => { setFMin(1); setFMax(8); }}
-                      style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 999, padding: '4px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
-                      Tous
-                    </button>
-                  )}
+                  <FilterChip label="Tous" active={!levelFilterActive}
+                    onClick={() => setLevelFilter(1, 8)} />
                 </div>
               </div>
-              <LevelRangeSlider compact min={fMin} max={fMax} onChange={(mn, mx) => { setFMin(mn); setFMax(mx); }} />
+              <LevelRangeSlider compact min={fMin} max={fMax} onChange={setLevelFilter} />
             </div>
           )}
           {token && (
