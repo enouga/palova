@@ -66,6 +66,8 @@ export function ResultsToRecord({ token, clubSlug, onRecorded }: {
           token={token}
           context={{ whenIso: recordingFor.startTime, tz: recordingFor.club.timezone, courtName: recordingFor.resourceName }}
           initialTeams={Object.fromEntries(recordingFor.players.map((p) => [p.userId, p.team]))}
+          locked={recordingFor.visibility === 'PUBLIC'}
+          competitive={recordingFor.competitive ?? true}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); reload(); onRecorded?.(); }}
         />

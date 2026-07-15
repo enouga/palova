@@ -17,6 +17,8 @@ interface Props {
   onSaved: () => void;
   context?: MatchContext;
   initialTeams?: Record<string, 1 | 2>;
+  competitive?: boolean; // valeur initiale (privé) OU type déclaré (partie ouverte, verrouillé)
+  locked?: boolean;      // true = partie ouverte : type hérité de la résa, non modifiable ici
 }
 
 const TEAM_COLORS: Record<1 | 2, string> = { 1: ACCENTS.blue, 2: ACCENTS.coral };
@@ -28,9 +30,10 @@ function fmtContext(ctx: MatchContext): string {
   return `${date} · ${hour} · ${ctx.courtName}`;
 }
 
-export function MatchResultModal({ reservationId, players, token, onClose, onSaved, context, initialTeams }: Props) {
+export function MatchResultModal({ reservationId, players, token, onClose, onSaved, context, initialTeams, competitive, locked }: Props) {
   const { th } = useTheme();
   const [team, setTeam] = useState<Record<string, 1 | 2 | undefined>>(() => ({ ...(initialTeams ?? {}) }));
+  const [competitiveState, setCompetitiveState] = useState(competitive ?? true);
   // Équipes pré-remplies complètes (4 joueurs, 2/2) → mode résumé compact ; sinon affectation.
   const preFilled2v2 = (() => {
     if (!initialTeams) return false;
@@ -70,7 +73,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
   const save = async () => {
     setBusy(true); setError(null);
     try {
-      await api.recordMatchResult(reservationId, { teams: { 1: t1, 2: t2 }, sets }, token);
+      await api.recordMatchResult(reservationId, { teams: { 1: t1, 2: t2 }, sets, competitive: competitiveState }, token);
       onSaved();
     } catch {
       setError('Échec de l’enregistrement.');
@@ -139,6 +142,27 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
             <button type="button" onClick={() => setEditingTeams(true)} className="self-start text-sm underline" style={{ color: th.textMute }}>
               Modifier les équipes
             </button>
+          </div>
+        )}
+
+        {locked ? (
+          <div className="mb-4 text-sm" style={{ color: th.textMute }}>
+            {competitiveState ? 'Partie compétitive — le résultat compte pour le niveau.' : 'Partie amicale — le niveau ne bouge pas.'}
+          </div>
+        ) : (
+          <div className="mb-4" style={{ display: 'flex', gap: 8 }}>
+            {([['competitive', 'Compétitive', 'Compte pour le niveau'],
+               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+              const active = (key === 'competitive') === competitiveState;
+              return (
+                <button key={key} type="button" onClick={() => setCompetitiveState(key === 'competitive')} disabled={busy}
+                  style={{ flex: 1, textAlign: 'left', cursor: 'pointer', borderRadius: 12, padding: '9px 12px',
+                    border: `1.5px solid ${active ? th.accent : th.line}`, background: active ? `${th.accent}14` : 'transparent' }}>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: active ? th.accent : th.text }}>{label}</div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 2 }}>{sub}</div>
+                </button>
+              );
+            })}
           </div>
         )}
 

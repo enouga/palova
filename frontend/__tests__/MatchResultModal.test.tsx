@@ -173,3 +173,25 @@ describe('MatchResultModal — mode résumé', () => {
     expect(screen.getByTestId('team1-u1')).toBeInTheDocument();
   });
 });
+
+describe('MatchResultModal — Amicale/Compétitive', () => {
+  it('résa privée : segmented par défaut Compétitive, envoie competitive au submit', async () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={() => {}}
+      initialTeams={fullTeams} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: /Amicale/ }));
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('set0-team2-plus'));
+    fireEvent.click(screen.getByText('Enregistrer'));
+    await waitFor(() => expect(api.recordMatchResult).toHaveBeenCalled());
+    const call = (api.recordMatchResult as jest.Mock).mock.calls.at(-1)!;
+    expect(call[1].competitive).toBe(false);
+  });
+
+  it('partie ouverte (locked) : badge statique, pas de bouton de bascule', () => {
+    render(<ThemeProvider><MatchResultModal
+      reservationId="r1" players={players} token="t" onClose={() => {}} onSaved={() => {}}
+      initialTeams={fullTeams} locked competitive={false} /></ThemeProvider>);
+    expect(screen.getByText(/Partie amicale/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Compétitive/ })).not.toBeInTheDocument();
+  });
+});

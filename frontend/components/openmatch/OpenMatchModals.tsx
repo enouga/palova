@@ -22,6 +22,8 @@ export function OpenMatchModals({ club, token, viewerUserId, canModerate, action
           token={token}
           context={{ whenIso: a.recordingFor.startTime, tz: club.timezone, courtName: a.recordingFor.resourceName }}
           initialTeams={Object.fromEntries(a.recordingFor.players.filter((p) => p.team === 1 || p.team === 2).map((p) => [p.userId, p.team as 1 | 2]))}
+          locked
+          competitive={a.recordingFor.competitive ?? true}
           onClose={() => a.setRecordingFor(null)}
           onSaved={() => { a.setRecordingFor(null); reload(); }}
         />

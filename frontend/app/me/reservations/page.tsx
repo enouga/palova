@@ -294,6 +294,8 @@ export default function MyReservationsPage() {
           )}
           token={token}
           context={{ whenIso: recordingFor.startTime, tz: recordingFor.resource.club.timezone, courtName: recordingFor.resource.name }}
+          locked={recordingFor.visibility === 'PUBLIC'}
+          competitive={recordingFor.competitive ?? true}
           onClose={() => setRecordingFor(null)}
           onSaved={() => { setRecordingFor(null); api.getMyMatches(token).then(setMatches).catch(() => {}); }}
         />
