@@ -5,6 +5,7 @@ import {
   notifyLessonCancellation,
   notifyLessonPromotion,
 } from '../email/notifications';
+import { coachDisplay } from './coach.service';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types de sortie supplémentaires (Lot 3 — côté joueur)
@@ -355,7 +356,7 @@ class LessonService {
       seriesId: string | null;
       capacity: number;
       allowSelfEnroll: boolean;
-      coach: { name: string; photoUrl: string | null };
+      coach: { name: string; photoUrl: string | null; user?: { firstName: string; lastName: string; avatarUrl: string | null } | null };
       reservation: { startTime: Date; endTime: Date; resource: { name: string; clubSport: { sport: { key: string; name: string } } | null } };
       series: { id: string; capacity: number | null; enrollmentMode: EnrollmentMode | null; title: string | null } | null;
       club: { slug: string; name: string; timezone: string };
@@ -368,7 +369,7 @@ class LessonService {
       clubId: lesson.clubId,
       lessonKind: lesson.lessonKind,
       seriesId: lesson.seriesId,
-      coach: lesson.coach,
+      coach: coachDisplay(lesson.coach),
       reservation: {
         startTime: lesson.reservation.startTime,
         endTime: lesson.reservation.endTime,
@@ -600,7 +601,7 @@ class LessonService {
     const lesson = await prisma.lesson.findUnique({
       where: { id: lessonId },
       include: {
-        coach: { select: { name: true, photoUrl: true } },
+        coach: { select: { name: true, photoUrl: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } } },
         reservation: {
           select: {
             startTime: true,
@@ -643,7 +644,7 @@ class LessonService {
         },
       },
       include: {
-        coach: { select: { name: true, photoUrl: true } },
+        coach: { select: { name: true, photoUrl: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } } },
         reservation: {
           select: {
             startTime: true,
@@ -706,7 +707,7 @@ class LessonService {
             },
           },
           include: {
-            coach: { select: { name: true, photoUrl: true } },
+            coach: { select: { name: true, photoUrl: true, user: { select: { firstName: true, lastName: true, avatarUrl: true } } } },
             reservation: {
               select: {
                 startTime: true,
