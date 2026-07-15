@@ -201,6 +201,11 @@ enum AnnouncementKind {
   EVENT
 }
 
+enum PromotionKind {
+  PERCENT
+  FIXED
+}
+
 /// Catalogue de sports géré par la plateforme (non éditable par les clubs).
 model Sport {
   id                  String   @id @default(cuid())
@@ -367,6 +372,7 @@ model Club {
   memberSnapshots      ClubMemberSnapshot[]
   matchAlerts          MatchAlert[]
   platformInvoices     PlatformInvoice[]
+  promotions           Promotion[]
 
   @@map("clubs")
 }
@@ -462,10 +468,48 @@ model Resource {
   clubSport    ClubSport     @relation(fields: [clubSportId], references: [id], onDelete: Cascade)
   reservations Reservation[]
   series       ReservationSeries[]
+  promotionResources PromotionResource[]
 
   @@index([clubId])
   @@index([clubSportId])
   @@map("resources")
+}
+
+/// Promotion datée sur des terrains : remise (% ou prix fixe) sur une période, terrains
+/// (vide = tous), et plage horaire optionnelle. Appliquée au prix du créneau à la réservation.
+model Promotion {
+  id          String        @id @default(cuid())
+  clubId      String        @map("club_id")
+  name        String
+  startDate   DateTime      @map("start_date") @db.Date // bornes incluses, date locale du club
+  endDate     DateTime      @map("end_date")   @db.Date
+  windowStart Int?          @map("window_start") // minutes depuis minuit ; null = toute la journée
+  windowEnd   Int?          @map("window_end")
+  kind        PromotionKind
+  percentOff  Int?          @map("percent_off") // 1..100 si kind=PERCENT
+  fixedPrice  Decimal?      @map("fixed_price") @db.Decimal(10, 2) // euros si kind=FIXED
+  enabled     Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  club      Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  resources PromotionResource[]
+
+  @@index([clubId])
+  @@map("promotions")
+}
+
+/// Ciblage d'une promo : liste de terrains. Aucune ligne = tous les terrains du club.
+model PromotionResource {
+  promotionId String @map("promotion_id")
+  resourceId  String @map("resource_id")
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  resource  Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, resourceId])
+  @@index([resourceId])
+  @@map("promotion_resources")
 }
 
 /// Compte global. Le rôle au sein d'un club est porté par ClubMember (multi-club).
