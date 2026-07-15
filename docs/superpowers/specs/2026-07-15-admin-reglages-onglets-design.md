@@ -64,7 +64,9 @@ l'intérieur des cartes. 100 % frontend, aucun changement backend, aucune migrat
   select ; heures de release en stepper −/+ (désactivées en ROLLING_SLOT, comme
   aujourd'hui).
 - **Interrupteurs** (switch) à la place des cases à cocher : annuaire, national, offres
-  publiques, niveau, autres clubs, remboursement auto, paiement au club.
+  publiques, niveau, autres clubs, remboursement auto, paiement au club, activation des
+  quotas (« Limiter les réservations par joueur » — la grille de limites reste en champs
+  numériques).
 - **Moyens d'encaissement rapides** : chips multi-sélection (ordre canonique
   `QUICK_METHODS` conservé) ; masqués quand « Paiement au club » est actif (inchangé).
 - **Heures creuses** : par jour, chips « 9h00 → 12h00 × » + bouton « + plage » ouvrant
