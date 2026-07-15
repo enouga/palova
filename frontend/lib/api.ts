@@ -116,7 +116,7 @@ export const api = {
     request<{ ok: boolean }>('/api/me/notification-preferences', { method: 'PUT', body: JSON.stringify({ preferences }) }, token),
 
   // --- Résultats de matchs (Lot 2) ---
-  recordMatchResult: (reservationId: string, body: { teams: Record<1 | 2, string[]>; sets: [number, number][] }, token: string) =>
+  recordMatchResult: (reservationId: string, body: { teams: Record<1 | 2, string[]>; sets: [number, number][]; competitive?: boolean }, token: string) =>
     request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
   getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
   getMatchesToRecord: (token: string) => request<MatchToRecord[]>('/api/me/matches/to-record', {}, token),
@@ -174,6 +174,7 @@ export const api = {
       targetLevelMax?: number | null;
       teams?: Record<string, 1 | 2>;
       slots?: Record<string, number>;
+      competitive?: boolean;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {
@@ -264,9 +265,9 @@ export const api = {
     reservationId: string,
     visibility: 'PRIVATE' | 'PUBLIC',
     token: string,
-    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null },
+    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
   ) =>
-    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null }>(
+    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null; competitive: boolean }>(
       `/api/reservations/${reservationId}/visibility`,
       { method: 'POST', body: JSON.stringify({ visibility, ...opts }) },
       token,
@@ -1161,6 +1162,7 @@ export interface MyReservation {
   resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
   visibility?: 'PRIVATE' | 'PUBLIC';
+  competitive?: boolean;
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null; slot?: number | null }[];
@@ -1218,6 +1220,8 @@ export interface MatchToRecord {
   reservationId: string;
   startTime: string;
   endTime: string;
+  competitive?: boolean;
+  visibility?: 'PRIVATE' | 'PUBLIC';
   club: { slug: string; name: string; timezone: string };
   resourceName: string;
   sport: { key: string; name: string };
@@ -1531,6 +1535,7 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
+  competitive?: boolean; // Amicale (false) / Compétitive (true) ; défaut true si absent
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
@@ -2214,6 +2219,7 @@ export interface NationalOpenMatch {
   full: boolean;
   targetLevelMin: number | null;
   targetLevelMax: number | null;
+  competitive?: boolean;
   players: OpenMatchPlayer[];
   club: NationalOpenMatchClub;
 }
