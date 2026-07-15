@@ -31,7 +31,7 @@ const matchService = new MatchService();
 const PROFILE_SELECT = {
   id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
   birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true, showInLeaderboard: true,
-  autoMatchProposals: true, acceptsFriendRequests: true,
+  autoMatchProposals: true, acceptsFriendRequests: true, acceptsDirectMessages: true,
   preferredSport: { select: { id: true, key: true, name: true } },
 } as const;
 
@@ -112,8 +112,8 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, n
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, preferredSportId } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; preferredSportId?: string | null } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, acceptsDirectMessages, preferredSportId } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
@@ -145,6 +145,10 @@ router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: 
     if (acceptsFriendRequests !== undefined) {
       if (typeof acceptsFriendRequests !== 'boolean') return void res.status(400).json({ error: 'acceptsFriendRequests invalide' });
       data.acceptsFriendRequests = acceptsFriendRequests;
+    }
+    if (acceptsDirectMessages !== undefined) {
+      if (typeof acceptsDirectMessages !== 'boolean') return void res.status(400).json({ error: 'acceptsDirectMessages invalide' });
+      data.acceptsDirectMessages = acceptsDirectMessages;
     }
     if (preferredSportId !== undefined) {
       if (preferredSportId === null) {
