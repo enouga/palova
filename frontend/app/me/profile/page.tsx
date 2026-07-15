@@ -188,6 +188,14 @@ export default function MyProfilePage() {
     catch (e) { setError((e as Error).message); }
   };
 
+  const changeAcceptsDirectMessages = async (next: boolean) => {
+    if (!token || !profile) return;
+    setError(null);
+    setProfile({ ...profile, acceptsDirectMessages: next }); // optimiste
+    try { setProfile(await api.updateMyProfile({ acceptsDirectMessages: next }, token)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const handlePreferredSport = async (id: string) => {
     if (!token) return;
     setError(null);
@@ -512,7 +520,20 @@ export default function MyProfilePage() {
                     />
                   </div>
                   <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
-                    La messagerie reste ouverte à tous les membres du club ; ce réglage ne concerne que les amitiés.
+                    Ce réglage ne concerne que les amitiés — la messagerie privée se règle séparément ci-dessous.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={label}>Recevoir des messages privés</span>
+                  <div role="group" aria-label="Recevoir des messages privés">
+                    <Segmented<'oui' | 'non'>
+                      value={profile.acceptsDirectMessages ? 'oui' : 'non'}
+                      onChange={(v) => changeAcceptsDirectMessages(v === 'oui')}
+                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
+                    />
+                  </div>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
+                    Vos amis confirmés peuvent toujours vous écrire, même désactivé.
                   </span>
                 </div>
               </section>
