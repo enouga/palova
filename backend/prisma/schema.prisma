@@ -472,8 +472,6 @@ model User {
   autoMatchProposals Boolean @default(false) @map("auto_match_proposals")
   /// Opt-in : autoriser les autres membres à m'envoyer une demande d'ami (ne concerne PAS le chat).
   acceptsFriendRequests Boolean @default(true) @map("accepts_friend_requests")
-  /// Opt-out : refuser les nouveaux messages privés des non-amis (les amis confirmés passent toujours).
-  acceptsDirectMessages Boolean @default(true) @map("accepts_direct_messages")
   preferredSportId String? @map("preferred_sport_id")
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
