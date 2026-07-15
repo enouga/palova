@@ -1,487 +1,138 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
-import { api, assetUrl, ClubAdminDetail, UpdateClubBody, OffPeakHours, BookingQuotas, PaymentMethod } from '@/lib/api';
-import { QUICK_METHODS, QUICK_METHOD_LABEL } from '@/lib/caisse';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { api, ClubAdminDetail } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
-import { Btn } from '@/components/ui/atoms';
-import { ClubCover } from '@/components/ClubCover';
+import { PillTabs } from '@/components/ui/atoms';
+import {
+  SETTINGS_TABS, SettingsTabKey, parseTab, buildUpdateBody, isDirty,
+} from '@/lib/adminSettings';
+import { SetClubField } from '@/components/admin/settings/shared';
+import { SaveBar } from '@/components/admin/settings/SaveBar';
+import { SettingsIdentity } from '@/components/admin/settings/SettingsIdentity';
+import { SettingsBooking } from '@/components/admin/settings/SettingsBooking';
+import { SettingsPricing } from '@/components/admin/settings/SettingsPricing';
+import { SettingsCollect } from '@/components/admin/settings/SettingsCollect';
+import { SettingsVisibility } from '@/components/admin/settings/SettingsVisibility';
+
+const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 export default function AdminSettingsPage() {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const { club: hostClub, refresh: refreshClub } = useClub();
   const clubId = hostClub?.id;
-  const [club, setClub]       = useState<ClubAdminDetail | null>(null);
+
+  // Deux états : baseline serveur + brouillon édité. Le brouillon est dirty quand il diffère.
+  const [server, setServer] = useState<ClubAdminDetail | null>(null);
+  const [draft, setDraft] = useState<ClubAdminDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-  const [saved, setSaved]     = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [tab, setTab] = useState<SettingsTabKey>('identite');
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-  const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-  const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
     setLoading(true);
-    try { setError(null); setClub(await api.adminGetClub(clubId, token)); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      setError(null);
+      const c = await api.adminGetClub(clubId, token);
+      setServer(c);
+      setDraft(c);
+    } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, [token, clubId]);
 
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
-  const set = <K extends keyof ClubAdminDetail>(k: K, v: ClubAdminDetail[K]) => {
-    setSaved(false);
-    setClub((c) => (c ? { ...c, [k]: v } : c));
+  // Onglet initial depuis l'URL (?tab=), puis reflété à chaque changement.
+  useEffect(() => { setTab(parseTab(window.location.search)); }, []);
+  const changeTab = (k: SettingsTabKey) => {
+    setTab(k);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', k);
+    window.history.replaceState(null, '', url.toString());
   };
 
-  // Upload du logo du club (comme la photo de profil) : persiste côté serveur puis met à jour l'aperçu.
+  const set: SetClubField = (k, v) => setDraft((c) => (c ? { ...c, [k]: v } : c));
+
+  const dirty = !!server && !!draft && isDirty(server, draft);
+
+  // Garde beforeunload tant que le brouillon est dirty.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  // Upload logo/couverture : persiste côté serveur puis synchronise server ET draft
+  // (déjà enregistré → ne rend jamais le brouillon dirty).
+  const syncImage = (patch: Partial<ClubAdminDetail>) => {
+    setServer((c) => (c ? { ...c, ...patch } : c));
+    setDraft((c) => (c ? { ...c, ...patch } : c));
+  };
   const pickLogo = async (file: File | undefined) => {
     if (!file || !token || !clubId) return;
     if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
     if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
-    setError(null);
-    setUploading(true);
-    try {
-      const res = await api.uploadClubLogo(clubId, file, token);
-      set('logoUrl', res.logoUrl);
-    } catch (e) { setError((e as Error).message); }
+    setError(null); setUploading(true);
+    try { const res = await api.uploadClubLogo(clubId, file, token); syncImage({ logoUrl: res.logoUrl }); }
+    catch (e) { setError((e as Error).message); }
     finally { setUploading(false); }
   };
-
-  // Upload de la couverture du club : persiste côté serveur puis met à jour l'aperçu.
   const pickCover = async (file: File | undefined) => {
     if (!file || !token || !clubId) return;
     if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
     if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
-    setError(null);
-    setUploading(true);
-    try {
-      const res = await api.uploadClubCover(clubId, file, token);
-      set('coverImageUrl', res.coverImageUrl);
-    } catch (e) { setError((e as Error).message); }
+    setError(null); setUploading(true);
+    try { const res = await api.uploadClubCover(clubId, file, token); syncImage({ coverImageUrl: res.coverImageUrl }); }
+    catch (e) { setError((e as Error).message); }
     finally { setUploading(false); }
   };
 
-  // Plages d'heures creuses par jour (weekday Luxon 1=lundi..7=dimanche), plusieurs
-  // possibles par jour. Jour sans plage = tout en heures pleines.
-  const DAYS: [number, string][] = [[1, 'Lundi'], [2, 'Mardi'], [3, 'Mercredi'], [4, 'Jeudi'], [5, 'Vendredi'], [6, 'Samedi'], [7, 'Dimanche']];
-  const HOURS = Array.from({ length: 25 }, (_, h) => h); // 0..24
-  const MINS = [0, 15, 30, 45];
-  const updateOffPeak = (fn: (oph: OffPeakHours) => void) => {
-    setSaved(false);
-    setClub((c) => {
-      if (!c) return c;
-      const oph: OffPeakHours = Object.fromEntries(Object.entries(c.offPeakHours ?? {}).map(([d, r]) => [d, [...r]]));
-      fn(oph);
-      return { ...c, offPeakHours: oph };
-    });
-  };
-  const addRange = (day: number) => updateOffPeak((oph) => {
-    const ranges = oph[day] ?? [];
-    // Nouvelle plage à la suite de la dernière (ou 9h-12h pour la première).
-    const start = ranges.length ? Math.min(22, ranges[ranges.length - 1].end + 2) : 9;
-    oph[day] = [...ranges, { start, end: Math.min(24, start + 3) }];
-  });
-  const removeRange = (day: number, idx: number) => updateOffPeak((oph) => {
-    const ranges = (oph[day] ?? []).filter((_, i) => i !== idx);
-    if (ranges.length) oph[day] = ranges;
-    else delete oph[day];
-  });
-  const setRangeField = (day: number, idx: number, field: 'start' | 'startMin' | 'end' | 'endMin', value: number) => updateOffPeak((oph) => {
-    const ranges = oph[day] ?? [];
-    const max = field === 'start' || field === 'end' ? 24 : 59;
-    ranges[idx] = { ...ranges[idx], [field]: Math.max(0, Math.min(max, value || 0)) };
-    oph[day] = ranges;
-  });
-
-  // Quotas de réservations (réglage club, null = désactivé).
-  const EMPTY_QUOTAS: BookingQuotas = {
-    model: 'UPCOMING',
-    subscriber: { peak: null, offPeak: null },
-    nonSubscriber: { peak: null, offPeak: null },
-  };
-  const quotas = club?.bookingQuotas ?? null;
-  const setQuotas = (q: BookingQuotas | null) => { setSaved(false); setClub((c) => (c ? { ...c, bookingQuotas: q } : c)); };
-  const setQuotaLimit = (who: 'subscriber' | 'nonSubscriber', kind: 'peak' | 'offPeak', raw: string) => {
-    if (!quotas) return;
-    const v = raw === '' ? null : Math.max(0, Math.min(999, Math.trunc(Number(raw))));
-    setQuotas({ ...quotas, [who]: { ...quotas[who], [kind]: Number.isFinite(v as number) || v === null ? v : null } });
-  };
-
   const save = async () => {
-    if (!token || !clubId || !club) return;
+    if (!token || !clubId || !draft) return;
     setSaving(true);
     try {
       setError(null);
-      const body: UpdateClubBody = {
-        name: club.name, description: club.description ?? '', address: club.address,
-        city: club.city ?? '', timezone: club.timezone, logoUrl: club.logoUrl ?? '',
-        coverImageUrl: club.coverImageUrl,
-        accentColor: club.accentColor, defaultThemeMode: club.defaultThemeMode,
-        listedInDirectory: club.listedInDirectory,
-        listTournamentsNationally: club.listTournamentsNationally,
-        showOffersPublicly: club.showOffersPublicly,
-        levelSystemEnabled: club.levelSystemEnabled,
-        publicBookingDays: Number(club.publicBookingDays), memberBookingDays: Number(club.memberBookingDays),
-        bookingReleaseMode: club.bookingReleaseMode,
-        publicReleaseHour: Number(club.publicReleaseHour), memberReleaseHour: Number(club.memberReleaseHour),
-        offPeakHours: club.offPeakHours && Object.keys(club.offPeakHours).length > 0 ? club.offPeakHours : null,
-        bookingQuotas: club.bookingQuotas ?? null,
-        playerChangeCutoffHours: Number(club.playerChangeCutoffHours),
-        cancellationCutoffHours: Number(club.cancellationCutoffHours),
-        refundOnCancelWithinCutoff: club.refundOnCancelWithinCutoff,
-        requireOnlinePayment: club.requireOnlinePayment,
-        requireCardFingerprint: club.requireCardFingerprint,
-        quickPaymentMethods: club.quickPaymentMethods,
-        payAtClubOnly: club.payAtClubOnly,
-      };
-      await api.adminUpdateClub(clubId, body, token);
-      setSaved(true);
-      // Recharge le club partagé (ClubProvider monté à la racine, fetché une seule fois) pour
-      // que les réglages (paiement en ligne, tarifs, fenêtres…) se reflètent dans la réservation
-      // sans rechargement de page — sinon la modale garderait l'ancienne config (« Régler au club »).
-      refreshClub();
+      await api.adminUpdateClub(clubId, buildUpdateBody(draft), token);
+      setServer(draft);           // le brouillon devient la nouvelle baseline → barre disparaît
+      refreshClub();              // rafraîchit le club partagé (réservation, tarifs…)
     } catch (e) { setError((e as Error).message); }
     finally { setSaving(false); }
   };
 
-  const field: CSSProperties = { width: '100%', height: 48, padding: '0 14px', borderRadius: 12, background: th.bg, color: th.text, border: `1px solid ${th.line}`, fontFamily: th.fontUI, fontSize: 15 };
-  const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute, display: 'block', marginBottom: 7 };
-  const card: CSSProperties = { background: th.surface, borderRadius: 18, padding: 22, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 16 };
+  const cancel = () => { setDraft(server); setError(null); };
 
-  if (loading || !club) {
+  if (loading || !draft) {
     return <div style={{ fontFamily: th.fontUI, color: th.textFaint, padding: '32px 0' }}>Chargement…</div>;
   }
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 24px', color: th.text }}>Réglages du club</h1>
+      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 20px', color: th.text }}>Réglages du club</h1>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 16px', color: th.text }}>Profil</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div><span style={label}>Nom du club</span><input value={club.name} onChange={(e) => set('name', e.target.value)} style={field} /></div>
-          <div><span style={label}>Description</span><textarea value={club.description ?? ''} onChange={(e) => set('description', e.target.value)} rows={2} style={{ ...field, height: 'auto', padding: '10px 14px', resize: 'vertical' }} /></div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 2 }}><span style={label}>Adresse</span><input value={club.address} onChange={(e) => set('address', e.target.value)} style={field} /></div>
-            <div style={{ flex: 1 }}><span style={label}>Ville</span><input value={club.city ?? ''} onChange={(e) => set('city', e.target.value)} style={field} /></div>
-          </div>
-          <div><span style={label}>Fuseau horaire</span><input value={club.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="Europe/Paris" style={field} /></div>
-        </div>
+      <div className="sp-scroll-x" style={{ marginBottom: 20 }}>
+        <PillTabs options={SETTINGS_TABS.map((t) => ({ value: t.key, label: t.label }))} value={tab} onChange={changeTab} />
       </div>
 
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 16px', color: th.text }}>Identité visuelle</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <span style={label}>Logo du club</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {club.logoUrl ? (
-                <img src={assetUrl(club.logoUrl) ?? ''} alt="Logo du club"
-                  style={{ width: 72, height: 72, borderRadius: 14, objectFit: 'contain', background: th.bg, border: `1px solid ${th.line}`, flexShrink: 0, opacity: uploading ? 0.5 : 1 }} />
-              ) : (
-                <span style={{ width: 72, height: 72, borderRadius: 14, flexShrink: 0, background: th.accent, color: th.onAccent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 26 }}>
-                  {(club.name?.[0] ?? '?').toUpperCase()}
-                </span>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <input ref={logoInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                  aria-label="Choisir un logo de club"
-                  onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
-                <Btn type="button" variant="surface" disabled={uploading} onClick={() => logoInputRef.current?.click()}>
-                  {uploading ? 'Envoi…' : 'Changer le logo'}
-                </Btn>
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
-              </div>
-            </div>
-          </div>
-          <div>
-            <span style={label}>Image de couverture</span>
-            <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '0 0 10px' }}>
-              Illustre votre club dans l'annuaire des clubs. Sans photo importée, une belle photo de court est utilisée automatiquement par défaut.
-            </p>
-            <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: uploading ? 0.5 : 1 }}>
-              <ClubCover club={{
-                name: club.name, slug: club.slug, accentColor: club.accentColor,
-                coverImageUrl: club.coverImageUrl,
-              }} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                aria-label="Choisir une image de couverture"
-                onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ''; }} />
-              <Btn type="button" variant="surface" disabled={uploading} onClick={() => coverInputRef.current?.click()}>
-                {uploading ? 'Envoi…' : 'Importer une photo'}
-              </Btn>
-              {club.coverImageUrl && (
-                <Btn type="button" variant="ghost" disabled={uploading} onClick={() => set('coverImageUrl', null)}>
-                  Utiliser l'illustration automatique
-                </Btn>
-              )}
-            </div>
-            <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, display: 'block', marginTop: 6 }}>JPEG, PNG ou WebP · 2 Mo max</span>
-          </div>
-          <div>
-            <span style={label}>Couleur d'accent</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {Object.values(ACCENTS).map((hex) => (
-                <button key={hex} type="button" onClick={() => set('accentColor', hex)} aria-label={`Accent ${hex}`}
-                  style={{ width: 34, height: 34, borderRadius: 10, background: hex, cursor: 'pointer', border: club.accentColor.toLowerCase() === hex.toLowerCase() ? `2px solid ${th.text}` : `2px solid transparent`, boxShadow: `inset 0 0 0 1px ${th.line}` }} />
-              ))}
-              <input value={club.accentColor} onChange={(e) => set('accentColor', e.target.value)} style={{ ...field, width: 120, height: 34 }} />
-            </div>
-          </div>
-          <div>
-            <span style={label}>Thème par défaut</span>
-            <select value={club.defaultThemeMode} onChange={(e) => set('defaultThemeMode', e.target.value)} style={field}>
-              <option value="floodlit">Sombre (floodlit)</option>
-              <option value="daylight">Clair (daylight)</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      {tab === 'identite' && (
+        <SettingsIdentity club={draft} set={set} uploading={uploading}
+          logoInputRef={logoInputRef} coverInputRef={coverInputRef} pickLogo={pickLogo} pickCover={pickCover} />
+      )}
+      {tab === 'reservation' && <SettingsBooking club={draft} set={set} />}
+      {tab === 'tarifs' && <SettingsPricing club={draft} set={set} />}
+      {tab === 'caisse' && <SettingsCollect club={draft} set={set} />}
+      {tab === 'visibilite' && <SettingsVisibility club={draft} set={set} />}
 
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Visibilité</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Affiche votre club dans l'annuaire public et la recherche. Décoché, votre club reste accessible par son adresse directe (sous-domaine) mais n'apparaît pas dans l'annuaire.</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <input type="checkbox" checked={club.listedInDirectory} onChange={(e) => set('listedInDirectory', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher mon club dans l'annuaire public</span>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginTop: 12 }}>
-          <input type="checkbox" checked={club.listTournamentsNationally} onChange={(e) => set('listTournamentsNationally', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Publier mes tournois dans le calendrier national Palova</span>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginTop: 12 }}>
-          <input type="checkbox" checked={club.showOffersPublicly} onChange={(e) => set('showOffersPublicly', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher mes formules (abonnements &amp; carnets) sur le Club-house</span>
-        </label>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Réservation à l'avance</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Nombre de jours pendant lesquels les joueurs peuvent réserver à l'avance. Les abonnés bénéficient d'une fenêtre élargie (réservent plus tôt).</p>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}><span style={label}>Public (jours)</span><input type="number" min={0} max={365} value={club.publicBookingDays} onChange={(e) => set('publicBookingDays', Number(e.target.value))} style={field} /></div>
-          <div style={{ flex: 1 }}><span style={label}>Abonnés (jours)</span><input type="number" min={0} max={365} value={club.memberBookingDays} onChange={(e) => set('memberBookingDays', Number(e.target.value))} style={field} /></div>
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <span style={label}>Ouverture des nouvelles réservations</span>
-          <select
-            value={club.bookingReleaseMode}
-            onChange={(e) => set('bookingReleaseMode', e.target.value as ClubAdminDetail['bookingReleaseMode'])}
-            style={field}
-          >
-            <option value="DAY_AT_HOUR">Journée entière à heure fixe (à H, toute la nouvelle journée s'ouvre)</option>
-            <option value="ROLLING_SLOT">Au fil de l'eau (chaque créneau s'ouvre X jours avant son horaire)</option>
-            <option value="WINDOW_SHIFT">Fenêtre jusqu'à l'heure (réservable jusqu'à J+X à H:00)</option>
-          </select>
-          <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '8px 0 0' }}>
-            « Au fil de l'eau » n'utilise pas l'heure de release ci-dessous. Heure 0 = ouverture à minuit (comportement par défaut).
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 12, marginTop: 12, opacity: club.bookingReleaseMode === 'ROLLING_SLOT' ? 0.4 : 1 }}>
-          <div style={{ flex: 1 }}>
-            <span style={label}>Heure publique (0-23)</span>
-            <input type="number" min={0} max={23} disabled={club.bookingReleaseMode === 'ROLLING_SLOT'}
-              value={club.publicReleaseHour} onChange={(e) => set('publicReleaseHour', Number(e.target.value))} style={field} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <span style={label}>Heure abonnés (0-23)</span>
-            <input type="number" min={0} max={23} disabled={club.bookingReleaseMode === 'ROLLING_SLOT'}
-              value={club.memberReleaseHour} onChange={(e) => set('memberReleaseHour', Number(e.target.value))} style={field} />
-          </div>
-        </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Délais (annulation & changement de joueurs)</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>
-          Nombre d&apos;heures avant le début d&apos;une réservation au-delà duquel le joueur ne peut plus, respectivement, modifier les joueurs de sa partie ou l&apos;annuler. <strong>0 = autorisé jusqu&apos;au début.</strong>
-        </p>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}><span style={label}>Changement de joueurs (h)</span><input type="number" min={0} max={365} value={club.playerChangeCutoffHours} onChange={(e) => set('playerChangeCutoffHours', Number(e.target.value))} style={field} /></div>
-          <div style={{ flex: 1 }}><span style={label}>Annulation (h)</span><input type="number" min={0} max={365} value={club.cancellationCutoffHours} onChange={(e) => set('cancellationCutoffHours', Number(e.target.value))} style={field} /></div>
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
-            <input type="checkbox" checked={club.refundOnCancelWithinCutoff} onChange={(e) => set('refundOnCancelWithinCutoff', e.target.checked)}
-              style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer', marginTop: 2, flexShrink: 0 }} />
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Rembourser automatiquement en cas d&apos;annulation dans les délais</span>
-              <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Le joueur est remboursé (recrédit du carnet / porte-monnaie si prépayé) lorsqu&apos;il annule avant le délai.</span>
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Page « Mes réservations »</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Par défaut, vos joueurs ne voient ici que les réservations, tournois et events de <strong>votre club</strong>. Cochez pour leur afficher aussi ceux des autres clubs dont ils sont membres (un clic sur une entrée d&apos;un autre club ouvre l&apos;app de ce club).</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <input type="checkbox" checked={club.showOtherClubsReservations} onChange={(e) => set('showOtherClubsReservations', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Afficher aussi les réservations des autres clubs</span>
-        </label>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Système de niveau de joueur</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Active le classement par niveau (Glicko-2), la saisie des résultats de matchs, le leaderboard et le matchmaking par niveau. Décoché, ces fonctionnalités et le menu « Matchs » sont masqués.</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <input type="checkbox" checked={club.levelSystemEnabled} onChange={(e) => set('levelSystemEnabled', e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Activer le système de niveau de joueur</span>
-        </label>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Heures pleines / creuses</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>Ajoutez des plages d&apos;<strong>heures creuses</strong> (tarif réduit) jour par jour — plusieurs plages possibles. Le reste de la journée est en <strong>heures pleines</strong> ; un jour sans plage est entièrement en heures pleines. Le tarif des heures creuses se règle par terrain dans <strong>Ressources</strong>.</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {DAYS.map(([day, name]) => {
-            const ranges = club.offPeakHours?.[day] ?? [];
-            return (
-              <div key={day} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.text, width: 110, paddingTop: ranges.length ? 9 : 2 }}>{name}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 260 }}>
-                  {ranges.length === 0 && (
-                    <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, paddingTop: 2 }}>tout en heures pleines</span>
-                  )}
-                  {ranges.map((r, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, flexWrap: 'wrap' }}>
-                      creuses de
-                      <select value={r.start} onChange={(e) => setRangeField(day, idx, 'start', Number(e.target.value))} style={{ ...field, width: 62, height: 40, padding: '0 4px' }}>
-                        {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                      h
-                      <select value={r.startMin ?? 0} onChange={(e) => setRangeField(day, idx, 'startMin', Number(e.target.value))} style={{ ...field, width: 62, height: 40, padding: '0 4px' }}>
-                        {MINS.map((m) => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
-                      </select>
-                      à
-                      <select value={r.end} onChange={(e) => setRangeField(day, idx, 'end', Number(e.target.value))} style={{ ...field, width: 62, height: 40, padding: '0 4px' }}>
-                        {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                      h
-                      <select value={r.endMin ?? 0} onChange={(e) => setRangeField(day, idx, 'endMin', Number(e.target.value))} style={{ ...field, width: 62, height: 40, padding: '0 4px' }}>
-                        {MINS.map((m) => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
-                      </select>
-                      <button type="button" onClick={() => removeRange(day, idx)} aria-label={`Supprimer la plage ${r.start}h-${r.end}h de ${name}`}
-                        style={{ marginLeft: 4, width: 28, height: 28, borderRadius: 8, background: 'transparent', color: th.textMute, border: `1px solid ${th.line}`, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>
-                    </div>
-                  ))}
-                  <button type="button" onClick={() => addRange(day)}
-                    style={{ alignSelf: 'flex-start', padding: '5px 10px', borderRadius: 8, background: 'transparent', color: th.textMute, border: `1px dashed ${th.line}`, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
-                    + Ajouter une plage
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Quotas de réservation</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 14px' }}>
-          Limitez le nombre de réservations de terrain par joueur, en heures pleines et en heures creuses,
-          avec des limites différentes pour les abonnés. Vide = illimité, 0 = bloqué.
-          Une réservation compte en heures creuses si elle est <strong>entièrement</strong> dans les plages creuses ci-dessus.
-        </p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginBottom: quotas ? 16 : 0 }}>
-          <input type="checkbox" checked={!!quotas} onChange={(e) => setQuotas(e.target.checked ? EMPTY_QUOTAS : null)}
-            style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>Limiter les réservations par joueur</span>
-        </label>
-        {quotas && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <span style={label}>Période de comptage</span>
-              <select value={quotas.model} onChange={(e) => setQuotas({ ...quotas, model: e.target.value as BookingQuotas['model'] })} style={field}>
-                <option value="UPCOMING">Réservations à venir simultanées</option>
-                <option value="WEEKLY">Par semaine calendaire (lun.–dim.)</option>
-              </select>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr', gap: 10, alignItems: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
-              <span />
-              <span style={{ ...label, marginBottom: 0 }}>Heures pleines</span>
-              <span style={{ ...label, marginBottom: 0 }}>Heures creuses</span>
-              {(['nonSubscriber', 'subscriber'] as const).map((who) => (
-                <span key={`${who}-row`} style={{ display: 'contents' }}>
-                  <span>{who === 'subscriber' ? 'Abonnés' : 'Non-abonnés'}</span>
-                  <input type="number" min={0} max={999} placeholder="illimité" value={quotas[who].peak ?? ''}
-                    onChange={(e) => setQuotaLimit(who, 'peak', e.target.value)} style={field} />
-                  <input type="number" min={0} max={999} placeholder="illimité" value={quotas[who].offPeak ?? ''}
-                    onChange={(e) => setQuotaLimit(who, 'offPeak', e.target.value)} style={field} />
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 6px', color: th.text }}>Moyens d&apos;encaissement rapides</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, margin: '0 0 16px' }}>
-          Choisissez les moyens proposés en <strong>1 clic</strong> sur chaque ligne joueur de la page <strong>Encaissement</strong>. Les autres moyens (montant libre, n&apos;&nbsp;de Ticket CE, carnet&hellip;) restent accessibles via « Détails ».
-        </p>
-
-        {/* Option « paiement au club » : un seul bouton « Encaissé », sans choix de moyen. */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${th.line}` }}>
-          <input type="checkbox" checked={!!club.payAtClubOnly}
-            onChange={(e) => set('payAtClubOnly', e.target.checked)}
-            style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer', marginTop: 2 }} />
-          <span>
-            <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 15, fontWeight: 600, color: th.text }}>Paiement au club — encaissement en un clic</span>
-            <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 2 }}>
-              À l&apos;encaissement, un seul bouton <strong>« Encaissé »</strong> au lieu du choix du moyen. Le paiement est bien enregistré (il compte dans le chiffre d&apos;affaires) sous le libellé neutre « Au club ». Les moyens rapides ci-dessous sont alors masqués.
-            </span>
-          </span>
-        </label>
-
-        {!club.payAtClubOnly && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {QUICK_METHODS.map((m) => {
-            const checked = (club.quickPaymentMethods ?? []).includes(m);
-            return (
-              <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <input type="checkbox" checked={checked}
-                  onChange={(e) => {
-                    const next = e.target.checked
-                      ? [...(club.quickPaymentMethods ?? []), m]
-                      : (club.quickPaymentMethods ?? []).filter((x) => x !== m);
-                    set('quickPaymentMethods', QUICK_METHODS.filter((x) => next.includes(x)) as PaymentMethod[]);
-                  }}
-                  style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
-                <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.text }}>{QUICK_METHOD_LABEL[m]}</span>
-              </label>
-            );
-          })}
-        </div>
-        )}
-      </div>
-
-      {/* Paiement en ligne — déplacé sur sa page dédiée */}
-      <div style={card}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 8px', color: th.text }}>Paiement en ligne</h2>
-        <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 14px' }}>
-          La connexion Stripe et les réglages de paiement CB ont leur page dédiée.
-        </p>
-        <a href="/admin/payments" style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.accent }}>
-          Gérer le paiement en ligne →
-        </a>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Btn onClick={save} icon="check" disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Btn>
-        {saved && <span style={{ fontFamily: th.fontUI, fontSize: 14, color: th.mode === 'floodlit' ? th.accent : th.ink, fontWeight: 600 }}>Enregistré ✓</span>}
-      </div>
+      <SaveBar dirty={dirty} saving={saving} error={error} onSave={save} onCancel={cancel} />
     </div>
   );
 }
