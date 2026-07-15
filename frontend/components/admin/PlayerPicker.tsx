@@ -148,6 +148,11 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
             : matches.map((m) => (
                 // Ligne « annuaire » alignée sur AddPlayerSheet du front (avatar + niveau + « + »), sans rangée « Mes amis ».
                 <button key={m.userId} type="button" onClick={() => pick(m)}
+                  // Sans ça, le mousedown sur la ligne fait perdre le focus au champ AVANT le
+                  // click : le blur programme la fermeture (setTimeout 150ms) et, si le clic
+                  // dépasse ce délai (trackpad, clic appuyé…), la ligne disparaît avant que le
+                  // click ne se déclenche — sélection silencieusement ratée.
+                  onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={(e) => { e.currentTarget.style.background = th.surface2; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '8px 6px', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>

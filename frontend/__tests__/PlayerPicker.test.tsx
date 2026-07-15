@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, createEvent } from '@testing-library/react';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { PlayerPicker } from '../components/admin/PlayerPicker';
 import type { Member } from '../lib/api';
@@ -53,6 +53,15 @@ describe('PlayerPicker', () => {
       <ThemeProvider><PlayerPicker members={members} value={null} onSelect={onSelect} onClear={jest.fn()} onCreate={jest.fn()} busy={false} /></ThemeProvider>,
     );
     expect(screen.queryByText('Sélection…')).not.toBeInTheDocument();
+  });
+
+  it('empêche le mousedown sur une ligne de faire perdre le focus au champ (sinon le blur ferme la liste avant que le clic n\'arrive et la sélection est ratée en silence)', () => {
+    setup();
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un joueur…'));
+    const row = screen.getByText(/Marie Curie/).closest('button')!;
+    const mouseDown = createEvent.mouseDown(row);
+    fireEvent(row, mouseDown);
+    expect(mouseDown.defaultPrevented).toBe(true);
   });
 
   it('affiche la pastille de niveau dans la liste (look annuaire du front)', () => {
