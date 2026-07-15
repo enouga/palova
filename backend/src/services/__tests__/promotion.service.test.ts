@@ -52,6 +52,45 @@ describe('updatePromotion / deletePromotion — garde club', () => {
     prismaMock.promotion.findUnique.mockResolvedValue(null as any);
     await expect(svc.deletePromotion('promo-1', 'club-1')).rejects.toThrow('PROMOTION_NOT_FOUND');
   });
+
+  it('update succès : bascule PERCENT→FIXED (nulle percentOff) + remplace les terrains, DTO', async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({
+      id: 'promo-1', clubId: 'club-1', name: 'Été', startDate: new Date('2026-08-01T00:00:00Z'), endDate: new Date('2026-08-31T00:00:00Z'),
+      windowStart: null, windowEnd: null, kind: 'PERCENT', percentOff: 20, fixedPrice: null, enabled: true,
+      createdAt: new Date('2026-07-15T00:00:00Z'), resources: [{ resourceId: 'court-1' }],
+    } as any);
+    prismaMock.resource.findMany.mockResolvedValue([{ id: 'court-2' }] as any); // validate : terrain du club
+    prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.promotionResource.deleteMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.promotionResource.createMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.promotion.update.mockResolvedValue({
+      id: 'promo-1', clubId: 'club-1', name: 'Été', startDate: new Date('2026-08-01T00:00:00Z'), endDate: new Date('2026-08-31T00:00:00Z'),
+      windowStart: null, windowEnd: null, kind: 'FIXED', percentOff: null, fixedPrice: '15.00', enabled: true,
+      createdAt: new Date('2026-07-15T00:00:00Z'), resources: [{ resourceId: 'court-2' }],
+    } as any);
+
+    const dto = await svc.updatePromotion('promo-1', 'club-1', { kind: 'FIXED', fixedPrice: 15, resourceIds: ['court-2'] });
+
+    // la mutation passe par une transaction
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    // cohérence kind : percentOff mis à null, fixedPrice posé
+    const updateData = (prismaMock.promotion.update as jest.Mock).mock.calls[0][0].data;
+    expect(updateData).toMatchObject({ kind: 'FIXED', percentOff: null });
+    expect(updateData.fixedPrice).toBeTruthy();
+    // remplacement des terrains
+    expect(prismaMock.promotionResource.deleteMany).toHaveBeenCalledWith({ where: { promotionId: 'promo-1' } });
+    expect(prismaMock.promotionResource.createMany).toHaveBeenCalledWith({ data: [{ promotionId: 'promo-1', resourceId: 'court-2' }] });
+    // DTO
+    expect(dto).toMatchObject({ id: 'promo-1', kind: 'FIXED', fixedPrice: '15.00', resourceIds: ['court-2'] });
+  });
+
+  it('delete succès : appelle promotion.delete et renvoie { ok: true }', async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({ id: 'promo-1', clubId: 'club-1' } as any);
+    prismaMock.promotion.delete.mockResolvedValue({ id: 'promo-1' } as any);
+    const res = await svc.deletePromotion('promo-1', 'club-1');
+    expect(prismaMock.promotion.delete).toHaveBeenCalledWith({ where: { id: 'promo-1' } });
+    expect(res).toEqual({ ok: true });
+  });
 });
 
 describe('loadActivePromotions', () => {

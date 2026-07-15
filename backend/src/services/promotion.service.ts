@@ -31,7 +31,7 @@ function toDTO(p: {
     startDate: ymd(p.startDate), endDate: ymd(p.endDate),
     windowStart: p.windowStart, windowEnd: p.windowEnd,
     kind: p.kind, percentOff: p.percentOff,
-    fixedPrice: p.fixedPrice != null ? p.fixedPrice.toFixed(2) : null,
+    fixedPrice: p.fixedPrice != null ? Number(p.fixedPrice).toFixed(2) : null,
     enabled: p.enabled, resourceIds: p.resources.map((r) => r.resourceId),
     createdAt: p.createdAt.toISOString(),
   };
@@ -151,16 +151,17 @@ export class PromotionService {
     if (body.windowEnd !== undefined) data.windowEnd = body.windowEnd;
     if (body.enabled !== undefined) data.enabled = body.enabled;
 
-    if (body.resourceIds !== undefined) {
-      const ids = [...new Set(body.resourceIds)];
-      await prisma.promotionResource.deleteMany({ where: { promotionId: id } });
-      if (ids.length > 0) {
-        await prisma.promotionResource.createMany({ data: ids.map((resourceId) => ({ promotionId: id, resourceId })) });
+    const updated = await prisma.$transaction(async (tx) => {
+      if (body.resourceIds !== undefined) {
+        const ids = [...new Set(body.resourceIds)];
+        await tx.promotionResource.deleteMany({ where: { promotionId: id } });
+        if (ids.length > 0) {
+          await tx.promotionResource.createMany({ data: ids.map((resourceId) => ({ promotionId: id, resourceId })) });
+        }
       }
-    }
-
-    const updated = await prisma.promotion.update({
-      where: { id }, data, include: { resources: { select: { resourceId: true } } },
+      return tx.promotion.update({
+        where: { id }, data, include: { resources: { select: { resourceId: true } } },
+      });
     });
     return toDTO(updated);
   }
