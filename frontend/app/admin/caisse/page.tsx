@@ -6,12 +6,14 @@ import { addDaysKey, frLongLabel, frWeekday, todayKey } from '@/lib/calendar';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { Receipt } from '@/components/admin/Receipt';
 import { TrendKpis } from '@/components/admin/ventes/TrendKpis';
 import { DayJournal, JournalFilter } from '@/components/admin/ventes/DayJournal';
 import { SellPanel, SellSelection } from '@/components/admin/ventes/SellPanel';
+import { SectionTitle } from '@/components/admin/ventes/SectionTitle';
 
 const euro = (s: string | number) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 
@@ -116,7 +118,7 @@ export default function AdminCaissePage() {
       };
       if (sel.kind === 'package') await api.adminSellPackage(clubId, buyer.userId, { templateId: sel.id, ...common }, token);
       else await api.adminSellSubscription(clubId, buyer.userId, { planId: sel.id, ...common }, token);
-      await Promise.all([load(), pickBuyer(buyer)]);
+      await load(); // le panneau réinitialise l'acheteur lui-même (onClear) après une vente réussie
       return true;
     } catch (e) { setError((e as Error).message); return false; }
     finally { setBusy(false); }
@@ -207,15 +209,25 @@ export default function AdminCaissePage() {
             onCreate={createBuyer} onSell={onSell}
           />
           <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow }}>
-            <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 12 }}>Tickets CE à rembourser ({vouchers.length})</div>
+            <SectionTitle icon="ticket" accent={ACCENTS.apricot} right={
+              <span style={{
+                fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px',
+                background: vouchers.length > 0 ? (th.mode === 'floodlit' ? `${ACCENTS.coral}26` : `${ACCENTS.coral}33`) : th.surface2,
+                color: vouchers.length > 0 ? (th.mode === 'floodlit' ? ACCENTS.coral : '#b23c17') : th.textMute,
+              }}>{vouchers.length}</span>
+            }>Tickets CE à rembourser</SectionTitle>
             <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 340, overflowY: 'auto' }}>
               {vouchers.map((p) => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 13, color: th.text, padding: '8px 0', borderTop: `1px solid ${th.line}` }}>
-                  <span style={{ flex: 1, minWidth: 0 }}>{paymentLabel(p)}</span>
-                  <span style={{ color: th.textMute, fontSize: 12 }}>{p.voucherRef}{p.voucherIssuer ? ` · ${p.voucherIssuer}` : ''}</span>
-                  <b>{euro(p.amount)}</b>
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, padding: '9px 0', borderTop: `1px solid ${th.line}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{paymentLabel(p)}</div>
+                    {p.voucherRef && (
+                      <div style={{ fontFamily: th.fontMono, fontSize: 11, color: th.textFaint, marginTop: 1 }}>{p.voucherRef}{p.voucherIssuer ? ` · ${p.voucherIssuer}` : ''}</div>
+                    )}
+                  </div>
+                  <b style={{ fontFamily: th.fontDisplay, fontSize: 13.5, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{euro(p.amount)}</b>
                   <button type="button" onClick={() => reimburse(p)} disabled={busy}
-                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>
+                    style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.text, borderRadius: 9, padding: '5px 10px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                     Remboursé
                   </button>
                 </div>
