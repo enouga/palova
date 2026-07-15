@@ -86,6 +86,14 @@ it('échec de openConversation affiche une erreur et laisse le panneau ouvert', 
   expect(onClose).not.toHaveBeenCalled();
 });
 
+it('échec DM_DISABLED affiche le message spécifique', async () => {
+  apiMock.openConversation.mockRejectedValue(new Error('DM_DISABLED'));
+  renderPanel();
+  fireEvent.click(await screen.findByText('Léa M'));
+  expect(await screen.findByText("Ce joueur n'accepte pas les messages privés.")).toBeInTheDocument();
+  expect(onOpened).not.toHaveBeenCalled();
+});
+
 it('échec de la recherche affiche un message d\'erreur (pas une liste vide silencieuse)', async () => {
   apiMock.searchClubMembers.mockRejectedValue(new Error('backend down'));
   renderPanel();
