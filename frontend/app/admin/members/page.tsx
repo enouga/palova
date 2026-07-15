@@ -13,14 +13,13 @@ import { clubIsMultiSport } from '@/lib/sportBadge';
 import { Pill } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { StaffRole } from '@/components/admin/StaffRoleMenu';
 import { MemberRow, SubActionKind } from '@/components/admin/members/MemberRow';
 import { MemberPanel, MemberDraft } from '@/components/admin/members/MemberPanel';
 import { AddMemberDialog } from '@/components/admin/members/AddMemberDialog';
 import { SubscriberInsights } from '@/components/admin/members/SubscriberInsights';
 import { SubscriptionActions } from '@/components/admin/subscriptions/SubscriptionActions';
 import {
-  MemberSeg, MemberSort, filterMembers, segCounts, sortMembers, memberKpis, membersCsv,
+  MemberSeg, MemberSort, StaffRole, filterMembers, segCounts, sortMembers, memberKpis, membersCsv,
 } from '@/lib/members';
 
 // Hauteur d'une MemberRow (mesurée) + gap de la grille — sert de pas fixe à la virtualisation.
@@ -32,7 +31,7 @@ const LIST_MAX_HEIGHT = 'calc(100vh - 300px)';
 const STAFF_ERRORS: Record<string, string> = {
   CANNOT_CHANGE_OWNER: 'Le rôle du gérant ne peut pas être modifié.',
   CANNOT_CHANGE_SELF:  'Vous ne pouvez pas modifier votre propre rôle.',
-  MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bouton « Rôle… ») avant de le supprimer.',
+  MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bloc « Rôle ») avant de le supprimer.',
 };
 
 const CORAL = '#ff7a4d';
@@ -181,6 +180,12 @@ export default function AdminMembersPage() {
     catch (e) { const msg = (e as Error).message; setError(STAFF_ERRORS[msg] ?? msg); }
   };
 
+  const setCoach = async (isCoach: boolean) => {
+    if (!token || !clubId || !selected) return;
+    try { setError(null); await api.adminSetMemberCoach(clubId, selected.userId, isCoach, token); await load(); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const remove = async (m: Member) => {
     if (!token || !clubId) return;
     try { setError(null); await api.adminRemoveMember(clubId, m.id, token); setConfirmRemove(null); await load(); }
@@ -308,7 +313,7 @@ export default function AdminMembersPage() {
 
             {selected && isDesktop && (
               <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop error={error}
-                onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
+                onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
             )}
           </div>
         </>
@@ -316,7 +321,7 @@ export default function AdminMembersPage() {
 
       {selected && !isDesktop && (
         <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop={false} error={error}
-          onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
+          onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
       )}
 
       {addOpen && token && clubId && (

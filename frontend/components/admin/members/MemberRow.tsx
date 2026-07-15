@@ -70,6 +70,7 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscription
           </span>
           {m.watch && <span title="À surveiller" style={{ fontSize: 13 }}>👁</span>}
           {m.staffRole && <Chip tone="accent">{STAFF_LABEL[m.staffRole]}</Chip>}
+          {m.isCoach && <Chip tone="line">Coach</Chip>}
           {(m.isSubscriber || m.hasActiveSubscription) && (
             // Chip abonné rendu inline (pas via <Chip>) pour tronquer un nom de formule long :
             // le nom de formule est libre → sans borne il déborde et crée un scroll horizontal en mobile.
