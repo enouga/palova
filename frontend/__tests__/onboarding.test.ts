@@ -27,7 +27,7 @@ describe('buildChecklist', () => {
     });
     expect(items.every((i) => i.done)).toBe(true);
     const byKey = Object.fromEntries(items.map((i) => [i.key, i]));
-    expect(byKey.logo.href).toBe('/admin/settings');
+    expect(byKey.logo.href).toBe('/admin/settings?tab=identite');
     expect(byKey.sports.href).toBe('/admin/sports');
     expect(byKey.courts.href).toBe('/admin/courts');
     expect(byKey.page.href).toBe('/admin/club');
@@ -39,6 +39,14 @@ describe('buildChecklist', () => {
   it('Stripe PENDING ne suffit pas', () => {
     const items = buildChecklist({ ...bare, stripeStatus: 'PENDING' });
     expect(items.find((i) => i.key === 'stripe')!.done).toBe(false);
+  });
+
+  it('deep-links the logo item to the Identité tab of settings', () => {
+    const items = buildChecklist({
+      hasLogo: false, sportsCount: 0, resourcesCount: 0, hasPresentation: false,
+      stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
+    });
+    expect(items.find((i) => i.key === 'logo')?.href).toBe('/admin/settings?tab=identite');
   });
 });
 

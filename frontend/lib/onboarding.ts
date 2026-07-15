@@ -34,7 +34,7 @@ export interface ChecklistItem {
 export function buildChecklist(s: OnboardingStatus): ChecklistItem[] {
   return [
     { key: 'club',   label: 'Créer votre club',                          done: true,                          href: null },
-    { key: 'logo',   label: 'Logo & couleur',                            done: s.hasLogo,                     href: '/admin/settings' },
+    { key: 'logo',   label: 'Logo & couleur',                            done: s.hasLogo,                     href: '/admin/settings?tab=identite' },
     { key: 'sports', label: 'Vos sports',                                done: s.sportsCount > 0,             href: '/admin/sports' },
     { key: 'courts', label: 'Vos terrains',                              done: s.resourcesCount > 0,          href: '/admin/courts' },
     { key: 'page',   label: 'Votre page club (photos, présentation)',    done: s.hasPresentation,             href: '/admin/club' },
