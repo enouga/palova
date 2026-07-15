@@ -47,3 +47,13 @@ it('abonné lointain : pastille « Actif » (pas de compte à rebours)', () => {
   expect(screen.getByText('Actif')).toBeInTheDocument();
   expect(screen.queryByText(/Expire dans/)).not.toBeInTheDocument();
 });
+
+it('affiche la chip Coach quand isCoach', () => {
+  wrap({ m: { ...base, isCoach: true } });
+  expect(screen.getByText('Coach')).toBeInTheDocument();
+});
+
+it('pas de chip Coach sinon', () => {
+  wrap();
+  expect(screen.queryByText('Coach')).toBeNull();
+});

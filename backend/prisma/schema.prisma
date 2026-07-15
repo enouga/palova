@@ -502,6 +502,7 @@ model User {
   paymentsCreated Payment[] @relation("PaymentsCreated")
   stripeCustomers  ClubStripeCustomer[]
   lessonEnrollments LessonEnrollment[]
+  coachProfiles     Coach[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   pushSubscriptions       PushSubscription[]
@@ -1167,10 +1168,12 @@ model EventRegistration {
   @@map("event_registrations")
 }
 
-/// Coach/moniteur géré par le club (indépendant des comptes staff). Suppression = soft (isActive=false).
+/// Coach/moniteur géré par le club (peut être lié à un compte membre via `userId` — nom/photo
+/// dérivés du profil dans ce cas). Suppression = soft (isActive=false).
 model Coach {
   id        String   @id @default(cuid())
   clubId    String   @map("club_id")
+  userId    String?  @map("user_id")
   name      String
   photoUrl  String?  @map("photo_url")
   bio       String?
@@ -1180,9 +1183,11 @@ model Coach {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   club   Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   series ReservationSeries[]
   lessons Lesson[]
 
+  @@unique([clubId, userId])
   @@index([clubId])
   @@map("coaches")
 }

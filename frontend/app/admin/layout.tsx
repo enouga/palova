@@ -158,7 +158,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       ...(club.levelSystemEnabled === false
         ? []
         : [{ href: '/admin/matches', label: 'Matchs', icon: 'trophy' } as NavItem]),
-      { href: '/admin/coaches',     label: 'Coachs',   icon: 'user' },
     ] },
     { title: 'Communauté', color: '#2bb6a3', items: [
       { href: '/admin/members',       label: 'Membres',     icon: 'users' },

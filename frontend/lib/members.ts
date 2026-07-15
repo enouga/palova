@@ -11,6 +11,9 @@ export type MemberSort = 'name' | 'recent' | 'activity';
 /** Libellé du rôle back-office (partagé liste / panneau / CSV). */
 export const STAFF_LABEL: Record<'OWNER' | 'ADMIN' | 'STAFF', string> = { OWNER: 'Gérant', ADMIN: 'Admin', STAFF: 'Staff' };
 
+/** Rôle attribuable depuis le bloc « Rôle » du panneau membre (null = révocation / membre simple). */
+export type StaffRole = 'ADMIN' | 'STAFF' | null;
+
 const inSeg = (m: Member, seg: MemberSeg): boolean => {
   switch (seg) {
     case 'subs': return !!m.hasActiveSubscription; // « Abonnés » = forfait actif géré (pas le flag booking-window)

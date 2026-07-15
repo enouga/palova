@@ -4,15 +4,24 @@ import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Member } from '@/lib/api';
 import { Avatar } from '@/components/ui/Avatar';
-import { Chip } from '@/components/ui/atoms';
-import { Icon } from '@/components/ui/Icon';
+import { Chip, Segmented } from '@/components/ui/atoms';
 import { colorForSeed } from '@/lib/playerColors';
-import { STAFF_LABEL } from '@/lib/members';
-import { StaffRoleMenu, StaffRole } from '@/components/admin/StaffRoleMenu';
+import { STAFF_LABEL, StaffRole } from '@/lib/members';
 
 export interface MemberDraft { phone: string; membershipNo: string; note: string; isSubscriber: boolean }
 
-export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, onSave, onToggleBlocked, onSetRole, onDelete, onClose }: {
+type RoleSeg = 'NONE' | 'STAFF' | 'ADMIN';
+// Élargi à Member['staffRole'] (inclut 'OWNER') : cette fonction sert aussi dans la branche
+// éditable, où TS ne peut pas déduire de `canEditRole` que le gérant est exclu à l'exécution.
+const toSeg = (r: Member['staffRole']): RoleSeg => (r === 'ADMIN' ? 'ADMIN' : r === 'STAFF' ? 'STAFF' : 'NONE');
+const fromSeg = (s: RoleSeg): StaffRole => (s === 'NONE' ? null : s);
+const ROLE_HINT: Record<RoleSeg, string> = {
+  NONE: "Membre simple, pas d'accès au back-office",
+  STAFF: 'Accès au back-office du club',
+  ADMIN: 'Back-office + gestion du staff et des niveaux',
+};
+
+export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, onSave, onToggleBlocked, onSetRole, onSetCoach, onDelete, onClose }: {
   member: Member;
   viewer: { userId: string; role: 'OWNER' | 'ADMIN' | 'STAFF' } | null;
   canManageStaff: boolean;
@@ -21,22 +30,21 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
   onSave: (draft: MemberDraft) => Promise<void>;
   onToggleBlocked: () => void;
   onSetRole: (role: StaffRole) => void;
+  onSetCoach: (isCoach: boolean) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const { th } = useTheme();
   const [draft, setDraft] = useState<MemberDraft>({ phone: '', membershipNo: '', note: '', isSubscriber: false });
   const [busy, setBusy] = useState(false);
-  const [roleAnchor, setRoleAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null);
 
   // Reset du brouillon quand on change de membre (le panneau est réutilisé en place).
   useEffect(() => {
     setDraft({ phone: member.phone ?? '', membershipNo: member.membershipNo ?? '', note: member.note ?? '', isSubscriber: member.isSubscriber });
-    setRoleAnchor(null);
   }, [member.userId, member.phone, member.membershipNo, member.note, member.isSubscriber]);
 
   const blocked = member.status === 'BLOCKED';
-  const showRole = canManageStaff && viewer && member.staffRole !== 'OWNER' && member.userId !== viewer.userId;
+  const canEditRole = canManageStaff && viewer != null && member.staffRole !== 'OWNER' && member.userId !== viewer.userId;
 
   const input: CSSProperties = { border: `1px solid ${th.line}`, background: th.bg, color: th.text, borderRadius: 9, padding: '9px 10px', fontFamily: th.fontUI, fontSize: 14, width: '100%' };
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 5 };
@@ -59,7 +67,6 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {member.staffRole && <Chip tone="accent">{STAFF_LABEL[member.staffRole]}</Chip>}
         {member.hasActivePackage && <Chip tone="line">Carnet actif</Chip>}
         <Chip tone={blocked ? 'line' : 'accent'}>{blocked ? 'Bloqué' : 'Actif'}</Chip>
       </div>
@@ -69,6 +76,35 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
       </Link>
 
       {error && <div style={{ background: th.accent, color: th.onAccent, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>}
+
+      {/* Rôle back-office + statut coach — visible pour un viewer OWNER/ADMIN uniquement */}
+      {canManageStaff && viewer && (
+        <div role="group" aria-label={`Rôle de ${member.firstName} ${member.lastName}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={label}>Rôle</span>
+          {canEditRole ? (
+            <>
+              <Segmented<RoleSeg>
+                value={toSeg(member.staffRole ?? null)}
+                onChange={(seg) => onSetRole(fromSeg(seg))}
+                options={[
+                  { value: 'NONE', label: 'Membre' },
+                  { value: 'STAFF', label: 'Staff' },
+                  { value: 'ADMIN', label: 'Admin' },
+                ]}
+              />
+              <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{ROLE_HINT[toSeg(member.staffRole ?? null)]}</span>
+            </>
+          ) : (
+            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text }}>
+              {member.staffRole ? STAFF_LABEL[member.staffRole] : 'Membre'}
+            </span>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.text, marginTop: 4 }}>
+            <input type="checkbox" checked={!!member.isCoach} onChange={(e) => onSetCoach(e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+            Coach — anime des cours
+          </label>
+        </div>
+      )}
 
       {/* Champs éditables */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -88,26 +124,8 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
         <button onClick={onToggleBlocked} style={ghostBtn}>{blocked ? 'Débloquer' : 'Bloquer'}</button>
-        {showRole && (
-          <button
-            onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setRoleAnchor(roleAnchor ? null : { top: r.top, bottom: r.bottom, right: r.right }); }}
-            onMouseDown={(e) => e.stopPropagation()}
-            aria-haspopup="menu" aria-expanded={!!roleAnchor}
-            aria-label={`Rôle staff de ${member.firstName} ${member.lastName}`}
-            style={ghostBtn}
-          >Rôle…</button>
-        )}
         <button onClick={onDelete} style={{ ...ghostBtn, color: '#ff7a4d', marginLeft: 'auto' }}>Supprimer le membre</button>
       </div>
-
-      {roleAnchor && (
-        <StaffRoleMenu
-          current={(member.staffRole ?? null) as StaffRole}
-          anchor={roleAnchor}
-          onPick={(r) => { setRoleAnchor(null); onSetRole(r); }}
-          onClose={() => setRoleAnchor(null)}
-        />
-      )}
     </div>
   );
 

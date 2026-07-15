@@ -177,6 +177,28 @@ describe('notifyActivityCancelledByClub(lesson) → dispatch', () => {
       email: expect.objectContaining({ to: 'student2@x.fr' }),
     }));
   });
+
+  it('utilise le nom du user lié au coach si présent (coach rattaché à un membre)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'lesson-2',
+      club,
+      coach: { name: 'Ancien nom', user: { firstName: 'Paul', lastName: 'Martin' } },
+      reservation: {
+        startTime: new Date('2026-07-15T10:00:00Z'),
+        endTime: new Date('2026-07-15T11:00:00Z'),
+      },
+      enrollments: [
+        { status: 'CONFIRMED', user: { id: 'student-3', email: 'student3@x.fr', firstName: 'Léa' } },
+      ],
+    } as any);
+
+    await notifyActivityCancelledByClub('lesson', 'lesson-2');
+
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'student-3',
+      body: '« Cours — Paul Martin » a été annulé par le club.',
+    }));
+  });
 });
 
 describe('notifyReservationRescheduled → dispatch', () => {

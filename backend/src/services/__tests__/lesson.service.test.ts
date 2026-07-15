@@ -279,6 +279,31 @@ describe('LessonService.getPublicLesson — lessonKind + seriesId présents dans
   });
 });
 
+describe('LessonService.getPublicLesson — coach lié à un compte : nom/photo dérivés du user', () => {
+  it('utilise prénom+nom et avatar du user quand le coach est lié', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValue({
+      id: 'l1',
+      clubId: 'club-demo',
+      lessonKind: 'INDIVIDUAL',
+      seriesId: null,
+      capacity: 4,
+      allowSelfEnroll: true,
+      coach: { name: 'Ancien nom', photoUrl: '/old.jpg', user: { firstName: 'Paul', lastName: 'Martin', avatarUrl: '/avatars/paul.jpg' } },
+      reservation: {
+        startTime: new Date('2026-07-01T09:00:00Z'),
+        endTime: new Date('2026-07-01T10:00:00Z'),
+        resource: { name: 'T1', clubSport: null },
+      },
+      series: null,
+      club: { slug: 'club-demo', name: 'Club Démo', timezone: 'Europe/Paris' },
+    } as any);
+    (prismaMock.lessonEnrollment.groupBy as jest.Mock).mockResolvedValue([]);
+
+    const row = await lessonService.getPublicLesson('l1');
+    expect(row.coach).toEqual({ name: 'Paul Martin', photoUrl: '/avatars/paul.jpg' });
+  });
+});
+
 describe('LessonService.listUserEnrollments', () => {
   it('listUserEnrollments : une inscription série est dépliée en occurrences futures', async () => {
     // L'enrollment série n'a pas de lessonId → le service cherche les lessons via lesson.findMany
