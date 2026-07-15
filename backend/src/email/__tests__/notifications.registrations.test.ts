@@ -25,6 +25,7 @@ const mockReg = {
     clubId: 'club-1',
     startTime: new Date('2026-08-01T09:00:00Z'),
     endTime: new Date('2026-08-01T18:00:00Z'),
+    registrationDeadline: new Date('2026-07-30T21:59:00Z'),
     club,
   },
   captain: { id: 'u-cap', email: 'captain@x.fr', firstName: 'Alice', lastName: 'Martin' },
@@ -62,6 +63,23 @@ describe('notifyTournamentRegistration → dispatch MY_REGISTRATIONS', () => {
         category: 'MY_REGISTRATIONS',
         type: 'registration.confirmed',
         email: expect.objectContaining({ to: 'partner@x.fr' }),
+      }),
+    );
+  });
+
+  it('inclut la date limite d’annulation (registrationDeadline) dans le mail de confirmation', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue(mockReg);
+    prismaMock.tournamentRegistration.count.mockResolvedValue(1);
+    prismaMock.clubMember.findMany.mockResolvedValue([]);
+
+    await notifyTournamentRegistration('reg-1');
+
+    expect(dispatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-cap',
+        email: expect.objectContaining({
+          html: expect.stringContaining('Annulable jusqu’au'),
+        }),
       }),
     );
   });

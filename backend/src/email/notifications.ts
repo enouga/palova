@@ -1,7 +1,7 @@
 import { ClubRole } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { dispatch } from '../services/notification/dispatcher';
-import { clubAppUrl, formatDateRangeFr } from './links';
+import { clubAppUrl, formatDateFr, formatDateRangeFr } from './links';
 import { Brand } from './templates/layout';
 import { renderClubEmail, brandFromClub } from './registry';
 import { emailTemplates } from '../services/emailTemplate.service';
@@ -178,6 +178,7 @@ async function sendTournamentPlayerEmails(
       lien: url,
       coequipier,
       phrase_coequipier: coequipier ? ` Vous êtes inscrit·e en binôme avec ${coequipier}.` : '',
+      date_limite_annulation: formatDateFr(t.registrationDeadline, t.club.timezone),
     };
     const mail = renderClubEmail(emailType, vars, brand, override);
     const notifType =
@@ -280,6 +281,7 @@ async function sendEventPlayerEmail(
     lien: url,
     coequipier: '',
     phrase_coequipier: '',
+    date_limite_annulation: formatDateFr(e.registrationDeadline, e.club.timezone),
   };
   const mail = renderClubEmail(emailType, vars, brand, override);
   const notifType =

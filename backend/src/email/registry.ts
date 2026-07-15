@@ -125,6 +125,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
       { key: 'date', label: 'Date lisible', sample: 'dimanche 6 juillet 2026 à 14h00' },
       { key: 'coequipier', label: 'Coéquipier (tournoi, sinon vide)', sample: 'Lucas Martin' },
       { key: 'phrase_coequipier', label: 'Phrase coéquipier (auto)', sample: ' Vous êtes inscrit·e en binôme avec Lucas Martin.' },
+      { key: 'date_limite_annulation', label: "Date limite d'annulation (tournoi/event, sinon vide)", sample: 'mardi 30 juin 2026 à 23h59' },
       { key: 'lien', label: 'Lien vers l\'activité', sample: 'https://club.palova.fr/tournois/1' },
     ],
     defaults: {
@@ -133,7 +134,12 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
       bodyHtml: '<p>Bonjour {{prenom}},</p><p>Votre inscription à <strong>{{activite}}</strong> est confirmée.{{phrase_coequipier}}</p>',
       ctaLabel: 'Voir {{ref_activite}}',
     },
-    infoRows: (v) => [row('Date', v.date), row('Club', v.club), ...(v.coequipier ? [row('Coéquipier', v.coequipier)] : [])],
+    infoRows: (v) => [
+      row('Date', v.date),
+      row('Club', v.club),
+      ...(v.coequipier ? [row('Coéquipier', v.coequipier)] : []),
+      ...(v.date_limite_annulation ? [row('Annulable jusqu’au', v.date_limite_annulation)] : []),
+    ],
   },
 
   'registration.waitlisted': {

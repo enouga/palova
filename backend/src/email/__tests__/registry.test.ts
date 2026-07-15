@@ -139,6 +139,23 @@ describe('renderClubEmail', () => {
     expect(mail.text).toContain('Club : Padel Arena');
   });
 
+  it('ajoute la ligne « Annulable jusqu’au » quand date_limite_annulation est fournie', () => {
+    const mail = renderClubEmail(
+      'registration.confirmed',
+      { ...vars, date_limite_annulation: 'mardi 30 juin 2026 à 23h59' },
+      brand,
+      null,
+    );
+    expect(mail.html).toContain('Annulable jusqu’au');
+    expect(mail.html).toContain('mardi 30 juin 2026 à 23h59');
+    expect(mail.text).toContain('Annulable jusqu’au : mardi 30 juin 2026 à 23h59');
+  });
+
+  it('omet la ligne « Annulable jusqu’au » quand date_limite_annulation est absente', () => {
+    const mail = renderClubEmail('registration.confirmed', vars, brand, null);
+    expect(mail.html).not.toContain('Annulable jusqu’au');
+  });
+
   it('applique la surcharge club', () => {
     const mail = renderClubEmail('registration.confirmed', vars, brand, {
       subject: 'Bienvenue {{prenom}} !', heading: 'Yes', bodyHtml: '<p>OK {{activite}}</p>',
