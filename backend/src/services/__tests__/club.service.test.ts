@@ -951,6 +951,7 @@ describe('ClubService — listMembers (enrichi)', () => {
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel' } as any); // getLevelsForUsers → sportId('padel')
     prismaMock.playerRating.findMany.mockResolvedValue([] as any);
     prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.coach.findMany.mockResolvedValue([] as any);
   });
 
   it('expose staffRole depuis club_members (null pour un membre simple), en 1 requête', async () => {
@@ -960,6 +961,17 @@ describe('ClubService — listMembers (enrichi)', () => {
     expect(rows[1].staffRole).toBeNull();
     // une seule requête staff pour tout le club (pas de N+1)
     expect(prismaMock.clubMember.findMany).toHaveBeenCalledWith({ where: { clubId: 'club-demo' }, select: { userId: true, role: true } });
+  });
+
+  it('expose isCoach (actif et lié au user seulement), en 1 requête groupée', async () => {
+    prismaMock.coach.findMany.mockResolvedValue([{ userId: 'u1' }] as any);
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].isCoach).toBe(true);
+    expect(rows[1].isCoach).toBe(false);
+    expect(prismaMock.coach.findMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-demo', isActive: true, userId: { in: ['u1', 'u2'] } },
+      select: { userId: true },
+    });
   });
 
   it('exclut les comptes supprimés (deletedAt) et le super-admin plateforme, et expose avatarUrl', async () => {
@@ -1078,7 +1090,7 @@ describe('ClubService — createMember renvoie directement la ligne membre (évi
     expect(r.member).toEqual({
       id: 'mb-new', userId: 'u-new', firstName: 'Jo', lastName: 'Doe', email: 'jo@x.fr', phone: null, avatarUrl: null,
       isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, since: createdAt,
-      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, subscription: null, hasActivePackage: false, lastSeenAt: null,
+      staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, subscription: null, hasActivePackage: false, lastSeenAt: null, isCoach: false,
     });
   });
 

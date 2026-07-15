@@ -426,6 +426,12 @@ export class ClubService {
     const roleByUser = new Map(staff.map((s) => [s.userId, s.role]));
     const userIds = members.map((m) => m.user.id);
 
+    // Statut coach (table coaches, userId lié) — une requête pour tout le club, pas de N+1.
+    const coachRows = userIds.length === 0
+      ? []
+      : await prisma.coach.findMany({ where: { clubId, isActive: true, userId: { in: userIds } }, select: { userId: true } });
+    const coachUserIds = new Set(coachRows.map((c) => c.userId));
+
     const [levels, lastSeenRows] = await Promise.all([
       // niveau padel (clé fixe — jamais de sport préféré par user = N+1) ; tolère l'absence de sport
       this.ratingService.getLevelsForUsers(userIds, LEVEL_SPORT_KEY).catch(() => ({} as Record<string, UserLevel>)),
@@ -480,6 +486,7 @@ export class ClubService {
       subscription: subByUser.get(m.user.id) ?? null,
       hasActivePackage: usableByUser.has(m.user.id),
       lastSeenAt: lastSeenBy.get(m.user.id)?.toISOString() ?? null,
+      isCoach: coachUserIds.has(m.user.id),
     }));
   }
 
@@ -559,7 +566,7 @@ export class ClubService {
       isSubscriber: membership.isSubscriber, membershipNo: membership.membershipNo,
       status: membership.status, note: membership.note, watch: membership.watch, since: membership.createdAt,
       staffRole: null, level: null, hasActiveSubscription: false, subscriptionPlan: null, subscription: null,
-      hasActivePackage: false, lastSeenAt: null,
+      hasActivePackage: false, lastSeenAt: null, isCoach: false,
     };
   }
 
