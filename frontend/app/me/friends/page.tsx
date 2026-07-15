@@ -25,17 +25,12 @@ export default function FriendsPage() {
       <div style={{ paddingBottom: 48 }}>
         <ClubNav club={club} />
 
-        {/* Clamp desktop : listes denses (suggestions, recherche) lisent mal étirées sur 1040px. */}
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-
         <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
           Mes amis
         </div>
 
         <div style={{ padding: '18px 20px 0' }}>
           <FriendsHub slug={slug} token={token} timezone={club.timezone ?? 'Europe/Paris'} anchor={anchor} />
-        </div>
-
         </div>
       </div>
     </Screen>
