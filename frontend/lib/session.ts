@@ -32,3 +32,12 @@ export function clearSession() {
   writeCookie('token', '', 0);
   writeCookie('clubId', '', 0);
 }
+
+/** true si le cookie de session est *host-only* sur cet hôte (donc NON partageable entre
+ *  sous-domaines) — cas de `localhost` en dev : Chrome refuse tout cookie `*.localhost`.
+ *  Miroir exact de `cookieDomainAttr` (host-only ⇔ pas d'attribut `domain`). Sert au
+ *  « pont de session » de postAuth pour contourner le hop plateforme→club en dev. */
+export function sessionCookieIsHostOnly(host: string): boolean {
+  const root = rootForHost(host);
+  return !root || root === 'localhost';
+}

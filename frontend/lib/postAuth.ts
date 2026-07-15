@@ -1,9 +1,30 @@
 import { api, AuthResponse } from '@/lib/api';
-import { setSession } from '@/lib/session';
+import { setSession, sessionCookieIsHostOnly } from '@/lib/session';
 import { clubUrl } from '@/lib/clubUrl';
+import { hardNavigate, currentHost } from '@/lib/nav';
 
 /** Minimum requis du routeur Next : on n'utilise que push(). */
 type Pushable = { push: (href: string) => void };
+
+/** URL du pont de session (dev localhost) : le token voyage dans le FRAGMENT (`#`, jamais
+ *  envoyé au serveur ni journalisé) vers le sous-domaine club, qui reposera le cookie.
+ *  Contourne l'impossibilité (Chrome) de partager un cookie entre sous-domaines `*.localhost`. */
+function sessionBridgeUrl(slug: string, to: string, token: string, clubId?: string | null): string {
+  const frag = new URLSearchParams({ token, to });
+  if (clubId) frag.set('clubId', clubId);
+  return `${clubUrl(slug, '/session-bridge')}#${frag.toString()}`;
+}
+
+/** Navigation plateforme → admin d'un club (sous-domaine). En dev (cookie host-only sur
+ *  `*.localhost`) le cookie de session ne suit pas le sous-domaine : on passe par le pont.
+ *  En prod (`.palova.fr`), le cookie couvre déjà `*.palova.fr` → redirection directe. */
+function goToClubAdmin(slug: string, token: string, clubId?: string | null): void {
+  hardNavigate(
+    sessionCookieIsHostOnly(currentHost())
+      ? sessionBridgeUrl(slug, '/admin', token, clubId)
+      : clubUrl(slug, '/admin'),
+  );
+}
 
 /** N'autorise qu'un chemin interne (même origine) comme cible de redirection post-auth.
  *  Rejette les URL absolues, le protocol-relative (`//`) et la ruse backslash (`/\`) — anti open-redirect (CWE-601). */
@@ -29,7 +50,7 @@ export async function finishAuth(auth: AuthResponse, slug: string | null, router
   } else {
     const managed = memberships[0];
     setSession(auth.token, managed?.clubId ?? null);
-    if (managed) window.location.assign(clubUrl(managed.slug, '/admin'));
+    if (managed) goToClubAdmin(managed.slug, auth.token, managed.clubId);
     else router.push('/clubs');
   }
 }
