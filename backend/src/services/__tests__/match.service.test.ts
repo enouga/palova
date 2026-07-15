@@ -74,6 +74,55 @@ describe('createFromReservation', () => {
   });
 });
 
+describe('createFromReservation — snapshot competitive', () => {
+  const createdData = () => (prismaMock.match.create as jest.Mock).mock.calls[0][0].data;
+
+  it('résa PRIVÉE : honore input.competitive=false', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({ ...RES, visibility: 'PRIVATE', competitive: true } as any);
+    await service.createFromReservation('r1', 'u1', { teams, sets, now: NOW, competitive: false });
+    expect(createdData().competitive).toBe(false);
+  });
+
+  it('résa PRIVÉE sans input : défaut true', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({ ...RES, visibility: 'PRIVATE' } as any);
+    await service.createFromReservation('r1', 'u1', { teams, sets, now: NOW });
+    expect(createdData().competitive).toBe(true);
+  });
+
+  it('résa PUBLIC : hérite de la résa (input contraire IGNORÉ)', async () => {
+    prismaMock.reservation.findUnique.mockResolvedValue({ ...RES, visibility: 'PUBLIC', competitive: false } as any);
+    await service.createFromReservation('r1', 'u1', { teams, sets, now: NOW, competitive: true });
+    expect(createdData().competitive).toBe(false);
+  });
+});
+
+describe('finalize — amicale ne bouge pas le niveau', () => {
+  function txMock(match: any) {
+    return {
+      match: { findUnique: jest.fn().mockResolvedValue(match), update: jest.fn().mockResolvedValue({}) },
+      matchPlayer: { update: jest.fn().mockResolvedValue({}) },
+      playerRating: { findUnique: jest.fn(), upsert: jest.fn() },
+    };
+  }
+
+  it('amicale PENDING : passe CONFIRMED sans toucher playerRating ni ratingsAppliedAt', async () => {
+    const tx: any = txMock({ id: 'm1', status: 'PENDING', competitive: false, ratingsAppliedAt: null, sportId: 's1', sets: [[6, 4]], players: [{ userId: 'u1', team: 1 }] });
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.finalize('m1');
+    expect(tx.playerRating.upsert).not.toHaveBeenCalled();
+    expect(tx.matchPlayer.update).not.toHaveBeenCalled();
+    expect(tx.match.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { status: 'CONFIRMED' } });
+  });
+
+  it('amicale DÉJÀ CONFIRMED : idempotent (aucune écriture)', async () => {
+    const tx: any = txMock({ id: 'm1', status: 'CONFIRMED', competitive: false, ratingsAppliedAt: null, sportId: 's1', sets: [[6, 4]], players: [{ userId: 'u1', team: 1 }] });
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    await service.finalize('m1');
+    expect(tx.match.update).not.toHaveBeenCalled();
+    expect(tx.playerRating.upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe('confirm / dispute', () => {
   const matchRow = (overrides = {}) => ({
     id: 'm1', status: 'PENDING',
@@ -214,7 +263,7 @@ describe('finalize', () => {
     return {
       match: {
         findUnique: jest.fn().mockResolvedValue({
-          id: 'm1', status: 'PENDING', sportId: 'sport-padel', playedAt, ratingsAppliedAt: null,
+          id: 'm1', status: 'PENDING', sportId: 'sport-padel', playedAt, ratingsAppliedAt: null, competitive: true,
           players: [
             { userId: 'u1', team: 1 }, { userId: 'u2', team: 1 },
             { userId: 'u3', team: 2 }, { userId: 'u4', team: 2 },

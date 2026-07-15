@@ -17,6 +17,7 @@ export interface CreateMatchInput {
   teams: Record<1 | 2, string[]>;
   sets: SetScore[];
   now: Date;
+  competitive?: boolean; // pris en compte SEULEMENT pour une résa privée ; PUBLIC hérite de la résa
 }
 
 export class MatchService {
@@ -55,6 +56,11 @@ export class MatchService {
 
     const teamOf = (userId: string): number => (t1.includes(userId) ? 1 : 2);
     const confirmDeadline = new Date(now.getTime() + CONFIRM_WINDOW_HOURS * 3600 * 1000);
+    // PUBLIC (partie ouverte) → hérite du type déclaré, verrouillé (l'input ne peut pas
+    // basculer en amicale à la saisie pour esquiver une défaite). Privé → input, défaut true.
+    const competitive = reservation.visibility === 'PUBLIC'
+      ? reservation.competitive
+      : (input.competitive ?? true);
 
     const match = await prisma.match.create({
       data: {
@@ -66,6 +72,7 @@ export class MatchService {
         createdByUserId: authorUserId,
         sets: sets as unknown as object,
         winningTeam: winningTeam(sets),
+        competitive,
         confirmDeadline,
         players: {
           create: all.map((userId) => ({
@@ -299,6 +306,14 @@ export class MatchService {
       if (!match) throw new Error('MATCH_NOT_FOUND');
       if (match.ratingsAppliedAt) return; // déjà appliqué → idempotent
       if (match.status === 'CANCELLED') return; // ne jamais appliquer un match annulé
+      // Amicale : on confirme le résultat mais on n'applique JAMAIS le niveau.
+      // ratingsAppliedAt reste null → voidMatch ne recalculera rien. Idempotent.
+      if (!match.competitive) {
+        if (match.status !== 'CONFIRMED') {
+          await tx.match.update({ where: { id: matchId }, data: { status: 'CONFIRMED' } });
+        }
+        return;
+      }
 
       const playedAt = match.playedAt;
       const states: (TeamPlayer & { userId: string; before: number })[] = [];
