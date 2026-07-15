@@ -29,6 +29,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   const [limit, setLimit] = useState(false); // « Limiter le niveau » activé ?
   const [lmin, setLmin] = useState(3);
   const [lmax, setLmax] = useState(6);
+  const [competitive, setCompetitive] = useState(reservation.competitive ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +65,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
     saveLevelPref({ enabled: limit, min: lmin, max: lmax });
     return api.setReservationVisibility(
       reservation.id, 'PUBLIC', token,
-      limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null },
+      { competitive, ...(limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null }) },
     );
   });
   const close = () => run(() => api.setReservationVisibility(reservation.id, 'PRIVATE', token));
@@ -107,6 +108,20 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
               <LevelRangeSlider min={lmin} max={lmax} onChange={(a, b) => { setLmin(a); setLmax(b); }} disabled={busy} />
             </div>
           )}
+          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+            {([['competitive', 'Compétitive', 'Compte pour le niveau'],
+               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+              const active = (key === 'competitive') === competitive;
+              return (
+                <button key={key} type="button" onClick={() => setCompetitive(key === 'competitive')} disabled={busy}
+                  style={{ flex: 1, textAlign: 'left', cursor: 'pointer', borderRadius: 12, padding: '9px 12px',
+                    border: `1.5px solid ${active ? th.accent : th.line}`, background: active ? `${th.accent}14` : 'transparent' }}>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: active ? th.accent : th.text }}>{label}</div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 2 }}>{sub}</div>
+                </button>
+              );
+            })}
+          </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
             <button type="button" onClick={publish} disabled={busy}
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 10, padding: '9px 16px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>

@@ -60,7 +60,7 @@ describe('OpenMatchToggle', () => {
     wrap({}, onChanged);
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
-    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, targetLevelMin: null, targetLevelMax: null }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
@@ -69,7 +69,16 @@ describe('OpenMatchToggle', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('switch', { name: /Limiter le niveau/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
-    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 6 }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, targetLevelMin: 3, targetLevelMax: 6 }));
+  });
+
+  it('publie une partie AMICALE (competitive=false) quand « Amicale » est choisi', async () => {
+    wrap();
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Amicale/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc',
+      expect.objectContaining({ competitive: false })));
   });
 
   it('publish enregistre la préférence de niveau (localStorage palova:open-match-level)', async () => {

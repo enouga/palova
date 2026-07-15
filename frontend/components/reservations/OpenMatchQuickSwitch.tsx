@@ -40,6 +40,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
   const [levelLimited, setLevelLimited] = useState(true);
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
+  const [competitive, setCompetitive] = useState(reservation.competitive ?? true);
   // Passe à `true` seulement sur une interaction manuelle du switch « Limiter » / du curseur —
   // jamais depuis le préchargement — pour que l'effet de republication ci-dessous ne se
   // déclenche jamais tout seul (préférence rechargée, résa déjà publique au montage…).
@@ -154,6 +155,31 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
           ) : (
             <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Ouverte à tous les niveaux.</div>
           )}
+          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+            {([['competitive', 'Compétitive', 'Le résultat compte pour le niveau'],
+               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+              const active = (key === 'competitive') === competitive;
+              return (
+                <button key={key} type="button" disabled={busy}
+                  onClick={() => {
+                    const next = key === 'competitive';
+                    setCompetitive(next);
+                    setBusy(true); setError(null);
+                    api.setReservationVisibility(reservation.id, 'PUBLIC', token, {
+                      targetLevelMin: levelLimited ? levelMin : null,
+                      targetLevelMax: levelLimited ? levelMax : null,
+                      competitive: next,
+                    }).then(() => onChanged()).catch((e) => setError(msg((e as Error).message))).finally(() => setBusy(false));
+                  }}
+                  style={{ flex: 1, textAlign: 'left', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 12,
+                    padding: '9px 12px', border: `1.5px solid ${active ? th.accent : th.line}`,
+                    background: active ? `${th.accent}14` : 'transparent', opacity: busy ? 0.6 : 1 }}>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: active ? th.accent : th.text }}>{label}</div>
+                  <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 2, lineHeight: 1.3 }}>{sub}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
