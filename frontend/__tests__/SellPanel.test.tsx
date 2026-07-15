@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { SellPanel } from '../components/admin/ventes/SellPanel';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import type { Member, PackageTemplate, SubscriptionPlan, MemberPackage } from '@/lib/api';
@@ -48,4 +48,40 @@ it('Ticket CE exige une référence avant de vendre', () => {
 it('sans acheteur, invite à choisir un membre', () => {
   renderPanel({ buyer: null });
   expect(screen.queryByText(/Carnet 10/)).not.toBeInTheDocument();
+});
+
+it('vente réussie : confirmation visible puis acheteur réinitialisé (client suivant)', async () => {
+  const onSell = jest.fn().mockResolvedValue(true);
+  const onClear = jest.fn();
+  renderPanel({ onSell, onClear });
+  fireEvent.click(screen.getByText(/Carnet 10/));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Encaisser/ })); });
+  expect(screen.getByRole('status')).toHaveTextContent('Carnet 10');
+  expect(screen.getByRole('status')).toHaveTextContent('Marie Dupont');
+  expect(onClear).toHaveBeenCalled(); // prêt pour le membre suivant
+});
+
+it('la confirmation se referme toute seule après quelques secondes', async () => {
+  jest.useFakeTimers();
+  try {
+    const onSell = jest.fn().mockResolvedValue(true);
+    renderPanel({ onSell });
+    fireEvent.click(screen.getByText(/Carnet 10/));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Encaisser/ })); });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    act(() => { jest.advanceTimersByTime(4000); });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('vente refusée : pas de confirmation, acheteur conservé pour réessayer', async () => {
+  const onSell = jest.fn().mockResolvedValue(false);
+  const onClear = jest.fn();
+  renderPanel({ onSell, onClear });
+  fireEvent.click(screen.getByText(/Carnet 10/));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Encaisser/ })); });
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(onClear).not.toHaveBeenCalled();
 });
