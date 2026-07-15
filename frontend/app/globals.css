@@ -14,7 +14,7 @@ html, body { overflow-x: clip; }
 /* Réserve la gouttière de scrollbar sur LES DEUX bords : quand la barre de
    défilement « classique » prend 15 px à droite (desktop, et certains mobiles
    type Samsung/WebView qui n'ont pas de scrollbar overlay), on réserve une
-   gouttière équivalente à gauche → le contenu centré (colonne max-width 820)
+   gouttière équivalente à gauche → le contenu centré (colonne max-width 1080)
    reste réellement centré au lieu d'être poussé vers la gauche par la barre.
    Sur scrollbars overlay (0 px) : aucune réserve, aucun effet. */
 html { scrollbar-gutter: stable both-edges; }
