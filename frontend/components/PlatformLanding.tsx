@@ -104,18 +104,22 @@ function ManagerView({ clubs }: { clubs: ManagedClub[] }) {
     <Screen>
       <div style={{ padding: '0 24px 40px' }}>
         <Header><ProfileMenu /></Header>
-        <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 44, lineHeight: 1.04, color: th.text, marginTop: 40, letterSpacing: -0.5 }}>
-          Vos clubs.
-        </div>
-        <p style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 12, lineHeight: 1.5 }}>
-          Accédez au back-office de {clubs.length > 1 ? 'vos clubs' : 'votre club'}.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
-          {clubs.map((c) => (
-            <Btn key={c.clubId} full icon="arrowR" onClick={() => window.location.assign(clubUrl(c.slug, '/admin'))}>
-              Aller à l&apos;admin de {c.name}
-            </Btn>
-          ))}
+        {/* Clamp desktop : liste d'actions courte, un bouton pleine largeur devient
+            démesuré sur 1040px (le Header, lui, garde toute la largeur du Screen). */}
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 44, lineHeight: 1.04, color: th.text, marginTop: 40, letterSpacing: -0.5 }}>
+            Vos clubs.
+          </div>
+          <p style={{ fontFamily: th.fontUI, fontSize: 15.5, color: th.textMute, marginTop: 12, lineHeight: 1.5 }}>
+            Accédez au back-office de {clubs.length > 1 ? 'vos clubs' : 'votre club'}.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
+            {clubs.map((c) => (
+              <Btn key={c.clubId} full icon="arrowR" onClick={() => window.location.assign(clubUrl(c.slug, '/admin'))}>
+                Aller à l&apos;admin de {c.name}
+              </Btn>
+            ))}
+          </div>
         </div>
       </div>
     </Screen>
