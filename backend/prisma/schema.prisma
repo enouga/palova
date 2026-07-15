@@ -586,6 +586,7 @@ model Match {
   createdByUserId  String      @map("created_by_user_id")
   sets             Json
   winningTeam      Int?        @map("winning_team")
+  competitive      Boolean     @default(true) @map("competitive") // snapshot du type de la résa à la saisie
   confirmDeadline  DateTime    @map("confirm_deadline")
   ratingsAppliedAt DateTime?   @map("ratings_applied_at")
   cancelledAt       DateTime? @map("cancelled_at")
@@ -739,6 +740,7 @@ model Reservation {
   status      ReservationStatus @default(PENDING)
   type        ReservationType   @default(COURT)
   visibility  ReservationVisibility @default(PRIVATE) // PUBLIC = partie ouverte (rejoignable par les membres du club)
+  competitive Boolean @default(true) // Amicale (false) vs Compétitive (true) : gate le niveau du résultat
   // Fourchette de niveau cible (0–8) d'une partie ouverte (visibility PUBLIC). null = pas de cible.
   targetLevelMin Float? @map("target_level_min")
   targetLevelMax Float? @map("target_level_max")
