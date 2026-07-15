@@ -94,6 +94,9 @@ export function OpenMatchCard({
         {(m.targetLevelMin != null || m.targetLevelMax != null) && (
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
         )}
+        {m.competitive === false
+          ? <Chip tone="line">Amicale</Chip>
+          : <Chip tone="accent">Compétitive</Chip>}
       </div>
       {friendCount > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>

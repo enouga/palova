@@ -64,6 +64,16 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
 }
 
 describe('OpenMatchCard', () => {
+  it('affiche le badge Amicale quand competitive=false', () => {
+    render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ competitive: false }))} /></ThemeProvider>);
+    expect(screen.getByText('Amicale')).toBeInTheDocument();
+  });
+
+  it('affiche le badge Compétitive par défaut (competitive=true ou absent)', () => {
+    render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ competitive: true }))} /></ThemeProvider>);
+    expect(screen.getByText('Compétitive')).toBeInTheDocument();
+  });
+
   it('« Discuter » est actif pour un utilisateur connecté et appelle onOpenChat', () => {
     const match = makeMatch({ viewerIsParticipant: false });
     const onOpenChat = jest.fn();
