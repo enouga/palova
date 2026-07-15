@@ -185,7 +185,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // Réservées aux admins : entrées de structure/pilotage, pas le comptoir du quotidien.
       ...(isClubAdmin(role)
         ? [{ href: '/admin/comptabilite', label: 'Comptabilité', icon: 'chart' } as NavItem,
-           { href: '/admin/packages',     label: 'Offres',       icon: 'card' } as NavItem]
+           { href: '/admin/packages',     label: 'Offres',       icon: 'card' } as NavItem,
+           { href: '/admin/promotions',   label: 'Promotions',   icon: 'euro' } as NavItem]
         : []),
       // Réservé aux admins : la page /admin/billing répond 403 au staff (requireClubMember('ADMIN')).
       ...(isClubAdmin(role)
