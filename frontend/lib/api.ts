@@ -1055,6 +1055,16 @@ export const api = {
 
   getMyLessons: (token: string) => request<MyLessonEnrollment[]>('/api/me/lessons', {}, token),
 
+  // --- Espace coach (le coach connecté gère SES cours) ---
+  getCoachStatus: (slug: string, token: string) =>
+    request<{ isCoach: boolean }>(`/api/clubs/${slug}/me/coach`, {}, token),
+  getCoachLessons: (slug: string, scope: 'upcoming' | 'past', token: string) =>
+    request<CoachLessonRow[]>(`/api/clubs/${slug}/me/coach/lessons?scope=${scope}`, {}, token),
+  coachEnrollStudent: (slug: string, lessonId: string, userId: string, token: string) =>
+    request<{ id: string; status: string }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  coachRemoveStudent: (slug: string, lessonId: string, enrollId: string, token: string) =>
+    request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students/${enrollId}`, { method: 'DELETE' }, token),
+
   getVapidPublicKey: () => request<{ publicKey: string | null }>('/api/push/vapid-public-key'),
   savePushSubscription: (sub: unknown, token: string) =>
     request<{ ok: boolean }>('/api/me/push-subscriptions', { method: 'POST', body: JSON.stringify(sub) }, token),
@@ -2800,6 +2810,31 @@ export interface MyLessonEnrollment {
   enrollmentId: string;
   status: string;
   lesson: MyLessonSummary;
+}
+
+// --- Espace coach (Mes cours) ---
+
+export interface CoachStudentRow {
+  id: string;
+  status: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  waitlistPosition: number | null;
+}
+
+export interface CoachLessonRow {
+  id: string;
+  lessonKind: string;
+  seriesId: string | null;
+  reservation: { startTime: string; endTime: string; resource: { name: string } };
+  sport: { key: string; name: string } | null;
+  series: { title: string | null; enrollmentMode: string | null } | null;
+  capacity: number;
+  confirmedCount: number;
+  waitlistCount: number;
+  students: CoachStudentRow[];
 }
 
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).
