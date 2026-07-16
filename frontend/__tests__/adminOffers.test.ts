@@ -24,7 +24,6 @@ describe('offerTint', () => {
   });
 });
 
-
 describe('planPulse', () => {
   it('abonnés + revenu quand il y a des ventes', () => {
     expect(planPulse(12, 58800)).toBe('12 abonnés actifs · 588 €/mois');
