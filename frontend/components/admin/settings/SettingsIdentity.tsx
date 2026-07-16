@@ -1,20 +1,24 @@
 'use client';
 import { RefObject } from 'react';
-import { assetUrl } from '@/lib/api';
 import { ACCENTS } from '@/lib/theme';
 import { Btn, Segmented } from '@/components/ui/atoms';
 import { ClubCover } from '@/components/ClubCover';
+import { LogoStudio } from './LogoStudio';
+import type { LogoWarning } from '@/lib/clubLogos';
 import { SettingsTabProps, useSettingsStyles } from './shared';
 
+type LogoVariant = 'icon' | 'wide' | 'wide-dark';
 interface Props extends SettingsTabProps {
-  uploading: boolean;
-  logoInputRef: RefObject<HTMLInputElement | null>;
+  coverUploading: boolean;
+  logoUploading: LogoVariant | null;
+  logoWarnings: Partial<Record<LogoVariant, LogoWarning>>;
+  onPickLogo: (variant: LogoVariant, file: File) => void;
+  onDeleteLogo: (variant: 'wide' | 'wide-dark') => void;
   coverInputRef: RefObject<HTMLInputElement | null>;
-  pickLogo: (f: File | undefined) => void;
   pickCover: (f: File | undefined) => void;
 }
 
-export function SettingsIdentity({ club, set, uploading, logoInputRef, coverInputRef, pickLogo, pickCover }: Props) {
+export function SettingsIdentity({ club, set, coverUploading, logoUploading, logoWarnings, onPickLogo, onDeleteLogo, coverInputRef, pickCover }: Props) {
   const { th, card, label, field, h2 } = useSettingsStyles();
   return (
     <>
@@ -35,44 +39,27 @@ export function SettingsIdentity({ club, set, uploading, logoInputRef, coverInpu
         <h2 style={{ ...h2, marginBottom: 16 }}>Identité visuelle</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <span style={label}>Logo du club</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {club.logoUrl ? (
-                <img src={assetUrl(club.logoUrl) ?? ''} alt="Logo du club"
-                  style={{ width: 72, height: 72, borderRadius: 14, objectFit: 'contain', background: th.bg, border: `1px solid ${th.line}`, flexShrink: 0, opacity: uploading ? 0.5 : 1 }} />
-              ) : (
-                <span style={{ width: 72, height: 72, borderRadius: 14, flexShrink: 0, background: th.accent, color: th.onAccent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 26 }}>
-                  {(club.name?.[0] ?? '?').toUpperCase()}
-                </span>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <input ref={logoInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                  aria-label="Choisir un logo de club"
-                  onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
-                <Btn type="button" variant="surface" disabled={uploading} onClick={() => logoInputRef.current?.click()}>
-                  {uploading ? 'Envoi…' : 'Changer le logo'}
-                </Btn>
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
-              </div>
-            </div>
+            <span style={label}>Logos du club</span>
+            <LogoStudio club={club} uploading={logoUploading} warnings={logoWarnings}
+              onPick={onPickLogo} onDelete={onDeleteLogo} />
           </div>
           <div>
             <span style={label}>Image de couverture</span>
             <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '0 0 10px' }}>
               Illustre votre club dans l&apos;annuaire des clubs. Sans photo importée, une belle photo de court est utilisée automatiquement par défaut.
             </p>
-            <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: uploading ? 0.5 : 1 }}>
+            <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${th.line}`, marginBottom: 10, opacity: coverUploading ? 0.5 : 1 }}>
               <ClubCover club={{ name: club.name, slug: club.slug, accentColor: club.accentColor, coverImageUrl: club.coverImageUrl }} />
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
                 aria-label="Choisir une image de couverture"
                 onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ''; }} />
-              <Btn type="button" variant="surface" disabled={uploading} onClick={() => coverInputRef.current?.click()}>
-                {uploading ? 'Envoi…' : 'Importer une photo'}
+              <Btn type="button" variant="surface" disabled={coverUploading} onClick={() => coverInputRef.current?.click()}>
+                {coverUploading ? 'Envoi…' : 'Importer une photo'}
               </Btn>
               {club.coverImageUrl && (
-                <Btn type="button" variant="ghost" disabled={uploading} onClick={() => set('coverImageUrl', null)}>
+                <Btn type="button" variant="ghost" disabled={coverUploading} onClick={() => set('coverImageUrl', null)}>
                   Utiliser l&apos;illustration automatique
                 </Btn>
               )}

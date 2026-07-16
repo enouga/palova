@@ -16,7 +16,7 @@ interface Props {
   uploading: Variant | null;
   warnings: Partial<Record<Variant, LogoWarning>>;
   onPick: (variant: Variant, file: File) => void;
-  onDelete: (variant: Variant) => void;
+  onDelete: (variant: 'wide' | 'wide-dark') => void; // l'icône n'est pas supprimable
 }
 
 const CHIP: CSSProperties = { display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600 };

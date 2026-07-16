@@ -12,7 +12,8 @@ jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
   api: {
     adminGetClub: jest.fn(), adminUpdateClub: jest.fn().mockResolvedValue({}),
-    uploadClubLogo: jest.fn(), uploadClubCover: jest.fn(),
+    uploadClubLogo: jest.fn().mockResolvedValue({ logoUrl: '/uploads/logos/x.png', warnings: [] }),
+    deleteClubLogoVariant: jest.fn().mockResolvedValue(undefined), uploadClubCover: jest.fn(),
     adminGetSports: jest.fn().mockResolvedValue([]), getSports: jest.fn().mockResolvedValue([]),
     adminAddSport: jest.fn(), adminUpdateClubSport: jest.fn().mockResolvedValue({}),
   },
@@ -22,7 +23,7 @@ const mocked = api as jest.Mocked<typeof api>;
 
 const CLUB = {
   id: 'c1', slug: 'demo', name: 'Démo', description: '', address: 'a', city: '', country: '',
-  timezone: 'Europe/Paris', logoUrl: '', coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
+  timezone: 'Europe/Paris', logoUrl: '', logoWideUrl: null, logoWideDarkUrl: null, coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
   status: 'ACTIVE', listedInDirectory: true, listTournamentsNationally: false, showOffersPublicly: false,
   publicBookingDays: 14, memberBookingDays: 28, bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 8, memberReleaseHour: 8,
   offPeakHours: null, bookingQuotas: null, playerChangeCutoffHours: 0, cancellationCutoffHours: 24,
@@ -65,6 +66,13 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     wrap();
     expect(await screen.findByText('Profil')).toBeInTheDocument();
     expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+  });
+
+  it('l’onglet Identité rend le studio de logos (3 emplacements)', async () => {
+    wrap();
+    expect(await screen.findByText('Icône carrée')).toBeInTheDocument();
+    expect(screen.getByText('Logotype horizontal')).toBeInTheDocument();
+    expect(screen.getByText(/fond sombre/i)).toBeInTheDocument();
   });
 
   it('viewer STAFF : page réservée aux administrateurs, aucun fetch club', async () => {

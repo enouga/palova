@@ -13,7 +13,8 @@ jest.mock('../lib/api', () => ({
   api: {
     adminGetClub: jest.fn(),
     adminUpdateClub: jest.fn().mockResolvedValue({}),
-    uploadClubLogo: jest.fn(),
+    uploadClubLogo: jest.fn().mockResolvedValue({ logoUrl: '/uploads/logos/x.png', warnings: [] }),
+    deleteClubLogoVariant: jest.fn().mockResolvedValue(undefined),
     uploadClubCover: jest.fn(),
     // L'onglet Sports est chargé par la page (brouillon + SaveBar partagés).
     adminGetSports: jest.fn().mockResolvedValue([]),

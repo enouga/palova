@@ -14,6 +14,7 @@ import {
   sameDurations,
 } from '@/lib/adminSports';
 import { effectiveDurations } from '@/lib/duration';
+import type { LogoWarning } from '@/lib/clubLogos';
 import { SetClubField } from '@/components/admin/settings/shared';
 import { SaveBar } from '@/components/admin/settings/SaveBar';
 import { SettingsIdentity } from '@/components/admin/settings/SettingsIdentity';
@@ -45,10 +46,11 @@ export default function AdminSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<'icon' | 'wide' | 'wide-dark' | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [logoWarnings, setLogoWarnings] = useState<Partial<Record<'icon' | 'wide' | 'wide-dark', LogoWarning>>>({});
   const [tab, setTab] = useState<SettingsTabKey>('identite');
 
-  const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -116,23 +118,38 @@ export default function AdminSettingsPage() {
     setServer((c) => (c ? { ...c, ...patch } : c));
     setDraft((c) => (c ? { ...c, ...patch } : c));
   };
-  const pickLogo = async (file: File | undefined) => {
-    if (!file || !token || !clubId) return;
+  const pickLogo = async (variant: 'icon' | 'wide' | 'wide-dark', file: File) => {
+    if (!token || !clubId) return;
     if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
     if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
-    setError(null); setUploading(true);
-    try { const res = await api.uploadClubLogo(clubId, file, token); syncImage({ logoUrl: res.logoUrl }); }
-    catch (e) { setError((e as Error).message); }
-    finally { setUploading(false); }
+    setError(null); setUploading(variant);
+    try {
+      const res = await api.uploadClubLogo(clubId, file, token, variant);
+      const col = variant === 'icon' ? 'logoUrl' : variant === 'wide' ? 'logoWideUrl' : 'logoWideDarkUrl';
+      syncImage({ [col]: (res as Record<string, unknown>)[col] } as Partial<ClubAdminDetail>);
+      setLogoWarnings((w) => ({ ...w, [variant]: res.warnings?.[0] as LogoWarning | undefined }));
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(null); }
+  };
+  const deleteLogo = async (variant: 'wide' | 'wide-dark') => {
+    if (!token || !clubId) return;
+    setUploading(variant);
+    try {
+      await api.deleteClubLogoVariant(clubId, variant, token);
+      const col = variant === 'wide' ? 'logoWideUrl' : 'logoWideDarkUrl';
+      syncImage({ [col]: null } as Partial<ClubAdminDetail>);
+      setLogoWarnings((w) => ({ ...w, [variant]: undefined }));
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(null); }
   };
   const pickCover = async (file: File | undefined) => {
     if (!file || !token || !clubId) return;
     if (!LOGO_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
     if (file.size > MAX_LOGO_BYTES) { setError('Image trop lourde (2 Mo max)'); return; }
-    setError(null); setUploading(true);
+    setError(null); setCoverUploading(true);
     try { const res = await api.uploadClubCover(clubId, file, token); syncImage({ coverImageUrl: res.coverImageUrl }); }
     catch (e) { setError((e as Error).message); }
-    finally { setUploading(false); }
+    finally { setCoverUploading(false); }
   };
 
   // Recharge la baseline Sports depuis le serveur (les créations rendent leur id).
@@ -207,8 +224,10 @@ export default function AdminSettingsPage() {
       </div>
 
       {tab === 'identite' && (
-        <SettingsIdentity club={draft} set={set} uploading={uploading}
-          logoInputRef={logoInputRef} coverInputRef={coverInputRef} pickLogo={pickLogo} pickCover={pickCover} />
+        <SettingsIdentity club={draft} set={set}
+          coverUploading={coverUploading} logoUploading={uploading} logoWarnings={logoWarnings}
+          onPickLogo={pickLogo} onDeleteLogo={deleteLogo}
+          coverInputRef={coverInputRef} pickCover={pickCover} />
       )}
       {tab === 'sports' && (
         <SettingsSports rows={sportsDraft} catalog={catalog} onAdd={addSport} onToggleDuration={toggleSportDuration} />
