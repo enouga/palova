@@ -35,12 +35,26 @@ describe('teamRows', () => {
     const players = [
       p('u1', 'Jean', 'Dupont', 1, 0),
       p('u2', 'Marie', 'Leroy', 1, 1),
-      p('u3', 'Paul', 'Roux', 1, 0),
-      { ...p('u4', 'Lea', 'Girard', 1, 1), team: 3 as unknown as 1 },
+      p('u3', 'Paul', 'Roux', 2, 0),
+      { ...p('u4', 'Lea', 'Girard', 2, 1), team: 3 as unknown as 1 },
     ];
     const [team1, team2] = teamRows(players);
-    expect(team1).toHaveLength(2);
+    expect(team1.map((x) => x.userId)).toEqual(['u1', 'u2']);
     expect(team2.map((x) => x.userId)).toEqual(['u3', 'u4']);
+  });
+
+  it('respecte toujours un team explicite, même déséquilibré', () => {
+    const players = [
+      p('u1', 'Jean', 'Dupont', 1, 0),
+      p('u2', 'Marie', 'Leroy', 1, 1),
+      p('u3', 'Paul', 'Roux', 1, 2),
+      p('u4', 'Lea', 'Girard', 2, 0),
+    ];
+    const [team1, team2] = teamRows(players);
+    // Un 3v1 s'affiche tel quel : mieux vaut un rendu visiblement cassé qu'un
+    // 2v2 plausible obtenu en déplaçant silencieusement un joueur valide.
+    expect(team1.map((x) => x.userId)).toEqual(['u1', 'u2', 'u3']);
+    expect(team2.map((x) => x.userId)).toEqual(['u4']);
   });
 
   it('renvoie deux rangées vides pour une liste vide', () => {
