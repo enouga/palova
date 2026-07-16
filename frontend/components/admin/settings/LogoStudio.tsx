@@ -72,7 +72,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
                 {chip('PNG / WebP', th.bg, th.text)}{chip('Carré ≥ 512 px', th.bg, th.text)}{chip('Fond transparent', th.bg, th.text)}
               </div>
-              <Btn type="button" variant="surface" disabled={uploading === 'icon'} onClick={() => iconRef.current?.click()}>
+              <Btn type="button" variant="primary" disabled={uploading === 'icon'} onClick={() => iconRef.current?.click()}>
                 {uploading === 'icon' ? 'Envoi…' : 'Changer l’icône'}
               </Btn>
             </div>
@@ -97,7 +97,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
                 {chip('PNG / WebP', th.bg, th.text)}{chip('Hauteur ≥ 160 px', th.bg, th.text)}{chip('Fond transparent', th.bg, th.text)}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Btn type="button" variant="surface" disabled={uploading === 'wide'} onClick={() => wideRef.current?.click()}>
+                <Btn type="button" variant="primary" disabled={uploading === 'wide'} onClick={() => wideRef.current?.click()}>
                   {uploading === 'wide' ? 'Envoi…' : club.logoWideUrl ? 'Changer' : 'Ajouter'}
                 </Btn>
                 {club.logoWideUrl && <Btn type="button" variant="ghost" onClick={() => onDelete('wide')} ariaLabel="Retirer le logotype">Retirer</Btn>}
@@ -118,7 +118,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12.5, color: th.textFaint, marginBottom: 8 }}>Si votre logotype est sombre, il disparaît en thème sombre. Uploadez une version claire pour le bandeau nocturne.</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Btn type="button" variant="surface" disabled={uploading === 'wide-dark'} onClick={() => darkRef.current?.click()}>
+                <Btn type="button" variant="primary" disabled={uploading === 'wide-dark'} onClick={() => darkRef.current?.click()}>
                   {uploading === 'wide-dark' ? 'Envoi…' : club.logoWideDarkUrl ? 'Changer' : 'Ajouter'}
                 </Btn>
                 {club.logoWideDarkUrl && <Btn type="button" variant="ghost" onClick={() => onDelete('wide-dark')} ariaLabel="Retirer la version sombre">Retirer</Btn>}
