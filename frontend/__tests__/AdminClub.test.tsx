@@ -62,18 +62,19 @@ describe('/admin/club', () => {
     fireEvent.click(screen.getByLabelText('Afficher Top du mois'));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
     const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
-    expect(body.clubHouseSections).toHaveLength(6);
+    expect(body.clubHouseSections).toHaveLength(7);
     expect(body.clubHouseSections.find((s: { key: string }) => s.key === 'top')).toEqual({ key: 'top', visible: false });
   });
 
-  it('carte Sections : ↓ sur la première ligne → ordre permuté dans le PATCH', async () => {
+  it('carte Sections : ↓ sur « Ça joue bientôt » → ordre permuté dans le PATCH (kiosque reste en tête)', async () => {
     wrap();
     await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText('Descendre Ça joue bientôt'));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
     const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
-    expect(body.clubHouseSections[0].key).toBe('agenda');
-    expect(body.clubHouseSections[1].key).toBe('matches');
+    expect(body.clubHouseSections[0].key).toBe('kiosk');
+    expect(body.clubHouseSections[1].key).toBe('agenda');
+    expect(body.clubHouseSections[2].key).toBe('matches');
   });
 
   it('carte Sections : Partenaires est réordonnable comme les autres (flèche ↑)', async () => {
@@ -86,21 +87,36 @@ describe('/admin/club', () => {
     fireEvent.click(screen.getByLabelText('Monter Partenaires'));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalled());
     const body = (api.adminUpdateClub as jest.Mock).mock.calls[0][1];
-    expect(body.clubHouseSections).toHaveLength(6);
-    expect(body.clubHouseSections[4].key).toBe('sponsors');
-    expect(body.clubHouseSections[5].key).toBe('clubCard');
+    expect(body.clubHouseSections).toHaveLength(7);
+    expect(body.clubHouseSections[5].key).toBe('sponsors');
+    expect(body.clubHouseSections[6].key).toBe('clubCard');
+  });
+
+  it('carte Sections : rangée « À la une » (kiosque) déplaçable/masquable, réglage de défilement replié', async () => {
+    wrap();
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    // Le kiosque est une rangée comme les autres : masquable et réordonnable.
+    expect(screen.getByLabelText('Afficher À la une')).toBeInTheDocument();
+    expect(screen.getByLabelText('Descendre À la une')).not.toBeDisabled();
+    expect(screen.getByLabelText('Monter À la une')).toBeDisabled(); // en tête par défaut
+    // Le réglage de défilement est replié tant qu'on ne l'ouvre pas.
+    expect(screen.queryByLabelText('Temps de pause entre deux annonces (secondes)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Défilement/i }));
+    expect(screen.getByLabelText('Temps de pause entre deux annonces (secondes)')).toBeInTheDocument();
   });
 
   it('carte Sections : curseur de vitesse du kiosque → PATCH clubHouseKioskSeconds (débouncé)', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByText('Défilement des annonces')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Défilement/i })); // déplie le panneau du kiosque
     fireEvent.change(screen.getByLabelText('Temps de pause entre deux annonces (secondes)'), { target: { value: '12' } });
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseKioskSeconds: 12 }, 't'));
   });
 
   it('carte Sections : « Pas de défilement automatique » → PATCH 0 (manuel)', async () => {
     wrap();
-    await waitFor(() => expect(screen.getByLabelText('Pas de défilement automatique')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Sections du Club-house')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Défilement/i })); // déplie le panneau du kiosque
     fireEvent.click(screen.getByLabelText('Pas de défilement automatique'));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseKioskSeconds: 0 }, 't'));
   });
