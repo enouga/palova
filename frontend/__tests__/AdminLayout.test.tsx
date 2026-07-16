@@ -119,6 +119,24 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Matchs')).toBeInTheDocument();
   });
 
+  it('viewer STAFF : les 5 entrées de structure sont masquées + section Configuration absente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument(); // sidebar rendue
+    for (const label of ['Ressources', 'Réglages', 'Contenu & mentions', 'Offres', 'Comptabilité']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText('Configuration')).not.toBeInTheDocument(); // section devenue vide
+  });
+
+  it('viewer ADMIN : les 5 entrées de structure sont présentes', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    for (const label of ['Ressources', 'Réglages', 'Contenu & mentions', 'Offres', 'Comptabilité']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
   it("affiche une pastille identifiant le club dans l'en-tête, même sans logo", async () => {
     await wrap();
     expect(screen.getByLabelText('Club Démo')).toBeInTheDocument();

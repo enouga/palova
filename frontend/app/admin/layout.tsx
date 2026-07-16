@@ -184,22 +184,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // TOUS les rôles, gérant compris. La page et les routes /stripe/* restent en place, en
       // sommeil (réservées OWNER). Pour réactiver (gérant uniquement), décommenter la ligne :
       //   ...(isClubOwner(role) ? [{ href: '/admin/payments', label: 'Paiement en ligne', icon: 'lock' } as NavItem] : []),
-      { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
-      { href: '/admin/packages',     label: 'Offres', icon: 'card' },
+      // Réservées aux admins : entrées de structure/pilotage, pas le comptoir du quotidien.
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/comptabilite', label: 'Comptabilité', icon: 'chart' } as NavItem,
+           { href: '/admin/packages',     label: 'Offres',       icon: 'card' } as NavItem]
+        : []),
       // Réservé aux admins : la page /admin/billing répond 403 au staff (requireClubMember('ADMIN')).
       ...(isClubAdmin(role)
         ? [{ href: '/admin/billing', label: 'Abonnement Palova', icon: 'wallet' } as NavItem]
         : []),
     ] },
     { title: 'Configuration', color: '#9b8cf0', items: [
-      { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
-      { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' },
-      { href: '/admin/settings', label: 'Réglages',           icon: 'settings' },
+      // Réservées aux admins : réglages/structure du club, pas d'usage quotidien pour le staff.
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' } as NavItem,
+           { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' } as NavItem,
+           { href: '/admin/settings', label: 'Réglages',           icon: 'settings' } as NavItem]
+        : []),
     ] },
   ];
 
+  // Une section sans items (ex. Configuration pour un STAFF) ne doit pas afficher son titre seul.
+  const visibleSections = sections.filter((s) => s.items.length > 0);
+
   // Repli des sections : liste des titres repliables, état « tout replié », bascules.
-  const titledSections = sections.map((s) => s.title).filter((t): t is string => !!t);
+  const titledSections = visibleSections.map((s) => s.title).filter((t): t is string => !!t);
   const allCollapsed = titledSections.length > 0 && titledSections.every((t) => collapsedSections.includes(t));
   const toggleSection = (title: string) =>
     setCollapsedSections(
@@ -263,7 +272,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             alignSelf: 'flex-end', background: 'transparent', border: 'none', cursor: 'pointer',
             color: th.textFaint, fontFamily: th.fontUI, fontSize: 11, padding: '0 8px 4px',
           }}>{allCollapsed ? 'Tout déplier' : 'Tout replier'}</button>
-          {sections.map((sec, i) => {
+          {visibleSections.map((sec, i) => {
             const isCollapsed = sec.title ? collapsedSections.includes(sec.title) : false;
             return (
               <div key={sec.title ?? 'top'} role="group" aria-label={sec.title} style={{ display: 'contents' }}>
