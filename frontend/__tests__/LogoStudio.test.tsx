@@ -39,4 +39,13 @@ describe('LogoStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: /Retirer le logotype/i }));
     expect(onDelete).toHaveBeenCalledWith('wide');
   });
+
+  it('avertit de façon persistante si l’icône en place n’est pas carrée', () => {
+    setup(); // club avec une icône en place
+    const img = screen.getByAltText('Icône du club');
+    Object.defineProperty(img, 'naturalWidth', { value: 300, configurable: true });
+    Object.defineProperty(img, 'naturalHeight', { value: 100, configurable: true });
+    fireEvent.load(img);
+    expect(screen.getByText(/pas carrée/i)).toBeInTheDocument();
+  });
 });

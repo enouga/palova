@@ -4,7 +4,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { assetUrl } from '@/lib/api';
 import { Btn } from '@/components/ui/atoms';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
-import { LOGO_WARNING_LABEL, wideLogo, iconLogo, type LogoWarning } from '@/lib/clubLogos';
+import { LOGO_WARNING_LABEL, wideLogo, iconLogo, clientRatioWarning, type LogoWarning } from '@/lib/clubLogos';
 
 type Variant = 'icon' | 'wide' | 'wide-dark';
 interface ClubLike {
@@ -27,15 +27,19 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
   const iconRef = useRef<HTMLInputElement>(null);
   const wideRef = useRef<HTMLInputElement>(null);
   const darkRef = useRef<HTMLInputElement>(null);
+  // Avertissement PERSISTANT sur l'icône en place (mesurée au chargement de l'aperçu), en plus
+  // du warning transitoire renvoyé par le serveur au dernier upload.
+  const [iconWarn, setIconWarn] = useState<LogoWarning | null>(null);
 
   const chip = (text: string, bg: string, color: string) => (
     <span style={{ ...CHIP, background: bg, color }}>{text}</span>
   );
-  const warn = (v: Variant) => warnings[v] ? (
+  const warnBox = (code: LogoWarning | null | undefined) => code ? (
     <div style={{ marginTop: 8, padding: '7px 10px', borderRadius: 9, background: `${th.accentWarm}22`, color: th.text, fontSize: 12.5 }}>
-      {LOGO_WARNING_LABEL[warnings[v]!]}
+      {LOGO_WARNING_LABEL[code]}
     </div>
   ) : null;
+  const warn = (v: Variant) => warnBox(warnings[v]);
 
   const hiddenInput = (ref: RefObject<HTMLInputElement | null>, v: Variant, label: string) => (
     <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} aria-label={label}
@@ -55,7 +59,9 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
         <div style={{ background: th.surface2, borderRadius: 14, padding: 14, boxShadow: th.shadow }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
             {iconUrl
-              ? <img src={iconUrl} alt="Icône du club" style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'contain', background: '#fff', flexShrink: 0 }} />
+              ? <img src={iconUrl} alt="Icône du club"
+                  onLoad={(e) => setIconWarn(clientRatioWarning(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight, 'icon'))}
+                  style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'contain', background: '#fff', flexShrink: 0 }} />
               : <span style={{ width: 64, height: 64, borderRadius: 14, background: club.accentColor, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 24, flexShrink: 0 }}>{(club.name[0] ?? '?').toUpperCase()}</span>}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -72,7 +78,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
             </div>
           </div>
           {hiddenInput(iconRef, 'icon', 'Choisir l’icône du club')}
-          {warn('icon')}
+          {warnBox(warnings.icon ?? iconWarn)}
         </div>
 
         {/* Logotype horizontal */}

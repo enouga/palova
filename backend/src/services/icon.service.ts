@@ -71,13 +71,17 @@ async function renderIcon(logo: Buffer, accentColor: string, v: IconVariant): Pr
 // null = logo sans transparence réelle (JPEG/PNG à fond plein) → l'appelant sert le
 // badge Palova de repli (jamais un carré blanc plein).
 async function renderBadge(logo: Buffer, size: number, markRatio: number): Promise<Buffer | null> {
+  // Opacité vérifiée sur le logo D'ORIGINE, avant le letterboxing `contain` : celui-ci ajoute
+  // un remplissage transparent qui, pour une image opaque NON carrée, ferait croire à tort à
+  // de la transparence (min d'alpha = 0) et produirait un rectangle blanc plein au lieu du repli.
+  // Le canal alpha est matérialisé (toBuffer) avant stats() — sinon stats() porte sur le RGB.
+  const srcAlpha = await sharp(logo).ensureAlpha().extractChannel(3).toBuffer();
+  if (((await sharp(srcAlpha).stats()).channels[0]?.min ?? 255) >= 250) return null; // logo opaque → repli
   const inner = Math.round(size * markRatio);
   const resized = await sharp(logo)
     .resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .ensureAlpha().png().toBuffer();
   const alpha = await sharp(resized).extractChannel(3).toBuffer(); // niveaux de gris = alpha
-  const stats = await sharp(alpha).stats();
-  if ((stats.channels[0]?.min ?? 255) >= 250) return null; // opaque partout → pas de silhouette
   const whiteMark = await sharp({ create: { width: inner, height: inner, channels: 3, background: '#ffffff' } })
     .joinChannel(alpha).png().toBuffer();
   return sharp({ create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })

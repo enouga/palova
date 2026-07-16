@@ -131,4 +131,22 @@ describe('GET /api/clubs/:slug/icon/:file', () => {
     expect(res.headers['content-type']).toContain('image/png');
     fetchMock.mockRestore();
   });
+
+  it('badge-96 : logo opaque NON carré → même repli que le carré opaque (pas un rectangle blanc)', async () => {
+    // Régression : le letterboxing `contain` d'une image opaque non carrée introduit du
+    // transparent qui faisait passer la garde d'opacité → rectangle blanc plein. Les deux cas
+    // opaques doivent servir le MÊME repli Palova (comparaison robuste au transfert HTTP).
+    const badgeFor = async (w: number, h: number, url: string): Promise<Buffer> => {
+      prismaMock.club.findUnique.mockResolvedValue({ ...CLUB, logoUrl: url } as any);
+      const buf = await sharp({ create: { width: w, height: h, channels: 3, background: '#224466' } }).png().toBuffer();
+      const fm = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array(buf), { status: 200 }) as any);
+      const res = await request(app).get('/api/clubs/demo/icon/badge-96.png');
+      fm.mockRestore();
+      expect(res.status).toBe(200);
+      return res.body as Buffer;
+    };
+    const square = await badgeFor(96, 96, 'https://logos.example/sq-opaque.png');
+    const wide = await badgeFor(200, 80, 'https://logos.example/wide-opaque.png');
+    expect(Buffer.compare(wide, square)).toBe(0); // les deux → repli identique, aucun rendu blanc
+  });
 });
