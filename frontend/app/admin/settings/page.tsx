@@ -160,8 +160,11 @@ export default function AdminSettingsPage() {
         const items = buildSportsBatchBody(sportsServer, sportsDraft);
         tasks.push(
           api.adminApplySportsBatch(clubId, items, token).then((updated) => {
+            // Ne JAMAIS écraser `sportsDraft` ici (contrairement au Club, `draft` n'est pas
+            // reposé sur `updated`) : un ajout/toggle fait par l'utilisateur pendant que cette
+            // requête était en vol serait sinon silencieusement perdu (remplacement intégral du
+            // tableau). `updated` ne fait que rafraîchir la baseline pour les prochains diffs.
             setSportsServer(updated);
-            setSportsDraft(toSportsDraft(updated));
           }).catch((e) => { errors.push((e as Error).message); }),
         );
       }

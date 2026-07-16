@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import AdminSettingsPage from '../app/admin/settings/page';
 
 const refreshMock = jest.fn();
@@ -96,6 +96,12 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([
       { id: 'cs1', slotStepMin: null, durationsMin: [90], sport: { id: 'padel', key: 'padel', name: 'Padel', resourceNoun: 'Court', defaultDurationsMin: [90], surfaces: [], hasLighting: false } },
     ]);
+    // Le PUT batch renvoie la liste COMPLÈTE des ClubSport du club (pas seulement le diff soumis) —
+    // il faut que la réponse mockée reflète bien Tennis pour que le brouillon redevienne "propre".
+    (mocked.adminApplySportsBatch as jest.Mock).mockResolvedValueOnce([
+      { id: 'cs1', slotStepMin: null, durationsMin: [90], sport: { id: 'padel', key: 'padel', name: 'Padel', resourceNoun: 'Court', defaultDurationsMin: [90], surfaces: [], hasLighting: false } },
+      { id: 'cs2', slotStepMin: null, durationsMin: [], sport: { id: 'tennis', key: 'tennis', name: 'Tennis', resourceNoun: 'Court', defaultDurationsMin: [60], surfaces: [], hasLighting: false } },
+    ]);
 
     wrap();
     await screen.findByText('Profil');
@@ -129,6 +135,106 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     expect(mocked.adminApplySportsBatch).not.toHaveBeenCalled();
     // Tennis redevient proposé à l'ajout (le brouillon est revenu à la baseline vide).
     expect(await screen.findByRole('button', { name: /Tennis/ })).toBeInTheDocument();
+  });
+
+  it('Enregistrer déclenche à la fois le PATCH Club et le batch Sports quand les deux onglets sont dirty', async () => {
+    (mocked.getSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'padel', name: 'Padel', icon: null, defaultDurationsMin: [90] },
+      { id: 'tennis', name: 'Tennis', icon: '🎾', defaultDurationsMin: [60] },
+    ]);
+    (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([]);
+    // Réponse réaliste du PUT batch (liste complète, reflète Tennis) pour que le brouillon
+    // Sports redevienne propre lui aussi — sinon la barre resterait dirty après un succès réel.
+    (mocked.adminApplySportsBatch as jest.Mock).mockResolvedValueOnce([
+      { id: 'cs-tennis', slotStepMin: null, durationsMin: [], sport: { id: 'tennis', key: 'tennis', name: 'Tennis', resourceNoun: 'Court', defaultDurationsMin: [60], surfaces: [], hasLighting: false } },
+    ]);
+
+    wrap();
+    const nameInput = await screen.findByDisplayValue('Démo');
+    fireEvent.change(nameInput, { target: { value: 'Nouveau nom' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tennis/ }));
+    expect(await screen.findByText('Modifications non enregistrées')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateClub).toHaveBeenCalled());
+    await waitFor(() => expect(mocked.adminApplySportsBatch)
+      .toHaveBeenCalledWith('c1', [{ sportId: 'tennis', durationsMin: [] }], 'tok'));
+    expect(await screen.findByText(/Enregistré/)).toBeInTheDocument();
+  });
+
+  it('un ajout de sport pendant un enregistrement Sports en vol n\'est pas silencieusement perdu (régression)', async () => {
+    (mocked.getSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'padel', name: 'Padel', icon: null, defaultDurationsMin: [90] },
+      { id: 'tennis', name: 'Tennis', icon: '🎾', defaultDurationsMin: [60] },
+      { id: 'squash', name: 'Squash', icon: null, defaultDurationsMin: [45] },
+    ]);
+    (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([]);
+
+    let resolveBatch: (v: unknown) => void = () => {};
+    (mocked.adminApplySportsBatch as jest.Mock).mockReturnValueOnce(
+      new Promise((resolve) => { resolveBatch = resolve; }),
+    );
+
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tennis/ }));
+    expect(await screen.findByText('Modifications non enregistrées')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminApplySportsBatch).toHaveBeenCalledTimes(1));
+    // Le batch en vol n'a soumis QUE Tennis (Squash n'existait pas encore dans le brouillon).
+    expect((mocked.adminApplySportsBatch as jest.Mock).mock.calls[0][1]).toEqual([{ sportId: 'tennis', durationsMin: [] }]);
+
+    // Pendant que la requête est en vol, l'utilisateur ajoute un second sport.
+    fireEvent.click(await screen.findByRole('button', { name: /Squash/ }));
+
+    // La requête se résout enfin, avec la ligne Tennis créée côté serveur (Squash n'y figure pas).
+    await act(async () => {
+      resolveBatch([
+        { id: 'cs-tennis', slotStepMin: null, durationsMin: [], sport: { id: 'tennis', key: 'tennis', name: 'Tennis', resourceNoun: 'Court', defaultDurationsMin: [60], surfaces: [], hasLighting: false } },
+      ]);
+    });
+
+    // Le Squash ajouté pendant le vol ne doit PAS être écrasé par la réponse du batch précédent :
+    // la barre doit rester "non enregistrée" (pas de faux "Enregistré ✓") et Squash doit
+    // toujours figurer dans le brouillon vivant (liste des sports proposés, plus dans "à ajouter").
+    await waitFor(() => expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Squash/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Squash')).toBeInTheDocument();
+  });
+
+  it('échec partiel : le Club se sauvegarde et se rebaseline même si le batch Sports échoue', async () => {
+    (mocked.getSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'padel', name: 'Padel', icon: null, defaultDurationsMin: [90] },
+      { id: 'tennis', name: 'Tennis', icon: '🎾', defaultDurationsMin: [60] },
+    ]);
+    (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([]);
+    (mocked.adminApplySportsBatch as jest.Mock).mockRejectedValueOnce(new Error('Le serveur a refusé le lot'));
+
+    wrap();
+    const nameInput = await screen.findByDisplayValue('Démo');
+    fireEvent.change(nameInput, { target: { value: 'Nouveau nom' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tennis/ }));
+    expect(await screen.findByText('Modifications non enregistrées')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateClub).toHaveBeenCalled());
+    await waitFor(() => expect(mocked.adminApplySportsBatch).toHaveBeenCalled());
+
+    // Le Club a réussi (baseline commitée → refreshClub appelé) ; le message d'erreur du
+    // batch Sports remplace le flash de succès (pas de faux « Enregistré ✓ »).
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(await screen.findByText(/Le serveur a refusé le lot/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Enregistré/)).not.toBeInTheDocument();
+
+    // Le brouillon Sports reste dirty (Tennis toujours en attente) pour permettre un nouvel essai.
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    expect(screen.getByText('Tennis')).toBeInTheDocument();
   });
 
   it('opens on the tab named in ?tab= at mount', async () => {
