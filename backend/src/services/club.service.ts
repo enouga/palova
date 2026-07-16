@@ -884,6 +884,14 @@ export class ClubService {
       const existing = await tx.clubSport.findMany({ where: { clubId }, select: { sportId: true } });
       const existingIds = new Set(existing.map((e) => e.sportId));
 
+      // 0) Un même sportId ne peut apparaître qu'une fois par lot (sinon double create → P2002,
+      // ou double update en silencieux last-write-wins) — rejeté explicitement, avant tout accès DB.
+      const seenIds = new Set<string>();
+      for (const item of items) {
+        if (seenIds.has(item.sportId)) throw new Error('VALIDATION_ERROR');
+        seenIds.add(item.sportId);
+      }
+
       // 1) Valider TOUT le lot avant d'appliquer quoi que ce soit (tout ou rien).
       const plan: { sportId: string; already: boolean; durationsMin: number[] }[] = [];
       for (const item of items) {

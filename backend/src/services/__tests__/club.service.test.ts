@@ -575,6 +575,17 @@ describe('ClubService.applySportsBatch', () => {
     expect(prismaMock.clubSport.create).not.toHaveBeenCalled();
     expect(prismaMock.clubSport.update).not.toHaveBeenCalled();
   });
+
+  it('refuse un sportId dupliqué dans le lot (VALIDATION_ERROR) sans rien appliquer', async () => {
+    prismaMock.clubSport.findMany.mockResolvedValueOnce([] as any);
+
+    await expect(svc.applySportsBatch('club-1', [
+      { sportId: 'tennis', durationsMin: [] },
+      { sportId: 'tennis', durationsMin: [60] },
+    ])).rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubSport.create).not.toHaveBeenCalled();
+    expect(prismaMock.clubSport.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('ClubService — updateClub heures d\'ouverture', () => {
