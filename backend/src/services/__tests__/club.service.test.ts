@@ -448,6 +448,14 @@ describe('levelSystemEnabled exposition', () => {
     expect(arg.select.levelSystemEnabled).toBe(true);
   });
 
+  it('getClubForAdmin sélectionne les logotypes', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({ id: 'c', logoWideUrl: '/w.png', logoWideDarkUrl: null } as any);
+    await svc.getClubForAdmin('c');
+    const arg = (prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0];
+    expect(arg.select.logoWideUrl).toBe(true);
+    expect(arg.select.logoWideDarkUrl).toBe(true);
+  });
+
   it('updateClub accepte levelSystemEnabled', async () => {
     prismaMock.club.update.mockResolvedValue({} as any);
     await svc.updateClub('c1', { levelSystemEnabled: false } as any);

@@ -216,7 +216,7 @@ export class ClubService {
       where: { slug },
       select: {
         id: true, slug: true, name: true, address: true, city: true, country: true,
-        description: true, timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        description: true, timezone: true, logoUrl: true, logoWideUrl: true, logoWideDarkUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         publicBookingDays: true, memberBookingDays: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         showOtherClubsReservations: true,
@@ -283,7 +283,7 @@ export class ClubService {
       where: { id: clubId },
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
-        timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        timezone: true, logoUrl: true, logoWideUrl: true, logoWideDarkUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         listedInDirectory: true, listTournamentsNationally: true, showOffersPublicly: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,

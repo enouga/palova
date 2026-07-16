@@ -2,6 +2,7 @@ import { buildVerificationEmail, buildPasswordResetEmail } from '../templates/em
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
+import { brandFromClub } from '../registry';
 
 describe('buildVerificationEmail', () => {
   const palova: Brand = { ...PALOVA_BRAND, logoUrl: 'https://palova.fr/icon-192.png' };
@@ -113,5 +114,17 @@ describe('links', () => {
       const end = new Date('2026-07-12T06:00:00.000Z'); // avant le début
       expect(formatDateRangeFr(start, end, tz)).toBe(formatDateFr(start, tz));
     });
+  });
+});
+
+describe('brandFromClub — logotype email', () => {
+  const base = { name: 'Padel Arena', accentColor: '#5e93da', slug: 'padel-arena' };
+  it('préfère logoWideUrl à logoUrl', () => {
+    const b = brandFromClub({ ...base, logoUrl: '/uploads/logos/i.png', logoWideUrl: '/uploads/logos/w.png' } as any);
+    expect(b.logoUrl).toContain('/uploads/logos/w.png');
+  });
+  it('repli sur logoUrl si pas de wide', () => {
+    const b = brandFromClub({ ...base, logoUrl: '/uploads/logos/i.png', logoWideUrl: null } as any);
+    expect(b.logoUrl).toContain('/uploads/logos/i.png');
   });
 });

@@ -15,7 +15,7 @@ const ratingService = new RatingService();
 
 /** Select club partagé par tous les emails (identité + coordonnées du pied de page). */
 export const EMAIL_CLUB_SELECT = {
-  id: true, name: true, slug: true, logoUrl: true, accentColor: true, timezone: true,
+  id: true, name: true, slug: true, logoUrl: true, logoWideUrl: true, accentColor: true, timezone: true,
   address: true, city: true, contactPhone: true, contactEmail: true,
 } as const;
 

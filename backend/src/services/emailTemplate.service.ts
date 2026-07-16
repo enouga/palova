@@ -96,7 +96,7 @@ export class EmailTemplateService {
   private async loadBrand(clubId: string): Promise<Brand> {
     const club = await prisma.club.findUniqueOrThrow({
       where: { id: clubId },
-      select: { name: true, slug: true, logoUrl: true, accentColor: true, address: true, city: true, contactPhone: true, contactEmail: true },
+      select: { name: true, slug: true, logoUrl: true, logoWideUrl: true, accentColor: true, address: true, city: true, contactPhone: true, contactEmail: true },
     });
     return brandFromClub(club);
   }
