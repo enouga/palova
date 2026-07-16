@@ -129,7 +129,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Le wizard d'onboarding est plein écran : pas de chrome admin (la garde ci-dessus s'applique déjà).
-  if (pathname === '/admin/onboarding') return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
+  // Il déroule la configuration du club (identité, terrains, règles) : réservé aux admins, même
+  // gate que le guide de démarrage (onboarding-status, requireClubMember('ADMIN')).
+  if (pathname === '/admin/onboarding') {
+    if (!isClubAdmin(role)) {
+      return (
+        <div style={{ minHeight: '100vh', background: th.bg, color: th.textMute, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, padding: 24, textAlign: 'center' }}>
+          Cette page est réservée aux administrateurs du club.
+        </div>
+      );
+    }
+    return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
+  }
 
   // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
   // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).

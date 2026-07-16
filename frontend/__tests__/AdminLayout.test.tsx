@@ -5,9 +5,10 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 // Objets stables entre les rendus : club et router sont dans les deps du useEffect
 // de vérification des droits — une identité neuve relancerait getMyClubs à chaque rendu.
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
+let mockPathname = '/admin';
 jest.mock('next/navigation', () => ({
   useRouter: () => mockRouter,
-  usePathname: () => '/admin',
+  usePathname: () => mockPathname,
 }));
 
 jest.mock('../lib/useAuth', () => ({
@@ -53,6 +54,7 @@ describe('AdminLayout — toggle de la sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockPathname = '/admin';
     mockClubCtx.slug = 'demo'; // hôte club par défaut
     mockClubCtx.club = clubOn; // restaure le club ON par défaut (objet stable)
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
@@ -87,6 +89,22 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
     // On n'atteint jamais la vérification des droits (getMyClubs) sur cet hôte.
     expect(api.getMyClubs).not.toHaveBeenCalled();
+  });
+
+  it('wizard onboarding : un STAFF voit le message réservé aux admins, pas le wizard', async () => {
+    mockPathname = '/admin/onboarding';
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+    expect(screen.queryByText('Contenu admin')).not.toBeInTheDocument();
+  });
+
+  it('wizard onboarding : un ADMIN passe (enfant rendu plein écran, sans chrome admin)', async () => {
+    mockPathname = '/admin/onboarding';
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Contenu admin')).toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument(); // pas de sidebar
   });
 
   it('club OFF : pas de lien nav « Matchs »', async () => {

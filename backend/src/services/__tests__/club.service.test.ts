@@ -1210,3 +1210,52 @@ describe('ClubService — removeMember (membre détenant un rôle staff)', () =>
     expect(prismaMock.clubMembership.delete).toHaveBeenCalledWith({ where: { id: 'mb1' } });
   });
 });
+
+describe('ClubService — setMemberBlocked (garde staff)', () => {
+  beforeEach(() => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'club-demo', userId: 'u9' } as any);
+    prismaMock.clubMembership.update.mockResolvedValue({} as any);
+  });
+
+  it('refuse de bloquer un membre qui détient un rôle staff (MEMBER_IS_STAFF)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'OWNER' } as any);
+    await expect(new ClubService().setMemberBlocked('club-demo', 'mb1', true)).rejects.toThrow('MEMBER_IS_STAFF');
+    expect(prismaMock.clubMembership.update).not.toHaveBeenCalled();
+  });
+
+  it('bloque un membre simple (aucune ligne ClubMember)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
+    await new ClubService().setMemberBlocked('club-demo', 'mb1', true);
+    expect(prismaMock.clubMember.findUnique).toHaveBeenCalledWith({
+      where: { userId_clubId: { userId: 'u9', clubId: 'club-demo' } }, select: { role: true },
+    });
+    expect(prismaMock.clubMembership.update).toHaveBeenCalledWith({ where: { id: 'mb1' }, data: { status: 'BLOCKED' } });
+  });
+
+  it('débloquer reste toujours permis (même un membre staff, sans lookup de rôle)', async () => {
+    await new ClubService().setMemberBlocked('club-demo', 'mb1', false);
+    expect(prismaMock.clubMember.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.clubMembership.update).toHaveBeenCalledWith({ where: { id: 'mb1' }, data: { status: 'ACTIVE' } });
+  });
+});
+
+describe('ClubService — updateMembership (garde staff sur status BLOCKED)', () => {
+  beforeEach(() => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'club-demo', userId: 'u9' } as any);
+    prismaMock.clubMembership.update.mockResolvedValue({} as any);
+  });
+
+  it('refuse status BLOCKED sur un membre qui détient un rôle staff (MEMBER_IS_STAFF)', async () => {
+    prismaMock.clubMember.findUnique.mockResolvedValue({ role: 'STAFF' } as any);
+    await expect(new ClubService().updateMembership('club-demo', 'mb1', { status: 'BLOCKED' })).rejects.toThrow('MEMBER_IS_STAFF');
+    expect(prismaMock.clubMembership.update).not.toHaveBeenCalled();
+  });
+
+  it('status ACTIVE et champs simples passent sans lookup de rôle', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', { status: 'ACTIVE', note: 'ok' });
+    expect(prismaMock.clubMember.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.clubMembership.update).toHaveBeenCalledWith({
+      where: { id: 'mb1' }, data: { status: 'ACTIVE', note: 'ok' },
+    });
+  });
+});

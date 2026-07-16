@@ -108,6 +108,16 @@ it('supprimer un membre staff → 409 MEMBER_IS_STAFF affiché en français', as
   expect(api.adminRemoveMember).toHaveBeenCalledWith('club-1', 'm2', 'tok');
 });
 
+it('bloquer un membre staff → 409 MEMBER_IS_STAFF affiché en français', async () => {
+  (api.adminSetMemberBlocked as jest.Mock).mockRejectedValue(new Error('MEMBER_IS_STAFF'));
+  mount();
+  await screen.findByText('Vera Moi');
+  await openPanel('Vera Moi');
+  fireEvent.click(screen.getByRole('button', { name: 'Bloquer' }));
+  await screen.findByText(/retirez d'abord son rôle/i);
+  expect(api.adminSetMemberBlocked).toHaveBeenCalledWith('club-1', 'm2', true, 'tok');
+});
+
 const sam = { ...base, id: 'm4', userId: 'u-staff', firstName: 'Sam', lastName: 'Staffeur', email: 's@x.fr', staffRole: 'STAFF' };
 
 it('révoquer via « Membre » → PATCH role null', async () => {

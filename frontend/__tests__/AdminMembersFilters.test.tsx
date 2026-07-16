@@ -61,6 +61,19 @@ it('le segment « Bloqués » ne montre que les membres bloqués', async () => {
   expect(screen.queryByText('Léo Costa')).toBeNull();
 });
 
+it('le segment « Coachs » ne montre que les coachs', async () => {
+  (api.adminGetMembers as jest.Mock).mockResolvedValue([
+    ...members,
+    { ...base, id: 'm4', userId: 'u4', firstName: 'Coco', lastName: 'Prof', email: 'coco@x.fr', isCoach: true },
+  ]);
+  mount();
+  await screen.findByText('Ana Bernard');
+  fireEvent.click(screen.getByRole('button', { name: 'Coachs · 1' }));
+  expect(screen.getByText('Coco Prof')).toBeInTheDocument();
+  expect(screen.queryByText('Ana Bernard')).toBeNull();
+  expect(screen.queryByText('Léo Costa')).toBeNull();
+});
+
 it('le bandeau KPI est présent (club entier)', async () => {
   mount();
   await screen.findByText('Ana Bernard');

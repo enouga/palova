@@ -603,12 +603,21 @@ export class ClubService {
     return { tempPassword, existed: false, userId: user.id, member: this.toMemberRow(membership, user) };
   }
 
+  /** Refuse l'opération si le membre détient un rôle back-office (même règle que removeMember). */
+  private async assertNotStaff(clubId: string, userId: string) {
+    const staff = await prisma.clubMember.findUnique({
+      where: { userId_clubId: { userId, clubId } }, select: { role: true },
+    });
+    if (staff) throw new Error('MEMBER_IS_STAFF');
+  }
+
   async updateMembership(
     clubId: string, membershipId: string,
     params: { isSubscriber?: boolean; membershipNo?: string | null; status?: 'ACTIVE' | 'BLOCKED'; note?: string | null; phone?: string | null },
   ) {
     const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    if (params.status === 'BLOCKED') await this.assertNotStaff(clubId, m.userId);
     if (params.phone !== undefined) {
       await prisma.user.update({ where: { id: m.userId }, data: { phone: params.phone?.toString().trim() || null } });
     }
@@ -624,8 +633,11 @@ export class ClubService {
   }
 
   async setMemberBlocked(clubId: string, membershipId: string, blocked: boolean) {
-    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true } });
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    // Bloquer un membre détenant un rôle staff est refusé (révoquer d'abord son rôle) ; le
+    // déblocage reste toujours permis (état pouvant précéder une promotion).
+    if (blocked) await this.assertNotStaff(clubId, m.userId);
     return prisma.clubMembership.update({ where: { id: membershipId }, data: { status: blocked ? 'BLOCKED' : 'ACTIVE' } });
   }
 

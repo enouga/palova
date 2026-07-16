@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MemberHistoryPage from '../app/admin/members/[userId]/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
+import { AdminRoleContext } from '../lib/adminRole';
 import { api } from '../lib/api';
 import type { MemberHistory } from '../lib/api';
 
@@ -50,7 +51,10 @@ const HISTORY: MemberHistory = {
   loyalty: { firstVisitAt: '2026-05-01T10:00:00.000Z', lastVisitAt: '2026-06-15T18:00:00.000Z', daysSinceLastVisit: 60, tenureDays: 170, playsPerMonth: 2, cancellationRate: 0.5, atRisk: true },
 };
 
-const renderPage = () => render(<ThemeProvider><MemberHistoryPage /></ThemeProvider>);
+// Rôle du viewer via le contexte posé par le layout /admin (défaut ADMIN : comportement historique).
+const renderPage = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') => render(
+  <ThemeProvider><AdminRoleContext.Provider value={role}><MemberHistoryPage /></AdminRoleContext.Provider></ThemeProvider>,
+);
 
 const balEntries = { id: 'pk1', kind: 'ENTRIES' as const, name: 'Carnet 10', creditsRemaining: 3, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00.000Z', expiresAt: null };
 const withBalance = (): MemberHistory => ({ ...HISTORY, finance: { ...HISTORY.finance, prepaid: { balances: [balEntries], consumption: [] } } });
@@ -95,6 +99,26 @@ it('onglet Niveau : partenaires fréquents + courbe de progression', async () =>
   await screen.findByText('Partenaires fréquents');
   expect(screen.getByText('Bob B')).toBeInTheDocument();
   expect(screen.getByLabelText('Courbe de progression du niveau')).toBeInTheDocument();
+});
+
+it('onglet Niveau : viewer ADMIN → formulaire « Corriger le niveau » présent, niveau admin chargé', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  expect(api.adminGetMemberLevel).toHaveBeenCalledWith('club-1', 'u1', 'tok');
+});
+
+it('onglet Niveau : viewer STAFF → blocs admin masqués et niveau admin non chargé (la route répond 403)', async () => {
+  (api.adminGetMemberLevel as jest.Mock).mockClear(); // la suite n'a pas de clearAllMocks : purge les appels des tests précédents
+  renderPage('STAFF');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Partenaires fréquents'); // le jeu (history, route STAFF) reste visible
+  expect(screen.queryByText('Corriger le niveau')).toBeNull();
+  expect(screen.queryByText('Historique des corrections')).toBeNull();
+  expect(screen.queryByText('Niveau par sport')).toBeNull();
+  expect(api.adminGetMemberLevel).not.toHaveBeenCalled();
 });
 
 it('onglet Notes : ajouter un commentaire appelle l\'API et l\'affiche', async () => {
