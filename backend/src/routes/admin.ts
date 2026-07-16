@@ -285,6 +285,18 @@ router.patch('/sports/:clubSportId', async (req: ClubScopedRequest, res: Respons
   } catch (err) { handleError(err, res, next); }
 });
 
+// Enregistrement différé (onglet Sports de /admin/settings) : applique tout le lot en une transaction.
+router.put('/sports', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!Array.isArray(req.body.items)) return void res.status(400).json({ error: 'items (array) requis' });
+    const items = req.body.items.map((it: { sportId?: unknown; durationsMin?: unknown }) => ({
+      sportId: asString(it?.sportId),
+      durationsMin: Array.isArray(it?.durationsMin) ? it.durationsMin.map(Number) : [],
+    }));
+    res.json(await clubService.applySportsBatch(req.membership!.clubId, items));
+  } catch (err) { handleError(err, res, next); }
+});
+
 // --- Ressources ---
 
 router.get('/resources', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
