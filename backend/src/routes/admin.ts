@@ -590,6 +590,13 @@ router.get('/announcements', async (req: ClubScopedRequest, res: Response, next:
 router.post('/announcements', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await announcementService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
+// ⚠️ Déclarée AVANT /announcements/:id (sinon Express capture 'reorder' comme :id).
+router.patch('/announcements/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const ids = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds.filter((x: unknown): x is string => typeof x === 'string') : [];
+    res.json(await announcementService.reorder(req.membership!.clubId, ids));
+  } catch (e) { handleError(e, res, next); }
+});
 router.patch('/announcements/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await announcementService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
