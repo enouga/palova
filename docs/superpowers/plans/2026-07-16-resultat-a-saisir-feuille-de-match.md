@@ -46,11 +46,25 @@ export interface MatchToRecord {
 
 **Pièges connus de ce repo :**
 - Les shims `node_modules/.bin` sont cassés : lancer Jest via `node node_modules/jest/bin/jest.js`, jamais `npx jest`.
+- Le flag de filtre de cette version de Jest est **`--testPathPatterns`** (au pluriel) ; `--testPathPattern` est **rejeté**. Ancrer le motif (`"resultsToRecord\.test\.ts$"`) : Windows étant insensible à la casse, un motif non ancré attrape aussi `ResultsToRecord.test.tsx`.
 - Jest ne type-check pas (ts-jest `isolatedModules`) → passer `node node_modules/typescript/bin/tsc --noEmit` séparément.
 - `matchMedia` est stubé dans `jest.setup.ts` avec `matches: false` **toujours** → `useIsDesktop()` renvoie `false` dans tous les tests : le rendu testé par défaut est la **variante compacte**. Pour tester le desktop il faut surcharger `window.matchMedia` localement (fourni en Task 2).
 - Le texte DOM doit rester en casse normale (« Résultat à saisir ») ; la mise en petites capitales se fait en CSS (`textTransform: 'uppercase'`), sinon le test existant qui cherche `/Résultat à saisir/` casse.
 
 **Règle absolue du projet :** aucun débordement horizontal, en clair comme en sombre, à 390 px comme à 1280 px.
+
+## ⚠️ Protocole de commit (obligatoire — Eric édite le repo EN PARALLÈLE)
+
+Eric travaille dans ce repo pendant l'exécution : il committe et son WIP non committé grossit entre deux appels. Ne jamais toucher, stager, committer ou « réparer » un fichier qui n'est pas explicitement le vôtre.
+
+1. **Avant chaque commit**, vérifier la branche : `git branch --show-current` doit imprimer `feat/annonces-drag-drop-kiosque`. Sinon → **STOP, reporter BLOCKED** (la branche a basculé).
+2. **`git add X && git commit -m "…"` est INTERDIT** : `git commit` sans pathspec committe **tout l'index**, or le WIP d'Eric peut déjà y être stagé (ça a déjà emporté 4 fichiers étrangers par le passé).
+3. **Forme correcte** — `-m` **AVANT** le `--`, sinon git prend le message pour un pathspec littéral et la commande échoue :
+   ```
+   git add <mes fichiers>
+   git commit -m "message" -- <mes fichiers>
+   ```
+4. **Après le commit**, `git show --stat --format="" HEAD` doit lister **exactement** vos fichiers. Sinon → reporter DONE_WITH_CONCERNS avec la sortie.
 
 ---
 
@@ -113,12 +127,26 @@ describe('teamRows', () => {
     const players = [
       p('u1', 'Jean', 'Dupont', 1, 0),
       p('u2', 'Marie', 'Leroy', 1, 1),
-      p('u3', 'Paul', 'Roux', 1, 0),
-      { ...p('u4', 'Lea', 'Girard', 1, 1), team: 3 as unknown as 1 },
+      p('u3', 'Paul', 'Roux', 2, 0),
+      { ...p('u4', 'Lea', 'Girard', 2, 1), team: 3 as unknown as 1 },
     ];
     const [team1, team2] = teamRows(players);
-    expect(team1).toHaveLength(2);
+    expect(team1.map((x) => x.userId)).toEqual(['u1', 'u2']);
     expect(team2.map((x) => x.userId)).toEqual(['u3', 'u4']);
+  });
+
+  it('respecte toujours un team explicite, même déséquilibré', () => {
+    const players = [
+      p('u1', 'Jean', 'Dupont', 1, 0),
+      p('u2', 'Marie', 'Leroy', 1, 1),
+      p('u3', 'Paul', 'Roux', 1, 2),
+      p('u4', 'Lea', 'Girard', 2, 0),
+    ];
+    const [team1, team2] = teamRows(players);
+    // Un 3v1 s'affiche tel quel : mieux vaut un rendu visiblement cassé qu'un
+    // 2v2 plausible obtenu en déplaçant silencieusement un joueur valide.
+    expect(team1.map((x) => x.userId)).toEqual(['u1', 'u2', 'u3']);
+    expect(team2.map((x) => x.userId)).toEqual(['u4']);
   });
 
   it('renvoie deux rangées vides pour une liste vide', () => {
@@ -171,13 +199,13 @@ export function teamRows(players: MatchToRecordPlayer[]): [MatchToRecordPlayer[]
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && node node_modules/jest/bin/jest.js __tests__/resultsToRecord.test.ts`
-Expected: PASS — 6 tests.
+Expected: PASS — 7 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add frontend/lib/resultsToRecord.ts frontend/__tests__/resultsToRecord.test.ts
-git commit -m "feat(matchs): helpers purs de la carte feuille de match (abbrevName, teamRows)"
+git commit -m "feat(matchs): helpers purs de la carte feuille de match (abbrevName, teamRows)" -- frontend/lib/resultsToRecord.ts frontend/__tests__/resultsToRecord.test.ts
 ```
 
 ---
@@ -266,7 +294,7 @@ Expected: les 3 tests d'origine PASS ; les 5 nouveaux FAIL (« Unable to find an
 
 ```bash
 git add frontend/__tests__/ResultsToRecord.test.tsx
-git commit -m "test(matchs): rendu attendu de la carte feuille de match (rouge)"
+git commit -m "test(matchs): rendu attendu de la carte feuille de match (rouge)" -- frontend/__tests__/ResultsToRecord.test.tsx
 ```
 
 ---
@@ -468,7 +496,7 @@ Expected: aucune erreur mentionnant `ResultsToRecord.tsx` ni `resultsToRecord.ts
 
 ```bash
 git add frontend/components/match/ResultsToRecord.tsx
-git commit -m "feat(matchs): carte Resultat a saisir en feuille de match (equipes, cases de sets, footer)"
+git commit -m "feat(matchs): carte Resultat a saisir en feuille de match (equipes, cases de sets, footer)" -- frontend/components/match/ResultsToRecord.tsx
 ```
 
 ---
@@ -507,7 +535,7 @@ S'il a fallu corriger quelque chose :
 
 ```bash
 git add frontend/components/match/ResultsToRecord.tsx
-git commit -m "fix(matchs): carte feuille de match - corrige le rendu apres verification visuelle"
+git commit -m "fix(matchs): carte feuille de match - corrige le rendu apres verification visuelle" -- frontend/components/match/ResultsToRecord.tsx
 ```
 
 S'il n'y a rien à corriger, ne pas faire de commit vide — passer à la Task 5.
@@ -523,20 +551,20 @@ S'il n'y a rien à corriger, ne pas faire de commit vide — passer à la Task 5
 
 Dans `CLAUDE.md`, ajouter ce paragraphe d'évolution (même style dense que les autres, en français) à la suite des sections traitant des matchs :
 
-> **Évolution (2026-07-16) — carte « Résultat à saisir » en feuille de match :** le prompt personnel (`components/match/ResultsToRecord.tsx`, monté sur Club-house + `/parties` ×2 + `/me/matches`) passe d'une ligne générique (tuile trophée + bouton) à une **carte « feuille de match »** : kicker petites capitales + **chip Compétitive/Amicale** (réutilise le `Chip` partagé, `tone="accent"`/`tone="line"` — **mêmes tons que le badge d'`OpenMatchCard`**, lisibles dans les 2 thèmes), **deux rangées d'équipe face à face** (paires d'avatars chevauchés `colorForSeed`, noms joints par « & », ellipsis) séparées par un **« VS » à filets**, **3 cases de sets vides en pointillés** (la 3ᵉ estompée — 3ᵉ set optionnel ; décoratives, non cliquables, `aria-hidden`), et **footer teinté `surface2`** (terrain · date en `fontMono` + CTA pill accent). **Variante compacte** sous 560 px (`useIsDesktop(560)`) : avatars 28, noms abrégés « J. Dupont » (helper `abbrevName`), label « SETS » masqué, CTA « Saisir ». **100 % frontend, aucune migration, aucun changement backend** (`listToRecord` garantit déjà le 2v2 avec `team`/`slot` concrets via `effectiveTeams`) ; fetch, wiring `MatchResultModal` (`initialTeams`/`locked`/`competitive`) et surfaces de montage **inchangés**. Helpers purs testés `frontend/lib/resultsToRecord.ts` (`abbrevName`, `teamRows` — ordre par slot, `team` inattendu versé dans la rangée la moins remplie). Direction retenue par Eric sur **3 maquettes comparées dans le companion visuel** (A « feuille de match » / B brume bleue / C talon-ticket — A retenue, v2 affinée validée sur desktop/empilement/mobile 390/sombre). Tests : `__tests__/resultsToRecord.test.ts` (6), `__tests__/ResultsToRecord.test.tsx` (8). Vérifié CDP clair+sombre, 1280 + 390. Spec & plan : `docs/superpowers/{specs,plans}/2026-07-16-resultat-a-saisir-feuille-de-match*`.
+> **Évolution (2026-07-16) — carte « Résultat à saisir » en feuille de match :** le prompt personnel (`components/match/ResultsToRecord.tsx`, monté sur Club-house + `/parties` ×2 + `/me/matches`) passe d'une ligne générique (tuile trophée + bouton) à une **carte « feuille de match »** : kicker petites capitales + **chip Compétitive/Amicale** (réutilise le `Chip` partagé, `tone="accent"`/`tone="line"` — **mêmes tons que le badge d'`OpenMatchCard`**, lisibles dans les 2 thèmes), **deux rangées d'équipe face à face** (paires d'avatars chevauchés `colorForSeed`, noms joints par « & », ellipsis) séparées par un **« VS » à filets**, **3 cases de sets vides en pointillés** (la 3ᵉ estompée — 3ᵉ set optionnel ; décoratives, non cliquables, `aria-hidden`), et **footer teinté `surface2`** (terrain · date en `fontMono` + CTA pill accent). **Variante compacte** sous 560 px (`useIsDesktop(560)`) : avatars 28, noms abrégés « J. Dupont » (helper `abbrevName`), label « SETS » masqué, CTA « Saisir ». **100 % frontend, aucune migration, aucun changement backend** (`listToRecord` garantit déjà le 2v2 avec `team`/`slot` concrets via `effectiveTeams`) ; fetch, wiring `MatchResultModal` (`initialTeams`/`locked`/`competitive`) et surfaces de montage **inchangés**. Helpers purs testés `frontend/lib/resultsToRecord.ts` (`abbrevName`, `teamRows` — ordre par slot, `team` inattendu versé dans la rangée la moins remplie). Direction retenue par Eric sur **3 maquettes comparées dans le companion visuel** (A « feuille de match » / B brume bleue / C talon-ticket — A retenue, v2 affinée validée sur desktop/empilement/mobile 390/sombre). Tests : `__tests__/resultsToRecord.test.ts` (7), `__tests__/ResultsToRecord.test.tsx` (8). Vérifié CDP clair+sombre, 1280 + 390. Spec & plan : `docs/superpowers/{specs,plans}/2026-07-16-resultat-a-saisir-feuille-de-match*`.
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add CLAUDE.md
-git commit -m "docs: carte Resultat a saisir en feuille de match"
+git commit -m "docs: carte Resultat a saisir en feuille de match" -- CLAUDE.md
 ```
 
 ---
 
 ## Definition of Done
 
-- [ ] `node node_modules/jest/bin/jest.js __tests__/resultsToRecord.test.ts __tests__/ResultsToRecord.test.tsx __tests__/OpenMatches.test.tsx` : tout vert (6 + 8 + suite OpenMatches).
+- [ ] `node node_modules/jest/bin/jest.js __tests__/resultsToRecord.test.ts __tests__/ResultsToRecord.test.tsx __tests__/OpenMatches.test.tsx` : tout vert (7 + 8 + suite OpenMatches).
 - [ ] `node node_modules/typescript/bin/tsc --noEmit` : aucune erreur sur `ResultsToRecord.tsx` / `resultsToRecord.ts`.
 - [ ] Vérification visuelle CDP passée sur les 4 combinaisons (clair/sombre × 1280/390), sans débordement horizontal.
 - [ ] `CLAUDE.md` documente l'évolution.
