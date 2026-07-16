@@ -401,6 +401,10 @@ export const api = {
   adminUpdateClubSport: (clubId: string, clubSportId: string, durationsMin: number[], token: string) =>
     request<AdminClubSport>(`/api/clubs/${clubId}/admin/sports/${clubSportId}`, { method: 'PATCH', body: JSON.stringify({ durationsMin }) }, token),
 
+  // Enregistrement différé (onglet Sports de /admin/settings) : `items` = uniquement les lignes modifiées.
+  adminApplySportsBatch: (clubId: string, items: SportsBatchItem[], token: string) =>
+    request<AdminClubSport[]>(`/api/clubs/${clubId}/admin/sports`, { method: 'PUT', body: JSON.stringify({ items }) }, token),
+
   adminGetResources: (clubId: string, token: string) =>
     request<AdminResource[]>(`/api/clubs/${clubId}/admin/resources`, {}, token),
 
@@ -1744,6 +1748,12 @@ export interface AdminClubSport {
   slotStepMin: number | null;
   durationsMin: number[];
   sport: { id: string; key: string; name: string; resourceNoun: string; defaultDurationsMin: number[]; surfaces: string[]; hasLighting: boolean };
+}
+
+/** Ligne de lot pour PUT /admin/sports — un sport ajouté ou dont les durées ont changé. */
+export interface SportsBatchItem {
+  sportId: string;
+  durationsMin: number[];
 }
 
 export interface AdminResource {
