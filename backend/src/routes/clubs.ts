@@ -100,6 +100,12 @@ const ERROR_STATUS: Record<string, number> = {
   ALERT_LIMIT_REACHED:      409,
   ALERT_WINDOW_INVALID:     400,
   ALERT_LEVEL_INVALID:      400,
+  NOT_A_COACH:           403,
+  LESSON_NOT_YOURS:      403,
+  LESSON_NOT_FOUND:      404,
+  ENROLLMENT_LOCKED:     409,
+  ENROLLMENT_NOT_FOUND:  404,
+  ALREADY_ENROLLED:      409,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -268,6 +274,52 @@ router.get('/:slug/events', async (req, res, next) => {
 router.get('/:slug/lessons', async (req, res, next) => {
   try { res.json(await lessonService.listPublicByClubSlug(asString(req.params.slug))); }
   catch (err) { handleError(err, res, next); }
+});
+
+// --- Espace coach : le coach connecté voit et gère SES cours (gate = ligne Coach active, PAS un rôle) ---
+
+// Signal léger pour l'entrée de menu (jamais 403 : ne bruite pas le menu).
+router.get('/:slug/me/coach', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') return void res.json({ isCoach: false });
+    const coach = await lessonService.resolveCoach(club.id, req.user!.id);
+    res.json({ isCoach: coach != null });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Cours du coach (?scope=upcoming|past). 403 NOT_A_COACH si pas de ligne coach active.
+// ensureActiveMembership : le coach devient membre actif (idempotent) → le picker de membres marche.
+router.get('/:slug/me/coach/lessons', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    const coach = await lessonService.resolveCoach(clubId, req.user!.id);
+    if (!coach) throw new Error('NOT_A_COACH');
+    const scope = asString(req.query.scope) === 'past' ? 'past' : 'upcoming';
+    res.json(await lessonService.listCoachLessons(clubId, coach.id, scope));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Inscription d'un élève par le coach (sur SON cours).
+router.post('/:slug/me/coach/lessons/:lessonId/students', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    const coach = await lessonService.resolveCoach(clubId, req.user!.id);
+    if (!coach) throw new Error('NOT_A_COACH');
+    const userId = asString(req.body?.userId);
+    if (!userId) throw new Error('VALIDATION_ERROR');
+    res.status(201).json(await lessonService.coachEnrollStudent(clubId, coach.id, asString(req.params.lessonId), userId));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retrait d'un élève par le coach (sur SON cours).
+router.delete('/:slug/me/coach/lessons/:lessonId/students/:enrollId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    const coach = await lessonService.resolveCoach(clubId, req.user!.id);
+    if (!coach) throw new Error('NOT_A_COACH');
+    res.json(await lessonService.coachRemoveStudent(clubId, coach.id, asString(req.params.lessonId), asString(req.params.enrollId)));
+  } catch (err) { handleError(err, res, next); }
 });
 
 // FAQ publique : socle Palova interpolé + items publiés du club.
