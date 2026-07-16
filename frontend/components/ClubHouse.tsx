@@ -126,6 +126,9 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '30px 20px 0' }}>{node}</div>;
 
   const sections: Record<string, React.ReactNode> = {
+    // Kiosque « À la une » : rendu dès que la section est visible — il porte lui-même son
+    // repli (« brume bleue ») quand il n'y a aucune annonce, et gère son propre bord.
+    kiosk: <AnnouncementKiosk key="kiosk" clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />,
     clubCard: showClubCard && presentation && (
       <div>
         <SectionHeader title="Le club" action={{ label: 'Découvrir →', href: '/club' }} />
@@ -165,13 +168,17 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
   return (
     <>
-      <AnnouncementKiosk clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />
-
       {club.levelSystemEnabled !== false && (
         <ResultsToRecord token={token} clubSlug={club.slug} />
       )}
 
-      {order.map((k) => (k === 'sponsors' ? sections[k] : wrap(k, sections[k])))}
+      {/* Kiosque et partenaires portent leur propre bord → jamais passés à wrap().
+          Le kiosque n'a besoin d'un espacement que s'il n'est plus en tête de page. */}
+      {order.map((k, i) => {
+        if (k === 'sponsors') return sections[k];
+        if (k === 'kiosk') return <div key="kiosk" style={i > 0 ? { paddingTop: 30 } : undefined}>{sections[k]}</div>;
+        return wrap(k, sections[k]);
+      })}
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>

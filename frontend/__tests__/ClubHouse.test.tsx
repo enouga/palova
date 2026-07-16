@@ -158,6 +158,40 @@ describe('ClubHouse', () => {
     expect(ids.indexOf('sec-top')).toBeLessThan(ids.indexOf('sec-offers'));
   });
 
+  it('kiosque : par défaut (config null) rendu en tête, avant les sections', async () => {
+    fullSections();
+    wrapWith(clubWith(null));
+    await waitFor(() => expect(screen.getByTestId('sec-matches')).toBeInTheDocument());
+    const kiosk = screen.getByTestId('clubhouse-kiosk');
+    const matches = screen.getByTestId('sec-matches');
+    // eslint-disable-next-line no-bitwise
+    expect(kiosk.compareDocumentPosition(matches) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('kiosque : déplacé après « Ça joue bientôt » → rendu à sa position', async () => {
+    fullSections();
+    wrapWith(clubWith([
+      { key: 'matches', visible: true }, { key: 'kiosk', visible: true }, { key: 'agenda', visible: true },
+      { key: 'top', visible: true }, { key: 'offers', visible: true }, { key: 'clubCard', visible: true },
+      { key: 'sponsors', visible: true },
+    ]));
+    await waitFor(() => expect(screen.getByTestId('sec-matches')).toBeInTheDocument());
+    const matches = screen.getByTestId('sec-matches');
+    const kiosk = screen.getByTestId('clubhouse-kiosk');
+    // eslint-disable-next-line no-bitwise
+    expect(matches.compareDocumentPosition(kiosk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('kiosque : section masquée → pas rendu du tout (même avec des annonces)', async () => {
+    mocked.getClubAnnouncements.mockResolvedValue([regular] as never);
+    wrapWith(clubWith([
+      { key: 'kiosk', visible: false },
+      { key: 'matches', visible: true },
+    ]));
+    await waitFor(() => expect(mocked.getClubAnnouncements).toHaveBeenCalled());
+    expect(screen.queryByTestId('clubhouse-kiosk')).not.toBeInTheDocument();
+  });
+
   it('membre : carte « Vos réservations » (tuile-date, Tout voir), clic sur une ligne → dialog d annulation', async () => {
     mockAuth = { token: 't', clubId: null, ready: true };
     mocked.getMyReservations.mockResolvedValue([{
