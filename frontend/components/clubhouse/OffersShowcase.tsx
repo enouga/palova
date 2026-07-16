@@ -5,7 +5,7 @@ import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTempl
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
 import { sportTag } from '@/lib/sportBadge';
-import { ACCENTS } from '@/lib/theme';
+import { offerTint } from '@/lib/adminOffers';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 
@@ -58,16 +58,11 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   const openDetails = (t: Target) => { setStage('details'); setTarget(t); };
   const close = () => setTarget(null);
 
-  // Chaque carte du rail prend une teinte de la palette (cycle par position) : lavis en
-  // tête, chip de type et CTA assortis — de la couleur sans casser le fond clair.
-  const OFFER_TINTS = [ACCENTS.blue, ACCENTS.apricot, ACCENTS.emerald, ACCENTS.violet, ACCENTS.cyan];
-
   // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
   const OfferCard = ({ name, price, suffix, lines, kindLabel, tint, onOpen }: {
     name: string; price: string; suffix: string | null; lines: string[]; kindLabel: string; tint: string; onOpen: () => void;
   }) => (
     <div className="of-card" style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', overflow: 'hidden' }}>
-      <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, background: `linear-gradient(180deg, ${tint}${th.mode === 'floodlit' ? '26' : '33'}, transparent)`, pointerEvents: 'none' }} />
       <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: tint }} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${tint}26` : `${tint}40`, color: th.mode === 'floodlit' ? tint : th.ink }}>
@@ -110,15 +105,15 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
       <SectionHeader title="Abonnements & offres" />
       <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
       <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory' }}>
-        {plans.map((p, i) => (
+        {plans.map((p) => (
           <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
-            kindLabel="Abonnement" tint={OFFER_TINTS[i % OFFER_TINTS.length]}
+            kindLabel="Abonnement" tint={offerTint('SUBSCRIPTION')}
             lines={planBenefits(p, club)} onOpen={() => openDetails({ kind: 'plan', plan: p })} />
         ))}
-        {offers.packages.map((t, i) => (
+        {offers.packages.map((t) => (
           <OfferCard key={t.id} name={t.name} price={euros(t.price)} suffix={null}
             kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
-            tint={OFFER_TINTS[(plans.length + i) % OFFER_TINTS.length]}
+            tint={offerTint(t.kind)}
             lines={packageBenefits(t, club)}
             onOpen={() => openDetails({ kind: 'package', tpl: t })} />
         ))}
