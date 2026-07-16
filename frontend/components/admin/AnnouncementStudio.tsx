@@ -28,7 +28,11 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Annonce créée mais dont l'upload d'affiche a échoué : le retry doit METTRE À JOUR
+  // cette annonce, jamais en créer une seconde.
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const effectiveId = editId ?? createdId;
 
   // Aperçu local du fichier choisi (jsdom/vieux navigateurs sans createObjectURL → repli).
   useEffect(() => {
@@ -66,12 +70,12 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
       validUntil: form.validUntil || null,
       pinned: form.pinned,
       isPublished: form.isPublished,
-      ...(editId && removeImage && !imageFile ? { imageUrl: null } : {}),
+      ...(effectiveId && removeImage && !imageFile ? { imageUrl: null } : {}),
     };
     let saved: Announcement;
     try {
-      saved = editId
-        ? await api.adminUpdateAnnouncement(clubId, editId, body, token)
+      saved = effectiveId
+        ? await api.adminUpdateAnnouncement(clubId, effectiveId, body, token)
         : await api.adminCreateAnnouncement(clubId, body, token);
     } catch (e) {
       setFormError((e as Error).message);
@@ -83,7 +87,9 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
       onSaved();
       onClose();
     } catch (e) {
-      // L'annonce est enregistrée : on rafraîchit la liste et on garde la fenêtre ouverte.
+      // L'annonce est enregistrée : on garde la fenêtre ouverte et on mémorise son id
+      // pour que le retry mette à jour au lieu de créer un doublon.
+      setCreatedId(saved.id);
       setFormError(`L'annonce est enregistrée, mais l'envoi de l'image a échoué (${(e as Error).message}). Réessayez.`);
       onSaved();
     } finally {
@@ -134,6 +140,10 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
               Affiche (image)
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Affiche (image)" style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f) { setImageFile(f); setRemoveImage(false); } }} />
+              {/* Repli quand l'aperçu n'est pas disponible (jsdom / pas de createObjectURL). */}
+              {!shownImage && imageFile && (
+                <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, fontWeight: 600 }}>{imageFile.name}</span>
+              )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => fileInputRef.current?.click()} style={miniBtn}>{hasImage ? "Changer l'image" : 'Ajouter une image'}</button>
                 {hasImage && <button type="button" onClick={clearImage} style={{ ...miniBtn, color: '#ff7a4d' }}>Retirer l&apos;image</button>}
@@ -151,7 +161,7 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
             </div>
             {formError && <div role="alert" style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: '#ff7a4d' }}>{formError}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <Btn onClick={submit} icon={editId ? 'check' : 'plus'} disabled={saving}>{saving ? '…' : editId ? 'Enregistrer' : 'Publier'}</Btn>
+              <Btn onClick={submit} icon={effectiveId ? 'check' : 'plus'} disabled={saving}>{saving ? '…' : effectiveId ? 'Enregistrer' : 'Publier'}</Btn>
               <Btn variant="ghost" onClick={onClose} disabled={saving}>Annuler</Btn>
             </div>
           </div>
