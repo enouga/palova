@@ -239,7 +239,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Juste le logo (ou une pastille initiale à défaut) — le nom en toutes lettres ne
               tenait de toute façon pas dans les 244px de la sidebar ; title = nom complet au survol. */}
           {club.logoUrl
-            ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} title={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+            ? <span title={club.name} style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              </span>
             : (
               <span role="img" aria-label={club.name} title={club.name} style={{
                 width: 34, height: 34, borderRadius: 9, flexShrink: 0,

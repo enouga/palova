@@ -51,7 +51,9 @@ export async function generateMetadata(): Promise<Metadata> {
     description: 'Réservez votre terrain de padel en quelques secondes',
     ...(slug ? { alternates: { canonical: `https://${slug}.${CANONICAL_ROOT}${path}` } } : {}),
     icons: {
-      icon: '/favicon.svg',
+      // Favicon d'onglet par club (icône transparente générée, repli Palova côté backend) ;
+      // identité Palova sur l'hôte plateforme.
+      icon: slug ? `${API_URL}/api/clubs/${slug}/icon/192.png` : '/favicon.svg',
       apple: slug ? `${API_URL}/api/clubs/${slug}/icon/apple-180.png` : '/apple-touch-icon.png',
     },
   };

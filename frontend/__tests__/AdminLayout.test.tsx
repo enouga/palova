@@ -18,6 +18,7 @@ jest.mock('../lib/useAuth', () => ({
 // Objets club STABLES (identité préservée entre les rendus, cf. deps du useEffect des droits).
 const clubOn = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null };
 const clubOff = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, levelSystemEnabled: false };
+const clubWithLogo = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: '/uploads/logos/demo.png' };
 const mockClubCtx: { slug: string | null; club: Record<string, unknown> | null; loading: boolean } =
   { slug: 'demo', club: clubOn as Record<string, unknown>, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubCtx }));
@@ -78,6 +79,13 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Se reconnecter')).toBeInTheDocument();
     expect(screen.queryByText('Chargement…')).not.toBeInTheDocument();
     jest.useRealTimers();
+  });
+
+  it('le logo de la sidebar est en contain sur tuile blanche (pas rogné)', async () => {
+    mockClubCtx.club = clubWithLogo;
+    await wrap();
+    const img = screen.getByAltText('Club Démo') as HTMLImageElement;
+    expect(img.style.objectFit).toBe('contain');
   });
 
   it("hôte plateforme (slug null) : redirige vers l'accueil au lieu de « Chargement… » infini", async () => {
