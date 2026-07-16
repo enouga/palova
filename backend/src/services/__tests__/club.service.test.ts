@@ -512,6 +512,71 @@ describe('ClubService.addClubSport — gate published', () => {
   });
 });
 
+describe('ClubService.applySportsBatch', () => {
+  let svc: ClubService;
+  beforeEach(() => {
+    svc = new ClubService();
+    prismaMock.$transaction.mockImplementation(((cb: any) => cb(prismaMock)) as any);
+  });
+
+  it('crée un nouveau sport et met à jour un sport déjà activé dans le même lot', async () => {
+    prismaMock.clubSport.findMany
+      .mockResolvedValueOnce([{ sportId: 'padel' }] as any) // sports déjà activés
+      .mockResolvedValueOnce([{ id: 'cs-padel', sport: { id: 'padel' } }] as any); // liste finale renvoyée
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'tennis', published: true } as any);
+    prismaMock.clubSport.create.mockResolvedValue({} as any);
+    prismaMock.clubSport.update.mockResolvedValue({} as any);
+
+    await svc.applySportsBatch('club-1', [
+      { sportId: 'tennis', durationsMin: [] },
+      { sportId: 'padel', durationsMin: [60, 90] },
+    ]);
+
+    expect(prismaMock.clubSport.create).toHaveBeenCalledWith({ data: { clubId: 'club-1', sportId: 'tennis' } });
+    expect(prismaMock.clubSport.update).toHaveBeenCalledWith({
+      where: { clubId_sportId: { clubId: 'club-1', sportId: 'padel' } },
+      data: { durationsMin: [60, 90] },
+    });
+  });
+
+  it('refuse un sport non publié (SPORT_NOT_FOUND) sans rien appliquer', async () => {
+    prismaMock.clubSport.findMany.mockResolvedValueOnce([] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'tennis', published: false } as any);
+
+    await expect(svc.applySportsBatch('club-1', [{ sportId: 'tennis', durationsMin: [] }]))
+      .rejects.toThrow('SPORT_NOT_FOUND');
+    expect(prismaMock.clubSport.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse des durées invalides (VALIDATION_ERROR) sans rien appliquer', async () => {
+    prismaMock.clubSport.findMany.mockResolvedValueOnce([{ sportId: 'padel' }] as any);
+
+    await expect(svc.applySportsBatch('club-1', [{ sportId: 'padel', durationsMin: [10] }]))
+      .rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubSport.update).not.toHaveBeenCalled();
+  });
+
+  it('refuse de vider les durées d\'un sport déjà activé (VALIDATION_ERROR)', async () => {
+    prismaMock.clubSport.findMany.mockResolvedValueOnce([{ sportId: 'padel' }] as any);
+
+    await expect(svc.applySportsBatch('club-1', [{ sportId: 'padel', durationsMin: [] }]))
+      .rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubSport.update).not.toHaveBeenCalled();
+  });
+
+  it('annule tout le lot si le DEUXIÈME item est invalide (rien appliqué, même pas le premier)', async () => {
+    prismaMock.clubSport.findMany.mockResolvedValueOnce([{ sportId: 'padel' }] as any);
+    prismaMock.sport.findUnique.mockResolvedValue({ id: 'tennis', published: true } as any);
+
+    await expect(svc.applySportsBatch('club-1', [
+      { sportId: 'tennis', durationsMin: [] },
+      { sportId: 'padel', durationsMin: [10] }, // invalide
+    ])).rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubSport.create).not.toHaveBeenCalled();
+    expect(prismaMock.clubSport.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('ClubService — updateClub heures d\'ouverture', () => {
   let svc: ClubService;
   beforeEach(() => { svc = new ClubService(); });

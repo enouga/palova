@@ -97,6 +97,12 @@ export function slugify(input: string): string {
 /** Libellés de sous-domaine interdits comme slug de club (hôtes plateforme / techniques). */
 export const RESERVED_SLUGS = new Set(['www', 'app', 'api', 'superadmin']);
 
+/** Select partagé par listClubSports et applySportsBatch (même forme de sortie). */
+const CLUB_SPORT_SELECT = {
+  id: true, slotStepMin: true, durationsMin: true,
+  sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true, surfaces: true, hasLighting: true } },
+};
+
 interface CreateClubParams {
   ownerId: string;
   name: string;
@@ -864,13 +870,55 @@ export class ClubService {
 
   /** Sports activés par un club (avec leurs ressources, y compris inactives). */
   async listClubSports(clubId: string) {
-    return prisma.clubSport.findMany({
-      where: { clubId },
-      select: {
-        id: true, slotStepMin: true, durationsMin: true,
-        sport: { select: { id: true, key: true, name: true, resourceNoun: true, defaultDurationsMin: true, surfaces: true, hasLighting: true } },
-      },
-      orderBy: { createdAt: 'asc' },
+    return prisma.clubSport.findMany({ where: { clubId }, select: CLUB_SPORT_SELECT, orderBy: { createdAt: 'asc' } });
+  }
+
+  /**
+   * Applique un lot de changements Sports (ajout de sport + durées proposées) en une seule
+   * transaction — tout ou rien. `items` = uniquement les lignes qui diffèrent de la baseline
+   * (le diff est calculé côté front, cf. `buildSportsBatchBody`). Enregistrement différé de
+   * l'onglet Sports de /admin/settings (avant : chaque action était persistée immédiatement).
+   */
+  async applySportsBatch(clubId: string, items: { sportId: string; durationsMin: number[] }[]) {
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.clubSport.findMany({ where: { clubId }, select: { sportId: true } });
+      const existingIds = new Set(existing.map((e) => e.sportId));
+
+      // 1) Valider TOUT le lot avant d'appliquer quoi que ce soit (tout ou rien).
+      const plan: { sportId: string; already: boolean; durationsMin: number[] }[] = [];
+      for (const item of items) {
+        const already = existingIds.has(item.sportId);
+        let valid: number[] = [];
+        if (item.durationsMin.length > 0) {
+          valid = Array.from(new Set(item.durationsMin))
+            .filter((d) => Number.isInteger(d) && d >= 15 && d <= 240 && d % 15 === 0)
+            .sort((a, b) => a - b);
+          if (valid.length === 0) throw new Error('VALIDATION_ERROR');
+        } else if (already) {
+          throw new Error('VALIDATION_ERROR'); // un sport déjà activé garde au moins une durée
+        }
+        if (!already) {
+          const sport = await tx.sport.findUnique({ where: { id: item.sportId }, select: { id: true, published: true } });
+          if (!sport || !sport.published) throw new Error('SPORT_NOT_FOUND');
+        }
+        plan.push({ sportId: item.sportId, already, durationsMin: valid });
+      }
+
+      // 2) Appliquer — le lot entier est déjà validé.
+      for (const p of plan) {
+        if (p.already) {
+          await tx.clubSport.update({
+            where: { clubId_sportId: { clubId, sportId: p.sportId } },
+            data: { durationsMin: p.durationsMin },
+          });
+        } else {
+          await tx.clubSport.create({
+            data: { clubId, sportId: p.sportId, ...(p.durationsMin.length ? { durationsMin: p.durationsMin } : {}) },
+          });
+        }
+      }
+
+      return tx.clubSport.findMany({ where: { clubId }, select: CLUB_SPORT_SELECT, orderBy: { createdAt: 'asc' } });
     });
   }
 
