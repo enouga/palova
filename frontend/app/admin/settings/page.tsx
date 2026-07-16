@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, ClubAdminDetail } from '@/lib/api';
+import { api, ClubAdminDetail, Sport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -8,6 +8,11 @@ import { PillTabs } from '@/components/ui/atoms';
 import {
   SETTINGS_TABS, SettingsTabKey, parseTab, buildUpdateBody, isDirty,
 } from '@/lib/adminSettings';
+import {
+  SportDraftRow, sportsDraftFrom, addSportToDraft, toggleDurationInDraft, sportsDiff, sportsDirty,
+  sameDurations,
+} from '@/lib/adminSports';
+import { effectiveDurations } from '@/lib/duration';
 import { SetClubField } from '@/components/admin/settings/shared';
 import { SaveBar } from '@/components/admin/settings/SaveBar';
 import { SettingsIdentity } from '@/components/admin/settings/SettingsIdentity';
@@ -29,6 +34,10 @@ export default function AdminSettingsPage() {
   // Deux états : baseline serveur + brouillon édité. Le brouillon est dirty quand il diffère.
   const [server, setServer] = useState<ClubAdminDetail | null>(null);
   const [draft, setDraft] = useState<ClubAdminDetail | null>(null);
+  // Même modèle pour l'onglet Sports, sur son propre modèle (ClubSport) : baseline + brouillon.
+  const [sportsServer, setSportsServer] = useState<SportDraftRow[]>([]);
+  const [sportsDraft, setSportsDraft] = useState<SportDraftRow[]>([]);
+  const [catalog, setCatalog] = useState<Sport[]>([]);
   const [saving, setSaving] = useState(false);
   // `error` = chargement/upload (bandeau haut) ; `saveError` = échec d'enregistrement (barre sticky).
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +53,17 @@ export default function AdminSettingsPage() {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const c = await api.adminGetClub(clubId, token);
+      const [c, enabled, cat] = await Promise.all([
+        api.adminGetClub(clubId, token),
+        api.adminGetSports(clubId, token),
+        api.getSports(),
+      ]);
       setServer(c);
       setDraft(c);
+      const rows = sportsDraftFrom(enabled);
+      setSportsServer(rows);
+      setSportsDraft(rows);
+      setCatalog(cat);
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId]);
 
@@ -62,13 +79,19 @@ export default function AdminSettingsPage() {
   };
 
   // Éditer efface un éventuel échec d'enregistrement et le flash de succès.
+  const touch = () => { setSaveError(null); setJustSaved(false); };
   const set: SetClubField = (k, v) => {
-    setSaveError(null);
-    setJustSaved(false);
+    touch();
     setDraft((c) => (c ? { ...c, [k]: v } : c));
   };
+  const addSport = (s: Sport) => { touch(); setSportsDraft((d) => addSportToDraft(d, s)); };
+  const toggleSportDuration = (sportId: string, min: number) => {
+    touch();
+    setSportsDraft((d) => toggleDurationInDraft(d, sportId, min));
+  };
 
-  const dirty = !!server && !!draft && isDirty(server, draft);
+  const clubDirty = !!server && !!draft && isDirty(server, draft);
+  const dirty = clubDirty || sportsDirty(sportsServer, sportsDraft);
 
   // Le flash « Enregistré ✓ » s'efface tout seul après 2,5 s.
   useEffect(() => {
@@ -110,20 +133,55 @@ export default function AdminSettingsPage() {
     finally { setUploading(false); }
   };
 
+  // Recharge la baseline Sports depuis le serveur (les créations rendent leur id).
+  const reloadSports = useCallback(async () => {
+    if (!token || !clubId) return;
+    const rows = sportsDraftFrom(await api.adminGetSports(clubId, token));
+    setSportsServer(rows);
+    setSportsDraft(rows);
+  }, [token, clubId]);
+
+  // Sports = entités distinctes : on rejoue le diff en requêtes. Un sport ajouté naît
+  // avec les durées par défaut de son sport → on ne le PATCH que si le club a choisi autre chose.
+  const flushSports = async () => {
+    if (!token || !clubId) return;
+    const { toAdd, toUpdate } = sportsDiff(sportsServer, sportsDraft);
+    for (const a of toAdd) {
+      const created = await api.adminAddSport(clubId, a.sportId, token);
+      const born = effectiveDurations(created.durationsMin, created.sport.defaultDurationsMin);
+      if (!sameDurations(born, a.durationsMin)) {
+        await api.adminUpdateClubSport(clubId, created.id, a.durationsMin, token);
+      }
+    }
+    for (const u of toUpdate) {
+      await api.adminUpdateClubSport(clubId, u.clubSportId, u.durationsMin, token);
+    }
+  };
+
   const save = async () => {
-    if (!token || !clubId || !draft) return;
+    if (!token || !clubId || !draft || !server) return;
     setSaving(true);
     try {
       setSaveError(null);
-      await api.adminUpdateClub(clubId, buildUpdateBody(draft), token);
-      setServer(draft);           // le brouillon devient la nouvelle baseline → barre passe en « Enregistré ✓ »
+      if (clubDirty) {
+        await api.adminUpdateClub(clubId, buildUpdateBody(draft), token);
+        setServer(draft);         // le brouillon devient la nouvelle baseline → barre passe en « Enregistré ✓ »
+      }
+      if (sportsDirty(sportsServer, sportsDraft)) {
+        await flushSports();
+        await reloadSports();     // baseline Sports = ce que le serveur a vraiment retenu
+      }
       setJustSaved(true);
       refreshClub();              // rafraîchit le club partagé (réservation, tarifs…)
-    } catch (e) { setSaveError((e as Error).message); }
+    } catch (e) {
+      setSaveError((e as Error).message);
+      // Un flush partiel a pu créer des sports : on resynchronise pour ne pas les recréer au réessai.
+      await reloadSports().catch(() => {});
+    }
     finally { setSaving(false); }
   };
 
-  const cancel = () => { setDraft(server); setSaveError(null); setJustSaved(false); };
+  const cancel = () => { setDraft(server); setSportsDraft(sportsServer); setSaveError(null); setJustSaved(false); };
 
   if (!draft) {
     // Pas encore de brouillon : chargement en cours, ou échec de chargement (on montre l'erreur).
@@ -146,7 +204,9 @@ export default function AdminSettingsPage() {
         <SettingsIdentity club={draft} set={set} uploading={uploading}
           logoInputRef={logoInputRef} coverInputRef={coverInputRef} pickLogo={pickLogo} pickCover={pickCover} />
       )}
-      {tab === 'sports' && <SettingsSports />}
+      {tab === 'sports' && (
+        <SettingsSports rows={sportsDraft} catalog={catalog} onAdd={addSport} onToggleDuration={toggleSportDuration} />
+      )}
       {tab === 'reservation' && <SettingsBooking club={draft} set={set} />}
       {tab === 'tarifs' && <SettingsPricing club={draft} set={set} />}
       {tab === 'caisse' && <SettingsCollect club={draft} set={set} />}
