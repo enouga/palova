@@ -29,6 +29,7 @@ export interface PushPayload {
   body: string;
   url?: string | null;
   icon?: string | null;
+  badge?: string | null;
 }
 
 /**
@@ -43,6 +44,21 @@ export async function resolvePushIcon(clubId?: string | null): Promise<string | 
     return absoluteAsset(`/api/clubs/${club.slug}/icon/192.png`);
   } catch {
     return platformAsset('/icon-192.png');
+  }
+}
+
+/**
+ * Badge Android (silhouette monochrome dans la barre d'état) : variante badge-96 du club
+ * (repli Palova géré par la route), ou asset Palova hors contexte club.
+ */
+export async function resolvePushBadge(clubId?: string | null): Promise<string | null> {
+  if (!clubId) return platformAsset('/icon-badge-96.png');
+  try {
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { slug: true } });
+    if (!club) return platformAsset('/icon-badge-96.png');
+    return absoluteAsset(`/api/clubs/${club.slug}/icon/badge-96.png`);
+  } catch {
+    return platformAsset('/icon-badge-96.png');
   }
 }
 

@@ -17,7 +17,7 @@ jest.mock('web-push', () => ({
 }));
 
 import webpush from 'web-push';
-import { deliverPush, resolvePushIcon, PushSub, PushPayload } from '../push';
+import { deliverPush, resolvePushIcon, resolvePushBadge, PushSub, PushPayload } from '../push';
 
 const mockSendNotification = webpush.sendNotification as jest.Mock;
 
@@ -99,5 +99,15 @@ describe('resolvePushIcon', () => {
     prismaMock.club.findUnique.mockRejectedValue(new Error('DB down'));
 
     await expect(resolvePushIcon('club-demo')).resolves.toBe('http://localhost:3000/icon-192.png');
+  });
+});
+
+describe('resolvePushBadge', () => {
+  it('sans clubId → asset Palova', async () => {
+    expect(await resolvePushBadge(null)).toContain('/icon-badge-96.png');
+  });
+  it('avec clubId → route badge-96 du club', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ slug: 'demo' } as any);
+    expect(await resolvePushBadge('c1')).toContain('/api/clubs/demo/icon/badge-96.png');
   });
 });
