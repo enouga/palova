@@ -3,7 +3,7 @@ import { prisma } from '../../db/prisma';
 import { sendMail } from '../../email/mailer';
 import { SSEService } from '../sse.service';
 import { resolveChannels } from './preferences';
-import { deliverPush, PushSub } from './push';
+import { deliverPush, resolvePushIcon, PushSub } from './push';
 
 export interface DispatchEmail { to: string; subject: string; html: string; text: string; }
 
@@ -78,7 +78,8 @@ export async function dispatch(input: DispatchInput): Promise<void> {
 
   if (channels.push && subs.length) {
     try {
-      await deliverPush(subs, { title: input.title, body: input.body, url: input.url ?? null });
+      const icon = await resolvePushIcon(input.clubId);
+      await deliverPush(subs, { title: input.title, body: input.body, url: input.url ?? null, icon });
     } catch (e) {
       console.error('[notif:push]', (e as Error).message);
     }

@@ -3,7 +3,7 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch (e) {}
   const title = data.title || 'Palova';
   event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || '', data: { url: data.url || '/' }, icon: '/icon-192.png', badge: '/icon-192.png',
+    body: data.body || '', data: { url: data.url || '/' }, icon: data.icon || '/icon-192.png', badge: '/icon-192.png',
   }));
 });
 self.addEventListener('notificationclick', (event) => {
