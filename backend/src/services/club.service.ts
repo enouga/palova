@@ -54,13 +54,16 @@ export function normalizeQuickPaymentMethods(input: unknown): string[] {
   return out;
 }
 
-/** Clés de sections du Club-house configurables par le club (ordre + visibilité). */
-const CLUB_HOUSE_SECTION_KEYS = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'] as const;
+/** Clés de sections du Club-house configurables par le club (ordre + visibilité).
+ *  `kiosk` = le kiosque « À la une » (les annonces), repositionnable comme les autres. */
+const CLUB_HOUSE_SECTION_KEYS = ['kiosk', 'matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'] as const;
 
 /** Valide/normalise la config des sections du Club-house. null/invalide → DbNull (= ordre
  *  adaptatif par défaut). Clé inconnue rejetée, doublon ignoré (1re occurrence gagne),
- *  clés connues manquantes complétées en fin (visibles) → la config stockée est toujours
- *  complète. Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
+ *  clés connues manquantes complétées en fin (visibles) — SAUF `kiosk`, ajouté EN TÊTE
+ *  quand il manque, pour que les clubs personnalisés avant l'arrivée de la clé gardent le
+ *  kiosque en haut. La config stockée est toujours complète.
+ *  Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
 export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   if (!Array.isArray(input)) return Prisma.DbNull;
   const allowed = new Set<string>(CLUB_HOUSE_SECTION_KEYS);
@@ -73,6 +76,8 @@ export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValu
     out.push({ key, visible: (e as { visible?: unknown }).visible !== false });
   }
   if (out.length === 0) return Prisma.DbNull;
+  // Kiosque absent (config antérieure à la clé) → en tête, visible : l'ordre historique est préservé.
+  if (!seen.has('kiosk')) { out.unshift({ key: 'kiosk', visible: true }); seen.add('kiosk'); }
   for (const key of CLUB_HOUSE_SECTION_KEYS) if (!seen.has(key)) out.push({ key, visible: true });
   return out as unknown as Prisma.InputJsonValue;
 }

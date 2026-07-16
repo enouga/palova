@@ -827,11 +827,12 @@ describe('normalizeClubHouseSections', () => {
   const { normalizeClubHouseSections } = require('../club.service');
   const { Prisma } = require('@prisma/client');
 
-  it('garde les entrées valides dans l\'ordre fourni et complète les clés manquantes en fin (visibles)', () => {
+  it('garde l\'ordre fourni, complète les clés manquantes en fin ; kiosk absent → ajouté EN TÊTE', () => {
     expect(normalizeClubHouseSections([
       { key: 'top', visible: false },
       { key: 'matches', visible: true },
     ])).toEqual([
+      { key: 'kiosk', visible: true },
       { key: 'top', visible: false },
       { key: 'matches', visible: true },
       { key: 'agenda', visible: true },
@@ -839,6 +840,17 @@ describe('normalizeClubHouseSections', () => {
       { key: 'clubCard', visible: true },
       { key: 'sponsors', visible: true },
     ]);
+  });
+
+  it('kiosk fourni explicitement : pas dupliqué, garde sa position et sa visibilité', () => {
+    const out = normalizeClubHouseSections([
+      { key: 'matches', visible: true },
+      { key: 'kiosk', visible: false },
+    ]) as { key: string; visible: boolean }[];
+    expect(out.filter((e) => e.key === 'kiosk')).toHaveLength(1);
+    expect(out[0]).toEqual({ key: 'matches', visible: true });
+    expect(out[1]).toEqual({ key: 'kiosk', visible: false });
+    expect(out).toHaveLength(7);
   });
 
   it('rejette les clés inconnues (dont anciennes posters/announcements) et dédoublonne (première occurrence gagne)', () => {
@@ -850,12 +862,12 @@ describe('normalizeClubHouseSections', () => {
     ]) as { key: string; visible: boolean }[];
     expect(out.find((e) => e.key === 'matches')).toEqual({ key: 'matches', visible: false });
     expect(out.some((e) => e.key === 'posters')).toBe(false);
-    expect(out).toHaveLength(6);
+    expect(out).toHaveLength(7);
   });
 
   it('visible absent ou non-false → true', () => {
     const out = normalizeClubHouseSections([{ key: 'agenda' }]) as { key: string; visible: boolean }[];
-    expect(out[0]).toEqual({ key: 'agenda', visible: true });
+    expect(out.find((e) => e.key === 'agenda')).toEqual({ key: 'agenda', visible: true });
   });
 
   it('non-tableau ou rien de valide → DbNull (reset)', () => {
@@ -874,8 +886,9 @@ describe('ClubService — sections du Club-house', () => {
     prismaMock.club.update.mockResolvedValue({} as any);
     await svc.updateClub('club-1', { clubHouseSections: [{ key: 'top', visible: false }, { key: 'nope', visible: true }] } as any);
     const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
-    expect(arg.data.clubHouseSections[0]).toEqual({ key: 'top', visible: false });
-    expect(arg.data.clubHouseSections).toHaveLength(6);
+    expect(arg.data.clubHouseSections[0]).toEqual({ key: 'kiosk', visible: true }); // kiosque préfixé
+    expect(arg.data.clubHouseSections[1]).toEqual({ key: 'top', visible: false });
+    expect(arg.data.clubHouseSections).toHaveLength(7);
     expect((arg.data.clubHouseSections as any[]).some((e) => e.key === 'nope')).toBe(false);
   });
 
