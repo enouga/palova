@@ -7,7 +7,10 @@ import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { fmtLevel } from '@/lib/levelMatch';
 import { alertChipLabel } from '@/lib/matchAlerts';
 
-type KindFilter = 'all' | 'competitive' | 'friendly';
+export type KindFilter = 'all' | 'competitive' | 'friendly';
+
+const LEVEL_MIN = 1;
+const LEVEL_MAX = 8;
 
 // Chip de filtre — actif = encre pleine + coche, inactif = pill fine contourée
 // (même langage que FacetChip d'EventsFilterBar).
@@ -69,13 +72,15 @@ export function MatchesFilterBar({
   const [sliderOpen, setSliderOpen] = useState(false);
 
   const showLevelGroup = levelEnabled && authenticated;
-  const isDefaultAll = fMin === 1 && fMax === 8;
-  const isMyLevel = myLevelMin != null && myLevelMax != null && fMin === myLevelMin && fMax === myLevelMax;
+  const isMyLevel = myLevel != null && myLevelMin != null && myLevelMax != null && fMin === myLevelMin && fMax === myLevelMax;
+  const isDefaultAll = !isMyLevel && fMin === LEVEL_MIN && fMax === LEVEL_MAX;
   const isCustom = showLevelGroup && !isDefaultAll && !isMyLevel;
   const arrow = sliderOpen ? '▴' : '▾';
   const adjustLabel = isCustom ? `Niveau ${fmtLevel(fMin)}–${fmtLevel(fMax)} ${arrow}` : `Régler ${arrow}`;
 
-  const hasActiveFilter = kindFilter !== 'all' || (showLevelGroup && (fMin > 1 || fMax < 8));
+  // Le pied s'affiche pour tout connecté (showFooter ci-dessous) ; ce flag ne sert
+  // qu'à un anonyme, dont le seul filtre disponible est le type de partie.
+  const hasActiveFilter = kindFilter !== 'all';
   const showFooter = authenticated || hasActiveFilter;
 
   return (
@@ -90,7 +95,7 @@ export function MatchesFilterBar({
                   <Chip label={`À mon niveau · ${fmtLevel(myLevelMin)}–${fmtLevel(myLevelMax)}`}
                     active={isMyLevel} onClick={() => onLevelChange(myLevelMin, myLevelMax)} />
                 )}
-                <Chip label="Tous" active={isDefaultAll} onClick={() => onLevelChange(1, 8)} />
+                <Chip label="Tous" active={isDefaultAll} onClick={() => onLevelChange(LEVEL_MIN, LEVEL_MAX)} />
                 <Chip label={adjustLabel} active={isCustom} ariaExpanded={sliderOpen}
                   onClick={() => setSliderOpen((v) => !v)} />
               </div>

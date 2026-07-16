@@ -106,4 +106,15 @@ describe('MatchesFilterBar', () => {
     rerender(<ThemeProvider><MatchesFilterBar {...baseProps} authenticated={false} /></ThemeProvider>);
     expect(screen.queryByRole('button', { name: /créer une alerte/i })).not.toBeInTheDocument();
   });
+
+  it('« Tous » et « À mon niveau » ne sont jamais actifs en même temps (fourchette « mon niveau » qui couvre toute l\'échelle)', () => {
+    renderBar({ myLevel: 4.5, myLevelMin: 1, myLevelMax: 8, fMin: 1, fMax: 8 });
+    expect(screen.getByRole('button', { name: /À mon niveau/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Tous' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('affiche « 0 partie » quand le compteur est nul', () => {
+    renderBar({ resultCount: 0 });
+    expect(screen.getByText('0 partie')).toBeInTheDocument();
+  });
 });
