@@ -1,12 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, ClubAdminDetail } from '@/lib/api';
+import { api, ClubAdminDetail, AdminClubSport, Sport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { PillTabs } from '@/components/ui/atoms';
 import {
   SETTINGS_TABS, SettingsTabKey, parseTab, buildUpdateBody, isDirty,
+  SportsDraftItem, toSportsDraft, addSportDraft, toggleDurationDraft, sportsDirty, buildSportsBatchBody,
 } from '@/lib/adminSettings';
 import { SetClubField } from '@/components/admin/settings/shared';
 import { SaveBar } from '@/components/admin/settings/SaveBar';
@@ -29,6 +30,10 @@ export default function AdminSettingsPage() {
   // Deux états : baseline serveur + brouillon édité. Le brouillon est dirty quand il diffère.
   const [server, setServer] = useState<ClubAdminDetail | null>(null);
   const [draft, setDraft] = useState<ClubAdminDetail | null>(null);
+  // Sports (ClubSport) : même principe baseline/brouillon, modèle et endpoint distincts du Club.
+  const [sportsServer, setSportsServer] = useState<AdminClubSport[] | null>(null);
+  const [sportsDraft, setSportsDraft] = useState<SportsDraftItem[] | null>(null);
+  const [sportsCatalog, setSportsCatalog] = useState<Sport[]>([]);
   const [saving, setSaving] = useState(false);
   // `error` = chargement/upload (bandeau haut) ; `saveError` = échec d'enregistrement (barre sticky).
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +49,16 @@ export default function AdminSettingsPage() {
     if (!token || !clubId) return;
     try {
       setError(null);
-      const c = await api.adminGetClub(clubId, token);
+      const [c, sports, catalog] = await Promise.all([
+        api.adminGetClub(clubId, token),
+        api.adminGetSports(clubId, token),
+        api.getSports(),
+      ]);
       setServer(c);
       setDraft(c);
+      setSportsServer(sports);
+      setSportsDraft(toSportsDraft(sports));
+      setSportsCatalog(catalog);
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId]);
 
@@ -68,7 +80,23 @@ export default function AdminSettingsPage() {
     setDraft((c) => (c ? { ...c, [k]: v } : c));
   };
 
-  const dirty = !!server && !!draft && isDirty(server, draft);
+  const addSport = (sportId: string) => {
+    setSaveError(null);
+    setJustSaved(false);
+    setSportsDraft((items) => (items ? addSportDraft(items, sportId) : items));
+  };
+  const toggleSportDuration = (sportId: string, min: number) => {
+    setSaveError(null);
+    setJustSaved(false);
+    setSportsDraft((items) => {
+      if (!items) return items;
+      const sport = sportsCatalog.find((s) => s.id === sportId);
+      return toggleDurationDraft(items, sportId, sport?.defaultDurationsMin ?? [], min);
+    });
+  };
+
+  const dirty = !!server && !!draft && !!sportsServer && !!sportsDraft &&
+    (isDirty(server, draft) || sportsDirty(sportsServer, sportsDraft));
 
   // Le flash « Enregistré ✓ » s'efface tout seul après 2,5 s.
   useEffect(() => {
@@ -111,22 +139,50 @@ export default function AdminSettingsPage() {
   };
 
   const save = async () => {
-    if (!token || !clubId || !draft) return;
+    if (!token || !clubId || !server || !draft || !sportsServer || !sportsDraft) return;
     setSaving(true);
     try {
       setSaveError(null);
-      await api.adminUpdateClub(clubId, buildUpdateBody(draft), token);
-      setServer(draft);           // le brouillon devient la nouvelle baseline → barre passe en « Enregistré ✓ »
-      setJustSaved(true);
-      refreshClub();              // rafraîchit le club partagé (réservation, tarifs…)
-    } catch (e) { setSaveError((e as Error).message); }
-    finally { setSaving(false); }
+      const clubIsDirty = isDirty(server, draft);
+      const sportsIsDirty = sportsDirty(sportsServer, sportsDraft);
+      const errors: string[] = [];
+      const tasks: Promise<void>[] = [];
+
+      if (clubIsDirty) {
+        tasks.push(
+          api.adminUpdateClub(clubId, buildUpdateBody(draft), token).then(() => {
+            setServer(draft);   // le brouillon devient la nouvelle baseline
+            refreshClub();       // rafraîchit le club partagé (réservation, tarifs…)
+          }).catch((e) => { errors.push((e as Error).message); }),
+        );
+      }
+      if (sportsIsDirty) {
+        const items = buildSportsBatchBody(sportsServer, sportsDraft);
+        tasks.push(
+          api.adminApplySportsBatch(clubId, items, token).then((updated) => {
+            setSportsServer(updated);
+            setSportsDraft(toSportsDraft(updated));
+          }).catch((e) => { errors.push((e as Error).message); }),
+        );
+      }
+
+      await Promise.all(tasks);
+      // Chacun réussit/échoue indépendamment (Club vs ClubSport) : le flash de succès
+      // n'apparaît que si tout ce qui a été tenté a réussi.
+      if (errors.length > 0) setSaveError(errors.join(' · '));
+      else setJustSaved(true);
+    } finally { setSaving(false); }
   };
 
-  const cancel = () => { setDraft(server); setSaveError(null); setJustSaved(false); };
+  const cancel = () => {
+    setDraft(server);
+    setSportsDraft(sportsServer ? toSportsDraft(sportsServer) : null);
+    setSaveError(null);
+    setJustSaved(false);
+  };
 
-  if (!draft) {
-    // Pas encore de brouillon : chargement en cours, ou échec de chargement (on montre l'erreur).
+  if (!draft || !sportsDraft) {
+    // Pas encore de brouillon (Club ou Sports) : chargement en cours, ou échec (on montre l'erreur).
     return <div style={{ fontFamily: th.fontUI, color: error ? th.text : th.textFaint, padding: '32px 0' }}>{error ?? 'Chargement…'}</div>;
   }
 
@@ -146,7 +202,9 @@ export default function AdminSettingsPage() {
         <SettingsIdentity club={draft} set={set} uploading={uploading}
           logoInputRef={logoInputRef} coverInputRef={coverInputRef} pickLogo={pickLogo} pickCover={pickCover} />
       )}
-      {tab === 'sports' && <SettingsSports />}
+      {tab === 'sports' && (
+        <SettingsSports catalog={sportsCatalog} items={sportsDraft} onAdd={addSport} onToggleDuration={toggleSportDuration} />
+      )}
       {tab === 'reservation' && <SettingsBooking club={draft} set={set} />}
       {tab === 'tarifs' && <SettingsPricing club={draft} set={set} />}
       {tab === 'caisse' && <SettingsCollect club={draft} set={set} />}

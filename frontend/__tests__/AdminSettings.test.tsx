@@ -13,6 +13,7 @@ jest.mock('../lib/api', () => ({
     adminGetClub: jest.fn(), adminUpdateClub: jest.fn().mockResolvedValue({}),
     uploadClubLogo: jest.fn(), uploadClubCover: jest.fn(),
     adminGetSports: jest.fn().mockResolvedValue([]), getSports: jest.fn().mockResolvedValue([]),
+    adminApplySportsBatch: jest.fn().mockResolvedValue([]),
   },
 }));
 import { api } from '../lib/api';
@@ -37,6 +38,7 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     refreshMock.mockReset();
     (mocked.adminGetClub as jest.Mock).mockResolvedValue({ ...CLUB });
     (mocked.adminUpdateClub as jest.Mock).mockClear().mockResolvedValue({});
+    (mocked.adminApplySportsBatch as jest.Mock).mockClear().mockResolvedValue([]);
     window.history.replaceState(null, '', '/admin/settings');
   });
 
@@ -84,6 +86,49 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
     expect(await screen.findByText('Proposés par le club')).toBeInTheDocument();
     expect(window.location.search).toContain('tab=sports');
+  });
+
+  it('Sports : ajouter un sport est différé (aucun appel réseau) jusqu\'à Enregistrer', async () => {
+    (mocked.getSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'padel', name: 'Padel', icon: null, defaultDurationsMin: [90] },
+      { id: 'tennis', name: 'Tennis', icon: '🎾', defaultDurationsMin: [60] },
+    ]);
+    (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'cs1', slotStepMin: null, durationsMin: [90], sport: { id: 'padel', key: 'padel', name: 'Padel', resourceNoun: 'Court', defaultDurationsMin: [90], surfaces: [], hasLighting: false } },
+    ]);
+
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tennis/ }));
+
+    expect(await screen.findByText('Modifications non enregistrées')).toBeInTheDocument();
+    expect(mocked.adminApplySportsBatch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminApplySportsBatch)
+      .toHaveBeenCalledWith('c1', [{ sportId: 'tennis', durationsMin: [] }], 'tok'));
+    expect(await screen.findByText(/Enregistré/)).toBeInTheDocument();
+  });
+
+  it('Sports : Annuler défait un ajout de sport sans appel réseau', async () => {
+    (mocked.getSports as jest.Mock).mockResolvedValueOnce([
+      { id: 'padel', name: 'Padel', icon: null, defaultDurationsMin: [90] },
+      { id: 'tennis', name: 'Tennis', icon: '🎾', defaultDurationsMin: [60] },
+    ]);
+    (mocked.adminGetSports as jest.Mock).mockResolvedValueOnce([]);
+
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Sports' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tennis/ }));
+    expect(await screen.findByText('Modifications non enregistrées')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+    expect(mocked.adminApplySportsBatch).not.toHaveBeenCalled();
+    // Tennis redevient proposé à l'ajout (le brouillon est revenu à la baseline vide).
+    expect(await screen.findByRole('button', { name: /Tennis/ })).toBeInTheDocument();
   });
 
   it('opens on the tab named in ?tab= at mount', async () => {

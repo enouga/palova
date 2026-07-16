@@ -14,6 +14,9 @@ jest.mock('../lib/api', () => ({
     adminUpdateClub: jest.fn().mockResolvedValue({}),
     uploadClubLogo: jest.fn(),
     uploadClubCover: jest.fn(),
+    adminGetSports: jest.fn().mockResolvedValue([]),
+    getSports: jest.fn().mockResolvedValue([]),
+    adminApplySportsBatch: jest.fn().mockResolvedValue([]),
   },
 }));
 import { api } from '../lib/api';
