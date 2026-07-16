@@ -1,9 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage, Payment, CaissePayment, ClubAdminDetail } from '@/lib/api';
-import { capacityLabel } from '@/lib/lessons';
+import { capacityLabel, splitCoachName } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
+import { Avatar } from '@/components/ui/Avatar';
+import { colorForSeed } from '@/lib/playerColors';
 import { toCents, dueCents, fmtEuros, PopoverAnchor, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
 import { participantPastilles, PastillesModel } from '@/lib/caisseRegister';
 import { endTimeFrom } from '@/lib/duration';
@@ -113,13 +115,16 @@ export default function AdminPlanningPage() {
   const { club } = useClub();
   const { collapsed, setCollapsed } = useAdminChrome();
   const clubId = club?.id;
-  // Étiquette d'une entrée : l'intitulé s'il existe, sinon le nom du joueur, sinon « Événement ».
+  // Étiquette d'une entrée : l'intitulé s'il existe, sinon le nom du joueur, sinon le coach
+  // pour un cours encadré (identité immédiatement lisible sur la grille), sinon « Événement ».
   const labelOf = (r: ClubReservation) =>
     r.title?.trim()
       ? r.title
       : r.user
         ? `${r.user.firstName} ${r.user.lastName}`
-        : 'Événement';
+        : r.lesson
+          ? `Cours · ${r.lesson.coach.name}`
+          : 'Événement';
   const rootRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -964,9 +969,24 @@ export default function AdminPlanningPage() {
               </div>
             )}
 
-            {/* élèves (cours) */}
+            {/* cours encadré : identité du coach + élèves */}
             {selected.lesson?.id && selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+                {/* Coach — identité immédiatement visible, avant la liste des élèves. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <Avatar
+                    firstName={splitCoachName(selected.lesson.coach.name).first}
+                    lastName={splitCoachName(selected.lesson.coach.name).last}
+                    avatarUrl={selected.lesson.coach.photoUrl}
+                    size={34}
+                    color={colorForSeed(selected.lesson.id)}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Coach</div>
+                    <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.lesson.coach.name}</div>
+                  </div>
+                </div>
+
                 <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>
                   Élèves {capacityLabel(students.filter((s) => s.status === 'CONFIRMED').length, selected.lesson.capacity)}
                 </div>
@@ -975,6 +995,7 @@ export default function AdminPlanningPage() {
                 )}
                 {students.filter((s) => s.status !== 'CANCELLED').map((s) => (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '6px 10px', borderRadius: 9, background: th.surface2 }}>
+                    <Avatar firstName={s.firstName} lastName={s.lastName} avatarUrl={s.avatarUrl} size={26} color={colorForSeed(s.id)} />
                     <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
                       {s.firstName} {s.lastName}
                       {s.status === 'WAITLISTED' && (

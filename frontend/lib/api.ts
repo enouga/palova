@@ -2142,7 +2142,7 @@ export interface ClubReservation {
   participants: ParticipantBill[];
   hasCardFingerprint?: boolean;
   seriesId?: string | null;
-  lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE' } | null;
+  lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; coach: { name: string; photoUrl: string | null } } | null;
   /** présent seulement sur la réponse d'une association « créer un membre à la volée puis associer ». */
   createdMember?: { userId: string; tempPassword: string | null; existed: boolean } | null;
 }

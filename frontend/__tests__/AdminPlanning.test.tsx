@@ -27,6 +27,7 @@ jest.mock('../lib/api', () => ({
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminCreateReservation: jest.fn().mockResolvedValue({ id: 'new-1' }),
     adminRescheduleReservation: jest.fn().mockResolvedValue({ id: 'rv-1' }),
+    adminListLessonStudents: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -142,6 +143,35 @@ it("permet de sélectionner une place SANS joueur et d'encaisser sa part (anonym
     const call = (api.adminAddPayment as jest.Mock).mock.calls.at(-1)!;
     expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4), anonyme
     expect(call[2].participantId).toBeUndefined();
+  });
+});
+
+describe('Cours encadré — le coach est visible (pavé + modale)', () => {
+  const lessonResa = (over: Record<string, unknown> = {}) => ({
+    id: 'rv-2', resourceId: 'court-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z',
+    status: 'CONFIRMED', type: 'COACHING', title: null, totalPrice: '0.00', paidAmount: '0.00', dueAmount: '0.00',
+    resource: { id: 'court-1', name: 'C1' }, user: null,
+    payments: [], participants: [],
+    lesson: { id: 'lesson-1', capacity: 4, lessonKind: 'COLLECTIVE', coach: { name: 'Lucas Moreau', photoUrl: null } },
+    ...over,
+  });
+
+  it('le pavé du planning affiche « Cours · <coach> » au lieu de « Événement »', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    // « Événement » reste le libellé du chip TYPE (sélecteur) — seule l'étiquette du pavé/sous-titre change.
+    expect(await screen.findByText('Cours · Lucas Moreau')).toBeInTheDocument();
+  });
+
+  it('la modale affiche le coach (avatar + nom) au-dessus des Élèves', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    expect(await screen.findByText('Coach')).toBeInTheDocument();
+    expect(screen.getAllByText('Lucas Moreau').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Élèves 0 / 4')).toBeInTheDocument();
   });
 });
 

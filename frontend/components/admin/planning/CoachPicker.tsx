@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
+import { splitCoachName } from '@/lib/lessons';
 
 export interface CoachPickerProps {
   coaches: Coach[];
@@ -12,12 +13,6 @@ export interface CoachPickerProps {
   onSelect: (c: Coach) => void;
   onClear: () => void;
   placeholder?: string;
-}
-
-// « Lucas Moreau » → { first: 'Lucas', last: 'Moreau' } (initiales de repli de l'Avatar).
-function splitName(name: string): { first: string; last: string } {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return { first: parts[0] ?? '', last: parts.slice(1).join(' ') };
 }
 
 // Sélecteur de coach cherchable — même identité visuelle que PlayerPicker (Membre) :
@@ -45,7 +40,7 @@ export function CoachPicker({ coaches, value, onSelect, onClear, placeholder }: 
     <div style={{ position: 'relative' }}>
       {showChip ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${th.line}`, borderRadius: 8, padding: '8px 10px' }}>
-          <Avatar firstName={splitName(value!.name).first} lastName={splitName(value!.name).last} avatarUrl={value!.photoUrl} size={26} color={colorForSeed(value!.id)} />
+          <Avatar firstName={splitCoachName(value!.name).first} lastName={splitCoachName(value!.name).last} avatarUrl={value!.photoUrl} size={26} color={colorForSeed(value!.id)} />
           <span style={{ flex: 1, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>{value!.name}</span>
           <button type="button" onClick={() => { setQuery(''); setOpen(true); onClear(); }}
             style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '3px 8px', color: th.textMute, fontSize: 12 }}>Changer</button>
@@ -68,7 +63,7 @@ export function CoachPicker({ coaches, value, onSelect, onClear, placeholder }: 
               {coaches.length === 0 ? 'Aucun coach actif dans ce club — nommez-en un depuis Membres.' : 'Aucun coach trouvé.'}
             </div>
           ) : matches.map((c) => {
-            const { first, last } = splitName(c.name);
+            const { first, last } = splitCoachName(c.name);
             return (
               <button key={c.id} type="button" onClick={() => pick(c)}
                 onMouseDown={(e) => e.preventDefault()}
