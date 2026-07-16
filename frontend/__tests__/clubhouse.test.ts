@@ -41,7 +41,7 @@ describe('todayISO', () => {
 
 const ann = (over: Partial<Announcement>): Announcement => ({
   id: 'a', title: 't', body: 'b', linkUrl: null, imageUrl: null, isPublished: true,
-  pinned: false, kind: 'INFO', validUntil: null, createdAt: '', updatedAt: '', ...over,
+  pinned: false, kind: 'INFO', validUntil: null, sortOrder: 0, createdAt: '', updatedAt: '', ...over,
 });
 
 describe('announcementExpired', () => {

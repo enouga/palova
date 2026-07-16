@@ -610,6 +610,8 @@ export const api = {
     request<Announcement>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
   adminDeleteAnnouncement: (clubId: string, id: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'DELETE' }, token),
+  adminReorderAnnouncements: (clubId: string, orderedIds: string[], token: string) =>
+    request<Announcement[]>(`/api/clubs/${clubId}/admin/announcements/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
   /** Upload de l'affiche d'une annonce : fetch dédié (FormData), pattern uploadMyAvatar. */
   adminUploadAnnouncementImage: async (clubId: string, id: string, file: File, token: string): Promise<Announcement> => {
     const form = new FormData();
@@ -2039,6 +2041,7 @@ export interface Announcement {
   validUntil: string | null;
   isPublished: boolean;
   pinned: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
