@@ -13,6 +13,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { clubHasPadel } from '@/lib/sport';
 import { buildAgendaList } from '@/lib/calendar';
+import { wideLogo } from '@/lib/clubLogos';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
 
@@ -40,7 +41,9 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  const showClubLogo = !!club.logoUrl && !logoFailed;
+  // Logotype horizontal du bandeau, choisi selon le thème courant (repli en cascade sur l'icône).
+  const bannerLogo = wideLogo(club, th.mode);
+  const showClubLogo = !!bannerLogo && !logoFailed;
 
   // Deux compteurs sur l'onglet Parties : messages non lus (pastille rouge, priorité) et
   // nombre de parties ouvertes à venir (pastille accent, même langage que « À venir » de Résas).
@@ -187,7 +190,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
         <div className="cn-row1" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {showClubLogo ? (
             <Link href="/" style={{ display: 'inline-flex', flexShrink: 0 }}>
-              <img src={assetUrl(club.logoUrl) ?? undefined} alt={`Logo ${club.name}`}
+              <img src={assetUrl(bannerLogo) ?? undefined} alt={`Logo ${club.name}`}
                 onError={() => setLogoFailed(true)}
                 style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block' }} />
             </Link>

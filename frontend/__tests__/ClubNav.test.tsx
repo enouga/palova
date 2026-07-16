@@ -136,6 +136,13 @@ describe('ClubNav', () => {
     expect(screen.queryByLabelText('Accueil Palova')).not.toBeInTheDocument();
   });
 
+  it('préfère le logotype horizontal (logoWideUrl) à l’icône dans le bandeau', () => {
+    const clubWide = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: '/uploads/logos/i.png', logoWideUrl: '/uploads/logos/w.png' } as never;
+    render(<ThemeProvider><ClubNav club={clubWide} /></ThemeProvider>);
+    const img = screen.getByRole('img', { name: 'Logo Club Démo' }) as HTMLImageElement;
+    expect(img.src).toContain('/uploads/logos/w.png');
+  });
+
   it("retombe sur la marque Palova quand le club n'a pas de logo", () => {
     wrap();
     expect(screen.getByLabelText('Accueil Palova')).toBeInTheDocument();
