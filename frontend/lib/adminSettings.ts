@@ -1,5 +1,6 @@
 // Helpers PURS de la page Réglages du club. Aucune horloge, aucun fetch, aucun JSX.
-import type { ClubAdminDetail, UpdateClubBody, OffPeakRange } from '@/lib/api';
+import type { ClubAdminDetail, UpdateClubBody, OffPeakRange, AdminClubSport, SportsBatchItem } from '@/lib/api';
+import { effectiveDurations } from '@/lib/duration';
 
 export type SettingsTabKey = 'identite' | 'sports' | 'reservation' | 'tarifs' | 'caisse' | 'visibilite';
 
@@ -63,4 +64,61 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 /** Libellé d'une plage creuse, ex. « 9h30 → 12h00 ». */
 export function offPeakChipLabel(r: OffPeakRange): string {
   return `${r.start}h${pad2(r.startMin ?? 0)} → ${r.end}h${pad2(r.endMin ?? 0)}`;
+}
+
+/** Ligne de brouillon Sports : `clubSportId: null` = sport ajouté, pas encore côté serveur. */
+export interface SportsDraftItem {
+  sportId: string;
+  clubSportId: string | null;
+  durationsMin: number[];
+}
+
+/** Convertit la liste serveur (AdminClubSport[]) en brouillon éditable. */
+export function toSportsDraft(list: AdminClubSport[]): SportsDraftItem[] {
+  return list.map((s) => ({ sportId: s.sport.id, clubSportId: s.id, durationsMin: s.durationsMin }));
+}
+
+/** Ajoute un sport au brouillon (idempotent — pas de doublon si déjà présent). */
+export function addSportDraft(items: SportsDraftItem[], sportId: string): SportsDraftItem[] {
+  if (items.some((i) => i.sportId === sportId)) return items;
+  return [...items, { sportId, clubSportId: null, durationsMin: [] }];
+}
+
+/** Bascule une durée pour un sport du brouillon ; refuse de vider l'ensemble (au moins une durée). */
+export function toggleDurationDraft(
+  items: SportsDraftItem[], sportId: string, defaultDurationsMin: number[], min: number,
+): SportsDraftItem[] {
+  return items.map((item) => {
+    if (item.sportId !== sportId) return item;
+    const cur = new Set(effectiveDurations(item.durationsMin, defaultDurationsMin));
+    if (cur.has(min)) cur.delete(min); else cur.add(min);
+    if (cur.size === 0) return item;
+    return { ...item, durationsMin: Array.from(cur).sort((a, b) => a - b) };
+  });
+}
+
+function normalizeSportsForCompare(items: { sportId: string; durationsMin: number[] }[]) {
+  return items
+    .map((i) => ({ sportId: i.sportId, durationsMin: [...i.durationsMin].sort((a, b) => a - b) }))
+    .sort((a, b) => a.sportId.localeCompare(b.sportId));
+}
+
+/** Vrai si le brouillon Sports diffère de la baseline serveur (ajout de sport ou durées modifiées). */
+export function sportsDirty(server: AdminClubSport[], draft: SportsDraftItem[]): boolean {
+  const serverItems = server.map((s) => ({ sportId: s.sport.id, durationsMin: s.durationsMin }));
+  const draftItems = draft.map((d) => ({ sportId: d.sportId, durationsMin: d.durationsMin }));
+  return JSON.stringify(normalizeSportsForCompare(serverItems)) !== JSON.stringify(normalizeSportsForCompare(draftItems));
+}
+
+/** Ne renvoie QUE les lignes du brouillon qui diffèrent de la baseline (jamais la liste entière). */
+export function buildSportsBatchBody(server: AdminClubSport[], draft: SportsDraftItem[]): SportsBatchItem[] {
+  const baselineBySport = new Map(server.map((s) => [s.sport.id, s.durationsMin]));
+  const out: SportsBatchItem[] = [];
+  for (const item of draft) {
+    const baseline = baselineBySport.get(item.sportId);
+    const changed = baseline === undefined
+      || JSON.stringify([...baseline].sort((a, b) => a - b)) !== JSON.stringify([...item.durationsMin].sort((a, b) => a - b));
+    if (changed) out.push({ sportId: item.sportId, durationsMin: item.durationsMin });
+  }
+  return out;
 }

@@ -1,8 +1,9 @@
 import {
   SETTINGS_TABS, parseTab, buildUpdateBody, isDirty, offPeakChipLabel,
   DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER,
+  toSportsDraft, addSportDraft, toggleDurationDraft, sportsDirty, buildSportsBatchBody,
 } from '@/lib/adminSettings';
-import type { ClubAdminDetail } from '@/lib/api';
+import type { ClubAdminDetail, AdminClubSport } from '@/lib/api';
 
 const CLUB: ClubAdminDetail = {
   id: 'c1', slug: 'demo', name: 'Démo', description: '', address: 'a', city: '', country: '',
@@ -53,5 +54,53 @@ describe('adminSettings helpers', () => {
   it('exposes independent day presets for public and members', () => {
     expect(DAY_PRESETS_PUBLIC).toEqual([7, 14, 30]);
     expect(DAY_PRESETS_MEMBER).toEqual([14, 28, 60]);
+  });
+});
+
+const PADEL_CS: AdminClubSport = {
+  id: 'cs-padel', slotStepMin: null, durationsMin: [90],
+  sport: { id: 'padel', key: 'padel', name: 'Padel', resourceNoun: 'Court', defaultDurationsMin: [90], surfaces: [], hasLighting: false },
+};
+
+describe('adminSettings — brouillon Sports', () => {
+  it('toSportsDraft convertit la liste serveur en brouillon éditable', () => {
+    expect(toSportsDraft([PADEL_CS])).toEqual([{ sportId: 'padel', clubSportId: 'cs-padel', durationsMin: [90] }]);
+  });
+
+  it('addSportDraft ajoute un sport absent, idempotent si déjà présent', () => {
+    const draft = toSportsDraft([PADEL_CS]);
+    const withTennis = addSportDraft(draft, 'tennis');
+    expect(withTennis).toEqual([...draft, { sportId: 'tennis', clubSportId: null, durationsMin: [] }]);
+    expect(addSportDraft(withTennis, 'tennis')).toBe(withTennis); // idempotent, pas de doublon
+  });
+
+  it('toggleDurationDraft bascule une durée et refuse de tout décocher', () => {
+    const draft = toSportsDraft([PADEL_CS]); // durationsMin: [90]
+    const toggled = toggleDurationDraft(draft, 'padel', [90], 60); // ajoute 60
+    expect(toggled[0].durationsMin).toEqual([60, 90]);
+
+    const oneLeft = toggleDurationDraft(toggled, 'padel', [90], 60); // retire 60
+    expect(oneLeft[0].durationsMin).toEqual([90]);
+
+    const refused = toggleDurationDraft(oneLeft, 'padel', [90], 90); // tenter de retirer la dernière
+    expect(refused[0].durationsMin).toEqual([90]); // refusé : au moins une durée
+  });
+
+  it('sportsDirty est faux pour un brouillon identique, vrai après ajout ou changement de durées', () => {
+    const server = [PADEL_CS];
+    expect(sportsDirty(server, toSportsDraft(server))).toBe(false);
+    expect(sportsDirty(server, addSportDraft(toSportsDraft(server), 'tennis'))).toBe(true);
+    expect(sportsDirty(server, toggleDurationDraft(toSportsDraft(server), 'padel', [90], 60))).toBe(true);
+  });
+
+  it('buildSportsBatchBody ne renvoie que les lignes modifiées', () => {
+    const server = [PADEL_CS];
+    expect(buildSportsBatchBody(server, toSportsDraft(server))).toEqual([]); // rien de modifié
+
+    const withTennis = addSportDraft(toSportsDraft(server), 'tennis');
+    expect(buildSportsBatchBody(server, withTennis)).toEqual([{ sportId: 'tennis', durationsMin: [] }]);
+
+    const toggled = toggleDurationDraft(toSportsDraft(server), 'padel', [90], 60);
+    expect(buildSportsBatchBody(server, toggled)).toEqual([{ sportId: 'padel', durationsMin: [60, 90] }]);
   });
 });
