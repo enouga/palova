@@ -1018,6 +1018,7 @@ model Announcement {
   validUntil  DateTime?        @map("valid_until") /// fin d'affichage (fin de journée UTC) ; null = sans limite
   isPublished Boolean  @default(true) @map("is_published")
   pinned      Boolean  @default(false)
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
