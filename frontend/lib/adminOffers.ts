@@ -1,10 +1,6 @@
 import { ACCENTS } from '@/lib/theme';
 import type { PackageKind, SubscriberRow } from '@/lib/api';
 
-/** Teintes cyclées des cartes (miroir de OffersShowcase, même ordre). */
-export const OFFER_TINTS = [ACCENTS.blue, ACCENTS.apricot, ACCENTS.emerald, ACCENTS.violet, ACCENTS.cyan];
-export const offerAccent = (index: number): string => OFFER_TINTS[((index % OFFER_TINTS.length) + OFFER_TINTS.length) % OFFER_TINTS.length];
-
 /** Type d'offre pour la couleur : un abonnement, un carnet (entrées) ou un porte-monnaie. */
 export type OfferTintKind = 'SUBSCRIPTION' | PackageKind;
 

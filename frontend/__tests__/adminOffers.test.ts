@@ -1,16 +1,8 @@
 import {
-  OFFER_TINTS, offerAccent, offerTint, planPulse, packagePulse, planRevenueCents, splitByActive,
+  offerTint, planPulse, packagePulse, planRevenueCents, splitByActive,
 } from '../lib/adminOffers';
 import type { PackageTemplate, SubscriberRow } from '../lib/api';
 import { ACCENTS } from '../lib/theme';
-
-describe('offerAccent', () => {
-  it('cycle sur la palette', () => {
-    expect(offerAccent(0)).toBe(OFFER_TINTS[0]);
-    expect(offerAccent(OFFER_TINTS.length)).toBe(OFFER_TINTS[0]);
-    expect(offerAccent(OFFER_TINTS.length + 2)).toBe(OFFER_TINTS[2]);
-  });
-});
 
 describe('offerTint', () => {
   it('un abonnement est toujours bleu', () => {
