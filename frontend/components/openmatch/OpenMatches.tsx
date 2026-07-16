@@ -7,41 +7,19 @@ import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
 import { Segmented } from '@/components/ui/atoms';
-import { Icon } from '@/components/ui/Icon';
 import { Leaderboard } from '@/components/openmatch/Leaderboard';
 import { MyMatchesList } from '@/components/match/MyMatchesList';
 import { OpenMatchCard } from '@/components/openmatch/OpenMatchCard';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { rangesOverlap } from '@/lib/levelMatch';
-import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { recommendMatches } from '@/lib/recommend';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
+import { MatchesFilterBar } from '@/components/openmatch/MatchesFilterBar';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
-import { alertChipLabel } from '@/lib/matchAlerts';
 import type { MatchAlert } from '@/lib/api';
-
-// Chip de filtre — même langage que `FacetChip` d'EventsFilterBar (tournois/events) :
-// actif = encre pleine + coche, inactif = pill fine contourée.
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  const { th } = useTheme();
-  const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute;
-  return (
-    <button type="button" aria-pressed={active} onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
-      fontFamily: th.fontUI, fontSize: 12, fontWeight: active ? 700 : 600,
-      background: active ? th.ink : 'transparent', color: fg,
-      boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-      transition: 'all .15s', WebkitTapHighlightColor: 'transparent',
-    }}>
-      {active && <Icon name="check" size={11} color={fg} />}
-      {label}
-    </button>
-  );
-}
 
 // /parties — découverte des parties ouvertes (PUBLIC) du club : rejoindre / quitter.
 export function OpenMatches({ club }: { club: ClubDetail }) {
@@ -91,6 +69,15 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     api.listMyMatchAlerts(club.slug, token).then(setAlerts).catch(() => setAlerts([]));
   }, [token, club.slug]);
   useEffect(() => { loadAlerts(); }, [loadAlerts]);
+
+  const handleDeleteAlert = async (id: string) => {
+    if (!token) return;
+    setAlerts((xs) => xs.filter((x) => x.id !== id)); // optimiste
+    try { await api.deleteMatchAlert(club.slug, id, token); } catch { loadAlerts(); }
+  };
+  const handleCreateAlert = () => {
+    setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' });
+  };
 
   // Deeplink ?vue=matchs (menu profil, redirection de /me/matches, notifications).
   // L'event window couvre le cas « déjà sur /parties » : router.push ne remonte pas le composant.
@@ -146,11 +133,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const a = useOpenMatchActions({ club, token, myLevel, reload: load });
 
   const levelFilterActive = fMin > 1 || fMax < 8;
-  // Fourchette « à mon niveau » (±1 autour du niveau arrondi) — sert à savoir si ce raccourci
-  // est la sélection courante, pour le chip « rempli » (même langage que les filtres Events).
+  // Fourchette « à mon niveau » (±1 autour du niveau arrondi) — passée à MatchesFilterBar
+  // pour le chip préset (le composant décide lui-même s'il est actif).
   const myLevelMin = myLevel != null ? Math.max(1, Math.round(myLevel) - 1) : null;
   const myLevelMax = myLevel != null ? Math.min(8, Math.round(myLevel) + 1) : null;
-  const atMyLevel = myLevelMin != null && fMin === myLevelMin && fMax === myLevelMax;
   const byLevel = levelFilterActive
     ? matches.filter((m) => rangesOverlap(m.targetLevelMin ?? null, m.targetLevelMax ?? null, fMin, fMax))
     : matches;
@@ -189,51 +175,25 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0, letterSpacing: -0.4 }}>Parties ouvertes</h1>
           <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, lineHeight: 1.5, margin: '8px 0 0' }}>
-            Rejoignez la partie publique d&apos;un autre membre, ou créez la vôtre en choisissant « Partie ouverte » au moment de réserver.
+            Rejoignez une partie publique, ou créez la vôtre au moment de réserver.
           </p>
-          {levelEnabled && token && (
-            <div style={{ marginTop: 14, maxWidth: 430 }}>
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 4 }}>
-                <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>Filtrer par niveau</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {myLevel != null && myLevelMin != null && myLevelMax != null && (
-                    <FilterChip label="À mon niveau" active={atMyLevel}
-                      onClick={() => setLevelFilter(myLevelMin, myLevelMax)} />
-                  )}
-                  <FilterChip label="Tous" active={!levelFilterActive}
-                    onClick={() => setLevelFilter(1, 8)} />
-                </div>
-              </div>
-              <LevelRangeSlider compact min={fMin} max={fMax} onChange={setLevelFilter} />
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-            <FilterChip label="Toutes" active={kindFilter === 'all'} onClick={() => setKindFilter('all')} />
-            <FilterChip label="Compétitives" active={kindFilter === 'competitive'} onClick={() => setKindFilter('competitive')} />
-            <FilterChip label="Amicales" active={kindFilter === 'friendly'} onClick={() => setKindFilter('friendly')} />
-          </div>
-          {token && (
-            <div style={{ marginTop: 14 }}>
-              <button
-                onClick={() => setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' })}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${th.line}`, background: th.surface, borderRadius: 999, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>
-                🔔 Créer une alerte
-              </button>
-              {alerts.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                  {alerts.map((al) => (
-                    <span key={al.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: th.surface2, borderRadius: 999, padding: '6px 10px 6px 12px', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
-                      {alertChipLabel(al, club.timezone)}
-                      <button aria-label="Supprimer l'alerte" onClick={async () => {
-                        setAlerts((xs) => xs.filter((x) => x.id !== al.id)); // optimiste
-                        try { await api.deleteMatchAlert(club.slug, al.id, token); } catch { loadAlerts(); }
-                      }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontSize: 15, lineHeight: 1 }}>✕</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <MatchesFilterBar
+            levelEnabled={levelEnabled}
+            authenticated={!!token}
+            myLevel={myLevel}
+            myLevelMin={myLevelMin}
+            myLevelMax={myLevelMax}
+            fMin={fMin}
+            fMax={fMax}
+            onLevelChange={setLevelFilter}
+            kindFilter={kindFilter}
+            onKindChange={setKindFilter}
+            resultCount={filtered.length}
+            alerts={alerts}
+            timezone={club.timezone}
+            onDeleteAlert={handleDeleteAlert}
+            onCreateAlert={handleCreateAlert}
+          />
         </div>
 
         {a.error && (
@@ -283,7 +243,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
                 {levelFilterActive && matches.length > 0 ? 'Aucune partie dans cette fourchette de niveau.' : 'Aucune partie ouverte pour le moment.'}
                 {token && (
                   <div style={{ marginTop: 12 }}>
-                    <button onClick={() => setAlertSheet({ date: new Date().toISOString().slice(0, 10), from: '18:00', to: '21:00' })}
+                    <button onClick={handleCreateAlert}
                       style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '9px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
                       🔔 Créer une alerte
                     </button>
