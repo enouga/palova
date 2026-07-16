@@ -2,15 +2,6 @@
 // Aucune dépendance React : testables directement.
 import type { MatchToRecordPlayer } from '@/lib/api';
 
-/** « Jean Dupont » → « J. Dupont ». Tolère un prénom ou un nom vide. */
-export function abbrevName(firstName: string, lastName: string): string {
-  const first = firstName.trim();
-  const last = lastName.trim();
-  if (!first) return last;
-  if (!last) return first;
-  return `${first[0].toUpperCase()}. ${last}`;
-}
-
 /**
  * Sépare les joueurs en deux rangées d'équipe ordonnées par `slot` (gauche puis droite).
  * Le backend garantit un 2v2 avec team/slot concrets (effectiveTeams) ; par défense en
@@ -28,4 +19,25 @@ export function teamRows(players: MatchToRecordPlayer[]): [MatchToRecordPlayer[]
   }
   const bySlot = (a: MatchToRecordPlayer, b: MatchToRecordPlayer) => a.slot - b.slot;
   return [team1.sort(bySlot), team2.sort(bySlot)];
+}
+
+/**
+ * Libellé d'une équipe en prénoms : « Lucas & Jean ». En cas de prénom en double DANS LE
+ * MATCH (`allPlayers` = les 4 joueurs), on ajoute l'initiale du nom pour lever l'ambiguïté :
+ * « Jean D. & Jean M. ». Un joueur sans nom garde son prénom seul.
+ */
+export function teamLabel(team: MatchToRecordPlayer[], allPlayers: MatchToRecordPlayer[]): string {
+  const counts = new Map<string, number>();
+  for (const p of allPlayers) {
+    const key = p.firstName.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return team
+    .map((p) => {
+      const first = p.firstName.trim();
+      const last = p.lastName.trim();
+      const collides = (counts.get(first.toLowerCase()) ?? 0) > 1;
+      return collides && last ? `${first} ${last[0].toUpperCase()}.` : first;
+    })
+    .join(' & ');
 }
