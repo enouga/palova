@@ -186,7 +186,7 @@ export default function AdminPackagesPage() {
         </>
       )}
 
-      <OfferStudio open={studioOpen} editing={editing} previewIndex={editing ? 0 : orderedPlans.length + orderedTpls.length}
+      <OfferStudio open={studioOpen} editing={editing}
         sportOptions={SPORT_OPTIONS} busy={busy} error={studioOpen ? error : null}
         onClose={() => { setStudioOpen(false); setEditing(undefined); }} onSubmit={submitStudio} />
     </div>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { assetUrl, CreatePackageTemplateBody, CreateSubscriptionPlanBody, PackageKind, PackageTemplate, SubscriptionBenefit, SubscriptionPlan } from '@/lib/api';
-import { offerAccent } from '@/lib/adminOffers';
+import { offerTint } from '@/lib/adminOffers';
 import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { OfferPreviewCard, OfferPreview } from '@/components/admin/offers/OfferPreviewCard';
 
@@ -16,7 +16,6 @@ export type OfferStudioResult =
 export interface OfferStudioProps {
   open: boolean;
   editing?: { kind: 'plan'; plan: SubscriptionPlan } | { kind: 'package'; tpl: PackageTemplate };
-  previewIndex: number;
   sportOptions: string[];
   busy: boolean;
   error: string | null;
@@ -28,7 +27,7 @@ const euro = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
 
 export function OfferStudio(props: OfferStudioProps) {
   const { th } = useTheme();
-  const { open, editing, previewIndex, sportOptions, busy, error, onClose, onSubmit } = props;
+  const { open, editing, sportOptions, busy, error, onClose, onSubmit } = props;
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const initialKind: StudioKind = editing ? (editing.kind === 'plan' ? 'PLAN' : editing.tpl.kind) : 'PLAN';
@@ -89,7 +88,7 @@ export function OfferStudio(props: OfferStudioProps) {
   const shownImageUrl = previewFileUrl ?? (!removeImage && existingImageUrl ? assetUrl(existingImageUrl) : null);
   const toggleSport = (k: string) => setSports((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
-  const tint = offerAccent(previewIndex);
+  const tint = offerTint(kind === 'PLAN' ? 'SUBSCRIPTION' : kind);
   const priceNum = Number(price) || 0;
   const kindLabel = kind === 'PLAN' ? 'Abonnement' : kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie';
   const sportsLine = sports.length > 0 ? sports.join(', ') : 'Tous sports';
