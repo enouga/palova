@@ -256,6 +256,8 @@ model Club {
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
   coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
+  logoWideUrl      String?    @map("logo_wide_url")      // logotype horizontal (fond clair) — bandeau + emails
+  logoWideDarkUrl  String?    @map("logo_wide_dark_url") // logotype pour fond sombre (bandeau en thème floodlit)
   accentColor      String     @default("#d6ff3f") @map("accent_color")
   defaultThemeMode String     @default("floodlit") @map("default_theme_mode")
   status           ClubStatus @default(ACTIVE)
