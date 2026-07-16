@@ -172,6 +172,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
 
   return (
     <>
+      {/* Invite d'action (rare : membre connecté avec un résultat en attente). Depuis que le
+          kiosque est une section repositionnable, cette bannière passe AU-DESSUS de lui —
+          choix produit assumé (une invite d'action se voit mieux en tête). Ne pas « corriger »
+          vers l'ancien ordre (kiosque puis bannière). */}
       {club.levelSystemEnabled !== false && (
         <ResultsToRecord token={token} clubSlug={club.slug} />
       )}
