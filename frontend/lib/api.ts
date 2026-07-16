@@ -1293,7 +1293,7 @@ export type BookingReleaseMode = 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT'
 
 // Sections du Club-house configurables par le club (ordre + visibilité).
 // 'sponsors' = visibilité seule (position fixe en bas de page).
-export type ClubHouseSectionKey = 'matches' | 'agenda' | 'top' | 'offers' | 'clubCard' | 'sponsors';
+export type ClubHouseSectionKey = 'kiosk' | 'matches' | 'agenda' | 'top' | 'offers' | 'clubCard' | 'sponsors';
 export interface ClubHouseSectionSetting { key: ClubHouseSectionKey; visible: boolean; }
 
 export interface ClubDetail {
