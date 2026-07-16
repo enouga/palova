@@ -31,7 +31,6 @@ export function OfferCard(props: OfferCardProps) {
   return (
     <div style={card}>
       <span aria-hidden style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: isActive ? tint : th.textFaint }} />
-      <span aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 52, background: `linear-gradient(180deg, ${tint}${th.mode === 'floodlit' ? '20' : '2e'}, transparent)`, pointerEvents: 'none' }} />
       <div style={{ position: 'relative', padding: '13px 15px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ alignSelf: 'flex-start', fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${tint}26` : `${tint}40`, color: th.mode === 'floodlit' ? tint : th.ink }}>
           {kindLabel}
