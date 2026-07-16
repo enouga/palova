@@ -6,7 +6,7 @@ import type { ClubAdminDetail } from '@/lib/api';
 
 const CLUB: ClubAdminDetail = {
   id: 'c1', slug: 'demo', name: 'Démo', description: '', address: 'a', city: '', country: '',
-  timezone: 'Europe/Paris', logoUrl: '', coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
+  timezone: 'Europe/Paris', logoUrl: '', logoWideUrl: null, logoWideDarkUrl: null, coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
   status: 'ACTIVE', listedInDirectory: true, listTournamentsNationally: false, showOffersPublicly: false,
   publicBookingDays: 7, memberBookingDays: 14, bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 8, memberReleaseHour: 8,
   offPeakHours: null, bookingQuotas: null, playerChangeCutoffHours: 2, cancellationCutoffHours: 2,

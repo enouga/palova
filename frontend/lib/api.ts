@@ -360,20 +360,28 @@ export const api = {
   adminUpdateClub: (clubId: string, body: UpdateClubBody, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, { method: 'PATCH', body: JSON.stringify(body) }, token),
 
-  // Upload du logo du club en FormData — fetch dédié (request() force du JSON). Persiste côté serveur.
-  uploadClubLogo: async (clubId: string, file: File, token: string): Promise<{ logoUrl: string }> => {
+  // Upload du logo du club en FormData. variant: 'icon' (défaut) | 'wide' | 'wide-dark'.
+  uploadClubLogo: async (
+    clubId: string, file: File, token: string, variant: 'icon' | 'wide' | 'wide-dark' = 'icon',
+  ): Promise<{ logoUrl?: string; logoWideUrl?: string; logoWideDarkUrl?: string; warnings: string[] }> => {
     const form = new FormData();
     form.append('logo', file);
-    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/club-logo`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
+    const path = variant === 'icon' ? 'club-logo' : `club-logo/${variant}`;
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/${path}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error || `HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload échoué');
     return res.json();
+  },
+
+  // Suppression d'un logotype optionnel (l'icône n'est que remplaçable).
+  deleteClubLogoVariant: async (
+    clubId: string, variant: 'wide' | 'wide-dark', token: string,
+  ): Promise<void> => {
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/club-logo/${variant}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Suppression échouée');
   },
 
   // Upload de la couverture du club en FormData — fetch dédié. Persiste côté serveur.
@@ -1306,6 +1314,8 @@ export interface ClubDetail {
   description: string | null;
   timezone: string;
   logoUrl: string | null;
+  logoWideUrl: string | null;
+  logoWideDarkUrl: string | null;
   coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
@@ -1597,6 +1607,8 @@ export interface ClubAdminDetail {
   country: string | null;
   timezone: string;
   logoUrl: string | null;
+  logoWideUrl: string | null;
+  logoWideDarkUrl: string | null;
   coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
