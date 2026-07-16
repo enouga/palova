@@ -4,6 +4,7 @@ import { api, PackageTemplate, SubscriptionPlan, SubscriptionOverview } from '@/
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { offerAccent, planPulse, packagePulse, planRevenueCents, splitByActive } from '@/lib/adminOffers';
 import { OfferCard } from '@/components/admin/offers/OfferCard';
 import { OfferStudio, OfferStudioResult } from '@/components/admin/offers/OfferStudio';
@@ -18,6 +19,7 @@ export default function AdminPackagesPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  const admin = isClubAdmin(useAdminRole());
 
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [plans, setPlans]         = useState<SubscriptionPlan[]>([]);
@@ -45,7 +47,7 @@ export default function AdminPackagesPage() {
     finally { setLoading(false); }
   }, [token, clubId]);
 
-  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  useEffect(() => { if (ready && token && clubId && admin) load(); }, [ready, token, clubId, admin, load]);
 
   const openCreate = () => { setEditing(undefined); setStudioOpen(true); };
   const openEditPlan = (p: SubscriptionPlan) => { setEditing({ kind: 'plan', plan: p }); setStudioOpen(true); };
@@ -115,6 +117,10 @@ export default function AdminPackagesPage() {
   );
 
   const empty = !loading && plans.length === 0 && templates.length === 0;
+
+  if (!admin) {
+    return <div style={{ marginTop: 20, fontFamily: th.fontUI, color: th.textMute }}>Cette page est réservée aux administrateurs du club.</div>;
+  }
 
   return (
     <div>

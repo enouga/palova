@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import AdminPackagesPage from '../app/admin/packages/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
+import { AdminRoleContext } from '../lib/adminRole';
 
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1', clubSports: [{ sport: { key: 'padel', name: 'Padel' } }, { sport: { key: 'tennis', name: 'Tennis' } }] } }) }));
@@ -46,7 +47,14 @@ beforeEach(() => {
   (api.adminGetSubscriptionOverview as jest.Mock).mockResolvedValue(overview);
 });
 
-const mount = () => render(<ThemeProvider><AdminPackagesPage /></ThemeProvider>);
+const mount = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') =>
+  render(<AdminRoleContext.Provider value={role}><ThemeProvider><AdminPackagesPage /></ThemeProvider></AdminRoleContext.Provider>);
+
+it('viewer STAFF : page réservée aux administrateurs, aucun fetch offres', async () => {
+  mount('STAFF');
+  expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+  expect(api.adminGetPackageTemplates).not.toHaveBeenCalled();
+});
 
 it('affiche le titre « Offres » et les deux sections', async () => {
   mount();

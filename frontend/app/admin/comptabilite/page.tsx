@@ -4,6 +4,7 @@ import { api, MonthlySummary } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { gaugeTrack } from '@/lib/theme';
 import { monthLabel, monthRange, methodLabel, fmtAmount } from '@/lib/accounting';
 import { toCents } from '@/lib/caisse';
@@ -13,6 +14,7 @@ export default function AdminComptabilitePage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  const admin = isClubAdmin(useAdminRole());
 
   // Initialiser year/month à null — l'effet les fixera à la date courante (hydration-safe).
   const [year, setYear]   = useState<number | null>(null);
@@ -41,8 +43,8 @@ export default function AdminComptabilitePage() {
   }, [token, clubId, year, month]);
 
   useEffect(() => {
-    if (ready && token && clubId && year !== null && month !== null) load();
-  }, [ready, token, clubId, year, month, load]);
+    if (ready && token && clubId && year !== null && month !== null && admin) load();
+  }, [ready, token, clubId, year, month, admin, load]);
 
   const doExport = async () => {
     if (!token || !clubId || year === null || month === null) return;
@@ -77,6 +79,10 @@ export default function AdminComptabilitePage() {
   const currentYear = year ?? new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  if (!admin) {
+    return <div style={{ padding: 24, fontFamily: th.fontUI, color: th.textMute }}>Cette page est réservée aux administrateurs du club.</div>;
+  }
 
   return (
     <div>
