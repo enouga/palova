@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import AdminSettingsPage from '../app/admin/settings/page';
+import { AdminRoleContext } from '../lib/adminRole';
 
 const refreshMock = jest.fn();
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
@@ -35,7 +36,8 @@ const PADEL_SPORT = { id: 'padel', key: 'padel', name: 'Padel', resourceNoun: 'T
 const TENNIS_SPORT = { id: 'tennis', key: 'tennis', name: 'Tennis', resourceNoun: 'Court', defaultDurationsMin: [60], surfaces: [], hasLighting: false };
 const ENABLED_SPORTS = [{ id: 'cs1', slotStepMin: null, durationsMin: [90], sport: PADEL_SPORT }];
 
-const wrap = () => render(<AdminSettingsPage />);
+const wrap = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') =>
+  render(<AdminRoleContext.Provider value={role}><AdminSettingsPage /></AdminRoleContext.Provider>);
 
 /** Ouvre l'onglet Sports d'une page montée avec un padel activé + tennis au catalogue. */
 const openSportsTab = async () => {
@@ -50,7 +52,7 @@ const openSportsTab = async () => {
 describe('AdminSettingsPage (onglets + SaveBar)', () => {
   beforeEach(() => {
     refreshMock.mockReset();
-    (mocked.adminGetClub as jest.Mock).mockResolvedValue({ ...CLUB });
+    (mocked.adminGetClub as jest.Mock).mockClear().mockResolvedValue({ ...CLUB });
     (mocked.adminUpdateClub as jest.Mock).mockClear().mockResolvedValue({});
     (mocked.adminGetSports as jest.Mock).mockClear().mockResolvedValue([]);
     (mocked.getSports as jest.Mock).mockClear().mockResolvedValue([]);
@@ -63,6 +65,12 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     wrap();
     expect(await screen.findByText('Profil')).toBeInTheDocument();
     expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+  });
+
+  it('viewer STAFF : page réservée aux administrateurs, aucun fetch club', async () => {
+    wrap('STAFF');
+    expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+    expect(api.adminGetClub).not.toHaveBeenCalled();
   });
 
   it('switches tabs and reflects the active tab in the URL', async () => {

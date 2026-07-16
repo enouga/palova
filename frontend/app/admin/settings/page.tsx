@@ -4,6 +4,7 @@ import { api, ClubAdminDetail, Sport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { PillTabs } from '@/components/ui/atoms';
 import {
   SETTINGS_TABS, SettingsTabKey, parseTab, buildUpdateBody, isDirty,
@@ -30,6 +31,7 @@ export default function AdminSettingsPage() {
   const { token, ready } = useAuth();
   const { club: hostClub, refresh: refreshClub } = useClub();
   const clubId = hostClub?.id;
+  const admin = isClubAdmin(useAdminRole());
 
   // Deux états : baseline serveur + brouillon édité. Le brouillon est dirty quand il diffère.
   const [server, setServer] = useState<ClubAdminDetail | null>(null);
@@ -67,7 +69,7 @@ export default function AdminSettingsPage() {
     } catch (e) { setError((e as Error).message); }
   }, [token, clubId]);
 
-  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  useEffect(() => { if (ready && token && clubId && admin) load(); }, [ready, token, clubId, admin, load]);
 
   // Onglet initial depuis l'URL (?tab=), puis reflété à chaque changement.
   useEffect(() => { setTab(parseTab(window.location.search)); }, []);
@@ -182,6 +184,10 @@ export default function AdminSettingsPage() {
   };
 
   const cancel = () => { setDraft(server); setSportsDraft(sportsServer); setSaveError(null); setJustSaved(false); };
+
+  if (!admin) {
+    return <div style={{ fontFamily: th.fontUI, color: th.textMute, padding: '32px 0' }}>Cette page est réservée aux administrateurs du club.</div>;
+  }
 
   if (!draft) {
     // Pas encore de brouillon : chargement en cours, ou échec de chargement (on montre l'erreur).
