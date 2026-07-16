@@ -47,7 +47,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
   const wideUrlDark = assetUrl(wideLogo(club, 'floodlit'));
 
   return (
-    <div className="pl-create-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+    <div className="pl-create-grid">
       {/* Colonne gauche — emplacements */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
@@ -125,7 +125,7 @@ export function LogoStudio({ club, uploading, warnings, onPick, onDelete }: Prop
       </div>
 
       {/* Colonne droite — aperçus en direct */}
-      <div style={{ background: HERO_GRADIENT, borderRadius: 16, padding: 16, color: HERO_INK }}>
+      <div className="pl-create-recap" style={{ background: HERO_GRADIENT, borderRadius: 16, padding: 16, color: HERO_INK }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: HERO_INK_MUTED, marginBottom: 10 }}>Aperçu — où vos logos apparaissent</div>
 
         <Preview label="Bandeau du site (clair)" bg="#ffffff" ink="#23314a">
