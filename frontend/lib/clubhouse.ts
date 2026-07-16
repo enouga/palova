@@ -1,4 +1,9 @@
-import { Announcement, ClubHouseSectionKey, ClubHouseSectionSetting, Sponsor, Tournament } from '@/lib/api';
+import { Announcement, AnnouncementKind, ClubHouseSectionKey, ClubHouseSectionSetting, Sponsor, Tournament } from '@/lib/api';
+
+/** Libellés des types d'annonce (admin : page Annonces + studio). */
+export const ANNOUNCEMENT_KIND_LABEL: Record<AnnouncementKind, string> = {
+  INFO: 'Info', OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event',
+};
 
 /** Date du jour (clé YYYY-MM-DD) — même convention que ClubReserve. */
 export function todayISO(now = new Date()): string {

@@ -4,9 +4,9 @@ import { api, Announcement, AnnouncementBody, AnnouncementKind, assetUrl } from 
 import { useTheme } from '@/lib/ThemeProvider';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { Btn } from '@/components/ui/atoms';
+import { ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from '@/lib/clubhouse';
 
-const KIND_LABEL: Record<AnnouncementKind, string> = { INFO: 'Info', OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
-const EMPTY = { title: '', body: '', linkUrl: '', kind: 'INFO' as AnnouncementKind, validUntil: '', pinned: false, isPublished: true };
+const EMPTY ={ title: '', body: '', linkUrl: '', kind: 'INFO' as AnnouncementKind, validUntil: '', pinned: false, isPublished: true };
 
 // Fenêtre de création/édition d'une annonce, avec aperçu en direct (langage du kiosque
 // « À la une »). Extrait du formulaire inline de /admin/announcements : même logique

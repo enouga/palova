@@ -1,14 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback, CSSProperties } from 'react';
-import { api, Announcement, AnnouncementKind, assetUrl } from '@/lib/api';
+import { api, Announcement, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AnnouncementStudio } from '@/components/admin/AnnouncementStudio';
-
-const KIND_LABEL: Record<AnnouncementKind, string> = { INFO: 'Info', OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
+import { ANNOUNCEMENT_KIND_LABEL } from '@/lib/clubhouse';
 
 // Page « Annonces » : liste déplaçable (glisser natif, pattern ClubHouseSectionsCard, + ↑↓
 // pour mobile/accessibilité). L'ordre manuel s'applique tel quel au kiosque du Club-house.
@@ -113,7 +112,7 @@ export default function AdminAnnouncementsPage() {
               <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                 <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                  <Chip tone="mute">{KIND_LABEL[a.kind ?? 'INFO']}</Chip>
+                  <Chip tone="mute">{ANNOUNCEMENT_KIND_LABEL[a.kind ?? 'INFO']}</Chip>
                   {a.pinned && <Chip tone="accent" icon="pin">À la une</Chip>}
                   {!a.isPublished && <Chip tone="line">Brouillon</Chip>}
                 </div>

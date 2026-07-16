@@ -190,6 +190,9 @@ describe('ClubHouse', () => {
     ]));
     await waitFor(() => expect(mocked.getClubAnnouncements).toHaveBeenCalled());
     expect(screen.queryByTestId('clubhouse-kiosk')).not.toBeInTheDocument();
+    // Les annonces existent mais ne s'affichent nulle part : l'état vide doit prendre le relais
+    // (sinon la page est totalement blanche).
+    expect(await screen.findByText(/Pas d'informations pour le moment/)).toBeInTheDocument();
   });
 
   it('membre : carte « Vos réservations » (tuile-date, Tout voir), clic sur une ligne → dialog d annulation', async () => {

@@ -113,14 +113,21 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   };
 
   const now = new Date();
-  // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), épinglées d'abord.
+  // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), dans l'ordre
+  // manuel choisi par l'admin (page Annonces) — « épinglée » n'est plus qu'un badge.
   const slides = kiosqueSlides(ann, now);
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
   const showClubCard = showShowcase(presentation);
   const showOffers = !!offers && ((!hasSub && offers.plans.length > 0) || offers.packages.length > 0);
 
-  const empty = slides.length === 0 && nextEvents.length === 0 && spons.length === 0
+  // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
+  const { order } = resolveSections(club.clubHouseSections, !!token);
+  // Les annonces sont fetchées inconditionnellement : si la section kiosque est masquée elles
+  // ne s'affichent nulle part et ne doivent donc pas empêcher l'état vide (sinon page blanche).
+  const kioskVisible = order.includes('kiosk');
+
+  const empty = (!kioskVisible || slides.length === 0) && nextEvents.length === 0 && spons.length === 0
     && next.length === 0 && upcomingMatches.length === 0 && !showClubCard && !showOffers && topMonth.length < 3;
 
   const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '30px 20px 0' }}>{node}</div>;
@@ -162,9 +169,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     // wrappées par `wrap()`) — rendu tel quel dans la boucle, jamais passé à `wrap()`.
     sponsors: spons.length > 0 && <SponsorFlipDeck key="sponsors" sponsors={spons} now={clock} />,
   };
-
-  // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
-  const { order } = resolveSections(club.clubHouseSections, !!token);
 
   return (
     <>
