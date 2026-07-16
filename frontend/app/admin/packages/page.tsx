@@ -143,7 +143,7 @@ export default function AdminPackagesPage() {
             <>
               <Kicker>Abonnements</Kicker>
               <div style={grid}>
-                {orderedPlans.map((p, i) => (
+                {orderedPlans.map((p) => (
                   <OfferCard key={p.id} tint={offerTint('SUBSCRIPTION')} kindLabel="Abonnement" name={p.name}
                     price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
                     features={[
@@ -168,7 +168,7 @@ export default function AdminPackagesPage() {
             <>
               <Kicker>Carnets &amp; Porte-monnaie</Kicker>
               <div style={grid}>
-                {orderedTpls.map((t, i) => (
+                {orderedTpls.map((t) => (
                   <OfferCard key={t.id} tint={offerTint(t.kind)}
                     kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
                     price={euro(t.price)}
