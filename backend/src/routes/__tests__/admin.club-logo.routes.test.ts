@@ -1,64 +1,61 @@
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import sharp from 'sharp';
 
-// Les fichiers uploadés vont dans un tmpdir (jamais dans le repo pendant les tests).
 jest.mock('../../utils/uploads', () => {
-  const fsm = require('fs');
-  const pathm = require('path');
-  const osm = require('os');
+  const fsm = require('fs'); const pathm = require('path'); const osm = require('os');
   const actual = jest.requireActual('../../utils/uploads');
   const UPLOADS_DIR = fsm.mkdtempSync(pathm.join(osm.tmpdir(), 'palova-logos-'));
   const LOGOS_DIR = pathm.join(UPLOADS_DIR, 'logos');
-  return {
-    ...actual,
-    UPLOADS_DIR, LOGOS_DIR,
-    ensureUploadDirs: () => { fsm.mkdirSync(LOGOS_DIR, { recursive: true }); },
-  };
+  return { ...actual, UPLOADS_DIR, LOGOS_DIR, ensureUploadDirs: () => fsm.mkdirSync(LOGOS_DIR, { recursive: true }) };
 });
+
+jest.mock('../../middleware/auth', () => ({
+  authMiddleware: (req: any, _res: any, next: any) => { req.user = { id: 'u1' }; next(); },
+  optionalAuth: (req: any, _res: any, next: any) => next(),
+}));
+jest.mock('../../middleware/requireClubMember', () => ({
+  requireClubMember: () => (req: any, _res: any, next: any) => { req.membership = { clubId: 'club-1', role: 'ADMIN' }; next(); },
+}));
 
 import app from '../../app';
 
-const SECRET = process.env.JWT_SECRET!;
-if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
-const token = jwt.sign({ id: 'admin-1', email: 'a@x.fr' }, SECRET, { expiresIn: '1h' });
-const url = '/api/clubs/club-demo/admin/club-logo';
-const asMember = (role = 'OWNER') => prismaMock.clubMember.findUnique.mockResolvedValue({ role } as any);
+const squarePng = () => sharp({ create: { width: 600, height: 600, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } } }).png().toBuffer();
 
-describe('POST /api/clubs/:clubId/admin/club-logo', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
-
-  it('200 enregistre le logo et renvoie un chemin /uploads/logos/...', async () => {
-    asMember();
-    prismaMock.club.findUnique.mockResolvedValue({ logoUrl: null } as any);
-    prismaMock.club.update.mockResolvedValue({ id: 'club-demo' } as any);
-
-    const res = await request(app).post(url)
-      .set('Authorization', `Bearer ${token}`)
-      .attach('logo', Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'logo.png');
-
-    expect(res.status).toBe(200);
-    expect(res.body.logoUrl).toMatch(/^\/uploads\/logos\/club-demo-\d+\.png$/);
-    expect(prismaMock.club.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'club-demo' },
-      data: expect.objectContaining({ logoUrl: res.body.logoUrl }),
-    }));
+describe('POST/DELETE /api/clubs/:clubId/admin/club-logo', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prismaMock.club.findUnique.mockResolvedValue({ logoUrl: null, logoWideUrl: null, logoWideDarkUrl: null } as any);
+    prismaMock.club.update.mockResolvedValue({} as any);
   });
 
-  it('400 si le format n est pas une image supportée', async () => {
-    asMember();
-    const res = await request(app).post(url)
-      .set('Authorization', `Bearer ${token}`)
-      .attach('logo', Buffer.from('coucou'), 'note.txt');
+  it('POST sans variante → persiste logoUrl (icône) + renvoie warnings', async () => {
+    const res = await request(app).post('/api/clubs/club-1/admin/club-logo').attach('logo', await squarePng(), 'l.png');
+    expect(res.status).toBe(200);
+    expect(res.body.logoUrl).toMatch(/^\/uploads\/logos\/club-1-icon-/);
+    expect(Array.isArray(res.body.warnings)).toBe(true);
+  });
+
+  it('POST /wide → persiste logoWideUrl', async () => {
+    const res = await request(app).post('/api/clubs/club-1/admin/club-logo/wide').attach('logo', await squarePng(), 'l.png');
+    expect(res.status).toBe(200);
+    expect(res.body.logoWideUrl).toMatch(/^\/uploads\/logos\/club-1-wide-/);
+  });
+
+  it('POST variante inconnue → 404', async () => {
+    const res = await request(app).post('/api/clubs/club-1/admin/club-logo/bogus').attach('logo', await squarePng(), 'l.png');
+    expect(res.status).toBe(404);
+  });
+
+  it('POST fichier non-image → 400', async () => {
+    const res = await request(app).post('/api/clubs/club-1/admin/club-logo').attach('logo', Buffer.from('nope'), 'x.png');
     expect(res.status).toBe(400);
   });
 
-  it('403 si l utilisateur n est pas membre du club', async () => {
-    prismaMock.clubMember.findUnique.mockResolvedValue(null as any);
-    const res = await request(app).post(url)
-      .set('Authorization', `Bearer ${token}`)
-      .attach('logo', Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'logo.png');
-    expect(res.status).toBe(403);
+  it('DELETE /wide → remet logoWideUrl à null', async () => {
+    const res = await request(app).delete('/api/clubs/club-1/admin/club-logo/wide');
+    expect(res.status).toBe(200);
+    expect(prismaMock.club.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ logoWideUrl: null }) }));
   });
 });

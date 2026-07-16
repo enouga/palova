@@ -308,7 +308,7 @@ export class ClubService {
   /** Met à jour profil/branding/fenêtres d'un club (déjà scopé par requireClubMember). */
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
-    timezone?: string; logoUrl?: string; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
+    timezone?: string; logoUrl?: string; logoWideUrl?: string | null; logoWideDarkUrl?: string | null; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
     listedInDirectory?: boolean; listTournamentsNationally?: boolean; showOffersPublicly?: boolean; publicBookingDays?: number; memberBookingDays?: number;
     bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
     publicReleaseHour?: number;
@@ -366,6 +366,8 @@ export class ClubService {
         ...(params.city !== undefined ? { city: params.city } : {}),
         ...(params.timezone !== undefined ? { timezone: params.timezone } : {}),
         ...(params.logoUrl !== undefined ? { logoUrl: params.logoUrl } : {}),
+        ...(params.logoWideUrl !== undefined ? { logoWideUrl: params.logoWideUrl } : {}),
+        ...(params.logoWideDarkUrl !== undefined ? { logoWideDarkUrl: params.logoWideDarkUrl } : {}),
         ...(params.coverImageUrl !== undefined ? { coverImageUrl: params.coverImageUrl || null } : {}),
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
