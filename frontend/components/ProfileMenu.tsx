@@ -35,6 +35,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [packages, setPackages] = useState<MemberPackage[]>([]);
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [isCoach, setIsCoach] = useState(false);
   const { state: installState, promptInstall } = useInstallPrompt();
   const [installHelp, setInstallHelp] = useState(false);
 
@@ -56,6 +57,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
         api.getMyClubMembership(slug, token).then(setMembership).catch(() => setMembership(null));
         api.getMyClubPackages(slug, token).then(setPackages).catch(() => {});
         api.getMyClubSubscriptions(slug, token).then(setSubs).catch(() => {});
+        api.getCoachStatus(slug, token).then((r) => setIsCoach(r.isCoach)).catch(() => {});
       } else {
         setMembership(null);
       }
@@ -165,6 +167,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
             {slug && <MenuItem th={th} icon="users" label="Mes amis" onClick={() => go('/me/friends')} />}
             {slug && <MenuItem th={th} icon="chat" label="Messages" onClick={() => go('/me/messages')} />}
+            {slug && isCoach && <MenuItem th={th} icon="whistle" label="Mes cours" onClick={() => go('/me/coaching')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
             {/* « Espace club » pour chaque AUTRE club géré : navigation cross-sous-domaine vers

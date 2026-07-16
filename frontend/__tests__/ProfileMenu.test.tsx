@@ -19,6 +19,7 @@ jest.mock('../lib/api', () => ({
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
     getMyClubSubscriptions: jest.fn(),
+    getCoachStatus: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -55,6 +56,7 @@ describe('ProfileMenu', () => {
     api.getMyClubMembership.mockResolvedValue(null);
     api.getMyClubPackages.mockResolvedValue([]);
     api.getMyClubSubscriptions.mockResolvedValue([]);
+    api.getCoachStatus.mockResolvedValue({ isCoach: false });
     installCtx.state = 'hidden';
     installCtx.promptInstall = jest.fn();
   });
@@ -146,6 +148,25 @@ describe('ProfileMenu', () => {
     openMenu();
     expect(await screen.findByText('Porte-monnaie — 90,00 € · Tennis')).toBeInTheDocument();
     expect(screen.getByText('Abonnement Padel · Padel')).toBeInTheDocument();
+  });
+
+  it('affiche « Mes cours » quand le viewer est coach', async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getCoachStatus.mockResolvedValue({ isCoach: true });
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Mes cours')).toBeInTheDocument();
+  });
+
+  it("masque « Mes cours » quand le viewer n'est pas coach", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getCoachStatus.mockResolvedValue({ isCoach: false });
+    wrap();
+    openMenu();
+    await screen.findByText('Marc Bidaut'); // menu chargé
+    expect(screen.queryByText('Mes cours')).not.toBeInTheDocument();
   });
 
   it("hôte plateforme : pas de section soldes ni d'appel membership", async () => {
