@@ -109,4 +109,26 @@ describe('GET /api/clubs/:slug/icon/:file', () => {
     expect(res.headers['content-type']).toContain('image/png');
     fetchMock.mockRestore();
   });
+
+  it('badge-96 : logo transparent → silhouette blanche (coin alpha 0)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ ...CLUB, logoUrl: 'https://logos.example/x.png' } as any);
+    const logo = await sharp({ create: { width: 80, height: 80, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } } })
+      .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array(logo), { status: 200 }) as any);
+    const res = await request(app).get('/api/clubs/demo/icon/badge-96.png');
+    expect(res.status).toBe(200);
+    const meta = await sharp(res.body as Buffer).metadata();
+    expect([meta.width, meta.height]).toEqual([96, 96]);
+    fetchMock.mockRestore();
+  });
+
+  it('badge-96 : logo opaque (sans alpha) → repli Palova (200)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ ...CLUB, logoUrl: 'https://logos.example/opaque.png' } as any);
+    const opaque = await sharp({ create: { width: 96, height: 96, channels: 3, background: '#123456' } }).png().toBuffer();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array(opaque), { status: 200 }) as any);
+    const res = await request(app).get('/api/clubs/demo/icon/badge-96.png');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('image/png');
+    fetchMock.mockRestore();
+  });
 });
