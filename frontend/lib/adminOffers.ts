@@ -5,6 +5,13 @@ import type { PackageKind, SubscriberRow } from '@/lib/api';
 export const OFFER_TINTS = [ACCENTS.blue, ACCENTS.apricot, ACCENTS.emerald, ACCENTS.violet, ACCENTS.cyan];
 export const offerAccent = (index: number): string => OFFER_TINTS[((index % OFFER_TINTS.length) + OFFER_TINTS.length) % OFFER_TINTS.length];
 
+/** Type d'offre pour la couleur : un abonnement, un carnet (entrées) ou un porte-monnaie. */
+export type OfferTintKind = 'SUBSCRIPTION' | PackageKind;
+
+/** Couleur d'une offre déterminée par son TYPE (pas sa position) : deux offres du même type partagent toujours la même teinte. */
+export const offerTint = (kind: OfferTintKind): string =>
+  kind === 'SUBSCRIPTION' ? ACCENTS.blue : kind === 'ENTRIES' ? ACCENTS.apricot : ACCENTS.emerald;
+
 const NO_SALE = 'Aucune vente pour l’instant';
 
 /** Espace fine insécable entre milliers : « 1 240 € ». */

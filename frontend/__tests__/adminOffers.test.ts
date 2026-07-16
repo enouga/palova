@@ -1,7 +1,8 @@
 import {
-  OFFER_TINTS, offerAccent, planPulse, packagePulse, planRevenueCents, splitByActive,
+  OFFER_TINTS, offerAccent, offerTint, planPulse, packagePulse, planRevenueCents, splitByActive,
 } from '../lib/adminOffers';
 import type { PackageTemplate, SubscriberRow } from '../lib/api';
+import { ACCENTS } from '../lib/theme';
 
 describe('offerAccent', () => {
   it('cycle sur la palette', () => {
@@ -10,6 +11,19 @@ describe('offerAccent', () => {
     expect(offerAccent(OFFER_TINTS.length + 2)).toBe(OFFER_TINTS[2]);
   });
 });
+
+describe('offerTint', () => {
+  it('un abonnement est toujours bleu', () => {
+    expect(offerTint('SUBSCRIPTION')).toBe(ACCENTS.blue);
+  });
+  it('un carnet (ENTRIES) est toujours abricot', () => {
+    expect(offerTint('ENTRIES')).toBe(ACCENTS.apricot);
+  });
+  it('un porte-monnaie (WALLET) est toujours émeraude', () => {
+    expect(offerTint('WALLET')).toBe(ACCENTS.emerald);
+  });
+});
+
 
 describe('planPulse', () => {
   it('abonnés + revenu quand il y a des ventes', () => {
