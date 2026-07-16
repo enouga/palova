@@ -17,8 +17,8 @@ const toSeg = (r: Member['staffRole']): RoleSeg => (r === 'ADMIN' ? 'ADMIN' : r 
 const fromSeg = (s: RoleSeg): StaffRole => (s === 'NONE' ? null : s);
 const ROLE_HINT: Record<RoleSeg, string> = {
   NONE: "Membre simple, pas d'accès au back-office",
-  STAFF: 'Accès au back-office du club',
-  ADMIN: 'Back-office + gestion du staff et des niveaux',
+  STAFF: 'Comptoir & quotidien (planning, caisse, membres, annonces)',
+  ADMIN: 'Staff + structure du club (réglages, terrains, offres, comptabilité, staff, niveaux)',
 };
 
 export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, onSave, onToggleBlocked, onSetRole, onSetCoach, onDelete, onClose }: {

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminClubPage from '@/app/admin/club/page';
 import { ThemeProvider } from '@/lib/ThemeProvider';
+import { AdminRoleContext } from '@/lib/adminRole';
 
 jest.mock('@/lib/useAuth', () => ({ useAuth: () => ({ token: 't', ready: true }) }));
 jest.mock('@/lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'c1', name: 'Padel Arena' } }) }));
@@ -22,7 +23,8 @@ jest.mock('@/lib/api', () => ({
 }));
 import { api } from '@/lib/api';
 
-const wrap = () => render(<ThemeProvider><AdminClubPage /></ThemeProvider>);
+const wrap = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') =>
+  render(<AdminRoleContext.Provider value={role}><ThemeProvider><AdminClubPage /></ThemeProvider></AdminRoleContext.Provider>);
 
 describe('/admin/club', () => {
   beforeEach(() => { jest.clearAllMocks(); });
@@ -129,5 +131,14 @@ describe('/admin/club', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser' }));
     await waitFor(() => expect(api.adminUpdateClub).toHaveBeenCalledWith('c1', { clubHouseSections: null }, 't'));
     await waitFor(() => expect(screen.queryByText('Réinitialiser l’ordre par défaut')).not.toBeInTheDocument());
+  });
+
+  it('viewer STAFF : la carte « Sections du Club-house » est masquée (le reste de la page rendu)', async () => {
+    wrap('STAFF');
+    // Ancre stable : le compteur de photos vient de la présentation (1 photo mockée).
+    await waitFor(() => expect(screen.getByText(/1\/12/)).toBeInTheDocument());
+    expect(screen.queryByText('Sections du Club-house')).not.toBeInTheDocument();
+    // Assertion robuste au timing : la carte ne doit même pas monter (donc jamais fetcher) pour STAFF.
+    expect(api.adminGetClub).not.toHaveBeenCalled();
   });
 });

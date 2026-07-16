@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ClubHouseSectionsCard } from '@/components/admin/ClubHouseSectionsCard';
 import { AMENITIES } from '@/lib/clubShowcase';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 
 const MAX_PHOTOS = 12;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -20,6 +21,7 @@ export default function AdminClubPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  const admin = isClubAdmin(useAdminRole());
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [pres, setPres] = useState<ClubPresentation | null>(null);
   const [form, setForm] = useState({ presentationText: '', openingHoursText: '', contactPhone: '', contactEmail: '', foundedYear: '', amenities: [] as string[] });
@@ -215,7 +217,7 @@ export default function AdminClubPage() {
         </div>
       </div>
 
-      {token && clubId && <ClubHouseSectionsCard clubId={clubId} token={token} />}
+      {admin && token && clubId && <ClubHouseSectionsCard clubId={clubId} token={token} />}
 
       {confirmDelete && (
         <ConfirmDialog
