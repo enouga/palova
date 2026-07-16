@@ -96,6 +96,25 @@ describe('CreateEventModal — chips intelligentes', () => {
   });
 });
 
+describe('CreateEventModal — cours encadré (sélection du coach)', () => {
+  const coaches = [
+    { id: 'c-1', clubId: 'club-1', name: 'Lucas Moreau', photoUrl: null, isActive: true, sortOrder: 0 },
+    { id: 'c-2', clubId: 'club-1', name: 'Jean Hub', photoUrl: null, isActive: true, sortOrder: 1 },
+  ];
+
+  it('choisir un coach via le picker cherchable (remplace l\'ancien <select>)', () => {
+    setup({ prefill: { resourceId: 'court-1', startHour: 17 }, coaches });
+    fireEvent.click(screen.getByRole('button', { name: 'Coaching' }));
+    fireEvent.click(screen.getByText('Cours encadré (coach + élèves)'));
+    fireEvent.focus(screen.getByPlaceholderText('Rechercher un coach…'));
+    fireEvent.click(screen.getByText('Lucas Moreau'));
+    // Sélectionné → repasse en chip avec « Changer », le champ de recherche disparaît.
+    expect(screen.getByText('Lucas Moreau')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Rechercher un coach…')).not.toBeInTheDocument();
+    expect(screen.getByText('Changer')).toBeInTheDocument();
+  });
+});
+
 describe('CreateEventModal — conflit', () => {
   it('affiche un avertissement et désactive la création quand le créneau choisi chevauche une résa existante', () => {
     setup({

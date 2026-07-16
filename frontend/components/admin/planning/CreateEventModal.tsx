@@ -9,6 +9,7 @@ import {
 } from '@/lib/planningTime';
 import { TYPE_META, TYPE_ORDER } from '@/lib/reservationType';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { CoachPicker } from '@/components/admin/planning/CoachPicker';
 import { DateField } from '@/components/ui/DateField';
 import { Btn } from '@/components/ui/atoms';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
@@ -317,12 +318,15 @@ export function CreateEventModal({
                 </label>
                 {isCourse && (
                   <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={label}>Coach
-                      <select value={coachId} onChange={(e) => setCoachId(e.target.value)} style={input}>
-                        <option value="">— choisir —</option>
-                        {coaches.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </label>
+                    <div>
+                      <div style={{ ...label, marginBottom: 4 }}>Coach</div>
+                      <CoachPicker
+                        coaches={coaches}
+                        value={coaches.find((c) => c.id === coachId) ?? null}
+                        onSelect={(c) => setCoachId(c.id)}
+                        onClear={() => setCoachId('')}
+                      />
+                    </div>
                     <label style={label}>Capacité (élèves max)
                       <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} style={{ ...input, width: 90 }} />
                     </label>
