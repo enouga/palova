@@ -28,7 +28,7 @@ Une carte par match, empilées verticalement (gap 12), chacune autonome (pas d'e
 
 1. **En-tête** — padding ~13px 20px :
    - à gauche, kicker petites capitales « RÉSULTAT À SAISIR » (≈10.5px, letter-spacing 2.2px, weight 700, `th.textMute`) ;
-   - à droite, **chip de type** : « Compétitive » = texte accent sur lavis accent (`${th.accent}` teinté ~14 % clair / ~20 % sombre, texte lisible dans les 2 thèmes) ; « Amicale » = chip neutre (texte `th.textMute` sur lavis `th.line`-like). Source : `m.competitive ?? true` (même convention que `OpenMatchCard`).
+   - à droite, **chip de type**, rendu par le composant partagé `Chip` (`components/ui/atoms.tsx`) : `<Chip tone="accent">Compétitive</Chip>` / `<Chip tone="line">Amicale</Chip>` — **exactement le badge déjà rendu par `OpenMatchCard`** pour la même sémantique. Son ton `accent` gère la lisibilité dans les deux thèmes (encre `th.ink` sur lavis fort en clair ; texte accent sur lavis discret en sombre) ; un chip fait main recréerait ce piège de contraste. Source : `m.competitive === false` → Amicale, sinon Compétitive (même convention que `OpenMatchCard`). **Écart assumé vs maquette** : radius 8 du `Chip` partagé au lieu de la pill de la maquette — la cohérence avec le même badge ailleurs dans l'app prime.
 2. **Filet** 1px `th.line`.
 3. **Corps** (padding latéral 20px) :
    - micro-label « SETS » (9px, letter-spacing 3px, `th.textFaint`), aligné au-dessus de la colonne des cases — **desktop uniquement** ;
@@ -70,13 +70,15 @@ Mêmes tokens : surface `th.surface`, filets `th.line`, cases dashed sur `rgba(2
 - `frontend/lib/resultsToRecord.ts` — helpers purs testés :
   - `abbrevName(firstName, lastName)` → « J. Dupont » (gère prénom vide) ;
   - `teamRows(players)` → `[team1, team2]` ordonnés par `slot` (tolère un `team` inattendu en le versant dans l'équipe la moins remplie — défense en profondeur, le backend garantit 2/2).
-- Réutilise `Avatar` (`components/ui/Avatar.tsx`) + `colorForSeed` (`lib/playerColors.ts`) + `useIsDesktop`.
+- Réutilise `Avatar` (`components/ui/Avatar.tsx`) + `Chip` (`components/ui/atoms.tsx`) + `colorForSeed` (`lib/playerColors.ts`) + `useIsDesktop` (`lib/useIsDesktop.ts`).
 - `fmtWhen` existant conservé.
 
 ## Tests
 
 - `frontend/__tests__/resultsToRecord.test.ts` (nouveau, helpers purs) : abréviation, ordre par slot, répartition d'équipes.
-- `frontend/__tests__/ResultsToRecord.test.tsx` (mise à jour) : noms des 4 joueurs rendus groupés par équipe, chip « Compétitive » vs « Amicale », séparateur VS présent, CTA « Saisir le score » ouvre la modale avec `initialTeams`/`locked` corrects (assertions existantes conservées), rendu `null` si vide.
+- `frontend/__tests__/ResultsToRecord.test.tsx` (mise à jour, 8 tests) : noms des 4 joueurs groupés par équipe, séparateur VS, chip « Compétitive » par défaut vs « Amicale » si `competitive: false`, terrain + horaire en pied de carte, variante desktop (CTA « Saisir le score » + noms complets, via surcharge locale de `matchMedia`) ; les 3 tests existants (liste vide, filtre club, ouverture de modale + enregistrement) restent verts sans modification.
+
+⚠️ `matchMedia` est stubé à `matches: false` dans `jest.setup.ts` → `useIsDesktop` renvoie `false` : le rendu testé par défaut est la variante **compacte**. Le test desktop surcharge `window.matchMedia` localement et le restaure.
 - Vérification visuelle CDP : clair + sombre, desktop 1280 + mobile 390 (aucun scroll horizontal), sur le Club-house et `/parties`.
 
 ## Hors périmètre
