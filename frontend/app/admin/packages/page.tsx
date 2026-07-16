@@ -4,7 +4,7 @@ import { api, PackageTemplate, SubscriptionPlan, SubscriptionOverview } from '@/
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { offerAccent, planPulse, packagePulse, planRevenueCents, splitByActive } from '@/lib/adminOffers';
+import { offerTint, planPulse, packagePulse, planRevenueCents, splitByActive } from '@/lib/adminOffers';
 import { OfferCard } from '@/components/admin/offers/OfferCard';
 import { OfferStudio, OfferStudioResult } from '@/components/admin/offers/OfferStudio';
 
@@ -143,8 +143,8 @@ export default function AdminPackagesPage() {
             <>
               <Kicker>Abonnements</Kicker>
               <div style={grid}>
-                {orderedPlans.map((p, i) => (
-                  <OfferCard key={p.id} tint={offerAccent(i)} kindLabel="Abonnement" name={p.name}
+                {orderedPlans.map((p) => (
+                  <OfferCard key={p.id} tint={offerTint('SUBSCRIPTION')} kindLabel="Abonnement" name={p.name}
                     price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
                     features={[
                       p.sportKeys.length > 0 ? p.sportKeys.join(', ') : 'Tous sports',
@@ -168,8 +168,8 @@ export default function AdminPackagesPage() {
             <>
               <Kicker>Carnets &amp; Porte-monnaie</Kicker>
               <div style={grid}>
-                {orderedTpls.map((t, i) => (
-                  <OfferCard key={t.id} tint={offerAccent(orderedPlans.length + i)}
+                {orderedTpls.map((t) => (
+                  <OfferCard key={t.id} tint={offerTint(t.kind)}
                     kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
                     price={euro(t.price)}
                     priceSuffix={t.kind === 'ENTRIES' ? `· ${t.entriesCount} entrées` : `· ${euro(t.walletAmount ?? 0)} crédités`}
@@ -186,7 +186,7 @@ export default function AdminPackagesPage() {
         </>
       )}
 
-      <OfferStudio open={studioOpen} editing={editing} previewIndex={editing ? 0 : orderedPlans.length + orderedTpls.length}
+      <OfferStudio open={studioOpen} editing={editing}
         sportOptions={SPORT_OPTIONS} busy={busy} error={studioOpen ? error : null}
         onClose={() => { setStudioOpen(false); setEditing(undefined); }} onSubmit={submitStudio} />
     </div>

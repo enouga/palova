@@ -25,7 +25,6 @@ export function OfferPreviewCard({ preview }: { preview: OfferPreview }) {
   };
   return (
     <div style={card}>
-      <span aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, background: `linear-gradient(180deg, ${tint}${th.mode === 'floodlit' ? '26' : '33'}, transparent)`, pointerEvents: 'none' }} />
       <span aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: tint }} />
       {imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
