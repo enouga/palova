@@ -851,7 +851,7 @@ model Payment {
   @@index([participantId])
   @@index([clubId, createdAt])
   @@index([clubId, status])
-  @@index([stripePaymentIntentId])
+  @@unique([stripePaymentIntentId])
   @@index([tournamentRegistrationId])
   @@index([eventRegistrationId])
   @@unique([clubId, receiptNo])
