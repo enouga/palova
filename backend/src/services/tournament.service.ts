@@ -1160,4 +1160,77 @@ export class TournamentService {
     if (del.count === 0) throw new Error('BENCH_ENTRY_NOT_FOUND');
     void actorUserId; // pas de journal pour un simple retrait manuel (acte correctif, pas un événement de jeu)
   }
+
+  // ---------------------------------------------------------- Remplacement
+
+  /**
+   * Remplace UN côté d'un binôme, sur SA place (même regId, même paiement — intouché).
+   * Ne dépend d'aucun forfait/pointage préalable : fonctionne sur n'importe quel côté (absent
+   * ou non — aucun gate de présence côté serveur, l'UI ne propose que les côtés ABSENT comme
+   * cibles). Téléphone/licence ne sont PAS bloquants (contrairement à l'inscription normale) :
+   * seules l'adhésion ACTIVE et la composition (sexe) sont des gardes dures. Outrepasse la
+   * clôture des inscriptions (le J/A doit pouvoir agir PENDANT le tournoi). Ne touche JAMAIS
+   * `paymentStatus`/`paymentDeadline` : le paiement reste attaché à l'inscription, remplacer
+   * un joueur — même le capitaine payeur — ne déclenche aucune charge ni remboursement.
+   */
+  async replacePlayer(clubId: string, tournamentId: string, regId: string, side: 'CAPTAIN' | 'PARTNER', newUserId: string, actorUserId: string) {
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { id: regId, tournamentId, tournament: { clubId }, status: { not: 'CANCELLED' } },
+      select: {
+        id: true, captainUserId: true, partnerUserId: true,
+        tournament: { select: { gender: true, openToWomen: true } },
+        captain: { select: { firstName: true, lastName: true, email: true } },
+        partner: { select: { firstName: true, lastName: true, email: true } },
+      },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    if (newUserId === reg.captainUserId || newUserId === reg.partnerUserId) throw new Error('ALREADY_REGISTERED');
+
+    await this.assertActiveMember(clubId, newUserId);
+    const dup = await prisma.tournamentRegistration.findFirst({
+      where: { tournamentId, status: { not: 'CANCELLED' }, id: { not: regId }, OR: [{ captainUserId: newUserId }, { partnerUserId: newUserId }] },
+      select: { id: true },
+    });
+    if (dup) throw new Error('ALREADY_REGISTERED');
+
+    const newUser = await prisma.user.findUnique({ where: { id: newUserId }, select: { id: true, sex: true, firstName: true, lastName: true, email: true } });
+    if (!newUser) throw new Error('USER_NOT_FOUND');
+    if (!newUser.sex) throw new Error('SEX_REQUIRED');
+
+    const otherSide = side === 'CAPTAIN' ? reg.partner : reg.captain;
+    const otherUserId = side === 'CAPTAIN' ? reg.partnerUserId : reg.captainUserId;
+    const otherUser = await prisma.user.findUnique({ where: { id: otherUserId }, select: { sex: true } });
+    if (!otherUser?.sex) throw new Error('SEX_REQUIRED');
+
+    const captainSex = side === 'CAPTAIN' ? newUser.sex : otherUser.sex;
+    const partnerSex = side === 'CAPTAIN' ? otherUser.sex : newUser.sex;
+    this.assertGender(reg.tournament.gender, captainSex as Sex, partnerSex as Sex, reg.tournament.openToWomen);
+
+    const removedPlayer = side === 'CAPTAIN' ? reg.captain : reg.partner;
+    const removedPlayerId = side === 'CAPTAIN' ? reg.captainUserId : reg.partnerUserId;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.tournamentRegistration.update({
+        where: { id: regId },
+        data: side === 'CAPTAIN'
+          ? { captainUserId: newUserId, captainPresence: 'PRESENT' }
+          : { partnerUserId: newUserId, partnerPresence: 'PRESENT' },
+      });
+      await tx.tournamentBenchEntry.deleteMany({ where: { tournamentId, userId: newUserId } });
+      await this.writeLog(tx, tournamentId, actorUserId, 'REPLACE', {
+        removedName: `${removedPlayer.firstName} ${removedPlayer.lastName}`.trim(),
+        newName: `${newUser.firstName} ${newUser.lastName}`.trim(),
+      });
+    });
+
+    // Ancien joueur : même email `registration.cancelled` que la désinscription classique,
+    // ciblé (le regId a déjà changé de titulaire, notifyTournamentCancellation ne l'atteindrait plus).
+    await this.safeNotify(() => notify.notifyTournamentReplacement({
+      tournamentId,
+      removedPlayer: { id: removedPlayerId, email: removedPlayer.email, firstName: removedPlayer.firstName, lastName: removedPlayer.lastName },
+      remainingPlayerName: `${otherSide.firstName} ${otherSide.lastName}`.trim(),
+    }));
+    // Remplaçant + coéquipier restant : notif d'inscription standard sur la même inscription (même regId).
+    await this.safeNotify(() => notify.notifyTournamentRegistration(regId));
+  }
 }

@@ -5,6 +5,7 @@ import {
   notifyTournamentRegistration,
   notifyTournamentCancellation,
   notifyTournamentPromotion,
+  notifyTournamentReplacement,
 } from '../../email/notifications';
 import { PackageService } from '../package.service';
 import { StripeService } from '../stripe.service';
@@ -1482,5 +1483,140 @@ describe('table de marque — forfait & banc', () => {
   it('removeFromBench : supprime l\'entrée présente', async () => {
     (prismaMock.tournamentBenchEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 1 } as any);
     await expect(svc.removeFromBench('club-1', 't1', 'u9', 'staff-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('table de marque — remplacement', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const baseReg = {
+    id: 'r1', tournamentId: 't1', captainUserId: 'c1', partnerUserId: 'p1',
+    tournament: { gender: 'MEN', openToWomen: false },
+    captain: { firstName: 'Bernard', lastName: 'X', email: 'bernard@test.fr' },
+    partner: { firstName: 'Andre', lastName: 'Y', email: 'andre@test.fr' },
+  };
+
+  /** Câble prisma.$transaction pour exécuter le callback avec un tx mocké minimal. Renvoie le tx pour assertions. */
+  function mockTx() {
+    const tx = {
+      tournamentRegistration: { update: jest.fn().mockResolvedValue({ id: 'r1' }) },
+      tournamentBenchEntry: { deleteMany: jest.fn() },
+      tournamentLogEntry: { create: jest.fn() },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    return tx;
+  }
+
+  it('replacePlayer : swap le côté CAPTAIN, présence -> PRESENT, paiement intouché, journalise', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any) // fetch de la registration ciblée
+      .mockResolvedValueOnce(null as any);   // dup check : 'u9' n'est nulle part ailleurs
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    const tx = mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith({
+      where: { id: 'r1' }, data: { captainUserId: 'u9', captainPresence: 'PRESENT' },
+    });
+    expect(tx.tournamentBenchEntry.deleteMany).toHaveBeenCalledWith({ where: { tournamentId: 't1', userId: 'u9' } });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tournamentId: 't1', actorUserId: 'staff-1', kind: 'REPLACE' }),
+    }));
+    // Le paiement (paymentStatus/paymentDeadline) n'est JAMAIS touché par un remplacement
+    // (décision de conception § « Décisions » points 2 et 4) : le seul appel d'update ne
+    // doit porter aucune clé paymentStatus.
+    expect(tx.tournamentRegistration.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentStatus: expect.anything() }) }),
+    );
+  });
+
+  it('replacePlayer : swap le côté PARTNER également (branche symétrique)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    const tx = mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'PARTNER', 'u9', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith({
+      where: { id: 'r1' }, data: { partnerUserId: 'u9', partnerPresence: 'PRESENT' },
+    });
+    expect(tx.tournamentBenchEntry.deleteMany).toHaveBeenCalledWith({ where: { tournamentId: 't1', userId: 'u9' } });
+  });
+
+  // Point le plus important de cette task (cf. note d'implémenteur du plan) : sans l'email
+  // réel du joueur RETIRÉ, `notifyTournamentReplacement` est un no-op silencieux
+  // (`if (!opts.removedPlayer.email) return;` dans notifications.ts) et l'email ne part jamais.
+  it('replacePlayer : notifie le joueur retiré avec SON email réel (pas null, pas undefined)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1');
+
+    expect(notifyTournamentReplacement).toHaveBeenCalledWith(expect.objectContaining({
+      tournamentId: 't1',
+      removedPlayer: expect.objectContaining({ id: 'c1', email: 'bernard@test.fr', firstName: 'Bernard', lastName: 'X' }),
+      remainingPlayerName: 'Andre Y',
+    }));
+    const call = (notifyTournamentReplacement as jest.Mock).mock.calls[0][0];
+    expect(call.removedPlayer.email).toBe('bernard@test.fr');
+    expect(call.removedPlayer.email).not.toBeNull();
+    expect(call.removedPlayer.email).not.toBeUndefined();
+    // Le remplaçant ET le coéquipier restant sont notifiés séparément, APRÈS le swap (même regId).
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  it('replacePlayer : refuse un non-membre (NOT_A_MEMBER)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock).mockResolvedValue(baseReg as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue(null as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('replacePlayer : refuse un déjà-inscrit dans ce tournoi (ALREADY_REGISTERED)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce({ id: 'r-other' } as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('ALREADY_REGISTERED');
+  });
+
+  it('replacePlayer : composition refusée avec GENDER_MISMATCH (tableau Dames, remplaçant homme)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce({ ...baseReg, tournament: { gender: 'WOMEN', openToWomen: false } } as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE' } as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
+  });
+
+  // Exigence explicite de la task : prouver que assertGender reçoit les sexes des DEUX côtés
+  // correctement affectés (captainSex = celui qui occupe RÉELLEMENT la place capitaine après le
+  // swap, partnerSex = celui qui occupe la place partenaire) — pas juste qu'une erreur sort.
+  // Sexes volontairement DIFFÉRENTS (MALE/FEMALE) : une inversion captainSex<->partnerSex dans
+  // l'implémentation changerait l'appel observé ci-dessous et ferait tomber ce test.
+  it('replacePlayer : assertGender reçoit les sexes des DEUX côtés correctement affectés (détecte une inversion captain/partner)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce({ ...baseReg, tournament: { gender: 'WOMEN', openToWomen: false } } as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    // Remplaçant (nouveau CAPTAIN, 'u9') = homme ; coéquipière conservée (partner 'p1') = femme.
+    (prismaMock.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any) // newUser
+      .mockResolvedValueOnce({ sex: 'FEMALE' } as any); // otherUser = partner existant (p1)
+    const spy = jest.spyOn(svc as any, 'assertGender');
+
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
+
+    // side='CAPTAIN' : captainSex doit venir du REMPLAÇANT (MALE), partnerSex du côté conservé (FEMALE).
+    expect(spy).toHaveBeenCalledWith('WOMEN', 'MALE', 'FEMALE', false);
   });
 });
