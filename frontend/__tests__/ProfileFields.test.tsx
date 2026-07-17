@@ -22,10 +22,12 @@ describe('ProfileInput', () => {
     expect(onChange).toHaveBeenCalledWith('0700000000');
   });
 
-  it('n’annonce le libellé qu’une fois (le libellé visuel est aria-hidden)', () => {
+  it('le libellé peint est masqué à l’accessibilité — seul le champ porte le nom', () => {
     wrap(<ProfileInput label="Téléphone" value="" onChange={() => {}} />);
-    // Un seul nœud accessible nommé « Téléphone » : l'input. Le libellé peint est masqué.
-    expect(screen.getAllByLabelText('Téléphone')).toHaveLength(1);
+    // Le libellé est peint dans le bloc mais retiré de l'arbre d'accessibilité :
+    // sans ça, un lecteur d'écran annoncerait « Téléphone » deux fois.
+    expect(screen.getByText('Téléphone')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByLabelText('Téléphone').tagName).toBe('INPUT');
   });
 
   it('le focus se reflète sur le bloc (anneau d’accent)', () => {
