@@ -14,7 +14,7 @@ import { ClubService } from '../services/club.service';
 import { processClubLogo, LogoKind } from '../services/clubLogo';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
-import { TournamentService } from '../services/tournament.service';
+import { TournamentService, MarkTablePresence } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { PackageService } from '../services/package.service';
 import { RefundService } from '../services/refund.service';
@@ -135,6 +135,19 @@ const ERROR_STATUS: Record<string, number> = {
   SERIES_CANCELLED:       409,
   RATE_LIMITED:           429,
   SUPPORT_UNAVAILABLE:    502,
+  // Table de marque du J/A côté staff (cœur partagé services/tournament.service.ts, miroir
+  // exact des routes J/A de clubs.ts — Task 8). REGISTRATION_NOT_FOUND, USER_NOT_FOUND,
+  // TOURNAMENT_NOT_FOUND et VALIDATION_ERROR sont déjà mappés ci-dessus, non dupliqués.
+  // NOT_A_MEMBER (assertActiveMember) est un message DISTINCT de MEMBER_NOT_FOUND (déjà
+  // présent ci-dessus pour assertClubMember/removeMember) — pas de doublon, code différent.
+  NOT_A_MEMBER:          404,
+  ALREADY_ON_BENCH:      409,
+  BENCH_ENTRY_NOT_FOUND: 404,
+  TOURNAMENT_NOT_OPEN:   409,
+  SEX_REQUIRED:          400,
+  GENDER_MISMATCH:       400,
+  ALREADY_REGISTERED:    409,
+  PARTNER_IS_SELF:       400,
 };
 
 function asString(v: unknown): string {
@@ -889,6 +902,101 @@ router.patch('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequ
 });
 router.delete('/tournaments/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await tournamentService.adminRemoveRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Table de marque (staff) — même cœur que les routes J/A (clubs.ts), gate STAFF hérité
+// du routeur (router.use(authMiddleware, requireClubMember('STAFF')) ci-dessus, pas de
+// resolveReferee/propriété ici : tout STAFF+ du club agit sur tous les tournois du club). ---
+
+// Vue complète de la table de marque (roster + présences + banc + journal récent).
+router.get('/tournaments/:id/mark-table', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.listMarkTable(req.membership!.clubId, asString(req.params.id))); } catch (e) { handleError(e, res, next); }
+});
+
+// Journal complet du tournoi (200 dernières entrées), plus récent d'abord.
+router.get('/tournaments/:id/mark-table/log', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.listMarkTableLog(req.membership!.clubId, asString(req.params.id))); } catch (e) { handleError(e, res, next); }
+});
+
+// Pointage d'un joueur (présent / absent / non vu).
+router.post('/tournaments/:id/registrations/:regId/presence', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const side = asString(req.body?.side);
+    const presence = asString(req.body?.presence);
+    if (!['CAPTAIN', 'PARTNER'].includes(side) || !['UNSEEN', 'PRESENT', 'ABSENT'].includes(presence)) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    await tournamentService.setPresence(req.membership!.clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', presence as MarkTablePresence, req.user!.id);
+    res.json({ ok: true });
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Forfait d'un côté d'un binôme (annule l'inscription, place le survivant sur le banc).
+router.post('/tournaments/:id/registrations/:regId/forfeit', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const side = asString(req.body?.side);
+    if (!['CAPTAIN', 'PARTNER'].includes(side)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await tournamentService.declareForfeit(req.membership!.clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', req.user!.id));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Remplacement d'un côté d'un binôme, sur la même place (même paiement, intouché).
+router.post('/tournaments/:id/registrations/:regId/replace', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const side = asString(req.body?.side);
+    const newUserId = asString(req.body?.newUserId);
+    if (!['CAPTAIN', 'PARTNER'].includes(side) || !newUserId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    await tournamentService.replacePlayer(req.membership!.clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', newUserId, req.user!.id);
+    res.json({ ok: true });
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Ajoute un retardataire au banc (membre actif requis).
+router.post('/tournaments/:id/bench', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = asString(req.body?.userId);
+    if (!userId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    await tournamentService.addToBench(req.membership!.clubId, asString(req.params.id), userId, req.user!.id);
+    res.status(201).json({ ok: true });
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Retrait manuel du banc.
+router.delete('/tournaments/:id/bench/:userId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await tournamentService.removeFromBench(req.membership!.clubId, asString(req.params.id), asString(req.params.userId), req.user!.id);
+    res.json({ ok: true });
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Deux joueurs du banc forment un nouveau binôme.
+router.post('/tournaments/:id/bench/pair', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userAId = asString(req.body?.userAId);
+    const userBId = asString(req.body?.userBId);
+    if (!userAId || !userBId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.status(201).json(await tournamentService.pairFromBench(req.membership!.clubId, asString(req.params.id), userAId, userBId, req.user!.id));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Binôme tardif direct (sans passer par le banc).
+router.post('/tournaments/:id/registrations', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const captainUserId = asString(req.body?.captainUserId);
+    const partnerUserId = asString(req.body?.partnerUserId);
+    if (!captainUserId || !partnerUserId) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.status(201).json(await tournamentService.addLateRegistration(req.membership!.clubId, asString(req.params.id), captainUserId, partnerUserId, req.user!.id));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Promotion d'un binôme en attente depuis la table de marque (journalisée).
+router.post('/tournaments/:id/mark-table/registrations/:regId/promote', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.markTablePromote(req.membership!.clubId, asString(req.params.id), asString(req.params.regId), req.user!.id)); } catch (e) { handleError(e, res, next); }
+});
+
+// Retrait d'un binôme depuis la table de marque (journalisé).
+router.delete('/tournaments/:id/mark-table/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await tournamentService.markTableRemove(req.membership!.clubId, asString(req.params.id), asString(req.params.regId), req.user!.id)); } catch (e) { handleError(e, res, next); }
 });
 
 // --- Events (animations : mêlées, stages, soirées…) ---
