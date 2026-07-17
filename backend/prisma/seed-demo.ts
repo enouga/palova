@@ -17,6 +17,11 @@ import { seedDefaultOffers, seedDefaultSubscriptionPlans, DEFAULT_OFF_PEAK_HOURS
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
+// Données de démonstration (clubs, membres, password123) — JAMAIS en production.
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('seed-demo.ts est réservé au développement (données de démo). Refus en production.');
+}
+
 type Gender = 'MEN' | 'WOMEN' | 'MIXED';
 type TStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
 type RStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED';

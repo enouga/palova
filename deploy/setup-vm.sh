@@ -36,5 +36,6 @@ echo ""
 echo ">>> État des services :"
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 echo ""
-echo ">>> Pour charger les données démo (à faire une fois) :"
+echo ">>> Pour initialiser la plateforme (super-admin + catalogue sports, une fois) :"
 echo "    docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend npm run db:seed"
+echo "    (en prod : SUPERADMIN_PASSWORD doit etre defini dans .env.prod ; aucune donnee de demo n'est creee)"
