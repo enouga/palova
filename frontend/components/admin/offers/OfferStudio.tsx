@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { assetUrl, CreatePackageTemplateBody, CreateSubscriptionPlanBody, PackageKind, PackageTemplate, SubscriptionBenefit, SubscriptionPlan } from '@/lib/api';
-import { offerTint } from '@/lib/adminOffers';
+import { offerTint, sportOfferTint } from '@/lib/adminOffers';
 import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { OfferPreviewCard, OfferPreview } from '@/components/admin/offers/OfferPreviewCard';
 
@@ -17,6 +17,7 @@ export interface OfferStudioProps {
   open: boolean;
   editing?: { kind: 'plan'; plan: SubscriptionPlan } | { kind: 'package'; tpl: PackageTemplate };
   sportOptions: string[];
+  multiSport: boolean;
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -27,7 +28,7 @@ const euro = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
 
 export function OfferStudio(props: OfferStudioProps) {
   const { th } = useTheme();
-  const { open, editing, sportOptions, busy, error, onClose, onSubmit } = props;
+  const { open, editing, sportOptions, multiSport, busy, error, onClose, onSubmit } = props;
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const initialKind: StudioKind = editing ? (editing.kind === 'plan' ? 'PLAN' : editing.tpl.kind) : 'PLAN';
@@ -88,7 +89,8 @@ export function OfferStudio(props: OfferStudioProps) {
   const shownImageUrl = previewFileUrl ?? (!removeImage && existingImageUrl ? assetUrl(existingImageUrl) : null);
   const toggleSport = (k: string) => setSports((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
-  const tint = offerTint(kind === 'PLAN' ? 'SUBSCRIPTION' : kind);
+  const typeTint = offerTint(kind === 'PLAN' ? 'SUBSCRIPTION' : kind);
+  const sportTint = multiSport ? sportOfferTint(sports) : typeTint;
   const priceNum = Number(price) || 0;
   const kindLabel = kind === 'PLAN' ? 'Abonnement' : kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie';
   const sportsLine = sports.length > 0 ? sports.join(', ') : 'Tous sports';
@@ -98,7 +100,7 @@ export function OfferStudio(props: OfferStudioProps) {
       ? [sportsLine, `${Number(entries) || 0} entrées`, validity ? `Valable ${validity} j` : 'Sans expiration']
       : [sportsLine, `${euro(Number(walletAmount) || 0)} crédités`, validity ? `Valable ${validity} j` : 'Sans expiration'];
   const preview: OfferPreview = {
-    kindLabel, tint, name, description,
+    kindLabel, sportTint, typeTint, name, description,
     price: euro(priceNum), priceSuffix: kind === 'PLAN' ? '/mois' : null,
     lines, ctaLabel: `Souscrire · ${euro(priceNum)}`,
     imageUrl: shownImageUrl,
