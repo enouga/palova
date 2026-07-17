@@ -19,7 +19,7 @@ jest.mock('../lib/api', () => ({
     getMyClubMembership: jest.fn(),
     getMyClubPackages: jest.fn(),
     getMyClubSubscriptions: jest.fn(),
-    getCoachStatus: jest.fn(),
+    getMyFacets: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -56,7 +56,7 @@ describe('ProfileMenu', () => {
     api.getMyClubMembership.mockResolvedValue(null);
     api.getMyClubPackages.mockResolvedValue([]);
     api.getMyClubSubscriptions.mockResolvedValue([]);
-    api.getCoachStatus.mockResolvedValue({ isCoach: false });
+    api.getMyFacets.mockResolvedValue({ isCoach: false, isReferee: false });
     installCtx.state = 'hidden';
     installCtx.promptInstall = jest.fn();
   });
@@ -153,7 +153,7 @@ describe('ProfileMenu', () => {
   it('affiche « Mes cours » quand le viewer est coach', async () => {
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getCoachStatus.mockResolvedValue({ isCoach: true });
+    api.getMyFacets.mockResolvedValue({ isCoach: true, isReferee: false });
     wrap();
     openMenu();
     expect(await screen.findByText('Mes cours')).toBeInTheDocument();
@@ -162,11 +162,44 @@ describe('ProfileMenu', () => {
   it("masque « Mes cours » quand le viewer n'est pas coach", async () => {
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getCoachStatus.mockResolvedValue({ isCoach: false });
+    api.getMyFacets.mockResolvedValue({ isCoach: false, isReferee: false });
     wrap();
     openMenu();
     await screen.findByText('Marc Bidaut'); // menu chargé
     expect(screen.queryByText('Mes cours')).not.toBeInTheDocument();
+  });
+
+  it('affiche « Arbitrage » quand le viewer est juge-arbitre', async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getMyFacets.mockResolvedValue({ isCoach: false, isReferee: true });
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Arbitrage')).toBeInTheDocument();
+  });
+
+  it("masque « Arbitrage » quand le viewer n'est pas juge-arbitre", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    api.getMyFacets.mockResolvedValue({ isCoach: false, isReferee: false });
+    wrap();
+    openMenu();
+    await screen.findByText('Marc Bidaut'); // menu chargé
+    expect(screen.queryByText('Arbitrage')).not.toBeInTheDocument();
+  });
+
+  // Garde-fou des suites qui montent le VRAI ClubNav (ClubReserve.*, OpenMatches…) : celui-ci rend
+  // ProfileMenu, donc un appel api.* au montage casserait leurs mocks lib/api. L'hôte club + la
+  // session sont posés exprès : la seule raison de ne pas appeler, c'est que le menu est fermé
+  // (sans slug, le test passerait même si l'appel migrait dans un useEffect — donc ne prouverait rien).
+  it("n'appelle les facettes qu'à l'ouverture du menu (paresse)", async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
+    wrap();
+    await screen.findByLabelText('Mon profil'); // montage + effets écoulés
+    expect(api.getMyFacets).not.toHaveBeenCalled();
+    openMenu();
+    await waitFor(() => expect(api.getMyFacets).toHaveBeenCalledTimes(1));
   });
 
   it("hôte plateforme : pas de section soldes ni d'appel membership", async () => {

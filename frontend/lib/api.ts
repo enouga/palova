@@ -569,6 +569,13 @@ export const api = {
   adminSetMemberCoach: (clubId: string, userId: string, isCoach: boolean, token: string) =>
     request<{ userId: string; isCoach: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/coach`, { method: 'PATCH', body: JSON.stringify({ isCoach }) }, token),
 
+  // Facette juge-arbitre d'un membre (attribution ADMIN+) + vivier des J/A du club (lecture seule,
+  // STAFF : il alimente le picker de J/A d'un tournoi, dont l'édition est ouverte au STAFF).
+  adminSetMemberReferee: (clubId: string, userId: string, isReferee: boolean, token: string) =>
+    request<{ userId: string; isReferee: boolean }>(`/api/clubs/${clubId}/admin/members/${userId}/referee`, { method: 'PATCH', body: JSON.stringify({ isReferee }) }, token),
+  adminGetReferees: (clubId: string, token: string) =>
+    request<ClubReferee[]>(`/api/clubs/${clubId}/admin/referees`, {}, token),
+
   adminSellPackage: (clubId: string, userId: string, body: SellPackageBody, token: string) =>
     request<{ package: MemberPackage; payment: Payment }>(`/api/clubs/${clubId}/admin/members/${userId}/packages`, { method: 'POST', body: JSON.stringify(body) }, token),
 
@@ -1064,15 +1071,28 @@ export const api = {
 
   getMyLessons: (token: string) => request<MyLessonEnrollment[]>('/api/me/lessons', {}, token),
 
+  // Facettes du viewer sur le club (coach, juge-arbitre) — un aller-retour pour les entrées de
+  // menu. Ne 403 jamais : les facettes absentes valent false (remplace l'ancien GET /me/coach).
+  getMyFacets: (slug: string, token: string) =>
+    request<{ isCoach: boolean; isReferee: boolean }>(`/api/clubs/${slug}/me/facets`, {}, token),
+
   // --- Espace coach (le coach connecté gère SES cours) ---
-  getCoachStatus: (slug: string, token: string) =>
-    request<{ isCoach: boolean }>(`/api/clubs/${slug}/me/coach`, {}, token),
   getCoachLessons: (slug: string, scope: 'upcoming' | 'past', token: string) =>
     request<CoachLessonRow[]>(`/api/clubs/${slug}/me/coach/lessons?scope=${scope}`, {}, token),
   coachEnrollStudent: (slug: string, lessonId: string, userId: string, token: string) =>
     request<{ id: string; status: string }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
   coachRemoveStudent: (slug: string, lessonId: string, enrollId: string, token: string) =>
     request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students/${enrollId}`, { method: 'DELETE' }, token),
+
+  // --- Espace juge-arbitre (le J/A connecté gère SES tournois) ---
+  getRefereeTournaments: (slug: string, scope: 'upcoming' | 'past', token: string) =>
+    request<RefereeTournamentRow[]>(`/api/clubs/${slug}/me/referee/tournaments?scope=${scope}`, {}, token),
+  getRefereeRegistrations: (slug: string, tournamentId: string, token: string) =>
+    request<RefereeRegistrationRow[]>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations`, {}, token),
+  refereePromoteRegistration: (slug: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}/promote`, { method: 'POST' }, token),
+  refereeRemoveRegistration: (slug: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
 
   getVapidPublicKey: () => request<{ publicKey: string | null }>('/api/push/vapid-public-key'),
   savePushSubscription: (sub: unknown, token: string) =>
@@ -1381,6 +1401,7 @@ export interface Member {
   watch?: boolean;     // drapeau « à surveiller »
   staffRole?: 'OWNER' | 'ADMIN' | 'STAFF' | null; // rôle back-office (table ClubMember), null = membre simple
   isCoach?: boolean;   // anime des cours (table coaches, liée au compte)
+  isReferee?: boolean; // facette juge-arbitre (ClubMembership.isReferee) — toujours peuplé par listMembers
   since?: string;
   // --- enrichissements liste (additifs, cf. listMembers) ---
   avatarUrl?: string | null;
@@ -2202,6 +2223,7 @@ export interface Tournament {
   openToWomen: boolean; // Messieurs uniquement : true = tableau "open" (femmes admises), false = 100% hommes
   description: string | null;
   contactInfo: string | null;
+  refereeUserId?: string | null; // J/A désigné (facette, pas un rôle) ; peuplé par les listes club/admin
   startTime: string;
   endTime: string | null;
   registrationDeadline: string;
@@ -2850,6 +2872,49 @@ export interface CoachLessonRow {
   confirmedCount: number;
   waitlistCount: number;
   students: CoachStudentRow[];
+}
+
+// --- Espace juge-arbitre (Arbitrage) ---
+
+/** Un joueur vu par le J/A à la table de marque. `userId` volontairement absent côté serveur. */
+export interface RefereePlayerRow {
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null; // licence — le J/A la vérifie à la table de marque
+}
+
+export interface RefereeRegistrationRow {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  waitlistPosition: number | null;
+  captain: RefereePlayerRow;
+  // Toujours présent : une inscription de tournoi est un binôme (partnerUserId requis en base).
+  partner: RefereePlayerRow;
+}
+
+export interface RefereeTournamentRow {
+  id: string;
+  name: string;
+  category: string;
+  gender: string;
+  status: string;
+  startTime: string;            // Date sérialisée en JSON
+  endTime: string | null;
+  registrationDeadline: string;
+  maxTeams: number | null;
+  confirmedCount: number;
+  waitlistCount: number;
+}
+
+/** Vivier des J/A du club (membres actifs portant la facette) — alimente le picker d'un tournoi. */
+export interface ClubReferee {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
 }
 
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).
