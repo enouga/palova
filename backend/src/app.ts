@@ -31,6 +31,10 @@ import platformBillingWebhooksRouter from './routes/platform-billing-webhooks';
 
 const app = express();
 
+// Derrière un seul proxy inverse (Caddy) : req.ip = vraie IP client (dernier saut de
+// X-Forwarded-For), résistant au spoofing. Indispensable au rate limiting par IP.
+app.set('trust proxy', 1);
+
 // Domaines racines acceptés (multi-domaines, ex. "palova.fr,palova.app"). Repli
 // rétro-compat sur l'ancienne variable singulière, puis localhost (dev).
 function rootDomains(): string[] {
