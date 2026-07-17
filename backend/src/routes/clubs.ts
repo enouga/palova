@@ -7,7 +7,7 @@ import { ClubPageService } from '../services/clubPage.service';
 import { AvailabilityService } from '../services/availability.service';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
-import { TournamentService } from '../services/tournament.service';
+import { TournamentService, MarkTablePresence } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { PackageService } from '../services/package.service';
@@ -114,6 +114,16 @@ const ERROR_STATUS: Record<string, number> = {
   TOURNAMENT_NOT_YOURS:  403,
   TOURNAMENT_NOT_FOUND:  404,
   INVALID_DATE:          400,
+  // Table de marque du J/A (cœur partagé services/tournament.service.ts) —
+  // NOT_A_MEMBER existe déjà ci-dessus à 404 (partagé avec follow/friendship), non dupliqué ici.
+  ALREADY_ON_BENCH:      409,
+  BENCH_ENTRY_NOT_FOUND: 404,
+  TOURNAMENT_NOT_OPEN:   409,
+  SEX_REQUIRED:          400,
+  GENDER_MISMATCH:       400,
+  USER_NOT_FOUND:        404,
+  ALREADY_REGISTERED:    409,
+  REGISTRATION_NOT_FOUND: 404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -393,6 +403,127 @@ router.delete('/:slug/me/referee/tournaments/:id/registrations/:regId', authMidd
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
     res.json(await tournamentService.refereeRemoveRegistration(clubId, req.user!.id, asString(req.params.id), asString(req.params.regId)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- Table de marque du J/A (mêmes gates que les 4 routes ci-dessus, cœur partagé avec le staff — Task 9) ---
+
+// Vue complète de la table de marque (roster + présences + banc + journal récent).
+router.get('/:slug/me/referee/tournaments/:id/mark-table', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.listMarkTable(clubId, asString(req.params.id)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Journal complet du tournoi (200 dernières entrées), plus récent d'abord.
+router.get('/:slug/me/referee/tournaments/:id/mark-table/log', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.listMarkTableLog(clubId, asString(req.params.id)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Pointage d'un joueur (présent / absent / non vu).
+router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/presence', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const side = asString(req.body?.side);
+    const presence = asString(req.body?.presence);
+    if (!['CAPTAIN', 'PARTNER'].includes(side) || !['UNSEEN', 'PRESENT', 'ABSENT'].includes(presence)) throw new Error('VALIDATION_ERROR');
+    await tournamentService.setPresence(clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', presence as MarkTablePresence, req.user!.id);
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Forfait d'un côté d'un binôme (annule l'inscription, place le survivant sur le banc).
+router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/forfeit', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const side = asString(req.body?.side);
+    if (!['CAPTAIN', 'PARTNER'].includes(side)) throw new Error('VALIDATION_ERROR');
+    res.json(await tournamentService.declareForfeit(clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Remplacement d'un côté d'un binôme, sur la même place (même paiement, intouché).
+router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/replace', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const side = asString(req.body?.side);
+    const newUserId = asString(req.body?.newUserId);
+    if (!['CAPTAIN', 'PARTNER'].includes(side) || !newUserId) throw new Error('VALIDATION_ERROR');
+    await tournamentService.replacePlayer(clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', newUserId, req.user!.id);
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Ajoute un retardataire au banc (membre actif requis).
+router.post('/:slug/me/referee/tournaments/:id/bench', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const userId = asString(req.body?.userId);
+    if (!userId) throw new Error('VALIDATION_ERROR');
+    await tournamentService.addToBench(clubId, asString(req.params.id), userId, req.user!.id);
+    res.status(201).json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retrait manuel du banc.
+router.delete('/:slug/me/referee/tournaments/:id/bench/:userId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.removeFromBench(clubId, asString(req.params.id), asString(req.params.userId), req.user!.id);
+    res.json({ ok: true });
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Deux joueurs du banc forment un nouveau binôme.
+router.post('/:slug/me/referee/tournaments/:id/bench/pair', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const userAId = asString(req.body?.userAId);
+    const userBId = asString(req.body?.userBId);
+    if (!userAId || !userBId) throw new Error('VALIDATION_ERROR');
+    res.status(201).json(await tournamentService.pairFromBench(clubId, asString(req.params.id), userAId, userBId, req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Binôme tardif direct (sans passer par le banc).
+router.post('/:slug/me/referee/tournaments/:id/registrations', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const captainUserId = asString(req.body?.captainUserId);
+    const partnerUserId = asString(req.body?.partnerUserId);
+    if (!captainUserId || !partnerUserId) throw new Error('VALIDATION_ERROR');
+    res.status(201).json(await tournamentService.addLateRegistration(clubId, asString(req.params.id), captainUserId, partnerUserId, req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Promotion d'un binôme en attente depuis la table de marque (journalisée).
+router.post('/:slug/me/referee/tournaments/:id/mark-table/registrations/:regId/promote', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.markTablePromote(clubId, asString(req.params.id), asString(req.params.regId), req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retrait d'un binôme depuis la table de marque (journalisé).
+router.delete('/:slug/me/referee/tournaments/:id/mark-table/registrations/:regId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.markTableRemove(clubId, asString(req.params.id), asString(req.params.regId), req.user!.id));
   } catch (err) { handleError(err, res, next); }
 });
 
