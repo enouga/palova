@@ -709,9 +709,10 @@ export class TournamentService {
   }
 
   /**
-   * Tournois du J/A (à venir = startTime>now asc ; passés = startTime<now desc, cap 30).
-   * Le partage se fait sur startTime seul : endTime est nullable, et un tournoi en cours doit
-   * rester joignable (il arrive en tête des « passés », sans verrou temporel sur les actions).
+   * Tournois du J/A (à venir asc ; passés desc, cap 30).
+   * « À venir » = PAS ENCORE FINI, càd `endTime ?? startTime >= now` — jamais `startTime` seul :
+   * `endTime` est nullable (le repli sur startTime est obligatoire) et le J/A doit agir PENDANT son
+   * tournoi, qui doit donc rester là où il va le chercher. Ni trou, ni doublon entre les deux scopes.
    */
   async listRefereeTournaments(clubId: string, userId: string, scope: 'upcoming' | 'past'): Promise<RefereeTournamentRow[]> {
     const now = new Date();
@@ -719,7 +720,9 @@ export class TournamentService {
       where: {
         clubId,
         refereeUserId: userId,
-        startTime: scope === 'upcoming' ? { gt: now } : { lt: now },
+        OR: scope === 'upcoming'
+          ? [{ endTime: { gte: now } }, { endTime: null, startTime: { gte: now } }]
+          : [{ endTime: { lt: now } }, { endTime: null, startTime: { lt: now } }],
       },
       orderBy: { startTime: scope === 'upcoming' ? 'asc' : 'desc' },
       ...(scope === 'past' ? { take: 30 } : {}),

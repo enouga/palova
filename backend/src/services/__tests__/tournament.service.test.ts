@@ -824,6 +824,34 @@ describe('espace J/A — gate', () => {
   });
 });
 
+const YESTERDAY = new Date(Date.now() - 86_400_000);
+const TOMORROW = new Date(Date.now() + 86_400_000);
+
+/**
+ * Mini-évaluateur du fragment `where` de scope : applique la clause Prisma produite par
+ * listRefereeTournaments à une fixture, pour verrouiller la RÈGLE (« fini » = endTime ?? startTime)
+ * et pas seulement la forme. Une clause d'une autre forme ne matche rien → le test tombe (fail-safe).
+ */
+function scopeMatches(where: any, t: { startTime: Date; endTime: Date | null }): boolean {
+  const cmp = (cond: any, value: Date | null): boolean => {
+    if (cond === null) return value === null;
+    if (cond?.gte instanceof Date) return value !== null && value >= cond.gte;
+    if (cond?.lt instanceof Date) return value !== null && value < cond.lt;
+    return false;
+  };
+  const branchMatches = (branch: any) =>
+    Object.entries(branch).every(([field, cond]) => cmp(cond, field === 'endTime' ? t.endTime : t.startTime));
+  return Array.isArray(where?.OR) && where.OR.some(branchMatches);
+}
+
+/** Renvoie la clause `where` passée à tournament.findMany pour un scope donné. */
+async function scopeWhere(svc: TournamentService, scope: 'upcoming' | 'past') {
+  jest.clearAllMocks();
+  prismaMock.tournament.findMany.mockResolvedValue([] as any);
+  await svc.listRefereeTournaments('club-1', 'u1', scope);
+  return (prismaMock.tournament.findMany.mock.calls[0][0] as any).where;
+}
+
 describe('espace J/A — lecture', () => {
   let svc: TournamentService;
   beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
@@ -834,7 +862,6 @@ describe('espace J/A — lecture', () => {
     const arg = prismaMock.tournament.findMany.mock.calls[0][0] as any;
     expect(arg.where.clubId).toBe('club-1');
     expect(arg.where.refereeUserId).toBe('u1');
-    expect(arg.where.startTime).toEqual({ gt: expect.any(Date) });
     expect(arg.orderBy).toEqual({ startTime: 'asc' });
     expect(arg.take).toBeUndefined();
   });
@@ -844,9 +871,37 @@ describe('espace J/A — lecture', () => {
     await svc.listRefereeTournaments('club-1', 'u1', 'past');
     const arg = prismaMock.tournament.findMany.mock.calls[0][0] as any;
     expect(arg.where.refereeUserId).toBe('u1');
-    expect(arg.where.startTime).toEqual({ lt: expect.any(Date) });
     expect(arg.orderBy).toEqual({ startTime: 'desc' });
     expect(arg.take).toBe(30);
+  });
+
+  // Règle : « fini » = endTime ?? startTime. Garde anti-régression — quiconque « simplifie »
+  // ce filtre en startTime seul remet le tournoi du jour J sous « Passés » et fait tomber ceci.
+  it('listRefereeTournaments : un tournoi en cours (commencé hier, fini demain) est « à venir », jamais « passé »', async () => {
+    const enCours = { startTime: YESTERDAY, endTime: TOMORROW };
+    expect(scopeMatches(await scopeWhere(svc, 'upcoming'), enCours)).toBe(true);
+    expect(scopeMatches(await scopeWhere(svc, 'past'), enCours)).toBe(false);
+  });
+
+  it('listRefereeTournaments : sans endTime, le scope bascule sur startTime (hier → passé)', async () => {
+    const hierSansFin = { startTime: YESTERDAY, endTime: null };
+    expect(scopeMatches(await scopeWhere(svc, 'past'), hierSansFin)).toBe(true);
+    expect(scopeMatches(await scopeWhere(svc, 'upcoming'), hierSansFin)).toBe(false);
+  });
+
+  it('listRefereeTournaments : ni trou ni doublon — tout tournoi tombe dans exactement un scope', async () => {
+    const upcoming = await scopeWhere(svc, 'upcoming');
+    const past = await scopeWhere(svc, 'past');
+    const fixtures = [
+      { startTime: TOMORROW, endTime: null },       // à venir, sans fin
+      { startTime: TOMORROW, endTime: TOMORROW },   // à venir, avec fin
+      { startTime: YESTERDAY, endTime: TOMORROW },  // en cours
+      { startTime: YESTERDAY, endTime: null },      // passé, sans fin
+      { startTime: YESTERDAY, endTime: YESTERDAY }, // passé, avec fin
+    ];
+    for (const t of fixtures) {
+      expect([scopeMatches(upcoming, t), scopeMatches(past, t)].filter(Boolean)).toHaveLength(1);
+    }
   });
 
   it('listRefereeTournaments : hydrate les compteurs confirmés / attente', async () => {
