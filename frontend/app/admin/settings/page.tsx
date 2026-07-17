@@ -12,7 +12,7 @@ import {
 } from '@/lib/adminSettings';
 import type { LogoWarning } from '@/lib/clubLogos';
 import { SetClubField } from '@/components/admin/settings/shared';
-import { SaveBar } from '@/components/admin/settings/SaveBar';
+import { SaveBar } from '@/components/ui/SaveBar';
 import { SettingsIdentity } from '@/components/admin/settings/SettingsIdentity';
 import { SettingsSports } from '@/components/admin/settings/SettingsSports';
 import { SettingsBooking } from '@/components/admin/settings/SettingsBooking';

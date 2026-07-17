@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@/lib/ThemeProvider';
-import { SaveBar } from '@/components/admin/settings/SaveBar';
+import { SaveBar } from '@/components/ui/SaveBar';
 
 const base = { dirty: true, saving: false, error: null as string | null, saved: false, onSave: jest.fn(), onCancel: jest.fn() };
 const wrap = (over: Partial<typeof base> = {}) =>
