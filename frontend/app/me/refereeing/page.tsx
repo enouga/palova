@@ -4,6 +4,7 @@ import { api, RefereeTournamentRow, RefereeRegistrationRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/atoms';
 import { ClubNav } from '@/components/ClubNav';
@@ -39,6 +40,9 @@ export default function MeRefereeingPage() {
   const [rosters, setRosters] = useState<Record<string, RefereeRegistrationRow[]>>({});
   const [rosterLoading, setRosterLoading] = useState<Set<string>>(new Set());
   const [removeFor, setRemoveFor] = useState<{ tournamentId: string; regId: string } | null>(null);
+  // Horloge unique posée au mount : jamais de `new Date()` au rendu (hydration).
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => { setNow(new Date()); }, []);
 
   const load = useCallback(async () => {
     if (!token || !slug) return;
@@ -106,14 +110,21 @@ export default function MeRefereeingPage() {
           <>
             <Segmented<'upcoming' | 'past'> value={scope} onChange={setScope}
               options={[{ value: 'upcoming', label: 'À venir' }, { value: 'past', label: 'Passés' }]} />
-            {error && <div style={{ background: th.accent, color: th.onAccent, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13 }}>{error}</div>}
+            {/* Coral : une erreur ne se peint pas avec l'accent du club (bleu = état normal). */}
+            {error && (
+              <div style={{
+                background: th.mode === 'floodlit' ? `${ACCENTS.coral}26` : `${ACCENTS.coral}40`,
+                color: th.mode === 'floodlit' ? ACCENTS.coral : th.ink,
+                borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600,
+              }}>{error}</div>
+            )}
             {loading ? (
               <span style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</span>
             ) : tournaments.length === 0 ? (
               <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>{scope === 'upcoming' ? 'Aucun tournoi à venir.' : 'Aucun tournoi passé.'}</p>
             ) : (
               tournaments.map((t) => (
-                <RefereeTournamentCard key={t.id} tournament={t} tz={tz} editable={scope === 'upcoming'}
+                <RefereeTournamentCard key={t.id} tournament={t} tz={tz} now={now} editable={scope === 'upcoming'}
                   expanded={expanded.has(t.id)}
                   registrations={rosters[t.id] ?? null}
                   loadingRoster={rosterLoading.has(t.id)}
