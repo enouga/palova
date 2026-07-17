@@ -1,16 +1,20 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { api, MatchComment } from '@/lib/api';
+import { useTheme } from '@/lib/ThemeProvider';
 import { Avatar } from '@/components/ui/Avatar';
 
 // Fil de discussion d'un match en litige. Réutilisé côté joueur et côté staff.
 export function MatchDiscussion({ matchId, token, canWrite }: { matchId: string; token: string; canWrite: boolean }) {
+  const { th } = useTheme();
   const [comments, setComments] = useState<MatchComment[] | null>(null);
+  const [error, setError] = useState(false);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    api.getMatchComments(matchId, token).then((t) => setComments(t.comments)).catch(() => setComments([]));
+    api.getMatchComments(matchId, token).then((t) => { setComments(t.comments); setError(false); })
+      .catch(() => { setComments([]); setError(true); });
   }, [matchId, token]);
   useEffect(() => { load(); }, [load]);
 
@@ -22,37 +26,56 @@ export function MatchDiscussion({ matchId, token, canWrite }: { matchId: string;
     finally { setBusy(false); }
   };
 
-  if (comments === null) return <p className="p-2 text-sm opacity-60">Chargement…</p>;
+  if (comments === null) {
+    return <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, padding: '8px 0' }}>Chargement…</p>;
+  }
 
   return (
-    <div className="mt-2 rounded-lg bg-black/[0.03] p-3">
-      <div className="space-y-3">
-        {comments.length === 0 && <p className="text-sm opacity-60">Aucun message.</p>}
+    <div style={{ marginTop: 8, borderRadius: 12, background: th.surface2, padding: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {error && (
+          <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.danger }}>
+            Impossible de charger la discussion.
+            <button type="button" onClick={load}
+              style={{ marginLeft: 8, border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '4px 11px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700 }}>Réessayer</button>
+          </p>
+        )}
+        {!error && comments.length === 0 && (
+          <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint }}>Aucun message.</p>
+        )}
         {comments.map((c) => (
-          <div key={c.id} className="flex gap-2">
+          <div key={c.id} style={{ display: 'flex', gap: 8 }}>
             <Avatar firstName={c.author.firstName} lastName={c.author.lastName} avatarUrl={c.author.avatarUrl} size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-semibold">{c.author.firstName} {c.author.lastName}</span>
-                {c.isStaff && <span className="rounded bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase">Staff</span>}
-                <span className="opacity-50">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12 }}>
+                <span style={{ fontWeight: 700, color: th.text }}>{c.author.firstName} {c.author.lastName}</span>
+                {c.isStaff && (
+                  <span style={{ borderRadius: 6, background: th.surfaceHi, color: th.textMute, padding: '2px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Staff</span>
+                )}
+                <span style={{ color: th.textFaint }}>
                   {new Date(c.createdAt).toLocaleDateString('fr-FR')} {new Date(c.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
-              <p className="whitespace-pre-wrap text-sm">{c.body}</p>
+              <p style={{ whiteSpace: 'pre-wrap', fontFamily: th.fontUI, fontSize: 13.5, color: th.text, margin: '3px 0 0' }}>{c.body}</p>
             </div>
           </div>
         ))}
       </div>
       {canWrite ? (
-        <div className="mt-3 flex gap-2">
+        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={1000} rows={2}
-            placeholder="Votre message…" className="flex-1 rounded-lg border p-2 text-sm" style={{ borderColor: 'rgba(0,0,0,0.15)' }} />
-          <button type="button" disabled={busy || !body.trim()} onClick={send}
-            className="self-end rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40">Envoyer</button>
+            placeholder="Votre message…" style={{
+              flex: 1, borderRadius: 10, border: `1px solid ${th.line}`, background: th.surface, color: th.text,
+              padding: 8, fontFamily: th.fontUI, fontSize: 13.5, resize: 'vertical',
+            }} />
+          <button type="button" disabled={busy || !body.trim()} onClick={send} style={{
+            alignSelf: 'flex-end', border: 'none', borderRadius: 10, background: th.accent, color: th.onAccent,
+            padding: '7px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            opacity: busy || !body.trim() ? 0.4 : 1,
+          }}>Envoyer</button>
         </div>
       ) : (
-        <p className="mt-3 text-xs opacity-50">Discussion close.</p>
+        <p style={{ marginTop: 12, fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Discussion close.</p>
       )}
     </div>
   );

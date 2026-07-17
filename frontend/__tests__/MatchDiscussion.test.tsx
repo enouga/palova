@@ -33,6 +33,17 @@ it('affiche les messages et le badge Staff', async () => {
   expect(screen.getByText('Discussion close.')).toBeInTheDocument();
 });
 
+it('un échec réseau affiche un message distinct de « Aucun message. » + un bouton Réessayer', async () => {
+  (api.getMatchComments as jest.Mock).mockRejectedValueOnce(new Error('network'));
+  renderWithTheme(<MatchDiscussion matchId="m1" token="t" canWrite={false} />);
+  await screen.findByText(/impossible de charger la discussion/i);
+  expect(screen.queryByText('Aucun message.')).not.toBeInTheDocument();
+
+  (api.getMatchComments as jest.Mock).mockResolvedValueOnce({ status: 'DISPUTED', comments: [] });
+  fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
+  await screen.findByText('Aucun message.');
+});
+
 it('envoie un message quand canWrite', async () => {
   (api.getMatchComments as jest.Mock).mockResolvedValue(thread);
   (api.postMatchComment as jest.Mock).mockResolvedValue({ ok: true });
