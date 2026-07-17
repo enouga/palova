@@ -124,6 +124,7 @@ const ERROR_STATUS: Record<string, number> = {
   USER_NOT_FOUND:        404,
   ALREADY_REGISTERED:    409,
   REGISTRATION_NOT_FOUND: 404,
+  PARTNER_IS_SELF:       400, // apparier/inscrire un joueur avec lui-même (createPairedRegistration)
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
