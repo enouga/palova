@@ -904,74 +904,10 @@ export default function AdminPlanningPage() {
               })}
             </div>
 
-            {selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 12 }}>
-                {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
-                    puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
-                    « Montant libre, options avancées » (ouvrant la modale Détails/CollectPanel) a été
-                    retiré — jugé inutile, le reçu/historique est déjà affiché en dessous dans cette
-                    page. `onOpenDetails` ne reste câblé que pour le cas due=0 (« Encaisser un
-                    montant… »). */}
-                <CashRegister
-                  reservation={selected}
-                  players={playersOf(selected)}
-                  due={dueOf(selected)}
-                  members={members}
-                  quickMethods={registerMethods}
-                  packagesByUser={packagesByUser}
-                  clubId={clubId!}
-                  slug={club?.slug ?? ''}
-                  token={token!}
-                  isDesktop={isDesktop}
-                  payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
-                  onChanged={onCollected}
-                  onOptimisticPay={(intent) => applyPaymentLocally(selected.id, intent)}
-                  onOptimisticRefund={(ids) => applyRefundLocally(selected.id, ids)}
-                  onOpenDetails={() => setDetailsOpen(true)}
-                  onCancel={() => setConfirmCancel(true)}
-                  onError={(msg) => setError(msg)}
-                />
-              </div>
-            )}
-
-            {/* Encaissements enregistrés + reçu imprimable (cohérent modale page Encaissement). */}
-            {selected.payments.length > 0 && (
-              <div style={{ marginTop: 22 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute }}>Encaissements</span>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
-                </div>
-                <div>
-                  {selected.payments.map((p, i) => {
-                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
-                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
-                    return (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
-                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
-                        </span>
-                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
-                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {who
-                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {p.note || METHOD_LABEL[p.method]}</>
-                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
-                        </span>
-                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
-                        {toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && (
-                          <button type="button" disabled={busy} onClick={() => cancelPayment(p)}
-                            style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textDecoration: 'underline', padding: '0 4px' }}>annuler</button>
-                        )}
-                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* cours encadré : identité du coach + élèves */}
+            {/* cours encadré : identité du coach + élèves — AVANT l'encaissement : c'est le
+                contenu utile d'un cours (la caisse en tête reléguait les élèves sous le pli). */}
             {selected.lesson?.id && selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
                 {/* Coach — identité immédiatement visible, avant la liste des élèves. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                   <Avatar
@@ -1042,6 +978,85 @@ export default function AdminPlanningPage() {
                     }}
                     placeholder="+ Ajouter un élève…"
                   />
+                </div>
+              </div>
+            )}
+
+            {selected.status !== 'CANCELLED' && (selected.type === 'COURT' || dueOf(selected) > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
+                    puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
+                    « Montant libre, options avancées » (ouvrant la modale Détails/CollectPanel) a été
+                    retiré — jugé inutile, le reçu/historique est déjà affiché en dessous dans cette
+                    page. `onOpenDetails` ne reste câblé que pour le cas due=0 (« Encaisser un
+                    montant… »). */}
+                <CashRegister
+                  reservation={selected}
+                  players={playersOf(selected)}
+                  due={dueOf(selected)}
+                  members={members}
+                  quickMethods={registerMethods}
+                  packagesByUser={packagesByUser}
+                  clubId={clubId!}
+                  slug={club?.slug ?? ''}
+                  token={token!}
+                  isDesktop={isDesktop}
+                  payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
+                  onChanged={onCollected}
+                  onOptimisticPay={(intent) => applyPaymentLocally(selected.id, intent)}
+                  onOptimisticRefund={(ids) => applyRefundLocally(selected.id, ids)}
+                  onOpenDetails={() => setDetailsOpen(true)}
+                  onCancel={() => setConfirmCancel(true)}
+                  onError={(msg) => setError(msg)}
+                />
+              </div>
+            ) : (
+              /* Rien à encaisser (cours / tournoi / événement sans prix) : pas de grande caisse
+                 (elle dupliquait l'en-tête et son gros bouton écrasait le contenu) — une rangée
+                 d'actions discrète suffit ; « Encaisser un montant… » ouvre la modale Détails. */
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => setDetailsOpen(true)}
+                  style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.text, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+                  Encaisser un montant…
+                </button>
+                <button type="button" onClick={() => setConfirmCancel(true)}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>
+                  Annuler la réservation
+                </button>
+              </div>
+            ))}
+
+            {/* Encaissements enregistrés + reçu imprimable (cohérent modale page Encaissement). */}
+            {selected.payments.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute }}>Encaissements</span>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
+                </div>
+                <div>
+                  {selected.payments.map((p, i) => {
+                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
+                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
+                        </span>
+                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {who
+                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {p.note || METHOD_LABEL[p.method]}</>
+                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
+                        </span>
+                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
+                        {toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && (
+                          <button type="button" disabled={busy} onClick={() => cancelPayment(p)}
+                            style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textDecoration: 'underline', padding: '0 4px' }}>annuler</button>
+                        )}
+                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

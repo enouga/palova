@@ -173,6 +173,40 @@ describe('Cours encadré — le coach est visible (pavé + modale)', () => {
     expect(screen.getAllByText('Lucas Moreau').length).toBeGreaterThan(0);
     expect(await screen.findByText('Élèves 0 / 4')).toBeInTheDocument();
   });
+
+  it('cours sans montant dû : élèves AVANT un bouton « Encaisser un montant… » discret (plus de grande caisse)', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    const eleves = await screen.findByText('Élèves 0 / 4');
+    const encaisser = screen.getByRole('button', { name: /Encaisser un montant/ });
+    // la section élèves précède le bouton d'encaissement dans le DOM (plus sous le pli)
+    expect(eleves.compareDocumentPosition(encaisser) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // plus de caisse complète : ni en-tête redondant « — C1 », ni rangée de moyens
+    expect(screen.queryByText(/— C1/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'CB' })).toBeNull();
+    // l'annulation reste accessible depuis la rangée discrète
+    expect(screen.getByRole('button', { name: 'Annuler la réservation' })).toBeInTheDocument();
+    // le bouton discret ouvre la modale « Détails · options » (montant libre)
+    fireEvent.click(encaisser);
+    expect(await screen.findByText('Détails · options')).toBeInTheDocument();
+  });
+
+  it("« + Ajouter un élève… » : l'annuaire s'affiche et la liste est amenée en vue (modale scrollable)", async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    (api.adminGetMembers as jest.Mock).mockResolvedValue([
+      { id: 'mb-1', userId: 'u9', firstName: 'Mia', lastName: 'Membre', email: 'mia@x.fr', avatarUrl: null },
+    ]);
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    const input = await screen.findByPlaceholderText('+ Ajouter un élève…');
+    (Element.prototype.scrollIntoView as jest.Mock).mockClear();
+    fireEvent.focus(input);
+    expect(await screen.findByText('Mia Membre')).toBeInTheDocument();   // l'annuaire est rendu
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();         // et amené en vue
+  });
 });
 
 describe('pastilles-initiales de paiement + panneau au survol', () => {
