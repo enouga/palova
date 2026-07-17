@@ -174,3 +174,107 @@ it('groupe les tournois par statut et montre les actions contextuelles', async (
   expect(screen.getByRole('button', { name: 'Publier' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
 });
+
+// T13b — la page est create-only : sans contrôle sur la carte, on ne pourrait désigner un J/A
+// qu'à la seconde de la création (et jamais le remplacer, ni en donner un aux tournois existants).
+describe('J/A d’un tournoi existant (carte de la liste)', () => {
+  const REFEREES = [
+    { userId: 'u1', firstName: 'Léa', lastName: 'Girard', avatarUrl: null },
+    { userId: 'u2', firstName: 'Julien', lastName: 'Martin', avatarUrl: null },
+  ];
+
+  it('changer le J/A appelle adminUpdateTournament avec refereeUserId', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES);
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: null }),
+    ]);
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test');
+    await waitFor(() => expect(within(select as HTMLSelectElement).getByRole('option', { name: 'Léa Girard' })).toBeInTheDocument());
+    fireEvent.change(select, { target: { value: 'u1' } });
+
+    await waitFor(() => expect(adminUpdateTournament).toHaveBeenCalled());
+    expect(adminUpdateTournament).toHaveBeenCalledWith('c1', 'u1t', { refereeUserId: 'u1' }, 'tok');
+  });
+
+  it('choisir « Aucun » retire le J/A (null)', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES);
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: 'u1' }),
+    ]);
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test');
+    fireEvent.change(select, { target: { value: '' } });
+
+    await waitFor(() => expect(adminUpdateTournament).toHaveBeenCalled());
+    expect(adminUpdateTournament).toHaveBeenCalledWith('c1', 'u1t', { refereeUserId: null }, 'tok');
+  });
+
+  it('le J/A courant du tournoi est pré-sélectionné', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES);
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: 'u2' }),
+    ]);
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test') as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('u2'));
+  });
+
+  it('un J/A refusé par le serveur affiche un message lisible, pas le code brut', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES);
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: null }),
+    ]);
+    adminUpdateTournament.mockRejectedValue(new Error('REFEREE_INVALID'));
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test');
+    fireEvent.change(select, { target: { value: 'u1' } });
+
+    expect(await screen.findByText(/n’est pas juge-arbitre/i)).toBeInTheDocument();
+    expect(screen.queryByText('REFEREE_INVALID')).not.toBeInTheDocument();
+  });
+
+  it('un tournoi annulé n’a pas de sélecteur de J/A', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES);
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'c1t', name: 'Annule Test', status: 'CANCELLED', startTime: iso(5) }),
+    ]);
+    renderPage();
+
+    await screen.findByText('Annule Test');
+    expect(screen.queryByLabelText('Juge-arbitre — Annule Test')).not.toBeInTheDocument();
+  });
+
+  // Le J/A garde sa mission quand on lui retire la facette (spec §4 : refereeUserId n'est pas
+  // effacé, on recoche et il retrouve son tournoi). Le vivier ne le liste plus pour autant :
+  // sans option correspondante, le select afficherait « Aucun » — une UI qui ment.
+  it('J/A hors vivier : la carte le signale au lieu d’afficher « Aucun »', async () => {
+    adminGetReferees.mockResolvedValue(REFEREES); // u3 n'y est plus
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: 'u3' }),
+    ]);
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test') as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('u3'));
+    expect(within(select).getByRole('option', { name: /hors liste/i })).toBeInTheDocument();
+  });
+
+  // Vivier en échec → on ne sait pas si le J/A a perdu sa facette ; on ne prétend donc rien,
+  // mais on n'efface pas non plus sa désignation de l'écran.
+  it('vivier indisponible : le J/A désigné reste visible, sans cause inventée', async () => {
+    adminGetReferees.mockRejectedValue(new Error('BOOM'));
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 'u1t', name: 'A venir Test', status: 'PUBLISHED', startTime: iso(5), refereeUserId: 'u2' }),
+    ]);
+    renderPage();
+
+    const select = await screen.findByLabelText('Juge-arbitre — A venir Test') as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('u2')); // pas retombé sur « Aucun »
+    expect(within(select).queryByRole('option', { name: /facette/i })).not.toBeInTheDocument();
+  });
+});

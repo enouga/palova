@@ -19,6 +19,16 @@ const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
   { value: 'MEN', label: 'Messieurs' }, { value: 'WOMEN', label: 'Dames' }, { value: 'MIXED', label: 'Mixte' },
 ];
 
+// Codes serveur → français. REFEREE_INVALID = la cible n'a pas (ou plus) la facette J/A :
+// vivier périmé dans l'onglet, ou facette retirée entre-temps.
+const ERROR_FR: Record<string, string> = {
+  REFEREE_INVALID: 'Ce membre n’est pas juge-arbitre.',
+};
+const messageFor = (e: unknown) => {
+  const code = (e as Error)?.message ?? '';
+  return ERROR_FR[code] ?? (code || 'Une erreur est survenue.');
+};
+
 const emptyForm = (clubSportId: string): CreateTournamentBody => ({
   clubSportId, name: '', category: 'P100', gender: 'MEN', openToWomen: true,
   description: '', contactInfo: '', refereeUserId: null, startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
@@ -79,11 +89,21 @@ export default function AdminTournamentsPage() {
         refereeUserId: form.refereeUserId ?? null, // explicite : « Aucun » doit envoyer null, jamais undefined
       }, token);
       setForm(null); reload();
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError(messageFor(e)); }
   };
 
   const publish = async (t: Tournament, status: 'PUBLISHED' | 'CANCELLED' | 'DRAFT') => {
     await api.adminUpdateTournament(club.id, t.id, { status }, token); reload();
+  };
+
+  // Désignation/retrait du J/A sur un tournoi déjà créé : le formulaire ne sert qu'à la
+  // création, or un J/A se remplace (indisponibilité) et les tournois existants n'en ont aucun.
+  const setReferee = async (t: Tournament, refereeUserId: string | null) => {
+    setError(null);
+    try {
+      await api.adminUpdateTournament(club.id, t.id, { refereeUserId }, token);
+      reload();
+    } catch (e) { setError(messageFor(e)); }
   };
   const openDetail = async (t: Tournament) => {
     setDetail(await api.adminGetTournament(club.id, t.id, token));
@@ -112,8 +132,26 @@ export default function AdminTournamentsPage() {
 
   const renderCard = (t: Tournament) => {
     const key = agendaItemGroup(t.status, t.startTime, t.endTime, now!);
+    const current = t.refereeUserId ?? null;
+    // Le J/A garde sa mission si on lui retire la facette (spec §4) : il peut donc être absent
+    // du vivier. Sans option pour lui, le select retomberait sur « Aucun » et mentirait.
+    // Libellé neutre à dessein : hors vivier chargé, on ne sait pas *pourquoi* il n'y est pas
+    // (facette retirée, vivier encore en vol, ou fetch en échec) — on ne l'invente pas.
+    const orphan = current != null && !referees.some((r) => r.userId === current);
     const actions = (
       <>
+        {key !== 'cancelled' && (
+          <select
+            aria-label={`Juge-arbitre — ${t.name}`}
+            value={current ?? ''}
+            onChange={(e) => setReferee(t, e.target.value || null)}
+            style={{ ...ghost, cursor: 'pointer', maxWidth: 190 }}
+          >
+            <option value="">J/A : aucun</option>
+            {orphan && <option value={current!}>J/A actuel (hors liste)</option>}
+            {referees.map((r) => <option key={r.userId} value={r.userId}>{r.firstName} {r.lastName}</option>)}
+          </select>
+        )}
         <button onClick={() => openDetail(t)} style={ghost}>Inscrits</button>
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => publish(t, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
