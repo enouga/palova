@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { ACCENTS, inkOn } from '@/lib/theme';
+import { CardKicker } from '@/components/profile/CardKicker';
+import { ProfileInput } from '@/components/profile/ProfileFields';
 import { DeleteAccountSection } from '@/components/profile/DeleteAccountSection';
 import { useProfileStyles } from '@/components/profile/shared';
 
@@ -12,7 +15,7 @@ const PASSWORD_ERR_FR: Record<string, string> = {
 // Mot de passe et suppression sont des ACTIONS, pas des champs : elles gardent leur
 // bouton et leur feedback propres, hors de la SaveBar (règle de la page).
 export function ProfileSecurity({ token }: { token: string }) {
-  const { th, card, cardTitle, label, input, primaryBtn } = useProfileStyles();
+  const { th, card, primaryBtn } = useProfileStyles();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,9 +23,8 @@ export function ProfileSecurity({ token }: { token: string }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const edit = (fn: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    fn(e.target.value); setSaved(false); setError(null);
-  };
+  // ProfileInput livre la valeur, pas l'évènement.
+  const edit = (fn: (v: string) => void) => (v: string) => { fn(v); setSaved(false); setError(null); };
 
   const changePassword = async () => {
     setSaved(false); setError(null);
@@ -42,26 +44,18 @@ export function ProfileSecurity({ token }: { token: string }) {
   return (
     <>
       <section style={card} aria-label="Mot de passe">
-        <div style={cardTitle}>Mot de passe</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={label}>Mot de passe actuel</span>
-          <input type="password" value={currentPassword} autoComplete="current-password"
-            onChange={edit(setCurrentPassword)} aria-label="Mot de passe actuel" style={input} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={label}>Nouveau mot de passe</span>
-          <input type="password" value={newPassword} autoComplete="new-password"
-            onChange={edit(setNewPassword)} aria-label="Nouveau mot de passe" placeholder="8 caractères minimum" style={input} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={label}>Confirmer le nouveau mot de passe</span>
-          <input type="password" value={confirmPassword} autoComplete="new-password"
-            onChange={edit(setConfirmPassword)} aria-label="Confirmer le nouveau mot de passe" style={input} />
-        </div>
+        <CardKicker>Mot de passe</CardKicker>
+        <ProfileInput label="Mot de passe actuel" type="password" autoComplete="current-password"
+          value={currentPassword} onChange={edit(setCurrentPassword)} />
+        <ProfileInput label="Nouveau mot de passe" type="password" autoComplete="new-password"
+          value={newPassword} onChange={edit(setNewPassword)} placeholder="8 caractères minimum" />
+        <ProfileInput label="Confirmer le nouveau mot de passe" type="password" autoComplete="new-password"
+          value={confirmPassword} onChange={edit(setConfirmPassword)} />
         {error && (
-          <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 11, padding: '9px 12px' }}>
-            {error}
-          </div>
+          <div style={{
+            fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: inkOn(ACCENTS.coral),
+            background: ACCENTS.coral, borderRadius: 11, padding: '9px 12px',
+          }}>{error}</div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={changePassword} disabled={saving} style={primaryBtn(saving)}>Modifier le mot de passe</button>
@@ -70,7 +64,7 @@ export function ProfileSecurity({ token }: { token: string }) {
       </section>
 
       <section style={card} aria-label="Supprimer mon compte">
-        <div style={cardTitle}>Supprimer mon compte</div>
+        <CardKicker tone="coral">Zone sensible</CardKicker>
         <DeleteAccountSection token={token} />
       </section>
     </>
