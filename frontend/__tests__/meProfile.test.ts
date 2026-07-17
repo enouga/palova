@@ -89,7 +89,7 @@ describe('meProfile helpers', () => {
 });
 
 describe('memberSinceYear', () => {
-  it('extrait l\'année d\'un ISO', () => {
+  it(`extrait l'année d'un ISO`, () => {
     expect(memberSinceYear('2024-03-01T10:00:00.000Z')).toBe(2024);
   });
 
@@ -99,7 +99,9 @@ describe('memberSinceYear', () => {
     expect(memberSinceYear('')).toBeNull();
   });
 
-  it('renvoie null sur une date illisible', () => {
-    expect(memberSinceYear('bientot')).toBeNull();
+  it(`renvoie null sur une date illisible`, () => {
+    expect(memberSinceYear('bientôt')).toBeNull();
+    // Année parseable mais implausible : c'est `> 1900` qui l'attrape, pas `Number.isInteger`.
+    expect(memberSinceYear('0024-03-01T10:00:00.000Z')).toBeNull();
   });
 });
