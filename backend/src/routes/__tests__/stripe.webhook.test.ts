@@ -225,4 +225,38 @@ describe('POST /api/stripe/webhooks', () => {
     expect(res.status).toBe(200);
     expect(spy).toHaveBeenCalledWith('reg2', { stripePaymentIntentId: 'pi_2' });
   });
+
+  it('500 si un handler lève une erreur INATTENDUE (Stripe doit rejouer)', async () => {
+    mockConfirmReservation.mockRejectedValue(new Error('Cannot reach database server')); // pas un code métier
+    mockConstructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_9', metadata: { reservationId: 'res-9' }, payment_method: 'pm_1' } },
+    });
+    prismaMock.reservation.findUnique.mockResolvedValue({ id: 'res-9', status: 'PENDING', userId: 'u-9' } as any);
+
+    const res = await request(app)
+      .post('/api/stripe/webhooks')
+      .set('stripe-signature', SIG)
+      .set('Content-Type', 'application/json')
+      .send(RAW_BODY);
+
+    expect(res.status).toBe(500);
+  });
+
+  it('200 si un handler lève un CODE MÉTIER terminal (pas de retry Stripe)', async () => {
+    mockConfirmReservation.mockRejectedValue(new Error('SLOT_NO_LONGER_AVAILABLE')); // terminal
+    mockConstructEvent.mockReturnValue({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_10', metadata: { reservationId: 'res-10' }, payment_method: 'pm_1' } },
+    });
+    prismaMock.reservation.findUnique.mockResolvedValue({ id: 'res-10', status: 'PENDING', userId: 'u-10' } as any);
+
+    const res = await request(app)
+      .post('/api/stripe/webhooks')
+      .set('stripe-signature', SIG)
+      .set('Content-Type', 'application/json')
+      .send(RAW_BODY);
+
+    expect(res.status).toBe(200);
+  });
 });

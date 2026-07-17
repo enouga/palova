@@ -1,5 +1,6 @@
 import { Prisma, PaymentMethod } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import { serializableTx } from '../db/serializable';
 import { stripe } from '../db/stripe';
 
 const cents = (v: unknown) => { const n = Math.round(Number(v) * 100); return Number.isFinite(n) ? n : 0; };
@@ -66,7 +67,7 @@ export class RefundService {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       const res = await tx.payment.updateMany({
         where: { id: payment.id, refundedAmount: payment.refundedAmount },
         data: { refundedAmount: { increment: amount } },
@@ -96,6 +97,6 @@ export class RefundService {
       }
 
       return refund;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 }

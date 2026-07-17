@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
+import { serializableTx } from '../db/serializable';
 import { bySortOrder } from './resource.service';
 import { OffPeakHours } from './pricing';
 import { normalizeBookingQuotas } from './quotas';
@@ -156,7 +157,7 @@ export class ClubService {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
       // un ReadCommitted laisserait un changeClubSlug concurrent interposer un alias que
       // ce createClub lirait comme absent. Serializable détecte la dépendance de lecture.
-      club = await prisma.$transaction(async (tx) => {
+      club = await serializableTx(async (tx) => {
         // Un ancien alias d'un club reste réservé à vie : aucun nouveau club ne peut le revendiquer.
         // Vérification DANS la transaction pour éviter la race TOCTOU avec changeClubSlug.
         const reserved = await tx.clubSlugAlias.findUnique({ where: { slug }, select: { slug: true } });
@@ -178,7 +179,7 @@ export class ClubService {
         await tx.clubMember.create({ data: { userId: params.ownerId, clubId: created.id, role: 'OWNER' } });
         await tx.user.update({ where: { id: params.ownerId }, data: { phone: ownerPhone } });
         return created;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new Error('SLUG_TAKEN');

@@ -8,6 +8,14 @@ import { OfferService, OfferIntentMeta } from '../services/offer.service';
 
 const router = Router();
 
+// Un « code métier » connu (OFFER_NOT_FOUND, SLOT_NO_LONGER_AVAILABLE, VALIDATION_ERROR…,
+// en UPPER_SNAKE_CASE) est un résultat TERMINAL : rejouer le webhook n'y changerait rien → 200.
+// Toute AUTRE erreur (Prisma infra, conflit de sérialisation épuisé, bug, inattendu) → 500 pour
+// que Stripe REJOUE — sinon un paiement débité mais non fulfillé serait perdu à jamais.
+function isTerminalBusinessError(e: unknown): boolean {
+  return e instanceof Error && /^[A-Z][A-Z0-9_]{2,}$/.test(e.message);
+}
+
 router.post('/', async (req: Request, res: Response) => {
   const reservationService = new ReservationService();
   const sig = req.headers['stripe-signature'] as string;
@@ -54,19 +62,21 @@ router.post('/', async (req: Request, res: Response) => {
           amount: number;
         };
 
+        // Les services de fulfillment sont idempotents (retour normal si déjà traité) ; une
+        // erreur qui remonte ici est donc soit terminale (→200), soit transitoire (→500),
+        // triée par le catch de sortie. Plus de catch qui avale : un échec transitoire doit
+        // faire rejouer Stripe.
         if (pi.metadata?.offerPlanId || pi.metadata?.offerPackageTemplateId) {
-          try {
-            await new OfferService().fulfillPaidIntent(pi.metadata as OfferIntentMeta, pi.id, pi.amount);
-          } catch { /* idempotent / OFFER_NOT_FOUND loggué par le catch global — remboursement manuel */ }
+          await new OfferService().fulfillPaidIntent(pi.metadata as OfferIntentMeta, pi.id, pi.amount);
           break;
         }
 
         if (pi.metadata?.tournamentRegistrationId) {
-          try { await new TournamentService().confirmRegistrationPayment(pi.metadata.tournamentRegistrationId, { stripePaymentIntentId: pi.id }); } catch { /* idempotent */ }
+          await new TournamentService().confirmRegistrationPayment(pi.metadata.tournamentRegistrationId, { stripePaymentIntentId: pi.id });
           break;
         }
         if (pi.metadata?.eventRegistrationId) {
-          try { await new EventService().confirmRegistrationPayment(pi.metadata.eventRegistrationId, { stripePaymentIntentId: pi.id }); } catch { /* idempotent */ }
+          await new EventService().confirmRegistrationPayment(pi.metadata.eventRegistrationId, { stripePaymentIntentId: pi.id });
           break;
         }
 
@@ -74,13 +84,9 @@ router.post('/', async (req: Request, res: Response) => {
         if (!reservationId) break;
         const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
         if (!reservation || reservation.status !== 'PENDING' || !reservation.userId) break;
-        try {
-          await reservationService.confirmReservation(reservation.id, reservation.userId, {
-            stripePaymentIntentId: pi.id,
-          });
-        } catch {
-          // Peut échouer si déjà confirmé concurremment — attendu
-        }
+        await reservationService.confirmReservation(reservation.id, reservation.userId, {
+          stripePaymentIntentId: pi.id,
+        });
         break;
       }
 
@@ -125,7 +131,14 @@ router.post('/', async (req: Request, res: Response) => {
         break;
     }
   } catch (err) {
-    console.error('[stripe-webhook] erreur handler', event.type, err);
+    if (isTerminalBusinessError(err)) {
+      console.warn('[stripe-webhook] résultat terminal, pas de retry', event.type, (err as Error).message);
+    } else {
+      // Erreur transitoire/inattendue : renvoyer un non-2xx pour que Stripe REJOUE l'événement
+      // (sinon un paiement débité mais non fulfillé serait définitivement perdu).
+      console.error('[stripe-webhook] erreur inattendue → retry Stripe', event.type, err);
+      return void res.status(500).json({ error: 'Webhook handler failed' });
+    }
   }
 
   res.json({ received: true });

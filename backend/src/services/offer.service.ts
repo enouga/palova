@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import { serializableTx } from '../db/serializable';
 import { PackageService } from './package.service';
 import { StripeService } from './stripe.service';
 
@@ -42,7 +43,7 @@ export class OfferService {
     const userId = meta.offerUserId;
     const clubId = meta.clubId;
     if (!userId || !clubId || (!meta.offerPlanId && !meta.offerPackageTemplateId)) throw new Error('VALIDATION_ERROR');
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       const existing = await tx.payment.findFirst({ where: { stripePaymentIntentId }, select: { id: true } });
       if (existing) return null; // déjà traité (client OU webhook)
       const amount = new Prisma.Decimal(amountCents).div(100);
@@ -91,7 +92,7 @@ export class OfferService {
         },
       });
       return { kind: 'package' as const, id: pkg.id };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    }, { timeout: 10_000 });
   }
 
   /** Confirmation côté client : vérifie le PaymentIntent auprès de Stripe puis délègue. */
