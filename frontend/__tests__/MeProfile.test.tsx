@@ -6,7 +6,6 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 
-// Contexte club contrôlable : slug null = hôte plateforme, sinon hôte club.
 let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; levelSystemEnabled?: boolean } | null; loading: boolean } =
   { slug: null, club: null, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => clubCtx }));
@@ -15,24 +14,13 @@ jest.mock('../components/ClubNav', () => ({ ClubNav: () => <nav /> }));
 
 jest.mock('../lib/api', () => ({
   api: {
-    getMyProfile: jest.fn(),
-    getMyClubs: jest.fn(),
-    getMyClubMembership: jest.fn(),
-    getMyClubPackages: jest.fn(),
-    getMyClubSubscriptions: jest.fn(),
-    getMyPayments: jest.fn(),
-    getMyPaymentMethod: jest.fn(),
-    removeMyPaymentMethod: jest.fn(),
-    getAccountDeletionSummary: jest.fn(),
-    deleteMyAccount: jest.fn(),
-    updateMyProfile: jest.fn(),
-    updateMyClubMembership: jest.fn(),
-    uploadMyAvatar: jest.fn(),
-    getMyRating: jest.fn().mockResolvedValue(null),
-    getRatingHistory: jest.fn().mockResolvedValue([]),
-    getMyClubMatchStats: jest.fn(),
-    calibrateRating: jest.fn(),
-    changePassword: jest.fn(),
+    getMyProfile: jest.fn(), getMyClubs: jest.fn(), getMyClubMembership: jest.fn(),
+    getMyClubPackages: jest.fn(), getMyClubSubscriptions: jest.fn(), getMyPayments: jest.fn(),
+    getMyPaymentMethod: jest.fn(), removeMyPaymentMethod: jest.fn(),
+    getAccountDeletionSummary: jest.fn(), deleteMyAccount: jest.fn(),
+    updateMyProfile: jest.fn(), updateMyClubMembership: jest.fn(), uploadMyAvatar: jest.fn(),
+    getMyRating: jest.fn().mockResolvedValue(null), getRatingHistory: jest.fn().mockResolvedValue([]),
+    getMyClubMatchStats: jest.fn(), calibrateRating: jest.fn(), changePassword: jest.fn(),
     getSports: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
@@ -43,15 +31,27 @@ const { api } = require('../lib/api') as { api: Record<string, jest.Mock> };
 const profile = {
   id: 'u1', email: 'eric@palova.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: '0609032635', sex: 'MALE',
   birthDate: '1973-07-08T00:00:00.000Z', avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
-  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: true,
+  autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: true, preferredSport: null,
 };
 
-const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
+const PADEL = { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true };
 
-describe('Page Mon profil', () => {
+const wrap = () => render(<ThemeProvider><MyProfilePage /></ThemeProvider>);
+const onClub = () => { clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false }; };
+const goTab = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
+
+// jsdom n'implémente pas URL.createObjectURL (l'aperçu local de l'avatar s'en sert).
+// Stub local plutôt que global : AnnouncementStudio.test.tsx teste au contraire le repli
+// quand l'API est absente, un stub dans jest.setup.ts le casserait.
+beforeAll(() => {
+  Object.defineProperty(URL, 'createObjectURL', { value: jest.fn(() => 'blob:avatar'), configurable: true });
+});
+
+describe('Page Mon profil — onglets + SaveBar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    window.history.replaceState(null, '', '/me/profile');
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: null, club: null, loading: false };
     api.getMyProfile.mockResolvedValue(profile);
@@ -69,252 +69,310 @@ describe('Page Mon profil', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
 
-  it('affiche identité, email non modifiable et valeurs des champs', async () => {
+  // --- Onglets ---
+
+  it('ouvre sur Identité, sans barre d’enregistrement au repos', async () => {
     wrap();
-    expect(await screen.findByText('Eric')).toBeInTheDocument();
-    expect(screen.getByText('Nougayrede')).toBeInTheDocument();
-    expect(screen.getByText('eric@palova.fr')).toBeInTheDocument();
-    expect(screen.getByText('L’email ne peut pas être modifié.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Téléphone')).toHaveValue('0609032635');
-    expect(screen.getByLabelText('Date de naissance')).toHaveTextContent('08/07/1973');
+    expect(await screen.findByRole('region', { name: 'Identité' })).toBeInTheDocument();
+    expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
   });
 
-  it('affiche les stats de résultat du club sous le niveau', async () => {
-    clubCtx = { slug: 'arena', club: { id: 'c1', slug: 'arena', name: 'Padel Arena', levelSystemEnabled: true }, loading: false };
-    api.getMyRating.mockResolvedValue({ level: 5.2, tier: 'Confirmé', isProvisional: false, reliability: 0.85, calibrated: true, matchesPlayed: 25 });
-    api.getMyClubMatchStats.mockResolvedValue({ wins: 18, losses: 7, streak: 3 });
+  it('change d’onglet et reflète l’onglet actif dans l’URL', async () => {
     wrap();
-    expect(await screen.findByText(/Résultats · Padel Arena/i)).toBeInTheDocument();
-    expect(screen.getByText(/25 matchs/i)).toBeInTheDocument();
-    expect(screen.getByText(/72\s*% de victoires/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 victoires d'affilée/i)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Préférences');
+    expect(await screen.findByRole('region', { name: 'Préférences' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Identité' })).not.toBeInTheDocument();
+    expect(window.location.search).toContain('tab=preferences');
   });
 
-  it("pas de stats de résultat sur l'hôte plateforme (slug null)", async () => {
-    // clubCtx reste { slug: null } (défaut du beforeEach)
-    api.getMyRating.mockResolvedValue({ level: 5.2, tier: 'Confirmé', isProvisional: false, reliability: 0.85, calibrated: true, matchesPlayed: 25 });
-    api.getMyClubMatchStats.mockResolvedValue({ wins: 18, losses: 7, streak: 3 });
+  it('ouvre sur l’onglet nommé dans ?tab= au montage', async () => {
+    window.history.replaceState(null, '', '/me/profile?tab=securite');
     wrap();
-    await screen.findByText('Eric');
-    expect(screen.queryByText(/Résultats ·/i)).toBeNull();
-    expect(api.getMyClubMatchStats).not.toHaveBeenCalled();
+    expect(await screen.findByRole('region', { name: 'Mot de passe' })).toBeInTheDocument();
   });
 
-  it('Enregistrer envoie téléphone, sexe et date de naissance', async () => {
+  it('hôte plateforme : pas d’onglet Portefeuille', async () => {
     wrap();
-    await screen.findByLabelText('Téléphone');
-    fireEvent.change(screen.getByLabelText('Téléphone'), { target: { value: '0699999999' } });
-    // Calendrier maison : ouvrir le popup (mois de la valeur = juillet 1973) puis cliquer un jour.
-    fireEvent.click(screen.getByLabelText('Date de naissance'));
-    fireEvent.click(screen.getByLabelText('15/07/1973'));
-    fireEvent.click(screen.getByText('Femme'));
-    fireEvent.click(screen.getByText('Enregistrer'));
+    await screen.findByRole('region', { name: 'Identité' });
+    expect(screen.queryByRole('button', { name: 'Portefeuille' })).not.toBeInTheDocument();
+  });
+
+  it('?tab=portefeuille sur un hôte sans portefeuille retombe sur Identité (pas d’onglet mort)', async () => {
+    window.history.replaceState(null, '', '/me/profile?tab=portefeuille');
+    wrap();
+    expect(await screen.findByRole('region', { name: 'Identité' })).toBeInTheDocument();
+  });
+
+  it('club OFF : pas d’onglet Niveau', async () => {
+    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
+    wrap();
+    await screen.findByRole('region', { name: 'Identité' });
+    expect(screen.queryByRole('button', { name: 'Niveau' })).not.toBeInTheDocument();
+  });
+
+  // --- Brouillon & SaveBar ---
+
+  it('éditer un champ révèle la barre et Enregistrer envoie le PATCH complet', async () => {
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Téléphone'), { target: { value: '0700000000' } });
+    expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
-      { phone: '0699999999', sex: 'FEMALE', birthDate: '1973-07-15' }, 'abc',
+      expect.objectContaining({ phone: '0700000000', sex: 'MALE', birthDate: '1973-07-08' }), 'abc',
     ));
     expect(await screen.findByText('Enregistré ✓')).toBeInTheDocument();
   });
 
-  it("la sélection d'un fichier déclenche l'upload d'avatar", async () => {
-    global.URL.createObjectURL = jest.fn(() => 'blob:preview');
+  it('les préférences sont différées : aucun appel réseau avant Enregistrer', async () => {
     wrap();
-    const input = await screen.findByLabelText('Choisir une photo de profil');
-    const file = new File(['x'], 'photo.png', { type: 'image/png' });
-    fireEvent.change(input, { target: { files: [file] } });
-    await waitFor(() => expect(api.uploadMyAvatar).toHaveBeenCalledWith(file, 'abc'));
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Préférences');
+    const group = await screen.findByRole('group', { name: 'Propose-moi les parties à mon niveau' });
+    fireEvent.click(within(group).getByText('Oui'));
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
+    expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ autoMatchProposals: true }), 'abc',
+    ));
   });
 
-  it('refuse un format de fichier non supporté sans appeler l\'API', async () => {
+  it('la langue est différée et part dans le même PATCH', async () => {
     wrap();
-    const input = await screen.findByLabelText('Choisir une photo de profil');
-    const file = new File(['x'], 'doc.pdf', { type: 'application/pdf' });
-    fireEvent.change(input, { target: { files: [file] } });
-    expect(await screen.findByText('Format d’image non supporté (JPEG, PNG ou WebP)')).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Préférences');
+    fireEvent.change(await screen.findByLabelText('Langue'), { target: { value: 'es' } });
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(expect.objectContaining({ locale: 'es' }), 'abc'));
+  });
+
+  it('le sport préféré est différé et part en preferredSportId', async () => {
+    api.getSports.mockResolvedValue([PADEL]);
+    wrap();
+    const region = await screen.findByRole('region', { name: 'Sport préféré' });
+    fireEvent.click(within(region).getByText('Padel'));
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredSportId: 'sport-padel' }), 'abc',
+    ));
+  });
+
+  it('Annuler restaure le brouillon et cache la barre, sans appel réseau', async () => {
+    wrap();
+    const phone = await screen.findByLabelText('Téléphone');
+    fireEvent.change(phone, { target: { value: '0700000000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(phone).toHaveValue('0609032635');
+    expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
+  });
+
+  it('un échec d’enregistrement s’affiche dans la barre, sans flash de succès', async () => {
+    api.updateMyProfile.mockRejectedValue(new Error('Boom'));
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Téléphone'), { target: { value: '0700000000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Boom');
+    expect(screen.queryByText('Enregistré ✓')).not.toBeInTheDocument();
+  });
+
+  it('une édition faite pendant un enregistrement en vol n’est pas écrasée (régression)', async () => {
+    let resolve!: (v: unknown) => void;
+    api.updateMyProfile.mockReturnValue(new Promise((r) => { resolve = r; }));
+    wrap();
+    const phone = await screen.findByLabelText('Téléphone');
+    fireEvent.change(phone, { target: { value: '0700000000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    // L'utilisateur continue d'éditer pendant que la requête est en vol.
+    fireEvent.change(phone, { target: { value: '0788888888' } });
+    resolve(profile);
+    await waitFor(() => expect(phone).toHaveValue('0788888888'));
+    // …et la page reste dirty : la seconde édition n'a pas été enregistrée.
+    expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
+  });
+
+  // --- Hors brouillon ---
+
+  it('l’onglet Préférences ne rend AUCUN sélecteur de thème (il vit dans l’en-tête)', async () => {
+    wrap();
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Préférences');
+    await screen.findByRole('region', { name: 'Préférences' });
+    expect(screen.queryByText('Thème')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sombre')).not.toBeInTheDocument();
+    // Le ThemeToggle de l'en-tête plateforme, lui, est bien là.
+    expect(screen.getByLabelText('Changer de thème')).toBeInTheDocument();
+  });
+
+  it('l’upload d’avatar ne rend jamais la page dirty', async () => {
+    wrap();
+    await screen.findByRole('region', { name: 'Identité' });
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Choisir une photo de profil'), { target: { files: [file] } });
+    await waitFor(() => expect(api.uploadMyAvatar).toHaveBeenCalled());
+    expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+  });
+
+  it('l’upload d’avatar pendant une édition ne détruit pas le brouillon (régression)', async () => {
+    wrap();
+    const phone = await screen.findByLabelText('Téléphone');
+    fireEvent.change(phone, { target: { value: '0700000000' } });
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Choisir une photo de profil'), { target: { files: [file] } });
+    await waitFor(() => expect(api.uploadMyAvatar).toHaveBeenCalled());
+    expect(phone).toHaveValue('0700000000');
+  });
+
+  it('refuse un format de fichier non supporté sans appeler l’API', async () => {
+    wrap();
+    await screen.findByRole('region', { name: 'Identité' });
+    const file = new File(['x'], 'a.gif', { type: 'image/gif' });
+    fireEvent.change(screen.getByLabelText('Choisir une photo de profil'), { target: { files: [file] } });
     expect(api.uploadMyAvatar).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Format d’image non supporté/)).toBeInTheDocument();
   });
 
-  it('changer la langue appelle updateMyProfile({ locale })', async () => {
+  it('le mot de passe garde son bouton propre, hors de la barre', async () => {
     wrap();
-    const select = await screen.findByLabelText('Langue');
-    fireEvent.change(select, { target: { value: 'en' } });
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ locale: 'en' }, 'abc'));
-  });
-
-  it('activer « parties à mon niveau » appelle updateMyProfile({ autoMatchProposals: true })', async () => {
-    api.updateMyProfile.mockResolvedValue({ ...profile, autoMatchProposals: true });
-    wrap();
-    const group = await screen.findByRole('group', { name: /parties à mon niveau/i });
-    fireEvent.click(within(group).getByText('Oui'));
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ autoMatchProposals: true }, 'abc'));
-    // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
-    await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
-  });
-
-  it('active « Autoriser les demandes d\'ami » appelle updateMyProfile({ acceptsFriendRequests: true })', async () => {
-    api.updateMyProfile.mockResolvedValue({ ...profile, acceptsFriendRequests: true });
-    wrap();
-    const group = await screen.findByRole('group', { name: /autoriser les demandes d'ami/i });
-    fireEvent.click(within(group).getByText('Oui'));
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ acceptsFriendRequests: true }, 'abc'));
-    // l'état retourné est reflété : « Oui » devient l'option active (fontWeight 700)
-    await waitFor(() => expect(within(group).getByText('Oui')).toHaveStyle({ fontWeight: 700 }));
-  });
-
-  it('désactive « Recevoir des messages privés » appelle updateMyProfile({ acceptsDirectMessages: false })', async () => {
-    api.updateMyProfile.mockResolvedValue({ ...profile, acceptsDirectMessages: false });
-    wrap();
-    const group = await screen.findByRole('group', { name: /recevoir des messages privés/i });
-    fireEvent.click(within(group).getByText('Non'));
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith({ acceptsDirectMessages: false }, 'abc'));
-    await waitFor(() => expect(within(group).getByText('Non')).toHaveStyle({ fontWeight: 700 }));
-  });
-
-  it('le sélecteur de thème bascule en sombre (localStorage)', async () => {
-    wrap();
-    await screen.findByText('Thème');
-    fireEvent.click(screen.getByText('Sombre'));
-    expect(localStorage.getItem('palova-theme')).toBe('floodlit');
-  });
-
-  it('hôte club + membre : la section licence enregistre via updateMyClubMembership', async () => {
-    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getMyClubMembership.mockResolvedValue({ membershipNo: 'LIC42', status: 'ACTIVE', isSubscriber: true });
-    api.updateMyClubMembership.mockResolvedValue({ membershipNo: 'LIC99', status: 'ACTIVE', isSubscriber: true });
-    wrap();
-    const input = await screen.findByLabelText('N° de licence / adhérent');
-    expect(input).toHaveValue('LIC42');
-    fireEvent.change(input, { target: { value: 'LIC99' } });
-    fireEvent.click(screen.getAllByText('Enregistrer')[1]);
-    await waitFor(() => expect(api.updateMyClubMembership).toHaveBeenCalledWith('demo', 'LIC99', 'abc'));
-  });
-
-  it('hôte plateforme : pas de section licence', async () => {
-    wrap();
-    await screen.findByText('Eric');
-    expect(screen.queryByLabelText('N° de licence / adhérent')).not.toBeInTheDocument();
-  });
-
-  it('club OFF : pas de section niveau', async () => {
-    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
-    wrap();
-    await screen.findByText('Eric');
-    expect(screen.queryByRole('region', { name: /mon niveau/i })).not.toBeInTheDocument();
-  });
-
-  it('changer le mot de passe appelle api.changePassword puis affiche le succès', async () => {
-    wrap();
-    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
-    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'newpass456' } });
-    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'newpass456' } });
-    fireEvent.click(screen.getByText('Modifier le mot de passe'));
-    await waitFor(() => expect(api.changePassword).toHaveBeenCalledWith('oldpass123', 'newpass456', 'abc'));
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Sécurité');
+    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'old' } });
+    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'password123' } });
+    // Éditer le formulaire de mot de passe ne rend PAS la page dirty.
+    expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier le mot de passe' }));
+    await waitFor(() => expect(api.changePassword).toHaveBeenCalledWith('old', 'password123', 'abc'));
     expect(await screen.findByText('Modifié ✓')).toBeInTheDocument();
   });
 
-  it('refuse si la confirmation ne correspond pas, sans appeler l\'API', async () => {
+  it('refuse une confirmation qui ne correspond pas, sans appeler l’API', async () => {
     wrap();
-    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
-    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'newpass456' } });
-    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'different' } });
-    fireEvent.click(screen.getByText('Modifier le mot de passe'));
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Sécurité');
+    fireEvent.change(await screen.findByLabelText('Nouveau mot de passe'), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'autre1234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier le mot de passe' }));
     expect(await screen.findByText('Les mots de passe ne correspondent pas.')).toBeInTheDocument();
     expect(api.changePassword).not.toHaveBeenCalled();
   });
 
-  it('refuse un nouveau mot de passe trop court, sans appeler l\'API', async () => {
+  it('refuse un nouveau mot de passe trop court, sans appeler l’API', async () => {
     wrap();
-    fireEvent.change(await screen.findByLabelText('Mot de passe actuel'), { target: { value: 'oldpass123' } });
-    fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), { target: { value: 'court' } });
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Sécurité');
+    fireEvent.change(await screen.findByLabelText('Nouveau mot de passe'), { target: { value: 'court' } });
     fireEvent.change(screen.getByLabelText('Confirmer le nouveau mot de passe'), { target: { value: 'court' } });
-    fireEvent.click(screen.getByText('Modifier le mot de passe'));
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier le mot de passe' }));
     expect(await screen.findByText('Le mot de passe doit faire au moins 8 caractères.')).toBeInTheDocument();
     expect(api.changePassword).not.toHaveBeenCalled();
   });
 
-  it('enregistre le sport préféré', async () => {
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
-    ]);
-    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: null });
-    api.updateMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-tennis', key: 'tennis', name: 'Tennis' } });
+  // --- Identité / Niveau ---
+
+  it('affiche l’identité et l’email non modifiable', async () => {
     wrap();
-    const group = await screen.findByRole('group', { name: /sport préféré/i });
-    fireEvent.click(within(group).getByText('Tennis'));
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ preferredSportId: 'sport-tennis' }), expect.any(String),
-    ));
+    const region = await screen.findByRole('region', { name: 'Identité' });
+    expect(within(region).getByText('Eric')).toBeInTheDocument();
+    expect(within(region).getByText('eric@palova.fr')).toBeInTheDocument();
+    expect(within(region).getByText('L’email ne peut pas être modifié.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Téléphone')).toHaveValue('0609032635');
   });
 
-  it('« Sport préféré » est une région dédiée, hors de Préférences', async () => {
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-    ]);
+  it('l’onglet Niveau affiche le bilan V/D du club', async () => {
+    onClub();
+    api.getMyRating.mockResolvedValue({ calibrated: true, level: 5.2, tier: 'Intermédiaire', isProvisional: false, reliability: 80 });
+    api.getMyClubMatchStats.mockResolvedValue({ wins: 3, losses: 1, streak: 2 });
     wrap();
-    const sportRegion = await screen.findByRole('region', { name: 'Sport préféré' });
-    expect(sportRegion).toBeInTheDocument();
-    // Le pill 'Aucun' du sport préféré est bien DANS la région dédiée…
-    expect(within(sportRegion).getByText('Aucun')).toBeInTheDocument();
-    // …et PAS dans la région Préférences.
-    const prefRegion = screen.getByRole('region', { name: 'Préférences' });
-    expect(within(prefRegion).queryByText('Sport préféré')).not.toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Niveau');
+    expect(await screen.findByText(/Résultats · Club Démo/)).toBeInTheDocument();
   });
 
-  it('niveau : padel uniquement, sans sélecteur de sport, découplé du sport préféré', async () => {
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-      { id: 'sport-tennis', key: 'tennis', name: 'Tennis', icon: '🎾', published: true },
-    ]);
-    api.getMyRating.mockResolvedValue({ level: 5.2, calibrated: true, gamesPlayed: 10, tier: 'CONFIRMED', sport: 'padel' });
-    api.getMyProfile.mockResolvedValue({ ...profile, preferredSport: { id: 'sport-tennis', key: 'tennis', name: 'Tennis' } });
+  it('niveau non calibré : état neutre, « Affiner » révèle le calibrage', async () => {
+    api.getMyRating.mockResolvedValue({ calibrated: false, level: null, tier: '—', isProvisional: true, reliability: 10 });
     wrap();
-    const region = await screen.findByRole('region', { name: /mon niveau/i });
-    expect(region).toHaveTextContent(/Padel/);
-    expect(screen.queryByRole('group', { name: /sport du niveau/i })).not.toBeInTheDocument();
-    // Le rating chargé est celui du padel, jamais du sport préféré (tennis).
-    await waitFor(() => expect(api.getMyRating).toHaveBeenCalledWith(expect.any(String), 'padel'));
-    expect(api.getMyRating).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
-    expect(api.getRatingHistory).not.toHaveBeenCalledWith(expect.any(String), 'tennis');
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Niveau');
+    expect(await screen.findByText(/Niveau en cours de calibrage/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Affiner mon niveau/ }));
+    expect(await screen.findByText(/Place le curseur sur le niveau/)).toBeInTheDocument();
   });
 
-  it('niveau : sans niveau → état neutre, pas d\'auto-éval forcée ; « Affiner » révèle le calibrage (padel)', async () => {
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-    ]);
-    // backend renvoie un état neutre (plus jamais null) quand le joueur n'a pas de niveau
-    api.getMyRating.mockResolvedValue({ calibrated: false, level: null, tier: '', isProvisional: true, reliability: 50, matchesPlayed: 0 });
-    api.calibrateRating.mockResolvedValue({ level: 4.0, calibrated: true, tier: 'Intermédiaire', isProvisional: true, reliability: 50, matchesPlayed: 0 });
+  it('calibrer envoie le niveau choisi', async () => {
+    api.getMyRating.mockResolvedValue({ calibrated: false, level: null, tier: '—', isProvisional: true, reliability: 10 });
+    api.calibrateRating.mockResolvedValue({ calibrated: true, level: 4, tier: 'Intermédiaire', isProvisional: true, reliability: 40 });
     wrap();
-    const region = await screen.findByRole('region', { name: /mon niveau/i });
-    // pas d'auto-évaluation mise en avant : aucun bouton « Passer » d'emblée
-    expect(within(region).queryByRole('button', { name: /passer|skip/i })).not.toBeInTheDocument();
-    // l'affinage est optionnel : on l'ouvre explicitement
-    fireEvent.click(within(region).getByRole('button', { name: /affiner/i }));
-    fireEvent.click(await within(region).findByRole('button', { name: /passer|skip/i }));
-    await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(null, expect.any(String), 'padel'));
+    await screen.findByRole('region', { name: 'Identité' });
+    goTab('Niveau');
+    fireEvent.click(await screen.findByRole('button', { name: /Affiner mon niveau/ }));
+    // Le curseur vaut 4 par défaut (DEFAULT dans LevelCalibration).
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider mon niveau' }));
+    await waitFor(() => expect(api.calibrateRating).toHaveBeenCalledWith(4, 'abc', 'padel'));
+  });
+});
+
+describe('Page Mon profil — licence (seconde ressource)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.history.replaceState(null, '', '/me/profile');
+    document.cookie = 'token=abc; path=/';
+    onClub();
+    api.getMyProfile.mockResolvedValue(profile);
+    api.getMyClubs.mockResolvedValue([]);
+    api.getMyClubMembership.mockResolvedValue({ membershipNo: 'LIC42', status: 'ACTIVE', isSubscriber: true });
+    api.getMyClubPackages.mockResolvedValue([]);
+    api.getMyClubSubscriptions.mockResolvedValue([]);
+    api.getMyPayments.mockResolvedValue([]);
+    api.getMyPaymentMethod.mockResolvedValue(null);
+    api.getMyClubMatchStats.mockResolvedValue({ wins: 0, losses: 0, streak: 0 });
+    api.getSports.mockResolvedValue([]);
+    api.updateMyProfile.mockResolvedValue(profile);
+    api.updateMyClubMembership.mockResolvedValue({ membershipNo: 'LIC99', status: 'ACTIVE', isSubscriber: true });
+  });
+  afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; });
+
+  it('la licence passe par la barre, pas par un bouton propre', async () => {
+    wrap();
+    const input = await screen.findByLabelText('N° de licence / adhérent');
+    expect(input).toHaveValue('LIC42');
+    fireEvent.change(input, { target: { value: 'LIC99' } });
+    expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyClubMembership).toHaveBeenCalledWith('demo', 'LIC99', 'abc'));
+    // Profil non touché → pas de PATCH profil inutile.
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
   });
 
-  it('affiche le menu de navigation listant les régions rendues', async () => {
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-    ]);
+  it('profil ET licence dirty : les deux ressources partent sur un seul Enregistrer', async () => {
     wrap();
-    const nav = await screen.findByRole('navigation', { name: /sections du profil/i });
-    expect(within(nav).getByText('Identité')).toBeInTheDocument();
-    expect(within(nav).getByText('Sport')).toBeInTheDocument();
-    expect(within(nav).getByText('Infos')).toBeInTheDocument();
-    expect(within(nav).getByText('Préf.')).toBeInTheDocument();
-    expect(within(nav).getByText('Sécu.')).toBeInTheDocument();
-    expect(within(nav).getByText('Niveau')).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText('Téléphone'), { target: { value: '0700000000' } });
+    fireEvent.change(screen.getByLabelText('N° de licence / adhérent'), { target: { value: 'LIC99' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalled());
+    expect(api.updateMyClubMembership).toHaveBeenCalledWith('demo', 'LIC99', 'abc');
   });
 
-  it('le menu omet « Niveau » quand le club a désactivé les niveaux', async () => {
-    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo', levelSystemEnabled: false }, loading: false };
-    api.getSports.mockResolvedValue([
-      { id: 'sport-padel', key: 'padel', name: 'Padel', icon: '🎾', published: true },
-    ]);
+  it('échec partiel : le profil se rebaseline même si la licence échoue', async () => {
+    api.updateMyClubMembership.mockRejectedValue(new Error('Licence refusée'));
     wrap();
-    const nav = await screen.findByRole('navigation', { name: /sections du profil/i });
-    expect(within(nav).queryByText('Niveau')).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText('Téléphone'), { target: { value: '0700000000' } });
+    fireEvent.change(screen.getByLabelText('N° de licence / adhérent'), { target: { value: 'LIC99' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Licence refusée');
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalled());
+    expect(screen.queryByText('Enregistré ✓')).not.toBeInTheDocument();
+  });
+
+  it('Annuler restaure aussi la licence', async () => {
+    wrap();
+    const input = await screen.findByLabelText('N° de licence / adhérent');
+    fireEvent.change(input, { target: { value: 'LIC99' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(input).toHaveValue('LIC42');
+    expect(api.updateMyClubMembership).not.toHaveBeenCalled();
   });
 });

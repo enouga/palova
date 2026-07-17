@@ -1,136 +1,101 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, ClubMatchStats, MyClubMembership, MyProfile, MyRating, RatingPoint, Sex, Sport, MemberPackage, Subscription, MyPayment } from '@/lib/api';
-import { LevelBadge } from '@/components/player/LevelBadge';
-import { ReliabilityMeter } from '@/components/player/ReliabilityMeter';
-import { LevelCalibration } from '@/components/player/LevelCalibration';
-import { LevelSourceNote } from '@/components/player/LevelSourceNote';
-import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
-import { ResultStats } from '@/components/player/ResultStats';
+import { api, assetUrl, ClubMatchStats, MyProfile, MyRating, RatingPoint, MemberPackage, Subscription, MyPayment, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { BackButton, PillTabs, Segmented, ThemeToggle } from '@/components/ui/atoms';
-import { DateField } from '@/components/ui/DateField';
+import { BackButton, PillTabs, ThemeToggle } from '@/components/ui/atoms';
+import { SaveBar } from '@/components/ui/SaveBar';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
-import { ProfileSectionNav, ProfileNavItem } from '@/components/profile/ProfileSectionNav';
-import { WalletSection } from '@/components/profile/WalletSection';
-import { PaymentMethodSection } from '@/components/profile/PaymentMethodSection';
-import { PaymentsHistory } from '@/components/profile/PaymentsHistory';
-import { DeleteAccountSection } from '@/components/profile/DeleteAccountSection';
-
-const LOCALE_OPTIONS = [
-  { value: 'fr', label: 'Français' },
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Español' },
-];
+import { PROFILE_TABS, ProfileTabKey, parseProfileTab, buildProfileBody, isDirty, licenceDirty } from '@/lib/meProfile';
+import { SetProfileField } from '@/components/profile/shared';
+import { ProfileIdentity } from '@/components/profile/tabs/ProfileIdentity';
+import { ProfileLevel } from '@/components/profile/tabs/ProfileLevel';
+import { ProfilePreferences } from '@/components/profile/tabs/ProfilePreferences';
+import { ProfileWallet } from '@/components/profile/tabs/ProfileWallet';
+import { ProfileSecurity } from '@/components/profile/tabs/ProfileSecurity';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-// Page profil dédiée : identité + avatar, infos modifiables (tél/naissance/sexe),
-// préférences (langue stockée en base, thème local à l'appareil), licence du club courant.
+// Page profil en 5 onglets, calquée sur /admin/settings : baseline serveur + brouillon,
+// une seule SaveBar sticky couvrant DEUX ressources (profil et licence).
+// Règle : tout ce qui est un champ passe par la barre ; ce qui n'est pas un champ
+// (photo, mot de passe, suppression, thème) garde son propre chemin.
 export default function MyProfilePage() {
   const router = useRouter();
-  const { th, mode, setMode } = useTheme();
+  const { th } = useTheme();
   const { token, ready } = useAuth();
   const { slug, club } = useClub();
 
-  // Hauteur du ClubNav collant : sert d'offset au menu de navigation (0 sur l'hôte plateforme).
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [headerH, setHeaderH] = useState(0);
+  // Ressource 1 : le profil.
+  const [server, setServer] = useState<MyProfile | null>(null);
+  const [draft, setDraft] = useState<MyProfile | null>(null);
+  // Ressource 2 : la licence du club courant (endpoint distinct). null = non membre.
+  const [licenceServer, setLicenceServer] = useState<string | null>(null);
+  const [licenceDraft, setLicenceDraft] = useState<string>('');
 
-  const [profile, setProfile] = useState<MyProfile | null>(null);
-  const [membership, setMembership] = useState<MyClubMembership | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  // `error` = chargement/upload (bandeau haut) ; `saveError` = échec d'enregistrement (barre).
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<ProfileTabKey>('identite');
 
-  // Formulaire « Informations »
-  const [phone, setPhone] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [sex, setSex] = useState<Sex | null>(null);
-  const [savingInfo, setSavingInfo] = useState(false);
-  const [savedInfo, setSavedInfo] = useState(false);
-
-  // Avatar
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
 
-  // Niveau padel
+  const [sports, setSports] = useState<Sport[]>([]);
+
+  // Niveau (lecture + action de calibrage, hors brouillon).
   const [rating, setRating] = useState<MyRating | null>(null);
   const [history, setHistory] = useState<RatingPoint[]>([]);
   const [matchStats, setMatchStats] = useState<ClubMatchStats | null>(null);
   const [calibrating, setCalibrating] = useState(false);
   const [ratingBusy, setRatingBusy] = useState(false);
-  // Sport sélectionné pour la section niveau (distinct du sport préféré identité)
-  const [ratingSport, setRatingSport] = useState<string>('padel');
+  const [ratingSport, setRatingSport] = useState('padel');
 
-  // Sports disponibles (pour le sélecteur de sport préféré)
-  const [sports, setSports] = useState<Sport[]>([]);
-
-  // Portefeuille & paiements du club courant (sections compte)
+  // Portefeuille (lecture, hors brouillon).
   const [walletPackages, setWalletPackages] = useState<MemberPackage[]>([]);
   const [walletSubs, setWalletSubs] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<MyPayment[]>([]);
 
-  // Préférences & licence
-  const [savingLocale, setSavingLocale] = useState(false);
-  const [license, setLicense] = useState('');
-  const [savingLicense, setSavingLicense] = useState(false);
-  const [savedLicense, setSavedLicense] = useState(false);
-
-  // Mot de passe
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [savedPassword, setSavedPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
-
   useEffect(() => { api.getSports().then(setSports).catch(() => {}); }, []);
+  useEffect(() => { setTab(parseProfileTab(window.location.search)); }, []);
 
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) { setHeaderH(0); return; }
-    const update = () => setHeaderH(el.offsetHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [slug, club]);
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!token) return;
-    (async () => {
-      try {
-        setError(null);
-        const p = await api.getMyProfile(token);
-        setProfile(p);
-        setPhone(p.phone ?? '');
-        setBirthDate(p.birthDate ? p.birthDate.slice(0, 10) : '');
-        setSex(p.sex);
-        if (slug) {
-          const m = await api.getMyClubMembership(slug, token).catch(() => null);
-          setMembership(m);
-          setLicense(m?.membershipNo ?? '');
-          // Sections compte (best-effort, ne bloquent jamais le profil).
+    try {
+      setError(null);
+      const p = await api.getMyProfile(token);
+      setServer(p);
+      setDraft(p);
+      if (slug) {
+        const m = await api.getMyClubMembership(slug, token).catch(() => null);
+        const lic = m ? (m.membershipNo ?? '') : null;
+        setLicenceServer(lic);
+        setLicenceDraft(lic ?? '');
+        if (m) {
+          // Best-effort : ne bloquent jamais le profil.
           api.getMyClubPackages(slug, token).then(setWalletPackages).catch(() => {});
           api.getMyClubSubscriptions(slug, token).then(setWalletSubs).catch(() => {});
           api.getMyPayments(slug, token).then(setPayments).catch(() => {});
         }
-      } catch (e) { setError((e as Error).message); }
-      finally { setLoading(false); }
-    })();
+      } else {
+        setLicenceServer(null);
+      }
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
   }, [token, slug]);
 
-  // Charger rating + historique quand le token ou le sport du niveau change
+  useEffect(() => { load(); }, [load]);
+
   useEffect(() => {
     if (!token) return;
     api.getMyRating(token, ratingSport).then(setRating).catch(() => {});
@@ -138,115 +103,78 @@ export default function MyProfilePage() {
     setCalibrating(false);
   }, [token, ratingSport]);
 
-  // Bilan V/D du club courant (padel) — seulement sur un hôte club où l'on est membre.
   useEffect(() => {
     if (!token || !slug) { setMatchStats(null); return; }
     api.getMyClubMatchStats(slug, token, ratingSport).then(setMatchStats).catch(() => setMatchStats(null));
   }, [token, slug, ratingSport]);
 
-  const saveInfo = async () => {
-    if (!token) return;
-    setSavingInfo(true); setSavedInfo(false); setError(null);
+  // Éditer efface un échec d'enregistrement et le flash de succès.
+  const set: SetProfileField = (k, v) => {
+    setSaveError(null); setJustSaved(false);
+    setDraft((p) => (p ? { ...p, [k]: v } : p));
+  };
+  const setLicence = (v: string) => {
+    setSaveError(null); setJustSaved(false);
+    setLicenceDraft(v);
+  };
+
+  const isMember = licenceServer !== null;
+  const profileDirty = !!server && !!draft && isDirty(server, draft);
+  const licDirty = isMember && licenceDirty(licenceServer, licenceDraft);
+  const dirty = profileDirty || licDirty;
+
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [justSaved]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  const save = async () => {
+    if (!token || !server || !draft) return;
+    setSaving(true);
     try {
-      const p = await api.updateMyProfile({ phone: phone.trim() || null, sex, birthDate: birthDate || null }, token);
-      setProfile(p);
-      setSavedInfo(true);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSavingInfo(false); }
+      setSaveError(null);
+      const errors: string[] = [];
+      const tasks: Promise<void>[] = [];
+
+      if (profileDirty) {
+        // ⚠️ Ne repose QUE la baseline : reposer `draft` écraserait une édition
+        // faite pendant que la requête était en vol.
+        tasks.push(api.updateMyProfile(buildProfileBody(draft), token)
+          .then(() => { setServer(draft); })
+          .catch((e) => { errors.push((e as Error).message); }));
+      }
+      if (licDirty && slug) {
+        const value = licenceDraft.trim();
+        tasks.push(api.updateMyClubMembership(slug, value, token)
+          .then(() => { setLicenceServer(value); })
+          .catch((e) => { errors.push((e as Error).message); }));
+      }
+
+      await Promise.all(tasks);
+      // Deux ressources indépendantes : chacune réussit/échoue seule. Le flash de
+      // succès n'apparaît que si tout ce qui a été tenté a réussi.
+      if (errors.length > 0) setSaveError(errors.join(' · '));
+      else setJustSaved(true);
+    } finally { setSaving(false); }
   };
 
-  const changeLocale = async (locale: string) => {
-    if (!token || !profile) return;
-    setSavingLocale(true); setError(null);
-    setProfile({ ...profile, locale }); // optimiste : le select reflète le choix immédiatement
-    try { setProfile(await api.updateMyProfile({ locale }, token)); }
-    catch (e) { setError((e as Error).message); }
-    finally { setSavingLocale(false); }
+  const cancel = () => {
+    setDraft(server);
+    setLicenceDraft(licenceServer ?? '');
+    setSaveError(null);
+    setJustSaved(false);
   };
 
-  const changeLeaderboard = async (next: boolean) => {
-    if (!token || !profile) return;
-    setError(null);
-    setProfile({ ...profile, showInLeaderboard: next }); // optimiste
-    try { setProfile(await api.updateMyProfile({ showInLeaderboard: next }, token)); }
-    catch (e) { setError((e as Error).message); }
-  };
-
-  const changeAutoMatchProposals = async (next: boolean) => {
-    if (!token || !profile) return;
-    setError(null);
-    setProfile({ ...profile, autoMatchProposals: next }); // optimiste
-    try { setProfile(await api.updateMyProfile({ autoMatchProposals: next }, token)); }
-    catch (e) { setError((e as Error).message); }
-  };
-
-  const changeAcceptsFriendRequests = async (next: boolean) => {
-    if (!token || !profile) return;
-    setError(null);
-    setProfile({ ...profile, acceptsFriendRequests: next }); // optimiste
-    try { setProfile(await api.updateMyProfile({ acceptsFriendRequests: next }, token)); }
-    catch (e) { setError((e as Error).message); }
-  };
-
-  const changeAcceptsDirectMessages = async (next: boolean) => {
-    if (!token || !profile) return;
-    setError(null);
-    setProfile({ ...profile, acceptsDirectMessages: next }); // optimiste
-    try { setProfile(await api.updateMyProfile({ acceptsDirectMessages: next }, token)); }
-    catch (e) { setError((e as Error).message); }
-  };
-
-  const handlePreferredSport = async (id: string) => {
-    if (!token) return;
-    setError(null);
-    try { setProfile(await api.updateMyProfile({ preferredSportId: id || null }, token)); }
-    catch (e) { setError((e as Error).message); }
-  };
-
-  const saveLicense = async () => {
-    if (!token || !slug) return;
-    setSavingLicense(true); setSavedLicense(false); setError(null);
-    try {
-      setMembership(await api.updateMyClubMembership(slug, license.trim(), token));
-      setSavedLicense(true);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSavingLicense(false); }
-  };
-
-  const PASSWORD_ERR_FR: Record<string, string> = {
-    INVALID_PASSWORD: 'Mot de passe actuel incorrect.',
-    SAME_PASSWORD: 'Le nouveau mot de passe doit être différent de l’actuel.',
-  };
-
-  const changePassword = async () => {
-    if (!token) return;
-    setSavedPassword(false); setPasswordError(null);
-    if (newPassword.length < 8) { setPasswordError('Le mot de passe doit faire au moins 8 caractères.'); return; }
-    if (newPassword !== confirmPassword) { setPasswordError('Les mots de passe ne correspondent pas.'); return; }
-    setSavingPassword(true);
-    try {
-      await api.changePassword(currentPassword, newPassword, token);
-      setSavedPassword(true);
-      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
-    } catch (e) {
-      const msg = (e as Error).message;
-      setPasswordError(PASSWORD_ERR_FR[msg] || msg || 'Une erreur est survenue.');
-    }
-    finally { setSavingPassword(false); }
-  };
-
-  const handleCalibrate = async (selfLevel: number | null) => {
-    if (!token) return;
-    setRatingBusy(true);
-    try {
-      const r = await api.calibrateRating(selfLevel, token, ratingSport);
-      setRating(r);
-      setCalibrating(false);
-    } finally {
-      setRatingBusy(false);
-    }
-  };
-
+  // Avatar : déjà persisté à l'upload → on patche UNIQUEMENT avatarUrl dans la baseline
+  // ET le brouillon. Reposer l'objet entier renvoyé par l'API détruirait le brouillon.
   const pickAvatar = async (file: File | undefined) => {
     if (!file || !token) return;
     if (!AVATAR_TYPES.includes(file.type)) { setError('Format d’image non supporté (JPEG, PNG ou WebP)'); return; }
@@ -254,68 +182,49 @@ export default function MyProfilePage() {
     setError(null);
     setPreview(URL.createObjectURL(file));
     setUploading(true);
-    try { setProfile(await api.uploadMyAvatar(file, token)); }
-    catch (e) { setError((e as Error).message); setPreview(null); }
+    try {
+      const p = await api.uploadMyAvatar(file, token);
+      setServer((c) => (c ? { ...c, avatarUrl: p.avatarUrl } : c));
+      setDraft((c) => (c ? { ...c, avatarUrl: p.avatarUrl } : c));
+    } catch (e) { setError((e as Error).message); setPreview(null); }
     finally { setUploading(false); }
+  };
+
+  const handleCalibrate = async (selfLevel: number | null) => {
+    if (!token) return;
+    setRatingBusy(true);
+    try {
+      setRating(await api.calibrateRating(selfLevel, token, ratingSport));
+      setCalibrating(false);
+    } finally { setRatingBusy(false); }
   };
 
   if (!ready || !token) return null;
 
-  const card: React.CSSProperties = {
-    background: th.surface, borderRadius: 20, boxShadow: `inset 0 0 0 1px ${th.line}`,
-    padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12,
-  };
-  const cardTitle: React.CSSProperties = {
-    fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
-    textTransform: 'uppercase', color: th.textFaint,
-  };
-  const label: React.CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute };
-  const input: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', background: th.surface2, border: `1px solid ${th.line}`,
-    borderRadius: 11, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 14, color: th.text,
-  };
-  const primaryBtn = (busy: boolean): React.CSSProperties => ({
-    cursor: 'pointer', border: 'none', background: th.accent, color: th.onAccent, borderRadius: 11,
-    padding: '10px 18px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, opacity: busy ? 0.6 : 1, alignSelf: 'flex-start',
+  // Onglets réellement rendus — pas d'onglet mort.
+  const tabs = PROFILE_TABS.filter((t) => {
+    if (t.key === 'niveau') return club?.levelSystemEnabled !== false;
+    if (t.key === 'portefeuille') return !!(slug && isMember);
+    return true;
   });
-  const readonlyRow = (l: string, v: string) => (
-    <div style={{ display: 'flex', gap: 12, fontFamily: th.fontUI, fontSize: 14 }}>
-      <span style={{ color: th.textMute, width: 92, flexShrink: 0 }}>{l}</span>
-      <span style={{ color: th.text, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
-    </div>
-  );
+  // Un ?tab= visant un onglet absent sur cet hôte retombe sur Identité.
+  const activeTab: ProfileTabKey = tabs.some((t) => t.key === tab) ? tab : 'identite';
 
-  // Niveau : on ne gère que le padel aujourd'hui. Le sélecteur de sport réapparaîtra
-  // quand l'utilisateur aura un niveau sur 2+ sports (à brancher sur un futur signal
-  // multi-sport ; tant qu'il n'existe pas, le drapeau reste false).
-  const showLevelSportPicker = false;
-  const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel'; // repli : le padel est toujours disponible
+  const changeTab = (k: ProfileTabKey) => {
+    setTab(k);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', k);
+    window.history.replaceState(null, '', url.toString());
+  };
 
-  // Items du menu = sections réellement rendues (pas d'ancre morte).
-  const navItems: ProfileNavItem[] = [
-    { id: 'identite', icon: 'user', label: 'Identité' },
-    ...(sports.length > 0 ? ([{ id: 'sport', icon: 'ball', label: 'Sport' }] satisfies ProfileNavItem[]) : []),
-    ...(club?.levelSystemEnabled !== false ? ([{ id: 'niveau', icon: 'chart', label: 'Niveau' }] satisfies ProfileNavItem[]) : []),
-    { id: 'infos', icon: 'info', label: 'Infos' },
-    { id: 'preferences', icon: 'settings', label: 'Préf.' },
-    ...(slug && club && membership ? ([
-      { id: 'portefeuille', icon: 'wallet', label: 'Solde' },
-      { id: 'paiement', icon: 'card', label: 'Carte' },
-      { id: 'paiements', icon: 'euro', label: 'Paie.' },
-    ] satisfies ProfileNavItem[]) : []),
-    { id: 'securite', icon: 'lock', label: 'Sécu.' },
-    ...(slug && club && membership ? ([{ id: 'licence', icon: 'ticket', label: 'Licence' }] satisfies ProfileNavItem[]) : []),
-    ...(token ? ([{ id: 'suppression', icon: 'trash', label: 'Suppr.' }] satisfies ProfileNavItem[]) : []),
-  ];
-
-  const avatarSrc = preview ?? assetUrl(profile?.avatarUrl ?? null);
-  const initials = profile ? `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase() : '…';
+  const avatarSrc = preview ?? assetUrl(draft?.avatarUrl ?? null);
+  const initials = draft ? `${draft.firstName[0] ?? ''}${draft.lastName[0] ?? ''}`.toUpperCase() : '…';
 
   return (
     <Screen>
       <div style={{ paddingBottom: 48 }}>
         {slug && club ? (
-          <div ref={headerRef}><ClubNav club={club} /></div>
+          <ClubNav club={club} />
         ) : (
           <div style={{ padding: '28px 20px 6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -338,282 +247,38 @@ export default function MyProfilePage() {
           </div>
         )}
 
-        {loading || !profile ? (
+        {loading || !draft ? (
           <div style={{ padding: '24px 20px', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : (
-          <>
-            <ProfileSectionNav items={navItems} topOffset={headerH} />
-            <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-              {/* Identité + avatar */}
-              <section id="identite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Identité">
-                <div style={cardTitle}>Identité</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  {avatarSrc ? (
-                    <img src={avatarSrc} alt="Photo de profil" style={{ width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: uploading ? 0.5 : 1 }} />
-                  ) : (
-                    <span aria-hidden="true" style={{
-                      width: 84, height: 84, borderRadius: '50%', flexShrink: 0, background: th.accent, color: th.onAccent,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, fontWeight: 700, fontSize: 28,
-                    }}>{initials}</span>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                      aria-label="Choisir une photo de profil"
-                      onChange={(e) => { pickAvatar(e.target.files?.[0]); e.target.value = ''; }} />
-                    <button onClick={() => fileRef.current?.click()} disabled={uploading} style={primaryBtn(uploading)}>
-                      {uploading ? 'Envoi…' : 'Changer la photo'}
-                    </button>
-                    <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>JPEG, PNG ou WebP · 2 Mo max</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-                  {readonlyRow('Prénom', profile.firstName)}
-                  {readonlyRow('Nom', profile.lastName)}
-                  {readonlyRow('Email', profile.email)}
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’email ne peut pas être modifié.</span>
-                </div>
-              </section>
-
-              {/* Sport préféré — région dédiée, distincte du niveau par sport */}
-              {sports.length > 0 && (
-                <section id="sport" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Sport préféré">
-                  <div style={cardTitle}>Sport préféré</div>
-                  <div role="group" aria-label="Sport préféré">
-                    <PillTabs
-                      options={[{ value: '', label: 'Aucun' }, ...sports.map((s) => ({ value: s.id, label: s.name }))]}
-                      value={profile.preferredSport?.id ?? ''}
-                      onChange={handlePreferredSport}
-                      size="sm"
-                    />
-                  </div>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Met en avant ce sport dans l'app.</span>
-                </section>
-              )}
-
-              {/* Niveau — masqué si le club a désactivé le système de niveau */}
-              {club?.levelSystemEnabled !== false && (
-                <section id="niveau" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mon niveau">
-                  <div style={cardTitle}>Mon niveau · {levelSportName}</div>
-                  {showLevelSportPicker && sports.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span style={label}>Sport du niveau</span>
-                      <div role="group" aria-label="Sport du niveau">
-                        <PillTabs
-                          options={sports.map((s) => ({ value: s.key, label: s.name }))}
-                          value={ratingSport}
-                          onChange={setRatingSport}
-                          size="sm"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {calibrating ? (
-                    <LevelCalibration onSelect={(l) => handleCalibrate(l)} onSkip={() => handleCalibrate(null)} busy={ratingBusy} />
-                  ) : rating && rating.level != null ? (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                        <LevelBadge rating={rating} />
-                        <button type="button" onClick={() => setCalibrating(true)}
-                          style={{ fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
-                          Réévaluer
-                        </button>
-                      </div>
-                      {matchStats && matchStats.wins + matchStats.losses > 0 && (
-                        <div style={{ marginTop: 10 }}>
-                          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginBottom: 4 }}>Résultats · {club?.name}</div>
-                          <ResultStats tone="onSurface" wins={matchStats.wins} losses={matchStats.losses} streak={matchStats.streak} />
-                        </div>
-                      )}
-                      {rating.calibrated && <div style={{ marginTop: 10 }}><LevelHistoryChart points={history} /></div>}
-                      <LevelSourceNote style={{ marginTop: 10 }} />
-                    </>
-                  ) : (
-                    // Onboarding neutre (façon Pista) : pas d'auto-évaluation forcée, les matchs calibrent.
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.text, margin: 0 }}>
-                        Niveau en cours de calibrage — joue tes premiers matchs et ton niveau s’affinera tout seul.
-                      </p>
-                      {rating && <ReliabilityMeter pct={rating.reliability} />}
-                      <button type="button" onClick={() => setCalibrating(true)}
-                        style={{ alignSelf: 'flex-start', fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', color: th.text }}>
-                        Affiner mon niveau (optionnel)
-                      </button>
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {/* Informations modifiables */}
-              <section id="infos" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Informations">
-                <div style={cardTitle}>Informations</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Téléphone</span>
-                  <input value={phone} onChange={(e) => { setPhone(e.target.value); setSavedInfo(false); }} placeholder="06 09 03 26 35" aria-label="Téléphone" style={input} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Date de naissance</span>
-                  <DateField value={birthDate} onChange={(d) => { setBirthDate(d); setSavedInfo(false); }} width="100%" ariaLabel="Date de naissance" />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Sexe</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(['MALE', 'FEMALE'] as const).map((s) => (
-                      <button key={s} onClick={() => { setSex(s); setSavedInfo(false); }}
-                        style={{ flex: 1, cursor: 'pointer', borderRadius: 11, padding: '10px', fontFamily: th.fontUI, fontSize: 13.5, border: `1px solid ${sex === s ? th.accent : th.line}`, background: sex === s ? th.surface2 : 'transparent', color: th.text }}>
-                        {s === 'MALE' ? 'Homme' : 'Femme'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={saveInfo} disabled={savingInfo} style={primaryBtn(savingInfo)}>Enregistrer</button>
-                  {savedInfo && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
-                </div>
-              </section>
-
-              {/* Préférences */}
-              <section id="preferences" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Préférences">
-                <div style={cardTitle}>Préférences</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Langue</span>
-                  <select value={profile.locale ?? 'fr'} onChange={(e) => changeLocale(e.target.value)} disabled={savingLocale} aria-label="Langue" style={{ ...input, cursor: 'pointer' }}>
-                    {LOCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>L’interface reste en français pour l’instant.</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Thème</span>
-                  <Segmented<ThemeMode> value={mode} onChange={setMode}
-                    options={[{ value: 'daylight', label: 'Clair' }, { value: 'floodlit', label: 'Sombre' }]} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Apparaître dans les classements</span>
-                  <div role="group" aria-label="Apparaître dans les classements">
-                    <Segmented<'oui' | 'non'>
-                      value={profile.showInLeaderboard ? 'oui' : 'non'}
-                      onChange={(v) => changeLeaderboard(v === 'oui')}
-                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                    />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Propose-moi les parties à mon niveau</span>
-                  <div role="group" aria-label="Propose-moi les parties à mon niveau">
-                    <Segmented<'oui' | 'non'>
-                      value={profile.autoMatchProposals ? 'oui' : 'non'}
-                      onChange={(v) => changeAutoMatchProposals(v === 'oui')}
-                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                    />
-                  </div>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
-                    Reçois une notification quand une partie ouverte à ton niveau est créée dans ton club. Tu rejoins en un tap — jamais d’inscription automatique.
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Autoriser les demandes d&apos;ami</span>
-                  <div role="group" aria-label="Autoriser les demandes d'ami">
-                    <Segmented<'oui' | 'non'>
-                      value={profile.acceptsFriendRequests ? 'oui' : 'non'}
-                      onChange={(v) => changeAcceptsFriendRequests(v === 'oui')}
-                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                    />
-                  </div>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
-                    Ce réglage ne concerne que les amitiés — la messagerie privée se règle séparément ci-dessous.
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Recevoir des messages privés</span>
-                  <div role="group" aria-label="Recevoir des messages privés">
-                    <Segmented<'oui' | 'non'>
-                      value={profile.acceptsDirectMessages ? 'oui' : 'non'}
-                      onChange={(v) => changeAcceptsDirectMessages(v === 'oui')}
-                      options={[{ value: 'oui', label: 'Oui' }, { value: 'non', label: 'Non' }]}
-                    />
-                  </div>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>
-                    Vos amis confirmés peuvent toujours vous écrire, même désactivé.
-                  </span>
-                </div>
-              </section>
-
-              {/* Sections compte club-scopées : portefeuille, carte, historique */}
-              {slug && club && membership && (
-                <>
-                  <section id="portefeuille" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Portefeuille">
-                    <div style={cardTitle}>Portefeuille</div>
-                    <WalletSection packages={walletPackages} subscriptions={walletSubs} />
-                  </section>
-
-                  <section id="paiement" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Méthodes de paiement">
-                    <div style={cardTitle}>Méthodes de paiement</div>
-                    {token && <PaymentMethodSection slug={slug} token={token} />}
-                  </section>
-
-                  <section id="paiements" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mes paiements">
-                    <div style={cardTitle}>Mes paiements</div>
-                    <PaymentsHistory payments={payments} />
-                  </section>
-                </>
-              )}
-
-              {/* Mot de passe */}
-              <section id="securite" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Mot de passe">
-                <div style={cardTitle}>Mot de passe</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Mot de passe actuel</span>
-                  <input type="password" value={currentPassword} autoComplete="current-password"
-                    onChange={(e) => { setCurrentPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                    aria-label="Mot de passe actuel" style={input} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Nouveau mot de passe</span>
-                  <input type="password" value={newPassword} autoComplete="new-password"
-                    onChange={(e) => { setNewPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                    aria-label="Nouveau mot de passe" placeholder="8 caractères minimum" style={input} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={label}>Confirmer le nouveau mot de passe</span>
-                  <input type="password" value={confirmPassword} autoComplete="new-password"
-                    onChange={(e) => { setConfirmPassword(e.target.value); setSavedPassword(false); setPasswordError(null); }}
-                    aria-label="Confirmer le nouveau mot de passe" style={input} />
-                </div>
-                {passwordError && (
-                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 11, padding: '9px 12px' }}>
-                    {passwordError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={changePassword} disabled={savingPassword} style={primaryBtn(savingPassword)}>Modifier le mot de passe</button>
-                  {savedPassword && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Modifié ✓</span>}
-                </div>
-              </section>
-
-              {/* Licence du club courant (uniquement membre, sur un sous-domaine club) */}
-              {slug && club && membership && (
-                <section id="licence" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Licence">
-                  <div style={cardTitle}>Licence · {club.name}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={label}>N° de licence / adhérent</span>
-                    <input value={license} onChange={(e) => { setLicense(e.target.value); setSavedLicense(false); }} placeholder="N° de licence / adhérent" aria-label="N° de licence / adhérent" style={input} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <button onClick={saveLicense} disabled={savingLicense} style={primaryBtn(savingLicense)}>Enregistrer</button>
-                    {savedLicense && <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute }}>Enregistré ✓</span>}
-                  </div>
-                </section>
-              )}
-
-              {/* Suppression de compte (globale, toujours rendue) */}
-              {token && (
-                <section id="suppression" style={{ ...card, scrollMarginTop: 'var(--profile-anchor, 72px)' }} aria-label="Supprimer mon compte">
-                  <div style={cardTitle}>Supprimer mon compte</div>
-                  <DeleteAccountSection token={token} />
-                </section>
-              )}
+          <div style={{ padding: '18px 20px 0' }}>
+            <div className="sp-scroll-x" style={{ marginBottom: 18 }}>
+              <PillTabs options={tabs.map((t) => ({ value: t.key, label: t.label }))} value={activeTab} onChange={changeTab} />
             </div>
-          </>
+
+            {activeTab === 'identite' && (
+              <ProfileIdentity
+                profile={draft} set={set} sports={sports}
+                avatarSrc={avatarSrc} initials={initials} uploading={uploading}
+                fileRef={fileRef} onPickAvatar={pickAvatar}
+                licence={isMember ? licenceDraft : null} clubName={club?.name ?? null} onLicence={setLicence}
+              />
+            )}
+            {activeTab === 'niveau' && (
+              <ProfileLevel
+                sports={sports} ratingSport={ratingSport} onRatingSport={setRatingSport}
+                rating={rating} history={history} matchStats={matchStats} clubName={club?.name ?? null}
+                calibrating={calibrating} ratingBusy={ratingBusy}
+                onStartCalibrate={() => setCalibrating(true)} onCalibrate={handleCalibrate}
+              />
+            )}
+            {activeTab === 'preferences' && <ProfilePreferences profile={draft} set={set} />}
+            {activeTab === 'portefeuille' && slug && (
+              <ProfileWallet slug={slug} token={token} packages={walletPackages} subscriptions={walletSubs} payments={payments} />
+            )}
+            {activeTab === 'securite' && <ProfileSecurity token={token} />}
+
+            <SaveBar dirty={dirty} saving={saving} error={saveError} saved={justSaved} onSave={save} onCancel={cancel} />
+          </div>
         )}
       </div>
     </Screen>
