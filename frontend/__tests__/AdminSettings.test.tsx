@@ -41,6 +41,10 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     refreshMock.mockReset();
     (mocked.adminGetClub as jest.Mock).mockClear().mockResolvedValue({ ...CLUB });
     (mocked.adminApplySportsBatch as jest.Mock).mockClear().mockResolvedValue([]);
+    // Sans ce mockClear, les appels s'accumulent d'un test à l'autre et les assertions
+    // sur `mock.calls[0]` relisent le PATCH d'un test précédent — ce qui rendait muet le
+    // garde-fou « persists showOtherClubsReservations » plus bas.
+    (mocked.adminUpdateClub as jest.Mock).mockClear();
     window.history.replaceState(null, '', '/admin/settings');
   });
 
