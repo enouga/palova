@@ -206,6 +206,20 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .auth-title { font-size: 42px; }
 }
 
+/* ── Cartes méta des fiches (tournoi/event/cours) : au-delà de 3 cartes, la
+   rangée passe à 2 par ligne sous 700px (4 cartes → 2×2), une seule ligne
+   au-delà (bascule 100 % CSS, pas de useIsDesktop → aucun flash).
+   À 4 de front, un mobile ne laisse que ~75px par carte : les libellés
+   (« INSCRIPTION », « JUGE-ARBITRE ») débordent de leur carte et la carte
+   voisine, opaque, les repeint — clipping invisible.
+   La classe n'est posée QUE au-delà de 3 cartes ; à 3 (event, cours, tournoi
+   sans juge-arbitre) --meta-basis est absente → repli 0px → la rangée de tiers
+   égaux reste strictement identique. ── */
+.agenda-meta-row { flex-wrap: wrap; --meta-basis: calc(50% - 3px); }
+@media (min-width: 700px) {
+  .agenda-meta-row { flex-wrap: nowrap; --meta-basis: 0px; }
+}
+
 /* ── Modale « Nouvel événement » (planning admin) : 2 colonnes dès 700px,
    empilées avant (bascule 100 % CSS, pas de useIsDesktop → aucun flash). ── */
 .pl-create-grid { display: block; }
