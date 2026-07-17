@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -40,3 +41,24 @@ export const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 };
+
+/**
+ * Nom de fichier opaque, sans lien avec le compte qui l'a uploadé.
+ *
+ * /uploads est servi par express.static et l'avatarUrl est publié par des
+ * endpoints PUBLICS et ANONYMES (fiche tournoi) : un nom dérivé du userId
+ * y publierait un identifiant interne stable, exploitable pour corréler
+ * ou scraper. Le jeton aléatoire coupe ce lien.
+ */
+export function randomFileName(ext: string): string {
+  return `${crypto.randomBytes(16).toString('hex')}.${ext}`;
+}
+
+// Ancien nommage des avatars : <userId>-<timestamp>.<ext>.
+// Le nouveau nom est un jeton hex sans tiret → jamais reconnu ici,
+// ce qui rend la migration (scripts/migrate-avatar-filenames.ts) idempotente.
+const LEGACY_AVATAR_RE = /^[a-z0-9]+-\d+\.(jpg|png|webp)$/i;
+
+export function isLegacyAvatarUrl(url: string): boolean {
+  return LEGACY_AVATAR_RE.test(path.basename(url));
+}
