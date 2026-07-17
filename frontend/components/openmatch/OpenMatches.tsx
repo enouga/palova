@@ -38,6 +38,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   } as const;
   const [matches, setMatches] = useState<OpenMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [myLevel, setMyLevel] = useState<number | null>(null);
   // Filtre par niveau = jauge (fourchette) ; [1,8] = tous. Une partie passe si sa fourchette
   // chevauche [fMin,fMax] (les parties « ouvertes à tous » passent toujours).
@@ -55,8 +56,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setMatches(await api.getOpenMatches(club.slug, token ?? undefined)); }
-    catch { setMatches([]); }
+    try { setMatches(await api.getOpenMatches(club.slug, token ?? undefined)); setError(false); }
+    catch { setMatches([]); setError(true); }
     finally { setLoading(false); }
   }, [club.slug, token]);
 
@@ -233,6 +234,13 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           )}
           {!ready || loading ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+          ) : error ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+              Impossible de charger les parties pour le moment.
+              <div style={{ marginTop: 12 }}>
+                <button onClick={load} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '9px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>Réessayer</button>
+              </div>
+            </div>
           ) : otherMatches.length === 0 ? (
             recommended.length > 0 ? (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Pas d&apos;autre partie ouverte.</div>

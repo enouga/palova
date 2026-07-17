@@ -92,6 +92,18 @@ it('« Autour de moi » relance listClubs avec lat/lng', async () => {
   );
 });
 
+it('un échec réseau affiche un message distinct de « aucun club » + un bouton Réessayer', async () => {
+  authToken = null;
+  listClubs.mockRejectedValueOnce(new Error('network'));
+  wrap();
+  await screen.findByText(/impossible de charger les clubs/i);
+  expect(screen.queryByText('Aucun club ne correspond.')).not.toBeInTheDocument();
+
+  listClubs.mockResolvedValueOnce([]);
+  fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
+  await screen.findByText('Aucun club ne correspond.');
+});
+
 it('fait tourner la banque de couvertures → cartes voisines distinctes', async () => {
   authToken = null; // évite le filtre sport, simplifie le chargement
   const club = (id: string) => ({

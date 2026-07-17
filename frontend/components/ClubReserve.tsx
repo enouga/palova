@@ -62,6 +62,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
   );
   const [availBySport, setAvailBySport]     = useState<Record<string, ClubAvailability[]>>({});
   const [loadingBySport, setLoadingBySport] = useState<Record<string, boolean>>({});
+  const [errorBySport, setErrorBySport]     = useState<Record<string, boolean>>({});
   const [booking, setBooking]   = useState<{ resourceId: string; price: string; slot: TimeSlot; duration: number; format?: string; sportKey?: string; resourceName?: string } | null>(null);
   // Feuille d'alerte pré-remplie (créneau padel « pris » cliqué → fenêtre = créneau ±1 h).
   const [alertSheet, setAlertSheet] = useState<{ date: string; from: string; to: string } | null>(null);
@@ -165,9 +166,14 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   const loadSport = useCallback(async (clubSportId: string, dur: number, dateArg: string) => {
     setLoadingBySport((s) => ({ ...s, [clubSportId]: true }));
-    try { const a = await api.getClubAvailability(club.slug, dateArg, dur, clubSportId); setAvailBySport((s) => ({ ...s, [clubSportId]: a })); }
-    catch { setAvailBySport((s) => ({ ...s, [clubSportId]: [] })); }
-    finally { setLoadingBySport((s) => ({ ...s, [clubSportId]: false })); }
+    try {
+      const a = await api.getClubAvailability(club.slug, dateArg, dur, clubSportId);
+      setAvailBySport((s) => ({ ...s, [clubSportId]: a }));
+      setErrorBySport((s) => ({ ...s, [clubSportId]: false }));
+    } catch {
+      setAvailBySport((s) => ({ ...s, [clubSportId]: [] }));
+      setErrorBySport((s) => ({ ...s, [clubSportId]: true }));
+    } finally { setLoadingBySport((s) => ({ ...s, [clubSportId]: false })); }
   }, [club.slug]);
 
   const reloadAll = useCallback(() => {
@@ -306,6 +312,12 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     )}
                     {items === undefined ? (
                       <div style={{ padding: '20px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+                    ) : errorBySport[cs.id] ? (
+                      <div style={{ padding: '12px 0 4px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+                        Impossible de charger les disponibilités.
+                        <button onClick={() => loadSport(cs.id, selDur, date)}
+                          style={{ marginLeft: 10, border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '6px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700 }}>Réessayer</button>
+                      </div>
                     ) : items.length === 0 ? (
                       <div style={{ padding: '12px 0 4px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun terrain.</div>
                     ) : view === 'grid' ? (

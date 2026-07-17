@@ -18,6 +18,7 @@ export function ClubDirectory() {
   const [city, setCity]     = useState('');
   const [sport, setSport]   = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied'>('idle');
 
@@ -38,7 +39,8 @@ export function ClubDirectory() {
         q: q || undefined, city: city || undefined, sport: sport || undefined,
         ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
       }));
-    } catch { setClubs([]); }
+      setError(false);
+    } catch { setClubs([]); setError(true); }
     finally { setLoading(false); }
   }, [q, city, sport, coords]);
 
@@ -88,6 +90,13 @@ export function ClubDirectory() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px 20px 0' }}>
         {loading ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+        ) : error ? (
+          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+            Impossible de charger les clubs pour le moment.
+            <div style={{ marginTop: 10 }}>
+              <button onClick={load} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '8px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>Réessayer</button>
+            </div>
+          </div>
         ) : clubs.length === 0 ? (
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (

@@ -324,6 +324,18 @@ describe('OpenMatches', () => {
     expect(screen.getByText('En attente de confirmation')).toBeInTheDocument();
   });
 
+  it('un échec réseau affiche un message distinct de « aucune partie » + un bouton Réessayer', async () => {
+    mocked.getOpenMatches.mockRejectedValueOnce(new Error('network'));
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    await screen.findByText(/impossible de charger les parties/i);
+    expect(screen.queryByText('Aucune partie ouverte pour le moment.')).not.toBeInTheDocument();
+
+    mocked.getOpenMatches.mockResolvedValueOnce([] as never);
+    fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
+    await screen.findByText('Aucune partie ouverte pour le moment.');
+  });
+
   it('deeplink ?vue=matchs : arrive directement sur la vue « Mes matchs »', async () => {
     window.history.replaceState(null, '', '/parties?vue=matchs');
     try {
