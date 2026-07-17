@@ -60,6 +60,17 @@ it('affiche les lignes classées dans l ordre', async () => {
   expect(names).toEqual(['Ana A', 'Bea B']);
 });
 
+it('un échec réseau affiche un message distinct de « Connectez-vous » + un bouton Réessayer', async () => {
+  getClubLeaderboard.mockRejectedValueOnce(new Error('network'));
+  wrap(<Leaderboard club={club} viewerUserId="u1" />);
+  await screen.findByText(/impossible de charger le classement/i);
+  expect(screen.queryByText('Connectez-vous pour voir le classement.')).not.toBeInTheDocument();
+
+  getClubLeaderboard.mockResolvedValueOnce(payload());
+  fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
+  await screen.findByText('Ana A');
+});
+
 it('panneau moi : opt-in mais pas assez de matchs → matchesToGo', async () => {
   getClubLeaderboard.mockResolvedValue(payload({ entries: [], me: { optedIn: true, ranked: false, rank: null, level: 3.4, matchesPlayed: 3, matchesToGo: 2 } }));
   wrap(<Leaderboard club={club} viewerUserId="u9" />);

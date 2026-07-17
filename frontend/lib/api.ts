@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Fallback localhost:3001 uniquement en dev (NEXT_PUBLIC_API_URL toujours défini en prod).
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const BASE_URL = API_BASE_URL;
 
 // URL complète d'un fichier servi par le backend (ex. avatarUrl `/uploads/avatars/...`).
 // Une URL déjà absolue (http/https) est renvoyée telle quelle — rétro-compat des logos

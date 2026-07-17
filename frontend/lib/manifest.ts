@@ -1,6 +1,8 @@
 // Construction pure du manifest PWA (consommée par app/manifest.ts, testable sans Next).
 // Hôte plateforme (club null) → identité Palova ; hôte club → nom/couleur/icônes du club.
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_BASE_URL } from '@/lib/api';
+
+const API = API_BASE_URL;
 
 export interface ManifestClub {
   slug: string;

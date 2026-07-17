@@ -104,7 +104,7 @@ export default function AdminAnnouncementsPage() {
               </span>
               {a.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={assetUrl(a.imageUrl) ?? ''} alt="" aria-label="Affiche" title="Affiche"
+                <img src={assetUrl(a.imageUrl) ?? ''} alt={`Affiche de « ${a.title} »`}
                   style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />
               ) : (
                 <div aria-hidden style={{ width: 46, height: 46, borderRadius: 10, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: th.textFaint, fontSize: 18 }}>i</div>

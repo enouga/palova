@@ -34,15 +34,17 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
   const [now, setNow] = useState<Date | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [deeplinkError, setDeeplinkError] = useState<string | null>(null);
+  const [listError, setListError] = useState(false);
 
   useEffect(() => { setNow(new Date()); }, []);
 
   const reload = useCallback(() => {
     api.listConversations(token).then((rows) => {
       setConversations(rows);
+      setListError(false);
       // re-dérive la sélection par id stable après reload
       setSelected((prev) => prev ? rows.find((c) => c.id === prev.id) ?? prev : prev);
-    }).catch(() => {});
+    }).catch(() => setListError(true));
   }, [token]);
   useEffect(() => { reload(); }, [reload]);
 
@@ -134,8 +136,17 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
         </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }}>
-        <ConversationList conversations={conversations} selectedId={selected?.id ?? null} now={now}
-          onSelect={(c) => { setDeeplinkError(null); setSelected(c); }} />
+        {listError && conversations.length === 0 ? (
+          <div style={{ padding: '24px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
+            Impossible de charger vos conversations.
+            <div style={{ marginTop: 10 }}>
+              <button onClick={reload} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '7px 15px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>Réessayer</button>
+            </div>
+          </div>
+        ) : (
+          <ConversationList conversations={conversations} selectedId={selected?.id ?? null} now={now}
+            onSelect={(c) => { setDeeplinkError(null); setSelected(c); }} />
+        )}
       </div>
     </div>
   );

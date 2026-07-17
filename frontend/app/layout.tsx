@@ -6,7 +6,7 @@ import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
 import { Footer } from '@/components/Footer';
 import { DmWidgetHost } from '@/components/messages/DmWidgetHost';
-import { api } from '@/lib/api';
+import { api, API_BASE_URL } from '@/lib/api';
 import { CANONICAL_ROOT } from '@/lib/roots';
 
 // Geist sur tout le site : Geist Sans (titres + UI) et Geist Mono (données).
@@ -30,7 +30,7 @@ const righteous = Righteous({
   display: 'swap',
 });
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = API_BASE_URL;
 
 // viewport-fit=cover : active env(safe-area-inset-*) sous l'encoche/la barre gestuelle en PWA
 // installée (utilisé par la nav club figée en haut pour ne pas passer sous l'encoche iOS).

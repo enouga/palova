@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useRef } from 'react';
+import { API_BASE_URL } from './api';
 import type { SSEEvent } from './api';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const BASE_URL = API_BASE_URL;
 
 export function useCourtSSE(
   resourceId: string | null,

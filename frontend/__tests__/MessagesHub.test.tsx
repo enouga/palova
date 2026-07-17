@@ -47,6 +47,17 @@ it('liste les conversations avec aperçu et badge de non-lus', async () => {
   expect(screen.getByText('2')).toBeInTheDocument();
 });
 
+it('un échec réseau affiche un message distinct de « Aucune conversation » + un bouton Réessayer', async () => {
+  apiMock.listConversations.mockRejectedValueOnce(new Error('network'));
+  renderHub();
+  await screen.findByText(/impossible de charger vos conversations/i);
+  expect(screen.queryByText(/aucune conversation/i)).not.toBeInTheDocument();
+
+  apiMock.listConversations.mockResolvedValueOnce([CONV()]);
+  fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
+  await screen.findByText('Marie Dupont');
+});
+
 it('tap sur une conversation → ouvre le fil (mobile) puis retour', async () => {
   renderHub();
   fireEvent.click(await screen.findByText('Marie Dupont'));

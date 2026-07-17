@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { api } from '@/lib/api';
+import { api, API_BASE_URL } from '@/lib/api';
 import { rangeLabel } from '@/lib/levelMatch';
 import { OpenMatchDetail } from '@/components/openmatch/OpenMatchDetail';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = API_BASE_URL;
 
 // Métadonnées Open Graph : aperçu riche du lien partagé (WhatsApp/SMS). Fetch anonyme
 // (crawler) ; tout échec → repli neutre, jamais d'exception (pas de page 500 pour un aperçu).

@@ -15,6 +15,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   const { token, ready } = useAuth();
   const [data, setData] = useState<ClubLeaderboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [optingIn, setOptingIn] = useState(false);
   // Données du panneau stats (best-effort : le classement s'affiche même si elles échouent).
   const [rating, setRating] = useState<MyRating | null>(null);
@@ -49,7 +50,7 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   }, [token]);
 
   const load = useCallback(async () => {
-    if (!token) { setData(null); setLoading(false); return; }
+    if (!token) { setData(null); setError(false); setLoading(false); return; }
     setLoading(true);
     try {
       const [lb, myRating, matches, ratingHistory] = await Promise.all([
@@ -62,8 +63,9 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
       setRating(myRating);
       setMyMatches(matches);
       setHistory(ratingHistory);
+      setError(false);
     }
-    catch { setData(null); }
+    catch { setData(null); setError(true); }
     finally { setLoading(false); }
   }, [club.slug, token, lbSport]);
 
@@ -91,8 +93,18 @@ export function Leaderboard({ club, viewerUserId }: { club: ClubDetail; viewerUs
   if (!ready || loading) {
     return <div style={{ padding: '24px 20px', textAlign: 'center', ...muted }}>Chargement…</div>;
   }
-  if (!token || !data) {
+  if (!token) {
     return <div style={{ padding: '24px 20px', textAlign: 'center', ...muted }}>Connectez-vous pour voir le classement.</div>;
+  }
+  if (error || !data) {
+    return (
+      <div style={{ padding: '24px 20px', textAlign: 'center', ...muted }}>
+        Impossible de charger le classement pour le moment.
+        <div style={{ marginTop: 12 }}>
+          <button onClick={load} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '8px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>Réessayer</button>
+        </div>
+      </div>
+    );
   }
 
   const { entries, me } = data;
