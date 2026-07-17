@@ -1233,4 +1233,67 @@ export class TournamentService {
     // Remplaçant + coéquipier restant : notif d'inscription standard sur la même inscription (même regId).
     await this.safeNotify(() => notify.notifyTournamentRegistration(regId));
   }
+
+  // ------------------------------------------------- Appariement & binôme tardif
+
+  /**
+   * Cœur partagé d'appariement/tardif : mêmes validations que `register` SAUF la deadline
+   * (le J/A doit pouvoir apparier/ajouter PENDANT le tournoi, après clôture des inscriptions).
+   * `fromBench` détermine si les 2 joueurs sont retirés du banc après création.
+   */
+  private async createPairedRegistration(clubId: string, tournamentId: string, userAId: string, userBId: string, actorUserId: string, logKind: 'PAIR' | 'ADD_LATE', fromBench: boolean) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, clubId: true, gender: true, openToWomen: true, status: true, maxTeams: true, requirePrepayment: true },
+    });
+    if (!tournament || tournament.clubId !== clubId) throw new Error('TOURNAMENT_NOT_FOUND');
+    if (tournament.status !== 'PUBLISHED') throw new Error('TOURNAMENT_NOT_OPEN');
+    if (userAId === userBId) throw new Error('PARTNER_IS_SELF');
+
+    await this.assertActiveMember(clubId, userAId);
+    await this.assertActiveMember(clubId, userBId);
+    const [userA, userB] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userAId }, select: { id: true, sex: true, firstName: true, lastName: true } }),
+      prisma.user.findUnique({ where: { id: userBId }, select: { id: true, sex: true, firstName: true, lastName: true } }),
+    ]);
+    if (!userA || !userB) throw new Error('USER_NOT_FOUND');
+    if (!userA.sex || !userB.sex) throw new Error('SEX_REQUIRED');
+    this.assertGender(tournament.gender, userA.sex as Sex, userB.sex as Sex, tournament.openToWomen);
+
+    const paid = tournament.requirePrepayment;
+    const registration = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+      await this.assertNoActiveRegistration(tx, tournamentId, [userAId, userBId]);
+      const now = new Date();
+      const confirmed = await tx.tournamentRegistration.count({ where: { tournamentId, ...occupiesSpotWhere(now) } });
+      const status = tournament.maxTeams == null || confirmed < tournament.maxTeams ? 'CONFIRMED' : 'WAITLISTED';
+      const created = await tx.tournamentRegistration.create({
+        data: {
+          tournamentId, captainUserId: userAId, partnerUserId: userBId, status,
+          ...(paid ? { paymentStatus: 'DUE', paymentDeadline: status === 'CONFIRMED' ? holdDeadline(now) : null } : {}),
+        },
+      });
+      if (fromBench) await tx.tournamentBenchEntry.deleteMany({ where: { tournamentId, userId: { in: [userAId, userBId] } } });
+      await this.writeLog(tx, tournamentId, actorUserId, logKind, {
+        nameA: `${userA.firstName} ${userA.lastName}`.trim(), nameB: `${userB.firstName} ${userB.lastName}`.trim(),
+      });
+      return created;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    // Même règle que `register` : place CONFIRMED payante → la notif part au paiement confirmé.
+    if (!paid || registration.status === 'WAITLISTED') {
+      await this.safeNotify(() => notify.notifyTournamentRegistration(registration.id));
+    }
+    return registration;
+  }
+
+  /** Deux joueurs du banc forment un nouveau binôme. Ils sortent du banc dans la transaction. Journal `PAIR`. */
+  async pairFromBench(clubId: string, tournamentId: string, userAId: string, userBId: string, actorUserId: string) {
+    return this.createPairedRegistration(clubId, tournamentId, userAId, userBId, actorUserId, 'PAIR', true);
+  }
+
+  /** Binôme tardif direct (sans passer par le banc). Journal `ADD_LATE`. */
+  async addLateRegistration(clubId: string, tournamentId: string, captainUserId: string, partnerUserId: string, actorUserId: string) {
+    return this.createPairedRegistration(clubId, tournamentId, captainUserId, partnerUserId, actorUserId, 'ADD_LATE', false);
+  }
 }
