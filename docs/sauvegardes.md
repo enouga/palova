@@ -298,8 +298,8 @@ Un restore est **impossible** sans eux. À conserver dans un **gestionnaire de m
 - [ ] Commander une **Storage Box** (ou bucket S3) et **décommenter** le bloc hors-site (§4 du script)
 - [ ] Créer le check **healthchecks.io** et **décommenter** le ping (§5 du script)
 - [ ] Mettre tous les **secrets au coffre** (§5)
-- [ ] Faire un **premier test de restauration** (§6) et noter la date ci-dessous
+- [x] ~~Faire un premier test de restauration~~ **mécanisme local validé** (§6) — reste le test **prod** une fois la VM déployée (cron + hors-site en place)
 
 ---
 
-*Dernier test de restauration réussi : — (jamais encore effectué)*
+*Dernier test de restauration réussi : 2026-07-17 — cycle complet `backup-local.ps1` → `pg_restore` dans une base Postgres 16 jetable (conteneur isolé, hors dev), comptes de lignes identiques à la source (clubs, users, reservations, payments, club_members, tournaments). A révélé et corrigé un bug réel : l'opérateur `>` de PowerShell 5.1 réencodait le dump binaire en UTF-16 (BOM), le corrompant silencieusement — `backup-local.ps1` redirige désormais via `cmd /c` + vérifie la signature `PGDMP` avant de déclarer la sauvegarde valide. Reste à faire : le test grandeur nature avec un dump **prod** une fois la VM et le cron déployés (§6 ci-dessus).*
