@@ -253,6 +253,14 @@ model Club {
   // (catalogue fermé AMENITY_KEYS — presentation.service, miroir front lib/clubShowcase).
   foundedYear Int?     @map("founded_year")
   amenities   String[] @default([]) @map("amenities")
+  // Garde anti-tourisme : vérification API d'État du SIRET du club + détection des clubs fantômes.
+  // Réutilise le champ `siret` légal existant (identité légale, plus bas dans ce modèle) —
+  // même colonne, même sémantique (SIRET du club) : pas de doublon de champ/colonne.
+  // null = club pré-feature ou créé par le superadmin sans SIRET (jamais purgé par le janitor).
+  siretVerifiedAt     DateTime? @map("siret_verified_at")       // confirmation recherche-entreprises ; null = non vérifié (API indispo)
+  siretLegalName      String?   @map("siret_legal_name")        // raison sociale renvoyée par l'API
+  setupReminderSentAt DateTime? @map("setup_reminder_sent_at")  // relance J+15 « aucun terrain » envoyée (jamais 2 fois)
+  autoSuspendedAt     DateTime? @map("auto_suspended_at")       // suspension auto J+30 faite (jamais 2 fois, même après réactivation)
   timezone         String     @default("Europe/Paris")
   logoUrl          String?    @map("logo_url")
   coverImageUrl    String?    @map("cover_image_url") // couverture club (annuaire + page) ; null = illustration auto-générée
