@@ -4,7 +4,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 const dispatchMock = jest.fn();
 jest.mock('../../services/notification/dispatcher', () => ({ dispatch: (...a: unknown[]) => dispatchMock(...a) }));
 
-import { notifyTournamentRegistration } from '../notifications';
+import { notifyTournamentRegistration, notifyTournamentReplacement } from '../notifications';
 
 const club = {
   id: 'club-1',
@@ -101,5 +101,68 @@ describe('notifyTournamentRegistration → dispatch MY_REGISTRATIONS', () => {
         email: expect.objectContaining({ to: 'admin@club.fr' }),
       }),
     );
+  });
+});
+
+describe('notifyTournamentReplacement → dispatch registration.cancelled au seul joueur remplacé', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  const tournamentRow = {
+    id: 't-1',
+    name: 'Open Padel Paris',
+    startTime: new Date('2026-08-01T09:00:00Z'),
+    endTime: new Date('2026-08-01T18:00:00Z'),
+    registrationDeadline: new Date('2026-07-30T21:59:00Z'),
+    club,
+  } as any;
+
+  it('envoie « registration.cancelled » au seul joueur remplacé (pas au coéquipier restant)', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournamentRow);
+
+    await notifyTournamentReplacement({
+      tournamentId: 't-1',
+      removedPlayer: { id: 'u1', email: 'removed@test.fr', firstName: 'Bernard', lastName: 'X' },
+      remainingPlayerName: 'Andre Y',
+    });
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        clubId: 'club-1',
+        category: 'MY_REGISTRATIONS',
+        type: 'registration.cancelled',
+        email: expect.objectContaining({
+          to: 'removed@test.fr',
+          subject: expect.stringContaining('Open Padel Paris'),
+        }),
+      }),
+    );
+  });
+
+  it('no-op silencieux si le tournoi est introuvable', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(null);
+
+    await expect(
+      notifyTournamentReplacement({
+        tournamentId: 't-404',
+        removedPlayer: { id: 'u1', email: 'a@test.fr', firstName: 'A', lastName: 'B' },
+        remainingPlayerName: 'C',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
+
+  it('no-op silencieux si le joueur retiré n’a pas d’email', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(tournamentRow);
+
+    await notifyTournamentReplacement({
+      tournamentId: 't-1',
+      removedPlayer: { id: 'u1', email: null, firstName: 'Bernard', lastName: 'X' },
+      remainingPlayerName: 'Andre Y',
+    });
+
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 });
