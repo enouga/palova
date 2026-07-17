@@ -136,6 +136,13 @@ describe('ClubNav', () => {
     expect(screen.queryByLabelText('Accueil Palova')).not.toBeInTheDocument();
   });
 
+  it('préfère le logotype horizontal (logoWideUrl) à l’icône dans le bandeau', () => {
+    const clubWide = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: '/uploads/logos/i.png', logoWideUrl: '/uploads/logos/w.png' } as never;
+    render(<ThemeProvider><ClubNav club={clubWide} /></ThemeProvider>);
+    const img = screen.getByRole('img', { name: 'Logo Club Démo' }) as HTMLImageElement;
+    expect(img.src).toContain('/uploads/logos/w.png');
+  });
+
   it("retombe sur la marque Palova quand le club n'a pas de logo", () => {
     wrap();
     expect(screen.getByLabelText('Accueil Palova')).toBeInTheDocument();
@@ -265,18 +272,46 @@ describe('ClubNav', () => {
     expect(await screen.findByText('Parties')).toBeInTheDocument();
   });
 
-  it("affiche l'icône « Espace club » (lien /admin) quand on gère ce club, quel que soit le rôle", async () => {
+  it("affiche l'icône « Espace club » (lien /admin, nouvel onglet) quand on gère ce club, quel que soit le rôle", async () => {
     const { api: mockApi } = require('../lib/api');
     mockApi.getMyClubs.mockResolvedValueOnce([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'STAFF' }]);
     document.cookie = 'token=abc; path=/';
     wrap();
     const link = await screen.findByLabelText('Espace club');
     expect(link).toHaveAttribute('href', '/admin');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 
-  it("masque l'icône « Espace club » si on ne gère pas ce club", async () => {
+  it("icône « Espace club » pointe vers l'AUTRE club géré (cross-sous-domaine, nouvel onglet) si on ne gère pas ce club-ci", async () => {
     const { api: mockApi } = require('../lib/api');
     mockApi.getMyClubs.mockResolvedValueOnce([{ clubId: 'autre-club', slug: 'x', name: 'X', role: 'OWNER' }]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const link = await screen.findByLabelText('Espace club');
+    expect(link).toHaveAttribute('href', expect.stringContaining('x.'));
+    expect(link).toHaveAttribute('href', expect.stringContaining('/admin'));
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it("icône « Espace club » ouvre un popover listant chaque club quand on en gère plusieurs autres", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getMyClubs.mockResolvedValueOnce([
+      { clubId: 'autre-1', slug: 'autre', name: 'Autre Club', role: 'ADMIN' },
+      { clubId: 'autre-2', slug: 'troisieme', name: 'Troisième Club', role: 'STAFF' },
+    ]);
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    const btn = await screen.findByLabelText('Espace club');
+    expect(btn.tagName).toBe('BUTTON');
+    fireEvent.click(btn);
+    const first = await screen.findByText('Espace club — Autre Club');
+    expect(first.closest('a')).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Espace club — Troisième Club')).toBeInTheDocument();
+  });
+
+  it("masque l'icône « Espace club » si on ne gère aucun club", async () => {
+    const { api: mockApi } = require('../lib/api');
+    mockApi.getMyClubs.mockResolvedValueOnce([]);
     document.cookie = 'token=abc; path=/';
     wrap();
     await screen.findByText('Mes réservations'); // menu chargé

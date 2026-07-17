@@ -17,7 +17,7 @@ jest.mock('web-push', () => ({
 }));
 
 import webpush from 'web-push';
-import { deliverPush, PushSub, PushPayload } from '../push';
+import { deliverPush, resolvePushIcon, resolvePushBadge, PushSub, PushPayload } from '../push';
 
 const mockSendNotification = webpush.sendNotification as jest.Mock;
 
@@ -72,5 +72,42 @@ describe('deliverPush', () => {
     await expect(deliverPush([sub1], payload)).resolves.toBeUndefined();
 
     expect(prismaMock.pushSubscription.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolvePushIcon', () => {
+  it('renvoie l icône Palova quand aucun clubId n est fourni', async () => {
+    await expect(resolvePushIcon(null)).resolves.toBe('http://localhost:3000/icon-192.png');
+    await expect(resolvePushIcon(undefined)).resolves.toBe('http://localhost:3000/icon-192.png');
+  });
+
+  it('renvoie l icône du club (repli Palova déjà géré par la route) quand le club existe', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ slug: 'padel-arena-paris' } as any);
+
+    await expect(resolvePushIcon('club-demo')).resolves.toBe(
+      'http://localhost:3001/api/clubs/padel-arena-paris/icon/192.png',
+    );
+  });
+
+  it('renvoie l icône Palova si le club est introuvable', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null as any);
+
+    await expect(resolvePushIcon('club-inconnu')).resolves.toBe('http://localhost:3000/icon-192.png');
+  });
+
+  it('renvoie l icône Palova (jamais de throw) si la requête DB échoue', async () => {
+    prismaMock.club.findUnique.mockRejectedValue(new Error('DB down'));
+
+    await expect(resolvePushIcon('club-demo')).resolves.toBe('http://localhost:3000/icon-192.png');
+  });
+});
+
+describe('resolvePushBadge', () => {
+  it('sans clubId → asset Palova', async () => {
+    expect(await resolvePushBadge(null)).toContain('/icon-badge-96.png');
+  });
+  it('avec clubId → route badge-96 du club', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ slug: 'demo' } as any);
+    expect(await resolvePushBadge('c1')).toContain('/api/clubs/demo/icon/badge-96.png');
   });
 });

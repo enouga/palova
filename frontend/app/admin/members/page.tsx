@@ -31,7 +31,7 @@ const LIST_MAX_HEIGHT = 'calc(100vh - 300px)';
 const STAFF_ERRORS: Record<string, string> = {
   CANNOT_CHANGE_OWNER: 'Le rôle du gérant ne peut pas être modifié.',
   CANNOT_CHANGE_SELF:  'Vous ne pouvez pas modifier votre propre rôle.',
-  MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bloc « Rôle ») avant de le supprimer.',
+  MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bloc « Rôle ») avant de le bloquer ou de le supprimer.',
 };
 
 const CORAL = '#ff7a4d';
@@ -170,7 +170,7 @@ export default function AdminMembersPage() {
   const toggleBlocked = async () => {
     if (!token || !clubId || !selected) return;
     try { setError(null); await api.adminSetMemberBlocked(clubId, selected.id, selected.status !== 'BLOCKED', token); await load(); }
-    catch (e) { setError((e as Error).message); }
+    catch (e) { const msg = (e as Error).message; setError(STAFF_ERRORS[msg] ?? msg); }
   };
 
   const setRole = async (role: StaffRole) => {
@@ -217,6 +217,7 @@ export default function AdminMembersPage() {
     { value: 'all', label: 'Tous', n: counts.all },
     { value: 'subs', label: 'Abonnés', n: counts.subs },
     { value: 'staff', label: 'Staff', n: counts.staff },
+    { value: 'coach', label: 'Coachs', n: counts.coach },
     { value: 'watch', label: 'À surveiller', n: counts.watch },
     { value: 'blocked', label: 'Bloqués', n: counts.blocked },
   ];

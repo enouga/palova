@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, ManagedClub, MemberPackage, MyClubMembership, MyProfile, Subscription } from '@/lib/api';
+import { api, assetUrl, MemberPackage, MyClubMembership, MyProfile, Subscription } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Theme } from '@/lib/theme';
 import { useAuth, logout } from '@/lib/useAuth';
 import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { useClub } from '@/lib/ClubProvider';
-import { platformUrl, clubUrl } from '@/lib/clubUrl';
+import { platformUrl } from '@/lib/clubUrl';
 import { packageLabel, isUsable } from '@/lib/packages';
 import { sportTag } from '@/lib/sportBadge';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -15,8 +15,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 
 // Icône profil (header) + menu déroulant : identité, soldes prépayés du club courant,
-// liens (page profil, clubs, « Espace club » pour les AUTRES clubs gérés — le club courant a
-// son raccourci direct dans ClubNav —, superadmin), déconnexion.
+// liens (page profil, clubs, superadmin), déconnexion. Le raccourci vers le back-office
+// d'un club géré vit uniquement dans ClubNav (gear icon), jamais dans ce menu.
 // L'édition du profil vit sur la page dédiée /me/profile.
 // Ne s'affiche que connecté. `direction="up"` ouvre le panneau vers le haut (pieds de sidebar) ;
 // `align="left"` l'aligne sur le bord gauche du bouton pour qu'il s'étende vers la droite
@@ -30,11 +30,11 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [profile, setProfile] = useState<MyProfile | null>(null);
-  const [managed, setManaged] = useState<ManagedClub[]>([]);
   // undefined = en cours de chargement ; null = pas membre du club courant (ou hôte plateforme).
   const [membership, setMembership] = useState<MyClubMembership | null | undefined>(undefined);
   const [packages, setPackages] = useState<MemberPackage[]>([]);
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [isCoach, setIsCoach] = useState(false);
   const { state: installState, promptInstall } = useInstallPrompt();
   const [installHelp, setInstallHelp] = useState(false);
 
@@ -51,11 +51,11 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const toggle = () => {
     if (!open && !loaded && token) {
       setLoaded(true);
-      api.getMyClubs(token).then(setManaged).catch(() => {});
       if (slug) {
         api.getMyClubMembership(slug, token).then(setMembership).catch(() => setMembership(null));
         api.getMyClubPackages(slug, token).then(setPackages).catch(() => {});
         api.getMyClubSubscriptions(slug, token).then(setSubs).catch(() => {});
+        api.getCoachStatus(slug, token).then((r) => setIsCoach(r.isCoach)).catch(() => {});
       } else {
         setMembership(null);
       }
@@ -78,9 +78,6 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const isMember = membership !== undefined && membership !== null;
   const incomplete = profile != null && (!profile.phone || !profile.sex || (isMember && !membership.membershipNo));
   const soldes = packages.filter((p) => isUsable(p));
-  // Le club courant a désormais son propre raccourci direct dans l'en-tête (ClubNav) : pas de
-  // doublon ici, seuls les AUTRES clubs gérés (cross-sous-domaine) restent dans le menu.
-  const otherManaged = managed.filter((m) => m.clubId !== club?.id);
   const avatarSrc = assetUrl(profile?.avatarUrl ?? null);
   // Info-bulle de survol : « Prénom Nom · e-mail » (l'icône reste inchangée, aucune empreinte au repos).
   const who = profile ? `${profile.firstName} ${profile.lastName}`.trim() : '';
@@ -165,15 +162,9 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             <MenuItem th={th} icon="user" label={incomplete ? 'Mon profil · incomplet' : 'Mon profil'} onClick={() => go('/me/profile')} />
             {slug && <MenuItem th={th} icon="users" label="Mes amis" onClick={() => go('/me/friends')} />}
             {slug && <MenuItem th={th} icon="chat" label="Messages" onClick={() => go('/me/messages')} />}
+            {slug && isCoach && <MenuItem th={th} icon="whistle" label="Mes cours" onClick={() => go('/me/coaching')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
-            {/* « Espace club » pour chaque AUTRE club géré : navigation cross-sous-domaine vers
-                son back-office (le club courant a son propre raccourci direct dans l'en-tête). */}
-            {otherManaged.map((m) => (
-              <MenuItem key={m.clubId} th={th} icon="settings"
-                label={otherManaged.length > 1 ? `Espace club — ${m.name}` : 'Espace club'}
-                onClick={() => { setOpen(false); window.location.assign(clubUrl(m.slug, '/admin')); }} />
-            ))}
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}
             {installState !== 'hidden' && (
               <MenuItem th={th} icon="home" label="Installer l'application"

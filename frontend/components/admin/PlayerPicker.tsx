@@ -59,6 +59,12 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
     ? (q ? members.filter((m) => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)) : members).slice(0, 8)
     : [];
 
+  // La liste s'ouvre en absolu SOUS le champ : quand le picker vit en bas d'une modale
+  // scrollable (élèves du planning, Détails…), le menu naît hors de la zone visible et le
+  // conteneur ne défile pas de lui-même → on l'amène en vue à l'ouverture.
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (showList) listRef.current?.scrollIntoView?.({ block: 'nearest' }); }, [showList]);
+
   const pick = (m: Member) => { setPickedId(m.userId); setQuery(''); setOpen(false); setEditing(false); setCreateMsg(null); onSelect(m); };
 
   const openCreate = () => {
@@ -142,7 +148,7 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
       )}
 
       {showList && (
-        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, maxHeight: 240, overflowY: 'auto', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, boxShadow: th.shadowSoft, padding: 4 }}>
+        <div ref={listRef} style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 10, maxHeight: 240, overflowY: 'auto', background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, marginTop: 4, boxShadow: th.shadowSoft, padding: 4 }}>
           {matches.length === 0
             ? <div style={{ padding: '8px 10px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>{members.length === 0 ? 'Aucun membre dans ce club.' : 'Aucun membre trouvé.'}</div>
             : matches.map((m) => (

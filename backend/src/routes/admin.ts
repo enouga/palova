@@ -10,6 +10,7 @@ import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
+import { processClubLogo, LogoKind } from '../services/clubLogo';
 import { AnnouncementService } from '../services/announcement.service';
 import { SponsorService } from '../services/sponsor.service';
 import { TournamentService } from '../services/tournament.service';
@@ -111,6 +112,7 @@ const ERROR_STATUS: Record<string, number> = {
   SERIES_NOT_FOUND:       404,
   SERIES_TOO_LONG:        400,
   LESSON_NOT_FOUND:       404,
+  COACH_NOT_FOUND:        404,
   ENROLLMENT_NOT_FOUND:   404,
   ALREADY_ENROLLED:       409,
   MEMBERSHIP_BLOCKED:     403,
@@ -189,7 +191,7 @@ router.get('/', async (req: ClubScopedRequest, res: Response, next: NextFunction
   } catch (err) { handleError(err, res, next); }
 });
 
-router.patch('/', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const club = await clubService.updateClub(req.membership!.clubId, req.body);
     res.json(club);
@@ -198,13 +200,13 @@ router.patch('/', async (req: ClubScopedRequest, res: Response, next: NextFuncti
 
 // --- Pages de contenu (CGV, mentions légales, confidentialité, offres) ---
 
-router.get('/pages', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/pages', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubPageService.listAdminPages(req.membership!.clubId)); }
   catch (err) { handleError(err, res, next); }
 });
 
 // Modèle Palova pré-rempli pour un type (pré-remplir / réinitialiser l'éditeur).
-router.get('/pages/:kind/template', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/pages/:kind/template', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const kind = asString(req.params.kind).toUpperCase() as ClubPageKind;
     if (!PAGE_KINDS.has(kind)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
@@ -213,7 +215,7 @@ router.get('/pages/:kind/template', async (req: ClubScopedRequest, res: Response
   } catch (err) { handleError(err, res, next); }
 });
 
-router.put('/pages/:kind', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.put('/pages/:kind', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const kind = asString(req.params.kind).toUpperCase() as ClubPageKind;
     if (!PAGE_KINDS.has(kind)) return void res.status(400).json({ error: 'VALIDATION_ERROR' });
@@ -224,12 +226,12 @@ router.put('/pages/:kind', async (req: ClubScopedRequest, res: Response, next: N
 
 // --- FAQ propre au club ---
 
-router.get('/faq', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/faq', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubPageService.listAdminFaq(req.membership!.clubId)); }
   catch (err) { handleError(err, res, next); }
 });
 
-router.post('/faq', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/faq', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { question, answerMarkdown, category } = req.body;
     res.status(201).json(await clubPageService.createFaqItem(req.membership!.clubId, { question, answerMarkdown, category }));
@@ -237,7 +239,7 @@ router.post('/faq', async (req: ClubScopedRequest, res: Response, next: NextFunc
 });
 
 // Réordonne — placé AVANT /faq/:id pour ne pas être capturé.
-router.patch('/faq/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/faq/reorder', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { orderedIds } = req.body;
     if (!Array.isArray(orderedIds) || !orderedIds.every((x) => typeof x === 'string')) {
@@ -248,14 +250,14 @@ router.patch('/faq/reorder', async (req: ClubScopedRequest, res: Response, next:
   } catch (err) { handleError(err, res, next); }
 });
 
-router.patch('/faq/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/faq/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { question, answerMarkdown, category, published } = req.body;
     res.json(await clubPageService.updateFaqItem(asString(req.params.id), req.membership!.clubId, { question, answerMarkdown, category, published }));
   } catch (err) { handleError(err, res, next); }
 });
 
-router.delete('/faq/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.delete('/faq/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { await clubPageService.deleteFaqItem(asString(req.params.id), req.membership!.clubId); res.json({ ok: true }); }
   catch (err) { handleError(err, res, next); }
 });
@@ -268,7 +270,7 @@ router.get('/sports', async (req: ClubScopedRequest, res: Response, next: NextFu
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/sports', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/sports', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.body.sportId) return void res.status(400).json({ error: 'sportId requis' });
     const cs = await clubService.addClubSport(req.membership!.clubId, req.body.sportId);
@@ -277,7 +279,7 @@ router.post('/sports', async (req: ClubScopedRequest, res: Response, next: NextF
 });
 
 // Durées proposées pour un sport du club.
-router.patch('/sports/:clubSportId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/sports/:clubSportId', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     if (!Array.isArray(req.body.durationsMin)) return void res.status(400).json({ error: 'durationsMin (number[]) requis' });
     const cs = await clubService.updateClubSport(asString(req.params.clubSportId), req.membership!.clubId, req.body.durationsMin.map(Number));
@@ -305,7 +307,7 @@ router.get('/resources', async (req: ClubScopedRequest, res: Response, next: Nex
   } catch (err) { handleError(err, res, next); }
 });
 
-router.post('/resources', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/resources', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { clubSportId, name, attributes, price, offPeakPrice, openHour, closeHour, slotStepMin } = req.body;
     if (!clubSportId) return void res.status(400).json({ error: 'clubSportId requis' });
@@ -317,7 +319,7 @@ router.post('/resources', async (req: ClubScopedRequest, res: Response, next: Ne
 });
 
 // Réordonne les ressources — placé AVANT /resources/:id pour ne pas être capturé.
-router.patch('/resources/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/resources/reorder', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { orderedIds } = req.body;
     if (!Array.isArray(orderedIds) || !orderedIds.every((x) => typeof x === 'string')) {
@@ -328,7 +330,7 @@ router.patch('/resources/reorder', async (req: ClubScopedRequest, res: Response,
   } catch (err) { handleError(err, res, next); }
 });
 
-router.patch('/resources/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/resources/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const { name, attributes, price, offPeakPrice, openHour, closeHour, slotStepMin } = req.body;
     const resource = await resourceService.updateResource(asString(req.params.id), req.membership!.clubId, {
@@ -338,7 +340,7 @@ router.patch('/resources/:id', async (req: ClubScopedRequest, res: Response, nex
   } catch (err) { handleError(err, res, next); }
 });
 
-router.patch('/resources/:id/active', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/resources/:id/active', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     if (typeof req.body.isActive !== 'boolean') {
       return void res.status(400).json({ error: 'isActive (boolean) requis' });
@@ -350,7 +352,7 @@ router.patch('/resources/:id/active', async (req: ClubScopedRequest, res: Respon
   } catch (err) { handleError(err, res, next); }
 });
 
-router.delete('/resources/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.delete('/resources/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     await resourceService.deleteResource(asString(req.params.id), req.membership!.clubId);
     res.json({ ok: true });
@@ -602,6 +604,13 @@ router.get('/announcements', async (req: ClubScopedRequest, res: Response, next:
 router.post('/announcements', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await announcementService.create(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
+// ⚠️ Déclarée AVANT /announcements/:id (sinon Express capture 'reorder' comme :id).
+router.patch('/announcements/reorder', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const ids = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds.filter((x: unknown): x is string => typeof x === 'string') : [];
+    res.json(await announcementService.reorder(req.membership!.clubId, ids));
+  } catch (e) { handleError(e, res, next); }
+});
 router.patch('/announcements/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await announcementService.update(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
@@ -656,8 +665,15 @@ router.post('/sponsors/logo', (req: ClubScopedRequest, res: Response, next: Next
     } catch (e) { handleError(e, res, next); }
   });
 });
-// Upload du logo du club (JPEG/PNG/WebP, 2 Mo max) : persiste club.logoUrl immédiatement.
-router.post('/club-logo', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+// Upload d'un logo du club, ré-encodé (PNG, EXIF retirés, plafonné) : icône carrée par défaut,
+// ou logotype horizontal (`wide`) / version fond sombre (`wide-dark`). Persiste la colonne
+// correspondante immédiatement et renvoie les avertissements non bloquants.
+const LOGO_VARIANTS: Record<string, { kind: LogoKind; column: 'logoUrl' | 'logoWideUrl' | 'logoWideDarkUrl' }> = {
+  icon:        { kind: 'icon',     column: 'logoUrl' },
+  wide:        { kind: 'wide',     column: 'logoWideUrl' },
+  'wide-dark': { kind: 'wideDark', column: 'logoWideDarkUrl' },
+};
+router.post('/club-logo{/:variant}', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   logoUpload.single('logo')(req, res, async (err: unknown) => {
     try {
       if (err) {
@@ -666,28 +682,49 @@ router.post('/club-logo', (req: ClubScopedRequest, res: Response, next: NextFunc
         }
         return next(err as Error);
       }
+      const spec = LOGO_VARIANTS[asString(req.params.variant ?? 'icon')];
+      if (!spec) return void res.status(404).json({ error: 'Variante de logo inconnue' });
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) {
-        return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
-      }
+      if (!file) return void res.status(400).json({ error: 'Aucun fichier reçu' });
+
+      let processed;
+      try { processed = await processClubLogo(file.buffer, spec.kind); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
+
       const clubId = req.membership!.clubId;
-      const prev = await prisma.club.findUnique({ where: { id: clubId }, select: { logoUrl: true } });
-      const filename = `${clubId}-${Date.now()}.${ext}`;
+      const prev = await prisma.club.findUnique({ where: { id: clubId }, select: { [spec.column]: true } as any });
+      const filename = `${clubId}-${spec.kind === 'wideDark' ? 'wide-dark' : spec.kind}-${Date.now()}.png`;
       ensureUploadDirs();
-      await fs.promises.writeFile(path.join(LOGOS_DIR, filename), file.buffer);
-      const logoUrl = `/uploads/logos/${filename}`;
-      await clubService.updateClub(clubId, { logoUrl });
-      // Nettoyage best-effort de l'ancien logo uploadé (jamais bloquant).
-      if (prev?.logoUrl?.startsWith('/uploads/logos/')) {
-        fs.promises.unlink(path.join(LOGOS_DIR, path.basename(prev.logoUrl))).catch(() => {});
+      await fs.promises.writeFile(path.join(LOGOS_DIR, filename), processed.png);
+      const url = `/uploads/logos/${filename}`;
+      await clubService.updateClub(clubId, { [spec.column]: url } as any);
+
+      const prevUrl = (prev as any)?.[spec.column] as string | null | undefined;
+      if (prevUrl?.startsWith('/uploads/logos/')) {
+        fs.promises.unlink(path.join(LOGOS_DIR, path.basename(prevUrl))).catch(() => {});
       }
-      res.json({ logoUrl });
+      res.json({ [spec.column]: url, warnings: processed.warnings });
     } catch (e) { handleError(e, res, next); }
   });
 });
+
+// Suppression d'un logotype optionnel (l'icône carrée n'est que remplaçable).
+router.delete('/club-logo/:variant', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const spec = LOGO_VARIANTS[asString(req.params.variant)];
+    if (!spec || spec.column === 'logoUrl') return void res.status(404).json({ error: 'Variante de logo inconnue' });
+    const clubId = req.membership!.clubId;
+    const prev = await prisma.club.findUnique({ where: { id: clubId }, select: { [spec.column]: true } as any });
+    await clubService.updateClub(clubId, { [spec.column]: null } as any);
+    const prevUrl = (prev as any)?.[spec.column] as string | null | undefined;
+    if (prevUrl?.startsWith('/uploads/logos/')) {
+      fs.promises.unlink(path.join(LOGOS_DIR, path.basename(prevUrl))).catch(() => {});
+    }
+    res.json({ [spec.column]: null });
+  } catch (e) { handleError(e, res, next); }
+});
 // Upload de la couverture du club (JPEG/PNG/WebP, 2 Mo max) : persiste club.coverImageUrl immédiatement.
-router.post('/club-cover', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/club-cover', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   logoUpload.single('cover')(req, res, async (err: unknown) => {
     try {
       if (err) {
@@ -800,6 +837,15 @@ router.delete('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, 
   try { res.json(await lessonService.adminRemoveStudent(asString(req.params.id), asString(req.params.enrollId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
+// Change le coach d'un cours existant (les élèves inscrits ne bougent pas).
+router.patch('/lessons/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const coachId = asString(req.body.coachId);
+    if (!coachId) return void res.status(400).json({ error: 'coachId requis' });
+    res.json(await lessonService.adminSetCoach(asString(req.params.id), req.membership!.clubId, coachId));
+  } catch (e) { handleError(e, res, next); }
+});
+
 // --- Tournois ---
 router.get('/tournaments', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await tournamentService.listForAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
@@ -851,17 +897,17 @@ router.delete('/events/:id/registrations/:regId', async (req: ClubScopedRequest,
 router.get('/packages/templates', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.listTemplates(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
-router.post('/packages/templates', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/packages/templates', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await packageService.createTemplate(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
-router.patch('/packages/templates/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/packages/templates/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await packageService.updateTemplate(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
 
 const offerImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Affiche d'une offre prépayée : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
-router.post('/packages/templates/:id/image', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/packages/templates/:id/image', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   offerImageUpload.single('image')(req, res, async (err: unknown) => {
     try {
       if (err) {
@@ -891,15 +937,15 @@ router.get('/packages/active', async (req: ClubScopedRequest, res: Response, nex
 router.get('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.listPlans(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
-router.post('/subscription-plans', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/subscription-plans', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.status(201).json(await subscriptionService.createPlan(req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
-router.patch('/subscription-plans/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.patch('/subscription-plans/:id', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await subscriptionService.updatePlan(asString(req.params.id), req.membership!.clubId, req.body)); } catch (e) { handleError(e, res, next); }
 });
 
 // Affiche d'un abonnement : upload (JPEG/PNG/WebP, 5 Mo max), remplace l'ancienne.
-router.post('/subscription-plans/:id/image', (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.post('/subscription-plans/:id/image', requireClubMember('ADMIN'), (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   offerImageUpload.single('image')(req, res, async (err: unknown) => {
     try {
       if (err) {
@@ -1033,7 +1079,7 @@ router.get('/accounting/summary', async (req: ClubScopedRequest, res: Response, 
     res.json(await accountingService.monthlySummary(req.membership!.clubId, year, month));
   } catch (e) { handleError(e, res, next); }
 });
-router.get('/accounting/export', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+router.get('/accounting/export', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const from = asString(req.query.from); const to = asString(req.query.to);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return void res.status(400).json({ error: 'from/to YYYY-MM-DD requis' });

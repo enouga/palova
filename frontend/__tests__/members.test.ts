@@ -24,12 +24,13 @@ describe('filterMembers', () => {
     mk({ userId: 'u2', firstName: 'Zoé', lastName: 'Diaz', email: 'zoe@x.fr', status: 'BLOCKED' }),
     mk({ userId: 'u3', firstName: 'Léo', lastName: 'Costa', email: 'leo@x.fr', staffRole: 'STAFF' }),
     mk({ userId: 'u4', firstName: 'Ana', lastName: 'Bernard', watch: true }),
+    mk({ userId: 'u5', firstName: 'Coco', lastName: 'Prof', email: 'coco@x.fr', isCoach: true }),
   ];
 
   it('recherche multi-termes ET, insensible aux accents', () => {
     expect(filterMembers(ms, 'benoit roy', 'all').map((m) => m.userId)).toEqual(['u1']);
     expect(filterMembers(ms, 'zzz', 'all')).toEqual([]);
-    expect(filterMembers(ms, '', 'all')).toHaveLength(4);
+    expect(filterMembers(ms, '', 'all')).toHaveLength(5);
   });
 
   it('filtre par segment', () => {
@@ -37,6 +38,7 @@ describe('filterMembers', () => {
     expect(filterMembers(ms, '', 'blocked').map((m) => m.userId)).toEqual(['u2']);
     expect(filterMembers(ms, '', 'staff').map((m) => m.userId)).toEqual(['u3']);
     expect(filterMembers(ms, '', 'watch').map((m) => m.userId)).toEqual(['u4']);
+    expect(filterMembers(ms, '', 'coach').map((m) => m.userId)).toEqual(['u5']);
   });
 
   it('recherche s\'applique dans le segment courant', () => {
@@ -52,8 +54,9 @@ describe('segCounts', () => {
       mk({ userId: 'u2', status: 'BLOCKED' }),
       mk({ userId: 'u3', staffRole: 'ADMIN' }),
       mk({ userId: 'u4', watch: true, hasActiveSubscription: true }),
+      mk({ userId: 'u5', isCoach: true }),
     ];
-    expect(segCounts(ms)).toEqual({ all: 4, subs: 2, staff: 1, watch: 1, blocked: 1 });
+    expect(segCounts(ms)).toEqual({ all: 5, subs: 2, staff: 1, watch: 1, blocked: 1, coach: 1 });
   });
 });
 
@@ -107,6 +110,7 @@ describe('membersCsv', () => {
       status: 'ACTIVE', staffRole: 'STAFF', watch: true, since: '2026-01-10T00:00:00Z',
       lastSeenAt: '2026-07-01T00:00:00Z', level: { level: 5.2, tier: 'P500', isProvisional: false, reliability: 0.9 } }),
     mk({ userId: 'u2', firstName: 'Zoé', lastName: 'D;iaz', email: 'zoe@x.fr', status: 'BLOCKED' }),
+    mk({ userId: 'u3', firstName: 'Coco', lastName: 'Prof', email: 'coco@x.fr', isCoach: true }),
   ];
   const csv = membersCsv(ms, NOW);
 
@@ -121,5 +125,13 @@ describe('membersCsv', () => {
     expect(csv).toContain('Oui'); // abonné u1
     expect(csv).toContain('Non'); // abonné u2
     expect(csv).toContain('10/01/2026'); // membre depuis u1
+  });
+  it('colonne Coach (Oui/Non par ligne)', () => {
+    const lines = csv.split('\r\n');
+    const iCoach = lines[0].replace('﻿', '').split(';').indexOf('Coach');
+    expect(iCoach).toBeGreaterThan(-1);
+    // Lignes sans ; échappé : split naïf fiable (Ana=1, Coco=3 ; Zoé contient "D;iaz", exclue)
+    expect(lines[1].split(';')[iCoach]).toBe('Non'); // Ana
+    expect(lines[3].split(';')[iCoach]).toBe('Oui'); // Coco
   });
 });

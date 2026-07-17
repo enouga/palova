@@ -54,13 +54,16 @@ export function normalizeQuickPaymentMethods(input: unknown): string[] {
   return out;
 }
 
-/** Clés de sections du Club-house configurables par le club (ordre + visibilité). */
-const CLUB_HOUSE_SECTION_KEYS = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'] as const;
+/** Clés de sections du Club-house configurables par le club (ordre + visibilité).
+ *  `kiosk` = le kiosque « À la une » (les annonces), repositionnable comme les autres. */
+const CLUB_HOUSE_SECTION_KEYS = ['kiosk', 'matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'] as const;
 
 /** Valide/normalise la config des sections du Club-house. null/invalide → DbNull (= ordre
  *  adaptatif par défaut). Clé inconnue rejetée, doublon ignoré (1re occurrence gagne),
- *  clés connues manquantes complétées en fin (visibles) → la config stockée est toujours
- *  complète. Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
+ *  clés connues manquantes complétées en fin (visibles) — SAUF `kiosk`, ajouté EN TÊTE
+ *  quand il manque, pour que les clubs personnalisés avant l'arrivée de la clé gardent le
+ *  kiosque en haut. La config stockée est toujours complète.
+ *  Miroir lecture : frontend/lib/clubhouse.ts (resolveSections). */
 export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   if (!Array.isArray(input)) return Prisma.DbNull;
   const allowed = new Set<string>(CLUB_HOUSE_SECTION_KEYS);
@@ -73,6 +76,8 @@ export function normalizeClubHouseSections(input: unknown): Prisma.InputJsonValu
     out.push({ key, visible: (e as { visible?: unknown }).visible !== false });
   }
   if (out.length === 0) return Prisma.DbNull;
+  // Kiosque absent (config antérieure à la clé) → en tête, visible : l'ordre historique est préservé.
+  if (!seen.has('kiosk')) { out.unshift({ key: 'kiosk', visible: true }); seen.add('kiosk'); }
   for (const key of CLUB_HOUSE_SECTION_KEYS) if (!seen.has(key)) out.push({ key, visible: true });
   return out as unknown as Prisma.InputJsonValue;
 }
@@ -217,7 +222,7 @@ export class ClubService {
       where: { slug },
       select: {
         id: true, slug: true, name: true, address: true, city: true, country: true,
-        description: true, timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        description: true, timezone: true, logoUrl: true, logoWideUrl: true, logoWideDarkUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         publicBookingDays: true, memberBookingDays: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         showOtherClubsReservations: true,
@@ -284,7 +289,7 @@ export class ClubService {
       where: { id: clubId },
       select: {
         id: true, slug: true, name: true, description: true, address: true, city: true, country: true,
-        timezone: true, logoUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
+        timezone: true, logoUrl: true, logoWideUrl: true, logoWideDarkUrl: true, coverImageUrl: true, accentColor: true, defaultThemeMode: true, status: true,
         listedInDirectory: true, listTournamentsNationally: true, showOffersPublicly: true, publicBookingDays: true, memberBookingDays: true, offPeakHours: true,
         bookingReleaseMode: true, publicReleaseHour: true, memberReleaseHour: true,
         bookingQuotas: true,
@@ -309,7 +314,7 @@ export class ClubService {
   /** Met à jour profil/branding/fenêtres d'un club (déjà scopé par requireClubMember). */
   async updateClub(clubId: string, params: {
     name?: string; description?: string; address?: string; city?: string;
-    timezone?: string; logoUrl?: string; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
+    timezone?: string; logoUrl?: string; logoWideUrl?: string | null; logoWideDarkUrl?: string | null; coverImageUrl?: string | null; accentColor?: string; defaultThemeMode?: string;
     listedInDirectory?: boolean; listTournamentsNationally?: boolean; showOffersPublicly?: boolean; publicBookingDays?: number; memberBookingDays?: number;
     bookingReleaseMode?: 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT';
     publicReleaseHour?: number;
@@ -367,6 +372,8 @@ export class ClubService {
         ...(params.city !== undefined ? { city: params.city } : {}),
         ...(params.timezone !== undefined ? { timezone: params.timezone } : {}),
         ...(params.logoUrl !== undefined ? { logoUrl: params.logoUrl } : {}),
+        ...(params.logoWideUrl !== undefined ? { logoWideUrl: params.logoWideUrl } : {}),
+        ...(params.logoWideDarkUrl !== undefined ? { logoWideDarkUrl: params.logoWideDarkUrl } : {}),
         ...(params.coverImageUrl !== undefined ? { coverImageUrl: params.coverImageUrl || null } : {}),
         ...(params.accentColor !== undefined ? { accentColor: params.accentColor } : {}),
         ...(params.defaultThemeMode !== undefined ? { defaultThemeMode: params.defaultThemeMode } : {}),
@@ -604,12 +611,21 @@ export class ClubService {
     return { tempPassword, existed: false, userId: user.id, member: this.toMemberRow(membership, user) };
   }
 
+  /** Refuse l'opération si le membre détient un rôle back-office (même règle que removeMember). */
+  private async assertNotStaff(clubId: string, userId: string) {
+    const staff = await prisma.clubMember.findUnique({
+      where: { userId_clubId: { userId, clubId } }, select: { role: true },
+    });
+    if (staff) throw new Error('MEMBER_IS_STAFF');
+  }
+
   async updateMembership(
     clubId: string, membershipId: string,
     params: { isSubscriber?: boolean; membershipNo?: string | null; status?: 'ACTIVE' | 'BLOCKED'; note?: string | null; phone?: string | null },
   ) {
     const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    if (params.status === 'BLOCKED') await this.assertNotStaff(clubId, m.userId);
     if (params.phone !== undefined) {
       await prisma.user.update({ where: { id: m.userId }, data: { phone: params.phone?.toString().trim() || null } });
     }
@@ -625,8 +641,11 @@ export class ClubService {
   }
 
   async setMemberBlocked(clubId: string, membershipId: string, blocked: boolean) {
-    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true } });
+    const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
+    // Bloquer un membre détenant un rôle staff est refusé (révoquer d'abord son rôle) ; le
+    // déblocage reste toujours permis (état pouvant précéder une promotion).
+    if (blocked) await this.assertNotStaff(clubId, m.userId);
     return prisma.clubMembership.update({ where: { id: membershipId }, data: { status: blocked ? 'BLOCKED' : 'ACTIVE' } });
   }
 

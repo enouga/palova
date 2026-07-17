@@ -1,18 +1,20 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClubDetail, assetUrl, api } from '@/lib/api';
+import { ClubDetail, ManagedClub, assetUrl, api } from '@/lib/api';
 import { subscribeNotifications } from '@/lib/notificationsStream';
 import { useTheme } from '@/lib/ThemeProvider';
+import { Theme } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
-import { platformUrl } from '@/lib/clubUrl';
+import { platformUrl, clubUrl } from '@/lib/clubUrl';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { clubHasPadel } from '@/lib/sport';
 import { buildAgendaList } from '@/lib/calendar';
+import { wideLogo } from '@/lib/clubLogos';
 
 type Tab = { label: string; short?: string; href: string; icon: IconName; match: (p: string) => boolean; show: boolean; brand?: boolean };
 
@@ -40,7 +42,9 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  const showClubLogo = !!club.logoUrl && !logoFailed;
+  // Logotype horizontal du bandeau, choisi selon le thème courant (repli en cascade sur l'icône).
+  const bannerLogo = wideLogo(club, th.mode);
+  const showClubLogo = !!bannerLogo && !logoFailed;
 
   // Deux compteurs sur l'onglet Parties : messages non lus (pastille rouge, priorité) et
   // nombre de parties ouvertes à venir (pastille accent, même langage que « À venir » de Résas).
@@ -82,15 +86,18 @@ export function ClubNav({ club }: { club: ClubDetail }) {
   }, [showMessages, token, pathname]);
 
   // Raccourci « Espace club » dans l'en-tête : visible pour l'OWNER/ADMIN/STAFF du club courant
-  // (rôle indifférent, cf. api.getMyClubs qui renvoie toute adhésion ClubMember). Le même lien
-  // dans le menu ProfileMenu est réservé aux AUTRES clubs gérés (pas de doublon).
-  const [manages, setManages] = useState(false);
+  // (rôle indifférent, cf. api.getMyClubs qui renvoie toute adhésion ClubMember) — lien direct
+  // vers /admin. Pour les AUTRES clubs gérés (navigation cross-sous-domaine), même icône mais
+  // vers le back-office de cet autre club (popover si plusieurs) — plus de doublon dans ProfileMenu.
+  const [managed, setManaged] = useState<ManagedClub[]>([]);
   useEffect(() => {
-    if (!ready || !token) { setManages(false); return; }
+    if (!ready || !token) { setManaged([]); return; }
     let alive = true;
-    api.getMyClubs(token).then((list) => { if (alive) setManages(list.some((m) => m.clubId === club.id)); }).catch(() => {});
+    api.getMyClubs(token).then((list) => { if (alive) setManaged(list); }).catch(() => {});
     return () => { alive = false; };
   }, [ready, token, club.id]);
+  const manages = managed.some((m) => m.clubId === club.id);
+  const otherManaged = managed.filter((m) => m.clubId !== club.id);
 
   // Compteur « Mes réservations » À VENIR — identique au compteur de l'onglet « À venir »
   // de /me/reservations : réservations terrain + inscriptions tournois + events + cours, fusionnés
@@ -187,7 +194,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
         <div className="cn-row1" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {showClubLogo ? (
             <Link href="/" style={{ display: 'inline-flex', flexShrink: 0 }}>
-              <img src={assetUrl(club.logoUrl) ?? undefined} alt={`Logo ${club.name}`}
+              <img src={assetUrl(bannerLogo) ?? undefined} alt={`Logo ${club.name}`}
                 onError={() => setLogoFailed(true)}
                 style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block' }} />
             </Link>
@@ -212,13 +219,16 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 )}
               </Link>
             )}
-            {manages && (
-              // Raccourci direct vers le back-office, même langage que l'icône Messages.
-              <Link href="/admin" aria-label="Espace club" title="Espace club"
+            {manages ? (
+              // Raccourci direct vers le back-office du club courant, même langage que l'icône Messages.
+              // Nouvel onglet : on ne quitte pas la page club en cours (garde le contexte joueur ouvert).
+              <Link href="/admin" target="_blank" rel="noopener noreferrer" aria-label="Espace club" title="Espace club"
                 style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
                 <Icon name="settings" size={19} color={th.text} />
               </Link>
+            ) : (
+              <OtherClubsIcon th={th} clubs={otherManaged} />
             )}
             <NotificationBell /><ProfileMenu />
           </div>
@@ -274,6 +284,62 @@ export function ClubNav({ club }: { club: ClubDetail }) {
             tient pas à côté de la grappe d'icônes dans la rangée 1, on l'affiche ici en entier. */}
         <div className="cn-title-bottom" style={{ marginTop: 11, textAlign: 'center', fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, color: th.text, letterSpacing: -0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</div>
       </div>
+    </div>
+  );
+}
+
+// Icône « Espace club » pour les clubs gérés AUTRES que le club courant (navigation
+// cross-sous-domaine, vraie ancre — pas de Link Next). Un seul autre club géré → lien direct ;
+// plusieurs → popover listant chacun (même langage que le menu déroulant du profil).
+// Ouvre systématiquement un nouvel onglet (target="_blank"), comme le lien du club courant.
+function OtherClubsIcon({ th, clubs }: { th: Theme; clubs: ManagedClub[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  if (clubs.length === 0) return null;
+
+  const iconBtnStyle: React.CSSProperties = {
+    width: 38, height: 38, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer',
+    background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  };
+
+  if (clubs.length === 1) {
+    return (
+      <a href={clubUrl(clubs[0].slug, '/admin')} target="_blank" rel="noopener noreferrer" aria-label="Espace club" title="Espace club" style={{ ...iconBtnStyle, textDecoration: 'none' }}>
+        <Icon name="settings" size={19} color={th.text} />
+      </a>
+    );
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} aria-label="Espace club" title="Espace club" aria-haspopup="menu" aria-expanded={open} style={iconBtnStyle}>
+        <Icon name="settings" size={19} color={th.text} />
+      </button>
+      {open && (
+        <div role="menu" aria-label="Espace club" style={{
+          position: 'absolute', top: 46, right: 0, minWidth: 220, zIndex: 60,
+          background: th.surface, border: `1px solid ${th.line}`, borderRadius: 14, boxShadow: th.shadowSoft, overflow: 'hidden', padding: '6px 0',
+        }}>
+          {clubs.map((c) => (
+            <a key={c.clubId} href={clubUrl(c.slug, '/admin')} target="_blank" rel="noopener noreferrer" role="menuitem" style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', textDecoration: 'none',
+              fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text,
+            }}>
+              <Icon name="settings" size={15} color={th.textMute} />Espace club — {c.name}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

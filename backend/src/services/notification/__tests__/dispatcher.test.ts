@@ -5,11 +5,11 @@ jest.mock('../../../email/mailer', () => ({ sendMail: jest.fn() }));
 jest.mock('../../sse.service', () => ({
   SSEService: { getInstance: () => ({ notifyUser: jest.fn() }) },
 }));
-jest.mock('../push', () => ({ deliverPush: jest.fn() }));
+jest.mock('../push', () => ({ deliverPush: jest.fn(), resolvePushIcon: jest.fn(), resolvePushBadge: jest.fn() }));
 
 import { dispatch } from '../dispatcher';
 import { sendMail } from '../../../email/mailer';
-import { deliverPush } from '../push';
+import { deliverPush, resolvePushIcon, resolvePushBadge } from '../push';
 
 const base = {
   userId: 'user-1', clubId: 'club-demo', category: 'MY_GAMES' as const,
@@ -20,11 +20,15 @@ describe('dispatch', () => {
   beforeEach(() => {
     (sendMail as jest.Mock).mockClear();
     (deliverPush as jest.Mock).mockClear();
+    (resolvePushIcon as jest.Mock).mockClear();
+    (resolvePushBadge as jest.Mock).mockClear();
     prismaMock.notificationPreference.findMany.mockResolvedValue([] as any);
     prismaMock.notification.create.mockResolvedValue({ id: 'n1' } as any);
     prismaMock.pushSubscription.findMany.mockResolvedValue([] as any);
     (sendMail as jest.Mock).mockResolvedValue(undefined);
     (deliverPush as jest.Mock).mockResolvedValue(undefined);
+    (resolvePushIcon as jest.Mock).mockResolvedValue('http://localhost:3001/api/clubs/padel-arena-paris/icon/192.png');
+    (resolvePushBadge as jest.Mock).mockResolvedValue('http://localhost:3001/api/clubs/padel-arena-paris/icon/badge-96.png');
   });
 
   it('crée la Notification in-app (défaut ON)', async () => {
@@ -60,16 +64,49 @@ describe('dispatch', () => {
       .resolves.toBeUndefined();
   });
 
-  it('appelle deliverPush quand l utilisateur a un abonnement et PUSH est actif (défaut)', async () => {
+  it('appelle deliverPush avec l icône résolue (club ou repli Palova) quand l utilisateur a un abonnement et PUSH est actif (défaut)', async () => {
     const sub = { endpoint: 'https://push.example.com/s1', p256dh: 'key1', auth: 'auth1' };
     prismaMock.pushSubscription.findMany.mockResolvedValue([sub] as any);
 
     await dispatch(base);
 
+    expect(resolvePushIcon).toHaveBeenCalledWith(base.clubId);
     expect(deliverPush).toHaveBeenCalledWith(
       [sub],
-      { title: base.title, body: base.body, url: base.url ?? null },
+      {
+        title: base.title, body: base.body, url: base.url ?? null,
+        icon: 'http://localhost:3001/api/clubs/padel-arena-paris/icon/192.png',
+        badge: 'http://localhost:3001/api/clubs/padel-arena-paris/icon/badge-96.png',
+      },
     );
+  });
+
+  it('résout l icône Palova quand la notif n est rattachée à aucun club', async () => {
+    const sub = { endpoint: 'https://push.example.com/s1', p256dh: 'key1', auth: 'auth1' };
+    prismaMock.pushSubscription.findMany.mockResolvedValue([sub] as any);
+    (resolvePushIcon as jest.Mock).mockResolvedValue('http://localhost:3000/icon-192.png');
+    (resolvePushBadge as jest.Mock).mockResolvedValue('http://localhost:3000/icon-badge-96.png');
+
+    await dispatch({ ...base, clubId: null });
+
+    expect(resolvePushIcon).toHaveBeenCalledWith(null);
+    expect(deliverPush).toHaveBeenCalledWith(
+      [sub],
+      {
+        title: base.title, body: base.body, url: base.url ?? null,
+        icon: 'http://localhost:3000/icon-192.png', badge: 'http://localhost:3000/icon-badge-96.png',
+      },
+    );
+  });
+
+  it('appelle deliverPush avec le badge Android résolu (silhouette monochrome)', async () => {
+    const sub = { endpoint: 'https://push.example.com/s1', p256dh: 'key1', auth: 'auth1' };
+    prismaMock.pushSubscription.findMany.mockResolvedValue([sub] as any);
+
+    await dispatch(base);
+
+    expect(resolvePushBadge).toHaveBeenCalledWith(base.clubId);
+    expect(deliverPush).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ badge: expect.anything() }));
   });
 
   it('ne appelle PAS deliverPush quand l utilisateur n a pas d abonnement', async () => {

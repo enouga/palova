@@ -129,7 +129,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Le wizard d'onboarding est plein écran : pas de chrome admin (la garde ci-dessus s'applique déjà).
-  if (pathname === '/admin/onboarding') return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
+  // Il déroule la configuration du club (identité, terrains, règles) : réservé aux admins, même
+  // gate que le guide de démarrage (onboarding-status, requireClubMember('ADMIN')).
+  if (pathname === '/admin/onboarding') {
+    if (!isClubAdmin(role)) {
+      return (
+        <div style={{ minHeight: '100vh', background: th.bg, color: th.textMute, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, padding: 24, textAlign: 'center' }}>
+          Cette page est réservée aux administrateurs du club.
+        </div>
+      );
+    }
+    return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
+  }
 
   // Menu groupé en familles : chaque entrée garde sa page (rien de fusionné), mais les
   // sections rendent les 18 liens scannables. Icônes dé-dupliquées (plus de doublon).
@@ -173,22 +184,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // TOUS les rôles, gérant compris. La page et les routes /stripe/* restent en place, en
       // sommeil (réservées OWNER). Pour réactiver (gérant uniquement), décommenter la ligne :
       //   ...(isClubOwner(role) ? [{ href: '/admin/payments', label: 'Paiement en ligne', icon: 'lock' } as NavItem] : []),
-      { href: '/admin/comptabilite', label: 'Comptabilité',     icon: 'chart' },
-      { href: '/admin/packages',     label: 'Offres', icon: 'card' },
+      // Réservées aux admins : entrées de structure/pilotage, pas le comptoir du quotidien.
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/comptabilite', label: 'Comptabilité', icon: 'chart' } as NavItem,
+           { href: '/admin/packages',     label: 'Offres',       icon: 'card' } as NavItem]
+        : []),
       // Réservé aux admins : la page /admin/billing répond 403 au staff (requireClubMember('ADMIN')).
       ...(isClubAdmin(role)
         ? [{ href: '/admin/billing', label: 'Abonnement Palova', icon: 'wallet' } as NavItem]
         : []),
     ] },
     { title: 'Configuration', color: '#9b8cf0', items: [
-      { href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' },
-      { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' },
-      { href: '/admin/settings', label: 'Réglages',           icon: 'settings' },
+      // Réservées aux admins : réglages/structure du club, pas d'usage quotidien pour le staff.
+      ...(isClubAdmin(role)
+        ? [{ href: '/admin/courts',   label: 'Ressources',         icon: 'indoor' } as NavItem,
+           { href: '/admin/pages',    label: 'Contenu & mentions', icon: 'info' } as NavItem,
+           { href: '/admin/settings', label: 'Réglages',           icon: 'settings' } as NavItem]
+        : []),
     ] },
   ];
 
+  // Une section sans items (ex. Configuration pour un STAFF) ne doit pas afficher son titre seul.
+  const visibleSections = sections.filter((s) => s.items.length > 0);
+
   // Repli des sections : liste des titres repliables, état « tout replié », bascules.
-  const titledSections = sections.map((s) => s.title).filter((t): t is string => !!t);
+  const titledSections = visibleSections.map((s) => s.title).filter((t): t is string => !!t);
   const allCollapsed = titledSections.length > 0 && titledSections.every((t) => collapsedSections.includes(t));
   const toggleSection = (title: string) =>
     setCollapsedSections(
@@ -219,7 +239,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Juste le logo (ou une pastille initiale à défaut) — le nom en toutes lettres ne
               tenait de toute façon pas dans les 244px de la sidebar ; title = nom complet au survol. */}
           {club.logoUrl
-            ? <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} title={club.name} style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+            ? <span title={club.name} style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <img src={assetUrl(club.logoUrl) ?? undefined} alt={club.name} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              </span>
             : (
               <span role="img" aria-label={club.name} title={club.name} style={{
                 width: 34, height: 34, borderRadius: 9, flexShrink: 0,
@@ -252,7 +274,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             alignSelf: 'flex-end', background: 'transparent', border: 'none', cursor: 'pointer',
             color: th.textFaint, fontFamily: th.fontUI, fontSize: 11, padding: '0 8px 4px',
           }}>{allCollapsed ? 'Tout déplier' : 'Tout replier'}</button>
-          {sections.map((sec, i) => {
+          {visibleSections.map((sec, i) => {
             const isCollapsed = sec.title ? collapsedSections.includes(sec.title) : false;
             return (
               <div key={sec.title ?? 'top'} role="group" aria-label={sec.title} style={{ display: 'contents' }}>

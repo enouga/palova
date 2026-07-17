@@ -32,18 +32,21 @@ export class AnnouncementService {
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
     return prisma.announcement.findMany({
       where: { clubId: club.id, isPublished: true },
-      orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
   async listAdmin(clubId: string) {
-    return prisma.announcement.findMany({ where: { clubId }, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] });
+    return prisma.announcement.findMany({ where: { clubId }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] });
   }
 
   async create(clubId: string, data: AnnouncementInput) {
     const title = (data.title ?? '').trim();
     const body = (data.body ?? '').trim();
     if (!title || !body) throw new Error('VALIDATION_ERROR');
+    // Ordre manuel : la nouvelle annonce arrive EN TÊTE (sortOrder = min − 1 ; 0 si aucune).
+    const agg = await prisma.announcement.aggregate({ where: { clubId }, _min: { sortOrder: true } });
+    const sortOrder = agg._min.sortOrder == null ? 0 : agg._min.sortOrder - 1;
     return prisma.announcement.create({
       data: {
         clubId, title, body,
@@ -53,6 +56,7 @@ export class AnnouncementService {
         validUntil: parseValidUntil(data.validUntil) ?? null,
         isPublished: data.isPublished ?? true,
         pinned: data.pinned ?? false,
+        sortOrder,
       },
     });
   }
@@ -90,5 +94,17 @@ export class AnnouncementService {
     if (!found || found.clubId !== clubId) throw new Error('ANNOUNCEMENT_NOT_FOUND');
     deleteUploadedImage(found.imageUrl);
     return prisma.announcement.update({ where: { id }, data: { imageUrl } });
+  }
+
+  /** Applique un ordre manuel : sortOrder = index. Ignore les ids n'appartenant pas au club. */
+  async reorder(clubId: string, orderedIds: string[]) {
+    const owned = new Set(
+      (await prisma.announcement.findMany({ where: { clubId }, select: { id: true } })).map((a) => a.id),
+    );
+    const ids = orderedIds.filter((id) => owned.has(id));
+    await prisma.$transaction(
+      ids.map((id, index) => prisma.announcement.update({ where: { id }, data: { sortOrder: index } })),
+    );
+    return this.listAdmin(clubId);
   }
 }

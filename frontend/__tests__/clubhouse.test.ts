@@ -41,7 +41,7 @@ describe('todayISO', () => {
 
 const ann = (over: Partial<Announcement>): Announcement => ({
   id: 'a', title: 't', body: 'b', linkUrl: null, imageUrl: null, isPublished: true,
-  pinned: false, kind: 'INFO', validUntil: null, createdAt: '', updatedAt: '', ...over,
+  pinned: false, kind: 'INFO', validUntil: null, sortOrder: 0, createdAt: '', updatedAt: '', ...over,
 });
 
 describe('announcementExpired', () => {
@@ -78,9 +78,9 @@ describe('matchSeats', () => {
 });
 
 describe('resolveSections', () => {
-  it('config null → ordres adaptatifs historiques (membre ≠ visiteur), sponsors inclus en fin', () => {
-    expect(resolveSections(null, true).order).toEqual(['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors']);
-    expect(resolveSections(null, false).order).toEqual(['matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors']);
+  it('config null → ordres adaptatifs historiques (membre ≠ visiteur), kiosque en tête, sponsors en fin', () => {
+    expect(resolveSections(null, true).order).toEqual(['kiosk', 'matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors']);
+    expect(resolveSections(null, false).order).toEqual(['kiosk', 'matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors']);
     expect(resolveSections(undefined, false).order).toContain('sponsors');
   });
 
@@ -96,7 +96,8 @@ describe('resolveSections', () => {
     const member = resolveSections(config, true);
     const visitor = resolveSections(config, false);
     expect(member.order).toEqual(visitor.order);
-    expect(member.order[0]).toBe('top');
+    expect(member.order[0]).toBe('kiosk'); // kiosque absent de la config → préfixé
+    expect(member.order[1]).toBe('top');
     expect(member.order).not.toContain('matches');
     expect(member.order).not.toContain('sponsors');
   });
@@ -110,7 +111,7 @@ describe('resolveSections', () => {
       { key: 'offers', visible: true },
       { key: 'clubCard', visible: true },
     ], true);
-    expect(front.order[0]).toBe('sponsors');
+    expect(front.order[1]).toBe('sponsors'); // [0] = kiosque préfixé
 
     const middle = resolveSections([
       { key: 'matches', visible: true },
@@ -120,19 +121,41 @@ describe('resolveSections', () => {
       { key: 'offers', visible: true },
       { key: 'clubCard', visible: true },
     ], true);
-    expect(middle.order[1]).toBe('sponsors');
+    expect(middle.order[2]).toBe('sponsors'); // [0] = kiosque préfixé
   });
 
   it('clé connue absente de la config → ajoutée en fin, visible (tolérance versions)', () => {
     const { order } = resolveSections([{ key: 'clubCard', visible: true }], true);
-    expect(order[0]).toBe('clubCard');
-    expect(order).toHaveLength(6);
+    expect(order[0]).toBe('kiosk'); // kiosque préfixé
+    expect(order[1]).toBe('clubCard');
+    expect(order).toHaveLength(7);
   });
 
   it('clé inconnue (dont anciennes posters/announcements) ignorée', () => {
     const { order } = resolveSections([{ key: 'posters', visible: true } as never, { key: 'top', visible: true }], true);
-    expect(order[0]).toBe('top');
+    expect(order[1]).toBe('top'); // [0] = kiosque préfixé
     expect(order).not.toContain('posters');
+  });
+
+  it('kiosk absent d\'une config complète → inséré en tête (rétro-compat clubs déjà personnalisés)', () => {
+    const { order } = resolveSections([
+      { key: 'matches', visible: true }, { key: 'agenda', visible: true }, { key: 'top', visible: true },
+      { key: 'offers', visible: true }, { key: 'clubCard', visible: true }, { key: 'sponsors', visible: true },
+    ], true);
+    expect(order[0]).toBe('kiosk');
+    expect(order).toHaveLength(7);
+  });
+
+  it('kiosk placé au milieu → respecté ; masqué explicitement → exclu', () => {
+    const moved = resolveSections([
+      { key: 'matches', visible: true }, { key: 'kiosk', visible: true }, { key: 'agenda', visible: true },
+      { key: 'top', visible: true }, { key: 'offers', visible: true }, { key: 'clubCard', visible: true },
+      { key: 'sponsors', visible: true },
+    ], true);
+    expect(moved.order[1]).toBe('kiosk');
+
+    const hiddenKiosk = resolveSections([{ key: 'kiosk', visible: false }, { key: 'matches', visible: true }], true);
+    expect(hiddenKiosk.order).not.toContain('kiosk');
   });
 });
 
@@ -153,18 +176,26 @@ describe('hiddenSectionKeys', () => {
 });
 
 describe('fullSectionSettings / SECTION_DEFS', () => {
-  it('null → 6 entrées visibles, ordre par défaut membre + sponsors en fin', () => {
+  it('null → 7 entrées visibles, kiosque en tête, sponsors en fin', () => {
     const full = fullSectionSettings(null);
-    expect(full).toHaveLength(6);
-    expect(full[0]).toEqual({ key: 'matches', visible: true });
-    expect(full[5].key).toBe('sponsors');
+    expect(full).toHaveLength(7);
+    expect(full[0]).toEqual({ key: 'kiosk', visible: true });
+    expect(full[1]).toEqual({ key: 'matches', visible: true });
+    expect(full[6].key).toBe('sponsors');
     expect(full.every((e) => e.visible)).toBe(true);
   });
 
-  it('config partielle → complétée sans doublon, 1re occurrence gagne', () => {
+  it('config partielle → complétée sans doublon, 1re occurrence gagne, kiosque préfixé', () => {
     const full = fullSectionSettings([{ key: 'top', visible: false }, { key: 'top', visible: true }]);
-    expect(full).toHaveLength(6);
-    expect(full[0]).toEqual({ key: 'top', visible: false });
+    expect(full).toHaveLength(7);
+    expect(full[0]).toEqual({ key: 'kiosk', visible: true });
+    expect(full[1]).toEqual({ key: 'top', visible: false });
+  });
+
+  it('kiosk masqué dans la config → conservé masqué dans l\'éditeur', () => {
+    const full = fullSectionSettings([{ key: 'kiosk', visible: false }, { key: 'matches', visible: true }]);
+    expect(full[0]).toEqual({ key: 'kiosk', visible: false });
+    expect(full).toHaveLength(7);
   });
 
   it('SECTION_DEFS couvre exactement SECTION_KEYS (sponsors compris)', () => {

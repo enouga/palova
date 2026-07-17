@@ -360,20 +360,28 @@ export const api = {
   adminUpdateClub: (clubId: string, body: UpdateClubBody, token: string) =>
     request<ClubAdminDetail>(`/api/clubs/${clubId}/admin`, { method: 'PATCH', body: JSON.stringify(body) }, token),
 
-  // Upload du logo du club en FormData — fetch dédié (request() force du JSON). Persiste côté serveur.
-  uploadClubLogo: async (clubId: string, file: File, token: string): Promise<{ logoUrl: string }> => {
+  // Upload du logo du club en FormData. variant: 'icon' (défaut) | 'wide' | 'wide-dark'.
+  uploadClubLogo: async (
+    clubId: string, file: File, token: string, variant: 'icon' | 'wide' | 'wide-dark' = 'icon',
+  ): Promise<{ logoUrl?: string; logoWideUrl?: string; logoWideDarkUrl?: string; warnings: string[] }> => {
     const form = new FormData();
     form.append('logo', file);
-    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/club-logo`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
+    const path = variant === 'icon' ? 'club-logo' : `club-logo/${variant}`;
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/${path}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error || `HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload échoué');
     return res.json();
+  },
+
+  // Suppression d'un logotype optionnel (l'icône n'est que remplaçable).
+  deleteClubLogoVariant: async (
+    clubId: string, variant: 'wide' | 'wide-dark', token: string,
+  ): Promise<void> => {
+    const res = await fetch(`${BASE_URL}/api/clubs/${clubId}/admin/club-logo/${variant}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Suppression échouée');
   },
 
   // Upload de la couverture du club en FormData — fetch dédié. Persiste côté serveur.
@@ -614,6 +622,8 @@ export const api = {
     request<Announcement>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
   adminDeleteAnnouncement: (clubId: string, id: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${clubId}/admin/announcements/${id}`, { method: 'DELETE' }, token),
+  adminReorderAnnouncements: (clubId: string, orderedIds: string[], token: string) =>
+    request<Announcement[]>(`/api/clubs/${clubId}/admin/announcements/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }, token),
   /** Upload de l'affiche d'une annonce : fetch dédié (FormData), pattern uploadMyAvatar. */
   adminUploadAnnouncementImage: async (clubId: string, id: string, file: File, token: string): Promise<Announcement> => {
     const form = new FormData();
@@ -1010,6 +1020,11 @@ export const api = {
   adminListCoaches: (clubId: string, token: string) =>
     request<Coach[]>(`/api/clubs/${clubId}/admin/coaches`, {}, token),
 
+  /** Change le coach d'un cours existant (les élèves inscrits ne bougent pas). */
+  adminSetLessonCoach: (clubId: string, lessonId: string, coachId: string, token: string) =>
+    request<{ id: string; coach: { id: string; name: string; photoUrl: string | null } }>(
+      `/api/clubs/${clubId}/admin/lessons/${lessonId}`, { method: 'PATCH', body: JSON.stringify({ coachId }) }, token),
+
   // --- Séries de réservations (back-office club) ---
   adminCreateSeries: (clubId: string, body: CreateSeriesBody, token: string) =>
     request<CreateSeriesResult>(`/api/clubs/${clubId}/admin/reservation-series`, { method: 'POST', body: JSON.stringify(body) }, token),
@@ -1048,6 +1063,16 @@ export const api = {
     request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/lessons/${id}/enrollment`, { method: 'DELETE' }, token),
 
   getMyLessons: (token: string) => request<MyLessonEnrollment[]>('/api/me/lessons', {}, token),
+
+  // --- Espace coach (le coach connecté gère SES cours) ---
+  getCoachStatus: (slug: string, token: string) =>
+    request<{ isCoach: boolean }>(`/api/clubs/${slug}/me/coach`, {}, token),
+  getCoachLessons: (slug: string, scope: 'upcoming' | 'past', token: string) =>
+    request<CoachLessonRow[]>(`/api/clubs/${slug}/me/coach/lessons?scope=${scope}`, {}, token),
+  coachEnrollStudent: (slug: string, lessonId: string, userId: string, token: string) =>
+    request<{ id: string; status: string }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  coachRemoveStudent: (slug: string, lessonId: string, enrollId: string, token: string) =>
+    request<{ cancelledEnrollmentId: string; promotedEnrollmentId: string | null }>(`/api/clubs/${slug}/me/coach/lessons/${lessonId}/students/${enrollId}`, { method: 'DELETE' }, token),
 
   getVapidPublicKey: () => request<{ publicKey: string | null }>('/api/push/vapid-public-key'),
   savePushSubscription: (sub: unknown, token: string) =>
@@ -1295,7 +1320,7 @@ export type BookingReleaseMode = 'DAY_AT_HOUR' | 'ROLLING_SLOT' | 'WINDOW_SHIFT'
 
 // Sections du Club-house configurables par le club (ordre + visibilité).
 // 'sponsors' = visibilité seule (position fixe en bas de page).
-export type ClubHouseSectionKey = 'matches' | 'agenda' | 'top' | 'offers' | 'clubCard' | 'sponsors';
+export type ClubHouseSectionKey = 'kiosk' | 'matches' | 'agenda' | 'top' | 'offers' | 'clubCard' | 'sponsors';
 export interface ClubHouseSectionSetting { key: ClubHouseSectionKey; visible: boolean; }
 
 export interface ClubDetail {
@@ -1308,6 +1333,8 @@ export interface ClubDetail {
   description: string | null;
   timezone: string;
   logoUrl: string | null;
+  logoWideUrl: string | null;
+  logoWideDarkUrl: string | null;
   coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
@@ -1599,6 +1626,8 @@ export interface ClubAdminDetail {
   country: string | null;
   timezone: string;
   logoUrl: string | null;
+  logoWideUrl: string | null;
+  logoWideDarkUrl: string | null;
   coverImageUrl: string | null;
   accentColor: string;
   defaultThemeMode: string;
@@ -2049,6 +2078,7 @@ export interface Announcement {
   validUntil: string | null;
   isPublished: boolean;
   pinned: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -2127,7 +2157,7 @@ export interface ClubReservation {
   participants: ParticipantBill[];
   hasCardFingerprint?: boolean;
   seriesId?: string | null;
-  lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE' } | null;
+  lesson?: { id: string; capacity: number; lessonKind: 'INDIVIDUAL' | 'COLLECTIVE'; coach: { name: string; photoUrl: string | null } } | null;
   /** présent seulement sur la réponse d'une association « créer un membre à la volée puis associer ». */
   createdMember?: { userId: string; tempPassword: string | null; existed: boolean } | null;
 }
@@ -2795,6 +2825,31 @@ export interface MyLessonEnrollment {
   enrollmentId: string;
   status: string;
   lesson: MyLessonSummary;
+}
+
+// --- Espace coach (Mes cours) ---
+
+export interface CoachStudentRow {
+  id: string;
+  status: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  waitlistPosition: number | null;
+}
+
+export interface CoachLessonRow {
+  id: string;
+  lessonKind: string;
+  seriesId: string | null;
+  reservation: { startTime: string; endTime: string; resource: { name: string } };
+  sport: { key: string; name: string } | null;
+  series: { title: string | null; enrollmentMode: string | null } | null;
+  capacity: number;
+  confirmedCount: number;
+  waitlistCount: number;
+  students: CoachStudentRow[];
 }
 
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).

@@ -27,6 +27,15 @@ async function renderFullBleed(size: number, markRatio: number): Promise<Buffer>
     .png().toBuffer();
 }
 
+// Badge monochrome Palova : pictogramme blanc sur transparent (repli si le logo club n'a pas d'alpha).
+async function renderBadgeMono(size: number, markRatio: number): Promise<Buffer> {
+  const markSvg = fs.readFileSync(path.join(FRONT_PUBLIC, 'palova-mark-white.svg'));
+  const markSize = Math.round(size * markRatio);
+  const mark = await sharp(markSvg, { density: 300 }).resize(markSize, markSize).png().toBuffer();
+  return sharp({ create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: mark, gravity: 'centre' }]).png().toBuffer();
+}
+
 async function main() {
   fs.mkdirSync(BACK_ASSETS, { recursive: true });
   const out: Array<[string, Buffer]> = [
@@ -40,6 +49,8 @@ async function main() {
     [path.join(BACK_ASSETS, 'icon-maskable-192.png'), await renderFullBleed(192, 0.62)],
     [path.join(BACK_ASSETS, 'icon-maskable-512.png'), await renderFullBleed(512, 0.62)],
     [path.join(BACK_ASSETS, 'icon-apple-180.png'), await renderFullBleed(180, 0.7)],
+    [path.join(FRONT_PUBLIC, 'icon-badge-96.png'), await renderBadgeMono(96, 0.9)],
+    [path.join(BACK_ASSETS, 'icon-badge-96.png'), await renderBadgeMono(96, 0.9)],
   ];
   for (const [file, buf] of out) {
     fs.writeFileSync(file, buf);

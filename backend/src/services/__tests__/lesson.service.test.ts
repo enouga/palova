@@ -347,3 +347,56 @@ describe('LessonService.listUserEnrollments', () => {
     expect(list.every((x) => x.enrollmentId === 'e1')).toBe(true);
   });
 });
+
+describe('LessonService — espace coach', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('resolveCoach : renvoie {id} pour un coach actif, null sinon', async () => {
+    prismaMock.coach.findFirst.mockResolvedValueOnce({ id: 'coach-1' } as any);
+    expect(await lessonService.resolveCoach('club-1', 'u-coach')).toEqual({ id: 'coach-1' });
+    prismaMock.coach.findFirst.mockResolvedValueOnce(null as any);
+    expect(await lessonService.resolveCoach('club-1', 'u-x')).toBeNull();
+  });
+
+  it('listCoachLessons : ne renvoie que les cours du coach, roster avec téléphone, userId absent', async () => {
+    prismaMock.lesson.findMany.mockResolvedValueOnce([{
+      id: 'les-1', clubId: 'club-1', coachId: 'coach-1', lessonKind: 'GROUP', capacity: 4, seriesId: null,
+      reservation: { startTime: new Date('2099-01-01T10:00:00Z'), endTime: new Date('2099-01-01T11:00:00Z'), resource: { name: 'Court 1', clubSport: { sport: { key: 'padel', name: 'Padel' } } } },
+      series: null,
+    }] as any);
+    prismaMock.lessonEnrollment.findMany.mockResolvedValueOnce([
+      { id: 'enr-1', status: 'CONFIRMED', userId: 'u-9', user: { firstName: 'Ana', lastName: 'B', avatarUrl: null, phone: '0611' } },
+    ] as any);
+    (prismaMock.lessonEnrollment.groupBy as jest.Mock).mockResolvedValueOnce([{ status: 'CONFIRMED', _count: 1 }] as any);
+
+    const rows = await lessonService.listCoachLessons('club-1', 'coach-1', 'upcoming');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].students[0]).toEqual({ id: 'enr-1', status: 'CONFIRMED', firstName: 'Ana', lastName: 'B', avatarUrl: null, phone: '0611', waitlistPosition: null });
+    expect((rows[0].students[0] as any).userId).toBeUndefined();
+    expect(rows[0].confirmedCount).toBe(1);
+    // filtre : coachId passé au where
+    const where = (prismaMock.lesson.findMany as jest.Mock).mock.calls[0][0].where;
+    expect(where.coachId).toBe('coach-1');
+    expect(where.reservation.startTime).toEqual({ gt: expect.any(Date) });
+  });
+
+  it('coachEnrollStudent : refuse un cours qui n\'est pas au coach (LESSON_NOT_YOURS)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValueOnce({ clubId: 'club-1', coachId: 'autre-coach', reservation: { startTime: new Date('2099-01-01T10:00:00Z') } } as any);
+    await expect(lessonService.coachEnrollStudent('club-1', 'coach-1', 'les-1', 'u-9')).rejects.toThrow('LESSON_NOT_YOURS');
+  });
+
+  it('coachEnrollStudent : refuse un cours introuvable / autre club (LESSON_NOT_FOUND)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValueOnce(null as any);
+    await expect(lessonService.coachEnrollStudent('club-1', 'coach-1', 'les-x', 'u-9')).rejects.toThrow('LESSON_NOT_FOUND');
+  });
+
+  it('coachEnrollStudent : refuse un cours passé (ENROLLMENT_LOCKED)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValueOnce({ clubId: 'club-1', coachId: 'coach-1', reservation: { startTime: new Date('2000-01-01T10:00:00Z') } } as any);
+    await expect(lessonService.coachEnrollStudent('club-1', 'coach-1', 'les-1', 'u-9')).rejects.toThrow('ENROLLMENT_LOCKED');
+  });
+
+  it('coachRemoveStudent : même garde de propriété (LESSON_NOT_YOURS)', async () => {
+    prismaMock.lesson.findUnique.mockResolvedValueOnce({ clubId: 'club-1', coachId: 'autre-coach', reservation: { startTime: new Date('2099-01-01T10:00:00Z') } } as any);
+    await expect(lessonService.coachRemoveStudent('club-1', 'coach-1', 'les-1', 'enr-1')).rejects.toThrow('LESSON_NOT_YOURS');
+  });
+});

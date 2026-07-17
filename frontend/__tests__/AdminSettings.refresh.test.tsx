@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminSettingsPage from '../app/admin/settings/page';
+import { AdminRoleContext } from '../lib/adminRole';
 
 const refreshMock = jest.fn();
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
@@ -12,7 +13,8 @@ jest.mock('../lib/api', () => ({
   api: {
     adminGetClub: jest.fn(),
     adminUpdateClub: jest.fn().mockResolvedValue({}),
-    uploadClubLogo: jest.fn(),
+    uploadClubLogo: jest.fn().mockResolvedValue({ logoUrl: '/uploads/logos/x.png', warnings: [] }),
+    deleteClubLogoVariant: jest.fn().mockResolvedValue(undefined),
     uploadClubCover: jest.fn(),
     adminGetSports: jest.fn().mockResolvedValue([]),
     getSports: jest.fn().mockResolvedValue([]),
@@ -43,7 +45,7 @@ describe('AdminSettingsPage', () => {
   // Régression : sans ce refresh, le club partagé (ClubProvider) restait périmé après
   // l'activation du paiement en ligne → la modale de réservation montrait « Régler au club ».
   it('refreshes the shared club context after saving so the booking flow sees new settings', async () => {
-    render(<AdminSettingsPage />);
+    render(<AdminRoleContext.Provider value="ADMIN"><AdminSettingsPage /></AdminRoleContext.Provider>);
     const nameInput = await screen.findByDisplayValue('Démo');
     fireEvent.change(nameInput, { target: { value: 'Démo 2' } });
     fireEvent.click(await screen.findByText('Enregistrer'));

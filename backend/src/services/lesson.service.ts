@@ -60,6 +60,23 @@ export interface RemoveResult {
   promotedEnrollmentId: string | null;
 }
 
+export interface CoachStudentRow extends StudentRow {
+  phone: string | null;
+}
+
+export interface CoachLessonRow {
+  id: string;
+  lessonKind: string;
+  seriesId: string | null;
+  reservation: { startTime: Date; endTime: Date; resource: { name: string } };
+  sport: { key: string; name: string } | null;
+  series: { title: string | null; enrollmentMode: EnrollmentMode | null } | null;
+  capacity: number;
+  confirmedCount: number;
+  waitlistCount: number;
+  students: CoachStudentRow[];
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Résolution du conteneur (SERIES vs LESSON)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -298,6 +315,27 @@ class LessonService {
     return prisma.lessonEnrollment.update({
       where: { id: enrollId },
       data: { status: 'CONFIRMED' },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────── adminSetCoach
+
+  /**
+   * Change le coach d'un cours existant — les inscriptions (élèves) ne bougent pas.
+   * Le nouveau coach doit être un coach ACTIF du même club.
+   * Lève : LESSON_NOT_FOUND | CLUB_MISMATCH | COACH_NOT_FOUND
+   */
+  async adminSetCoach(lessonId: string, clubId: string, coachId: string) {
+    await this.loadLesson(lessonId, clubId);
+    const coach = await prisma.coach.findFirst({
+      where: { id: coachId, clubId, isActive: true },
+      select: { id: true },
+    });
+    if (!coach) throw new Error('COACH_NOT_FOUND');
+    return prisma.lesson.update({
+      where: { id: lessonId },
+      data: { coachId },
+      select: { id: true, coach: { select: { id: true, name: true, photoUrl: true } } },
     });
   }
 
@@ -734,6 +772,117 @@ class LessonService {
     }
 
     return results;
+  }
+
+  // ─────────────────────────────────────────────────────────── Espace coach
+
+  /** Le coach actif lié à ce user dans ce club (null si aucun). Gate de l'espace coach. */
+  async resolveCoach(clubId: string, userId: string): Promise<{ id: string } | null> {
+    return prisma.coach.findFirst({ where: { clubId, userId, isActive: true }, select: { id: true } });
+  }
+
+  /** Mapping roster côté coach : ajoute le téléphone (userId jamais exposé). */
+  private mapRosterForCoach(
+    enrollments: Array<{
+      id: string; status: string; userId: string;
+      user: { firstName: string; lastName: string; avatarUrl: string | null; phone: string | null };
+    }>,
+  ): CoachStudentRow[] {
+    let waitlistIdx = 0;
+    return enrollments.map(({ userId: _userId, user, ...row }) => ({
+      id: row.id,
+      status: row.status,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl,
+      phone: user.phone,
+      waitlistPosition: row.status === 'WAITLISTED' ? ++waitlistIdx : null,
+    }));
+  }
+
+  /** Cours du coach (à venir = startTime>now asc ; passés = endTime<now desc, cap 30) + rosters. */
+  async listCoachLessons(clubId: string, coachId: string, scope: 'upcoming' | 'past'): Promise<CoachLessonRow[]> {
+    const now = new Date();
+    const lessons = await prisma.lesson.findMany({
+      where: {
+        clubId,
+        coachId,
+        reservation: {
+          status: { not: 'CANCELLED' },
+          ...(scope === 'upcoming' ? { startTime: { gt: now } } : { endTime: { lt: now } }),
+        },
+      },
+      include: {
+        reservation: {
+          select: {
+            startTime: true,
+            endTime: true,
+            resource: { select: { name: true, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
+          },
+        },
+        series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
+      },
+      orderBy: { reservation: { startTime: scope === 'upcoming' ? 'asc' : 'desc' } },
+      ...(scope === 'past' ? { take: 30 } : {}),
+    });
+
+    return Promise.all(
+      lessons.map(async (lesson) => {
+        const container = resolveContainer(lesson);
+        const enrollments = await prisma.lessonEnrollment.findMany({
+          where: { ...container.whereActive, status: { not: 'CANCELLED' } },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            status: true,
+            userId: true,
+            user: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+          },
+        });
+        const { confirmedCount, waitlistCount } = await this.withCounts(lesson);
+        return {
+          id: lesson.id,
+          lessonKind: lesson.lessonKind,
+          seriesId: lesson.seriesId,
+          reservation: {
+            startTime: lesson.reservation.startTime,
+            endTime: lesson.reservation.endTime,
+            resource: { name: lesson.reservation.resource.name },
+          },
+          sport: lesson.reservation.resource.clubSport?.sport ?? null,
+          series: lesson.series ? { title: lesson.series.title, enrollmentMode: lesson.series.enrollmentMode } : null,
+          capacity: lesson.capacity,
+          confirmedCount,
+          waitlistCount,
+          students: this.mapRosterForCoach(enrollments),
+        };
+      }),
+    );
+  }
+
+  /** Vérifie que le cours appartient bien au coach (et au club). LESSON_NOT_FOUND | LESSON_NOT_YOURS. */
+  private async assertCoachOwnsLesson(lessonId: string, clubId: string, coachId: string) {
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { clubId: true, coachId: true, reservation: { select: { startTime: true } } },
+    });
+    if (!lesson || lesson.clubId !== clubId) throw new Error('LESSON_NOT_FOUND');
+    if (lesson.coachId !== coachId) throw new Error('LESSON_NOT_YOURS');
+    return lesson;
+  }
+
+  /** Inscription d'un élève par le coach (sur SON cours, non passé). Délègue au cœur admin. */
+  async coachEnrollStudent(clubId: string, coachId: string, lessonId: string, targetUserId: string) {
+    const lesson = await this.assertCoachOwnsLesson(lessonId, clubId, coachId);
+    if (lesson.reservation.startTime <= new Date()) throw new Error('ENROLLMENT_LOCKED');
+    return this.adminEnrollStudent(lessonId, targetUserId, clubId);
+  }
+
+  /** Retrait d'un élève par le coach (sur SON cours, non passé). Délègue au cœur admin. */
+  async coachRemoveStudent(clubId: string, coachId: string, lessonId: string, enrollId: string) {
+    const lesson = await this.assertCoachOwnsLesson(lessonId, clubId, coachId);
+    if (lesson.reservation.startTime <= new Date()) throw new Error('ENROLLMENT_LOCKED');
+    return this.adminRemoveStudent(lessonId, enrollId, clubId);
   }
 }
 

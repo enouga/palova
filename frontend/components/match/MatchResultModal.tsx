@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { SetScore, validSets, winnerFromSets } from '@/lib/match';
+import { validSets, winnerFromSets } from '@/lib/match';
+import { emptyGrid, applyDigit, backspace as gridBackspace, gridToSets, setWinner, type Grid } from '@/lib/scoreGrid';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
@@ -32,9 +33,8 @@ function fmtContext(ctx: MatchContext): string {
 
 export function MatchResultModal({ reservationId, players, token, onClose, onSaved, context, initialTeams, competitive, locked }: Props) {
   const { th } = useTheme();
-  const [team, setTeam] = useState<Record<string, 1 | 2 | undefined>>(() => ({ ...(initialTeams ?? {}) }));
-  const [competitiveState, setCompetitiveState] = useState(competitive ?? true);
-  // Équipes pré-remplies complètes (4 joueurs, 2/2) → mode résumé compact ; sinon affectation.
+
+  // Équipes pré-remplies complètes (4 joueurs, 2/2) → on démarre au tableau de score ; sinon affectation.
   const preFilled2v2 = (() => {
     if (!initialTeams) return false;
     const assigned = players.filter((p) => initialTeams[p.userId] === 1 || initialTeams[p.userId] === 2);
@@ -42,33 +42,35 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
     return assigned.filter((p) => initialTeams[p.userId] === 1).length === 2
       && assigned.filter((p) => initialTeams[p.userId] === 2).length === 2;
   })();
-  const [editingTeams, setEditingTeams] = useState(false);
-  const showAssignment = !preFilled2v2 || editingTeams;
-  const [sets, setSets] = useState<SetScore[]>([[0, 0]]);
+
+  const [team, setTeam] = useState<Record<string, 1 | 2 | undefined>>(() => ({ ...(initialTeams ?? {}) }));
+  const [competitiveState, setCompetitiveState] = useState(competitive ?? true);
+  const [phase, setPhase] = useState<'assign' | 'score'>(preFilled2v2 ? 'score' : 'assign');
+  const [grid, setGrid] = useState<Grid>(emptyGrid);
+  const [cursor, setCursor] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const showAssignment = phase === 'assign';
 
   const t1 = players.filter((p) => team[p.userId] === 1).map((p) => p.userId);
   const t2 = players.filter((p) => team[p.userId] === 2).map((p) => p.userId);
   const compositionOk = t1.length === 2 && t2.length === 2;
-  const setsOk = validSets(sets);
-  const canSave = compositionOk && setsOk && !busy;
 
+  const sets = gridToSets(grid);
+  const setsOk = validSets(sets);
   const wins: [number, number] = sets.reduce<[number, number]>(
     (acc, [a, b]) => { if (a > b) acc[0]++; else if (b > a) acc[1]++; return acc; }, [0, 0]);
   const winner = compositionOk && setsOk && wins[0] !== wins[1] ? winnerFromSets(sets) : null;
+  const canSave = compositionOk && setsOk && winner != null && !busy;
 
   const assign = (userId: string, t: 1 | 2) =>
     setTeam((prev) => ({ ...prev, [userId]: prev[userId] === t ? undefined : t }));
-
-  const bump = (i: number, side: 0 | 1, delta: number) =>
-    setSets((prev) => prev.map((s, idx) => (idx === i
-      ? (side === 0 ? [Math.max(0, Math.min(7, s[0] + delta)), s[1]] : [s[0], Math.max(0, Math.min(7, s[1] + delta))]) as SetScore
-      : s)));
-
-  const removeSet = (i: number) => setSets((prev) => prev.filter((_, idx) => idx !== i));
-
   const teamFull = (t: 1 | 2, userId: string) => (t === 1 ? t1 : t2).length >= 2 && team[userId] !== t;
+  const teamNames = (n: 1 | 2) => players.filter((p) => team[p.userId] === n);
+
+  const pressDigit = (d: number) => { const r = applyDigit(grid, cursor, d); setGrid(r.grid); setCursor(r.cursor); };
+  const pressBack = () => { const r = gridBackspace(grid, cursor); setGrid(r.grid); setCursor(r.cursor); };
 
   const save = async () => {
     setBusy(true); setError(null);
@@ -80,15 +82,45 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
     } finally { setBusy(false); }
   };
 
-  const stepBtn = { border: `1px solid ${th.lineStrong}`, color: th.textMute } as const;
-
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="match-result-title" className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-      <div className="w-full max-w-md rounded-t-2xl p-4 sm:rounded-2xl" style={{ background: th.surface, color: th.text, fontFamily: th.fontUI }}>
-        <div className="mb-4">
-          <h2 id="match-result-title" className="text-lg font-semibold">Saisir le résultat</h2>
-          {context && <p className="mt-0.5 text-sm" style={{ color: th.textMute }}>{fmtContext(context)}</p>}
+      <div className="w-full max-w-md rounded-t-2xl p-4 sm:rounded-2xl" style={{ background: th.surface, color: th.text, fontFamily: th.fontUI, maxHeight: '92vh', overflowY: 'auto' }}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 id="match-result-title" className="text-lg font-semibold">Saisir le résultat</h2>
+            {context && <p className="mt-0.5 text-sm" style={{ color: th.textMute }}>{fmtContext(context)}</p>}
+          </div>
+          {locked ? (
+            <span style={{
+              flexShrink: 0, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, borderRadius: 99, padding: '5px 10px',
+              background: competitiveState ? `${th.accent}22` : 'transparent', color: competitiveState ? th.accent : th.textMute,
+              border: competitiveState ? 'none' : `1px solid ${th.line}`,
+            }}>
+              {competitiveState ? 'Compétitive' : 'Amicale'}
+            </span>
+          ) : (
+            <span style={{ display: 'inline-flex', flexShrink: 0, borderRadius: 99, overflow: 'hidden', border: `1px solid ${th.line}` }}>
+              {([['competitive', 'Compétitive'], ['friendly', 'Amicale']] as const).map(([key, label]) => {
+                const active = (key === 'competitive') === competitiveState;
+                return (
+                  <button key={key} type="button" onClick={() => setCompetitiveState(key === 'competitive')} disabled={busy}
+                    style={{
+                      cursor: 'pointer', border: 'none', padding: '5px 12px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700,
+                      background: active ? th.accent : 'transparent', color: active ? th.onAccent : th.textMute,
+                    }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </span>
+          )}
         </div>
+
+        <p className="mb-3 text-xs" style={{ color: th.textFaint }}>
+          {locked
+            ? (competitiveState ? 'Partie compétitive — le résultat compte pour le niveau.' : 'Partie amicale — le niveau ne bouge pas.')
+            : (competitiveState ? 'Compte pour le niveau.' : 'Le niveau ne bouge pas.')}
+        </p>
 
         {showAssignment ? (
           <>
@@ -126,103 +158,98 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
                 </div>
               ))}
             </div>
+
+            {!compositionOk && <p className="mb-3 text-xs" style={{ color: th.textMute }}>Affecte 2 joueurs par équipe.</p>}
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm" style={{ color: th.textMute }}>Annuler</button>
+              <button type="button" disabled={!compositionOk} onClick={() => setPhase('score')}
+                className="rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                style={{ background: th.accent, color: th.onAccent }}>
+                Continuer
+              </button>
+            </div>
           </>
         ) : (
-          <div className="mb-4 flex flex-col gap-2">
-            {([1, 2] as const).map((n) => {
-              const names = players.filter((p) => team[p.userId] === n).map((p) => `${p.firstName} ${p.lastName}`).join(' & ');
-              return (
-                <div key={n} className="flex items-center gap-2 rounded-lg px-3 py-2.5" style={{ background: th.surface2 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: TEAM_COLORS[n], flexShrink: 0 }} />
-                  <span className="text-xs font-semibold" style={{ color: th.textMute }}>Éq. {n}</span>
-                  <span className="ml-1 truncate text-sm font-medium">{names}</span>
-                </div>
-              );
-            })}
-            <button type="button" onClick={() => setEditingTeams(true)} className="self-start text-sm underline" style={{ color: th.textMute }}>
-              Modifier les équipes
-            </button>
-          </div>
-        )}
-
-        {locked ? (
-          <div className="mb-4 text-sm" style={{ color: th.textMute }}>
-            {competitiveState ? 'Partie compétitive — le résultat compte pour le niveau.' : 'Partie amicale — le niveau ne bouge pas.'}
-          </div>
-        ) : (
-          <div className="mb-4" style={{ display: 'flex', gap: 8 }}>
-            {([['competitive', 'Compétitive', 'Compte pour le niveau'],
-               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
-              const active = (key === 'competitive') === competitiveState;
-              return (
-                <button key={key} type="button" onClick={() => setCompetitiveState(key === 'competitive')} disabled={busy}
-                  style={{ flex: 1, textAlign: 'left', cursor: 'pointer', borderRadius: 12, padding: '9px 12px',
-                    border: `1.5px solid ${active ? th.accent : th.line}`, background: active ? `${th.accent}14` : 'transparent' }}>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: active ? th.accent : th.text }}>{label}</div>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 2 }}>{sub}</div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="mb-1 flex items-center gap-3">
-          <span className="w-12" />
-          <div className="ml-auto flex items-center gap-4">
-            <span className="w-[92px] text-center text-xs font-semibold" style={{ color: TEAM_COLORS[1] }}>Éq. 1</span>
-            <span className="w-[92px] text-center text-xs font-semibold" style={{ color: TEAM_COLORS[2] }}>Éq. 2</span>
-          </div>
-          <span className="w-6" aria-hidden="true" />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {sets.map((s, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <span className="w-12 text-sm" style={{ color: th.textMute }}>Set {i + 1}</span>
-              <div className="ml-auto flex items-center gap-4">
-                {[0, 1].map((sideRaw) => {
-                  const side = sideRaw as 0 | 1;
-                  return (
-                    <span key={side} className="flex w-[92px] items-center justify-center gap-2">
-                      <button type="button" data-testid={`set${i}-team${side + 1}-minus`} onClick={() => bump(i, side, -1)} className="rounded-md px-2" style={stepBtn}>−</button>
-                      <span className="w-5 text-center font-semibold">{s[side]}</span>
-                      <button type="button" data-testid={`set${i}-team${side + 1}-plus`} onClick={() => bump(i, side, +1)} className="rounded-md px-2" style={stepBtn}>+</button>
-                    </span>
-                  );
-                })}
-              </div>
-              <span className="flex w-6 justify-center">
-                {sets.length > 1 && (
-                  <button type="button" data-testid={`set${i}-remove`} aria-label={`Retirer le set ${i + 1}`}
-                    onClick={() => removeSet(i)} className="text-base leading-none" style={{ color: th.textMute }}>×</button>
-                )}
-              </span>
+          <>
+            <div className="mb-3 flex flex-col gap-2">
+              {([1, 2] as const).map((n) => {
+                const names = teamNames(n).map((p) => `${p.firstName} ${p.lastName}`).join(' & ');
+                return (
+                  <div key={n} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: th.surface2 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: TEAM_COLORS[n], flexShrink: 0 }} />
+                    <span className="text-xs font-semibold" style={{ color: th.textMute }}>Éq. {n}</span>
+                    <span className="ml-1 truncate text-sm font-medium">{names}</span>
+                  </div>
+                );
+              })}
+              <button type="button" onClick={() => setPhase('assign')} className="self-start text-sm underline" style={{ color: th.textMute }}>
+                Modifier les équipes
+              </button>
             </div>
-          ))}
-        </div>
 
-        <div className="mb-3 mt-3 flex items-center justify-between">
-          {sets.length < 3
-            ? <button type="button" onClick={() => setSets((p) => [...p, [0, 0]])} className="text-sm underline" style={{ color: th.textMute }}>+ Ajouter un set</button>
-            : <span />}
-          {winner && (
-            <span className="rounded-md px-2.5 py-1 text-xs font-semibold" style={{ background: TEAM_COLORS[winner], color: inkOn(TEAM_COLORS[winner]) }}>
-              Équipe {winner} gagne {wins[winner - 1]}–{wins[winner === 1 ? 1 : 0]}
-            </span>
-          )}
-        </div>
+            <div className="mb-1 flex items-center justify-end gap-2 pr-1">
+              {['S1', 'S2', 'S3'].map((s) => (
+                <span key={s} style={{ width: 34, textAlign: 'center', fontSize: 9, letterSpacing: '2px', fontWeight: 700, color: th.textFaint }}>{s}</span>
+              ))}
+            </div>
 
-        {error && <p className="mb-2 text-sm" style={{ color: ACCENTS.coral }}>{error}</p>}
-        {!compositionOk && <p className="mb-2 text-xs" style={{ color: th.textMute }}>Affecte 2 joueurs par équipe.</p>}
+            {([1, 2] as const).map((n) => (
+              <div key={n} className="flex items-center gap-2 py-1">
+                <span className="flex-1 truncate text-sm font-semibold">
+                  {teamNames(n).map((p) => p.firstName).join(' & ')}
+                </span>
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((s) => {
+                    const idx = s * 2 + (n - 1);
+                    const val = grid[idx];
+                    const w = setWinner(grid, s);
+                    const isActive = cursor === idx;
+                    const isWinner = w === n;
+                    return (
+                      <button key={s} type="button" data-testid={`cell-${s}-${n}`} onClick={() => setCursor(idx)}
+                        style={{
+                          width: 34, height: 40, borderRadius: 9, flexShrink: 0, cursor: 'pointer',
+                          fontFamily: th.fontUI, fontWeight: 800, fontSize: 16,
+                          color: isWinner ? inkOn(th.accent) : th.text,
+                          background: isWinner ? th.accent : (val != null ? th.surface2 : 'transparent'),
+                          border: isActive ? `2px solid ${th.accent}` : (val != null ? `1.5px solid ${th.line}` : `1.5px dashed ${s === 2 ? th.line : th.lineStrong}`),
+                        }}>
+                        {val ?? ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm" style={{ color: th.textMute }}>Annuler</button>
-          <button type="button" disabled={!canSave} onClick={save}
-            className="rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
-            style={{ background: th.accent, color: th.onAccent }}>
-            Enregistrer
-          </button>
-        </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <button key={d} type="button" data-testid={`key-${d}`} onClick={() => pressDigit(d)}
+                  style={{ width: 34, height: 38, borderRadius: 9, border: 'none', cursor: 'pointer', background: th.surface2, color: th.text, fontFamily: th.fontUI, fontWeight: 700, fontSize: 15 }}>
+                  {d}
+                </button>
+              ))}
+              <button type="button" data-testid="key-back" aria-label="Effacer" onClick={pressBack}
+                style={{ width: 44, height: 38, borderRadius: 9, border: 'none', cursor: 'pointer', background: th.surface2, color: th.textMute, fontFamily: th.fontUI, fontWeight: 700, fontSize: 15 }}>
+                ⌫
+              </button>
+            </div>
+
+            {error && <p className="mb-2 mt-2 text-sm" style={{ color: ACCENTS.coral }}>{error}</p>}
+
+            <div className="mt-3 flex items-center gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm" style={{ color: th.textMute }}>Annuler</button>
+              <button type="button" disabled={!canSave} onClick={save}
+                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
+                style={{ background: th.accent, color: th.onAccent }}>
+                {winner
+                  ? `Enregistrer — Victoire ${teamNames(winner).map((p) => p.firstName).join(' & ')} ${wins[winner - 1]}–${wins[winner === 1 ? 1 : 0]}`
+                  : 'Enregistrer'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

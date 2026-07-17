@@ -27,6 +27,8 @@ jest.mock('../lib/api', () => ({
     adminCreateMember: jest.fn().mockResolvedValue({ tempPassword: null, existed: false }),
     adminCreateReservation: jest.fn().mockResolvedValue({ id: 'new-1' }),
     adminRescheduleReservation: jest.fn().mockResolvedValue({ id: 'rv-1' }),
+    adminListLessonStudents: jest.fn().mockResolvedValue([]),
+    adminSetLessonCoach: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -142,6 +144,92 @@ it("permet de sélectionner une place SANS joueur et d'encaisser sa part (anonym
     const call = (api.adminAddPayment as jest.Mock).mock.calls.at(-1)!;
     expect(call[2]).toMatchObject({ amount: 13, method: 'CARD' });   // une part (52/4), anonyme
     expect(call[2].participantId).toBeUndefined();
+  });
+});
+
+describe('Cours encadré — le coach est visible (pavé + modale)', () => {
+  const lessonResa = (over: Record<string, unknown> = {}) => ({
+    id: 'rv-2', resourceId: 'court-1', startTime: '2099-06-22T16:00:00.000Z', endTime: '2099-06-22T17:00:00.000Z',
+    status: 'CONFIRMED', type: 'COACHING', title: null, totalPrice: '0.00', paidAmount: '0.00', dueAmount: '0.00',
+    resource: { id: 'court-1', name: 'C1' }, user: null,
+    payments: [], participants: [],
+    lesson: { id: 'lesson-1', capacity: 4, lessonKind: 'COLLECTIVE', coach: { name: 'Lucas Moreau', photoUrl: null } },
+    ...over,
+  });
+
+  it('le pavé du planning affiche « Cours · <coach> » au lieu de « Événement »', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    // « Événement » reste le libellé du chip TYPE (sélecteur) — seule l'étiquette du pavé/sous-titre change.
+    expect(await screen.findByText('Cours · Lucas Moreau')).toBeInTheDocument();
+  });
+
+  it('la modale affiche le coach (avatar + nom) au-dessus des Élèves', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    expect(await screen.findByText('Coach')).toBeInTheDocument();
+    expect(screen.getAllByText('Lucas Moreau').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Élèves 0 / 4')).toBeInTheDocument();
+  });
+
+  it('« Changer » ouvre le sélecteur de coach ; la sélection change le coach et referme le sélecteur', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    (api.adminListCoaches as jest.Mock).mockResolvedValue([
+      { id: 'coach-1', clubId: 'club-1', name: 'Lucas Moreau', photoUrl: null, isActive: true, sortOrder: 0 },
+      { id: 'coach-2', clubId: 'club-1', name: 'Nina Petit', photoUrl: null, isActive: true, sortOrder: 1 },
+    ]);
+    (api.adminSetLessonCoach as jest.Mock).mockResolvedValue({ id: 'lesson-1', coach: { id: 'coach-2', name: 'Nina Petit', photoUrl: null } });
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    await screen.findByText('Élèves 0 / 4');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Changer' }));
+    const input = await screen.findByPlaceholderText('Rechercher un coach…');
+    fireEvent.focus(input);
+    fireEvent.click(await screen.findByText('Nina Petit'));
+
+    await waitFor(() => expect(api.adminSetLessonCoach).toHaveBeenCalledWith('club-1', 'lesson-1', 'coach-2', 'tok'));
+    expect(await screen.findByText('Nina Petit')).toBeInTheDocument();          // le nouveau coach s'affiche
+    expect(screen.queryByPlaceholderText('Rechercher un coach…')).toBeNull();   // repli sur la vue statique
+    expect(screen.getByRole('button', { name: 'Changer' })).toBeInTheDocument(); // à nouveau prêt à changer
+  });
+
+  it('cours sans montant dû : élèves AVANT un bouton « Encaisser un montant… » discret (plus de grande caisse)', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    const eleves = await screen.findByText('Élèves 0 / 4');
+    const encaisser = screen.getByRole('button', { name: /Encaisser un montant/ });
+    // la section élèves précède le bouton d'encaissement dans le DOM (plus sous le pli)
+    expect(eleves.compareDocumentPosition(encaisser) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // plus de caisse complète : ni en-tête redondant « — C1 », ni rangée de moyens
+    expect(screen.queryByText(/— C1/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'CB' })).toBeNull();
+    // l'annulation reste accessible depuis la rangée discrète
+    expect(screen.getByRole('button', { name: 'Annuler la réservation' })).toBeInTheDocument();
+    // le bouton discret ouvre la modale « Détails · options » (montant libre)
+    fireEvent.click(encaisser);
+    expect(await screen.findByText('Détails · options')).toBeInTheDocument();
+  });
+
+  it("« + Ajouter un élève… » : l'annuaire s'affiche et la liste est amenée en vue (modale scrollable)", async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    (api.adminGetMembers as jest.Mock).mockResolvedValue([
+      { id: 'mb-1', userId: 'u9', firstName: 'Mia', lastName: 'Membre', email: 'mia@x.fr', avatarUrl: null },
+    ]);
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    const input = await screen.findByPlaceholderText('+ Ajouter un élève…');
+    (Element.prototype.scrollIntoView as jest.Mock).mockClear();
+    fireEvent.focus(input);
+    expect(await screen.findByText('Mia Membre')).toBeInTheDocument();   // l'annuaire est rendu
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();         // et amené en vue
   });
 });
 

@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminResourcesPage from '@/app/admin/courts/page';
 import { ThemeProvider } from '@/lib/ThemeProvider';
+import { AdminRoleContext } from '@/lib/adminRole';
 
 jest.mock('@/lib/useAuth', () => ({ useAuth: () => ({ token: 't', ready: true }) }));
 jest.mock('@/lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-demo', accentColor: '#d6ff3f' } }) }));
@@ -26,11 +27,13 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-function renderPage() {
+function renderPage(role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') {
   return render(
-    <ThemeProvider>
-      <AdminResourcesPage />
-    </ThemeProvider>,
+    <AdminRoleContext.Provider value={role}>
+      <ThemeProvider>
+        <AdminResourcesPage />
+      </ThemeProvider>
+    </AdminRoleContext.Provider>,
   );
 }
 
@@ -41,6 +44,13 @@ describe('AdminResourcesPage — suppression', () => {
     api.adminGetResources.mockResolvedValue([{ ...RES, attributes: { ...RES.attributes } }]);
     api.adminGetSports.mockResolvedValue(SPORTS);
     api.adminDeleteResource.mockResolvedValue({ ok: true });
+  });
+
+  it('viewer STAFF : page réservée aux administrateurs, aucun fetch ressources', async () => {
+    const { api } = require('@/lib/api');
+    renderPage('STAFF');
+    expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+    expect(api.adminGetResources).not.toHaveBeenCalled();
   });
 
   it('supprime une ressource après confirmation', async () => {

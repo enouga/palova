@@ -4,6 +4,7 @@ import { api, AdminResource, AdminClubSport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { COURT_FORMATS, COVERAGE_OPTIONS, Coverage } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -18,6 +19,7 @@ export default function AdminResourcesPage() {
   const { token, ready } = useAuth();
   const { club } = useClub();
   const clubId = club?.id;
+  const admin = isClubAdmin(useAdminRole());
   const [resources, setResources] = useState<AdminResource[]>([]);
   const [sports, setSports]       = useState<AdminClubSport[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -55,7 +57,7 @@ export default function AdminResourcesPage() {
     }
   }, [token, clubId]);
 
-  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  useEffect(() => { if (ready && token && clubId && admin) load(); }, [ready, token, clubId, admin, load]);
 
   const markDirty = (id: string) => setDirty((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
 
@@ -213,6 +215,10 @@ export default function AdminResourcesPage() {
       setError(`Création : ${(e as Error).message}`);
     } finally { setCreating(false); }
   };
+
+  if (!admin) {
+    return <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textMute }}>Cette page est réservée aux administrateurs du club.</div>;
+  }
 
   return (
     <div>

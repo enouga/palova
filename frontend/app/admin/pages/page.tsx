@@ -5,6 +5,7 @@ import { api, ClubAdminDetail, ClubPageKind, AdminFaqItem } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import type { Theme } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 
@@ -33,6 +34,7 @@ export default function AdminPagesPage() {
   const { token, ready } = useAuth();
   const { club: hostClub } = useClub();
   const clubId = hostClub?.id;
+  const admin = isClubAdmin(useAdminRole());
   const [tab, setTab] = useState<Tab>('legal');
   const [loading, setLoading] = useState(true);
 
@@ -57,7 +59,11 @@ export default function AdminPagesPage() {
     } finally { setLoading(false); }
   }, [token, clubId]);
 
-  useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
+  useEffect(() => { if (ready && token && clubId && admin) load(); }, [ready, token, clubId, admin, load]);
+
+  if (!admin) {
+    return <div style={{ padding: 24, fontFamily: th.fontUI, color: th.textMute }}>Cette page est réservée aux administrateurs du club.</div>;
+  }
 
   if (!ready || loading || !club || !clubId || !token) {
     return <p style={{ color: th.textFaint, fontFamily: th.fontUI }}>Chargement…</p>;

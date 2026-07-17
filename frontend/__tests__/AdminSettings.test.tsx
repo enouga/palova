@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import AdminSettingsPage from '../app/admin/settings/page';
+import { AdminRoleContext } from '../lib/adminRole';
 
 const refreshMock = jest.fn();
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
@@ -11,7 +12,8 @@ jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
   api: {
     adminGetClub: jest.fn(), adminUpdateClub: jest.fn().mockResolvedValue({}),
-    uploadClubLogo: jest.fn(), uploadClubCover: jest.fn(),
+    uploadClubLogo: jest.fn().mockResolvedValue({ logoUrl: '/uploads/logos/x.png', warnings: [] }),
+    deleteClubLogoVariant: jest.fn().mockResolvedValue(undefined), uploadClubCover: jest.fn(),
     adminGetSports: jest.fn().mockResolvedValue([]), getSports: jest.fn().mockResolvedValue([]),
     adminApplySportsBatch: jest.fn().mockResolvedValue([]),
   },
@@ -21,7 +23,7 @@ const mocked = api as jest.Mocked<typeof api>;
 
 const CLUB = {
   id: 'c1', slug: 'demo', name: 'Démo', description: '', address: 'a', city: '', country: '',
-  timezone: 'Europe/Paris', logoUrl: '', coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
+  timezone: 'Europe/Paris', logoUrl: '', logoWideUrl: null, logoWideDarkUrl: null, coverImageUrl: null, accentColor: '#5e93da', defaultThemeMode: 'daylight',
   status: 'ACTIVE', listedInDirectory: true, listTournamentsNationally: false, showOffersPublicly: false,
   publicBookingDays: 14, memberBookingDays: 28, bookingReleaseMode: 'DAY_AT_HOUR', publicReleaseHour: 8, memberReleaseHour: 8,
   offPeakHours: null, bookingQuotas: null, playerChangeCutoffHours: 0, cancellationCutoffHours: 24,
@@ -31,13 +33,13 @@ const CLUB = {
   legalEntityName: '', legalForm: '', siret: '', vatNumber: '', legalRepresentative: '', legalEmail: '', legalPhone: '',
 };
 
-const wrap = () => render(<AdminSettingsPage />);
+const wrap = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') =>
+  render(<AdminRoleContext.Provider value={role}><AdminSettingsPage /></AdminRoleContext.Provider>);
 
 describe('AdminSettingsPage (onglets + SaveBar)', () => {
   beforeEach(() => {
     refreshMock.mockReset();
-    (mocked.adminGetClub as jest.Mock).mockResolvedValue({ ...CLUB });
-    (mocked.adminUpdateClub as jest.Mock).mockClear().mockResolvedValue({});
+    (mocked.adminGetClub as jest.Mock).mockClear().mockResolvedValue({ ...CLUB });
     (mocked.adminApplySportsBatch as jest.Mock).mockClear().mockResolvedValue([]);
     window.history.replaceState(null, '', '/admin/settings');
   });
@@ -46,6 +48,19 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     wrap();
     expect(await screen.findByText('Profil')).toBeInTheDocument();
     expect(screen.queryByText('Modifications non enregistrées')).not.toBeInTheDocument();
+  });
+
+  it('l’onglet Identité rend le studio de logos (3 emplacements)', async () => {
+    wrap();
+    expect(await screen.findByText('Icône carrée')).toBeInTheDocument();
+    expect(screen.getByText('Logotype horizontal')).toBeInTheDocument();
+    expect(screen.getByText(/fond sombre/i)).toBeInTheDocument();
+  });
+
+  it('viewer STAFF : page réservée aux administrateurs, aucun fetch club', async () => {
+    wrap('STAFF');
+    expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+    expect(api.adminGetClub).not.toHaveBeenCalled();
   });
 
   it('switches tabs and reflects the active tab in the URL', async () => {

@@ -5,7 +5,7 @@ import { Member } from './api';
 // minuscules + suppression des accents, pour une recherche tolérante (« benoit » trouve « Benoît »)
 export const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-export type MemberSeg = 'all' | 'subs' | 'staff' | 'watch' | 'blocked';
+export type MemberSeg = 'all' | 'subs' | 'staff' | 'coach' | 'watch' | 'blocked';
 export type MemberSort = 'name' | 'recent' | 'activity';
 
 /** Libellé du rôle back-office (partagé liste / panneau / CSV). */
@@ -18,6 +18,7 @@ const inSeg = (m: Member, seg: MemberSeg): boolean => {
   switch (seg) {
     case 'subs': return !!m.hasActiveSubscription; // « Abonnés » = forfait actif géré (pas le flag booking-window)
     case 'staff': return m.staffRole != null;
+    case 'coach': return !!m.isCoach;
     case 'watch': return !!m.watch;
     case 'blocked': return m.status === 'BLOCKED';
     default: return true;
@@ -37,11 +38,12 @@ export function filterMembers(members: Member[], query: string, seg: MemberSeg):
 
 /** Compteurs par segment (sur l'ensemble donné — typiquement déjà filtré par la recherche). */
 export function segCounts(members: Member[]): Record<MemberSeg, number> {
-  const c: Record<MemberSeg, number> = { all: 0, subs: 0, staff: 0, watch: 0, blocked: 0 };
+  const c: Record<MemberSeg, number> = { all: 0, subs: 0, staff: 0, coach: 0, watch: 0, blocked: 0 };
   for (const m of members) {
     c.all++;
     if (m.hasActiveSubscription) c.subs++;
     if (m.staffRole != null) c.staff++;
+    if (m.isCoach) c.coach++;
     if (m.watch) c.watch++;
     if (m.status === 'BLOCKED') c.blocked++;
   }
@@ -103,7 +105,7 @@ const csvCell = (v: string): string =>
 
 const CSV_HEADERS = [
   'Prénom', 'Nom', 'Email', 'Téléphone', 'N° adhérent', 'Abonné', 'Formule',
-  'Carnet actif', 'Statut', 'Rôle', 'Niveau', 'Dernière venue', 'Membre depuis', 'À surveiller', 'Note',
+  'Carnet actif', 'Statut', 'Rôle', 'Coach', 'Niveau', 'Dernière venue', 'Membre depuis', 'À surveiller', 'Note',
 ];
 
 /** Export CSV de la liste (déjà filtrée/triée par l'appelant). BOM + `;` pour Excel FR. */
@@ -115,6 +117,7 @@ export function membersCsv(members: Member[], _nowMs: number): string {
     m.hasActivePackage ? 'Oui' : 'Non',
     m.status === 'BLOCKED' ? 'Bloqué' : 'Actif',
     m.staffRole ? STAFF_LABEL[m.staffRole] : '',
+    m.isCoach ? 'Oui' : 'Non',
     m.level ? String(m.level.level) : '',
     frDate(m.lastSeenAt),
     frDate(m.since),

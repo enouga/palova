@@ -5,9 +5,10 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 // Objets stables entre les rendus : club et router sont dans les deps du useEffect
 // de vérification des droits — une identité neuve relancerait getMyClubs à chaque rendu.
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
+let mockPathname = '/admin';
 jest.mock('next/navigation', () => ({
   useRouter: () => mockRouter,
-  usePathname: () => '/admin',
+  usePathname: () => mockPathname,
 }));
 
 jest.mock('../lib/useAuth', () => ({
@@ -17,6 +18,7 @@ jest.mock('../lib/useAuth', () => ({
 // Objets club STABLES (identité préservée entre les rendus, cf. deps du useEffect des droits).
 const clubOn = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null };
 const clubOff = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, levelSystemEnabled: false };
+const clubWithLogo = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: '/uploads/logos/demo.png' };
 const mockClubCtx: { slug: string | null; club: Record<string, unknown> | null; loading: boolean } =
   { slug: 'demo', club: clubOn as Record<string, unknown>, loading: false };
 jest.mock('../lib/ClubProvider', () => ({ useClub: () => mockClubCtx }));
@@ -53,6 +55,7 @@ describe('AdminLayout — toggle de la sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockPathname = '/admin';
     mockClubCtx.slug = 'demo'; // hôte club par défaut
     mockClubCtx.club = clubOn; // restaure le club ON par défaut (objet stable)
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
@@ -78,6 +81,13 @@ describe('AdminLayout — toggle de la sidebar', () => {
     jest.useRealTimers();
   });
 
+  it('le logo de la sidebar est en contain sur tuile blanche (pas rogné)', async () => {
+    mockClubCtx.club = clubWithLogo;
+    await wrap();
+    const img = screen.getByAltText('Club Démo') as HTMLImageElement;
+    expect(img.style.objectFit).toBe('contain');
+  });
+
   it("hôte plateforme (slug null) : redirige vers l'accueil au lieu de « Chargement… » infini", async () => {
     // Sur l'hôte plateforme, aucun slug → le club ne se chargera jamais. La garde ne doit
     // pas laisser la page tourner indéfiniment : elle renvoie à l'accueil.
@@ -87,6 +97,22 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
     // On n'atteint jamais la vérification des droits (getMyClubs) sur cet hôte.
     expect(api.getMyClubs).not.toHaveBeenCalled();
+  });
+
+  it('wizard onboarding : un STAFF voit le message réservé aux admins, pas le wizard', async () => {
+    mockPathname = '/admin/onboarding';
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText(/réservée aux administrateurs/i)).toBeInTheDocument();
+    expect(screen.queryByText('Contenu admin')).not.toBeInTheDocument();
+  });
+
+  it('wizard onboarding : un ADMIN passe (enfant rendu plein écran, sans chrome admin)', async () => {
+    mockPathname = '/admin/onboarding';
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    expect(screen.getByText('Contenu admin')).toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord')).not.toBeInTheDocument(); // pas de sidebar
   });
 
   it('club OFF : pas de lien nav « Matchs »', async () => {
@@ -99,6 +125,24 @@ describe('AdminLayout — toggle de la sidebar', () => {
   it('club ON : lien nav « Matchs » présent', async () => {
     await wrap();
     expect(screen.getByText('Matchs')).toBeInTheDocument();
+  });
+
+  it('viewer STAFF : les 5 entrées de structure sont masquées + section Configuration absente', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText('Tableau de bord')).toBeInTheDocument(); // sidebar rendue
+    for (const label of ['Ressources', 'Réglages', 'Contenu & mentions', 'Offres', 'Comptabilité']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText('Configuration')).not.toBeInTheDocument(); // section devenue vide
+  });
+
+  it('viewer ADMIN : les 5 entrées de structure sont présentes', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'ADMIN' }]);
+    await wrap();
+    for (const label of ['Ressources', 'Réglages', 'Contenu & mentions', 'Offres', 'Comptabilité']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
   });
 
   it("affiche une pastille identifiant le club dans l'en-tête, même sans logo", async () => {

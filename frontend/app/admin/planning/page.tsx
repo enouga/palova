@@ -1,9 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { api, AdminResource, ClubReservation, ReservationType, OffPeakHours, Member, CreateMemberBody, Coach, LessonStudent, PaymentMethod, MemberPackage, Payment, CaissePayment, ClubAdminDetail } from '@/lib/api';
-import { capacityLabel } from '@/lib/lessons';
+import { capacityLabel, splitCoachName } from '@/lib/lessons';
 import { indexPackagesByUser } from '@/lib/packages';
 import { courtFormat, playerCount, SINGLE_COLOR } from '@/lib/courtType';
+import { Avatar } from '@/components/ui/Avatar';
+import { colorForSeed } from '@/lib/playerColors';
 import { toCents, dueCents, fmtEuros, PopoverAnchor, DEFAULT_QUICK_METHODS, QUICK_METHODS, applyOptimisticPayment, applyOptimisticRefund, PaymentIntent } from '@/lib/caisse';
 import { participantPastilles, PastillesModel } from '@/lib/caisseRegister';
 import { endTimeFrom } from '@/lib/duration';
@@ -14,6 +16,7 @@ import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PaymentInitials } from '@/components/admin/PaymentInitials';
 import { TilePaymentPopover } from '@/components/admin/planning/TilePaymentPopover';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { CoachPicker } from '@/components/admin/planning/CoachPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { CashRegister } from '@/components/admin/caisse/CashRegister';
 import { Receipt } from '@/components/admin/Receipt';
@@ -113,13 +116,16 @@ export default function AdminPlanningPage() {
   const { club } = useClub();
   const { collapsed, setCollapsed } = useAdminChrome();
   const clubId = club?.id;
-  // Étiquette d'une entrée : l'intitulé s'il existe, sinon le nom du joueur, sinon « Événement ».
+  // Étiquette d'une entrée : l'intitulé s'il existe, sinon le nom du joueur, sinon le coach
+  // pour un cours encadré (identité immédiatement lisible sur la grille), sinon « Événement ».
   const labelOf = (r: ClubReservation) =>
     r.title?.trim()
       ? r.title
       : r.user
         ? `${r.user.firstName} ${r.user.lastName}`
-        : 'Événement';
+        : r.lesson
+          ? `Cours · ${r.lesson.coach.name}`
+          : 'Événement';
   const rootRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +182,7 @@ export default function AdminPlanningPage() {
   const [createPrefill, setCreatePrefill] = useState<CreateEventPrefill | undefined>(undefined);
   const [coaches, setCoaches]               = useState<Coach[]>([]);
   const [students, setStudents]             = useState<LessonStudent[]>([]);
+  const [coachPickOpen, setCoachPickOpen]   = useState(false);   // sélecteur « Changer » de coach dans la modale
 
   // Couverture automatique par abonnement (Planning) : balaie le jour affiché avant de charger —
   // best-effort, ne bloque jamais l'encaissement manuel si ça échoue.
@@ -282,6 +289,7 @@ export default function AdminPlanningPage() {
 
   // Charge la liste des élèves quand la modale de détail s'ouvre sur un cours.
   useEffect(() => {
+    setCoachPickOpen(false);
     if (selected?.lesson?.id) {
       loadStudents(selected.lesson.id);
     } else {
@@ -544,6 +552,21 @@ export default function AdminPlanningPage() {
     setBusy(true);
     try { setError(null); await api.adminSetReservationType(clubId, selected.id, t, token); setSelected({ ...selected, type: t }); await load(); }
     catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  // Change le coach du cours ouvert (les élèves ne bougent pas) ; le pavé de la grille
+  // affiche « Cours · <coach> » → rechargement léger pour le resynchroniser.
+  const changeCoach = async (c: Coach) => {
+    if (!token || !clubId || !selected?.lesson) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminSetLessonCoach(clubId, selected.lesson.id, c.id, token);
+      setSelected({ ...selected, lesson: { ...selected.lesson, coach: { name: c.name, photoUrl: c.photoUrl } } });
+      setCoachPickOpen(false);
+      await reloadReservations();
+    } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
 
@@ -899,74 +922,36 @@ export default function AdminPlanningPage() {
               })}
             </div>
 
-            {selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 12 }}>
-                {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
-                    puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
-                    « Montant libre, options avancées » (ouvrant la modale Détails/CollectPanel) a été
-                    retiré — jugé inutile, le reçu/historique est déjà affiché en dessous dans cette
-                    page. `onOpenDetails` ne reste câblé que pour le cas due=0 (« Encaisser un
-                    montant… »). */}
-                <CashRegister
-                  reservation={selected}
-                  players={playersOf(selected)}
-                  due={dueOf(selected)}
-                  members={members}
-                  quickMethods={registerMethods}
-                  packagesByUser={packagesByUser}
-                  clubId={clubId!}
-                  slug={club?.slug ?? ''}
-                  token={token!}
-                  isDesktop={isDesktop}
-                  payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
-                  onChanged={onCollected}
-                  onOptimisticPay={(intent) => applyPaymentLocally(selected.id, intent)}
-                  onOptimisticRefund={(ids) => applyRefundLocally(selected.id, ids)}
-                  onOpenDetails={() => setDetailsOpen(true)}
-                  onCancel={() => setConfirmCancel(true)}
-                  onError={(msg) => setError(msg)}
-                />
-              </div>
-            )}
-
-            {/* Encaissements enregistrés + reçu imprimable (cohérent modale page Encaissement). */}
-            {selected.payments.length > 0 && (
-              <div style={{ marginTop: 22 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute }}>Encaissements</span>
-                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
-                </div>
-                <div>
-                  {selected.payments.map((p, i) => {
-                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
-                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
-                    return (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
-                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
-                        </span>
-                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
-                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {who
-                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {p.note || METHOD_LABEL[p.method]}</>
-                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
-                        </span>
-                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
-                        {toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && (
-                          <button type="button" disabled={busy} onClick={() => cancelPayment(p)}
-                            style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textDecoration: 'underline', padding: '0 4px' }}>annuler</button>
-                        )}
-                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* élèves (cours) */}
+            {/* cours encadré : identité du coach + élèves — AVANT l'encaissement : c'est le
+                contenu utile d'un cours (la caisse en tête reléguait les élèves sous le pli). */}
             {selected.lesson?.id && selected.status !== 'CANCELLED' && (
-              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
+                {/* Coach — identité immédiatement visible, avant la liste des élèves ; « Changer »
+                    bascule sur le CoachPicker (recherche), qui referme sur sélection réussie. */}
+                {coachPickOpen ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <CoachPicker coaches={coaches} value={null} onSelect={changeCoach} onClear={() => setCoachPickOpen(false)} />
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <Avatar
+                      firstName={splitCoachName(selected.lesson.coach.name).first}
+                      lastName={splitCoachName(selected.lesson.coach.name).last}
+                      avatarUrl={selected.lesson.coach.photoUrl}
+                      size={34}
+                      color={colorForSeed(selected.lesson.id)}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Coach</div>
+                      <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.lesson.coach.name}</div>
+                    </div>
+                    <button type="button" onClick={() => setCoachPickOpen(true)}
+                      style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '5px 10px', color: th.textMute, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                      Changer
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>
                   Élèves {capacityLabel(students.filter((s) => s.status === 'CONFIRMED').length, selected.lesson.capacity)}
                 </div>
@@ -975,6 +960,7 @@ export default function AdminPlanningPage() {
                 )}
                 {students.filter((s) => s.status !== 'CANCELLED').map((s) => (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '6px 10px', borderRadius: 9, background: th.surface2 }}>
+                    <Avatar firstName={s.firstName} lastName={s.lastName} avatarUrl={s.avatarUrl} size={26} color={colorForSeed(s.id)} />
                     <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text, flex: 1 }}>
                       {s.firstName} {s.lastName}
                       {s.status === 'WAITLISTED' && (
@@ -1021,6 +1007,85 @@ export default function AdminPlanningPage() {
                     }}
                     placeholder="+ Ajouter un élève…"
                   />
+                </div>
+              </div>
+            )}
+
+            {selected.status !== 'CANCELLED' && (selected.type === 'COURT' || dueOf(selected) > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                {/* Encaissement type « Caisse » : on sélectionne les joueurs en cliquant la ligne,
+                    puis un tap sur le moyen encaisse (optimiste + toast « Annuler »). Le lien
+                    « Montant libre, options avancées » (ouvrant la modale Détails/CollectPanel) a été
+                    retiré — jugé inutile, le reçu/historique est déjà affiché en dessous dans cette
+                    page. `onOpenDetails` ne reste câblé que pour le cas due=0 (« Encaisser un
+                    montant… »). */}
+                <CashRegister
+                  reservation={selected}
+                  players={playersOf(selected)}
+                  due={dueOf(selected)}
+                  members={members}
+                  quickMethods={registerMethods}
+                  packagesByUser={packagesByUser}
+                  clubId={clubId!}
+                  slug={club?.slug ?? ''}
+                  token={token!}
+                  isDesktop={isDesktop}
+                  payAtClubOnly={clubDetail?.payAtClubOnly ?? false}
+                  onChanged={onCollected}
+                  onOptimisticPay={(intent) => applyPaymentLocally(selected.id, intent)}
+                  onOptimisticRefund={(ids) => applyRefundLocally(selected.id, ids)}
+                  onOpenDetails={() => setDetailsOpen(true)}
+                  onCancel={() => setConfirmCancel(true)}
+                  onError={(msg) => setError(msg)}
+                />
+              </div>
+            ) : (
+              /* Rien à encaisser (cours / tournoi / événement sans prix) : pas de grande caisse
+                 (elle dupliquait l'en-tête et son gros bouton écrasait le contenu) — une rangée
+                 d'actions discrète suffit ; « Encaisser un montant… » ouvre la modale Détails. */
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => setDetailsOpen(true)}
+                  style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.text, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+                  Encaisser un montant…
+                </button>
+                <button type="button" onClick={() => setConfirmCancel(true)}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, padding: 0 }}>
+                  Annuler la réservation
+                </button>
+              </div>
+            ))}
+
+            {/* Encaissements enregistrés + reçu imprimable (cohérent modale page Encaissement). */}
+            {selected.payments.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: th.textMute }}>Encaissements</span>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Total <b style={{ color: th.text }}>{fmtEuros(selected.payments.reduce((s, p) => s + toCents(p.amount), 0))}</b></span>
+                </div>
+                <div>
+                  {selected.payments.map((p, i) => {
+                    const payer = p.participantId ? (selected.participants ?? []).find((b) => b.id === p.participantId) : null;
+                    const who = payer ? `${payer.firstName} ${payer.lastName}` : null;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 2px', borderTop: i === 0 ? 'none' : `1px solid ${th.line}` }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: th.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={METHOD_ICON[p.method]} size={16} color={th.textMute} />
+                        </span>
+                        <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14, minWidth: 62, color: th.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(toCents(p.amount))}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: th.fontUI, fontSize: 14, color: th.textMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {who
+                            ? <><span style={{ color: th.text, fontWeight: 600 }}>{who}</span> · {p.note || METHOD_LABEL[p.method]}</>
+                            : <><span style={{ color: th.textFaint }}>Réservation</span> · {p.note || METHOD_LABEL[p.method]}</>}
+                        </span>
+                        <span style={{ fontFamily: th.fontMono, fontSize: 12, color: th.textFaint }}>{fmtHM(p.createdAt, tz)}</span>
+                        {toCents(p.amount) - toCents(p.refundedAmount ?? '0') > 0 && (
+                          <button type="button" disabled={busy} onClick={() => cancelPayment(p)}
+                            style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, textDecoration: 'underline', padding: '0 4px' }}>annuler</button>
+                        )}
+                        <button type="button" onClick={() => setReceiptTarget({ payment: p, rv: selected })} style={{ border: 'none', boxShadow: `inset 0 0 0 1px ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600 }}>Reçu</button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

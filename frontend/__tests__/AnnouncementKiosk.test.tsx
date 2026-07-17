@@ -7,7 +7,7 @@ jest.mock('@/lib/api', () => ({ ...jest.requireActual('@/lib/api'), assetUrl: (p
 
 const ann = (over: Partial<Announcement>): Announcement => ({
   id: 'a1', title: 'Tournoi P100', body: 'Corps ici', linkUrl: null, imageUrl: null,
-  kind: 'INFO', validUntil: null, isPublished: true, pinned: false, createdAt: '', updatedAt: '', ...over,
+  kind: 'INFO', validUntil: null, isPublished: true, pinned: false, sortOrder: 0, createdAt: '', updatedAt: '', ...over,
 });
 const wrap = (slides: Announcement[], now: Date | null = null) =>
   render(<ThemeProvider><AnnouncementKiosk clubName="Padel Arena" slides={slides} now={now} /></ThemeProvider>);

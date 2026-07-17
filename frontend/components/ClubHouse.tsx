@@ -113,19 +113,29 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   };
 
   const now = new Date();
-  // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), épinglées d'abord.
+  // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), dans l'ordre
+  // manuel choisi par l'admin (page Annonces) — « épinglée » n'est plus qu'un badge.
   const slides = kiosqueSlides(ann, now);
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
   const showClubCard = showShowcase(presentation);
   const showOffers = !!offers && ((!hasSub && offers.plans.length > 0) || offers.packages.length > 0);
 
-  const empty = slides.length === 0 && nextEvents.length === 0 && spons.length === 0
+  // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
+  const { order } = resolveSections(club.clubHouseSections, !!token);
+  // Les annonces sont fetchées inconditionnellement : si la section kiosque est masquée elles
+  // ne s'affichent nulle part et ne doivent donc pas empêcher l'état vide (sinon page blanche).
+  const kioskVisible = order.includes('kiosk');
+
+  const empty = (!kioskVisible || slides.length === 0) && nextEvents.length === 0 && spons.length === 0
     && next.length === 0 && upcomingMatches.length === 0 && !showClubCard && !showOffers && topMonth.length < 3;
 
   const wrap = (key: string, node: React.ReactNode) => node && <div key={key} style={{ padding: '30px 20px 0' }}>{node}</div>;
 
   const sections: Record<string, React.ReactNode> = {
+    // Kiosque « À la une » : rendu dès que la section est visible — il porte lui-même son
+    // repli (« brume bleue ») quand il n'y a aucune annonce, et gère son propre bord.
+    kiosk: <AnnouncementKiosk key="kiosk" clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />,
     clubCard: showClubCard && presentation && (
       <div>
         <SectionHeader title="Le club" action={{ label: 'Découvrir →', href: '/club' }} />
@@ -160,18 +170,23 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     sponsors: spons.length > 0 && <SponsorFlipDeck key="sponsors" sponsors={spons} now={clock} />,
   };
 
-  // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
-  const { order } = resolveSections(club.clubHouseSections, !!token);
-
   return (
     <>
-      <AnnouncementKiosk clubName={club.name} slides={slides} now={clock} intervalSeconds={club.clubHouseKioskSeconds} />
-
+      {/* Invite d'action (rare : membre connecté avec un résultat en attente). Depuis que le
+          kiosque est une section repositionnable, cette bannière passe AU-DESSUS de lui —
+          choix produit assumé (une invite d'action se voit mieux en tête). Ne pas « corriger »
+          vers l'ancien ordre (kiosque puis bannière). */}
       {club.levelSystemEnabled !== false && (
         <ResultsToRecord token={token} clubSlug={club.slug} />
       )}
 
-      {order.map((k) => (k === 'sponsors' ? sections[k] : wrap(k, sections[k])))}
+      {/* Kiosque et partenaires portent leur propre bord → jamais passés à wrap().
+          Le kiosque n'a besoin d'un espacement que s'il n'est plus en tête de page. */}
+      {order.map((k, i) => {
+        if (k === 'sponsors') return sections[k];
+        if (k === 'kiosk') return <div key="kiosk" style={i > 0 ? { paddingTop: 30 } : undefined}>{sections[k]}</div>;
+        return wrap(k, sections[k]);
+      })}
 
       {empty && (
         <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>

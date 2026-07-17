@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { api, MemberHistory, MemberNote, AdminMemberLevel, UserLevel } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
+import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { Chip, BackButton, Segmented, Btn } from '@/components/ui/atoms';
@@ -72,6 +73,9 @@ export default function MemberHistoryPage() {
   // Le système de niveau peut être désactivé pour le club : on masque alors la partie
   // correction/fiabilité/historique de l'onglet Niveau (le reste de la fiche reste actif).
   const levelEnabled = club?.levelSystemEnabled !== false;
+  // Les blocs override de niveau (formulaire + données /members/:userId/level) sont réservés
+  // ADMIN côté serveur : un viewer STAFF ne doit ni les voir ni déclencher l'appel (403).
+  const admin = isClubAdmin(useAdminRole());
 
   const [data, setData] = useState<MemberHistory | null>(null);
   const [notes, setNotes] = useState<MemberNote[]>([]);
@@ -99,8 +103,9 @@ export default function MemberHistoryPage() {
       const [h, n, lvl] = await Promise.all([
         api.adminGetMemberHistory(clubId, userId, token),
         api.adminGetMemberNotes(clubId, userId, token).catch(() => [] as MemberNote[]),
-        // Niveau (override admin) — uniquement si le système de niveau est actif ; tolérant à l'échec.
-        levelEnabled
+        // Niveau (override admin) — uniquement si le système de niveau est actif ET que le
+        // viewer est admin (route requireClubMember('ADMIN')) ; tolérant à l'échec.
+        levelEnabled && admin
           ? api.adminGetMemberLevel(clubId, userId, token).catch(() => null)
           : Promise.resolve(null),
       ]);
@@ -112,7 +117,7 @@ export default function MemberHistoryPage() {
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [token, clubId, userId, levelEnabled]);
+  }, [token, clubId, userId, levelEnabled, admin]);
 
   useEffect(() => { if (ready && token && clubId && userId) load(); }, [ready, token, clubId, userId, load]);
 
@@ -351,8 +356,8 @@ export default function MemberHistoryPage() {
         {/* ───────── Niveau & jeu ───────── */}
         {tab === 'niveau' && (
           <>
-            {/* (C2) Niveau courant par sport + fiabilité — affiché seulement si le système de niveau est actif. */}
-            {levelEnabled && (
+            {/* (C2) Niveau courant par sport + fiabilité — données de la route ADMIN /level. */}
+            {levelEnabled && admin && (
               <Section title="Niveau par sport">
                 {levelEntries.length === 0 ? (
                   <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, margin: 0 }}>Aucun niveau enregistré pour ce membre.</p>
@@ -375,7 +380,7 @@ export default function MemberHistoryPage() {
             )}
 
             {/* (C2) Correction manuelle du niveau (override ADMIN 0–8) → recharge la fiche après succès. */}
-            {levelEnabled && clubId && token && (
+            {levelEnabled && admin && clubId && token && (
               <div style={{ marginTop: 14 }}>
                 <LevelOverrideForm
                   clubId={clubId}
@@ -387,8 +392,8 @@ export default function MemberHistoryPage() {
               </div>
             )}
 
-            {/* (C2) Historique des corrections (récent d'abord). */}
-            {levelEnabled && (
+            {/* (C2) Historique des corrections (récent d'abord) — données de la route ADMIN /level. */}
+            {levelEnabled && admin && (
               <Section title="Historique des corrections">
                 {adjustments.length === 0 ? (
                   <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textFaint, margin: 0 }}>Aucune correction manuelle pour l&apos;instant.</p>

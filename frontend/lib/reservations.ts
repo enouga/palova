@@ -33,3 +33,19 @@ export function quotaBites(status: MyQuotaStatus | null | undefined, offPeak: bo
   const count = offPeak ? status?.offPeak : status?.peak;
   return !!count && count.limit - count.used <= 1;
 }
+
+/**
+ * Réduit le statut de quota aux seules classes « qui mordent » (reste ≤ 1) — pour les
+ * affichages permanents (Réserver, Mes réservations) où montrer un compteur « 0/10 » en
+ * continu est du bruit. Une classe confortable est remise à null (QuotaStatus masque déjà
+ * les classes nulles) → seules les jauges tendues s'affichent, en coral au plafond.
+ * Renvoie null si aucune classe n'est tendue : la rangée entière est alors masquée.
+ * NB : ne PAS utiliser pour la jauge de BookingModal, qui reste gatée sur la classe du
+ * créneau en cours (`quotaBites(status, isOffPeak)`).
+ */
+export function tightQuotaOnly(status: MyQuotaStatus | null | undefined): MyQuotaStatus | null {
+  if (!status) return null;
+  const peak = quotaBites(status, false) ? status.peak : null;
+  const offPeak = quotaBites(status, true) ? status.offPeak : null;
+  return peak || offPeak ? { ...status, peak, offPeak } : null;
+}

@@ -874,6 +874,21 @@ describe('ReservationService', () => {
       expect(result.reservations[0].paidAmount).toBe('25.00');
     });
 
+    it('inclut le coach du cours (lesson.coach) — affiché dans la modale planning', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([
+        {
+          id: 'r1', status: 'CONFIRMED', totalPrice: 30, payments: [],
+          lesson: { id: 'lesson-1', capacity: 4, lessonKind: 'COLLECTIVE', coach: { name: 'Lucas Moreau', photoUrl: null } },
+        },
+      ] as any);
+
+      const result = await service.listClubReservations({ clubId: 'club-demo' });
+
+      expect((result.reservations[0].lesson as any).coach).toEqual({ name: 'Lucas Moreau', photoUrl: null });
+      const arg = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
+      expect(arg.include.lesson.select.coach.select).toEqual({ name: true, photoUrl: true });
+    });
+
     it('applique le filtre de jour quand date est fournie', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([] as any);
 
@@ -1448,6 +1463,23 @@ describe('ReservationService', () => {
       prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-1', userId: 'autre', kind: 'ENTRIES' } as any);
       await expect(service.addPayment({ reservationId: 'res-1', clubId: 'club-1', amount: 12, method: 'PACK_CREDIT', sourcePackageId: 'pkg-1', participantId: 'pp1' }))
         .rejects.toThrow('PACKAGE_NOT_FOUND');
+    });
+  });
+
+  describe('loadClubReservation (relecture après mutation) — lesson.coach', () => {
+    it('inclut le coach dans la sélection lesson et le restitue', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', resource: { clubId: 'club-1', price: 25, offPeakPrice: null },
+        payments: [], participants: [],
+        lesson: { id: 'lesson-1', capacity: 4, lessonKind: 'COLLECTIVE', coach: { name: 'Lucas Moreau', photoUrl: null } },
+      } as any);
+      prismaMock.club.findUniqueOrThrow.mockResolvedValue({ timezone: 'Europe/Paris', offPeakHours: null } as any);
+
+      const result = await (service as any).loadClubReservation('res-1', 'club-1');
+
+      expect((result.lesson as any)?.coach).toEqual({ name: 'Lucas Moreau', photoUrl: null });
+      const arg = (prismaMock.reservation.findUnique as jest.Mock).mock.calls[0][0];
+      expect(arg.include.lesson.select.coach.select).toEqual({ name: true, photoUrl: true });
     });
   });
 

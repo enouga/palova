@@ -71,14 +71,14 @@ export function decorateBodyHtml(html: string, accent: string): string {
 
 /** Brand email d'un club (logo en URL absolue, coordonnées pour le pied de page, repli Palova). */
 export function brandFromClub(club: {
-  name: string; logoUrl: string | null; accentColor: string;
+  name: string; logoUrl: string | null; logoWideUrl?: string | null; accentColor: string;
   slug?: string | null; address?: string | null; city?: string | null;
   contactPhone?: string | null; contactEmail?: string | null;
 }): Brand {
   const address = [club.address, club.city].filter(Boolean).join(', ');
   return {
     name: club.name || PALOVA_BRAND.name,
-    logoUrl: absoluteAsset(club.logoUrl),
+    logoUrl: absoluteAsset(club.logoWideUrl ?? club.logoUrl),
     accentColor: club.accentColor || PALOVA_BRAND.accentColor,
     address: address || null,
     phone: club.contactPhone || null,

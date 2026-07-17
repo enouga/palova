@@ -1,4 +1,9 @@
-import { Announcement, ClubHouseSectionKey, ClubHouseSectionSetting, Sponsor, Tournament } from '@/lib/api';
+import { Announcement, AnnouncementKind, ClubHouseSectionKey, ClubHouseSectionSetting, Sponsor, Tournament } from '@/lib/api';
+
+/** Libellés des types d'annonce (admin : page Annonces + studio). */
+export const ANNOUNCEMENT_KIND_LABEL: Record<AnnouncementKind, string> = {
+  INFO: 'Info', OFFER: 'Offre', TOURNAMENT: 'Tournoi', EVENT: 'Event',
+};
 
 /** Date du jour (clé YYYY-MM-DD) — même convention que ClubReserve. */
 export function todayISO(now = new Date()): string {
@@ -18,7 +23,7 @@ export function announcementExpired(a: Pick<Announcement, 'validUntil'>, now: Da
 }
 
 /** Diapos du kiosque « À la une » : toutes les annonces actives (avec ou sans image),
- *  ordre de l'API conservé (épinglées d'abord), plafond 6. */
+ *  ordre de l'API conservé (= l'ordre manuel choisi par l'admin), plafond 6. */
 export function kiosqueSlides(anns: Announcement[], now: Date): Announcement[] {
   return anns.filter((a) => !announcementExpired(a, now)).slice(0, 6);
 }
@@ -48,11 +53,12 @@ export function tournamentPlacesLabel(t: Tournament): { text: string; urgent: bo
 
 // --- Sections configurables du Club-house (miroir écriture : backend normalizeClubHouseSections) ---
 
-/** Toutes les clés de sections. */
-export const SECTION_KEYS: ClubHouseSectionKey[] = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'];
+/** Toutes les clés de sections. `kiosk` = le kiosque « À la une » (les annonces). */
+export const SECTION_KEYS: ClubHouseSectionKey[] = ['kiosk', 'matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'];
 
 /** Libellés admin des sections réordonnables (l'ordre ici = ordre par défaut membre). */
 export const SECTION_DEFS: { key: ClubHouseSectionKey; label: string; hint?: string }[] = [
+  { key: 'kiosk', label: 'À la une', hint: 'Vos annonces (kiosque) · défilement réglable' },
   { key: 'matches', label: 'Ça joue bientôt', hint: 'Parties ouvertes qui cherchent des joueurs' },
   { key: 'agenda', label: 'Prochains events & vos réservations' },
   { key: 'top', label: 'Top du mois', hint: 'Podium des victoires du mois' },
@@ -61,12 +67,14 @@ export const SECTION_DEFS: { key: ClubHouseSectionKey; label: string; hint?: str
   { key: 'sponsors', label: 'Partenaires', hint: 'Rivière de logos' },
 ];
 
-const MEMBER_ORDER: ClubHouseSectionKey[] = ['matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'];
-const VISITOR_ORDER: ClubHouseSectionKey[] = ['matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors'];
+const MEMBER_ORDER: ClubHouseSectionKey[] = ['kiosk', 'matches', 'agenda', 'top', 'offers', 'clubCard', 'sponsors'];
+const VISITOR_ORDER: ClubHouseSectionKey[] = ['kiosk', 'matches', 'clubCard', 'agenda', 'offers', 'top', 'sponsors'];
 
 /** Ordre + visibilité effectifs. config null → ordre adaptatif historique (visiteur/membre) ;
  *  sinon la config s'applique à tous. Clé inconnue ignorée, clé connue absente ajoutée en
- *  fin visible (une section livrée après la sauvegarde de la config s'affiche quand même). */
+ *  fin visible (une section livrée après la sauvegarde de la config s'affiche quand même) —
+ *  SAUF `kiosk`, ajouté EN TÊTE quand il manque (config antérieure à la clé : le kiosque
+ *  restait en haut). Miroir : backend normalizeClubHouseSections. */
 export function resolveSections(
   config: ClubHouseSectionSetting[] | null | undefined,
   isMember: boolean,
@@ -82,6 +90,8 @@ export function resolveSections(
     seen.add(key);
     if (e.visible !== false) order.push(key);
   }
+  // Kiosque absent de la config → en tête (et visible) ; s'il y figure, sa position/visibilité gagnent.
+  if (!seen.has('kiosk')) { seen.add('kiosk'); order.unshift('kiosk'); }
   for (const key of SECTION_KEYS) {
     if (!seen.has(key)) order.push(key);
   }
@@ -96,7 +106,7 @@ export function hiddenSectionKeys(config: ClubHouseSectionSetting[] | null | und
   return hidden;
 }
 
-/** Liste complète (6 entrées) pour l'éditeur admin : config complétée ; null → défaut membre. */
+/** Liste complète (7 entrées) pour l'éditeur admin : config complétée ; null → défaut membre. */
 export function fullSectionSettings(config: ClubHouseSectionSetting[] | null | undefined): ClubHouseSectionSetting[] {
   if (!Array.isArray(config) || config.length === 0) {
     return MEMBER_ORDER.map((key) => ({ key, visible: true }));
@@ -109,6 +119,8 @@ export function fullSectionSettings(config: ClubHouseSectionSetting[] | null | u
     seen.add(key);
     out.push({ key, visible: e.visible !== false });
   }
+  // Kiosque absent de la config → en tête, visible (miroir de resolveSections / backend).
+  if (!seen.has('kiosk')) { seen.add('kiosk'); out.unshift({ key: 'kiosk', visible: true }); }
   for (const key of SECTION_KEYS) if (!seen.has(key)) out.push({ key, visible: true });
   return out;
 }

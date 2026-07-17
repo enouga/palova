@@ -2,9 +2,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, MatchToRecord } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
-import { Icon } from '@/components/ui/Icon';
+import { colorForSeed } from '@/lib/playerColors';
+import { Avatar } from '@/components/ui/Avatar';
+import { Chip } from '@/components/ui/atoms';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
+import { teamRows, teamLabel } from '@/lib/resultsToRecord';
 
 function fmtWhen(iso: string, tz: string): string {
   const date = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(iso));
@@ -12,9 +14,9 @@ function fmtWhen(iso: string, tz: string): string {
   return `${date} · ${hour}`;
 }
 
-// Prompt personnel « Résultat à saisir » : liste les matchs padel joués sans résultat et
-// ouvre la modale de saisie avec les équipes pré-remplies. Rendu null si rien à saisir.
-// `clubSlug` restreint au club courant ; `onRecorded` laisse la surface parente se rafraîchir.
+// Prompt personnel « Résultats à saisir » : UNE carte, une ligne fine par match padel joué sans
+// résultat. Le clic « Saisir » ouvre la feuille de saisie avec les équipes pré-remplies.
+// Rendu null si rien à saisir. `clubSlug` restreint au club courant ; `onRecorded` rafraîchit le parent.
 export function ResultsToRecord({ token, clubSlug, onRecorded }: {
   token: string | null;
   clubSlug?: string;
@@ -35,28 +37,68 @@ export function ResultsToRecord({ token, clubSlug, onRecorded }: {
 
   if (!token || rows.length === 0) return null;
 
-  const tint = (hex: string) => (th.mode === 'floodlit' ? `${hex}1f` : `${hex}55`);
+  const kicker = {
+    fontFamily: th.fontUI, fontSize: 10.5, letterSpacing: '2.2px',
+    textTransform: 'uppercase' as const, fontWeight: 700, color: th.textMute,
+  };
 
   return (
     <div style={{ padding: '18px 20px 0' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {rows.map((m) => (
-          <div key={m.reservationId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: th.surface, borderRadius: 16, padding: 14, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: tint(ACCENTS.emerald), flexShrink: 0 }}>
-              <Icon name="trophy" size={20} color={ACCENTS.emerald} />
-            </span>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text }}>Résultat à saisir</div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {m.resourceName} · {fmtWhen(m.startTime, m.club.timezone)}
+      <div style={{ background: th.surface, borderRadius: 18, boxShadow: th.shadow, overflow: 'hidden' }}>
+        <div style={{ padding: '13px 18px 11px' }}>
+          <span style={kicker}>
+            {rows.length > 1 ? `Résultats à saisir · ${rows.length}` : 'Résultat à saisir'}
+          </span>
+        </div>
+
+        {rows.map((m) => {
+          const [team1, team2] = teamRows(m.players);
+          const avatars = [...team1, ...team2];
+          return (
+            <div key={m.reservationId} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '11px 18px', borderTop: `1px solid ${th.line}`,
+            }}>
+              <span style={{ display: 'flex', flexShrink: 0 }}>
+                {avatars.map((p, i) => (
+                  <span key={p.userId} style={{
+                    marginLeft: i === 0 ? 0 : -7, borderRadius: '50%',
+                    border: `2px solid ${th.surface}`, display: 'flex', flexShrink: 0,
+                  }}>
+                    <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={p.avatarUrl} size={26} color={colorForSeed(p.userId)} />
+                  </span>
+                ))}
+              </span>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  <span>{teamLabel(team1, m.players)}</span>
+                  <span style={{ color: th.textFaint, fontWeight: 600, fontSize: 11.5, margin: '0 6px' }}>vs</span>
+                  <span>{teamLabel(team2, m.players)}</span>
+                </div>
+                <div style={{
+                  fontFamily: th.fontMono, fontSize: 11, color: th.textMute, marginTop: 2,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {m.resourceName} · {fmtWhen(m.startTime, m.club.timezone)}
+                </div>
               </div>
+
+              {m.competitive === false && <Chip tone="line">Amicale</Chip>}
+
+              <button type="button" onClick={() => setRecordingFor(m)} style={{
+                flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 99,
+                padding: '8px 16px', background: th.accent, color: th.onAccent,
+                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
+              }}>
+                Saisir
+              </button>
             </div>
-            <button type="button" onClick={() => setRecordingFor(m)}
-              style={{ flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 10, padding: '8px 14px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
-              Saisir
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {recordingFor && token && (
