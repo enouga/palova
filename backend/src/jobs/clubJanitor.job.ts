@@ -1,9 +1,9 @@
 import cron from 'node-cron';
 import { prisma } from '../db/prisma';
 import { sendMail } from '../email/mailer';
-import { buildClubSetupReminderEmail, buildClubAutoSuspendedEmail } from '../email/templates/clubLifecycle';
+import { buildClubSetupReminderEmail, buildClubAutoSuspendedEmail, buildClubAutoSuspendedAdminEmail } from '../email/templates/clubLifecycle';
 import { PALOVA_BRAND } from '../email/templates/layout';
-import { clubAppUrl } from '../email/links';
+import { clubAppUrl, platformAsset } from '../email/links';
 
 export const REMINDER_DAYS = 15; // relance : club sans terrain depuis 15 j
 export const SUSPEND_DAYS = 30;  // suspension : depuis 30 j ET relancé il y a ≥ 7 j
@@ -45,6 +45,14 @@ export async function runClubJanitor(now: Date): Promise<void> {
           const mail = buildClubAutoSuspendedEmail({ clubName: club.name, adminUrl, brand: PALOVA_BRAND });
           await sendMail({ to: ownerEmail, subject: mail.subject, html: mail.html, text: mail.text });
         }
+        const admins = await prisma.user.findMany({ where: { isSuperAdmin: true, deletedAt: null }, select: { email: true } });
+        const adminMail = buildClubAutoSuspendedAdminEmail({ clubName: club.name, clubsUrl: platformAsset('/superadmin/clubs'), brand: PALOVA_BRAND });
+        await Promise.all(
+          admins.map((a) => a.email)
+            .filter((e): e is string => !!e)
+            .map((to) => sendMail({ to, subject: adminMail.subject, html: adminMail.html, text: adminMail.text })
+              .catch((err) => console.error('[janitor] email superadmin échoué pour', to, (err as Error).message))),
+        );
         continue;
       }
       // Relance : vieux de 15 j et jamais relancé.

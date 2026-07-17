@@ -74,3 +74,21 @@ export function buildClubAutoSuspendedEmail(i: ClubOwnerEmailInput): BuiltEmail 
   ].join('\n');
   return { subject, html, text };
 }
+
+export interface ClubAdminSuspendedEmailInput { clubName: string; clubsUrl: string; brand: Brand }
+
+/** Info aux superadmins : un club fantôme a été auto-suspendu faute de terrain (J+30). */
+export function buildClubAutoSuspendedAdminEmail(i: ClubAdminSuspendedEmailInput): BuiltEmail {
+  const subject = `Club mis en veille automatiquement : ${i.clubName}`;
+  const introHtml = `<p style="margin:0;">Le club <strong>${escapeHtml(i.clubName)}</strong> a été mis en veille automatiquement : aucun terrain configuré 30 jours après sa création.</p>`;
+  const html = renderLayout({
+    brand: i.brand, preheader: subject, heading: 'Club auto-suspendu',
+    introHtml, ctaLabel: 'Voir les clubs', ctaUrl: i.clubsUrl,
+  });
+  const text = [
+    'Club auto-suspendu', '',
+    `${i.clubName} a été mis en veille automatiquement (aucun terrain configuré 30 jours après sa création).`,
+    '', `Voir les clubs : ${i.clubsUrl}`,
+  ].join('\n');
+  return { subject, html, text };
+}

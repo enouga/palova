@@ -1,5 +1,5 @@
 import { PALOVA_BRAND } from '../templates/layout';
-import { buildNewClubEmail, buildClubSetupReminderEmail, buildClubAutoSuspendedEmail } from '../templates/clubLifecycle';
+import { buildNewClubEmail, buildClubSetupReminderEmail, buildClubAutoSuspendedEmail, buildClubAutoSuspendedAdminEmail } from '../templates/clubLifecycle';
 
 describe('clubLifecycle emails', () => {
   it('buildNewClubEmail : sujet + nom club + badge vérifié + échappement', () => {
@@ -34,5 +34,13 @@ describe('clubLifecycle emails', () => {
     const m = buildClubAutoSuspendedEmail({ clubName: 'Mon Club', adminUrl: 'https://c.palova.fr/admin', brand: PALOVA_BRAND });
     expect(m.subject.toLowerCase()).toContain('veille');
     expect(m.text).toContain('Mon Club');
+  });
+
+  it('buildClubAutoSuspendedAdminEmail : informe le superadmin de la mise en veille', () => {
+    const m = buildClubAutoSuspendedAdminEmail({ clubName: 'Club Test', clubsUrl: 'https://palova.fr/superadmin/clubs', brand: PALOVA_BRAND });
+    expect(m.subject.toLowerCase()).toContain('veille');
+    expect(m.subject).toContain('Club Test');
+    expect(m.html).toContain('https://palova.fr/superadmin/clubs');
+    expect(m.text).toContain('Club Test');
   });
 });

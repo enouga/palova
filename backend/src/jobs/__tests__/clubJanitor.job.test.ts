@@ -39,6 +39,18 @@ describe('runClubJanitor', () => {
     }));
   });
 
+  it('informe les superadmins par email lors de la suspension', async () => {
+    prismaMock.user.findMany.mockResolvedValue([{ email: 'super@palova.fr' }] as any);
+    prismaMock.club.findMany.mockResolvedValue([
+      { id: 'c5', slug: 's5', name: 'Club Cinq', createdAt: daysAgo(31), setupReminderSentAt: daysAgo(10), autoSuspendedAt: null,
+        members: [{ user: { email: 'o5@e.fr' } }] },
+    ] as any);
+    await runClubJanitor(now);
+    // le gérant ET le superadmin sont notifiés
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'o5@e.fr' }));
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'super@palova.fr' }));
+  });
+
   it('ne suspend pas un club relancé il y a moins de 7 j', async () => {
     prismaMock.club.findMany.mockResolvedValue([
       { id: 'c3', slug: 's3', name: 'C3', createdAt: daysAgo(31), setupReminderSentAt: daysAgo(3), autoSuspendedAt: null, members: [] },
