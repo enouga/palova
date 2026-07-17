@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import sharp from 'sharp';
 import { prisma } from '../db/prisma';
 import { SSEService } from './sse.service';
 import { notifyDirectMessage } from '../email/notifications';
 import { DM_DIR } from '../utils/uploads';
 import { assertRateLimit } from './rateLimit';
+import { reencodeImage } from '../utils/imagePipeline';
 
 const MAX_BODY = 2000;
 const PAGE_DEFAULT = 50;
@@ -306,7 +306,7 @@ export class MessagingService {
     const body = (caption ?? '').trim();
     if (body.length > MAX_BODY) throw new Error('VALIDATION_ERROR');
 
-    const { buffer: processed, ext } = await this.reencodeImage(file.buffer);
+    const { buffer: processed, ext } = await reencodeImage(file.buffer);
 
     const relPath = `${conversationId}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
     const absPath = path.join(DM_DIR, relPath);
@@ -328,27 +328,6 @@ export class MessagingService {
       throw err;
     }
     return this.finishSend(conversationId, meId, created);
-  }
-
-  /** Détecte le format RÉEL (sharp, pas le mimetype déclaré par le client), applique
-   *  l'orientation EXIF puis ré-encode SANS métadonnées (EXIF/GPS/ICC retirés par défaut),
-   *  plafonne 2048×2048 sans agrandir. Fichier corrompu / non jpeg-png-webp → VALIDATION_ERROR. */
-  private async reencodeImage(input: Buffer): Promise<{ buffer: Buffer; ext: string }> {
-    try {
-      const img = sharp(input).rotate();
-      const meta = await img.metadata();
-      if (meta.format !== 'jpeg' && meta.format !== 'png' && meta.format !== 'webp') {
-        throw new Error('VALIDATION_ERROR');
-      }
-      const resized = img.resize(2048, 2048, { fit: 'inside', withoutEnlargement: true });
-      const buffer = meta.format === 'jpeg' ? await resized.jpeg({ quality: 82 }).toBuffer()
-        : meta.format === 'webp' ? await resized.webp({ quality: 82 }).toBuffer()
-        : await resized.png().toBuffer();
-      return { buffer, ext: meta.format === 'jpeg' ? 'jpg' : meta.format };
-    } catch (err) {
-      if ((err as Error).message === 'VALIDATION_ERROR') throw err;
-      throw new Error('VALIDATION_ERROR');
-    }
   }
 
   /** Chemin absolu + mime d'une image de message, APRÈS garde participant. Anti-traversée. */

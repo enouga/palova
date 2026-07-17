@@ -2,6 +2,7 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import sharp from 'sharp';
 
 // Les fichiers uploadés vont dans un tmpdir (jamais dans le repo pendant les tests).
 jest.mock('../../utils/uploads', () => {
@@ -34,9 +35,11 @@ describe('POST /api/clubs/:clubId/admin/club-cover', () => {
     prismaMock.club.findUnique.mockResolvedValue({ coverImageUrl: null } as any);
     prismaMock.club.update.mockResolvedValue({ id: 'club-demo' } as any);
 
+    // Couverture ré-encodée via sharp (audit pré-MEP §2.3) : un entête PNG tronqué ne suffit plus.
+    const realPng = await sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 1, g: 2, b: 3 } } }).png().toBuffer();
     const res = await request(app).post(url)
       .set('Authorization', `Bearer ${token}`)
-      .attach('cover', Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'cover.png');
+      .attach('cover', realPng, 'cover.png');
 
     expect(res.status).toBe(200);
     expect(res.body.coverImageUrl).toMatch(/^\/uploads\/covers\/club-demo-\d+\.png$/);

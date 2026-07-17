@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 // Les uploads écrivent dans un tmpdir (jamais dans le dossier du repo pendant les tests).
 jest.mock('../../utils/uploads', () => {
@@ -40,8 +41,12 @@ const PROFILE = {
   autoMatchProposals: false, acceptsFriendRequests: false, acceptsDirectMessages: false,
 };
 
-// PNG 1x1 minimal (entête valide suffisante : le backend ne décode pas l'image).
-const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
+// PNG réel (l'avatar est ré-encodé via sharp — audit pré-MEP §2.3 — donc le contenu
+// doit être décodable, un entête tronqué ne suffit plus).
+let PNG: Buffer;
+beforeAll(async () => {
+  PNG = await sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
+});
 
 describe('PATCH /api/me', () => {
   it('rejette un sexe invalide (400)', async () => {
@@ -138,9 +143,11 @@ describe('POST /api/me/avatar', () => {
     expect(res.status).toBe(401);
   });
 
-  it('refuse un format non supporté (400)', async () => {
+  it('refuse un fichier dont le contenu réel n’est pas une image supportée (400)', async () => {
+    // Le mimetype déclaré par le client n'est plus source de vérité (sharp décode le
+    // contenu réel) : un fichier corrompu/non-image est rejeté quel que soit son en-tête HTTP.
     const res = await request(app).post('/api/me/avatar').set('Authorization', `Bearer ${token()}`)
-      .attach('avatar', PNG, { filename: 'a.gif', contentType: 'image/gif' });
+      .attach('avatar', Buffer.from('pas une image'), { filename: 'a.gif', contentType: 'image/gif' });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('Format');
   });

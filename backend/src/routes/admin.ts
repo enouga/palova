@@ -6,7 +6,8 @@ import { Prisma, ClubPageKind, ReservationType } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { requireClubMember, ClubScopedRequest } from '../middleware/requireClubMember';
 import { prisma } from '../db/prisma';
-import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, OFFERS_DIR, EMAIL_IMAGES_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { SPONSORS_DIR, LOGOS_DIR, COVERS_DIR, ANNOUNCEMENTS_DIR, CLUB_PHOTOS_DIR, OFFERS_DIR, EMAIL_IMAGES_DIR, ensureUploadDirs } from '../utils/uploads';
+import { reencodeImage } from '../utils/imagePipeline';
 import { ResourceService } from '../services/resource.service';
 import { ReservationService } from '../services/reservation.service';
 import { ClubService } from '../services/club.service';
@@ -632,11 +633,13 @@ router.post('/announcements/:id/image', (req: ClubScopedRequest, res: Response, 
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      if (!file) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       ensureUploadDirs();
-      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
-      await fs.promises.writeFile(path.join(ANNOUNCEMENTS_DIR, filename), file.buffer);
+      const filename = `${asString(req.params.id)}-${Date.now()}.${processed.ext}`;
+      await fs.promises.writeFile(path.join(ANNOUNCEMENTS_DIR, filename), processed.buffer);
       const ann = await announcementService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/announcements/${filename}`);
       res.json(ann);
     } catch (e) { handleError(e, res, next); }
@@ -655,13 +658,15 @@ router.post('/sponsors/logo', (req: ClubScopedRequest, res: Response, next: Next
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) {
+      if (!file) {
         return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
       }
-      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
+      const filename = `${req.membership!.clubId}-${Date.now()}.${processed.ext}`;
       ensureUploadDirs();
-      await fs.promises.writeFile(path.join(SPONSORS_DIR, filename), file.buffer);
+      await fs.promises.writeFile(path.join(SPONSORS_DIR, filename), processed.buffer);
       res.json({ logoUrl: `/uploads/sponsors/${filename}` });
     } catch (e) { handleError(e, res, next); }
   });
@@ -735,15 +740,17 @@ router.post('/club-cover', requireClubMember('ADMIN'), (req: ClubScopedRequest, 
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) {
+      if (!file) {
         return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
       }
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       const clubId = req.membership!.clubId;
       const prev = await prisma.club.findUnique({ where: { id: clubId }, select: { coverImageUrl: true } });
-      const filename = `${clubId}-${Date.now()}.${ext}`;
+      const filename = `${clubId}-${Date.now()}.${processed.ext}`;
       ensureUploadDirs();
-      await fs.promises.writeFile(path.join(COVERS_DIR, filename), file.buffer);
+      await fs.promises.writeFile(path.join(COVERS_DIR, filename), processed.buffer);
       const coverImageUrl = `/uploads/covers/${filename}`;
       await clubService.updateClub(clubId, { coverImageUrl });
       // Nettoyage best-effort de l'ancienne couverture uploadée (jamais bloquant).
@@ -925,11 +932,13 @@ router.post('/packages/templates/:id/image', requireClubMember('ADMIN'), (req: C
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      if (!file) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       ensureUploadDirs();
-      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
-      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), file.buffer);
+      const filename = `${asString(req.params.id)}-${Date.now()}.${processed.ext}`;
+      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), processed.buffer);
       const tpl = await packageService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/offers/${filename}`);
       res.json(tpl);
     } catch (e) { handleError(e, res, next); }
@@ -963,11 +972,13 @@ router.post('/subscription-plans/:id/image', requireClubMember('ADMIN'), (req: C
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      if (!file) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       ensureUploadDirs();
-      const filename = `${asString(req.params.id)}-${Date.now()}.${ext}`;
-      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), file.buffer);
+      const filename = `${asString(req.params.id)}-${Date.now()}.${processed.ext}`;
+      await fs.promises.writeFile(path.join(OFFERS_DIR, filename), processed.buffer);
       const plan = await subscriptionService.setImage(asString(req.params.id), req.membership!.clubId, `/uploads/offers/${filename}`);
       res.json(plan);
     } catch (e) { handleError(e, res, next); }
@@ -1397,11 +1408,13 @@ router.post('/emails/images', requireClubMember('STAFF'), (req: ClubScopedReques
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      if (!file) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       ensureUploadDirs();
-      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
-      await fs.promises.writeFile(path.join(EMAIL_IMAGES_DIR, filename), file.buffer);
+      const filename = `${req.membership!.clubId}-${Date.now()}.${processed.ext}`;
+      await fs.promises.writeFile(path.join(EMAIL_IMAGES_DIR, filename), processed.buffer);
       res.json({ url: `/uploads/email-images/${filename}` });
     } catch (e) { handleError(e, res, next); }
   });
@@ -1426,11 +1439,13 @@ router.post('/photos', requireClubMember('STAFF'), (req: ClubScopedRequest, res:
         return next(err as Error);
       }
       const file = req.file;
-      const ext = file && EXT_BY_MIME[file.mimetype];
-      if (!file || !ext) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      if (!file) return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
+      let processed;
+      try { processed = await reencodeImage(file.buffer); }
+      catch { return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' }); }
       ensureUploadDirs();
-      const filename = `${req.membership!.clubId}-${Date.now()}.${ext}`;
-      await fs.promises.writeFile(path.join(CLUB_PHOTOS_DIR, filename), file.buffer);
+      const filename = `${req.membership!.clubId}-${Date.now()}.${processed.ext}`;
+      await fs.promises.writeFile(path.join(CLUB_PHOTOS_DIR, filename), processed.buffer);
       const photo = await presentationService.addPhoto(req.membership!.clubId, `/uploads/club-photos/${filename}`, req.body?.caption);
       res.status(201).json(photo);
     } catch (e) { handleError(e, res, next); }

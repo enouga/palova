@@ -3,6 +3,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+import sharp from 'sharp';
 
 let listImpl = jest.fn();
 let getImpl = jest.fn();
@@ -113,8 +114,10 @@ describe('POST /emails/images', () => {
   it('200 pour STAFF : écrit le fichier et renvoie une URL /uploads/email-images/', async () => {
     prismaMock.clubMember.findUnique.mockResolvedValue({ userId: 'u1', clubId: 'club-demo', role: 'STAFF' } as any);
     const write = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined as never);
+    // Image ré-encodée via sharp (audit pré-MEP §2.3) : un entête PNG tronqué ne suffit plus.
+    const realPng = await sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 1, g: 2, b: 3 } } }).png().toBuffer();
     const res = await request(app).post(`${base}/images`).set(auth)
-      .attach('image', Buffer.from([0x89, 0x50, 0x4e, 0x47]), { filename: 'a.png', contentType: 'image/png' });
+      .attach('image', realPng, { filename: 'a.png', contentType: 'image/png' });
     expect(res.status).toBe(200);
     expect(res.body.url).toMatch(/^\/uploads\/email-images\/club-demo-\d+\.png$/);
     expect(write).toHaveBeenCalled();
