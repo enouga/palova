@@ -17,6 +17,7 @@ export interface CreateTournamentInput {
   openToWomen?: boolean;
   description?: string | null;
   contactInfo?: string | null;
+  refereeUserId?: string | null; // J/A désigné — validé serveur (assertRefereeValid), null = aucun
   startTime: string | Date;
   endTime?: string | Date | null;
   registrationDeadline: string | Date;
@@ -490,6 +491,7 @@ export class TournamentService {
     const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId }, select: { id: true } });
     if (!cs) throw new Error('CLUB_SPORT_NOT_FOUND');
     if (data.requirePrepayment) await this.assertPrepaymentAllowed(clubId, Math.round(Number((data as any).entryFee ?? 0) * 100));
+    if (data.refereeUserId !== undefined) await this.assertRefereeValid(clubId, data.refereeUserId as string | null);
     return prisma.tournament.create({ data: { clubId, clubSportId: input.clubSportId, ...data } as Prisma.TournamentUncheckedCreateInput });
   }
 
@@ -510,6 +512,7 @@ export class TournamentService {
       const fee = input.entryFee !== undefined ? Number(input.entryFee) : Number(found.entryFee);
       await this.assertPrepaymentAllowed(clubId, Math.round(fee * 100));
     }
+    if (data.refereeUserId !== undefined) await this.assertRefereeValid(clubId, data.refereeUserId as string | null);
     const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
       await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
@@ -599,6 +602,7 @@ export class TournamentService {
     if (input.openToWomen !== undefined) data.openToWomen = Boolean(input.openToWomen);
     if (input.description !== undefined) data.description = (input.description ?? '')?.toString().trim() || null;
     if (input.contactInfo !== undefined) data.contactInfo = (input.contactInfo ?? '')?.toString().trim() || null;
+    if (input.refereeUserId !== undefined) data.refereeUserId = (input.refereeUserId ?? '').toString().trim() || null;
 
     const parseDate = (v: string | Date) => { const d = new Date(v); if (isNaN(d.getTime())) throw new Error('VALIDATION_ERROR'); return d; };
     if (requireAll || input.startTime !== undefined) data.startTime = parseDate(input.startTime as string | Date);
@@ -706,6 +710,32 @@ export class TournamentService {
     if (!t || t.clubId !== clubId) throw new Error('TOURNAMENT_NOT_FOUND');
     if (t.refereeUserId !== userId) throw new Error('TOURNAMENT_NOT_YOURS');
     return t;
+  }
+
+  /**
+   * Le J/A désigné doit être un membre ACTIVE du club portant la facette. REFEREE_INVALID sinon.
+   * Sans ce contrôle, désigner un `refereeUserId` arbitraire ouvrirait l'espace J/A du club à
+   * n'importe quel User de la plateforme, non-membre compris : c'est une garde de sécurité.
+   */
+  private async assertRefereeValid(clubId: string, refereeUserId: string | null) {
+    if (!refereeUserId) return; // null = retirer le J/A, rien à vérifier
+    if (!(await this.resolveReferee(clubId, refereeUserId))) throw new Error('REFEREE_INVALID');
+  }
+
+  /**
+   * Promotion d'un binôme en attente par le J/A (sur SON tournoi). Délègue au cœur admin.
+   * Pas de verrou temporel : le J/A doit pouvoir agir PENDANT le tournoi. Les règles de
+   * deadline / tableau lancé sont portées par le cœur — on ne les redouble pas ici.
+   */
+  async refereePromoteRegistration(clubId: string, userId: string, tournamentId: string, regId: string) {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+    return this.adminPromoteRegistration(tournamentId, regId, clubId);
+  }
+
+  /** Retrait d'un binôme par le J/A (sur SON tournoi). Délègue au cœur admin. */
+  async refereeRemoveRegistration(clubId: string, userId: string, tournamentId: string, regId: string) {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+    return this.adminRemoveRegistration(tournamentId, regId, clubId);
   }
 
   /**

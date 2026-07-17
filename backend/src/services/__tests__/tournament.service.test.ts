@@ -978,3 +978,151 @@ describe('espace J/A — lecture', () => {
     expect(prismaMock.clubMembership.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('espace J/A — écriture (délégation au cœur admin)', () => {
+  let svc: TournamentService;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    svc = new TournamentService();
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'u1' } as any);
+  });
+
+  // Le J/A ne redéclare AUCUNE règle métier : il pose l'assertion de propriété puis délègue.
+  // L'assertion porte sur l'ORDRE des arguments (le J/A prend clubId en tête, le cœur en queue) :
+  // c'est le seul vrai piège de la délégation, et un remap fautif tomberait ici.
+  it('refereePromoteRegistration délègue au cœur admin', async () => {
+    const spy = jest.spyOn(svc, 'adminPromoteRegistration').mockResolvedValue({ id: 'r1' } as never);
+    await svc.refereePromoteRegistration('club-1', 'u1', 't1', 'r1');
+    expect(spy).toHaveBeenCalledWith('t1', 'r1', 'club-1');
+  });
+
+  it('refereeRemoveRegistration délègue au cœur admin', async () => {
+    const spy = jest.spyOn(svc, 'adminRemoveRegistration').mockResolvedValue({ id: 'r1' } as never);
+    await svc.refereeRemoveRegistration('club-1', 'u1', 't1', 'r1');
+    expect(spy).toHaveBeenCalledWith('t1', 'r1', 'club-1');
+  });
+
+  it('refereePromoteRegistration renvoie le résultat du cœur (pas de réécriture)', async () => {
+    jest.spyOn(svc, 'adminPromoteRegistration').mockResolvedValue({ id: 'r1', status: 'CONFIRMED' } as never);
+    await expect(svc.refereePromoteRegistration('club-1', 'u1', 't1', 'r1'))
+      .resolves.toMatchObject({ id: 'r1', status: 'CONFIRMED' });
+  });
+
+  // Kill-switch : le gate court AVANT la délégation. Si l'assertion passait après (ou pas du tout),
+  // le cœur serait appelé et le J/A d'un autre tournoi écrirait sur celui-ci.
+  it('kill-switch : un J/A sur le tournoi d’un autre ne peut pas promouvoir', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'autre' } as any);
+    const spy = jest.spyOn(svc, 'adminPromoteRegistration');
+    await expect(svc.refereePromoteRegistration('club-1', 'u1', 't1', 'r1')).rejects.toThrow('TOURNAMENT_NOT_YOURS');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('kill-switch : un J/A sur le tournoi d’un autre ne peut pas retirer un binôme', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'autre' } as any);
+    const spy = jest.spyOn(svc, 'adminRemoveRegistration');
+    await expect(svc.refereeRemoveRegistration('club-1', 'u1', 't1', 'r1')).rejects.toThrow('TOURNAMENT_NOT_YOURS');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('kill-switch : un tournoi d’un autre club est invisible (TOURNAMENT_NOT_FOUND), aucune écriture', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-2', refereeUserId: 'u1' } as any);
+    const spy = jest.spyOn(svc, 'adminRemoveRegistration');
+    await expect(svc.refereeRemoveRegistration('club-1', 'u1', 't1', 'r1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// Sans cette garde, PATCH { refereeUserId: 'nimporte-qui' } ouvrirait l'espace J/A du club à
+// n'importe quel User de la plateforme, non-membre compris. C'est une garde de sécurité.
+describe('désignation du J/A', () => {
+  let svc: TournamentService;
+  const found = { id: 't1', status: 'DRAFT', entryFee: 0, requirePrepayment: false };
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const createInput = (over: Record<string, unknown> = {}) => ({
+    clubSportId: 'cs1', name: 'Open', category: 'P100', gender: 'MEN' as const,
+    startTime: FUTURE, registrationDeadline: FUTURE, ...over,
+  });
+
+  it('updateTournament refuse un J/A qui n’a pas la facette (REFEREE_INVALID)', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: false } as any);
+    await expect(svc.updateTournament('t1', 'club-1', { refereeUserId: 'u9' })).rejects.toThrow('REFEREE_INVALID');
+    expect(prismaMock.tournament.update).not.toHaveBeenCalled(); // rien n'est écrit
+  });
+
+  it('updateTournament refuse un J/A BLOCKED, même avec la facette', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED', isReferee: true } as any);
+    await expect(svc.updateTournament('t1', 'club-1', { refereeUserId: 'u9' })).rejects.toThrow('REFEREE_INVALID');
+    expect(prismaMock.tournament.update).not.toHaveBeenCalled();
+  });
+
+  it('updateTournament refuse un non-membre du club', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.updateTournament('t1', 'club-1', { refereeUserId: 'u9' })).rejects.toThrow('REFEREE_INVALID');
+    expect(prismaMock.tournament.update).not.toHaveBeenCalled();
+  });
+
+  it('updateTournament accepte un J/A qui a la facette', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: true } as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
+    await svc.updateTournament('t1', 'club-1', { refereeUserId: 'u9' });
+    expect((prismaMock.tournament.update as jest.Mock).mock.calls[0][0].data.refereeUserId).toBe('u9');
+  });
+
+  // La facette est vérifiée dans LE club du tournoi : un J/A du club A ne doit pas pouvoir être
+  // désigné sur un tournoi du club B au prétexte qu'il est J/A quelque part.
+  it('updateTournament vérifie la facette dans le club du tournoi', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: true } as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
+    await svc.updateTournament('t1', 'club-1', { refereeUserId: 'u9' });
+    expect(prismaMock.clubMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId_clubId: { userId: 'u9', clubId: 'club-1' } } }),
+    );
+  });
+
+  it('updateTournament : null retire le J/A sans vérification', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
+    await svc.updateTournament('t1', 'club-1', { refereeUserId: null });
+    expect((prismaMock.tournament.update as jest.Mock).mock.calls[0][0].data.refereeUserId).toBeNull();
+    expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('updateTournament sans refereeUserId ne touche pas au J/A en place', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(found as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1' } as any);
+    await svc.updateTournament('t1', 'club-1', { name: 'Open P250' });
+    const data = (prismaMock.tournament.update as jest.Mock).mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('refereeUserId');
+    expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  // La garde couvre les DEUX chemins d'écriture : créer un tournoi avec un J/A bidon doit
+  // échouer comme l'éditer. Sinon le trou se rouvre à la création.
+  it('createTournament refuse un J/A qui n’a pas la facette (REFEREE_INVALID)', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: false } as any);
+    await expect(svc.createTournament('club-1', createInput({ refereeUserId: 'u9' }) as any)).rejects.toThrow('REFEREE_INVALID');
+    expect(prismaMock.tournament.create).not.toHaveBeenCalled();
+  });
+
+  it('createTournament accepte un J/A qui a la facette', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: true } as any);
+    prismaMock.tournament.create.mockResolvedValue({ id: 't1' } as any);
+    await svc.createTournament('club-1', createInput({ refereeUserId: 'u9' }) as any);
+    expect((prismaMock.tournament.create as jest.Mock).mock.calls[0][0].data.refereeUserId).toBe('u9');
+  });
+
+  it('createTournament sans J/A ne vérifie rien', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue({ id: 'cs1' } as any);
+    prismaMock.tournament.create.mockResolvedValue({ id: 't1' } as any);
+    await svc.createTournament('club-1', createInput() as any);
+    expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
+  });
+});
