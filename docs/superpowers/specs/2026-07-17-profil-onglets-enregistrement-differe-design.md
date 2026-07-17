@@ -14,6 +14,11 @@
 | Bouton par section | Infos (tél / naissance / sexe), Licence |
 | Sauvegarde optimiste immédiate | Langue, Sport préféré, Classements, Propositions de parties, Demandes d'ami, Messages privés |
 | Action dédiée | Avatar, Mot de passe, Suppression de compte, Retrait de carte, Réévaluation du niveau |
+| Local à l'appareil, rien à enregistrer | Thème (`ThemeProvider` + localStorage) — pourtant présenté comme un champ, dans la même carte que « Langue » |
+
+Le pire n'est pas la variété des régimes : c'est que **« Téléphone » et « Langue » se ressemblent trait
+pour trait et obéissent à des règles opposées**. L'utilisateur ne peut pas deviner laquelle s'applique —
+il doit tester chaque champ.
 
 Conséquence concrète : on peut éditer tél/naissance/sexe, quitter la page sans cliquer « Enregistrer »,
 et **tout perdre sans le moindre avertissement**.
@@ -26,6 +31,17 @@ même architecture sur le profil joueur.
 
 Une page à **5 onglets** (`PillTabs` + `?tab=`) et **une seule barre d'enregistrement sticky** — mêmes
 composants, même sémantique, mêmes pièges déjà documentés.
+
+## Règle
+
+> **Tout ce qui est un champ passe par la barre. Ce qui n'est pas un champ, non.**
+
+C'est la règle que `/admin/settings` applique déjà, et elle n'admet **aucune exception**. Elle répond
+directement au diagnostic ci-dessus : deux éléments qui se ressemblent ne peuvent plus obéir à des
+règles opposées, puisqu'il n'y a plus qu'une règle pour les champs.
+
+Corollaire, appliqué en §2 : **un contrôle qui ne passe pas par la barre n'a pas le droit d'être habillé
+en champ de formulaire**, sinon on recrée l'incohérence qu'on prétend supprimer.
 
 ## 1. Mécanique d'enregistrement
 
@@ -92,11 +108,15 @@ avant le clic sur Enregistrer.
 
 ### Ce qui reste hors du brouillon
 
+Rien de ce qui suit n'est un champ — la règle est donc respectée.
+
 | Quoi | Pourquoi |
 |---|---|
-| **Avatar** | Uploadé = déjà persisté. `syncProfile(patch)` met à jour baseline **et** brouillon → ne rend jamais dirty. Miroir exact de `syncImage` (logo / couverture) côté Réglages. |
-| **Thème** | Aucun état serveur (ThemeProvider + localStorage). Le différer obligerait soit à afficher « non enregistré » sur un thème déjà visible (mensonge), soit à ne pas l'appliquer avant le clic (on perd l'aperçu instantané, qui est tout l'intérêt du sélecteur). |
+| **Avatar** | C'est un sélecteur de fichier : on choisit une photo, elle part. Personne n'attend un « Enregistrer » après un `<input type=file>`, et le logo du club marche déjà exactement comme ça. Uploadé = déjà persisté : `syncProfile(patch)` met à jour baseline **et** brouillon → ne rend jamais dirty. Miroir exact de `syncImage` (logo / couverture) côté Réglages. |
 | **Actions** | Mot de passe, suppression de compte, retrait de carte, réévaluation du niveau. Ce sont des actions, pas des champs — on ne met pas « supprimer mon compte » derrière une barre d'enregistrement. Elles gardent leur bouton et leur feedback propres. |
+
+Le **thème** est traité en §2 : il n'a aucun état serveur, il ne peut donc pas passer par la barre — et
+par le corollaire de la règle, il ne peut pas rester habillé en champ. Il quitte la page.
 
 ## 2. Les 5 onglets
 
@@ -104,7 +124,7 @@ avant le clic sur Enregistrer.
 |---|---|---|
 | **Identité** | Photo, nom/prénom/email (lecture seule), téléphone, date de naissance, sexe, sport préféré, licence du club | toujours (licence : membre d'un club) |
 | **Niveau** | Badge, courbe, bilan V/D, réévaluer | `club?.levelSystemEnabled !== false` |
-| **Préférences** | Langue, thème, classements, propositions de parties, demandes d'ami, messages privés | toujours |
+| **Préférences** | Langue, classements, propositions de parties, demandes d'ami, messages privés | toujours |
 | **Portefeuille** | Soldes carnets/abos, carte enregistrée, historique des paiements | `slug && club && membership` |
 | **Sécurité** | Mot de passe, supprimer mon compte | toujours |
 
@@ -113,6 +133,26 @@ un `.sp-scroll-x`, onglet actif reflété dans l'URL via `history.replaceState`,
 valeur inconnue → `identite`.
 
 Les onglets sont **dynamiques**, exactement comme l'est déjà `navItems` aujourd'hui — pas d'onglet mort.
+
+### Le thème quitte la carte Préférences
+
+La ligne « Thème » (label + `Segmented` Clair/Sombre) est **retirée**. Elle violait le corollaire de la
+règle : contrôle immédiat, mais habillé en champ et posé juste sous « Langue » qui, elle, devient
+différée. Deux voisins identiques, deux règles — exactement l'incohérence que ce chantier supprime.
+
+Le différer n'était pas une option : le thème n'a **aucun état serveur** (`ThemeProvider` + localStorage).
+Le mettre dans la barre obligerait soit à afficher « non enregistré » sur un thème déjà visible (mensonge),
+soit à ne pas l'appliquer avant le clic — et on perdrait l'aperçu instantané, qui est tout l'intérêt du
+sélecteur.
+
+**Aucune fonctionnalité n'est perdue : la ligne est un doublon.** Le `ThemeToggle` est déjà présent dans
+l'en-tête de chaque page du profil, sur les deux types d'hôte :
+
+- hôte club → `ClubNav.tsx:206`, en-tête collant rendu par la page ;
+- hôte plateforme → en-tête propre de la page (`app/me/profile/page.tsx`, aujourd'hui ligne 324).
+
+Le thème reste donc réglable exactement là où il l'est sur toutes les autres pages de l'app — et la
+carte Préférences ne contient plus que des champs de compte, tous derrière la barre.
 
 ## 3. Fichiers
 
@@ -140,6 +180,14 @@ code mort (la page est leur seul consommateur) → supprimés. Avec eux disparai
 
 Les stubs jsdom de `IntersectionObserver` / `ResizeObserver` dans `jest.setup.ts` **restent** — ils
 servent ailleurs.
+
+Le retrait de la ligne « Thème » (§2) libère aussi, dans la page :
+
+- `mode` / `setMode` de `useTheme()` — seul `th` reste utilisé ;
+- l'import du type `ThemeMode`.
+
+En revanche `Segmented` **reste** (les bascules oui/non de Préférences s'en servent) et `ThemeToggle`
+**reste** (en-tête de l'hôte plateforme).
 
 ## 5. La seule ligne de backend
 
@@ -170,8 +218,9 @@ Identité alors qu'il vise les préférences de notification. Le test existant
 - `save()` : PATCH profil + PATCH licence en parallèle ; échec d'une seule ressource → `saveError`, pas
   de flash de succès.
 - **Régression** : une édition faite pendant que l'enregistrement est en vol n'est pas écrasée au succès.
-- Thème : bascule immédiate, ne rend jamais dirty.
 - Avatar : upload → baseline et brouillon synchronisés, ne rend jamais dirty.
+- **Règle** : l'onglet Préférences ne rend **aucun** sélecteur de thème (la ligne a quitté la carte) —
+  le `ThemeToggle` de l'en-tête reste, lui, couvert par les suites existantes.
 
 **Filets**
 - `tsc --noEmit` en gate séparé (jest + ts-jest `isolatedModules` ne type-check pas).
