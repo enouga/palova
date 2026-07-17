@@ -57,7 +57,9 @@ export default function MeCoachingPage() {
   return (
     <Screen>
       {slug && club && <ClubNav club={club} />}
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Pas de largeur par page : le ClubNav collant vit dans la colonne 1080 de Screen,
+          une largeur locale ferait sauter la barre en naviguant (cf. Screen.tsx). */}
+      <div style={{ padding: '16px 20px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 24, margin: 0, color: th.text }}>Mes cours</h1>
           <span style={{ marginLeft: 'auto' }}><ProfileMenu /></span>
