@@ -217,9 +217,12 @@ export class ClubService {
       url: platformAsset('/superadmin/clubs'),
       brand: PALOVA_BRAND,
     });
-    for (const to of recipients) {
-      await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
-    }
+    await Promise.all(
+      recipients.map((to) =>
+        sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text })
+          .catch((e) => console.error('[club] email nouveau club échoué pour', to, (e as Error).message)),
+      ),
+    );
   }
 
   /** Annuaire public : clubs actifs. `city` matche ville OU région ; `lat`/`lng` trient par distance. */
