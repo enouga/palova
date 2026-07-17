@@ -80,6 +80,56 @@ export interface RefereeTournamentRow {
   waitlistCount: number;
 }
 
+export type MarkTablePresence = 'UNSEEN' | 'PRESENT' | 'ABSENT';
+
+/** Un joueur vu à la table de marque. `userId` volontairement présent (cf. bloc « Table de marque »). */
+export interface MarkTablePlayer {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null;
+  presence: MarkTablePresence;
+}
+
+export interface MarkTableRegistration {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  waitlistPosition: number | null;
+  captain: MarkTablePlayer;
+  partner: MarkTablePlayer;
+}
+
+export interface MarkTableBenchEntry {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null;
+  source: 'FORFEIT' | 'WALK_IN';
+}
+
+export interface MarkTableLogEntry {
+  id: string;
+  kind: string;
+  data: Record<string, unknown>;
+  actorName: string | null;
+  createdAt: Date;
+}
+
+export interface MarkTableView {
+  tournament: { id: string; name: string; category: string; gender: string; maxTeams: number | null };
+  registrations: MarkTableRegistration[];
+  bench: MarkTableBenchEntry[];
+  recentLog: MarkTableLogEntry[];
+  pointedCount: number;
+  totalSlots: number;
+  waitlistCount: number;
+}
+
 /** Erreur métier avec, optionnellement, le joueur concerné ("self" | "partner"). */
 function appError(code: string, subject?: 'self' | 'partner'): Error {
   return Object.assign(new Error(code), subject ? { subject } : {});
@@ -868,5 +918,170 @@ export class TournamentService {
       captain: toPlayer(r.captain, r.captainUserId),
       partner: toPlayer(r.partner, r.partnerUserId),
     }));
+  }
+
+  // ─────────────────────────────────────────────────────────── Table de marque
+  // Gate = fait de la ROUTE appelante (resolveReferee+propriété côté J/A, STAFF côté admin).
+  // Les méthodes ci-dessous sont le CŒUR PARTAGÉ, appelé par les deux portes.
+
+  /** Vérifie que le tournoi appartient au club. TOURNAMENT_NOT_FOUND sinon. */
+  private async assertTournamentInClub(clubId: string, tournamentId: string) {
+    const t = await prisma.tournament.findFirst({
+      where: { id: tournamentId, clubId },
+      select: { id: true, name: true, category: true, gender: true, maxTeams: true },
+    });
+    if (!t) throw new Error('TOURNAMENT_NOT_FOUND');
+    return t;
+  }
+
+  /**
+   * `userId` exposé ici (contrairement à `refereeListRegistrations`, en lecture seule) :
+   * cette vue sert à AGIR (remplacer/apparier), il faut un identifiant à renvoyer au
+   * serveur. Jamais atteignable sans être J/A du tournoi ou STAFF du club — jamais public.
+   */
+  async listMarkTable(clubId: string, tournamentId: string): Promise<MarkTableView> {
+    const t = await this.assertTournamentInClub(clubId, tournamentId);
+
+    const registrations = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true, status: true, paymentStatus: true,
+        captainUserId: true, partnerUserId: true, captainPresence: true, partnerPresence: true,
+        captain: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+        partner: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+      },
+    });
+    const bench = await prisma.tournamentBenchEntry.findMany({
+      where: { tournamentId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        userId: true, source: true,
+        user: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+      },
+    });
+    const recentLogRows = await prisma.tournamentLogEntry.findMany({
+      where: { tournamentId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { id: true, kind: true, data: true, createdAt: true, actor: { select: { firstName: true, lastName: true } } },
+    });
+
+    const userIds = [...new Set([
+      ...registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]),
+      ...bench.map((b) => b.userId),
+    ])];
+    const memberships = userIds.length
+      ? await prisma.clubMembership.findMany({ where: { clubId, userId: { in: userIds } }, select: { userId: true, membershipNo: true } })
+      : [];
+    const licenseByUser = new Map(memberships.map((m) => [m.userId, m.membershipNo]));
+
+    const toPlayer = (u: { firstName: string; lastName: string; avatarUrl: string | null; phone: string | null }, userId: string, presence: MarkTablePresence): MarkTablePlayer => ({
+      userId, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl, phone: u.phone,
+      membershipNo: licenseByUser.get(userId) ?? null, presence,
+    });
+
+    let waitlistIdx = 0;
+    let pointedCount = 0;
+    const mapped = registrations.map((r) => {
+      if (r.captainPresence === 'PRESENT') pointedCount++;
+      if (r.partnerPresence === 'PRESENT') pointedCount++;
+      return {
+        id: r.id, status: r.status, paymentStatus: r.paymentStatus,
+        waitlistPosition: r.status === 'WAITLISTED' ? ++waitlistIdx : null,
+        captain: toPlayer(r.captain, r.captainUserId, r.captainPresence),
+        partner: toPlayer(r.partner, r.partnerUserId, r.partnerPresence),
+      };
+    });
+
+    return {
+      tournament: t,
+      registrations: mapped,
+      bench: bench.map((b) => ({
+        userId: b.userId, firstName: b.user.firstName, lastName: b.user.lastName,
+        avatarUrl: b.user.avatarUrl, phone: b.user.phone,
+        membershipNo: licenseByUser.get(b.userId) ?? null, source: b.source,
+      })),
+      recentLog: recentLogRows.map((l) => ({
+        id: l.id, kind: l.kind, data: l.data as Record<string, unknown>, createdAt: l.createdAt,
+        actorName: l.actor ? `${l.actor.firstName} ${l.actor.lastName}`.trim() : null,
+      })),
+      pointedCount,
+      totalSlots: mapped.filter((r) => r.status === 'CONFIRMED').length * 2,
+      waitlistCount: mapped.filter((r) => r.status === 'WAITLISTED').length,
+    };
+  }
+
+  /** Journal complet du tournoi, plus récent d'abord. Pas de curseur (v1 : cap simple). */
+  async listMarkTableLog(clubId: string, tournamentId: string): Promise<MarkTableLogEntry[]> {
+    await this.assertTournamentInClub(clubId, tournamentId);
+    const rows = await prisma.tournamentLogEntry.findMany({
+      where: { tournamentId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { id: true, kind: true, data: true, createdAt: true, actor: { select: { firstName: true, lastName: true } } },
+    });
+    return rows.map((l) => ({
+      id: l.id, kind: l.kind, data: l.data as Record<string, unknown>, createdAt: l.createdAt,
+      actorName: l.actor ? `${l.actor.firstName} ${l.actor.lastName}`.trim() : null,
+    }));
+  }
+
+  /** Écrit une entrée de journal. À appeler DANS la transaction de l'acte qu'elle documente. */
+  private async writeLog(tx: Prisma.TransactionClient, tournamentId: string, actorUserId: string, kind: string, data: Record<string, unknown>) {
+    await tx.tournamentLogEntry.create({ data: { tournamentId, actorUserId, kind, data: data as Prisma.InputJsonValue } });
+  }
+
+  /** Pointage d'un joueur. Pas de gate temporel — pointer se fait à tout moment. */
+  async setPresence(clubId: string, tournamentId: string, regId: string, side: 'CAPTAIN' | 'PARTNER', presence: MarkTablePresence, actorUserId: string) {
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { id: regId, tournamentId, tournament: { clubId }, status: { not: 'CANCELLED' } },
+      select: { id: true, captainUserId: true, partnerUserId: true, captain: { select: { firstName: true, lastName: true } }, partner: { select: { firstName: true, lastName: true } } },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    const player = side === 'CAPTAIN' ? reg.captain : reg.partner;
+    await prisma.$transaction(async (tx) => {
+      await tx.tournamentRegistration.update({
+        where: { id: regId },
+        data: side === 'CAPTAIN' ? { captainPresence: presence } : { partnerPresence: presence },
+      });
+      await this.writeLog(tx, tournamentId, actorUserId, 'CHECK_IN', {
+        playerName: `${player.firstName} ${player.lastName}`.trim(), presence,
+      });
+    });
+  }
+
+  /** Promotion depuis la table de marque : délègue au cœur admin, puis journalise. */
+  async markTablePromote(clubId: string, tournamentId: string, regId: string, actorUserId: string) {
+    const promoted = await this.adminPromoteRegistration(tournamentId, regId, clubId);
+    // `adminPromoteRegistration` renvoie nullable côté paiement (re-findUnique après une promotion
+    // concurrente qui aurait pu annuler la place entretemps) — cas résiduel, on journalise seulement si trouvé.
+    const full = promoted
+      ? await prisma.tournamentRegistration.findUnique({
+          where: { id: promoted.id },
+          select: { captain: { select: { firstName: true, lastName: true } }, partner: { select: { firstName: true, lastName: true } } },
+        })
+      : null;
+    if (full) {
+      await prisma.tournamentLogEntry.create({
+        data: { tournamentId, actorUserId, kind: 'PROMOTE', data: { nameA: `${full.captain.firstName} ${full.captain.lastName}`.trim(), nameB: `${full.partner.firstName} ${full.partner.lastName}`.trim() } as Prisma.InputJsonValue },
+      });
+    }
+    return promoted;
+  }
+
+  /** Retrait depuis la table de marque : délègue au cœur admin, puis journalise. */
+  async markTableRemove(clubId: string, tournamentId: string, regId: string, actorUserId: string) {
+    const before = await prisma.tournamentRegistration.findUnique({
+      where: { id: regId },
+      select: { captain: { select: { firstName: true, lastName: true } }, partner: { select: { firstName: true, lastName: true } } },
+    });
+    const removed = await this.adminRemoveRegistration(tournamentId, regId, clubId);
+    if (before) {
+      await prisma.tournamentLogEntry.create({
+        data: { tournamentId, actorUserId, kind: 'REMOVE', data: { nameA: `${before.captain.firstName} ${before.captain.lastName}`.trim(), nameB: `${before.partner.firstName} ${before.partner.lastName}`.trim() } as Prisma.InputJsonValue },
+      });
+    }
+    return removed;
   }
 }
