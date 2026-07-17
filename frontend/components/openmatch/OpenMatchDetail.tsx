@@ -17,6 +17,7 @@ import { OpenMatchModals } from '@/components/openmatch/OpenMatchModals';
 import { useOpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { matchShareUrl, matchShareText } from '@/lib/matchShare';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 // /parties/[id] — vue détaillée d'une partie ouverte (cible d'un lien partagé).
 export function OpenMatchDetail({ matchId }: { matchId: string }) {
@@ -24,6 +25,10 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
   const { th } = useTheme();
   const { token, ready } = useAuth();
   const router = useRouter();
+  // Même grille que /parties (2 colonnes dès 700px) : seule sur sa page, la carte garde
+  // la largeur qu'elle aurait à côté d'une autre — pleine largeur, le mini-terrain s'étire
+  // pour rien. Garder le breakpoint synchro avec OpenMatches.tsx.
+  const isDesktop = useIsDesktop(700);
 
   const [match, setMatch] = useState<OpenMatch | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound'>('loading');
@@ -94,7 +99,7 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
             {a.error && (
               <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{a.error}</div>
             )}
-            <div style={{ padding: '14px 20px 0' }}>
+            <div data-match-grid style={{ padding: '14px 20px 0', display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12, alignItems: 'start' }}>
               <OpenMatchCard
                 match={match} friendIds={friendIds} timezone={club.timezone} slug={club.slug} token={token ?? ''}
                 busy={a.busyId === match.id} addingOpen={a.addingId === match.id}

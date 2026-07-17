@@ -18,7 +18,9 @@ export function OpenMatchesShowcase({ matches, timezone }: { matches: OpenMatch[
   return (
     <section id="ch-matches">
       <SectionHeader title="Ça joue bientôt" action={{ label: 'Toutes les parties →', href: '/parties' }} />
-      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory' }}>
+      {/* scrollPaddingLeft = padding-left : sans lui, le snap `mandatory` cale la 1re carte sur le
+          bord du snapport dès le montage (scrollLeft 20) et mange le padding → rail désaligné du titre. */}
+      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
         {matches.slice(0, 6).map((m) => {
           const empty = matchSeats(m);
           const urgent = !m.full && m.spotsLeft === 1;

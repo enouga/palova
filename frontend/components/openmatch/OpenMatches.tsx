@@ -28,13 +28,11 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const levelEnabled = club.levelSystemEnabled !== false;
   const multiSport = clubIsMultiSport(club);
   // Écran large (le Screen fait 1080px) : cartes en grille — une carte pleine largeur
-  // étire le mini-terrain pour rien. 1 colonne en mobile, 2 dès 700px, 3 dès 1010px
-  // (viewport ≈ colonne pleine : ~1040px utiles → 3 cartes de ~340px).
+  // étire le mini-terrain pour rien. 1 colonne en mobile, 2 dès 700px.
   const isDesktop = useIsDesktop(700);
-  const isWide = useIsDesktop(1010);
   const matchGrid = {
     display: 'grid',
-    gridTemplateColumns: isWide ? '1fr 1fr 1fr' : isDesktop ? '1fr 1fr' : '1fr',
+    gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
     gap: 12,
     alignItems: 'start',
   } as const;

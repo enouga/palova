@@ -104,7 +104,8 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     <section>
       <SectionHeader title="Abonnements & offres" />
       <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
-      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory' }}>
+      {/* scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage. */}
+      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
         {plans.map((p) => (
           <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
             kindLabel="Abonnement" tint={offerTint('SUBSCRIPTION')}

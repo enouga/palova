@@ -38,10 +38,12 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
   return (
     <div>
       <div className="sp-scroll-x">
-        <table style={{ borderCollapse: 'separate', borderSpacing: 4 }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 4, width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ position: 'sticky', left: 0, background: th.bg, zIndex: 1 }} />
+              {/* width 1% + nowrap : la colonne terrain reste à sa largeur naturelle,
+                  tout le surplus de la table va aux colonnes horaires. */}
+              <th style={{ position: 'sticky', left: 0, background: th.bg, zIndex: 1, width: '1%' }} />
               {cols.map((c) => (
                 <th key={c} style={{ fontFamily: th.fontMono, fontSize: 11, fontWeight: 500,
                   color: th.textMute, padding: '0 2px', whiteSpace: 'nowrap' }}>{fmtHour(c, timezone)}</th>
@@ -53,7 +55,7 @@ export function SportGrid({ items, nowMs, timezone, slotAllowed, onSlot, sportKe
               const format = typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined;
               return (
                 <tr key={resource.id}>
-                  <td style={{ position: 'sticky', left: 0, background: th.bg, zIndex: 1, paddingRight: 10, whiteSpace: 'nowrap' }}>
+                  <td style={{ position: 'sticky', left: 0, background: th.bg, zIndex: 1, paddingRight: 10, whiteSpace: 'nowrap', width: '1%' }}>
                     <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 12.5, color: th.text }}>{resource.name}</span>
                     <span style={{ display: 'block', fontFamily: th.fontUI, fontSize: 11, color: th.textMute }}>
                       {Number(resource.price)}€

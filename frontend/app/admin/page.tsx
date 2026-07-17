@@ -69,10 +69,14 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      {club?.name && (
-        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', color: th.accent, margin: '0 0 6px' }}>{club.name}</div>
+      {club?.name ? (
+        <>
+          <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: th.accent, margin: '0 0 2px' }}>Tableau de bord</div>
+          <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, letterSpacing: -0.4, lineHeight: 1.1, margin: '0 0 6px', color: th.text }}>{club.name}</h1>
+        </>
+      ) : (
+        <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 4px', color: th.text }}>Tableau de bord</h1>
       )}
-      <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 4px', color: th.text }}>Tableau de bord</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 24px' }}>
         {new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
       </p>

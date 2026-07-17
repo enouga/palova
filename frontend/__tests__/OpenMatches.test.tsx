@@ -122,7 +122,7 @@ describe('OpenMatches', () => {
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
   });
 
-  it('mobile : les cartes restent en 1 colonne ; desktop : grille 2 colonnes ; large : grille 3 colonnes', async () => {
+  it('mobile : les cartes restent en 1 colonne ; desktop : grille 2 colonnes', async () => {
     mocked.getOpenMatches.mockResolvedValue([match(), match({ id: 'm2', resourceName: 'Terrain 2' })] as never);
     const { container, unmount } = render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
     await screen.findByText('Terrain 2');
@@ -130,7 +130,7 @@ describe('OpenMatches', () => {
     expect((container.querySelector('[data-match-grid]') as HTMLElement).style.gridTemplateColumns).toBe('1fr');
     unmount();
 
-    // Écran large : le stub renvoie matches: true pour tous les breakpoints → 3 colonnes.
+    // Desktop : le stub renvoie matches: true pour tous les breakpoints → 2 colonnes, jamais plus.
     const prev = window.matchMedia;
     (window as any).matchMedia = (q: string) => ({
       matches: true, media: q, addEventListener: () => {}, removeEventListener: () => {},
@@ -139,7 +139,7 @@ describe('OpenMatches', () => {
     try {
       const wide = render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
       await wide.findByText('Terrain 2');
-      expect((wide.container.querySelector('[data-match-grid]') as HTMLElement).style.gridTemplateColumns).toBe('1fr 1fr 1fr');
+      expect((wide.container.querySelector('[data-match-grid]') as HTMLElement).style.gridTemplateColumns).toBe('1fr 1fr');
     } finally {
       window.matchMedia = prev;
     }
