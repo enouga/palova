@@ -9,6 +9,26 @@ jest.mock('../geo.service', () => ({
 import { geocodeAddress } from '../geo.service';
 const geocodeMock = geocodeAddress as jest.Mock;
 
+jest.mock('../siret.service', () => ({
+  siretIsValidFormat: jest.fn(),
+  checkSiret: jest.fn(),
+}));
+import { siretIsValidFormat, checkSiret } from '../siret.service';
+const siretValidMock = siretIsValidFormat as jest.Mock;
+const checkSiretMock = checkSiret as jest.Mock;
+
+jest.mock('../../email/mailer', () => ({ sendMail: jest.fn() }));
+import { sendMail } from '../../email/mailer';
+const sendMailMock = sendMail as jest.Mock;
+
+// Défauts valides pour TOUTE la suite : les tests createClub pré-existants (hors bloc « garde
+// SIRET ») n'ont pas à connaître le SIRET — on les fait passer la garde silencieusement.
+beforeEach(() => {
+  siretValidMock.mockReturnValue(true);
+  checkSiretMock.mockResolvedValue({ exists: true, active: true, legalName: null, city: null });
+  sendMailMock.mockResolvedValue(undefined);
+});
+
 describe('ClubService — recherche de membres', () => {
   let service: ClubService;
   beforeEach(() => {
@@ -397,8 +417,59 @@ describe('ClubService.createClub — slugs réservés / alias', () => {
       clubMember: { create: jest.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
-    await expect(service.createClub({ ownerId: 'u1', name: 'Ancien Club' })).rejects.toThrow('SLUG_TAKEN');
+    await expect(service.createClub({ ownerId: 'u1', name: 'Ancien Club', siret: '44306184100047', ownerPhone: '0600000000' })).rejects.toThrow('SLUG_TAKEN');
     expect(tx.club.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('createClub — garde SIRET', () => {
+  let service: ClubService;
+  const base = { ownerId: 'u1', name: 'Padel Arena', siret: '44306184100047', ownerPhone: '0600000000' };
+
+  beforeEach(() => {
+    service = new ClubService();
+    geocodeMock.mockResolvedValue(null);
+    prismaMock.clubSlugAlias.findUnique.mockResolvedValue(null as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.club.create.mockResolvedValue({ id: 'c1', slug: 'padel-arena', name: 'Padel Arena', city: null } as any);
+    prismaMock.clubMember.create.mockResolvedValue({} as any);
+    prismaMock.user.update.mockResolvedValue({} as any);
+    prismaMock.user.findUnique.mockResolvedValue({ firstName: 'Jean', lastName: 'Dupont', email: 'jean@test.fr' } as any);
+    prismaMock.user.findMany.mockResolvedValue([{ email: 'admin@palova.fr' }] as any);
+  });
+
+  it('refuse un SIRET au format invalide (SIRET_INVALID)', async () => {
+    siretValidMock.mockReturnValue(false);
+    await expect(service.createClub(base)).rejects.toThrow('SIRET_INVALID');
+  });
+
+  it('refuse un téléphone gérant vide (VALIDATION_ERROR)', async () => {
+    await expect(service.createClub({ ...base, ownerPhone: '' })).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('refuse un SIRET introuvable (SIRET_NOT_FOUND)', async () => {
+    checkSiretMock.mockResolvedValue({ exists: false, active: false, legalName: null, city: null });
+    await expect(service.createClub(base)).rejects.toThrow('SIRET_NOT_FOUND');
+  });
+
+  it('refuse un établissement fermé (SIRET_INACTIVE)', async () => {
+    checkSiretMock.mockResolvedValue({ exists: true, active: false, legalName: 'ARENA SARL', city: 'Paris' });
+    await expect(service.createClub(base)).rejects.toThrow('SIRET_INACTIVE');
+  });
+
+  it('l\'API SIRET en panne (checkSiret → null) n\'empêche pas la création (club non vérifié)', async () => {
+    checkSiretMock.mockResolvedValue(null);
+    const result = await service.createClub(base);
+    expect(result).toBeDefined();
+    const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
+    expect(data.siret).toBe('44306184100047');
+    expect(data.siretVerifiedAt).toBeUndefined();
+  });
+
+  it('résout même si l\'envoi email au superadmin échoue (best-effort)', async () => {
+    sendMailMock.mockRejectedValue(new Error('SMTP down'));
+    const result = await service.createClub(base);
+    expect(result).toBeDefined();
   });
 });
 
@@ -762,7 +833,7 @@ describe('club.service — persistance du département', () => {
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
     const service = new ClubService();
-    await service.createClub({ name: 'Test', address: '1 rue', city: 'Paris', ownerId: 'u1' } as any);
+    await service.createClub({ name: 'Test', address: '1 rue', city: 'Paris', ownerId: 'u1', siret: '44306184100047', ownerPhone: '0600000000' } as any);
 
     const data = prismaMock.club.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ department: 'Paris', departmentCode: '75' });
@@ -818,7 +889,7 @@ describe('ClubService — géocodage create/update', () => {
     prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
-    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris' });
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000' });
 
     expect(geocodeMock).toHaveBeenCalledWith({ address: '12 rue X', city: 'Paris' });
     const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
@@ -831,7 +902,7 @@ describe('ClubService — géocodage create/update', () => {
     prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
-    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris' });
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000' });
 
     const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
     expect(data.latitude).toBeUndefined();

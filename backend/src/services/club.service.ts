@@ -10,6 +10,11 @@ import { namedTier, MIN_RANKED_MATCHES, LEVEL_SPORT_KEY } from './rating/level';
 import { computeResultStats, ResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
+import { siretIsValidFormat, checkSiret } from './siret.service';
+import { sendMail } from '../email/mailer';
+import { buildNewClubEmail } from '../email/templates/clubLifecycle';
+import { PALOVA_BRAND } from '../email/templates/layout';
+import { clubAppUrl, platformAsset } from '../email/links';
 
 /** Valide/normalise les plages d'heures creuses (plusieurs par jour). null → efface (tout en pleines). */
 function normalizeOffPeakHours(input: OffPeakHours | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -115,6 +120,8 @@ interface CreateClubParams {
   address?: string;
   city?: string;
   timezone?: string;
+  siret?: string;
+  ownerPhone?: string;
 }
 
 export class ClubService {
@@ -129,37 +136,89 @@ export class ClubService {
     if (!slug) throw new Error('VALIDATION_ERROR');
     if (RESERVED_SLUGS.has(slug)) throw new Error('SLUG_RESERVED');
 
+    const siret = (params.siret ?? '').trim();
+    const ownerPhone = (params.ownerPhone ?? '').trim();
+    if (!siret || !siretIsValidFormat(siret)) throw new Error('SIRET_INVALID');
+    if (!ownerPhone) throw new Error('VALIDATION_ERROR');
+
+    // Vérification API d'État HORS transaction. null = API injoignable → club « non vérifié ».
+    const siretCheck = await checkSiret(siret);
+    if (siretCheck) {
+      if (!siretCheck.exists) throw new Error('SIRET_NOT_FOUND');
+      if (!siretCheck.active) throw new Error('SIRET_INACTIVE');
+    }
+
     // Géocodage HORS transaction (réseau) ; null si indisponible.
     const geo = await geocodeAddress({ address: params.address, city: params.city });
 
+    let club;
     try {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
       // un ReadCommitted laisserait un changeClubSlug concurrent interposer un alias que
       // ce createClub lirait comme absent. Serializable détecte la dépendance de lecture.
-      return await prisma.$transaction(async (tx) => {
+      club = await prisma.$transaction(async (tx) => {
         // Un ancien alias d'un club reste réservé à vie : aucun nouveau club ne peut le revendiquer.
         // Vérification DANS la transaction pour éviter la race TOCTOU avec changeClubSlug.
         const reserved = await tx.clubSlugAlias.findUnique({ where: { slug }, select: { slug: true } });
         if (reserved) throw new Error('SLUG_TAKEN');
 
-        const club = await tx.club.create({
+        const created = await tx.club.create({
           data: {
             slug,
             name,
             address: params.address?.trim() || '',
             city: params.city?.trim() || null,
             timezone: params.timezone || 'Europe/Paris',
+            siret,
+            contactPhone: ownerPhone,
+            ...(siretCheck ? { siretVerifiedAt: new Date(), siretLegalName: siretCheck.legalName } : {}),
             ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
           },
         });
-        await tx.clubMember.create({ data: { userId: params.ownerId, clubId: club.id, role: 'OWNER' } });
-        return club;
+        await tx.clubMember.create({ data: { userId: params.ownerId, clubId: created.id, role: 'OWNER' } });
+        await tx.user.update({ where: { id: params.ownerId }, data: { phone: ownerPhone } });
+        return created;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new Error('SLUG_TAKEN');
       }
       throw err;
+    }
+
+    // Notification superadmin APRÈS commit, best-effort (un échec SMTP n'annule jamais la création).
+    await this.notifyNewClub(club, { ownerId: params.ownerId, siret, ownerPhone, verified: !!siretCheck, legalName: siretCheck?.legalName ?? null })
+      .catch((e) => console.error('[club] notif nouveau club échouée', (e as Error).message));
+
+    return club;
+  }
+
+  /** Prévient tous les superadmins qu'un club a été créé en self-service (email best-effort). */
+  private async notifyNewClub(
+    club: { id: string; slug: string; name: string; city: string | null },
+    ctx: { ownerId: string; siret: string; ownerPhone: string; verified: boolean; legalName: string | null },
+  ): Promise<void> {
+    const [owner, admins] = await Promise.all([
+      prisma.user.findUnique({ where: { id: ctx.ownerId }, select: { firstName: true, lastName: true, email: true } }),
+      prisma.user.findMany({ where: { isSuperAdmin: true, deletedAt: null }, select: { email: true } }),
+    ]);
+    const recipients = admins.map((a) => a.email).filter(Boolean) as string[];
+    if (!recipients.length) return;
+    const mail = buildNewClubEmail({
+      clubName: club.name,
+      clubUrl: clubAppUrl(club.slug),
+      city: club.city,
+      ownerName: `${owner?.firstName ?? ''} ${owner?.lastName ?? ''}`.trim(),
+      ownerEmail: owner?.email ?? '',
+      ownerPhone: ctx.ownerPhone,
+      siret: ctx.siret,
+      legalName: ctx.legalName,
+      verified: ctx.verified,
+      url: platformAsset('/superadmin/clubs'),
+      brand: PALOVA_BRAND,
+    });
+    for (const to of recipients) {
+      await sendMail({ to, subject: mail.subject, html: mail.html, text: mail.text });
     }
   }
 
