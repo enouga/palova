@@ -5,7 +5,11 @@ export function register() {
     // Suppress EPIPE errors from broken streaming connections in Next.js 16 dev mode.
     // These occur when the browser closes a connection while the server is still streaming.
     process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EPIPE') return;
+      if (err.code === 'EPIPE') return; // flux fermé côté client (streaming) — sans gravité
+      // Toute AUTRE exception non capturée = état indéfini : la logguer et sortir proprement
+      // (le gestionnaire de process / Docker redémarre) plutôt que de la laisser filer.
+      console.error('[instrumentation] uncaughtException', err);
+      process.exit(1);
     });
   }
 }

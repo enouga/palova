@@ -2,10 +2,18 @@
 # Lancement : docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 # Variables secrètes attendues dans .env.prod (cf. .env.prod.example).
 
+# Rotation des logs : borne l'espace disque consommé par les logs de chaque conteneur.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: palova
       POSTGRES_USER: palovauser
@@ -21,6 +29,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -33,6 +42,7 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    logging: *default-logging
     environment:
       DATABASE_URL: postgresql://palovauser:${POSTGRES_PASSWORD}@postgres:5432/palova
       REDIS_URL: redis://redis:6379
@@ -79,6 +89,7 @@ services:
         # Clé publique Stripe — GELÉE au build (NEXT_PUBLIC_*) → rebuild front obligatoire si elle change.
         NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       SITE_USER: ${SITE_USER}
@@ -89,6 +100,7 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"

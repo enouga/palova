@@ -87,7 +87,17 @@ app.use('/api/platform', authMiddleware, requireSuperAdmin, platformRouter);
 app.use('/api/clubs/:clubId/admin', adminRouter);
 app.use('/api/clubs',         clubsRouter);
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// Santé PROFONDE : vérifie réellement Postgres et Redis (un /health « ok » en dur
+// pouvait être vert base morte). 503 si une dépendance critique est injoignable.
+app.get('/health', async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    await redis.ping();
+    res.json({ status: 'ok' });
+  } catch (err) {
+    res.status(503).json({ status: 'degraded', error: (err as Error).message });
+  }
+});
 
 // Validation des certificats TLS « à la demande » de Caddy (sous-domaines clubs en prod).
 // Caddy appelle GET /internal/tls-check?domain=<host> ; on n'autorise que nos domaines
@@ -112,6 +122,17 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 if (require.main === module) {
+  // Filet de sécurité process (le serveur héberge aussi les crons + les flux SSE) :
+  // une promesse rejetée non gérée ne doit pas tuer le process en silence, et une
+  // exception non capturée doit le faire sortir proprement (redémarrage Docker).
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[uncaughtException]', err);
+    process.exit(1);
+  });
+
   Promise.all([prisma.$connect(), redis.connect()])
     .then(() => {
       app.listen(PORT, () => {
