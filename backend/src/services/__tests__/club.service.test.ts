@@ -183,10 +183,21 @@ describe('ClubService — mon adhésion (licence)', () => {
   let service: ClubService;
   beforeEach(() => { service = new ClubService(); });
 
-  it('getMyMembership renvoie la licence du joueur', async () => {
+  it('getMyMembership renvoie la licence et la date d’adhésion (since)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
-    prismaMock.clubMembership.findUnique.mockResolvedValue({ membershipNo: 'LIC-9', status: 'ACTIVE', isSubscriber: false } as any);
-    expect(await service.getMyMembership('demo', 'caller')).toMatchObject({ membershipNo: 'LIC-9' });
+    prismaMock.clubMembership.findUnique.mockResolvedValue({
+      membershipNo: 'LIC-9', status: 'ACTIVE', isSubscriber: false,
+      createdAt: new Date('2024-03-01T10:00:00.000Z'),
+    } as any);
+
+    const m = await service.getMyMembership('demo', 'caller');
+
+    expect(m).toEqual({
+      membershipNo: 'LIC-9', status: 'ACTIVE', isSubscriber: false,
+      since: '2024-03-01T10:00:00.000Z',
+    });
+    // `createdAt` brut ne fuite pas — le payload public expose `since`.
+    expect(m).not.toHaveProperty('createdAt');
   });
 
   it('getMyMembership lève MEMBERSHIP_REQUIRED si pas membre', async () => {

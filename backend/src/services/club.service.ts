@@ -937,16 +937,18 @@ export class ClubService {
     return this.computeClubMatchStats(club.id, userId, sport.id);
   }
 
-  /** Adhésion du joueur connecté à ce club (licence / statut). */
+  /** Adhésion du joueur connecté à ce club (licence / statut / date d'adhésion). */
   async getMyMembership(slug: string, userId: string) {
     const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
     const m = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId, clubId: club.id } },
-      select: { membershipNo: true, status: true, isSubscriber: true },
+      select: { membershipNo: true, status: true, isSubscriber: true, createdAt: true },
     });
     if (!m) throw new Error('MEMBERSHIP_REQUIRED');
-    return m;
+    // `createdAt` (= date d'adhésion) sort sous le nom métier `since`, comme Member.since.
+    const { createdAt, ...rest } = m;
+    return { ...rest, since: createdAt.toISOString() };
   }
 
   /** Le club a-t-il déjà une carte enregistrée (empreinte no-show) pour ce joueur ? */
