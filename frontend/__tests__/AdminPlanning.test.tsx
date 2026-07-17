@@ -28,6 +28,7 @@ jest.mock('../lib/api', () => ({
     adminCreateReservation: jest.fn().mockResolvedValue({ id: 'new-1' }),
     adminRescheduleReservation: jest.fn().mockResolvedValue({ id: 'rv-1' }),
     adminListLessonStudents: jest.fn().mockResolvedValue([]),
+    adminSetLessonCoach: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -172,6 +173,29 @@ describe('Cours encadré — le coach est visible (pavé + modale)', () => {
     expect(await screen.findByText('Coach')).toBeInTheDocument();
     expect(screen.getAllByText('Lucas Moreau').length).toBeGreaterThan(0);
     expect(await screen.findByText('Élèves 0 / 4')).toBeInTheDocument();
+  });
+
+  it('« Changer » ouvre le sélecteur de coach ; la sélection change le coach et referme le sélecteur', async () => {
+    (api.adminGetResources as jest.Mock).mockResolvedValue([singleCourt()]);
+    (api.adminGetReservations as jest.Mock).mockResolvedValue(resp([lessonResa()]));
+    (api.adminListCoaches as jest.Mock).mockResolvedValue([
+      { id: 'coach-1', clubId: 'club-1', name: 'Lucas Moreau', photoUrl: null, isActive: true, sortOrder: 0 },
+      { id: 'coach-2', clubId: 'club-1', name: 'Nina Petit', photoUrl: null, isActive: true, sortOrder: 1 },
+    ]);
+    (api.adminSetLessonCoach as jest.Mock).mockResolvedValue({ id: 'lesson-1', coach: { id: 'coach-2', name: 'Nina Petit', photoUrl: null } });
+    renderPage();
+    fireEvent.click((await screen.findByText('Cours · Lucas Moreau')).closest('button') as HTMLElement);
+    await screen.findByText('Élèves 0 / 4');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Changer' }));
+    const input = await screen.findByPlaceholderText('Rechercher un coach…');
+    fireEvent.focus(input);
+    fireEvent.click(await screen.findByText('Nina Petit'));
+
+    await waitFor(() => expect(api.adminSetLessonCoach).toHaveBeenCalledWith('club-1', 'lesson-1', 'coach-2', 'tok'));
+    expect(await screen.findByText('Nina Petit')).toBeInTheDocument();          // le nouveau coach s'affiche
+    expect(screen.queryByPlaceholderText('Rechercher un coach…')).toBeNull();   // repli sur la vue statique
+    expect(screen.getByRole('button', { name: 'Changer' })).toBeInTheDocument(); // à nouveau prêt à changer
   });
 
   it('cours sans montant dû : élèves AVANT un bouton « Encaisser un montant… » discret (plus de grande caisse)', async () => {

@@ -926,20 +926,31 @@ export default function AdminPlanningPage() {
                 contenu utile d'un cours (la caisse en tête reléguait les élèves sous le pli). */}
             {selected.lesson?.id && selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
-                {/* Coach — identité immédiatement visible, avant la liste des élèves. */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <Avatar
-                    firstName={splitCoachName(selected.lesson.coach.name).first}
-                    lastName={splitCoachName(selected.lesson.coach.name).last}
-                    avatarUrl={selected.lesson.coach.photoUrl}
-                    size={34}
-                    color={colorForSeed(selected.lesson.id)}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Coach</div>
-                    <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.lesson.coach.name}</div>
+                {/* Coach — identité immédiatement visible, avant la liste des élèves ; « Changer »
+                    bascule sur le CoachPicker (recherche), qui referme sur sélection réussie. */}
+                {coachPickOpen ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <CoachPicker coaches={coaches} value={null} onSelect={changeCoach} onClear={() => setCoachPickOpen(false)} />
                   </div>
-                </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <Avatar
+                      firstName={splitCoachName(selected.lesson.coach.name).first}
+                      lastName={splitCoachName(selected.lesson.coach.name).last}
+                      avatarUrl={selected.lesson.coach.photoUrl}
+                      size={34}
+                      color={colorForSeed(selected.lesson.id)}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute }}>Coach</div>
+                      <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.lesson.coach.name}</div>
+                    </div>
+                    <button type="button" onClick={() => setCoachPickOpen(true)}
+                      style={{ border: 'none', background: th.surface2, cursor: 'pointer', borderRadius: 8, padding: '5px 10px', color: th.textMute, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                      Changer
+                    </button>
+                  </div>
+                )}
 
                 <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: th.textMute, marginBottom: 8 }}>
                   Élèves {capacityLabel(students.filter((s) => s.status === 'CONFIRMED').length, selected.lesson.capacity)}
