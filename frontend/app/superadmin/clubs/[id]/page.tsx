@@ -90,6 +90,12 @@ export default function SuperAdminClubDetail() {
           Gérant{club.owners.length > 1 ? 's' : ''} : {club.owners.map((o) => o.email).join(', ')}
         </div>
       )}
+      {club.siret && (
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>
+          SIRET : {club.siret}{club.siretLegalName ? ` · ${club.siretLegalName}` : ''}
+          {' · '}{club.siretVerifiedAt ? 'vérifié' : 'non vérifié'}
+        </div>
+      )}
 
       {/* Actions club */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '16px 0 22px' }}>

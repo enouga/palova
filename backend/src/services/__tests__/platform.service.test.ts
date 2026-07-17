@@ -156,6 +156,7 @@ describe('PlatformService.getClubDetail', () => {
     prismaMock.club.findUnique.mockResolvedValue({
       id: 'club-1', slug: 'arena', name: 'Arena', city: 'Paris', address: '1 rue X',
       timezone: 'Europe/Paris', status: 'ACTIVE', createdAt: new Date('2026-01-01'),
+      siret: '44306184100047', siretLegalName: 'ARENA PADEL SAS', siretVerifiedAt: new Date('2026-01-02'),
       billingExempt: false, activeMemberCount: 200, activeMemberCountAt: new Date('2026-07-01'),
       members: [{ user: { id: 'u1', email: 'o@x.fr', firstName: 'O', lastName: 'M' } }],
       slugAliases: [{ slug: 'ancien-arena' }],
@@ -181,6 +182,9 @@ describe('PlatformService.getClubDetail', () => {
 
     const detail = await service.getClubDetail('club-1');
     expect(detail.name).toBe('Arena');
+    expect(detail.siret).toBe('44306184100047');
+    expect(detail.siretLegalName).toBe('ARENA PADEL SAS');
+    expect(detail.siretVerifiedAt).toEqual(new Date('2026-01-02'));
     expect(detail.aliases).toEqual(['ancien-arena']);
     expect(detail.owners).toEqual([{ id: 'u1', email: 'o@x.fr', firstName: 'O', lastName: 'M' }]);
     expect(detail.counts).toEqual({ adherents: 48, resources: 5, tournaments: 3, events: 2 });

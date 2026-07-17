@@ -159,6 +159,10 @@ export class PlatformService {
       timezone: club.timezone,
       status: club.status,
       createdAt: club.createdAt,
+      siret: club.siret,
+      siretLegalName: club.siretLegalName,
+      // Miroir de createdAt/activeMemberCountAt : Date brute (ou null), sérialisée en ISO par res.json().
+      siretVerifiedAt: club.siretVerifiedAt,
       aliases: club.slugAliases.map((a) => a.slug),
       owners: club.members.map((m) => m.user),
       counts: {

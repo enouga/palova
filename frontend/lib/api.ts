@@ -2705,6 +2705,9 @@ export interface PlatformClubDetail {
   timezone: string;
   status: 'ACTIVE' | 'SUSPENDED';
   createdAt: string;
+  siret: string | null;
+  siretLegalName: string | null;
+  siretVerifiedAt: string | null;
   aliases: string[];
   owners: { id: string; email: string; firstName: string; lastName: string }[];
   counts: { adherents: number; resources: number; tournaments: number; events: number };
@@ -2756,7 +2759,7 @@ export interface PlatformUsageStats {
 }
 
 export interface CreateClubByPlatformBody {
-  club: { name: string; city?: string; timezone?: string; sportKey?: string };
+  club: { name: string; city?: string; timezone?: string; sportKey?: string; siret?: string };
   owner: { firstName: string; lastName: string; email: string; password: string };
 }
 

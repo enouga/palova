@@ -13,6 +13,7 @@ export default function NewClubByPlatform() {
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [sportKey, setSportKey] = useState('padel');
+  const [siret, setSiret] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ export default function NewClubByPlatform() {
     setError(null); setLoading(true);
     try {
       await api.platformCreateClub({
-        club: { name, city: city || undefined, sportKey },
+        club: { name, city: city || undefined, sportKey, siret: siret.trim() || undefined },
         owner: { firstName, lastName, email, password },
       }, token);
       router.push('/superadmin/clubs');
@@ -35,6 +36,7 @@ export default function NewClubByPlatform() {
       setError(m === 'EMAIL_TAKEN' ? 'Cet email gérant est déjà utilisé'
         : m === 'SLUG_TAKEN' ? 'Un club avec ce nom existe déjà'
         : m === 'VALIDATION_ERROR' ? 'Champs manquants ou mot de passe trop court (8 min)'
+        : m === 'SIRET_INVALID' ? 'SIRET invalide (14 chiffres)'
         : 'Création impossible');
     } finally { setLoading(false); }
   }
@@ -47,6 +49,7 @@ export default function NewClubByPlatform() {
         <div style={{ fontSize: 12.5, color: th.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Club</div>
         <Field label="Nom du club" value={name} onChange={setName} required />
         <Field label="Ville" value={city} onChange={setCity} />
+        <Field label="SIRET (optionnel)" value={siret} onChange={setSiret} placeholder="14 chiffres" />
         <Field label="Sport principal (key)" value={sportKey} onChange={setSportKey} />
         <div style={{ fontSize: 12.5, color: th.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 8 }}>Gérant</div>
         <Field label="Prénom" value={firstName} onChange={setFirstName} required />
