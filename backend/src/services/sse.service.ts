@@ -33,7 +33,11 @@ export class SSEService {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30_000);
+    const keepAlive = setInterval(() => {
+      // Garde : un write sur socket morte peut jeter en synchrone → sans ce try/catch,
+      // l'exception non capturée ferait sortir le process (cf. handler uncaughtException).
+      try { res.write(': ping\n\n'); } catch { /* socket morte : le handler 'close' nettoiera */ }
+    }, 30_000);
 
     if (!this.clients.has(resourceId)) this.clients.set(resourceId, new Set());
     this.clients.get(resourceId)!.add(res);
@@ -77,7 +81,11 @@ export class SSEService {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30_000);
+    const keepAlive = setInterval(() => {
+      // Garde : un write sur socket morte peut jeter en synchrone → sans ce try/catch,
+      // l'exception non capturée ferait sortir le process (cf. handler uncaughtException).
+      try { res.write(': ping\n\n'); } catch { /* socket morte : le handler 'close' nettoiera */ }
+    }, 30_000);
 
     if (!this.userClients.has(userId)) this.userClients.set(userId, new Set());
     this.userClients.get(userId)!.add(res);
@@ -113,7 +121,11 @@ export class SSEService {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30_000);
+    const keepAlive = setInterval(() => {
+      // Garde : un write sur socket morte peut jeter en synchrone → sans ce try/catch,
+      // l'exception non capturée ferait sortir le process (cf. handler uncaughtException).
+      try { res.write(': ping\n\n'); } catch { /* socket morte : le handler 'close' nettoiera */ }
+    }, 30_000);
 
     if (!this.matchClients.has(reservationId)) this.matchClients.set(reservationId, new Map());
     this.matchClients.get(reservationId)!.set(res, userId);
@@ -150,7 +162,11 @@ export class SSEService {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30_000);
+    const keepAlive = setInterval(() => {
+      // Garde : un write sur socket morte peut jeter en synchrone → sans ce try/catch,
+      // l'exception non capturée ferait sortir le process (cf. handler uncaughtException).
+      try { res.write(': ping\n\n'); } catch { /* socket morte : le handler 'close' nettoiera */ }
+    }, 30_000);
 
     if (!this.conversationClients.has(conversationId)) this.conversationClients.set(conversationId, new Map());
     this.conversationClients.get(conversationId)!.set(res, userId);

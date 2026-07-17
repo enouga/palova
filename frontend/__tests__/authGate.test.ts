@@ -84,4 +84,11 @@ describe('isClubPublicPath', () => {
     expect(isClubPublicPath('/me/reservations')).toBe(false);
     expect(isClubPublicPath('/admin')).toBe(false);
   });
+
+  it('ouvre les fiches et listes tournoi/event (liées depuis la vitrine, pensées pour l\'anonyme)', () => {
+    expect(isClubPublicPath('/tournois')).toBe(true);
+    expect(isClubPublicPath('/tournois/abc123')).toBe(true);
+    expect(isClubPublicPath('/events')).toBe(true);
+    expect(isClubPublicPath('/events/xyz789')).toBe(true);
+  });
 });

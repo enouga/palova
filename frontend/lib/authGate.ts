@@ -22,5 +22,11 @@ export function isPlatformPublicPath(pathname: string): boolean {
  * Club-house — la VITRINE du club (parties ouvertes, offres, présentation) — visible de
  * tout visiteur, comme /parties et /club ; les blocs personnels s'y masquent sans session. */
 export function isClubPublicPath(pathname: string): boolean {
-  return pathname === '/' || isPublicPath(pathname);
+  // La racine = Club-house (vitrine publique). Les fiches tournoi/event et leurs listes sont
+  // liées depuis cette vitrine et conçues pour l'anonyme (CTA « Se connecter pour s'inscrire ») :
+  // sans ça, un visiteur qui clique un event « à la une » tombait sur /login (cul-de-sac).
+  return pathname === '/'
+    || pathname === '/tournois' || pathname.startsWith('/tournois/')
+    || pathname === '/events' || pathname.startsWith('/events/')
+    || isPublicPath(pathname);
 }
