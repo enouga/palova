@@ -26,24 +26,24 @@ describe('MatchAlertService — create/list/remove', () => {
 
   it('crée une alerte : convertit la fenêtre locale en UTC (fuseau du club)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
-    prismaMock.matchAlert.create.mockResolvedValue({ id: 'a1', windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z') } as any);
+    prismaMock.matchAlert.create.mockResolvedValue({ id: 'a1', windowStart: new Date('2026-08-14T16:00:00Z'), windowEnd: new Date('2026-08-14T19:00:00Z') } as any);
 
-    const created = await service.create('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00' });
+    const created = await service.create('arena', 'u1', { date: '2026-08-14', from: '18:00', to: '21:00' });
 
     expect(prismaMock.matchAlert.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         userId: 'u1', clubId: 'club-demo',
         // 18:00 Europe/Paris (UTC+2 en été) = 16:00 UTC
-        windowStart: new Date('2026-07-16T16:00:00.000Z'),
-        windowEnd: new Date('2026-07-16T19:00:00.000Z'),
+        windowStart: new Date('2026-08-14T16:00:00.000Z'),
+        windowEnd: new Date('2026-08-14T19:00:00.000Z'),
       }),
     }));
-    expect(created).toEqual({ id: 'a1', windowStart: '2026-07-16T16:00:00.000Z', windowEnd: '2026-07-16T19:00:00.000Z' });
+    expect(created).toEqual({ id: 'a1', windowStart: '2026-08-14T16:00:00.000Z', windowEnd: '2026-08-14T19:00:00.000Z' });
   });
 
   it('refuse une fenêtre inversée (to <= from)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
-    await expect(service.create('arena', 'u1', { date: '2026-07-16', from: '21:00', to: '18:00' }))
+    await expect(service.create('arena', 'u1', { date: '2026-08-14', from: '21:00', to: '18:00' }))
       .rejects.toThrow('ALERT_WINDOW_INVALID');
   });
 
@@ -56,27 +56,27 @@ describe('MatchAlertService — create/list/remove', () => {
   it('refuse au-delà de 5 alertes actives', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
     prismaMock.matchAlert.count.mockResolvedValue(5 as any);
-    await expect(service.create('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00' }))
+    await expect(service.create('arena', 'u1', { date: '2026-08-14', from: '18:00', to: '21:00' }))
       .rejects.toThrow('ALERT_LIMIT_REACHED');
   });
 
   it('refuse un membre BLOCKED', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
     prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED' } as any);
-    await expect(service.create('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00' }))
+    await expect(service.create('arena', 'u1', { date: '2026-08-14', from: '18:00', to: '21:00' }))
       .rejects.toThrow('MEMBERSHIP_BLOCKED');
   });
 
   it('listMine ne renvoie que les alertes actives, triées', async () => {
     prismaMock.matchAlert.findMany.mockResolvedValue([
-      { id: 'a1', windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z') },
+      { id: 'a1', windowStart: new Date('2026-08-14T16:00:00Z'), windowEnd: new Date('2026-08-14T19:00:00Z') },
     ] as any);
     const list = await service.listMine('arena', 'u1');
     expect(prismaMock.matchAlert.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ clubId: 'club-demo', userId: 'u1', windowEnd: expect.objectContaining({ gt: expect.any(Date) }) }),
       orderBy: { windowStart: 'asc' },
     }));
-    expect(list).toEqual([{ id: 'a1', windowStart: '2026-07-16T16:00:00.000Z', windowEnd: '2026-07-16T19:00:00.000Z' }]);
+    expect(list).toEqual([{ id: 'a1', windowStart: '2026-08-14T16:00:00.000Z', windowEnd: '2026-08-14T19:00:00.000Z' }]);
   });
 
   it('remove ne supprime que sa propre alerte (idempotent)', async () => {
@@ -88,19 +88,19 @@ describe('MatchAlertService — create/list/remove', () => {
 
   it('crée une alerte avec fourchette de niveau (stockée et renvoyée)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
-    prismaMock.matchAlert.create.mockResolvedValue({ id: 'a1', windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z'), targetLevelMin: 3, targetLevelMax: 6 } as any);
+    prismaMock.matchAlert.create.mockResolvedValue({ id: 'a1', windowStart: new Date('2026-08-14T16:00:00Z'), windowEnd: new Date('2026-08-14T19:00:00Z'), targetLevelMin: 3, targetLevelMax: 6 } as any);
 
-    const created = await service.create('arena', 'u1', { date: '2026-07-16', from: '18:00', to: '21:00', targetLevelMin: 3, targetLevelMax: 6 });
+    const created = await service.create('arena', 'u1', { date: '2026-08-14', from: '18:00', to: '21:00', targetLevelMin: 3, targetLevelMax: 6 });
 
     expect(prismaMock.matchAlert.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ targetLevelMin: 3, targetLevelMax: 6 }),
     }));
-    expect(created).toEqual({ id: 'a1', windowStart: '2026-07-16T16:00:00.000Z', windowEnd: '2026-07-16T19:00:00.000Z', targetLevelMin: 3, targetLevelMax: 6 });
+    expect(created).toEqual({ id: 'a1', windowStart: '2026-08-14T16:00:00.000Z', windowEnd: '2026-08-14T19:00:00.000Z', targetLevelMin: 3, targetLevelMax: 6 });
   });
 
   it('refuse une fourchette de niveau invalide (une seule borne / hors 1–8 / min>max)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE', timezone: 'Europe/Paris' } as any);
-    const base = { date: '2026-07-16', from: '18:00', to: '21:00' };
+    const base = { date: '2026-08-14', from: '18:00', to: '21:00' };
     await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 3, targetLevelMax: null })).rejects.toThrow('ALERT_LEVEL_INVALID');
     await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 0, targetLevelMax: 5 })).rejects.toThrow('ALERT_LEVEL_INVALID');
     await expect(service.create('arena', 'u1', { ...base, targetLevelMin: 6, targetLevelMax: 3 })).rejects.toThrow('ALERT_LEVEL_INVALID');
@@ -118,7 +118,7 @@ const CLUB_FULL = {
 function joinableMatch(overrides: Record<string, unknown> = {}) {
   return {
     id: 'res-1', status: 'CONFIRMED', visibility: 'PUBLIC',
-    startTime: new Date('2026-07-16T16:30:00Z'), endTime: new Date('2026-07-16T18:00:00Z'),
+    startTime: new Date('2026-08-14T16:30:00Z'), endTime: new Date('2026-08-14T18:00:00Z'),
     targetLevelMin: 2, targetLevelMax: 5,
     resource: { clubId: 'club-demo', name: 'Court 1', attributes: { format: 'double' }, club: CLUB_FULL, clubSport: { sport: { key: 'padel' } } },
     participants: [{ userId: 'orga' }],
@@ -127,7 +127,7 @@ function joinableMatch(overrides: Record<string, unknown> = {}) {
 }
 // Alerte de u1 couvrant 18:00–21:00 (club) = 16:00–19:00 UTC → contient la partie.
 const alertRow = (id: string, userId: string) => ({
-  id, userId, windowStart: new Date('2026-07-16T16:00:00Z'), windowEnd: new Date('2026-07-16T19:00:00Z'),
+  id, userId, windowStart: new Date('2026-08-14T16:00:00Z'), windowEnd: new Date('2026-08-14T19:00:00Z'),
   targetLevelMin: null as number | null, targetLevelMax: null as number | null,
 });
 // Variante avec fourchette de niveau propre à l'alerte.

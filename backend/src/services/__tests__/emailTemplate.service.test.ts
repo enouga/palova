@@ -10,10 +10,10 @@ describe('EmailTemplateService (lecture)', () => {
   const service = new EmailTemplateService();
 
   describe('listForAdmin', () => {
-    it('renvoie 18 entrées avec le flag customized', async () => {
+    it('renvoie 19 entrées avec le flag customized', async () => {
       prismaMock.clubEmailTemplate.findMany.mockResolvedValue([{ type: 'payment.refunded' }] as any);
       const items = await service.listForAdmin('club-1');
-      expect(items).toHaveLength(18);
+      expect(items).toHaveLength(19);
       const refunded = items.find((i) => i.type === 'payment.refunded');
       expect(refunded!.customized).toBe(true);
       const confirmed = items.find((i) => i.type === 'registration.confirmed');
