@@ -26,6 +26,38 @@ export interface CreateTournamentInput {
 }
 export type UpdateTournamentInput = Partial<CreateTournamentInput & { status: TournamentStatus }>;
 
+/** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
+export interface RefereePlayerRow {
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null; // licence — le J/A la vérifie à la table de marque
+}
+
+export interface RefereeRegistrationRow {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  waitlistPosition: number | null;
+  captain: RefereePlayerRow;
+  partner: RefereePlayerRow; // toujours présent : TournamentRegistration.partnerUserId est requis
+}
+
+export interface RefereeTournamentRow {
+  id: string;
+  name: string;
+  category: string;
+  gender: string;
+  status: string;
+  startTime: Date;
+  endTime: Date | null;
+  registrationDeadline: Date;
+  maxTeams: number | null;
+  confirmedCount: number;
+  waitlistCount: number;
+}
+
 /** Erreur métier avec, optionnellement, le joueur concerné ("self" | "partner"). */
 function appError(code: string, subject?: 'self' | 'partner'): Error {
   return Object.assign(new Error(code), subject ? { subject } : {});
@@ -647,5 +679,96 @@ export class TournamentService {
       select: { id: true },
     });
     if (dup) throw new Error('ALREADY_REGISTERED');
+  }
+
+  // ------------------------------------------------------- Espace juge-arbitre
+  // Gate = facette ClubMembership.isReferee + propriété du tournoi. PAS un rôle : un J/A
+  // n'a aucun droit sur le reste du club. Miroir de l'espace coach (lesson.service.ts).
+
+  /** Étage 1 — « es-tu J/A de ce club ? ». Adhésion ACTIVE + facette. Gate de l'espace arbitrage. */
+  async resolveReferee(clubId: string, userId: string): Promise<boolean> {
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId } },
+      select: { status: true, isReferee: true },
+    });
+    return !!m && m.status === 'ACTIVE' && m.isReferee;
+  }
+
+  /**
+   * Étage 2 — « ce tournoi est-il le tien ? ».
+   * TOURNAMENT_NOT_FOUND (inexistant / autre club) | TOURNAMENT_NOT_YOURS (autre J/A).
+   */
+  private async assertRefereeOwnsTournament(tournamentId: string, clubId: string, userId: string) {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { clubId: true, refereeUserId: true },
+    });
+    if (!t || t.clubId !== clubId) throw new Error('TOURNAMENT_NOT_FOUND');
+    if (t.refereeUserId !== userId) throw new Error('TOURNAMENT_NOT_YOURS');
+    return t;
+  }
+
+  /**
+   * Tournois du J/A (à venir = startTime>now asc ; passés = startTime<now desc, cap 30).
+   * Le partage se fait sur startTime seul : endTime est nullable, et un tournoi en cours doit
+   * rester joignable (il arrive en tête des « passés », sans verrou temporel sur les actions).
+   */
+  async listRefereeTournaments(clubId: string, userId: string, scope: 'upcoming' | 'past'): Promise<RefereeTournamentRow[]> {
+    const now = new Date();
+    const tournaments = await prisma.tournament.findMany({
+      where: {
+        clubId,
+        refereeUserId: userId,
+        startTime: scope === 'upcoming' ? { gt: now } : { lt: now },
+      },
+      orderBy: { startTime: scope === 'upcoming' ? 'asc' : 'desc' },
+      ...(scope === 'past' ? { take: 30 } : {}),
+      select: {
+        id: true, name: true, category: true, gender: true, status: true,
+        startTime: true, endTime: true, registrationDeadline: true, maxTeams: true,
+      },
+    });
+    return this.withCounts(tournaments);
+  }
+
+  /** Roster J/A d'un tournoi : binômes + contacts + licence. `userId` jamais exposé. */
+  async refereeListRegistrations(clubId: string, userId: string, tournamentId: string): Promise<RefereeRegistrationRow[]> {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+
+    const registrations = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }], // CONFIRMED avant WAITLISTED, puis ordre d'inscription
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        captainUserId: true,
+        partnerUserId: true,
+        captain: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+        partner: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+      },
+    });
+
+    // Licences en une requête groupée pour tous les joueurs du tableau (pas de N+1).
+    const userIds = [...new Set(registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]))];
+    const memberships = userIds.length
+      ? await prisma.clubMembership.findMany({ where: { clubId, userId: { in: userIds } }, select: { userId: true, membershipNo: true } })
+      : [];
+    const licenseByUser = new Map(memberships.map((m) => [m.userId, m.membershipNo]));
+
+    const toPlayer = (u: Omit<RefereePlayerRow, 'membershipNo'>, playerId: string): RefereePlayerRow => ({
+      ...u,
+      membershipNo: licenseByUser.get(playerId) ?? null,
+    });
+
+    let waitlistIdx = 0;
+    return registrations.map((r) => ({
+      id: r.id,
+      status: r.status,
+      paymentStatus: r.paymentStatus,
+      waitlistPosition: r.status === 'WAITLISTED' ? ++waitlistIdx : null,
+      captain: toPlayer(r.captain, r.captainUserId),
+      partner: toPlayer(r.partner, r.partnerUserId),
+    }));
   }
 }

@@ -779,3 +779,147 @@ describe('TournamentService.listNationalTournaments', () => {
     expect(res).toEqual([]);
   });
 });
+
+describe('espace J/A — gate', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('resolveReferee : vrai pour un membre ACTIVE avec la facette', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: true } as any);
+    await expect(svc.resolveReferee('club-1', 'u1')).resolves.toBe(true);
+    expect(prismaMock.clubMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId_clubId: { userId: 'u1', clubId: 'club-1' } } }),
+    );
+  });
+
+  it('resolveReferee : faux si la facette est décochée', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE', isReferee: false } as any);
+    await expect(svc.resolveReferee('club-1', 'u1')).resolves.toBe(false);
+  });
+
+  it('resolveReferee : faux si le membre est BLOCKED, même J/A', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'BLOCKED', isReferee: true } as any);
+    await expect(svc.resolveReferee('club-1', 'u1')).resolves.toBe(false);
+  });
+
+  it('resolveReferee : faux si aucune adhésion', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.resolveReferee('club-1', 'u1')).resolves.toBe(false);
+  });
+
+  it('assertRefereeOwnsTournament : TOURNAMENT_NOT_YOURS pour un autre J/A', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'autre' } as any);
+    await expect(svc.refereeListRegistrations('club-1', 'u1', 't1')).rejects.toThrow('TOURNAMENT_NOT_YOURS');
+    expect(prismaMock.tournamentRegistration.findMany).not.toHaveBeenCalled();
+  });
+
+  it('assertRefereeOwnsTournament : TOURNAMENT_NOT_FOUND si le tournoi est d’un autre club', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-2', refereeUserId: 'u1' } as any);
+    await expect(svc.refereeListRegistrations('club-1', 'u1', 't1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('assertRefereeOwnsTournament : TOURNAMENT_NOT_FOUND si le tournoi n’existe pas', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(null as any);
+    await expect(svc.refereeListRegistrations('club-1', 'u1', 't1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+});
+
+describe('espace J/A — lecture', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('listRefereeTournaments : filtre sur refereeUserId et le scope à venir', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([] as any);
+    await svc.listRefereeTournaments('club-1', 'u1', 'upcoming');
+    const arg = prismaMock.tournament.findMany.mock.calls[0][0] as any;
+    expect(arg.where.clubId).toBe('club-1');
+    expect(arg.where.refereeUserId).toBe('u1');
+    expect(arg.where.startTime).toEqual({ gt: expect.any(Date) });
+    expect(arg.orderBy).toEqual({ startTime: 'asc' });
+    expect(arg.take).toBeUndefined();
+  });
+
+  it('listRefereeTournaments : scope passé = desc, cap 30', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([] as any);
+    await svc.listRefereeTournaments('club-1', 'u1', 'past');
+    const arg = prismaMock.tournament.findMany.mock.calls[0][0] as any;
+    expect(arg.where.refereeUserId).toBe('u1');
+    expect(arg.where.startTime).toEqual({ lt: expect.any(Date) });
+    expect(arg.orderBy).toEqual({ startTime: 'desc' });
+    expect(arg.take).toBe(30);
+  });
+
+  it('listRefereeTournaments : hydrate les compteurs confirmés / attente', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([
+      { id: 't1', name: 'GP du club', category: 'P100', gender: 'MEN', status: 'PUBLISHED', startTime: FUTURE, endTime: null, registrationDeadline: FUTURE, maxTeams: 8 },
+    ] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([
+      { tournamentId: 't1', status: 'CONFIRMED', _count: { _all: 5 } },
+      { tournamentId: 't1', status: 'WAITLISTED', _count: { _all: 2 } },
+    ] as any);
+
+    const rows = await svc.listRefereeTournaments('club-1', 'u1', 'upcoming');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 't1', name: 'GP du club', maxTeams: 8, confirmedCount: 5, waitlistCount: 2 });
+  });
+
+  it('refereeListRegistrations : expose licence + téléphone, jamais userId', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'u1' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      {
+        id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID',
+        captainUserId: 'c1', partnerUserId: 'p1',
+        captain: { firstName: 'Léa', lastName: 'Girard', avatarUrl: null, phone: '0600000001' },
+        partner: { firstName: 'Zoé', lastName: 'Marin', avatarUrl: null, phone: null },
+      },
+      {
+        id: 'r2', status: 'WAITLISTED', paymentStatus: 'NONE',
+        captainUserId: 'c2', partnerUserId: 'p2',
+        captain: { firstName: 'Tom', lastName: 'Roy', avatarUrl: null, phone: null },
+        partner: { firstName: 'Ana', lastName: 'Diaz', avatarUrl: null, phone: null },
+      },
+    ] as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([{ userId: 'c1', membershipNo: '12345' }] as any);
+
+    const rows = await svc.refereeListRegistrations('club-1', 'u1', 't1');
+
+    expect(rows[0].captain).toEqual({
+      firstName: 'Léa', lastName: 'Girard', avatarUrl: null, phone: '0600000001', membershipNo: '12345',
+    });
+    expect(rows[0].partner?.membershipNo).toBeNull();
+    expect(JSON.stringify(rows)).not.toContain('c1'); // userId jamais exposé
+    expect(rows[1].waitlistPosition).toBe(1);
+    expect(rows[0].waitlistPosition).toBeNull();
+  });
+
+  it('refereeListRegistrations : exclut les annulés et cherche les licences du bon club, en une requête', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'u1' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      {
+        id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE',
+        captainUserId: 'c1', partnerUserId: 'p1',
+        captain: { firstName: 'Léa', lastName: 'Girard', avatarUrl: null, phone: null },
+        partner: { firstName: 'Zoé', lastName: 'Marin', avatarUrl: null, phone: null },
+      },
+    ] as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+
+    await svc.refereeListRegistrations('club-1', 'u1', 't1');
+
+    const regArg = prismaMock.tournamentRegistration.findMany.mock.calls[0][0] as any;
+    expect(regArg.where).toEqual({ tournamentId: 't1', status: { not: 'CANCELLED' } });
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { clubId: 'club-1', userId: { in: ['c1', 'p1'] } } }),
+    );
+  });
+
+  it('refereeListRegistrations : aucun inscrit → pas de requête de licences', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({ clubId: 'club-1', refereeUserId: 'u1' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([] as any);
+
+    await expect(svc.refereeListRegistrations('club-1', 'u1', 't1')).resolves.toEqual([]);
+    expect(prismaMock.clubMembership.findMany).not.toHaveBeenCalled();
+  });
+});
