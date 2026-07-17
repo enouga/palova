@@ -128,14 +128,24 @@ describe('Page Mon profil — onglets + SaveBar', () => {
     wrap();
     await screen.findByRole('region', { name: 'Informations' });
     goTab('Préférences');
-    const group = await screen.findByRole('group', { name: 'Propose-moi les parties à mon niveau' });
-    fireEvent.click(within(group).getByText('Oui'));
+    const sw = await screen.findByRole('switch', { name: /Propose-moi les parties à mon niveau/ });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(sw);
     expect(api.updateMyProfile).not.toHaveBeenCalled();
     expect(screen.getByText('Modifications non enregistrées')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
       expect.objectContaining({ autoMatchProposals: true }), 'abc',
     ));
+  });
+
+  it('les 4 préférences sont des interrupteurs, pas des boutons Oui/Non', async () => {
+    wrap();
+    await screen.findByRole('region', { name: 'Informations' });
+    goTab('Préférences');
+    await screen.findByRole('region', { name: 'Préférences' });
+    expect(screen.getAllByRole('switch')).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Oui' })).not.toBeInTheDocument();
   });
 
   it('la langue est différée et part dans le même PATCH', async () => {
