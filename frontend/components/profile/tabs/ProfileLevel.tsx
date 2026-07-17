@@ -7,6 +7,7 @@ import { LevelCalibration } from '@/components/player/LevelCalibration';
 import { LevelSourceNote } from '@/components/player/LevelSourceNote';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
 import { ResultStats } from '@/components/player/ResultStats';
+import { CardKicker } from '@/components/profile/CardKicker';
 import { useProfileStyles } from '@/components/profile/shared';
 
 interface Props {
@@ -31,7 +32,7 @@ export function ProfileLevel({
   sports, ratingSport, onRatingSport, rating, history, matchStats, clubName,
   calibrating, ratingBusy, onStartCalibrate, onCalibrate,
 }: Props) {
-  const { th, card, cardTitle, label } = useProfileStyles();
+  const { th, card, label } = useProfileStyles();
   const levelSportName = sports.find((s) => s.key === ratingSport)?.name ?? 'Padel';
   const linkBtn = {
     fontFamily: th.fontUI, fontSize: 13, textDecoration: 'underline', opacity: 0.7,
@@ -40,7 +41,7 @@ export function ProfileLevel({
 
   return (
     <section style={card} aria-label="Mon niveau">
-      <div style={cardTitle}>Mon niveau · {levelSportName}</div>
+      <CardKicker>Mon niveau · {levelSportName}</CardKicker>
       {showLevelSportPicker && sports.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={label}>Sport du niveau</span>
