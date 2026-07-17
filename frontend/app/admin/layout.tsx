@@ -220,7 +220,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const sectionHeaderStyle = {
     fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
-    textTransform: 'uppercase' as const, color: th.textFaint, padding: '6px 10px 6px',
+    textTransform: 'uppercase' as const, color: th.textFaint, padding: 'clamp(2px, 1vh - 4px, 6px) 10px',
   };
 
   return (
@@ -232,7 +232,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         position: 'sticky', top: 0, alignSelf: 'flex-start', height: '100vh',
         width: 244, flexShrink: 0, boxSizing: 'border-box',
         background: th.bgElev, borderRight: `1px solid ${th.line}`,
-        display: 'flex', flexDirection: 'column', padding: '20px 14px',
+        display: 'flex', flexDirection: 'column', padding: 'clamp(10px, 2vh - 4px, 20px) 14px',
       }}>
         {/* marque + identité club */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 6px' }}>
@@ -269,7 +269,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>⟨</button>
         </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto', marginTop: 10 }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', marginTop: 'clamp(4px, 1vh - 2px, 10px)' }}>
           <button type="button" onClick={toggleAll} title={allCollapsed ? 'Tout déplier' : 'Tout replier'} style={{
             alignSelf: 'flex-end', background: 'transparent', border: 'none', cursor: 'pointer',
             color: th.textFaint, fontFamily: th.fontUI, fontSize: 11, padding: '0 8px 4px',
@@ -282,7 +282,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <button type="button" onClick={() => toggleSection(sec.title!)} aria-expanded={!isCollapsed}
                     title={isCollapsed ? `Déplier ${sec.title}` : `Replier ${sec.title}`}
                     style={{
-                      ...sectionHeaderStyle, marginTop: i === 0 ? 0 : 12,
+                      ...sectionHeaderStyle, marginTop: i === 0 ? 0 : 'clamp(3px, 2vh - 13px, 12px)',
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                       background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
                     }}>
@@ -296,7 +296,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   const active = pathname === l.href;
                   return (
                     <Link key={l.href} href={l.href} style={{
-                      display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', borderRadius: 11, textDecoration: 'none',
+                      display: 'flex', alignItems: 'center', gap: 11, padding: 'clamp(2px, 2vh - 15px, 9px) 12px', borderRadius: 11, textDecoration: 'none',
                       fontFamily: th.fontUI, fontSize: 14, fontWeight: active ? 700 : 500,
                       background: active ? th.surface2 : 'transparent',
                       color: active ? th.text : th.textMute,
@@ -318,7 +318,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
+        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 'clamp(8px, 2vh - 8px, 16px)', borderTop: `1px solid ${th.line}` }}>
           <ThemeToggle />
           <ProfileMenu direction="up" align="left" />
         </div>
