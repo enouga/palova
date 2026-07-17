@@ -2524,6 +2524,7 @@ export type CreateTournamentBody = {
   openToWomen?: boolean;
   description?: string | null;
   contactInfo?: string | null;
+  refereeUserId?: string | null; // J/A désigné (vivier `adminGetReferees`) ; null = aucun / retirer
   startTime: string;
   endTime?: string | null;
   registrationDeadline: string;

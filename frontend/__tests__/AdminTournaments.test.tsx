@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import AdminTournamentsPage from '../app/admin/tournaments/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
@@ -7,6 +7,7 @@ const adminGetSports = jest.fn();
 const adminGetClub = jest.fn();
 const adminCreateTournament = jest.fn();
 const adminUpdateTournament = jest.fn();
+const adminGetReferees = jest.fn();
 
 jest.mock('../lib/api', () => ({
   api: {
@@ -15,6 +16,7 @@ jest.mock('../lib/api', () => ({
     adminGetClub: (...a: unknown[]) => adminGetClub(...a),
     adminCreateTournament: (...a: unknown[]) => adminCreateTournament(...a),
     adminUpdateTournament: (...a: unknown[]) => adminUpdateTournament(...a),
+    adminGetReferees: (...a: unknown[]) => adminGetReferees(...a),
     adminGetTournament: jest.fn(),
     adminPromoteRegistration: jest.fn(),
     adminRemoveRegistration: jest.fn(),
@@ -34,6 +36,7 @@ beforeEach(() => {
   adminGetClub.mockResolvedValue({ stripeAccountStatus: 'NONE' });
   adminCreateTournament.mockResolvedValue({});
   adminUpdateTournament.mockResolvedValue({});
+  adminGetReferees.mockResolvedValue([]);
 });
 
 it('le formulaire Messieurs montre la case « Ouvert aux femmes » cochée par défaut', async () => {
@@ -82,6 +85,67 @@ it('cocher la case et créer envoie requirePrepayment: true', async () => {
   await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
   const [, body] = adminCreateTournament.mock.calls[0];
   expect(body.requirePrepayment).toBe(true);
+});
+
+it('désigne un J/A du vivier dans le formulaire → refereeUserId envoyé', async () => {
+  adminGetReferees.mockResolvedValue([
+    { userId: 'u1', firstName: 'Léa', lastName: 'Girard', avatarUrl: null },
+    { userId: 'u2', firstName: 'Julien', lastName: 'Martin', avatarUrl: null },
+  ]);
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Nouveau tournoi/ }));
+  const select = await screen.findByLabelText(/Juge-arbitre/i);
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Léa Girard' })).toBeInTheDocument());
+  fireEvent.change(select, { target: { value: 'u1' } });
+  fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+  await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+  expect(adminCreateTournament).toHaveBeenCalledWith('c1', expect.objectContaining({ refereeUserId: 'u1' }), 'tok');
+});
+
+it('« Aucun » (défaut) envoie refereeUserId null', async () => {
+  adminGetReferees.mockResolvedValue([{ userId: 'u1', firstName: 'Léa', lastName: 'Girard', avatarUrl: null }]);
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Nouveau tournoi/ }));
+  await screen.findByLabelText(/Juge-arbitre/i);
+  fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+  await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+  expect(adminCreateTournament).toHaveBeenCalledWith('c1', expect.objectContaining({ refereeUserId: null }), 'tok');
+});
+
+it('retirer le J/A après l\'avoir choisi renvoie à « Aucun » → null', async () => {
+  adminGetReferees.mockResolvedValue([{ userId: 'u1', firstName: 'Léa', lastName: 'Girard', avatarUrl: null }]);
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Nouveau tournoi/ }));
+  const select = await screen.findByLabelText(/Juge-arbitre/i);
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Léa Girard' })).toBeInTheDocument());
+  fireEvent.change(select, { target: { value: 'u1' } });
+  fireEvent.change(select, { target: { value: '' } }); // retour à « Aucun »
+  fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+  await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+  expect(adminCreateTournament).toHaveBeenCalledWith('c1', expect.objectContaining({ refereeUserId: null }), 'tok');
+});
+
+// Sans cette phrase, un admin devant une liste vide n'a aucun moyen de deviner qu'il faut
+// d'abord cocher « Juge-arbitre » sur une fiche membre.
+it('vivier vide : « Aucun » seul + l\'aide explique comment peupler la liste', async () => {
+  adminGetReferees.mockResolvedValue([]);
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Nouveau tournoi/ }));
+  const select = await screen.findByLabelText(/Juge-arbitre/i);
+  expect(within(select as HTMLSelectElement).getAllByRole('option')).toHaveLength(1);
+  expect(screen.getByRole('option', { name: 'Aucun' })).toBeInTheDocument();
+  expect(screen.getByText(/Cochez « Juge-arbitre » sur la fiche d’un membre/)).toBeInTheDocument();
+});
+
+it('le vivier indisponible (API en échec) ne casse pas le formulaire', async () => {
+  adminGetReferees.mockRejectedValue(new Error('BOOM'));
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Nouveau tournoi/ }));
+  const select = await screen.findByLabelText(/Juge-arbitre/i);
+  expect(within(select as HTMLSelectElement).getAllByRole('option')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+  await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+  expect(adminCreateTournament).toHaveBeenCalledWith('c1', expect.objectContaining({ refereeUserId: null }), 'tok');
 });
 
 const iso = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();

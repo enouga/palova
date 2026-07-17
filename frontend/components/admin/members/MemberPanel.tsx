@@ -21,7 +21,7 @@ const ROLE_HINT: Record<RoleSeg, string> = {
   ADMIN: 'Staff + structure du club (réglages, terrains, offres, comptabilité, staff, niveaux)',
 };
 
-export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, onSave, onToggleBlocked, onSetRole, onSetCoach, onDelete, onClose }: {
+export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, onSave, onToggleBlocked, onSetRole, onSetCoach, onSetReferee, onDelete, onClose }: {
   member: Member;
   viewer: { userId: string; role: 'OWNER' | 'ADMIN' | 'STAFF' } | null;
   canManageStaff: boolean;
@@ -31,6 +31,7 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
   onToggleBlocked: () => void;
   onSetRole: (role: StaffRole) => void;
   onSetCoach: (isCoach: boolean) => void;
+  onSetReferee: (isReferee: boolean) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -99,9 +100,16 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
               {member.staffRole ? STAFF_LABEL[member.staffRole] : 'Membre'}
             </span>
           )}
+          {/* Facettes : ni l'une ni l'autre n'est un rôle — elles s'additionnent librement
+              (le coach du club est souvent aussi juge-arbitre) et ne donnent aucun droit
+              sur le club, seulement sur les cours / tournois qu'on leur confie. */}
           <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.text, marginTop: 4 }}>
             <input type="checkbox" checked={!!member.isCoach} onChange={(e) => onSetCoach(e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
             Coach — anime des cours
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
+            <input type="checkbox" checked={!!member.isReferee} onChange={(e) => onSetReferee(e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent, cursor: 'pointer' }} />
+            Juge-arbitre — pilote des tournois
           </label>
         </div>
       )}
