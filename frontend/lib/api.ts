@@ -1016,6 +1016,11 @@ export const api = {
   adminListCoaches: (clubId: string, token: string) =>
     request<Coach[]>(`/api/clubs/${clubId}/admin/coaches`, {}, token),
 
+  /** Change le coach d'un cours existant (les élèves inscrits ne bougent pas). */
+  adminSetLessonCoach: (clubId: string, lessonId: string, coachId: string, token: string) =>
+    request<{ id: string; coach: { id: string; name: string; photoUrl: string | null } }>(
+      `/api/clubs/${clubId}/admin/lessons/${lessonId}`, { method: 'PATCH', body: JSON.stringify({ coachId }) }, token),
+
   // --- Séries de réservations (back-office club) ---
   adminCreateSeries: (clubId: string, body: CreateSeriesBody, token: string) =>
     request<CreateSeriesResult>(`/api/clubs/${clubId}/admin/reservation-series`, { method: 'POST', body: JSON.stringify(body) }, token),

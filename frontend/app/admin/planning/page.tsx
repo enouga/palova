@@ -16,6 +16,7 @@ import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 import { PaymentInitials } from '@/components/admin/PaymentInitials';
 import { TilePaymentPopover } from '@/components/admin/planning/TilePaymentPopover';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
+import { CoachPicker } from '@/components/admin/planning/CoachPicker';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { CashRegister } from '@/components/admin/caisse/CashRegister';
 import { Receipt } from '@/components/admin/Receipt';
@@ -181,6 +182,7 @@ export default function AdminPlanningPage() {
   const [createPrefill, setCreatePrefill] = useState<CreateEventPrefill | undefined>(undefined);
   const [coaches, setCoaches]               = useState<Coach[]>([]);
   const [students, setStudents]             = useState<LessonStudent[]>([]);
+  const [coachPickOpen, setCoachPickOpen]   = useState(false);   // sélecteur « Changer » de coach dans la modale
 
   // Couverture automatique par abonnement (Planning) : balaie le jour affiché avant de charger —
   // best-effort, ne bloque jamais l'encaissement manuel si ça échoue.
@@ -287,6 +289,7 @@ export default function AdminPlanningPage() {
 
   // Charge la liste des élèves quand la modale de détail s'ouvre sur un cours.
   useEffect(() => {
+    setCoachPickOpen(false);
     if (selected?.lesson?.id) {
       loadStudents(selected.lesson.id);
     } else {
@@ -549,6 +552,21 @@ export default function AdminPlanningPage() {
     setBusy(true);
     try { setError(null); await api.adminSetReservationType(clubId, selected.id, t, token); setSelected({ ...selected, type: t }); await load(); }
     catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  // Change le coach du cours ouvert (les élèves ne bougent pas) ; le pavé de la grille
+  // affiche « Cours · <coach> » → rechargement léger pour le resynchroniser.
+  const changeCoach = async (c: Coach) => {
+    if (!token || !clubId || !selected?.lesson) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await api.adminSetLessonCoach(clubId, selected.lesson.id, c.id, token);
+      setSelected({ ...selected, lesson: { ...selected.lesson, coach: { name: c.name, photoUrl: c.photoUrl } } });
+      setCoachPickOpen(false);
+      await reloadReservations();
+    } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
 

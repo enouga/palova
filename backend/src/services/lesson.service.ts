@@ -318,6 +318,27 @@ class LessonService {
     });
   }
 
+  // ─────────────────────────────────────────────────────────── adminSetCoach
+
+  /**
+   * Change le coach d'un cours existant — les inscriptions (élèves) ne bougent pas.
+   * Le nouveau coach doit être un coach ACTIF du même club.
+   * Lève : LESSON_NOT_FOUND | CLUB_MISMATCH | COACH_NOT_FOUND
+   */
+  async adminSetCoach(lessonId: string, clubId: string, coachId: string) {
+    await this.loadLesson(lessonId, clubId);
+    const coach = await prisma.coach.findFirst({
+      where: { id: coachId, clubId, isActive: true },
+      select: { id: true },
+    });
+    if (!coach) throw new Error('COACH_NOT_FOUND');
+    return prisma.lesson.update({
+      where: { id: lessonId },
+      data: { coachId },
+      select: { id: true, coach: { select: { id: true, name: true, photoUrl: true } } },
+    });
+  }
+
   // ─────────────────────────────────────────────────────────── listStudents
 
   /**

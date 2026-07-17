@@ -112,6 +112,7 @@ const ERROR_STATUS: Record<string, number> = {
   SERIES_NOT_FOUND:       404,
   SERIES_TOO_LONG:        400,
   LESSON_NOT_FOUND:       404,
+  COACH_NOT_FOUND:        404,
   ENROLLMENT_NOT_FOUND:   404,
   ALREADY_ENROLLED:       409,
   MEMBERSHIP_BLOCKED:     403,
@@ -822,6 +823,15 @@ router.patch('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, r
 });
 router.delete('/lessons/:id/students/:enrollId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await lessonService.adminRemoveStudent(asString(req.params.id), asString(req.params.enrollId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
+// Change le coach d'un cours existant (les élèves inscrits ne bougent pas).
+router.patch('/lessons/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const coachId = asString(req.body.coachId);
+    if (!coachId) return void res.status(400).json({ error: 'coachId requis' });
+    res.json(await lessonService.adminSetCoach(asString(req.params.id), req.membership!.clubId, coachId));
+  } catch (e) { handleError(e, res, next); }
 });
 
 // --- Tournois ---
