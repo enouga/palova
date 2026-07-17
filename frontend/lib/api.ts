@@ -924,6 +924,30 @@ export const api = {
   adminRemoveRegistration: (clubId: string, tournamentId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
 
+  // --- Table de marque (staff) ---
+  adminGetMarkTable: (clubId: string, tournamentId: string, token: string) =>
+    request<MarkTableView>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/mark-table`, {}, token),
+  adminGetMarkTableLog: (clubId: string, tournamentId: string, token: string) =>
+    request<MarkTableLogEntry[]>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/mark-table/log`, {}, token),
+  adminSetPresence: (clubId: string, tournamentId: string, regId: string, side: MarkTableSide, presence: MarkTablePresence, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations/${regId}/presence`, { method: 'POST', body: JSON.stringify({ side, presence }) }, token),
+  adminForfeit: (clubId: string, tournamentId: string, regId: string, side: MarkTableSide, token: string) =>
+    request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations/${regId}/forfeit`, { method: 'POST', body: JSON.stringify({ side }) }, token),
+  adminReplacePlayer: (clubId: string, tournamentId: string, regId: string, side: MarkTableSide, newUserId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations/${regId}/replace`, { method: 'POST', body: JSON.stringify({ side, newUserId }) }, token),
+  adminAddToBench: (clubId: string, tournamentId: string, userId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/bench`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  adminRemoveFromBench: (clubId: string, tournamentId: string, userId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/bench/${userId}`, { method: 'DELETE' }, token),
+  adminPairFromBench: (clubId: string, tournamentId: string, userAId: string, userBId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/bench/pair`, { method: 'POST', body: JSON.stringify({ userAId, userBId }) }, token),
+  adminAddLateRegistration: (clubId: string, tournamentId: string, captainUserId: string, partnerUserId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/registrations`, { method: 'POST', body: JSON.stringify({ captainUserId, partnerUserId }) }, token),
+  adminMarkTablePromote: (clubId: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/mark-table/registrations/${regId}/promote`, { method: 'POST' }, token),
+  adminMarkTableRemove: (clubId: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${clubId}/admin/tournaments/${tournamentId}/mark-table/registrations/${regId}`, { method: 'DELETE' }, token),
+
   // --- Events (back-office club) ---
   adminGetEvents: (clubId: string, token: string) =>
     request<ClubEvent[]>(`/api/clubs/${clubId}/admin/events`, {}, token),
@@ -1120,6 +1144,30 @@ export const api = {
     request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}/promote`, { method: 'POST' }, token),
   refereeRemoveRegistration: (slug: string, tournamentId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
+
+  // --- Table de marque du J/A ---
+  getRefereeMarkTable: (slug: string, tournamentId: string, token: string) =>
+    request<MarkTableView>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table`, {}, token),
+  getRefereeMarkTableLog: (slug: string, tournamentId: string, token: string) =>
+    request<MarkTableLogEntry[]>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table/log`, {}, token),
+  refereeSetPresence: (slug: string, tournamentId: string, regId: string, side: MarkTableSide, presence: MarkTablePresence, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}/presence`, { method: 'POST', body: JSON.stringify({ side, presence }) }, token),
+  refereeForfeit: (slug: string, tournamentId: string, regId: string, side: MarkTableSide, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}/forfeit`, { method: 'POST', body: JSON.stringify({ side }) }, token),
+  refereeReplacePlayer: (slug: string, tournamentId: string, regId: string, side: MarkTableSide, newUserId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}/replace`, { method: 'POST', body: JSON.stringify({ side, newUserId }) }, token),
+  refereeAddToBench: (slug: string, tournamentId: string, userId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/bench`, { method: 'POST', body: JSON.stringify({ userId }) }, token),
+  refereeRemoveFromBench: (slug: string, tournamentId: string, userId: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/bench/${userId}`, { method: 'DELETE' }, token),
+  refereePairFromBench: (slug: string, tournamentId: string, userAId: string, userBId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/bench/pair`, { method: 'POST', body: JSON.stringify({ userAId, userBId }) }, token),
+  refereeAddLateRegistration: (slug: string, tournamentId: string, captainUserId: string, partnerUserId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations`, { method: 'POST', body: JSON.stringify({ captainUserId, partnerUserId }) }, token),
+  refereeMarkTablePromote: (slug: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table/registrations/${regId}/promote`, { method: 'POST' }, token),
+  refereeMarkTableRemove: (slug: string, tournamentId: string, regId: string, token: string) =>
+    request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table/registrations/${regId}`, { method: 'DELETE' }, token),
 
   getVapidPublicKey: () => request<{ publicKey: string | null }>('/api/push/vapid-public-key'),
   savePushSubscription: (sub: unknown, token: string) =>
@@ -2990,6 +3038,59 @@ export interface ClubReferee {
   lastName: string;
   avatarUrl: string | null;
 }
+
+// --- Table de marque (J/A + staff, cœur partagé backend) ---
+
+export type MarkTablePresence = 'UNSEEN' | 'PRESENT' | 'ABSENT';
+
+export interface MarkTablePlayer {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null;
+  presence: MarkTablePresence;
+}
+
+export interface MarkTableRegistration {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  waitlistPosition: number | null;
+  captain: MarkTablePlayer;
+  partner: MarkTablePlayer;
+}
+
+export interface MarkTableBenchEntry {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null;
+  source: 'FORFEIT' | 'WALK_IN';
+}
+
+export interface MarkTableLogEntry {
+  id: string;
+  kind: string;
+  data: Record<string, unknown>;
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface MarkTableView {
+  tournament: { id: string; name: string; category: string; gender: string; maxTeams: number | null };
+  registrations: MarkTableRegistration[];
+  bench: MarkTableBenchEntry[];
+  recentLog: MarkTableLogEntry[];
+  pointedCount: number;
+  totalSlots: number;
+  waitlistCount: number;
+}
+
+export type MarkTableSide = 'CAPTAIN' | 'PARTNER';
 
 // Construit l'URL du flux SSE de notifications (utilisé par la cloche).
 export function notificationsStreamUrl(token: string): string {
