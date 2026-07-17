@@ -1614,6 +1614,8 @@ export interface CreateClubBody {
   address?: string;
   city?: string;
   timezone?: string;
+  siret: string;      // requis en self-service (/clubs/new)
+  ownerPhone: string; // requis en self-service (/clubs/new)
 }
 
 export interface RegisterBody {

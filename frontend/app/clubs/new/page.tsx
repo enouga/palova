@@ -2,6 +2,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, AuthResponse, Sport } from '@/lib/api';
+import { siretIsValidFormat } from '@/lib/siret';
 import { useTheme } from '@/lib/ThemeProvider';
 import { setSession } from '@/lib/session';
 import { clubUrl } from '@/lib/clubUrl';
@@ -19,6 +20,8 @@ export default function NewClubPage() {
   const [password, setPassword]   = useState('');
   const [clubName, setClubName]   = useState('');
   const [city, setCity]           = useState('');
+  const [siret, setSiret]         = useState('');
+  const [phone, setPhone]         = useState('');
   const [sports, setSports]       = useState<Sport[]>([]);
   const [sportId, setSportId]     = useState('');
   const [error, setError]         = useState<string | null>(null);
@@ -33,7 +36,7 @@ export default function NewClubPage() {
   // Après validation du code : le compte gérant est actif → on crée son club et on bascule sur l'admin.
   const finishClub = async (auth: AuthResponse) => {
     try {
-      const club = await api.createClub({ name: clubName, city: city || undefined }, auth.token);
+      const club = await api.createClub({ name: clubName, city: city || undefined, siret: siret.trim(), ownerPhone: phone.trim() }, auth.token);
       if (sportId) {
         try { await api.adminAddSport(club.id, sportId, auth.token); } catch { /* sport activable plus tard */ }
       }
@@ -42,7 +45,10 @@ export default function NewClubPage() {
     } catch (err) {
       const msg = (err as Error).message;
       throw new Error(
-        msg === 'SLUG_TAKEN' ? 'Un club porte déjà ce nom. Essayez une variante.'
+        msg === 'SIRET_INVALID' ? 'Le numéro SIRET est invalide (14 chiffres).'
+        : msg === 'SIRET_NOT_FOUND' ? "Ce SIRET n'existe pas dans le répertoire des entreprises."
+        : msg === 'SIRET_INACTIVE' ? 'Cet établissement est fermé administrativement.'
+        : msg === 'SLUG_TAKEN' ? 'Un club porte déjà ce nom. Essayez une variante.'
         : msg === 'VALIDATION_ERROR' ? 'Champs du club invalides.'
         : msg,
       );
@@ -53,6 +59,8 @@ export default function NewClubPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) { setError('Mot de passe : 8 caractères minimum.'); return; }
+    if (!siretIsValidFormat(siret.trim())) { setError('Le numéro SIRET est invalide (14 chiffres).'); return; }
+    if (!phone.trim()) { setError('Le téléphone du gérant est requis.'); return; }
     setLoading(true);
     try {
       const r = await api.register({ email, password, firstName, lastName });
@@ -108,6 +116,9 @@ export default function NewClubPage() {
           <div style={{ ...sectionLabel, marginTop: 8 }}>Club</div>
           <Field label="Nom du club" icon="pin" value={clubName} onChange={setClubName} required />
           <Field label="Ville" value={city} onChange={setCity} />
+          <Field label="SIRET du club" value={siret} onChange={setSiret} required
+            placeholder="14 chiffres — visible sur votre Kbis ou annuaire-entreprises.data.gouv.fr" />
+          <Field label="Téléphone du gérant" type="tel" value={phone} onChange={setPhone} required />
           <SelectField label="Sport principal" value={sportId} onChange={setSportId}>
             {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
           </SelectField>
