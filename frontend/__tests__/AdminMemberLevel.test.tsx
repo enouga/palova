@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminMemberLevelPage from '../app/admin/members/[userId]/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
+import { AdminRoleContext } from '../lib/adminRole';
 import type { MemberHistory } from '../lib/api';
 
 // Fiche membre fusionnée (lots C+D) : la partie « niveau » (override admin) vit dans
@@ -55,8 +56,10 @@ const HISTORY: MemberHistory = {
   loyalty: { firstVisitAt: null, lastVisitAt: null, daysSinceLastVisit: null, tenureDays: 0, playsPerMonth: 0, cancellationRate: 0, atRisk: false },
 };
 
+// Les blocs override de niveau sont réservés ADMIN (isClubAdmin(useAdminRole())) — sans
+// provider, le contexte par défaut est null (non-admin) et les masquerait tous.
 function renderPage() {
-  return render(<ThemeProvider><AdminMemberLevelPage /></ThemeProvider>);
+  return render(<AdminRoleContext.Provider value="ADMIN"><ThemeProvider><AdminMemberLevelPage /></ThemeProvider></AdminRoleContext.Provider>);
 }
 
 // Va sur l'onglet « Niveau » (où vivent niveau courant, override et corrections).
