@@ -1,4 +1,4 @@
-import { PROFILE_TABS, parseProfileTab, buildProfileBody, isDirty, licenceDirty } from '../lib/meProfile';
+import { PROFILE_TABS, parseProfileTab, buildProfileBody, isDirty, licenceDirty, memberSinceYear } from '../lib/meProfile';
 import type { MyProfile } from '../lib/api';
 
 const base: MyProfile = {
@@ -85,5 +85,21 @@ describe('meProfile helpers', () => {
     expect(licenceDirty('LIC42', '  LIC42  ')).toBe(false);
     expect(licenceDirty('LIC42', 'LIC99')).toBe(true);
     expect(licenceDirty('', 'LIC1')).toBe(true);
+  });
+});
+
+describe('memberSinceYear', () => {
+  it('extrait l\'année d\'un ISO', () => {
+    expect(memberSinceYear('2024-03-01T10:00:00.000Z')).toBe(2024);
+  });
+
+  it('renvoie null sans date', () => {
+    expect(memberSinceYear(null)).toBeNull();
+    expect(memberSinceYear(undefined)).toBeNull();
+    expect(memberSinceYear('')).toBeNull();
+  });
+
+  it('renvoie null sur une date illisible', () => {
+    expect(memberSinceYear('bientot')).toBeNull();
   });
 });
