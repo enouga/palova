@@ -457,7 +457,7 @@ export default function BookingModal({
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700,
                   color: phase === 'held' ? '#15803d' : th.textMute, background: phase === 'held' ? 'rgba(34,197,94,0.13)' : th.surface2, borderRadius: 999, padding: '5px 12px 5px 10px' }}>
                   {phase === 'held'
-                    ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px #22c55e2e' }} />Créneau bloqué pour vous</>
+                    ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: th.success, boxShadow: `0 0 0 4px ${th.success}2e` }} />Créneau bloqué pour vous</>
                     : <><span style={{ width: 7, height: 7, borderRadius: '50%', background: th.textFaint }} />Blocage du créneau…</>}
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontMono, fontWeight: 700, fontSize: 13,

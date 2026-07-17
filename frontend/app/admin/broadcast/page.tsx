@@ -149,7 +149,7 @@ export default function AdminBroadcastPage() {
           </label>
 
           {error && (
-            <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55', margin: 0 }}>{error}</p>
+            <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.danger, margin: 0 }}>{error}</p>
           )}
           {successMsg && (
             <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.accent, margin: 0, fontWeight: 600 }}>

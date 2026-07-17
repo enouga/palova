@@ -2,6 +2,7 @@
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { hhmm, isSalePayment, toCents, fmtEuros } from '@/lib/caisse';
+import { eurosFromString } from '@/lib/payments';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { SectionTitle } from '@/components/admin/ventes/SectionTitle';
 import type { CaissePayment, PaymentMethod } from '@/lib/api';
@@ -21,8 +22,6 @@ const PREPAID_METHODS: PaymentMethod[] = ['PACK_CREDIT', 'WALLET', 'MEMBER', 'SU
 const FILTERS: { value: JournalFilter; label: string }[] = [
   { value: 'all', label: 'Tout' }, { value: 'sales', label: 'Ventes' }, { value: 'resa', label: 'Résas' },
 ];
-
-const euro = (s: string) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 
 function label(p: CaissePayment): string {
   if (p.memberPackage) return `${p.memberPackage.user.firstName} ${p.memberPackage.user.lastName} · ${p.memberPackage.template.name}`;
@@ -118,7 +117,7 @@ export function DayJournal({ payments, tz, totalsByMethod, filter, onFilter, onR
                   </span>
                 )}
                 <b style={{ fontFamily: th.fontDisplay, fontSize: 14.5, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                  color: isFullyRefunded ? th.textMute : th.text, textDecoration: isFullyRefunded ? 'line-through' : 'none' }}>{euro(p.amount)}</b>
+                  color: isFullyRefunded ? th.textMute : th.text, textDecoration: isFullyRefunded ? 'line-through' : 'none' }}>{eurosFromString(p.amount)}</b>
                 {!isFullyRefunded && (
                   <button type="button" onClick={() => onRefund(p)} disabled={busy}
                     style={{ ...ghostBtn, color: th.text, cursor: busy ? 'default' : 'pointer' }}>
@@ -141,7 +140,7 @@ export function DayJournal({ payments, tz, totalsByMethod, filter, onFilter, onR
           {moneyChips.map(({ m, v }) => (
             <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, borderRadius: 999, padding: '6px 13px', background: th.surface2, color: th.text }}>
               <Icon name={METHOD_ICON[m]} size={14} color={th.textMute} />
-              {METHOD_LABEL[m]} {euro(v)}
+              {METHOD_LABEL[m]} {eurosFromString(v)}
             </span>
           ))}
           {moneyChips.length === 0 && <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>Aucune entrée d&apos;argent.</span>}
@@ -152,7 +151,7 @@ export function DayJournal({ payments, tz, totalsByMethod, filter, onFilter, onR
             {prepaidChips.map(({ m, v }) => (
               <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: '4px 11px', background: 'transparent', color: th.textMute, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
                 <Icon name={METHOD_ICON[m]} size={13} color={th.textFaint} />
-                {METHOD_LABEL[m]} {euro(v)}
+                {METHOD_LABEL[m]} {eurosFromString(v)}
               </span>
             ))}
           </div>

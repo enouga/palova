@@ -113,8 +113,8 @@ export default function SuperAdminClubs() {
                   <span style={{ color: th.textFaint, fontSize: 12 }}> actifs · T{c.billing.observedTier}</span><br />
                   <span style={{ fontSize: 12, fontWeight: 700, color:
                     c.billing.state === 'OK' ? th.accent
-                    : c.billing.state === 'PAST_DUE' ? '#c4472e'
-                    : c.billing.state === 'TO_REGULARIZE' ? '#e8804f'
+                    : c.billing.state === 'PAST_DUE' ? th.danger
+                    : c.billing.state === 'TO_REGULARIZE' ? th.warning
                     : th.textFaint }}>
                     {{ EXEMPT: 'Exonéré', FREE: 'Gratuit', OK: 'Actif', TO_REGULARIZE: 'À régulariser', PAST_DUE: 'Impayé' }[c.billing.state]}
                   </span>

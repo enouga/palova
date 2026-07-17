@@ -53,7 +53,7 @@ export function BookingSuccess({ reservationId, token, summary, slot, timezone, 
   return (
     <div style={{ marginTop: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(34,197,94,0.13)', color: '#15803d', borderRadius: 14, padding: '12px 14px' }}>
-        <span style={{ width: 26, height: 26, flex: '0 0 auto', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ width: 26, height: 26, flex: '0 0 auto', borderRadius: '50%', background: th.success, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="check" size={15} color="#fff" stroke={2.6} />
         </span>
         <span style={{ fontFamily: th.fontUI, fontSize: 15.5, fontWeight: 700 }}>Réservation confirmée !</span>

@@ -192,7 +192,7 @@ export function RichEmailEditor({ value, vars, onChange, singleLine = false, onU
       <div className="pl-rte" style={{ border: `1px solid ${th.line}`, borderRadius: 12, background: th.bg, color: th.text, padding: singleLine ? '10px 14px' : '12px 14px', fontFamily: th.fontUI }}>
         <EditorContent editor={editor} />
       </div>
-      {uploadError && <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: '#e55', margin: '6px 0 0' }}>{uploadError}</p>}
+      {uploadError && <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.danger, margin: '6px 0 0' }}>{uploadError}</p>}
     </div>
   );
 }

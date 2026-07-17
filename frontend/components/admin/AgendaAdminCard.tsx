@@ -16,11 +16,6 @@ export function groupAccentColor(th: Theme, key: AgendaGroupKey): string {
   }
 }
 
-// Coral lisible en petit texte : coral vif en sombre, coral foncé en clair.
-function coralInkOf(th: Theme): string {
-  return th.mode === 'floodlit' ? ACCENTS.coral : '#b23c17';
-}
-
 export interface AgendaAdminCardProps {
   icon: IconName;              // trophy (tournoi) / bolt (event)
   accent: string;             // teinte de la tuile d'icône (apricot / cyan)
@@ -46,7 +41,7 @@ export function AgendaAdminCard(props: AgendaAdminCardProps) {
     ratio, full, countLabel, waitlist, chips, actions,
   } = props;
   const countdown = deadline && now ? deadlineCountdown(deadline, now) : null;
-  const coralInk = coralInkOf(th);
+  const coralInk = th.danger;
   const cleanChips = (chips ?? []).filter(Boolean) as string[];
 
   const coralPill: CSSProperties = {

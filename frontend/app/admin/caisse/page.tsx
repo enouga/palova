@@ -213,7 +213,7 @@ export default function AdminCaissePage() {
               <span style={{
                 fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px',
                 background: vouchers.length > 0 ? (th.mode === 'floodlit' ? `${ACCENTS.coral}26` : `${ACCENTS.coral}33`) : th.surface2,
-                color: vouchers.length > 0 ? (th.mode === 'floodlit' ? ACCENTS.coral : '#b23c17') : th.textMute,
+                color: vouchers.length > 0 ? th.danger : th.textMute,
               }}>{vouchers.length}</span>
             }>Tickets CE à rembourser</SectionTitle>
             <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 340, overflowY: 'auto' }}>

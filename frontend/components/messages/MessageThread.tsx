@@ -202,7 +202,7 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
                       <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value.slice(0, 2000))} rows={2} autoFocus
                         onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m); } }}
                         style={{ width: '100%', border: `1px solid ${th.line}`, borderRadius: 12, padding: '8px 12px', resize: 'vertical', fontFamily: th.fontUI, fontSize: 14, background: th.surface, color: th.text }} />
-                      {editError && <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: '#e0554f', marginTop: 3 }}>{editError}</div>}
+                      {editError && <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.danger, marginTop: 3 }}>{editError}</div>}
                       <div style={{ display: 'flex', gap: 10, marginTop: 3, justifyContent: 'flex-end' }}>
                         <button type="button" onClick={cancelEdit} disabled={editBusy}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textFaint, fontFamily: th.fontUI, fontSize: 11.5, padding: 0 }}>
@@ -315,7 +315,7 @@ export function MessageThread({ conversationId, token, viewerUserId, other, onMe
       ) : (
         <>
           {sendError && (
-            <div style={{ padding: '6px 16px 0', fontFamily: th.fontUI, fontSize: 12.5, color: '#e0554f' }}>{sendError}</div>
+            <div style={{ padding: '6px 16px 0', fontFamily: th.fontUI, fontSize: 12.5, color: th.danger }}>{sendError}</div>
           )}
           <MessageComposer onSend={send} onSendImage={sendImage} onTyping={typing} initialDraft={initialDraft} />
         </>

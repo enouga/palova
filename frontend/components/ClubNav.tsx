@@ -21,7 +21,7 @@ type Tab = { label: string; short?: string; href: string; icon: IconName; match:
 // Pastille de compteur posée sur un onglet. Défaut = rouge notification (non lus Parties) ;
 // `bg`/`fg` permettent le style accent (compteur « à venir », même langage que l'onglet
 // À venir de /me/reservations).
-function CountBadge({ count, label, fontFamily, bg = '#e5484d', fg = '#fff' }: { count: number; label: string; fontFamily: string; bg?: string; fg?: string }) {
+function CountBadge({ count, label, fontFamily, bg, fg = '#fff' }: { count: number; label: string; fontFamily: string; bg: string; fg?: string }) {
   return (
     <span className="cn-badge" aria-label={label} style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: bg, color: fg, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily, flexShrink: 0 }}>
       {count > 99 ? '99+' : count}
@@ -213,7 +213,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                 {dmUnread > 0 && (
                   <span aria-label={`${dmUnread} messages non lus`} style={{
                     position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, padding: '0 4px',
-                    borderRadius: 8, background: '#e5484d', color: '#fff', fontSize: 10, fontWeight: 700,
+                    borderRadius: 8, background: th.danger, color: '#fff', fontSize: 10, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI,
                   }}>{dmUnread > 99 ? '99+' : dmUnread}</span>
                 )}
@@ -261,7 +261,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
                   <span className="cn-tab-label cn-lbl-short" style={t.brand ? { fontFamily: th.fontBrand, fontWeight: 400, fontSize: 15, letterSpacing: 0.2 } : undefined}>{t.short}</span>
                 )}
                 {t.href === '/parties' && partiesUnread > 0 && (
-                  <CountBadge count={partiesUnread} label={`${partiesUnread} non lus`} fontFamily={th.fontUI} />
+                  <CountBadge count={partiesUnread} label={`${partiesUnread} non lus`} fontFamily={th.fontUI} bg={th.danger} />
                 )}
                 {t.href === '/parties' && partiesUnread === 0 && openPartiesCount > 0 && (
                   // Aucun message non lu : on montre le nombre de parties ouvertes (pastille accent,

@@ -69,7 +69,7 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un membre…" autoFocus
           style={{ border: `1px solid ${th.line}`, background: th.surface2, color: th.text, borderRadius: 10,
             padding: '10px 12px', fontFamily: th.fontUI, fontSize: 14, marginBottom: 10 }} />
-        {error && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: '#e5484d', marginBottom: 8 }}>{error}</div>}
+        {error && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.danger, marginBottom: 8 }}>{error}</div>}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {!query && rows.length > 0 && (
             <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.4, padding: '4px 4px 8px' }}>
@@ -77,7 +77,7 @@ export function NewConversationPanel({ slug, token, viewerUserId, onClose, onOpe
             </div>
           )}
           {rows.length === 0 && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: query && searchError ? '#e5484d' : th.textMute, padding: '12px 4px' }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: query && searchError ? th.danger : th.textMute, padding: '12px 4px' }}>
               {query
                 ? (searchError ? 'Recherche indisponible, réessayez.' : 'Aucun membre trouvé.')
                 : 'Tapez un nom pour trouver un membre.'}

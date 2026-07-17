@@ -66,8 +66,8 @@ export default function SuperAdminClubDetail() {
 
   const sub = club.billing.subscription;
   const stateColor = club.billing.state === 'OK' ? th.accent
-    : club.billing.state === 'PAST_DUE' ? '#c4472e'
-    : club.billing.state === 'TO_REGULARIZE' ? '#e8804f' : th.textFaint;
+    : club.billing.state === 'PAST_DUE' ? th.danger
+    : club.billing.state === 'TO_REGULARIZE' ? th.warning : th.textFaint;
 
   return (
     <div>
@@ -189,7 +189,7 @@ export default function SuperAdminClubDetail() {
                     <td style={{ padding: '8px', fontSize: 12.5, color: th.textMute, borderBottom: `1px solid ${th.line}` }}>{formatPeriod(inv.periodStart, inv.periodEnd)}</td>
                     <td style={{ padding: '8px', fontSize: 13, color: th.textMute, borderBottom: `1px solid ${th.line}` }}>{inv.tier != null ? `T${inv.tier}` : '—'}</td>
                     <td style={{ padding: '8px', fontSize: 13, textAlign: 'right', fontFamily: th.fontMono, color: th.text, borderBottom: `1px solid ${th.line}` }}>{eurosFromCents(inv.amountCents)}</td>
-                    <td style={{ padding: '8px', fontSize: 12.5, fontWeight: 700, color: inv.status === 'paid' ? th.accent : inv.status === 'failed' ? '#c4472e' : th.textFaint, borderBottom: `1px solid ${th.line}` }}>{invoiceStatusLabel(inv.status)}</td>
+                    <td style={{ padding: '8px', fontSize: 12.5, fontWeight: 700, color: inv.status === 'paid' ? th.accent : inv.status === 'failed' ? th.danger : th.textFaint, borderBottom: `1px solid ${th.line}` }}>{invoiceStatusLabel(inv.status)}</td>
                     <td style={{ padding: '8px', fontSize: 12.5, borderBottom: `1px solid ${th.line}` }}>
                       {inv.hostedInvoiceUrl && (
                         <a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer" style={{ color: th.accent, textDecoration: 'none' }}>Voir sur Stripe</a>

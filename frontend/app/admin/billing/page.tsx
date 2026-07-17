@@ -5,6 +5,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubBilling } from '@/lib/api';
 import { PLATFORM_TIERS, tierLabel } from '@/lib/platformTiers';
+import { eurosCompact as euros } from '@/lib/payments';
 import { MemberGauge } from '@/components/billing/MemberGauge';
 
 const STATE_LABEL: Record<ClubBilling['state'], string> = {
@@ -14,16 +15,6 @@ const STATE_LABEL: Record<ClubBilling['state'], string> = {
   TO_REGULARIZE: 'À régulariser',
   PAST_DUE: 'Paiement en échec',
 };
-
-/** 2900 → « 29 € », 101000 → « 1 010 € » (espaces normalisées, sans décimales inutiles). */
-function euros(cents: number): string {
-  const value = cents / 100;
-  const s = (Number.isInteger(value)
-    ? value.toLocaleString('fr-FR')
-    : value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  ).replace(/[  ]/g, ' ');
-  return `${s} €`;
-}
 
 /** Plage courte d'un palier : « 0 – 50 », « 801+ »… */
 function tierRange(tier: number): string {
@@ -166,7 +157,7 @@ export default function AdminBillingPage() {
       <TierPricingRow observedTier={billing.observedTier} subscribedTier={sub ? sub.tier : null} />
 
       {/* État + actions */}
-      <section style={{ ...card, borderLeft: needsAction ? '4px solid #e8804f' : `1px solid ${th.line}` }}>
+      <section style={{ ...card, borderLeft: needsAction ? `4px solid ${th.warning}` : `1px solid ${th.line}` }}>
         <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>
           {STATE_LABEL[billing.state]}
         </div>
@@ -214,7 +205,7 @@ export default function AdminBillingPage() {
             </span>
           )}
         </div>
-        {error && <div style={{ marginTop: 10, fontFamily: th.fontUI, fontSize: 13, color: '#c4472e' }}>{error}</div>}
+        {error && <div style={{ marginTop: 10, fontFamily: th.fontUI, fontSize: 13, color: th.danger }}>{error}</div>}
       </section>
 
       {/* Historique */}

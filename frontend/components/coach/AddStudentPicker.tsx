@@ -54,7 +54,7 @@ export function AddStudentPicker({ slug, token, onClose, onPick }: {
             padding: '10px 12px', fontFamily: th.fontUI, fontSize: 14, marginBottom: 10 }} />
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {results.length === 0 && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: query && searchError ? '#e5484d' : th.textMute, padding: '12px 4px' }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: query && searchError ? th.danger : th.textMute, padding: '12px 4px' }}>
               {query
                 ? (searchError ? 'Recherche indisponible, réessayez.' : 'Aucun membre trouvé.')
                 : 'Tapez un nom pour trouver un membre.'}

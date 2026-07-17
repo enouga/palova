@@ -65,7 +65,7 @@ export function ReportDialog({ onSubmit, onCancel }: {
             <textarea value={detail} onChange={(e) => setDetail(e.target.value.slice(0, 500))}
               placeholder="Précisions (optionnel)" rows={3}
               style={{ width: '100%', marginTop: 12, border: `1px solid ${th.line}`, borderRadius: 12, padding: '10px 12px', resize: 'vertical', fontFamily: th.fontUI, fontSize: 14, background: th.surface, color: th.text }} />
-            {error && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12.5, color: '#e0554f' }}>{error}</div>}
+            {error && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12.5, color: th.danger }}>{error}</div>}
             <div style={{ display: 'flex', gap: 11, marginTop: 18 }}>
               <Btn variant="surface" onClick={onCancel} disabled={phase === 'sending'} style={{ flex: '0 0 42%' }}>Annuler</Btn>
               <Btn variant="danger" onClick={submit} disabled={phase === 'sending'} style={{ flex: 1 }}>

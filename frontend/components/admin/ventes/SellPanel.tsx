@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { packageLabel } from '@/lib/packages';
+import { eurosFromString } from '@/lib/payments';
 import { Btn } from '@/components/ui/atoms';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { SectionTitle } from '@/components/admin/ventes/SectionTitle';
@@ -23,7 +24,6 @@ export interface SellSelection {
 
 interface Offer { key: string; kind: 'package' | 'subscription'; id: string; name: string; price: string; suffix?: string }
 
-const euro = (s: string) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 const TOAST_MS = 3500;
 
 /** Panneau de vente unifié : un seul acheteur, carnets ET abonnements groupés. */
@@ -69,7 +69,7 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
           borderRadius: 11, padding: '10px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 6 }}>
         <span style={{ fontWeight: 600 }}>{o.name}</span>
         <span style={{ fontFamily: th.fontDisplay, fontSize: 14, color: active ? th.accent : th.textMute, fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', letterSpacing: -0.2 }}>
-          {euro(o.price)}{o.suffix ?? ''}
+          {eurosFromString(o.price)}{o.suffix ?? ''}
         </span>
       </button>
     );
@@ -143,7 +143,7 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
           )}
 
           <Btn type="button" icon="check" onClick={sell} disabled={busy || !selected}>
-            {busy ? '…' : selected ? `Encaisser ${euro(selected.price)}${selected.suffix ?? ''}` : 'Encaisser'}
+            {busy ? '…' : selected ? `Encaisser ${eurosFromString(selected.price)}${selected.suffix ?? ''}` : 'Encaisser'}
           </Btn>
         </>
       )}

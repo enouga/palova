@@ -131,8 +131,8 @@ export default function SuperAdminBilling() {
                           <Link href={`/superadmin/clubs/${c.id}`} style={{ color: th.text, textDecoration: 'none', fontWeight: 600 }}>{c.name}</Link>
                         </td>
                         <td style={{ padding: '9px 8px', fontSize: 12.5, fontWeight: 700, borderBottom: `1px solid ${th.line}`, color:
-                          c.billing.state === 'OK' ? th.accent : c.billing.state === 'PAST_DUE' ? '#c4472e'
-                          : c.billing.state === 'TO_REGULARIZE' ? '#e8804f' : th.textFaint }}>
+                          c.billing.state === 'OK' ? th.accent : c.billing.state === 'PAST_DUE' ? th.danger
+                          : c.billing.state === 'TO_REGULARIZE' ? th.warning : th.textFaint }}>
                           {BILLING_STATE_LABEL[c.billing.state]}
                         </td>
                         <td style={{ padding: '9px 8px', fontSize: 13, color: th.textMute, borderBottom: `1px solid ${th.line}` }}>
@@ -141,7 +141,7 @@ export default function SuperAdminBilling() {
                         <td style={{ padding: '9px 8px', fontSize: 13, color: th.textMute, borderBottom: `1px solid ${th.line}` }}>T{c.billing.observedTier}</td>
                         <td style={{ padding: '9px 8px', fontSize: 13, color: th.textMute, borderBottom: `1px solid ${th.line}` }}>
                           {c.billing.subscription ? intervalLabel(c.billing.subscription.interval) : '—'}
-                          {c.billing.subscription?.cancelAtPeriodEnd && <span style={{ color: '#e8804f' }}> · annulé</span>}
+                          {c.billing.subscription?.cancelAtPeriodEnd && <span style={{ color: th.warning }}> · annulé</span>}
                         </td>
                         <td style={{ padding: '9px 8px', fontSize: 12.5, color: th.textFaint, borderBottom: `1px solid ${th.line}` }}>
                           {c.billing.subscription ? formatDate(c.billing.subscription.currentPeriodEnd) : '—'}

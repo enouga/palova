@@ -1,11 +1,11 @@
 'use client';
 import { Member, SubscriptionPlan } from '@/lib/api';
 import { Theme, ACCENTS } from '@/lib/theme';
+import { fmtEuros as eur } from '@/lib/caisse';
+import { eurosTrim as eurStr } from '@/lib/payments';
 import { Icon } from '@/components/ui/Icon';
 import { daysUntil } from '@/lib/subscriptionAdmin';
 
-const eur = (cents: number) => (cents % 100 === 0 ? `${cents / 100} €` : `${(cents / 100).toFixed(2).replace('.', ',')} €`);
-const eurStr = (s: string) => { const n = Number(s); return n % 1 === 0 ? String(n) : n.toFixed(2).replace('.', ','); };
 const PALETTE = ['blue', 'coral', 'apricot', 'cyan', 'emerald'] as const;
 
 /**

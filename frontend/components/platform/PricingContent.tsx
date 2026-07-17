@@ -3,19 +3,10 @@ import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
+import { eurosCompact as euros } from '@/lib/payments';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { PLATFORM_TIERS, tierLabel } from '@/lib/platformTiers';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
-
-/** 2900 → « 29 € », 101000 → « 1 010 € » (espaces normalisées, sans décimales inutiles). */
-function euros(cents: number): string {
-  const value = cents / 100;
-  const s = (Number.isInteger(value)
-    ? value.toLocaleString('fr-FR')
-    : value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  ).replace(/[  ]/g, ' ');
-  return `${s} €`;
-}
 
 /** Plage courte d'un palier : « 0 – 50 », « 801+ »… */
 function tierRange(tier: number): string {

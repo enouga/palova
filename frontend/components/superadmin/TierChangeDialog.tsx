@@ -5,15 +5,7 @@ import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Btn } from '@/components/ui/atoms';
 import { PLATFORM_TIERS, tierLabel, tierPriceCents } from '@/lib/platformTiers';
-
-function euros(cents: number): string {
-  const value = cents / 100;
-  const s = (Number.isInteger(value)
-    ? value.toLocaleString('fr-FR')
-    : value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  ).replace(/[  ]/g, ' ');
-  return `${s} €`;
-}
+import { eurosCompact as euros } from '@/lib/payments';
 
 /**
  * Change le palier (et éventuellement la cadence) de l'abonnement d'un club.

@@ -65,6 +65,12 @@ export interface Theme {
   shadow: string;
   shadowSoft: string;
   glow: string;
+  /** Rouge d'erreur/danger lisible dans les 2 thèmes (texte sur fond neutre). */
+  danger: string;
+  /** Vert de succès/confirmation. */
+  success: string;
+  /** Orange d'avertissement (ex. facturation à régulariser) — attention sans être bloquant. */
+  warning: string;
 }
 
 interface MakeThemeOpts {
@@ -99,6 +105,9 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
       shadow: '0 1px 2px rgba(24,21,14,0.05), 0 8px 28px rgba(24,21,14,0.07)',
       shadowSoft: '0 1px 3px rgba(24,21,14,0.06)',
       glow: 'none',
+      danger: '#b23c17',
+      success: '#22c55e',
+      warning: '#e8804f',
     };
   }
 
@@ -124,6 +133,9 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
     shadow: '0 2px 6px rgba(0,0,0,0.4), 0 20px 50px rgba(0,0,0,0.45)',
     shadowSoft: '0 1px 3px rgba(0,0,0,0.4)',
     glow: '0 0 0 1px rgba(214,255,63,0.0)',
+    danger: ACCENTS.coral,
+    success: '#22c55e',
+    warning: '#e8804f',
   };
 }
 
@@ -142,5 +154,19 @@ export function gaugeTrack(th: Theme, height: number, radius = 999, bg = th.surf
     background: bg,
     boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
     overflow: 'hidden',
+  };
+}
+
+/** Bandeau d'alerte/erreur : lavis coral + texte danger lisible dans les 2 thèmes. */
+export function dangerBanner(th: Theme): CSSProperties {
+  return {
+    background: `${ACCENTS.coral}1f`,
+    color: th.danger,
+    boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`,
+    borderRadius: 10,
+    padding: '10px 12px',
+    fontFamily: th.fontUI,
+    fontSize: 13.5,
+    fontWeight: 600,
   };
 }

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api, SubscriberRow, SubscriptionPlanSummary, PaymentMethod } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Theme } from '@/lib/theme';
+import { eurosTrim as eur } from '@/lib/payments';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -11,7 +12,6 @@ const SALE_METHODS: { m: PaymentMethod; label: string }[] = [
   { m: 'CARD', label: 'Carte' }, { m: 'CASH', label: 'Espèces' }, { m: 'TRANSFER', label: 'Virement' },
   { m: 'VOUCHER', label: 'Ticket CE' }, { m: 'OTHER', label: 'Autre' },
 ];
-const eur = (s: string) => { const n = Number(s); return n % 1 === 0 ? String(n) : n.toFixed(2).replace('.', ','); };
 
 export function SubscriptionActions({ action, sub, plans, clubId, token, onClose, onDone }: {
   action: Action;

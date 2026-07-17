@@ -50,7 +50,7 @@ export function ConversationList({ conversations, selectedId, now, onSelect }: {
             </span>
           </span>
           {c.unreadCount > 0 && (
-            <span style={{ background: '#e5484d', color: '#fff', borderRadius: 999, minWidth: 20, height: 20,
+            <span style={{ background: th.danger, color: '#fff', borderRadius: 999, minWidth: 20, height: 20,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, padding: '0 6px' }}>
               {c.unreadCount > 99 ? '99+' : c.unreadCount}

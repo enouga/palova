@@ -62,13 +62,13 @@ export default function SuperAdminModerationPage() {
       </div>
 
       {actionError && (
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: '#e0554f', marginBottom: 14 }}>{actionError}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.danger, marginBottom: 14 }}>{actionError}</div>
       )}
 
       {loading ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>
       ) : loadError ? (
-        <div style={{ fontFamily: th.fontUI, color: '#e0554f' }}>{loadError}</div>
+        <div style={{ fontFamily: th.fontUI, color: th.danger }}>{loadError}</div>
       ) : items.length === 0 ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun signalement.</div>
       ) : (

@@ -68,7 +68,7 @@ export function DmWidgetHost() {
         ...(error ? {} : { height: 'min(520px, 80vh)' }) }}>
         {error ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16 }}>
-            <span role="alert" style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e5484d', flex: 1 }}>{error}</span>
+            <span role="alert" style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.danger, flex: 1 }}>{error}</span>
             <button type="button" aria-label="Fermer" onClick={() => setError(null)}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.textMute, fontSize: 20 }}>×</button>
           </div>

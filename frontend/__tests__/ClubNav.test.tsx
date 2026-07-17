@@ -201,8 +201,8 @@ describe('ClubNav', () => {
     document.cookie = 'token=abc; path=/';
     wrap();
     const badge = await screen.findByLabelText('1 à venir');
-    // Accent du thème (bleu Palova par défaut), pas le rouge #e5484d des non-lus.
-    expect(badge.style.background).not.toBe('rgb(229, 72, 77)');
+    // Accent du thème (bleu Palova par défaut), pas le rouge danger des non-lus.
+    expect(badge.style.background).not.toBe('rgb(178, 60, 23)');
     expect(badge.style.background).toBeTruthy();
   });
 
@@ -213,7 +213,7 @@ describe('ClubNav', () => {
     const clubPadel = { id: 'c1', slug: 'demo', name: 'Club Démo', logoUrl: null, clubSports: [{ sport: { key: 'padel' } }] } as never;
     render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
     const badge = await screen.findByLabelText('2 non lus');
-    expect(badge.style.background).toBe('rgb(229, 72, 77)');
+    expect(badge.style.background).toBe('rgb(178, 60, 23)');
   });
 
   it("affiche l'icône Messages du header avec badge rouge de non-lus quand connecté", async () => {
@@ -224,7 +224,7 @@ describe('ClubNav', () => {
     const link = await screen.findByLabelText('Messages');
     expect(link).toHaveAttribute('href', '/me/messages');
     const badge = await screen.findByLabelText('4 messages non lus');
-    expect(badge.style.background).toBe('rgb(229, 72, 77)');
+    expect(badge.style.background).toBe('rgb(178, 60, 23)');
   });
 
   it("masque l'icône Messages sans session", () => {
@@ -251,8 +251,8 @@ describe('ClubNav', () => {
     render(<ThemeProvider><ClubNav club={clubPadel} /></ThemeProvider>);
     const badge = await screen.findByLabelText('3 parties ouvertes');
     expect(badge.textContent).toBe('3');
-    // Pastille accent (bleu Palova par défaut), pas le rouge #e5484d des non-lus.
-    expect(badge.style.background).not.toBe('rgb(229, 72, 77)');
+    // Pastille accent (bleu Palova par défaut), pas le rouge th.danger des non-lus.
+    expect(badge.style.background).not.toBe('rgb(178, 60, 23)');
   });
 
   it('le badge de non lus a priorité sur le compteur de parties ouvertes', async () => {

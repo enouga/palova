@@ -8,8 +8,8 @@ import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { offerTint, planPulse, packagePulse, planRevenueCents, splitByActive } from '@/lib/adminOffers';
 import { OfferCard } from '@/components/admin/offers/OfferCard';
 import { OfferStudio, OfferStudioResult } from '@/components/admin/offers/OfferStudio';
+import { eurosFromString as euro } from '@/lib/payments';
 
-const euro = (s: string | number) => `${Number(s).toFixed(2).replace('.', ',')} €`;
 const SPORT_OPTIONS = ['padel', 'squash', 'tennis', 'badminton', 'pickleball', 'pingpong'];
 
 type Editing = { kind: 'plan'; plan: SubscriptionPlan } | { kind: 'package'; tpl: PackageTemplate };

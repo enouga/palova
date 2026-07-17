@@ -44,7 +44,7 @@ export default function AdminEmailsPage() {
         Personnalisez le contenu de chaque email automatique — texte, mise en forme et photos, sans aucune technique.
       </p>
       {loading && <p style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</p>}
-      {error && <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55', margin: '0 0 20px' }}>{error}</p>}
+      {error && <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.danger, margin: '0 0 20px' }}>{error}</p>}
       {GROUP_ORDER.map((g) => {
         const groupItems = items.filter((i) => i.group === g);
         if (groupItems.length === 0) return null;

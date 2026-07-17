@@ -25,8 +25,8 @@ export function TilePaymentPopover({ model, anchor }: { model: PastillesModel; a
         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 0' }}>
           {seat ? (
             <>
-              <span style={{ color: seat.paid ? th.text : '#c0392b' }}>{seat.paid ? '✓' : '○'} {seat.name}</span>
-              <span style={{ fontFamily: th.fontMono, fontSize: 11, color: seat.paid ? th.textMute : '#c0392b' }}>
+              <span style={{ color: seat.paid ? th.text : th.danger }}>{seat.paid ? '✓' : '○'} {seat.name}</span>
+              <span style={{ fontFamily: th.fontMono, fontSize: 11, color: seat.paid ? th.textMute : th.danger }}>
                 {seat.paid ? fmtEuros(seat.paidCents) : `reste ${fmtEuros(seat.outstandingCents)}`}
               </span>
             </>
@@ -38,7 +38,7 @@ export function TilePaymentPopover({ model, anchor }: { model: PastillesModel; a
       <div style={{ marginTop: 5, paddingTop: 5, borderTop: `1px solid ${th.line}`, fontWeight: 700 }}>
         {model.settled
           ? <span style={{ color: SETTLED_COLOR }}>✓ Soldé</span>
-          : <span>Payé {fmtEuros(model.totalPaidCents)} / {fmtEuros(model.totalDueCents)} · <span style={{ color: '#c0392b' }}>reste {fmtEuros(remaining)}</span></span>}
+          : <span>Payé {fmtEuros(model.totalPaidCents)} / {fmtEuros(model.totalDueCents)} · <span style={{ color: th.danger }}>reste {fmtEuros(remaining)}</span></span>}
       </div>
     </div>
   );

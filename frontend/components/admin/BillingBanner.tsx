@@ -40,7 +40,7 @@ export function BillingBanner({ clubId, token }: { clubId: string; token: string
       </span>
       <button onClick={() => router.push('/admin/billing')} style={{
         padding: '8px 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
-        fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, background: '#e8804f', color: '#fff',
+        fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, background: th.warning, color: '#fff',
       }}>
         {pastDue ? 'Mettre à jour' : 'Voir l’offre'}
       </button>

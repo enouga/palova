@@ -1,10 +1,10 @@
 'use client';
-import { CSSProperties, ReactNode, useState, useEffect, useCallback } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { api, MessageReportRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Theme, ACCENTS } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
@@ -15,19 +15,6 @@ const REASON_LABEL: Record<string, string> = { HARASSMENT: 'Harcèlement', ILLEG
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-// Coral lisible en petit texte : coral vif en sombre, coral foncé en clair (convention AgendaAdminCard).
-function coralInkOf(th: Theme): string {
-  return th.mode === 'floodlit' ? ACCENTS.coral : '#b23c17';
-}
-
-function errorBanner(th: Theme): CSSProperties {
-  return {
-    background: `${ACCENTS.coral}1f`, color: th.mode === 'floodlit' ? ACCENTS.coral : '#a83214',
-    boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`, borderRadius: 10, padding: '10px 12px',
-    fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginBottom: 14,
-  };
 }
 
 // En-tête de section : point coloré + label + compteur (convention AgendaAdminList).
@@ -47,7 +34,7 @@ function SectionHead({ color, label, count }: { color: string; label: string; co
 function ReportCard({ r, actions }: { r: MessageReportRow; actions?: ReactNode }) {
   const { th } = useTheme();
   const resolved = r.status === 'RESOLVED';
-  const coralInk = coralInkOf(th);
+  const coralInk = th.danger;
   const stripe = resolved ? th.textFaint : ACCENTS.coral;
   const authorLine = [
     `${r.message.author.firstName} ${r.message.author.lastName}`,
@@ -165,12 +152,12 @@ export default function AdminModerationPage() {
         Messages du chat de partie signalés par les membres.
       </div>
 
-      {actionError && <div style={errorBanner(th)}>{actionError}</div>}
+      {actionError && <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{actionError}</div>}
 
       {loading ? (
         <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Chargement…</div>
       ) : loadError ? (
-        <div style={errorBanner(th)}>{loadError}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{loadError}</div>
       ) : items.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '46px 20px' }}>
           <span aria-hidden style={{

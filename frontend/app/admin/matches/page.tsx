@@ -23,7 +23,8 @@ export default function AdminMatchesPage() {
 
   const reload = useCallback(() => {
     if (!club || !token) return;
-    api.getClubMatches(club.id, tab, token).then(setList).catch(() => setList([]));
+    api.getClubMatches(club.id, tab, token).then((l) => { setList(l); setError(null); })
+      .catch(() => { setList([]); setError('Impossible de charger les matchs pour le moment.'); });
   }, [club?.id, token, tab]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -75,7 +76,7 @@ export default function AdminMatchesPage() {
           <p style={{ fontFamily: th.fontUI, color: th.textMute, marginBottom: 16 }}>
             Un joueur a contesté ces résultats. Valide pour appliquer les niveaux, ou annule le match.
           </p>
-          {error && <p style={{ color: '#dc2626', marginBottom: 12 }}>{error}</p>}
+          {error && <p style={{ color: th.danger, marginBottom: 12 }}>{error}</p>}
           {list.length === 0 ? (
             <p style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun litige.</p>
           ) : (
@@ -113,7 +114,7 @@ export default function AdminMatchesPage() {
           <p style={{ fontFamily: th.fontUI, color: th.textMute, marginBottom: 16 }}>
             Annuler un match recalcule les niveaux des joueurs et le retire de leur courbe de progression.
           </p>
-          {error && <p style={{ color: '#dc2626', marginBottom: 12 }}>{error}</p>}
+          {error && <p style={{ color: th.danger, marginBottom: 12 }}>{error}</p>}
           {list.length === 0 ? (
             <p style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun match confirmé.</p>
           ) : (

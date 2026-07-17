@@ -5,10 +5,10 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
 import { GUIDE_STEPS, stripeGuideStates, STRIPE_DOC_LINKS, StepState } from '@/lib/stripeGuide';
 
-const DOT_META: Record<StepState, { bg: string; fg: string; symbol: string }> = {
-  done: { bg: '#22c55e', fg: '#fff', symbol: '✓' },
-  current: { bg: '', fg: '#fff', symbol: '' },
-  todo: { bg: '', fg: '', symbol: '' },
+const DOT_META: Record<StepState, { fg: string; symbol: string }> = {
+  done: { fg: '#fff', symbol: '✓' },
+  current: { fg: '#fff', symbol: '' },
+  todo: { fg: '', symbol: '' },
 };
 
 export function StripeSetupGuide({ status }: { status: ClubAdminDetail['stripeAccountStatus'] }) {
@@ -51,7 +51,7 @@ export function StripeSetupGuide({ status }: { status: ClubAdminDetail['stripeAc
                       flexShrink: 0, width: 24, height: 24, borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, marginTop: 1,
-                      background: state === 'done' ? meta.bg : state === 'current' ? th.accent : th.surface2,
+                      background: state === 'done' ? th.success : state === 'current' ? th.accent : th.surface2,
                       color: state === 'todo' ? th.textMute : meta.fg,
                       border: state === 'todo' ? `1px solid ${th.line}` : 'none',
                     }}

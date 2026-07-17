@@ -80,7 +80,7 @@ export default function EmailEditorPage() {
   const labelStyle: CSSProperties = { fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 6 };
 
   if (!detail) {
-    if (loadError) return <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#e55' }}>{loadError}</p>;
+    if (loadError) return <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.danger }}>{loadError}</p>;
     return <p style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</p>;
   }
 

@@ -7,7 +7,7 @@ import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClub
 import { localInputToISO } from '@/lib/datetimeLocal';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { GENDER_LABEL } from '@/lib/events';
 import { formatDateShortTimeRange, fillRatio, waitlistPosition } from '@/lib/tournament';
 import { groupAdminAgenda, agendaItemGroup } from '@/lib/adminAgenda';
@@ -186,7 +186,7 @@ export default function AdminTournamentsPage() {
       </div>
 
       {error && (
-        <div style={{ background: `${ACCENTS.coral}1f`, color: th.mode === 'floodlit' ? ACCENTS.coral : '#a83214', boxShadow: `inset 0 0 0 1px ${ACCENTS.coral}55`, borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, marginBottom: 14 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>
       )}
 
       {/* Formulaire de création */}

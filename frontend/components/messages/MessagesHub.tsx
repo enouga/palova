@@ -145,11 +145,11 @@ export function MessagesHub({ token, viewerUserId, clubSlug, initialWith, initia
       display: 'flex', flexDirection: 'column', height: 'min(680px, calc(100vh - 220px))', minHeight: 380 }}>
       {deeplinkError && (
         <div role="alert" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          padding: '8px 14px', background: '#e5484d1a', borderBottom: `1px solid ${th.line}`,
-          fontFamily: th.fontUI, fontSize: 13, color: '#e5484d' }}>
+          padding: '8px 14px', background: `${th.danger}1a`, borderBottom: `1px solid ${th.line}`,
+          fontFamily: th.fontUI, fontSize: 13, color: th.danger }}>
           <span>{deeplinkError}</span>
           <button type="button" aria-label="Fermer" onClick={() => setDeeplinkError(null)}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#e5484d', fontSize: 16, lineHeight: 1 }}>×</button>
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: th.danger, fontSize: 16, lineHeight: 1 }}>×</button>
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>

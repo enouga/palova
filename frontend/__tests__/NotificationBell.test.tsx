@@ -8,6 +8,7 @@ jest.mock('@/lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true 
 jest.mock('@/lib/ThemeProvider', () => ({ useTheme: () => ({ th: {
   text: '#000', textMute: '#666', textFaint: '#999', surface: '#fff', surface2: '#f3f3f3',
   surfaceHi: '#eee', line: '#ddd', accent: '#d6ff3f', onAccent: '#000', fontUI: 'sans-serif', shadowSoft: 'none',
+  danger: '#b23c17', success: '#22c55e', warning: '#e8804f',
 } }) }));
 jest.mock('@/lib/api', () => ({
   api: {
