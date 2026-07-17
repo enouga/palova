@@ -114,7 +114,27 @@ describe('RefundService.refund — paiements ONLINE', () => {
 
     expect(stripe.refunds.create).toHaveBeenCalledWith(
       { payment_intent: 'pi_1', amount: 2500 },
-      { stripeAccount: 'acct_1' },
+      { stripeAccount: 'acct_1', idempotencyKey: 'refund:pay-online-1:0:2500' },
+    );
+  });
+
+  it('idempotencyKey déterministe qui varie selon le déjà-remboursé (anti-double / non-collision)', async () => {
+    // Remboursement partiel de 5 € sur un paiement déjà remboursé de 10 € → alreadyCents=1000.
+    prismaMock.payment.findUnique.mockResolvedValue({
+      ...onlinePayment, refundedAmount: new Prisma.Decimal(10),
+    } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountId: 'acct_1' } as any);
+    (stripe.refunds.create as jest.Mock).mockResolvedValue({ id: 'ref_2' });
+    prismaMock.payment.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.refund.create.mockResolvedValue({ id: 'rf-2' } as any);
+    prismaMock.payment.update.mockResolvedValue({ id: 'pay-online-1' } as any);
+
+    await service.refund({ paymentId: 'pay-online-1', clubId: 'club-1', amount: 5 });
+
+    // Clé distincte du remboursement initial (0:2500) → deux remboursements légitimes ne se collapsent pas.
+    expect(stripe.refunds.create).toHaveBeenCalledWith(
+      { payment_intent: 'pi_1', amount: 500 },
+      { stripeAccount: 'acct_1', idempotencyKey: 'refund:pay-online-1:1000:500' },
     );
   });
 

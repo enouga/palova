@@ -55,7 +55,14 @@ export class RefundService {
       if (!club?.stripeAccountId) throw new Error('STRIPE_NOT_CONFIGURED');
       await stripe.refunds.create(
         { payment_intent: payment.stripePaymentIntentId, amount: amountCents },
-        { stripeAccount: club.stripeAccountId },
+        {
+          stripeAccount: club.stripeAccountId,
+          // Idempotence anti-double-remboursement : deux demandes concurrentes lisent le même
+          // refundedAmount (alreadyCents) → même clé → Stripe ne rembourse qu'une fois. Deux
+          // remboursements partiels légitimes successifs ont un alreadyCents différent → clés
+          // distinctes → les deux passent bien.
+          idempotencyKey: `refund:${payment.id}:${alreadyCents}:${amountCents}`,
+        },
       );
     }
 
