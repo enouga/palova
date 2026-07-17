@@ -22,6 +22,7 @@ import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
 import { startReminderJob } from './jobs/reminders.job';
 import { startPlatformBillingJob } from './jobs/platformBilling.job';
+import { startClubJanitorJob } from './jobs/clubJanitor.job';
 import { prisma } from './db/prisma';
 import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
@@ -114,6 +115,7 @@ if (require.main === module) {
         startCleanupJob();
         startReminderJob();
         startPlatformBillingJob();
+        startClubJanitorJob();
       });
     })
     .catch(console.error);
