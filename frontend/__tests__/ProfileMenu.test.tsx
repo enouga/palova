@@ -196,49 +196,15 @@ describe('ProfileMenu', () => {
     expect(screen.queryByText('Superadmin')).not.toBeInTheDocument();
   });
 
-  it("pas de lien « Espace club » dans le menu pour le club courant (déplacé dans l'en-tête)", async () => {
+  it("jamais de lien « Espace club » dans le menu (raccourci vit uniquement dans ClubNav)", async () => {
     document.cookie = 'token=abc; path=/';
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'OWNER' }]);
     wrap();
     openMenu();
     await screen.findByText('Mes clubs'); // menu chargé
     expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
-  });
-
-  it("lien « Espace club » pour les AUTRES clubs gérés, pas le club courant", async () => {
-    document.cookie = 'token=abc; path=/';
-    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getMyClubs.mockResolvedValue([
-      { clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'OWNER' },
-      { clubId: 'c2', slug: 'autre', name: 'Autre Club', role: 'ADMIN' },
-      { clubId: 'c3', slug: 'troisieme', name: 'Troisième Club', role: 'STAFF' },
-    ]);
-    wrap();
-    openMenu();
-    expect(await screen.findByText('Espace club — Autre Club')).toBeInTheDocument();
-    expect(screen.getByText('Espace club — Troisième Club')).toBeInTheDocument();
-    expect(screen.queryByText('Espace club — Club Démo')).not.toBeInTheDocument();
-    expect(screen.queryByText('Espace club')).not.toBeInTheDocument(); // pas de version courte (2 autres clubs)
-  });
-
-  it("lien « Espace club » visible aussi sur l'hôte plateforme dès qu'on gère un club", async () => {
-    document.cookie = 'token=abc; path=/';
-    clubCtx = { slug: null, club: null, loading: false }; // hôte plateforme
-    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', slug: 'demo', name: 'Club Démo', role: 'ADMIN' }]);
-    wrap();
-    openMenu();
-    expect(await screen.findByText('Espace club')).toBeInTheDocument();
-  });
-
-  it("pas de lien « Espace club » si on ne gère aucun club", async () => {
-    document.cookie = 'token=abc; path=/';
-    clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
-    api.getMyClubs.mockResolvedValue([]); // membre simple, pas gérant
-    wrap();
-    openMenu();
-    await screen.findByText('Mes clubs'); // menu chargé
-    expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Espace club — /)).not.toBeInTheDocument();
+    expect(api.getMyClubs).not.toHaveBeenCalled();
   });
 
   it('Échap et clic extérieur ferment le menu', async () => {
