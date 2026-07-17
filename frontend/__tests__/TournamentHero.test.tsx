@@ -98,4 +98,22 @@ describe('MetaCards', () => {
     wrap(<MetaCards t={tournament({ entryFee: null })} />);
     expect(screen.queryByText(/€ \/ binôme/)).not.toBeInTheDocument();
   });
+
+  // Le J/A est public : c'est lui qui répond du tournoi. Nom seul (spec §7) — le canal de
+  // contact reste `contactInfo`, affiché ailleurs sur la fiche.
+  it('J/A désigné → carte « Juge-arbitre » avec son nom', () => {
+    wrap(<MetaCards t={tournament({ referee: { name: 'Julien Martin' } })} />);
+    expect(screen.getByText('Juge-arbitre')).toBeInTheDocument();
+    expect(screen.getByText('Julien Martin')).toBeInTheDocument();
+  });
+
+  it('aucun J/A désigné → pas de carte « Juge-arbitre »', () => {
+    wrap(<MetaCards t={tournament({ referee: null })} />);
+    expect(screen.queryByText('Juge-arbitre')).not.toBeInTheDocument();
+  });
+
+  it('champ referee absent du payload (listes) → pas de carte', () => {
+    wrap(<MetaCards t={tournament()} />);
+    expect(screen.queryByText('Juge-arbitre')).not.toBeInTheDocument();
+  });
 });

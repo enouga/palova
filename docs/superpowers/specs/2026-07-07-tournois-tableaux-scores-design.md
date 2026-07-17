@@ -36,7 +36,7 @@ par tous sur la fiche tournoi.
 |---|---|
 | Sport | **Padel uniquement** (garde serveur + gating UI sur `clubSport.sport.key === 'padel'`) |
 | Formats v1 | **TMC 12/16/24** + poules+tableau + tableau seul |
-| Scores | **Staff seul** (OWNER/ADMIN/STAFF), pas de flux joueur |
+| Scores | **Staff + le J/A du tournoi** (`Tournament.refereeUserId`, cf. `2026-07-17-juge-arbitre-tournoi-design.md`), pas de flux joueur |
 | Planning terrains | **Hors v1** |
 | Seeding | **Poids de la paire saisi par le staff** à la composition (`TournamentRegistration.seedWeight`), pas de champ FFT sur le profil ; sans poids → rating interne moyen puis ordre d'inscription |
 | Composition | Proposée par le moteur, **retouchable** (poules, slots, poids) tant que non lancée |
@@ -241,6 +241,19 @@ tournoi** (pattern des inscriptions).
   mutation → 409 `TOURNAMENT_CANCELLED`).
 
 ## 6. API
+
+> **Deux chemins d'autorité.** La surface du tableau accepte le staff (gate
+> `requireClubMember('STAFF')` hérité) **et** le J/A désigné du tournoi (gate
+> `resolveReferee` + `assertRefereeOwnsTournament`, cf. la spec J/A du 2026-07-17). Un J/A
+> n'est pas staff : prévoir des routes `/me/referee/tournaments/:id/draw*` en miroir, ou un
+> gate composite. À trancher au brainstorming du moteur — mais **pas après** : si le moteur
+> naît staff-only, il faudra le rétrofitter.
+>
+> **Note de chiffrage** (issue de l'exploration du 2026-07-17) : la saisie de résultat
+> actuelle est **auto-déclarée entre pairs** — `MatchService.createFromReservation` exige
+> d'être **l'un des 4 joueurs** et refuse les créneaux de tournoi (`NOT_A_COURT_RESERVATION`) ;
+> `Match` n'a **aucune FK vers `Tournament`**. Un J/A qui saisit un tableau est donc un
+> **chemin d'écriture entièrement neuf**, pas une extension des gardes existantes.
 
 **Admin** (`admin.ts`, sous `/api/clubs/:clubId/admin/tournaments/:id/draw`, staff existant) :
 - `GET /draw` — état complet (+ `compositionStale`)

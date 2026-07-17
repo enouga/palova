@@ -35,6 +35,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const [packages, setPackages] = useState<MemberPackage[]>([]);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [isCoach, setIsCoach] = useState(false);
+  const [isReferee, setIsReferee] = useState(false);
   const { state: installState, promptInstall } = useInstallPrompt();
   const [installHelp, setInstallHelp] = useState(false);
 
@@ -55,7 +56,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
         api.getMyClubMembership(slug, token).then(setMembership).catch(() => setMembership(null));
         api.getMyClubPackages(slug, token).then(setPackages).catch(() => {});
         api.getMyClubSubscriptions(slug, token).then(setSubs).catch(() => {});
-        api.getCoachStatus(slug, token).then((r) => setIsCoach(r.isCoach)).catch(() => {});
+        api.getMyFacets(slug, token).then((r) => { setIsCoach(r.isCoach); setIsReferee(r.isReferee); }).catch(() => {});
       } else {
         setMembership(null);
       }
@@ -163,6 +164,9 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             {slug && <MenuItem th={th} icon="users" label="Mes amis" onClick={() => go('/me/friends')} />}
             {slug && <MenuItem th={th} icon="chat" label="Messages" onClick={() => go('/me/messages')} />}
             {slug && isCoach && <MenuItem th={th} icon="whistle" label="Mes cours" onClick={() => go('/me/coaching')} />}
+            {/* « Arbitrage », jamais « Mes tournois » : /api/me/tournaments désigne déjà les tournois
+                où JE SUIS INSCRIT comme joueur — deux « mes tournois » de sens opposés piégeraient. */}
+            {slug && isReferee && <MenuItem th={th} icon="trophy" label="Arbitrage" onClick={() => go('/me/refereeing')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="search" label="Mes clubs" onClick={() => { setOpen(false); window.location.assign(platformUrl('/clubs')); }} />
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}

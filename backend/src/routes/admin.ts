@@ -77,6 +77,7 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_CANCELLED:     409,
   USER_NOT_FOUND:        404,
   MEMBER_NOT_FOUND:      404,
+  REFEREE_INVALID:       400,  // J/A désigné qui n'est pas un membre ACTIVE portant la facette (create/update tournoi)
   CANNOT_CHANGE_OWNER:   403,
   CANNOT_CHANGE_SELF:    409,
   MEMBER_IS_STAFF:       409,
@@ -771,6 +772,13 @@ router.get('/coaches', async (req: ClubScopedRequest, res: Response, next: NextF
   try { res.json(await coachService.listAdmin(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
 });
 
+// --- Vivier des juges-arbitres (lecture seule : la facette se gère depuis /members/:userId/referee) ---
+// Volontairement laissée à STAFF (garde globale du routeur) : peupler le picker de J/A fait partie
+// de l'édition d'un tournoi, elle-même ouverte au STAFF. Seule l'attribution de la facette est ADMIN+.
+router.get('/referees', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await clubService.listReferees(req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
 // --- Séries récurrentes (tous types) ---
 router.post('/reservation-series', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1042,6 +1050,16 @@ router.patch('/members/:userId/coach', requireClubMember('ADMIN'), async (req: C
   try {
     if (typeof req.body?.isCoach !== 'boolean') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     res.json(await coachService.setMemberCoach(req.membership!.clubId, asString(req.params.userId), req.body.isCoach));
+  } catch (e) { handleError(e, res, next); }
+});
+
+// Facette « juge-arbitre » d'un membre — réservé OWNER/ADMIN, même périmètre que le rôle staff :
+// la facette ouvre l'espace arbitrage des tournois qu'on lui assigne, un STAFF ne se l'octroie pas seul.
+// Être J/A ne donne pour autant aucun droit sur le club (pas de garde self/owner côté service).
+router.patch('/members/:userId/referee', requireClubMember('ADMIN'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (typeof req.body?.isReferee !== 'boolean') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    res.json(await clubService.setMemberReferee(req.membership!.clubId, asString(req.params.userId), req.body.isReferee));
   } catch (e) { handleError(e, res, next); }
 });
 

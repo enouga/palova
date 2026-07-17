@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useClub } from '@/lib/ClubProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
-import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClubSport } from '@/lib/api';
+import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClubSport, ClubReferee } from '@/lib/api';
 import { localInputToISO } from '@/lib/datetimeLocal';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
@@ -19,9 +19,19 @@ const GENDERS: { value: 'MEN' | 'WOMEN' | 'MIXED'; label: string }[] = [
   { value: 'MEN', label: 'Messieurs' }, { value: 'WOMEN', label: 'Dames' }, { value: 'MIXED', label: 'Mixte' },
 ];
 
+// Codes serveur → français. REFEREE_INVALID = la cible n'a pas (ou plus) la facette J/A :
+// vivier périmé dans l'onglet, ou facette retirée entre-temps.
+const ERROR_FR: Record<string, string> = {
+  REFEREE_INVALID: 'Ce membre n’est pas juge-arbitre.',
+};
+const messageFor = (e: unknown) => {
+  const code = (e as Error)?.message ?? '';
+  return ERROR_FR[code] ?? (code || 'Une erreur est survenue.');
+};
+
 const emptyForm = (clubSportId: string): CreateTournamentBody => ({
   clubSportId, name: '', category: 'P100', gender: 'MEN', openToWomen: true,
-  description: '', contactInfo: '', startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
+  description: '', contactInfo: '', refereeUserId: null, startTime: '', endTime: null, registrationDeadline: '', maxTeams: null, entryFee: null,
   requirePrepayment: false,
 });
 
@@ -31,6 +41,7 @@ export default function AdminTournamentsPage() {
   const { th } = useTheme();
   const [list, setList] = useState<Tournament[]>([]);
   const [sports, setSports] = useState<AdminClubSport[]>([]);
+  const [referees, setReferees] = useState<ClubReferee[]>([]);
   const [form, setForm] = useState<CreateTournamentBody | null>(null);
   const [detail, setDetail] = useState<AdminTournamentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +59,12 @@ export default function AdminTournamentsPage() {
   useEffect(() => {
     if (!club || !token) return;
     api.adminGetSports(club.id, token).then(setSports).catch(() => setSports([]));
+  }, [club?.id, token]);
+  // Vivier des J/A (membres portant la facette). Vivier indisponible → liste vide : le
+  // formulaire reste utilisable, le tournoi se crée simplement sans J/A désigné.
+  useEffect(() => {
+    if (!club || !token) return;
+    api.adminGetReferees(club.id, token).then(setReferees).catch(() => setReferees([]));
   }, [club?.id, token]);
   useEffect(() => {
     if (!club || !token) return;
@@ -69,13 +86,24 @@ export default function AdminTournamentsPage() {
         endTime: form.endTime ? localInputToISO(form.endTime) : null,
         maxTeams: form.maxTeams ? Number(form.maxTeams) : null,
         entryFee: form.entryFee ? Number(form.entryFee) : null,
+        refereeUserId: form.refereeUserId ?? null, // explicite : « Aucun » doit envoyer null, jamais undefined
       }, token);
       setForm(null); reload();
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError(messageFor(e)); }
   };
 
   const publish = async (t: Tournament, status: 'PUBLISHED' | 'CANCELLED' | 'DRAFT') => {
     await api.adminUpdateTournament(club.id, t.id, { status }, token); reload();
+  };
+
+  // Désignation/retrait du J/A sur un tournoi déjà créé : le formulaire ne sert qu'à la
+  // création, or un J/A se remplace (indisponibilité) et les tournois existants n'en ont aucun.
+  const setReferee = async (t: Tournament, refereeUserId: string | null) => {
+    setError(null);
+    try {
+      await api.adminUpdateTournament(club.id, t.id, { refereeUserId }, token);
+      reload();
+    } catch (e) { setError(messageFor(e)); }
   };
   const openDetail = async (t: Tournament) => {
     setDetail(await api.adminGetTournament(club.id, t.id, token));
@@ -104,8 +132,26 @@ export default function AdminTournamentsPage() {
 
   const renderCard = (t: Tournament) => {
     const key = agendaItemGroup(t.status, t.startTime, t.endTime, now!);
+    const current = t.refereeUserId ?? null;
+    // Le J/A garde sa mission si on lui retire la facette (spec §4) : il peut donc être absent
+    // du vivier. Sans option pour lui, le select retomberait sur « Aucun » et mentirait.
+    // Libellé neutre à dessein : hors vivier chargé, on ne sait pas *pourquoi* il n'y est pas
+    // (facette retirée, vivier encore en vol, ou fetch en échec) — on ne l'invente pas.
+    const orphan = current != null && !referees.some((r) => r.userId === current);
     const actions = (
       <>
+        {key !== 'cancelled' && (
+          <select
+            aria-label={`Juge-arbitre — ${t.name}`}
+            value={current ?? ''}
+            onChange={(e) => setReferee(t, e.target.value || null)}
+            style={{ ...ghost, cursor: 'pointer', maxWidth: 190 }}
+          >
+            <option value="">J/A : aucun</option>
+            {orphan && <option value={current!}>J/A actuel (hors liste)</option>}
+            {referees.map((r) => <option key={r.userId} value={r.userId}>{r.firstName} {r.lastName}</option>)}
+          </select>
+        )}
         <button onClick={() => openDetail(t)} style={ghost}>Inscrits</button>
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => publish(t, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
@@ -194,6 +240,15 @@ export default function AdminTournamentsPage() {
           <textarea style={{ ...input, minHeight: 70, resize: 'vertical' }} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div style={label}>Contact (affiché une fois les inscriptions closes)</div>
           <textarea style={{ ...input, minHeight: 50, resize: 'vertical' }} value={form.contactInfo ?? ''} onChange={(e) => setForm({ ...form, contactInfo: e.target.value })} placeholder="Ex. Vous devez contacter le Juge Arbitre au 06 02 32 33 65" />
+          <label style={{ ...label, display: 'block' }} htmlFor="referee">Juge-arbitre</label>
+          <select id="referee" style={input} value={form.refereeUserId ?? ''} onChange={(e) => setForm({ ...form, refereeUserId: e.target.value || null })}>
+            <option value="">Aucun</option>
+            {referees.map((r) => <option key={r.userId} value={r.userId}>{r.firstName} {r.lastName}</option>)}
+          </select>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 4 }}>
+            Il pourra gérer les inscrits de ce tournoi depuis son espace Arbitrage, sans autre accès au club.
+            Cochez « Juge-arbitre » sur la fiche d&rsquo;un membre pour l&rsquo;ajouter à cette liste.
+          </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: stripeActive ? 'pointer' : 'default', fontFamily: th.fontUI, fontSize: 13.5, color: th.text, opacity: stripeActive ? 1 : 0.5 }}>
             <input type="checkbox" checked={form.requirePrepayment ?? false} disabled={!stripeActive}
               onChange={(e) => setForm({ ...form, requirePrepayment: e.target.checked })} />

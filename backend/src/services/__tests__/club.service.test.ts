@@ -1037,9 +1037,9 @@ describe('ClubService — listMembers (enrichi)', () => {
     service = new ClubService();
     // Deux membres par défaut ; chaque requête d'enrichissement renvoie vide (surchargée au cas par cas).
     prismaMock.clubMembership.findMany.mockResolvedValue([
-      { id: 'm1', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-01'),
+      { id: 'm1', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, isReferee: true, createdAt: new Date('2026-01-01'),
         user: { id: 'u1', firstName: 'Olivia', lastName: 'Gerante', email: 'o@x.fr', phone: null, avatarUrl: '/uploads/avatars/u1.jpg' } },
-      { id: 'm2', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, createdAt: new Date('2026-01-02'),
+      { id: 'm2', isSubscriber: false, membershipNo: null, status: 'ACTIVE', note: null, watch: false, isReferee: false, createdAt: new Date('2026-01-02'),
         user: { id: 'u2', firstName: 'Paul', lastName: 'Martin', email: 'p@x.fr', phone: null, avatarUrl: null } },
     ] as any);
     prismaMock.clubMember.findMany.mockResolvedValue([{ userId: 'u1', role: 'OWNER' }] as any);
@@ -1069,6 +1069,14 @@ describe('ClubService — listMembers (enrichi)', () => {
       where: { clubId: 'club-demo', isActive: true, userId: { in: ['u1', 'u2'] } },
       select: { userId: true },
     });
+  });
+
+  it('expose isReferee (facette portée par la ligne d\'adhésion, pas de requête en plus)', async () => {
+    const rows = await service.listMembers('club-demo');
+    expect(rows[0].isReferee).toBe(true);
+    expect(rows[1].isReferee).toBe(false);
+    const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.select.isReferee).toBe(true);
   });
 
   it('exclut les comptes supprimés (deletedAt) et le super-admin plateforme, et expose avatarUrl', async () => {
@@ -1340,6 +1348,50 @@ describe('ClubService — updateMembership (garde staff sur status BLOCKED)', ()
     expect(prismaMock.clubMember.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.clubMembership.update).toHaveBeenCalledWith({
       where: { id: 'mb1' }, data: { status: 'ACTIVE', note: 'ok' },
+    });
+  });
+});
+
+describe('ClubService — facette juge-arbitre', () => {
+  let service: ClubService;
+  beforeEach(() => { service = new ClubService(); });
+
+  it('setMemberReferee : MEMBER_NOT_FOUND si la cible n\'est pas membre du club', async () => {
+    prismaMock.clubMembership.updateMany.mockResolvedValue({ count: 0 } as any);
+    await expect(service.setMemberReferee('club-1', 'u9', true)).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
+  it('setMemberReferee : coche la facette (clé userId+clubId)', async () => {
+    prismaMock.clubMembership.updateMany.mockResolvedValue({ count: 1 } as any);
+    await expect(service.setMemberReferee('club-1', 'u9', true)).resolves.toEqual({ userId: 'u9', isReferee: true });
+    expect(prismaMock.clubMembership.updateMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-1', userId: 'u9' }, data: { isReferee: true },
+    });
+  });
+
+  it('setMemberReferee : décoche la facette (pas de garde self/owner — aucun privilège club)', async () => {
+    prismaMock.clubMembership.updateMany.mockResolvedValue({ count: 1 } as any);
+    await expect(service.setMemberReferee('club-1', 'u9', false)).resolves.toEqual({ userId: 'u9', isReferee: false });
+    expect(prismaMock.clubMembership.updateMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-1', userId: 'u9' }, data: { isReferee: false },
+    });
+  });
+
+  it('listReferees : vivier = membres ACTIVE portant la facette (comptes supprimés/super-admin exclus)', async () => {
+    prismaMock.clubMembership.findMany.mockResolvedValue([
+      { user: { id: 'u1', firstName: 'Olivia', lastName: 'Gerante', avatarUrl: '/uploads/avatars/u1.jpg' } },
+      { user: { id: 'u2', firstName: 'Paul', lastName: 'Martin', avatarUrl: null } },
+    ] as any);
+
+    const rows = await service.listReferees('club-1');
+
+    expect(rows).toEqual([
+      { userId: 'u1', firstName: 'Olivia', lastName: 'Gerante', avatarUrl: '/uploads/avatars/u1.jpg' },
+      { userId: 'u2', firstName: 'Paul', lastName: 'Martin', avatarUrl: null },
+    ]);
+    const arg = (prismaMock.clubMembership.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({
+      clubId: 'club-1', isReferee: true, status: 'ACTIVE', user: { deletedAt: null, isSuperAdmin: false },
     });
   });
 });

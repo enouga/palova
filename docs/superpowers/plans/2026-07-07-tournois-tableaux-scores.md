@@ -1,5 +1,9 @@
 # Plan — Tournois padel : tableaux, TMC, scores & classement
 
+> ⚠️ **Ce plan précède la spec J/A du 2026-07-17.** Sa décision « scores = staff seul » est
+> **amendée** : le J/A désigné du tournoi (`Tournament.refereeUserId`) doit aussi pouvoir
+> piloter le tableau. Re-cadrer les tâches de routes admin **avant** exécution.
+
 > ⚠️ Chantier **mis de côté le 2026-07-07** à la demande du user — spec associée :
 > `docs/superpowers/specs/2026-07-07-tournois-tableaux-scores-design.md` (non committée).
 > Pour reprendre : committer la spec, puis exécuter ce plan lot par lot.

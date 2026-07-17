@@ -12,6 +12,7 @@ jest.mock('../lib/api', () => ({
     getMyProfile: jest.fn(),
     adminSetMemberStaffRole: jest.fn(),
     adminSetMemberCoach: jest.fn(),
+    adminSetMemberReferee: jest.fn(),
     adminRemoveMember: jest.fn(),
     adminUpdateMember: jest.fn(),
     adminSetMemberBlocked: jest.fn(),
@@ -34,6 +35,7 @@ beforeEach(() => {
   (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'u-viewer' });
   (api.adminSetMemberStaffRole as jest.Mock).mockResolvedValue({ userId: 'u-plain', staffRole: 'STAFF' });
   (api.adminSetMemberCoach as jest.Mock).mockResolvedValue({ userId: 'u-plain', isCoach: true });
+  (api.adminSetMemberReferee as jest.Mock).mockResolvedValue({ userId: 'u-plain', isReferee: true });
 });
 
 const mount = () => render(<ThemeProvider><AdminMembersPage /></ThemeProvider>);
@@ -146,6 +148,57 @@ it('cocher « Coach » → PATCH isCoach puis rechargement', async () => {
   fireEvent.click(within(group).getByRole('checkbox', { name: /Coach/ }));
   await waitFor(() => expect(api.adminSetMemberCoach).toHaveBeenCalledWith('club-1', 'u-plain', true, 'tok'));
   await waitFor(() => expect(api.adminGetMembers).toHaveBeenCalledTimes(2));
+});
+
+it('cocher « Juge-arbitre » → PATCH isReferee puis rechargement', async () => {
+  mount();
+  await openPanel('Paul Martin');
+  const group = await waitFor(() => roleGroup('Paul Martin'));
+  fireEvent.click(within(group).getByRole('checkbox', { name: /Juge-arbitre/ }));
+  await waitFor(() => expect(api.adminSetMemberReferee).toHaveBeenCalledWith('club-1', 'u-plain', true, 'tok'));
+  await waitFor(() => expect(api.adminGetMembers).toHaveBeenCalledTimes(2));
+});
+
+it('décocher « Juge-arbitre » → PATCH isReferee false', async () => {
+  (api.adminGetMembers as jest.Mock).mockResolvedValue(
+    members.map((m) => (m.userId === 'u-plain' ? { ...m, isReferee: true } : m)),
+  );
+  (api.adminSetMemberReferee as jest.Mock).mockResolvedValue({ userId: 'u-plain', isReferee: false });
+  mount();
+  await openPanel('Paul Martin');
+  const group = await waitFor(() => roleGroup('Paul Martin'));
+  const checkbox = within(group).getByRole('checkbox', { name: /Juge-arbitre/ }) as HTMLInputElement;
+  expect(checkbox.checked).toBe(true);
+  fireEvent.click(checkbox);
+  await waitFor(() => expect(api.adminSetMemberReferee).toHaveBeenCalledWith('club-1', 'u-plain', false, 'tok'));
+});
+
+// Le J/A n'est pas un rôle, mais l'attribuer reste une prérogative OWNER/ADMIN : un STAFF ne
+// doit pas pouvoir se nommer J/A depuis l'UI (la case vit dans le bloc gaté `canManageStaff`).
+it('viewer STAFF : aucune case « Juge-arbitre » dans le panneau', async () => {
+  (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', slug: 'c', name: 'Club', role: 'STAFF' }]);
+  mount();
+  await screen.findByText('Paul Martin');
+  await openPanel('Paul Martin');
+  await screen.findByRole('button', { name: 'Enregistrer' }); // le panneau est bien ouvert
+  expect(screen.queryByRole('checkbox', { name: /Juge-arbitre/ })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: /Coach/ })).toBeNull();
+  expect(api.adminSetMemberReferee).not.toHaveBeenCalled();
+});
+
+it('les facettes Coach et J/A sont deux cases indépendantes', async () => {
+  (api.adminGetMembers as jest.Mock).mockResolvedValue(
+    members.map((m) => (m.userId === 'u-plain' ? { ...m, isCoach: true, isReferee: false } : m)),
+  );
+  mount();
+  await openPanel('Paul Martin');
+  const group = await waitFor(() => roleGroup('Paul Martin'));
+  expect((within(group).getByRole('checkbox', { name: /Coach/ }) as HTMLInputElement).checked).toBe(true);
+  expect((within(group).getByRole('checkbox', { name: /Juge-arbitre/ }) as HTMLInputElement).checked).toBe(false);
+  // Cocher J/A ne touche pas la facette coach.
+  fireEvent.click(within(group).getByRole('checkbox', { name: /Juge-arbitre/ }));
+  await waitFor(() => expect(api.adminSetMemberReferee).toHaveBeenCalledWith('club-1', 'u-plain', true, 'tok'));
+  expect(api.adminSetMemberCoach).not.toHaveBeenCalled();
 });
 
 it('décocher « Coach » → PATCH isCoach false', async () => {

@@ -17,6 +17,7 @@ export interface CreateTournamentInput {
   openToWomen?: boolean;
   description?: string | null;
   contactInfo?: string | null;
+  refereeUserId?: string | null; // J/A désigné — validé serveur (assertRefereeValid), null = aucun
   startTime: string | Date;
   endTime?: string | Date | null;
   registrationDeadline: string | Date;
@@ -25,6 +26,58 @@ export interface CreateTournamentInput {
   requirePrepayment?: boolean;
 }
 export type UpdateTournamentInput = Partial<CreateTournamentInput & { status: TournamentStatus }>;
+
+/**
+ * Colonnes d'un tournoi exposables sans authentification.
+ *
+ * ALLOWLIST, et non retrait a posteriori : les lectures publiques sont anonymes
+ * (`GET /api/clubs/:slug/tournaments`, `/api/tournaments/:id`, `/api/tournaments/national`),
+ * or un `include` renvoie *toutes* les colonnes du modèle — donc `refereeUserId`, un userId
+ * interne, en clair (spec §7 : « nom seul, jamais le userId »). Énumérer ce qui sort plutôt
+ * que ce qui reste garantit qu'une colonne privée *future* ne fuitera pas par défaut.
+ *
+ * Le nom du J/A s'expose via la relation `referee` projetée en `{ name }` (cf. `getById`).
+ * Les chemins ADMIN (`listForAdmin`, `getForAdmin`) n'utilisent pas cette projection : le
+ * picker de `/admin/tournaments` a besoin de `refereeUserId` pour se pré-sélectionner.
+ */
+const PUBLIC_TOURNAMENT_SELECT = {
+  id: true, clubId: true, clubSportId: true, name: true, category: true, gender: true,
+  openToWomen: true, description: true, contactInfo: true, startTime: true, endTime: true,
+  registrationDeadline: true, maxTeams: true, entryFee: true, requirePrepayment: true,
+  status: true, createdAt: true, updatedAt: true,
+} satisfies Prisma.TournamentSelect;
+
+/** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
+export interface RefereePlayerRow {
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  membershipNo: string | null; // licence — le J/A la vérifie à la table de marque
+}
+
+export interface RefereeRegistrationRow {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  waitlistPosition: number | null;
+  captain: RefereePlayerRow;
+  partner: RefereePlayerRow; // toujours présent : TournamentRegistration.partnerUserId est requis
+}
+
+export interface RefereeTournamentRow {
+  id: string;
+  name: string;
+  category: string;
+  gender: string;
+  status: string;
+  startTime: Date;
+  endTime: Date | null;
+  registrationDeadline: Date;
+  maxTeams: number | null;
+  confirmedCount: number;
+  waitlistCount: number;
+}
 
 /** Erreur métier avec, optionnellement, le joueur concerné ("self" | "partner"). */
 function appError(code: string, subject?: 'self' | 'partner'): Error {
@@ -293,7 +346,7 @@ export class TournamentService {
     const tournaments = await prisma.tournament.findMany({
       where: { clubId: club.id, status: 'PUBLISHED' },
       orderBy: { startTime: 'asc' },
-      include: { clubSport: { select: { sport: { select: { key: true, name: true } } } } },
+      select: { ...PUBLIC_TOURNAMENT_SELECT, clubSport: { select: { sport: { select: { key: true, name: true } } } } },
     });
     const withCounts = await this.withCounts(tournaments);
     return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
@@ -314,7 +367,8 @@ export class TournamentService {
         startTime: { gte: now, lte: horizon },
         club: { status: 'ACTIVE', listTournamentsNationally: true },
       },
-      include: {
+      select: {
+        ...PUBLIC_TOURNAMENT_SELECT,
         club: { select: { slug: true, name: true, city: true, department: true, departmentCode: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true } },
         clubSport: { select: { sport: { select: { key: true, name: true } } } },
       },
@@ -324,15 +378,28 @@ export class TournamentService {
     return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
   }
 
-  /** Détail public d'un tournoi (DRAFT masqué) + compteurs. */
+  /**
+   * Détail public d'un tournoi (DRAFT masqué) + compteurs.
+   * Le J/A désigné y est exposé **par son nom seul** (spec §7) : c'est lui qui répond du
+   * tournoi, mais son userId reste interne — d'où la projection `{ name }` plutôt que l'objet.
+   */
   async getById(tournamentId: string) {
     const t = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } },
+      select: {
+        ...PUBLIC_TOURNAMENT_SELECT,
+        club: { select: { slug: true, name: true, timezone: true } },
+        clubSport: { select: { sport: { select: { key: true, name: true } } } },
+        referee: { select: { firstName: true, lastName: true } },
+      },
     });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
-    const [withCount] = await this.withCounts([t]);
-    return withCount;
+    const { referee, ...rest } = t;
+    const [withCount] = await this.withCounts([rest]);
+    return {
+      ...withCount,
+      referee: referee ? { name: `${referee.firstName} ${referee.lastName}`.trim() } : null,
+    };
   }
 
   /** Liste publique des binômes inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
@@ -372,7 +439,14 @@ export class TournamentService {
       where: { status: { not: 'CANCELLED' }, OR: [{ captainUserId: userId }, { partnerUserId: userId }] },
       orderBy: { tournament: { startTime: 'asc' } },
       include: {
-        tournament: { include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
+        // Payload joueur (pas admin) : même projection publique que les autres lectures.
+        tournament: {
+          select: {
+            ...PUBLIC_TOURNAMENT_SELECT,
+            club: { select: { slug: true, name: true, timezone: true } },
+            clubSport: { select: { sport: { select: { key: true, name: true } } } },
+          },
+        },
         captain: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         partner: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       },
@@ -458,6 +532,7 @@ export class TournamentService {
     const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId }, select: { id: true } });
     if (!cs) throw new Error('CLUB_SPORT_NOT_FOUND');
     if (data.requirePrepayment) await this.assertPrepaymentAllowed(clubId, Math.round(Number((data as any).entryFee ?? 0) * 100));
+    if (data.refereeUserId !== undefined) await this.assertRefereeValid(clubId, data.refereeUserId as string | null);
     return prisma.tournament.create({ data: { clubId, clubSportId: input.clubSportId, ...data } as Prisma.TournamentUncheckedCreateInput });
   }
 
@@ -478,6 +553,7 @@ export class TournamentService {
       const fee = input.entryFee !== undefined ? Number(input.entryFee) : Number(found.entryFee);
       await this.assertPrepaymentAllowed(clubId, Math.round(fee * 100));
     }
+    if (data.refereeUserId !== undefined) await this.assertRefereeValid(clubId, data.refereeUserId as string | null);
     const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
       await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
@@ -567,6 +643,7 @@ export class TournamentService {
     if (input.openToWomen !== undefined) data.openToWomen = Boolean(input.openToWomen);
     if (input.description !== undefined) data.description = (input.description ?? '')?.toString().trim() || null;
     if (input.contactInfo !== undefined) data.contactInfo = (input.contactInfo ?? '')?.toString().trim() || null;
+    if (input.refereeUserId !== undefined) data.refereeUserId = (input.refereeUserId ?? '').toString().trim() || null;
 
     const parseDate = (v: string | Date) => { const d = new Date(v); if (isNaN(d.getTime())) throw new Error('VALIDATION_ERROR'); return d; };
     if (requireAll || input.startTime !== undefined) data.startTime = parseDate(input.startTime as string | Date);
@@ -647,5 +724,125 @@ export class TournamentService {
       select: { id: true },
     });
     if (dup) throw new Error('ALREADY_REGISTERED');
+  }
+
+  // ------------------------------------------------------- Espace juge-arbitre
+  // Gate = facette ClubMembership.isReferee + propriété du tournoi. PAS un rôle : un J/A
+  // n'a aucun droit sur le reste du club. Miroir de l'espace coach (lesson.service.ts).
+
+  /** Étage 1 — « es-tu J/A de ce club ? ». Adhésion ACTIVE + facette. Gate de l'espace arbitrage. */
+  async resolveReferee(clubId: string, userId: string): Promise<boolean> {
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId } },
+      select: { status: true, isReferee: true },
+    });
+    return !!m && m.status === 'ACTIVE' && m.isReferee;
+  }
+
+  /**
+   * Étage 2 — « ce tournoi est-il le tien ? ».
+   * TOURNAMENT_NOT_FOUND (inexistant / autre club) | TOURNAMENT_NOT_YOURS (autre J/A).
+   */
+  private async assertRefereeOwnsTournament(tournamentId: string, clubId: string, userId: string) {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { clubId: true, refereeUserId: true },
+    });
+    if (!t || t.clubId !== clubId) throw new Error('TOURNAMENT_NOT_FOUND');
+    if (t.refereeUserId !== userId) throw new Error('TOURNAMENT_NOT_YOURS');
+    return t;
+  }
+
+  /**
+   * Le J/A désigné doit être un membre ACTIVE du club portant la facette. REFEREE_INVALID sinon.
+   * Sans ce contrôle, désigner un `refereeUserId` arbitraire ouvrirait l'espace J/A du club à
+   * n'importe quel User de la plateforme, non-membre compris : c'est une garde de sécurité.
+   */
+  private async assertRefereeValid(clubId: string, refereeUserId: string | null) {
+    if (!refereeUserId) return; // null = retirer le J/A, rien à vérifier
+    if (!(await this.resolveReferee(clubId, refereeUserId))) throw new Error('REFEREE_INVALID');
+  }
+
+  /**
+   * Promotion d'un binôme en attente par le J/A (sur SON tournoi). Délègue au cœur admin.
+   * Pas de verrou temporel : le J/A doit pouvoir agir PENDANT le tournoi. Les règles de
+   * deadline / tableau lancé sont portées par le cœur — on ne les redouble pas ici.
+   */
+  async refereePromoteRegistration(clubId: string, userId: string, tournamentId: string, regId: string) {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+    return this.adminPromoteRegistration(tournamentId, regId, clubId);
+  }
+
+  /** Retrait d'un binôme par le J/A (sur SON tournoi). Délègue au cœur admin. */
+  async refereeRemoveRegistration(clubId: string, userId: string, tournamentId: string, regId: string) {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+    return this.adminRemoveRegistration(tournamentId, regId, clubId);
+  }
+
+  /**
+   * Tournois du J/A (à venir asc ; passés desc, cap 30).
+   * « À venir » = PAS ENCORE FINI, càd `endTime ?? startTime >= now` — jamais `startTime` seul :
+   * `endTime` est nullable (le repli sur startTime est obligatoire) et le J/A doit agir PENDANT son
+   * tournoi, qui doit donc rester là où il va le chercher. Ni trou, ni doublon entre les deux scopes.
+   */
+  async listRefereeTournaments(clubId: string, userId: string, scope: 'upcoming' | 'past'): Promise<RefereeTournamentRow[]> {
+    const now = new Date();
+    const tournaments = await prisma.tournament.findMany({
+      where: {
+        clubId,
+        refereeUserId: userId,
+        OR: scope === 'upcoming'
+          ? [{ endTime: { gte: now } }, { endTime: null, startTime: { gte: now } }]
+          : [{ endTime: { lt: now } }, { endTime: null, startTime: { lt: now } }],
+      },
+      orderBy: { startTime: scope === 'upcoming' ? 'asc' : 'desc' },
+      ...(scope === 'past' ? { take: 30 } : {}),
+      select: {
+        id: true, name: true, category: true, gender: true, status: true,
+        startTime: true, endTime: true, registrationDeadline: true, maxTeams: true,
+      },
+    });
+    return this.withCounts(tournaments);
+  }
+
+  /** Roster J/A d'un tournoi : binômes + contacts + licence. `userId` jamais exposé. */
+  async refereeListRegistrations(clubId: string, userId: string, tournamentId: string): Promise<RefereeRegistrationRow[]> {
+    await this.assertRefereeOwnsTournament(tournamentId, clubId, userId);
+
+    const registrations = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }], // CONFIRMED avant WAITLISTED, puis ordre d'inscription
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        captainUserId: true,
+        partnerUserId: true,
+        captain: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+        partner: { select: { firstName: true, lastName: true, avatarUrl: true, phone: true } },
+      },
+    });
+
+    // Licences en une requête groupée pour tous les joueurs du tableau (pas de N+1).
+    const userIds = [...new Set(registrations.flatMap((r) => [r.captainUserId, r.partnerUserId]))];
+    const memberships = userIds.length
+      ? await prisma.clubMembership.findMany({ where: { clubId, userId: { in: userIds } }, select: { userId: true, membershipNo: true } })
+      : [];
+    const licenseByUser = new Map(memberships.map((m) => [m.userId, m.membershipNo]));
+
+    const toPlayer = (u: Omit<RefereePlayerRow, 'membershipNo'>, playerId: string): RefereePlayerRow => ({
+      ...u,
+      membershipNo: licenseByUser.get(playerId) ?? null,
+    });
+
+    let waitlistIdx = 0;
+    return registrations.map((r) => ({
+      id: r.id,
+      status: r.status,
+      paymentStatus: r.paymentStatus,
+      waitlistPosition: r.status === 'WAITLISTED' ? ++waitlistIdx : null,
+      captain: toPlayer(r.captain, r.captainUserId),
+      partner: toPlayer(r.partner, r.partnerUserId),
+    }));
   }
 }

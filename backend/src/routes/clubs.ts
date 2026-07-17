@@ -106,6 +106,9 @@ const ERROR_STATUS: Record<string, number> = {
   ENROLLMENT_LOCKED:     409,
   ENROLLMENT_NOT_FOUND:  404,
   ALREADY_ENROLLED:      409,
+  NOT_A_REFEREE:         403,
+  TOURNAMENT_NOT_YOURS:  403,
+  TOURNAMENT_NOT_FOUND:  404,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -276,17 +279,22 @@ router.get('/:slug/lessons', async (req, res, next) => {
   catch (err) { handleError(err, res, next); }
 });
 
-// --- Espace coach : le coach connecté voit et gère SES cours (gate = ligne Coach active, PAS un rôle) ---
-
-// Signal léger pour l'entrée de menu (jamais 403 : ne bruite pas le menu).
-router.get('/:slug/me/coach', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+// Signal léger des facettes (coach, J/A) pour les entrées de menu — transverse aux deux espaces
+// ci-dessous. Jamais 403 : ne bruite pas le menu. Remplace l'ancien GET /:slug/me/coach —
+// deux facettes, un seul aller-retour.
+router.get('/:slug/me/facets', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
-    if (!club || club.status !== 'ACTIVE') return void res.json({ isCoach: false });
-    const coach = await lessonService.resolveCoach(club.id, req.user!.id);
-    res.json({ isCoach: coach != null });
+    if (!club || club.status !== 'ACTIVE') return void res.json({ isCoach: false, isReferee: false });
+    const [coach, isReferee] = await Promise.all([
+      lessonService.resolveCoach(club.id, req.user!.id),
+      tournamentService.resolveReferee(club.id, req.user!.id),
+    ]);
+    res.json({ isCoach: coach != null, isReferee });
   } catch (err) { handleError(err, res, next); }
 });
+
+// --- Espace coach : le coach connecté voit et gère SES cours (gate = ligne Coach active, PAS un rôle) ---
 
 // Cours du coach (?scope=upcoming|past). 403 NOT_A_COACH si pas de ligne coach active.
 // ensureActiveMembership : le coach devient membre actif (idempotent) → le picker de membres marche.
@@ -319,6 +327,46 @@ router.delete('/:slug/me/coach/lessons/:lessonId/students/:enrollId', authMiddle
     const coach = await lessonService.resolveCoach(clubId, req.user!.id);
     if (!coach) throw new Error('NOT_A_COACH');
     res.json(await lessonService.coachRemoveStudent(clubId, coach.id, asString(req.params.lessonId), asString(req.params.enrollId)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- Espace juge-arbitre : le J/A voit et gère SES tournois (gate = facette + propriété, PAS un rôle) ---
+
+// Tournois du J/A (?scope=upcoming|past). 403 NOT_A_REFEREE sans la facette.
+// ensureActiveMembership : le J/A devient membre actif (idempotent), comme côté coach.
+router.get('/:slug/me/referee/tournaments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    const scope = asString(req.query.scope) === 'past' ? 'past' : 'upcoming';
+    res.json(await tournamentService.listRefereeTournaments(clubId, req.user!.id, scope));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Roster d'un tournoi du J/A.
+router.get('/:slug/me/referee/tournaments/:id/registrations', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.refereeListRegistrations(clubId, req.user!.id, asString(req.params.id)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Promotion d'un binôme en attente par le J/A.
+router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/promote', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.refereePromoteRegistration(clubId, req.user!.id, asString(req.params.id), asString(req.params.regId)));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Retrait d'un binôme par le J/A.
+router.delete('/:slug/me/referee/tournaments/:id/registrations/:regId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.refereeRemoveRegistration(clubId, req.user!.id, asString(req.params.id), asString(req.params.regId)));
   } catch (err) { handleError(err, res, next); }
 });
 

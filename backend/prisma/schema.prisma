@@ -498,6 +498,7 @@ model User {
   captainRegistrations TournamentRegistration[] @relation("CaptainRegistrations")
   partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
   eventRegistrations   EventRegistration[]
+  refereedTournaments  Tournament[] @relation("TournamentReferee")
   emailVerification EmailVerification?
   passwordReset  PasswordReset?
   memberPackages MemberPackage[]
@@ -689,6 +690,7 @@ model ClubMembership {
   status       MembershipStatus @default(ACTIVE)
   note         String?
   watch        Boolean          @default(false)                       // drapeau « à surveiller » (staff)
+  isReferee    Boolean          @default(false) @map("is_referee")    // facette juge-arbitre
   createdAt    DateTime         @default(now()) @map("created_at")    // = date d'adhésion
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1084,15 +1086,18 @@ model Tournament {
   entryFee             Decimal?         @map("entry_fee") @db.Decimal(10, 2)
   requirePrepayment    Boolean          @default(false) @map("require_prepayment")
   status               TournamentStatus @default(DRAFT)
+  refereeUserId        String?          @map("referee_user_id")     // juge-arbitre désigné (facette, pas un rôle)
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
   club          Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
   clubSport     ClubSport                @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
+  referee       User?                    @relation("TournamentReferee", fields: [refereeUserId], references: [id], onDelete: SetNull)
   registrations TournamentRegistration[]
 
   @@index([clubId])
   @@index([clubId, status, startTime])
+  @@index([refereeUserId])
   @@map("tournaments")
 }
 

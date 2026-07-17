@@ -33,7 +33,7 @@ import app from '../../app';
 
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
 
-const token = () => jwt.sign({ id: 'u1', email: 'test@x.fr' }, process.env.JWT_SECRET!);
+const token = (id = 'u1') => jwt.sign({ id, email: 'test@x.fr' }, process.env.JWT_SECRET!);
 const PROFILE = {
   id: 'u1', email: 'test@x.fr', firstName: 'Eric', lastName: 'Nougayrede', phone: null, sex: null,
   birthDate: null, avatarUrl: null, locale: 'fr', isSuperAdmin: false, showInLeaderboard: false,
@@ -156,12 +156,43 @@ describe('POST /api/me/avatar', () => {
       .attach('avatar', PNG, { filename: 'photo.png', contentType: 'image/png' });
 
     expect(res.status).toBe(200);
-    expect(res.body.avatarUrl).toMatch(/^\/uploads\/avatars\/u1-\d+\.png$/);
+    expect(res.body.avatarUrl).toMatch(/^\/uploads\/avatars\/[0-9a-f]{32}\.png$/);
     const written = path.join(AVATARS_DIR, path.basename(res.body.avatarUrl));
     expect(fs.existsSync(written)).toBe(true);
     // L'unlink de l'ancienne photo est asynchrone best-effort : on lui laisse un tick.
     await new Promise((r) => setTimeout(r, 50));
     expect(fs.existsSync(path.join(AVATARS_DIR, oldName))).toBe(false);
+  });
+
+  // Fuite d'info : /uploads est servi par express.static et l'avatarUrl est publié
+  // par des endpoints PUBLICS et ANONYMES (fiche tournoi). Un nom dérivé du compte
+  // y publierait le userId → identifiant stable pour corréler/scraper.
+  it('ne met jamais le userId dans le nom du fichier', async () => {
+    const userId = 'cmqfcjs0w000fokkk3iujuzlj'; // cuid réaliste (forme du cas constaté)
+    prismaMock.user.findUnique.mockResolvedValue({ avatarUrl: null } as any);
+    prismaMock.user.update.mockImplementation((args: any) => Promise.resolve({ ...PROFILE, avatarUrl: args.data.avatarUrl }) as any);
+
+    const res = await request(app).post('/api/me/avatar').set('Authorization', `Bearer ${token(userId)}`)
+      .attach('avatar', PNG, { filename: 'photo.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.avatarUrl).not.toContain(userId);
+    expect(res.body.avatarUrl).toMatch(/^\/uploads\/avatars\/[0-9a-f]{32}\.png$/);
+    // Le fichier réellement écrit sur disque ne porte pas non plus le userId.
+    const written = path.basename(res.body.avatarUrl);
+    expect(written).not.toContain(userId);
+    expect(fs.existsSync(path.join(AVATARS_DIR, written))).toBe(true);
+  });
+
+  it('donne un nom différent à deux uploads du même compte', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ avatarUrl: null } as any);
+    prismaMock.user.update.mockImplementation((args: any) => Promise.resolve({ ...PROFILE, avatarUrl: args.data.avatarUrl }) as any);
+
+    const upload = () => request(app).post('/api/me/avatar').set('Authorization', `Bearer ${token()}`)
+      .attach('avatar', PNG, { filename: 'photo.png', contentType: 'image/png' });
+    const [a, b] = [await upload(), await upload()];
+
+    expect(a.body.avatarUrl).not.toBe(b.body.avatarUrl);
   });
 });
 

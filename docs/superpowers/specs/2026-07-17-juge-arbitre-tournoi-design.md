@@ -178,7 +178,7 @@ Routes dans `backend/src/routes/clubs.ts`, sous `authMiddleware` **sans** `requi
 | Route | Rôle |
 |---|---|
 | `GET /:slug/me/facets` | Signal léger `{ isCoach, isReferee }` pour le menu — **ne 403 jamais** (tout à `false` si club inconnu/inactif), reprend le contrat de `GET /:slug/me/coach` en l'élargissant (cf. §6) |
-| `GET /:slug/me/referee/tournaments?scope=upcoming\|past` | Ses tournois (upcoming = `startTime > now` asc / past = `endTime < now` desc, **cap 30**) |
+| `GET /:slug/me/referee/tournaments?scope=upcoming\|past` | Ses tournois — **« à venir » = pas encore fini**, `(endTime ?? startTime) >= now` (asc) ; « passés » = le complément (desc, **cap 30**) |
 | `GET /:slug/me/referee/tournaments/:id/registrations` | Le roster (cf. ci-dessous) |
 | `POST /:slug/me/referee/tournaments/:id/registrations/:regId/promote` | Délègue `adminPromoteRegistration` |
 | `DELETE /:slug/me/referee/tournaments/:id/registrations/:regId` | Délègue `adminRemoveRegistration` |

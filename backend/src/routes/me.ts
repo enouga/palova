@@ -11,7 +11,7 @@ import { EventService } from '../services/event.service';
 import { lessonService } from '../services/lesson.service';
 import { RatingService } from '../services/rating.service';
 import { resolvePreferredSportKey } from '../services/rating/preferredSport';
-import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs } from '../utils/uploads';
+import { AVATARS_DIR, EXT_BY_MIME, ensureUploadDirs, randomFileName } from '../utils/uploads';
 import { AccountService } from '../services/account.service';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
@@ -181,7 +181,8 @@ router.post('/avatar', authMiddleware, (req: AuthRequest, res: Response, next: N
         return void res.status(400).json({ error: 'Format d’image non supporté (JPEG, PNG ou WebP)' });
       }
       const previous = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { avatarUrl: true } });
-      const filename = `${req.user!.id}-${Date.now()}.${ext}`;
+      // Nom opaque : jamais le userId (l'URL finit sur des pages publiques/anonymes).
+      const filename = randomFileName(ext);
       ensureUploadDirs();
       await fs.promises.writeFile(path.join(AVATARS_DIR, filename), file.buffer);
       const user = await prisma.user.update({

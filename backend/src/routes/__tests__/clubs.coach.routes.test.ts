@@ -56,22 +56,9 @@ const base = '/api/clubs/demo/me/coach';
 
 beforeEach(() => { jest.clearAllMocks(); });
 
+// Le signal de facette a migré vers GET /:slug/me/facets (cf. clubs.referee.routes.test.ts) :
+// /me/coach n'existe plus. Les routes /me/coach/lessons*, elles, sont inchangées.
 describe('Routes espace coach', () => {
-  it('GET /me/coach → { isCoach:false } pour un non-coach (jamais 403)', async () => {
-    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
-    resolveCoach.mockResolvedValue(null);
-    const res = await request(app).get(base).set(auth);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ isCoach: false });
-  });
-
-  it('GET /me/coach → { isCoach:true } pour un coach', async () => {
-    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
-    resolveCoach.mockResolvedValue({ id: 'coach-1' });
-    const res = await request(app).get(base).set(auth);
-    expect(res.body).toEqual({ isCoach: true });
-  });
-
   it('GET /me/coach/lessons → 403 NOT_A_COACH pour un non-coach', async () => {
     resolveCoach.mockResolvedValue(null);
     const res = await request(app).get(`${base}/lessons?scope=upcoming`).set(auth);

@@ -186,6 +186,12 @@ export default function AdminMembersPage() {
     catch (e) { setError((e as Error).message); }
   };
 
+  const setReferee = async (isReferee: boolean) => {
+    if (!token || !clubId || !selected) return;
+    try { setError(null); await api.adminSetMemberReferee(clubId, selected.userId, isReferee, token); await load(); }
+    catch (e) { setError((e as Error).message); }
+  };
+
   const remove = async (m: Member) => {
     if (!token || !clubId) return;
     try { setError(null); await api.adminRemoveMember(clubId, m.id, token); setConfirmRemove(null); await load(); }
@@ -218,6 +224,7 @@ export default function AdminMembersPage() {
     { value: 'subs', label: 'Abonnés', n: counts.subs },
     { value: 'staff', label: 'Staff', n: counts.staff },
     { value: 'coach', label: 'Coachs', n: counts.coach },
+    { value: 'referee', label: 'J/A', n: counts.referee },
     { value: 'watch', label: 'À surveiller', n: counts.watch },
     { value: 'blocked', label: 'Bloqués', n: counts.blocked },
   ];
@@ -314,7 +321,7 @@ export default function AdminMembersPage() {
 
             {selected && isDesktop && (
               <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop error={error}
-                onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
+                onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onSetReferee={setReferee} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
             )}
           </div>
         </>
@@ -322,7 +329,7 @@ export default function AdminMembersPage() {
 
       {selected && !isDesktop && (
         <MemberPanel member={selected} viewer={viewer} canManageStaff={canManageStaff} isDesktop={false} error={error}
-          onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
+          onSave={save} onToggleBlocked={toggleBlocked} onSetRole={setRole} onSetCoach={setCoach} onSetReferee={setReferee} onDelete={() => setConfirmRemove(selected)} onClose={() => setSelectedUserId(null)} />
       )}
 
       {addOpen && token && clubId && (

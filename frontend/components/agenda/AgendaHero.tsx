@@ -91,15 +91,20 @@ export interface MetaCard {
   value: string;
 }
 
-// Rangée de cartes méta icônées sous le hero (début, clôture, prix…).
-// 3 tiers égaux sans scroll horizontal : sur mobile ~110 px par carte (les
-// valeurs — formats courts — wrappent sur 2-3 lignes), sur desktop ~255 px.
+// Rangée de cartes méta icônées sous le hero (début, clôture, prix, juge-arbitre…).
+// Jusqu'à 3 cartes : tiers égaux sans scroll horizontal — sur mobile ~110 px par
+// carte (les valeurs — formats courts — wrappent sur 2-3 lignes), sur desktop
+// ~255 px. Au-delà, `.agenda-meta-row` (globals.css) les passe à 2 par ligne
+// sous 700 px : à 4 de front il ne resterait ~75 px par carte et les libellés
+// déborderaient sous la carte voisine. La classe n'est posée qu'au-delà de 3
+// cartes → le cas à 3 garde exactement le rendu d'origine (--meta-basis absente
+// → repli 0px, soit l'ancien `flex: 1 1 0`).
 export function MetaCardsRow({ cards }: { cards: MetaCard[] }) {
   const { th } = useTheme();
   return (
-    <div style={{ display: 'flex', gap: 6, padding: '10px 20px 0' }}>
+    <div className={cards.length > 3 ? 'agenda-meta-row' : undefined} style={{ display: 'flex', gap: 6, padding: '10px 20px 0' }}>
       {cards.map((c) => (
-        <div key={c.label} style={{ flex: '1 1 0', minWidth: 0, background: th.surface, borderRadius: 14, padding: '10px 11px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+        <div key={c.label} style={{ flex: '1 1 var(--meta-basis, 0px)', minWidth: 0, background: th.surface, borderRadius: 14, padding: '10px 11px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textFaint }}>
             <Icon name={c.icon} size={12} color={th.textFaint} style={{ flexShrink: 0 }} />{c.label}
           </div>
