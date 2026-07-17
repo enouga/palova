@@ -2223,7 +2223,8 @@ export interface Tournament {
   openToWomen: boolean; // Messieurs uniquement : true = tableau "open" (femmes admises), false = 100% hommes
   description: string | null;
   contactInfo: string | null;
-  refereeUserId?: string | null; // J/A désigné (facette, pas un rôle) ; peuplé par les listes club/admin
+  refereeUserId?: string | null; // J/A désigné (facette, pas un rôle) ; ADMIN uniquement — les lectures publiques ne l'exposent pas
+  referee?: { name: string } | null; // J/A public : nom seul, jamais le userId ; peuplé par le détail (getTournament)
   startTime: string;
   endTime: string | null;
   registrationDeadline: string;

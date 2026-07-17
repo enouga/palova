@@ -1126,3 +1126,112 @@ describe('désignation du J/A', () => {
     expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
   });
 });
+
+// Le J/A est une donnée interne : `refereeUserId` est un userId, et les lectures publiques
+// sont anonymes (GET /api/clubs/:slug/tournaments, /api/tournaments/:id, /national).
+// Spec §7 : « nom seul, jamais le userId ». La défense est une ALLOWLIST de colonnes
+// (`select`) et non un retrait a posteriori : une colonne privée future ne fuite pas par défaut.
+describe('projection publique — refereeUserId ne fuite pas', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  /** Colonnes demandées par un findMany/findUnique mocké. `path` = relation imbriquée. */
+  const selectOf = (mock: jest.Mock, path?: string) => {
+    const args = mock.mock.calls[0][0] as any;
+    if (!path) return args.select;
+    const rel = args.select?.[path] ?? args.include?.[path]; // la relation peut pendre de l'un ou l'autre
+    return rel?.select;
+  };
+
+  it('listPublicByClubSlug ne demande pas refereeUserId', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-demo', status: 'ACTIVE' } as any);
+    prismaMock.tournament.findMany.mockResolvedValue([] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+
+    await svc.listPublicByClubSlug('club-demo');
+
+    const select = selectOf(prismaMock.tournament.findMany as jest.Mock);
+    expect(select).toBeDefined();                 // projection explicite, pas un include fourre-tout
+    expect(select.refereeUserId).toBeUndefined(); // la colonne n'est même pas lue
+    expect(select.name).toBe(true);               // …mais le reste de la fiche est bien exposé
+  });
+
+  it('listNationalTournaments ne demande pas refereeUserId', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+
+    await svc.listNationalTournaments();
+
+    const select = selectOf(prismaMock.tournament.findMany as jest.Mock);
+    expect(select).toBeDefined();
+    expect(select.refereeUserId).toBeUndefined();
+    expect(select.club).toBeDefined(); // la projection club du calendrier national est conservée
+  });
+
+  it('getById ne demande pas refereeUserId', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 't1', status: 'PUBLISHED', referee: null,
+      club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
+      clubSport: { sport: { key: 'padel', name: 'Padel' } },
+    } as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+
+    await svc.getById('t1');
+
+    const select = selectOf(prismaMock.tournament.findUnique as jest.Mock);
+    expect(select).toBeDefined();
+    expect(select.refereeUserId).toBeUndefined();
+  });
+
+  it('listUserRegistrations ne demande pas refereeUserId sur le tournoi imbriqué', async () => {
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([] as any);
+
+    await svc.listUserRegistrations('me');
+
+    const select = selectOf(prismaMock.tournamentRegistration.findMany as jest.Mock, 'tournament');
+    expect(select).toBeDefined();
+    expect(select.refereeUserId).toBeUndefined();
+    expect(select.club).toBeDefined(); // slug/nom/fuseau du club toujours là
+  });
+
+  // Le pendant : l'admin en a besoin pour pré-sélectionner son picker de J/A.
+  it('listForAdmin expose refereeUserId (le picker admin en dépend)', async () => {
+    prismaMock.tournament.findMany.mockResolvedValue([{ id: 't1', refereeUserId: 'u1' }] as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+
+    const [t] = await svc.listForAdmin('club-demo');
+
+    expect((t as Record<string, unknown>).refereeUserId).toBe('u1');
+  });
+});
+
+describe('getById — J/A public (nom seul)', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const mockTournament = (referee: unknown) => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 't1', name: 'Open', status: 'PUBLISHED', referee,
+      club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
+      clubSport: { sport: { key: 'padel', name: 'Padel' } },
+    } as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+  };
+
+  it('expose le nom du J/A désigné, et aucun userId', async () => {
+    // `id` volontairement présent dans le mock : si quelqu'un ajoute `id: true` au select du
+    // J/A et étale l'objet tel quel, le userId partirait en clair. La projection { name } l'interdit.
+    mockTournament({ id: 'u-referee', firstName: 'Julien', lastName: 'Martin' });
+
+    const dto = await svc.getById('t1');
+
+    expect(dto.referee).toEqual({ name: 'Julien Martin' });
+    expect(JSON.stringify(dto)).not.toContain('u-referee');
+  });
+
+  it('referee: null quand aucun J/A n’est désigné', async () => {
+    mockTournament(null);
+    const dto = await svc.getById('t1');
+    expect(dto.referee).toBeNull();
+  });
+});

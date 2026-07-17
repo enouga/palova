@@ -27,6 +27,26 @@ export interface CreateTournamentInput {
 }
 export type UpdateTournamentInput = Partial<CreateTournamentInput & { status: TournamentStatus }>;
 
+/**
+ * Colonnes d'un tournoi exposables sans authentification.
+ *
+ * ALLOWLIST, et non retrait a posteriori : les lectures publiques sont anonymes
+ * (`GET /api/clubs/:slug/tournaments`, `/api/tournaments/:id`, `/api/tournaments/national`),
+ * or un `include` renvoie *toutes* les colonnes du modèle — donc `refereeUserId`, un userId
+ * interne, en clair (spec §7 : « nom seul, jamais le userId »). Énumérer ce qui sort plutôt
+ * que ce qui reste garantit qu'une colonne privée *future* ne fuitera pas par défaut.
+ *
+ * Le nom du J/A s'expose via la relation `referee` projetée en `{ name }` (cf. `getById`).
+ * Les chemins ADMIN (`listForAdmin`, `getForAdmin`) n'utilisent pas cette projection : le
+ * picker de `/admin/tournaments` a besoin de `refereeUserId` pour se pré-sélectionner.
+ */
+const PUBLIC_TOURNAMENT_SELECT = {
+  id: true, clubId: true, clubSportId: true, name: true, category: true, gender: true,
+  openToWomen: true, description: true, contactInfo: true, startTime: true, endTime: true,
+  registrationDeadline: true, maxTeams: true, entryFee: true, requirePrepayment: true,
+  status: true, createdAt: true, updatedAt: true,
+} satisfies Prisma.TournamentSelect;
+
 /** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
 export interface RefereePlayerRow {
   firstName: string;
@@ -326,7 +346,7 @@ export class TournamentService {
     const tournaments = await prisma.tournament.findMany({
       where: { clubId: club.id, status: 'PUBLISHED' },
       orderBy: { startTime: 'asc' },
-      include: { clubSport: { select: { sport: { select: { key: true, name: true } } } } },
+      select: { ...PUBLIC_TOURNAMENT_SELECT, clubSport: { select: { sport: { select: { key: true, name: true } } } } },
     });
     const withCounts = await this.withCounts(tournaments);
     return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
@@ -347,7 +367,8 @@ export class TournamentService {
         startTime: { gte: now, lte: horizon },
         club: { status: 'ACTIVE', listTournamentsNationally: true },
       },
-      include: {
+      select: {
+        ...PUBLIC_TOURNAMENT_SELECT,
         club: { select: { slug: true, name: true, city: true, department: true, departmentCode: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true } },
         clubSport: { select: { sport: { select: { key: true, name: true } } } },
       },
@@ -357,15 +378,28 @@ export class TournamentService {
     return withCounts.map(({ clubSport, ...t }) => ({ ...t, sport: clubSport?.sport ?? null }));
   }
 
-  /** Détail public d'un tournoi (DRAFT masqué) + compteurs. */
+  /**
+   * Détail public d'un tournoi (DRAFT masqué) + compteurs.
+   * Le J/A désigné y est exposé **par son nom seul** (spec §7) : c'est lui qui répond du
+   * tournoi, mais son userId reste interne — d'où la projection `{ name }` plutôt que l'objet.
+   */
   async getById(tournamentId: string) {
     const t = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } },
+      select: {
+        ...PUBLIC_TOURNAMENT_SELECT,
+        club: { select: { slug: true, name: true, timezone: true } },
+        clubSport: { select: { sport: { select: { key: true, name: true } } } },
+        referee: { select: { firstName: true, lastName: true } },
+      },
     });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
-    const [withCount] = await this.withCounts([t]);
-    return withCount;
+    const { referee, ...rest } = t;
+    const [withCount] = await this.withCounts([rest]);
+    return {
+      ...withCount,
+      referee: referee ? { name: `${referee.firstName} ${referee.lastName}`.trim() } : null,
+    };
   }
 
   /** Liste publique des binômes inscrits (noms + avatar + niveau), confirmés puis liste d'attente. DRAFT masqué. */
@@ -405,7 +439,14 @@ export class TournamentService {
       where: { status: { not: 'CANCELLED' }, OR: [{ captainUserId: userId }, { partnerUserId: userId }] },
       orderBy: { tournament: { startTime: 'asc' } },
       include: {
-        tournament: { include: { club: { select: { slug: true, name: true, timezone: true } }, clubSport: { select: { sport: { select: { key: true, name: true } } } } } },
+        // Payload joueur (pas admin) : même projection publique que les autres lectures.
+        tournament: {
+          select: {
+            ...PUBLIC_TOURNAMENT_SELECT,
+            club: { select: { slug: true, name: true, timezone: true } },
+            clubSport: { select: { sport: { select: { key: true, name: true } } } },
+          },
+        },
         captain: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         partner: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       },

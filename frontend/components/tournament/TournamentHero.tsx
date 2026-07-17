@@ -30,13 +30,15 @@ export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDe
   );
 }
 
-// Cartes méta de la fiche tournoi : début, clôture, prix par binôme.
+// Cartes méta de la fiche tournoi : début, clôture, prix par binôme, juge-arbitre.
 export function MetaCards({ t }: { t: TournamentDetail }) {
   const tz = t.club.timezone;
   const cards: MetaCard[] = [
     { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(t.startTime, t.endTime, tz) },
     { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(t.registrationDeadline, tz) },
     ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € / binôme` } as MetaCard] : []),
+    // Nom seul : le J/A répond du tournoi, mais ses coordonnées restent l'affaire de `contactInfo`.
+    ...(t.referee ? [{ icon: 'whistle', label: 'Juge-arbitre', value: t.referee.name } as MetaCard] : []),
   ];
   return <MetaCardsRow cards={cards} />;
 }
