@@ -151,12 +151,22 @@ describe('Page Mon profil — onglets + SaveBar', () => {
   it('le sport préféré est différé et part en preferredSportId', async () => {
     api.getSports.mockResolvedValue([PADEL]);
     wrap();
-    const region = await screen.findByRole('region', { name: 'Sport préféré' });
-    fireEvent.click(within(region).getByText('Padel'));
+    const group = await screen.findByRole('group', { name: 'Sport préféré' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Padel' }));
     expect(api.updateMyProfile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
       expect.objectContaining({ preferredSportId: 'sport-padel' }), 'abc',
+    ));
+  });
+
+  it('le sexe se choisit en pills et part dans le même PATCH', async () => {
+    wrap();
+    const group = await screen.findByRole('group', { name: 'Sexe' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Femme' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ sex: 'FEMALE' }), 'abc',
     ));
   });
 
