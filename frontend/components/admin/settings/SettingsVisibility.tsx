@@ -1,5 +1,5 @@
 'use client';
-import { SwitchRow } from './SwitchRow';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { SettingsTabProps, useSettingsStyles } from './shared';
 
 export function SettingsVisibility({ club, set }: SettingsTabProps) {

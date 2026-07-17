@@ -1,17 +1,18 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, ClubMatchStats, MyProfile, MyRating, RatingPoint, MemberPackage, Subscription, MyPayment, Sport } from '@/lib/api';
+import { api, assetUrl, ClubMatchStats, MyProfile, MyRating, RatingPoint, MemberPackage, Subscription, MyPayment, MyClubMembership, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
-import { BackButton, PillTabs, ThemeToggle } from '@/components/ui/atoms';
+import { BackButton, ThemeToggle } from '@/components/ui/atoms';
 import { SaveBar } from '@/components/ui/SaveBar';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { ClubNav } from '@/components/ClubNav';
 import { PROFILE_TABS, ProfileTabKey, parseProfileTab, buildProfileBody, isDirty, licenceDirty } from '@/lib/meProfile';
 import { SetProfileField } from '@/components/profile/shared';
+import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileIdentity } from '@/components/profile/tabs/ProfileIdentity';
 import { ProfileLevel } from '@/components/profile/tabs/ProfileLevel';
 import { ProfilePreferences } from '@/components/profile/tabs/ProfilePreferences';
@@ -37,6 +38,8 @@ export default function MyProfilePage() {
   // Ressource 2 : la licence du club courant (endpoint distinct). null = non membre.
   const [licenceServer, setLicenceServer] = useState<string | null>(null);
   const [licenceDraft, setLicenceDraft] = useState<string>('');
+  // Adhésion complète (chips du hero) — la licence en est extraite comme 2ᵉ ressource.
+  const [membership, setMembership] = useState<MyClubMembership | null>(null);
 
   const [saving, setSaving] = useState(false);
   // `error` = chargement/upload (bandeau haut) ; `saveError` = échec d'enregistrement (barre).
@@ -78,6 +81,7 @@ export default function MyProfilePage() {
       setDraft(p);
       if (slug) {
         const m = await api.getMyClubMembership(slug, token).catch(() => null);
+        setMembership(m);
         const lic = m ? (m.membershipNo ?? '') : null;
         setLicenceServer(lic);
         setLicenceDraft(lic ?? '');
@@ -88,6 +92,7 @@ export default function MyProfilePage() {
           api.getMyPayments(slug, token).then(setPayments).catch(() => {});
         }
       } else {
+        setMembership(null);
         setLicenceServer(null);
       }
     } catch (e) { setError((e as Error).message); }
@@ -237,10 +242,6 @@ export default function MyProfilePage() {
           </div>
         )}
 
-        <div style={{ padding: '18px 20px 0', fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, letterSpacing: -0.5 }}>
-          Mon profil
-        </div>
-
         {error && (
           <div style={{ margin: '14px 20px 0', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 12, padding: '10px 14px' }}>
             {error}
@@ -250,35 +251,42 @@ export default function MyProfilePage() {
         {loading || !draft ? (
           <div style={{ padding: '24px 20px', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : (
-          <div style={{ padding: '18px 20px 0' }}>
-            <div className="sp-scroll-x" style={{ marginBottom: 18 }}>
-              <PillTabs options={tabs.map((t) => ({ value: t.key, label: t.label }))} value={activeTab} onChange={changeTab} />
+          <>
+            <ProfileHero
+              profile={draft}
+              avatarSrc={avatarSrc} initials={initials} uploading={uploading}
+              fileRef={fileRef} onPickAvatar={pickAvatar}
+              kicker={club?.name ?? 'Palova'}
+              level={club?.levelSystemEnabled !== false ? (rating?.level ?? null) : null}
+              isSubscriber={!!membership?.isSubscriber}
+              memberSince={membership?.since ?? null}
+              tabs={tabs} activeTab={activeTab} onTab={changeTab}
+              compact={activeTab !== 'identite'}
+            />
+            <div style={{ padding: '16px 20px 0' }}>
+              {activeTab === 'identite' && (
+                <ProfileIdentity
+                  profile={draft} set={set} sports={sports}
+                  licence={isMember ? licenceDraft : null} clubName={club?.name ?? null} onLicence={setLicence}
+                />
+              )}
+              {activeTab === 'niveau' && (
+                <ProfileLevel
+                  sports={sports} ratingSport={ratingSport} onRatingSport={setRatingSport}
+                  rating={rating} history={history} matchStats={matchStats} clubName={club?.name ?? null}
+                  calibrating={calibrating} ratingBusy={ratingBusy}
+                  onStartCalibrate={() => setCalibrating(true)} onCalibrate={handleCalibrate}
+                />
+              )}
+              {activeTab === 'preferences' && <ProfilePreferences profile={draft} set={set} />}
+              {activeTab === 'portefeuille' && slug && (
+                <ProfileWallet slug={slug} token={token} packages={walletPackages} subscriptions={walletSubs} payments={payments} />
+              )}
+              {activeTab === 'securite' && <ProfileSecurity token={token} />}
+
+              <SaveBar dirty={dirty} saving={saving} error={saveError} saved={justSaved} onSave={save} onCancel={cancel} />
             </div>
-
-            {activeTab === 'identite' && (
-              <ProfileIdentity
-                profile={draft} set={set} sports={sports}
-                avatarSrc={avatarSrc} initials={initials} uploading={uploading}
-                fileRef={fileRef} onPickAvatar={pickAvatar}
-                licence={isMember ? licenceDraft : null} clubName={club?.name ?? null} onLicence={setLicence}
-              />
-            )}
-            {activeTab === 'niveau' && (
-              <ProfileLevel
-                sports={sports} ratingSport={ratingSport} onRatingSport={setRatingSport}
-                rating={rating} history={history} matchStats={matchStats} clubName={club?.name ?? null}
-                calibrating={calibrating} ratingBusy={ratingBusy}
-                onStartCalibrate={() => setCalibrating(true)} onCalibrate={handleCalibrate}
-              />
-            )}
-            {activeTab === 'preferences' && <ProfilePreferences profile={draft} set={set} />}
-            {activeTab === 'portefeuille' && slug && (
-              <ProfileWallet slug={slug} token={token} packages={walletPackages} subscriptions={walletSubs} payments={payments} />
-            )}
-            {activeTab === 'securite' && <ProfileSecurity token={token} />}
-
-            <SaveBar dirty={dirty} saving={saving} error={saveError} saved={justSaved} onSave={save} onCancel={cancel} />
-          </div>
+          </>
         )}
       </div>
     </Screen>

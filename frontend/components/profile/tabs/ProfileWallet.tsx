@@ -3,6 +3,7 @@ import type { MemberPackage, MyPayment, Subscription } from '@/lib/api';
 import { WalletSection } from '@/components/profile/WalletSection';
 import { PaymentMethodSection } from '@/components/profile/PaymentMethodSection';
 import { PaymentsHistory } from '@/components/profile/PaymentsHistory';
+import { CardKicker } from '@/components/profile/CardKicker';
 import { useProfileStyles } from '@/components/profile/shared';
 
 interface Props {
@@ -14,21 +15,21 @@ interface Props {
 }
 
 export function ProfileWallet({ slug, token, packages, subscriptions, payments }: Props) {
-  const { card, cardTitle } = useProfileStyles();
+  const { card } = useProfileStyles();
   return (
     <>
       <section style={card} aria-label="Portefeuille">
-        <div style={cardTitle}>Portefeuille</div>
+        <CardKicker>Portefeuille</CardKicker>
         <WalletSection packages={packages} subscriptions={subscriptions} />
       </section>
 
       <section style={card} aria-label="Méthodes de paiement">
-        <div style={cardTitle}>Méthodes de paiement</div>
+        <CardKicker>Méthodes de paiement</CardKicker>
         <PaymentMethodSection slug={slug} token={token} />
       </section>
 
       <section style={card} aria-label="Mes paiements">
-        <div style={cardTitle}>Mes paiements</div>
+        <CardKicker>Mes paiements</CardKicker>
         <PaymentsHistory payments={payments} />
       </section>
     </>

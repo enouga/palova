@@ -2500,6 +2500,7 @@ export interface MyClubMembership {
   membershipNo: string | null;
   status: 'ACTIVE' | 'BLOCKED';
   isSubscriber: boolean;
+  since?: string; // ISO, date d'adhésion (additif — le PATCH licence ne le renvoie pas)
 }
 
 export interface AdminRegistration {

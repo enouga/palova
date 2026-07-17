@@ -66,3 +66,16 @@ export function isDirty(server: MyProfile, draft: MyProfile): boolean {
 export function licenceDirty(server: string, draft: string): boolean {
   return server.trim() !== draft.trim();
 }
+
+/**
+ * Année d'adhésion pour la chip « Membre depuis {année} ».
+ * Lit les 4 premiers caractères de l'ISO plutôt que `new Date()` : pur, sans fuseau
+ * (un 31/12 23h UTC ne bascule pas d'année selon le fuseau du lecteur), donc stable.
+ * Le plancher 1900 rend la fonction totale : il rejette `NaN` (date illisible) ET 0
+ * (`Number('    ')` vaut 0 — sans lui, un blanc afficherait « Membre depuis 0 »).
+ */
+export function memberSinceYear(since: string | null | undefined): number | null {
+  if (!since) return null;
+  const y = Number(since.slice(0, 4));
+  return y > 1900 ? y : null;
+}
