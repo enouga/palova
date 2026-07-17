@@ -30,6 +30,8 @@ Lis ces trois fichiers en entier — ce plan est un portage, ils sont la référ
 
 **Environnement :** les shims `node_modules/.bin` sont cassés sur ce poste. Lance jest via `node node_modules/jest/bin/jest.js` et tsc via `node node_modules/typescript/bin/tsc`, depuis `frontend/`.
 
+⚠️ **Jest traite un chemin comme un MOTIF, pas comme un fichier.** Sur Windows (insensible à la casse), `jest __tests__/meProfile.test.ts` attrape **aussi** `__tests__/MeProfile.test.tsx` — 33 tests au lieu de 10. Les deux noms sont pourtant corrects et suivent la convention du repo (`adminSettings.test.ts` helpers / `AdminSettings.test.tsx` page, qui se télescopent déjà pareil). Pour cibler **un seul** fichier, utilise **`--runTestsByPath`**, qui prend un chemin littéral.
+
 ---
 
 ## File Structure
@@ -147,7 +149,7 @@ describe('meProfile helpers', () => {
 - [ ] **Step 2 : Lancer le test pour vérifier qu'il échoue**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/meProfile.test.ts
+cd frontend && node node_modules/jest/bin/jest.js --runTestsByPath __tests__/meProfile.test.ts
 ```
 
 Attendu : FAIL — `Cannot find module '../lib/meProfile'`.
@@ -228,7 +230,7 @@ export function licenceDirty(server: string, draft: string): boolean {
 - [ ] **Step 4 : Lancer le test pour vérifier qu'il passe**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/meProfile.test.ts
+cd frontend && node node_modules/jest/bin/jest.js --runTestsByPath __tests__/meProfile.test.ts
 ```
 
 Attendu : PASS, 10 tests.
@@ -250,6 +252,7 @@ Purement mécanique, **aucun changement de comportement**. La suite `AdminSettin
 - Create: `frontend/components/ui/SaveBar.tsx`
 - Delete: `frontend/components/admin/settings/SaveBar.tsx`
 - Modify: `frontend/app/admin/settings/page.tsx:15`
+- Modify: `frontend/__tests__/SaveBar.test.tsx:3` — **la suite du composant importe elle aussi l'ancien chemin** (deux importeurs, pas un)
 
 - [ ] **Step 1 : Déplacer le fichier**
 
@@ -1205,7 +1208,7 @@ describe('Page Mon profil — licence (seconde ressource)', () => {
 - [ ] **Step 2 : Lancer pour vérifier l'échec**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/MeProfile.test.tsx
+cd frontend && node node_modules/jest/bin/jest.js --runTestsByPath __tests__/MeProfile.test.tsx
 ```
 
 Attendu : FAIL en masse — la page rend encore la `ProfileSectionNav` et les sections empilées, il n'y a ni onglet ni `SaveBar`.
@@ -1506,7 +1509,7 @@ export default function MyProfilePage() {
 - [ ] **Step 4 : Lancer la suite pour vérifier qu'elle passe**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/MeProfile.test.tsx
+cd frontend && node node_modules/jest/bin/jest.js --runTestsByPath __tests__/MeProfile.test.tsx
 ```
 
 Attendu : PASS, 28 tests (24 onglets/SaveBar + 4 licence).
@@ -1543,7 +1546,7 @@ cd frontend && git rm components/profile/ProfileSectionNav.tsx __tests__/Profile
 - [ ] **Step 3 : Vérifier qu'aucune suite ne casse**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/MeProfile.test.tsx
+cd frontend && node node_modules/jest/bin/jest.js --runTestsByPath __tests__/MeProfile.test.tsx
 ```
 
 Attendu : PASS, 28 tests.
@@ -1630,11 +1633,13 @@ Attendu : `OK: aucune erreur sur nos fichiers`. On filtre sur nos chemins : du t
 - [ ] **Step 2 : Suites touchées**
 
 ```bash
-cd frontend && node node_modules/jest/bin/jest.js __tests__/meProfile.test.ts __tests__/MeProfile.test.tsx __tests__/AdminSettings
+cd frontend && node node_modules/jest/bin/jest.js __tests__/MeProfile __tests__/AdminSettings
 cd ../backend && node node_modules/jest/bin/jest.js src/email
 ```
 
-Attendu : tout vert. `AdminSettings` prouve que le déplacement de la `SaveBar` n'a rien cassé.
+Ici on veut au contraire tout ratisser, donc on garde les **motifs** (pas `--runTestsByPath`) : `__tests__/MeProfile` attrape volontairement les deux suites profil (helpers `meProfile.test.ts` + page `MeProfile.test.tsx`), et `__tests__/AdminSettings` les trois suites Réglages.
+
+Attendu : tout vert — 38 tests profil (10 + 28) et 55 tests Réglages. `AdminSettings` prouve que le déplacement de la `SaveBar` n'a rien cassé.
 
 - [ ] **Step 3 : Vérification visuelle**
 
