@@ -1684,12 +1684,11 @@ describe('table de marque — appariement & tardif', () => {
   it('pairFromBench : WAITLISTED si complet', async () => {
     mockTournament({ maxTeams: 2 });
     mockEligiblePair();
-    const tx = mockTx({ count: jest.fn().mockResolvedValue(2), create: jest.fn().mockResolvedValue({ id: 'r-new', status: 'WAITLISTED' }) });
+    mockTx({ count: jest.fn().mockResolvedValue(2), create: jest.fn().mockResolvedValue({ id: 'r-new', status: 'WAITLISTED' }) });
 
     const reg = await svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1');
 
     expect(reg.status).toBe('WAITLISTED');
-    void tx;
   });
 
   it('pairFromBench : épreuve payante -> DUE + holdDeadline', async () => {
