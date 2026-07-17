@@ -233,6 +233,17 @@ describe('brandFromClub — coordonnées & manageUrl', () => {
     expect(b.manageUrl).toContain('/me/profile');
   });
 
+  it('manageUrl vise l’onglet Préférences (le lien « Gérer mes notifications » y atterrit)', () => {
+    // La page profil est en onglets et s'ouvre sur Identité par défaut : sans ?tab=,
+    // le lien du pied de tous les emails raterait les préférences de notification.
+    const b = brandFromClub({
+      name: 'Arena', logoUrl: null, accentColor: '#5e93da',
+      slug: 'arena', address: '12 rue du Padel', city: 'Paris',
+      contactPhone: '01 23 45 67 89', contactEmail: 'c@arena.fr',
+    });
+    expect(b.manageUrl).toContain('/me/profile?tab=preferences');
+  });
+
   it('champs absents → null (jamais undefined dans le rendu)', () => {
     const b = brandFromClub({ name: 'Arena', logoUrl: null, accentColor: '#5e93da' });
     expect(b.address).toBeNull();

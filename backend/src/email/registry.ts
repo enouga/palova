@@ -83,7 +83,8 @@ export function brandFromClub(club: {
     address: address || null,
     phone: club.contactPhone || null,
     email: club.contactEmail || null,
-    manageUrl: club.slug ? clubAppUrl(club.slug, '/me/profile') : null,
+    // Vise l'onglet Préférences : la page profil est en onglets et s'ouvre sur Identité.
+    manageUrl: club.slug ? clubAppUrl(club.slug, '/me/profile?tab=preferences') : null,
   };
 }
 
