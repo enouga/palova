@@ -1,5 +1,6 @@
 import {
   offerTint, planPulse, packagePulse, planRevenueCents, splitByActive,
+  sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersBySport,
 } from '../lib/adminOffers';
 import type { PackageTemplate, SubscriberRow } from '../lib/api';
 import { ACCENTS } from '../lib/theme';
@@ -74,5 +75,78 @@ describe('splitByActive', () => {
     const { active, inactive } = splitByActive(items);
     expect(active.map(i => i.id)).toEqual(['a', 'c']);
     expect(inactive.map(i => i.id)).toEqual(['b']);
+  });
+});
+
+describe('sportOfferTint', () => {
+  it('une offre à un seul sport prend la couleur dédiée de ce sport', () => {
+    expect(sportOfferTint(['padel'])).toBe('#7FAE86');
+    expect(sportOfferTint(['tennis'])).toBe('#6F9FC4');
+  });
+  it('une offre sans sport (« Tous sports ») prend la couleur neutre', () => {
+    expect(sportOfferTint([])).toBe('#B9B3A8');
+  });
+  it('une offre à plusieurs sports prend la couleur neutre', () => {
+    expect(sportOfferTint(['padel', 'tennis'])).toBe('#B9B3A8');
+  });
+  it('une clé de sport hors catalogue retombe sur la couleur neutre', () => {
+    expect(sportOfferTint(['futsal'])).toBe('#B9B3A8');
+  });
+});
+
+describe('sportKeyColor', () => {
+  it('couleur dédiée pour une clé connue', () => {
+    expect(sportKeyColor('squash')).toBe('#D69574');
+  });
+  it('couleur neutre pour la clé null ("Tous sports")', () => {
+    expect(sportKeyColor(null)).toBe('#B9B3A8');
+  });
+});
+
+describe('sportGroupLabel', () => {
+  const club = { clubSports: [{ sport: { key: 'padel', name: 'Padel' } }, { sport: { key: 'tennis', name: 'Tennis' } }] };
+  it('résout le nom du sport via le club', () => {
+    expect(sportGroupLabel('padel', club)).toBe('Padel');
+  });
+  it('« Tous sports » pour la clé null', () => {
+    expect(sportGroupLabel(null, club)).toBe('Tous sports');
+  });
+  it('retombe sur la clé brute si le sport est introuvable côté club', () => {
+    expect(sportGroupLabel('squash', club)).toBe('squash');
+  });
+});
+
+describe('groupOffersBySport', () => {
+  const clubSports = [{ sport: { key: 'padel' } }, { sport: { key: 'tennis' } }];
+  const item = (id: string, sportKeys: string[]) => ({ id, sportKeys });
+
+  it('regroupe par sport dans l’ordre du club, « Tous sports » en dernier', () => {
+    const items = [
+      item('tennis-1', ['tennis']),
+      item('padel-1', ['padel']),
+      item('all-1', []),
+      item('padel-2', ['padel']),
+    ];
+    const groups = groupOffersBySport(items, clubSports);
+    expect(groups.map((g) => g.key)).toEqual(['padel', 'tennis', null]);
+    expect(groups[0].items.map((i) => i.id)).toEqual(['padel-1', 'padel-2']);
+    expect(groups[1].items.map((i) => i.id)).toEqual(['tennis-1']);
+    expect(groups[2].items.map((i) => i.id)).toEqual(['all-1']);
+  });
+
+  it('une offre à plusieurs sports rejoint « Tous sports »', () => {
+    const groups = groupOffersBySport([item('multi', ['padel', 'tennis'])], clubSports);
+    expect(groups).toEqual([{ key: null, items: [item('multi', ['padel', 'tennis'])] }]);
+  });
+
+  it('une clé hors catalogue du club est ajoutée après les sports du club', () => {
+    const items = [item('padel-1', ['padel']), item('squash-1', ['squash'])];
+    const groups = groupOffersBySport(items, clubSports);
+    expect(groups.map((g) => g.key)).toEqual(['padel', 'squash']);
+  });
+
+  it('groupes vides omis', () => {
+    const groups = groupOffersBySport([item('padel-1', ['padel'])], clubSports);
+    expect(groups.map((g) => g.key)).toEqual(['padel']);
   });
 });

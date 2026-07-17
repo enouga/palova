@@ -2,6 +2,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { OffersShowcase } from '@/components/clubhouse/OffersShowcase';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import type { PublicOffers } from '@/lib/api';
+import { ACCENTS } from '@/lib/theme';
 
 jest.mock('next/dynamic', () => () => {
   const Stub = () => <div data-testid="stripe-step" />;
@@ -137,5 +138,38 @@ describe('OffersShowcase', () => {
     // Dans la modale, chaque avantage est un <li> séparé — la ligne sport y est un texte exact isolé.
     fireEvent.click(screen.getAllByRole('button', { name: /Souscrire/i })[0]);
     expect(within(screen.getByRole('dialog')).getByText('Padel')).toBeInTheDocument();
+  });
+
+  it('club mono-sport (ou non chargé) : bandeau de couleur de type, aucune section de sport', () => {
+    wrap({});
+    expect(screen.queryByTestId('offer-sport-kicker')).toBeNull();
+    const stripe = screen.getByText('Abo Or').closest('.of-card')!.querySelector('[data-testid="offer-stripe"]')!;
+    expect(stripe).toHaveStyle({ background: ACCENTS.blue });
+  });
+
+  it('club multi-sport : sections par sport dans l’ordre du club, « Tous sports » en dernier, bandeau ≠ badge', () => {
+    clubCtx = {
+      slug: 'padel-arena',
+      club: { clubSports: [{ sport: { key: 'padel', name: 'Padel' } }, { sport: { key: 'tennis', name: 'Tennis' } }] },
+    };
+    wrap({
+      offers: {
+        ...offers,
+        plans: [{ ...offers.plans[0], sportKeys: ['padel'] }],
+        packages: [
+          { ...offers.packages[0], id: 'tp-tennis', name: 'Carnet Tennis', sportKeys: ['tennis'] },
+          { ...offers.packages[0], id: 'tp-multi', name: 'Carnet Multi', sportKeys: [] },
+        ],
+      },
+    });
+    const kickers = screen.getAllByTestId('offer-sport-kicker');
+    expect(kickers.map((k) => k.textContent)).toEqual(['Padel', 'Tennis', 'Tous sports']);
+
+    const padelStripe = screen.getByText('Abo Or').closest('.of-card')!.querySelector('[data-testid="offer-stripe"]')!;
+    expect(padelStripe).toHaveStyle({ background: '#7FAE86' });
+    expect(padelStripe).not.toHaveStyle({ background: ACCENTS.blue });
+
+    const multiStripe = screen.getByText('Carnet Multi').closest('.of-card')!.querySelector('[data-testid="offer-stripe"]')!;
+    expect(multiStripe).toHaveStyle({ background: '#B9B3A8' });
   });
 });

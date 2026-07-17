@@ -4,8 +4,8 @@ import dynamic from 'next/dynamic';
 import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
-import { sportTag } from '@/lib/sportBadge';
-import { offerTint } from '@/lib/adminOffers';
+import { sportTag, clubIsMultiSport } from '@/lib/sportBadge';
+import { offerTint, sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersBySport } from '@/lib/adminOffers';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 
@@ -37,7 +37,20 @@ const packageBenefits = (t: PublicPackageTemplate, club: ClubDetail | null): str
   ];
 };
 
-// Vitrine des formules : cartes abonnements + carnets. Le bouton « Souscrire » ouvre une
+type CardEntry = {
+  id: string;
+  name: string;
+  price: string;
+  suffix: string | null;
+  lines: string[];
+  kindLabel: string;
+  typeTint: string;
+  sportKeys: string[];
+  onOpen: () => void;
+};
+
+// Vitrine des formules : cartes abonnements + carnets, groupées par sport sur un club multi-sport
+// (sections avec kicker coloré, ordre des sports du club). Le bouton « Souscrire » ouvre une
 // modale de détail (description complète + caractéristiques) ; le paiement en ligne n'y est
 // proposé que si le club l'a activé, sinon la modale invite à régler à l'accueil.
 export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPrompt, onPurchased }: {
@@ -58,14 +71,36 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   const openDetails = (t: Target) => { setStage('details'); setTarget(t); };
   const close = () => setTarget(null);
 
+  const multiSport = clubIsMultiSport(club);
+
+  const cardEntries: CardEntry[] = [
+    ...plans.map((p): CardEntry => ({
+      id: `plan-${p.id}`, name: p.name, price: euros(p.monthlyPrice), suffix: '/ mois',
+      lines: planBenefits(p, club), kindLabel: 'Abonnement', typeTint: offerTint('SUBSCRIPTION'),
+      sportKeys: p.sportKeys, onOpen: () => openDetails({ kind: 'plan', plan: p }),
+    })),
+    ...offers.packages.map((t): CardEntry => ({
+      id: `tpl-${t.id}`, name: t.name, price: euros(t.price), suffix: null,
+      lines: packageBenefits(t, club), kindLabel: t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie',
+      typeTint: offerTint(t.kind), sportKeys: t.sportKeys, onOpen: () => openDetails({ kind: 'package', tpl: t }),
+    })),
+  ];
+
+  const groups = multiSport
+    ? groupOffersBySport(cardEntries, club?.clubSports ?? [])
+    : [{ key: null as string | null, items: cardEntries }];
+
   // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
-  const OfferCard = ({ name, price, suffix, lines, kindLabel, tint, onOpen }: {
-    name: string; price: string; suffix: string | null; lines: string[]; kindLabel: string; tint: string; onOpen: () => void;
+  // sportTint colore le bandeau du haut (couleur de sport ; couleur de type si le club n'a qu'un
+  // sport) ; typeTint colore le badge et le bouton (abonnement/carnet/porte-monnaie), inchangé.
+  const OfferCard = ({ name, price, suffix, lines, kindLabel, sportTint, typeTint, onOpen }: {
+    name: string; price: string; suffix: string | null; lines: string[]; kindLabel: string;
+    sportTint: string; typeTint: string; onOpen: () => void;
   }) => (
     <div className="of-card" style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', overflow: 'hidden' }}>
-      <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: tint }} />
+      <span aria-hidden="true" data-testid="offer-stripe" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: sportTint }} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${tint}26` : `${tint}40`, color: th.mode === 'floodlit' ? tint : th.ink }}>
+        <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${typeTint}26` : `${typeTint}40`, color: th.mode === 'floodlit' ? typeTint : th.ink }}>
           {kindLabel}
         </span>
       </div>
@@ -77,7 +112,7 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
         {lines.join(' · ')}
       </div>
       <button onClick={onOpen} style={{
-        marginTop: 10, border: `1.5px solid ${tint}`, background: 'transparent', color: th.mode === 'floodlit' ? tint : th.ink,
+        marginTop: 10, border: `1.5px solid ${typeTint}`, background: 'transparent', color: th.mode === 'floodlit' ? typeTint : th.ink,
         borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, cursor: 'pointer',
       }}>
         Souscrire
@@ -104,21 +139,25 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     <section>
       <SectionHeader title="Abonnements & offres" />
       <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
-      {/* scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage. */}
-      <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
-        {plans.map((p) => (
-          <OfferCard key={p.id} name={p.name} price={euros(p.monthlyPrice)} suffix="/ mois"
-            kindLabel="Abonnement" tint={offerTint('SUBSCRIPTION')}
-            lines={planBenefits(p, club)} onOpen={() => openDetails({ kind: 'plan', plan: p })} />
-        ))}
-        {offers.packages.map((t) => (
-          <OfferCard key={t.id} name={t.name} price={euros(t.price)} suffix={null}
-            kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'}
-            tint={offerTint(t.kind)}
-            lines={packageBenefits(t, club)}
-            onOpen={() => openDetails({ kind: 'package', tpl: t })} />
-        ))}
-      </div>
+      {groups.map((g) => (
+        <div key={g.key ?? '_other'}>
+          {multiSport && (
+            <div data-testid="offer-sport-kicker" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 20px 6px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>
+              <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: sportKeyColor(g.key) }} />
+              {sportGroupLabel(g.key, club)}
+            </div>
+          )}
+          {/* scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage. */}
+          <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
+            {g.items.map((entry) => (
+              <OfferCard key={entry.id} name={entry.name} price={entry.price} suffix={entry.suffix}
+                kindLabel={entry.kindLabel} typeTint={entry.typeTint}
+                sportTint={multiSport ? sportOfferTint(entry.sportKeys) : entry.typeTint}
+                lines={entry.lines} onOpen={entry.onOpen} />
+            ))}
+          </div>
+        </div>
+      ))}
 
       {target && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
