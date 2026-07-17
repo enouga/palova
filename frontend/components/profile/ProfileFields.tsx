@@ -12,15 +12,15 @@ export function FieldShell({ label, focused, children }: { label: string; focuse
   const { th } = useTheme();
   return (
     <div style={{
-      background: th.surface2, borderRadius: 13, padding: '15px 12px 10px', position: 'relative',
+      background: th.surface2, borderRadius: 13, padding: '19px 13px 12px', position: 'relative',
       boxShadow: focused
         ? `inset 0 0 0 1.5px ${th.accent}, 0 0 0 3px ${th.accent}29`
         : `inset 0 0 0 1px ${th.lineStrong}`,
       transition: 'box-shadow .15s',
     }}>
       <span aria-hidden style={{
-        position: 'absolute', top: 6, left: 12, fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 700,
-        letterSpacing: 0.5, textTransform: 'uppercase', color: focused ? th.accent : th.textFaint,
+        position: 'absolute', top: 7, left: 13, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
+        letterSpacing: 0.4, textTransform: 'uppercase', color: focused ? th.accent : th.textFaint,
       }}>{label}</span>
       {children}
     </div>
@@ -32,7 +32,7 @@ function useBareStyle(): CSSProperties {
   const { th } = useTheme();
   return {
     width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', outline: 'none',
-    padding: 0, margin: 0, fontFamily: th.fontUI, fontSize: 14, color: th.text,
+    padding: 0, margin: 0, fontFamily: th.fontUI, fontSize: 16.5, color: th.text,
   };
 }
 
@@ -91,8 +91,8 @@ export function PillChoice<T extends string>({ label, value, onChange, options }
             <button
               key={o.value} type="button" aria-pressed={active} onClick={() => onChange(o.value)}
               style={{
-                cursor: 'pointer', border: 'none', borderRadius: 999, padding: '6px 15px',
-                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: active ? 700 : 600,
+                cursor: 'pointer', border: 'none', borderRadius: 999, padding: '8px 17px',
+                fontFamily: th.fontUI, fontSize: 14.5, fontWeight: active ? 700 : 600,
                 background: active ? th.accent : th.surfaceHi,
                 color: active ? th.onAccent : th.textMute,
               }}

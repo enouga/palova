@@ -9,6 +9,7 @@ const ERR_FR: Record<string, string> = {
   CODE_EXPIRED: 'Code expiré — renvoyez-en un nouveau.',
   TOO_MANY_ATTEMPTS: "Trop d'essais. Renvoyez un code.",
   RESEND_COOLDOWN: 'Patientez un instant avant de renvoyer.',
+  RATE_LIMITED: 'Trop de tentatives. Patientez une minute avant de réessayer.',
 };
 function frError(e: unknown): string {
   const m = (e as Error)?.message ?? '';

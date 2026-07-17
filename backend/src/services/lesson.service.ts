@@ -6,6 +6,7 @@ import {
   notifyLessonPromotion,
 } from '../email/notifications';
 import { coachDisplay } from './coach.service';
+import { serializableTx } from '../db/serializable';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types de sortie supplémentaires (Lot 3 — côté joueur)
@@ -188,7 +189,7 @@ class LessonService {
 
     const container = resolveContainer(lesson);
 
-    const result = await prisma.$transaction(
+    const result = await serializableTx(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -233,7 +234,7 @@ class LessonService {
           },
         });
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
+      { timeout: 10_000 },
     );
 
     await this.safeNotify(() => notifyLessonEnrollment(result.id));
@@ -250,7 +251,7 @@ class LessonService {
     const lesson = await this.loadLesson(lessonId, clubId);
     const container = resolveContainer(lesson);
 
-    const { cancelledId, promotedId } = await prisma.$transaction(
+    const { cancelledId, promotedId } = await serializableTx(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -286,7 +287,7 @@ class LessonService {
 
         return { cancelledId: enrollId, promotedId };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
+      { timeout: 10_000 },
     );
 
     await this.safeNotify(() => notifyLessonCancellation(cancelledId));
@@ -495,7 +496,7 @@ class LessonService {
 
     const container = resolveContainer(lesson);
 
-    const result = await prisma.$transaction(
+    const result = await serializableTx(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -529,7 +530,7 @@ class LessonService {
           data: { userId, status, ...container.enrollKey },
         });
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
+      { timeout: 10_000 },
     );
 
     await this.safeNotify(() => notifyLessonEnrollment(result.id));
@@ -555,7 +556,7 @@ class LessonService {
 
     const container = resolveContainer(lesson);
 
-    const { cancelledId, promotedId } = await prisma.$transaction(
+    const { cancelledId, promotedId } = await serializableTx(
       async (tx) => {
         await this.lockContainer(tx, container);
 
@@ -595,7 +596,7 @@ class LessonService {
 
         return { cancelledId: enrollment.id, promotedId };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 },
+      { timeout: 10_000 },
     );
 
     await this.safeNotify(() => notifyLessonCancellation(cancelledId));

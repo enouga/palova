@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MatchesFilterBar } from '../components/openmatch/MatchesFilterBar';
+import { MatchesFilterBar, KindFilter } from '../components/openmatch/MatchesFilterBar';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import type { MatchAlert } from '../lib/api';
 
@@ -14,7 +14,7 @@ const baseProps = {
   fMin: 1,
   fMax: 8,
   onLevelChange: noop,
-  kindFilter: 'all' as const,
+  kindFilter: 'all' as KindFilter,
   onKindChange: noop,
   resultCount: 0,
   alerts: [] as MatchAlert[],

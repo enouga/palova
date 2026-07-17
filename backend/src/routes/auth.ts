@@ -5,8 +5,14 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { generateCode } from '../utils/code';
 import { sendVerificationEmail, sendPasswordResetEmail, emailDevMode } from '../email/mailer';
+import { rateLimit } from '../middleware/rateLimit';
 
 const router = Router();
+
+// Limites anti-brute-force / anti-abus (fenêtre fixe, cf. assertRateLimit).
+// Généreuses pour un humain, serrées pour un bot. Le contrôle par IP freine le spray
+// (beaucoup de comptes depuis une IP), le contrôle par email le brute-force ciblé.
+const MIN = 60;
 
 const CODE_TTL_MS = 15 * 60 * 1000;        // validité du code : 15 min
 const MAX_ATTEMPTS = 5;                     // essais max avant de devoir renvoyer un code
@@ -50,7 +56,10 @@ async function issueResetCode(userId: string, email: string): Promise<string> {
   return code;
 }
 
-router.post('/login', async (req: Request, res: Response): Promise<void> => {
+router.post('/login', rateLimit(
+  { bucket: 'login', by: 'ip', max: 20, windowSec: MIN },
+  { bucket: 'login', by: 'email', max: 8, windowSec: MIN },
+), async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email et mot de passe requis' });
@@ -74,7 +83,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   res.json({ token: signToken(user), user: publicUser(user) });
 });
 
-router.post('/register', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/register', rateLimit(
+  { bucket: 'register', by: 'ip', max: 10, windowSec: MIN },
+  { bucket: 'register', by: 'email', max: 5, windowSec: MIN },
+), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password, firstName, lastName, phone, preferredSportId } = req.body;
     if (!email || !password || !firstName || !lastName) {
@@ -116,7 +128,9 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
-router.post('/verify-email', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/verify-email', rateLimit(
+  { bucket: 'verify', by: 'ip', max: 20, windowSec: MIN },
+), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
@@ -157,7 +171,9 @@ router.post('/verify-email', async (req: Request, res: Response, next: NextFunct
   }
 });
 
-router.post('/resend-code', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/resend-code', rateLimit(
+  { bucket: 'resend', by: 'ip', max: 8, windowSec: MIN },
+), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -184,7 +200,9 @@ router.post('/resend-code', async (req: Request, res: Response, next: NextFuncti
 
 // Mot de passe oublié : déclenche l'envoi d'un code de réinitialisation.
 // Réponse TOUJOURS neutre (anti-énumération) : on ne révèle pas si l'email existe.
-router.post('/forgot-password', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/forgot-password', rateLimit(
+  { bucket: 'forgot', by: 'ip', max: 8, windowSec: MIN },
+), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -211,7 +229,9 @@ router.post('/forgot-password', async (req: Request, res: Response, next: NextFu
 });
 
 // Réinitialisation effective : valide le code et pose le nouveau mot de passe.
-router.post('/reset-password', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/reset-password', rateLimit(
+  { bucket: 'reset', by: 'ip', max: 20, windowSec: MIN },
+), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, code, newPassword } = req.body;
     if (!email || !code || !newPassword) {

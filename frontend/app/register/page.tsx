@@ -48,7 +48,11 @@ export default function RegisterPage() {
       setStep('verify');
     } catch (err) {
       const msg = (err as Error).message;
-      setError(msg.includes('déjà utilisé') ? 'Cet email a déjà un compte. Connectez-vous.' : msg);
+      setError(
+        msg === 'RATE_LIMITED' ? 'Trop de tentatives. Patientez une minute avant de réessayer.'
+        : msg.includes('déjà utilisé') ? 'Cet email a déjà un compte. Connectez-vous.'
+        : msg,
+      );
     } finally {
       setLoading(false);
     }

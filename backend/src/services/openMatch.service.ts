@@ -7,6 +7,7 @@ import { effectiveTeams, applyTeams } from './matchTeams';
 import { ensureActiveMembership } from './membership';
 import { matchCardStateHash } from './matchCardState';
 import { MatchAlertService } from './matchAlert.service';
+import { serializableTx } from '../db/serializable';
 
 // Include commun à la liste et à la lecture unitaire d'une partie ouverte.
 const MATCH_INCLUDE = {
@@ -272,7 +273,7 @@ export class OpenMatchService {
   ) {
     const club = await ensureActiveMembership(slug, userId);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await serializableTx(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
         SELECT status, visibility, start_time, resource_id, total_price FROM reservations WHERE id = ${reservationId} FOR UPDATE
       `;
@@ -312,7 +313,7 @@ export class OpenMatchService {
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
       return { id: reservationId };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    }, { timeout: 10_000 });
 
     // Après commit, best-effort : prévenir l'organisateur qu'un joueur a rejoint.
     await this.safeNotify(() => notifyOpenMatchJoin(reservationId, userId));
@@ -328,7 +329,7 @@ export class OpenMatchService {
   async removeOpenMatchPlayer(slug: string, reservationId: string, actorUserId: string, targetUserId: string) {
     const club = await this.resolveActiveMember(slug, actorUserId);
 
-    const outcome = await prisma.$transaction(async (tx) => {
+    const outcome = await serializableTx(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ start_time: Date; resource_id: string; total_price: string }>>`
         SELECT start_time, resource_id, total_price FROM reservations WHERE id = ${reservationId} FOR UPDATE
       `;
@@ -355,7 +356,7 @@ export class OpenMatchService {
       const remaining = parts.filter((p) => p.id !== target.id).map((p) => ({ id: p.id, isOrganizer: p.isOrganizer }));
       await this.applyShares(tx, remaining, Math.round(Number(r.total_price) * 100));
       return { isSelf };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    }, { timeout: 10_000 });
 
     // Best-effort après commit : prévenir la bonne personne.
     if (outcome.isSelf) await this.safeNotify(() => notifyOpenMatchLeft(reservationId, targetUserId));
@@ -375,7 +376,7 @@ export class OpenMatchService {
 
     const club = await this.resolveActiveMember(slug, organizerUserId);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await serializableTx(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ status: string; visibility: string; start_time: Date; resource_id: string; total_price: string }>>`
         SELECT status, visibility, start_time, resource_id, total_price FROM reservations WHERE id = ${reservationId} FOR UPDATE
       `;
@@ -412,7 +413,7 @@ export class OpenMatchService {
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
       return { id: reservationId };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    }, { timeout: 10_000 });
 
     await this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
     return result;
@@ -421,7 +422,7 @@ export class OpenMatchService {
   /** Réorganise les équipes (+ places G/D) d'une partie ouverte (organisateur seul). Transaction Serializable + FOR UPDATE. */
   async setTeams(slug: string, reservationId: string, organizerUserId: string, teams: Record<string, number>, slots?: Record<string, number>) {
     const club = await this.resolveActiveMember(slug, organizerUserId);
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ start_time: Date; resource_id: string }>>`
         SELECT start_time, resource_id FROM reservations WHERE id = ${reservationId} FOR UPDATE
       `;
@@ -434,7 +435,7 @@ export class OpenMatchService {
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
       await applyTeams(tx, reservationId, teams, maxPlayers, slots);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+    }, { timeout: 10_000 });
     return { id: reservationId };
   }
 

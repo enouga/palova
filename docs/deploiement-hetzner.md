@@ -107,18 +107,19 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f caddy    # Ctrl-C pour sortir
 ```
 
-## Étape 6 — Seeder les données démo (une seule fois)
+## Étape 6 — Initialiser la plateforme (une seule fois)
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend npm run db:seed
 ```
-Crée le club démo (`padel-arena-paris`), les terrains, le compte `test@palova.fr` / `password123`, les tournois.
+En production (`NODE_ENV=production`, positionné dans `docker-compose.prod.yml`), ce seed crée **uniquement** le **catalogue de sports** de la plateforme et le compte **super-admin** `super@palova.fr` (mot de passe = `SUPERADMIN_PASSWORD` de `.env.prod` — **obligatoire**, le seed échoue s'il manque).
+**Aucune donnée de démo** (club, terrains, comptes `password123`, tournois) n'est créée en prod : les vrais clubs se créent ensuite via `https://palova.fr/clubs/new`.
 
 ## Étape 7 — Vérification finale
 Depuis un réseau **hors entreprise** (le FortiClient de BAYARD bloque `palova.fr`) — ton téléphone en données mobiles, ou chez toi :
 - `https://api.palova.fr/health` → `{"status":"ok"}`
 - `https://palova.fr` → **pop-up login** (Basic Auth = `SITE_USER`/`SITE_PASS`) puis la plateforme
-- `https://padel-arena-paris.palova.fr` → **accueil du club** + lien **Tournois** *(1ʳᵉ visite d'un nouveau sous-domaine = 1-2 s de plus, le temps d'émettre son certificat)*
-- Connexion app avec `test@palova.fr` / `password123` ; le gérant atterrit sur `/admin`.
+- Connexion app avec `super@palova.fr` / `SUPERADMIN_PASSWORD` → atterrit sur `/superadmin`
+- Créer un premier vrai club via `https://palova.fr/clubs/new`, puis vérifier `https://<slug>.palova.fr` → **accueil du club** *(1ʳᵉ visite d'un nouveau sous-domaine = 1-2 s de plus, le temps d'émettre son certificat)*
 
 ---
 

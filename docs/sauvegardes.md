@@ -51,7 +51,7 @@ Plus deux **runbooks de restauration** (base corrompue sur VM existante / VM tot
 | **Secrets** (`.env`, `.env.prod`, clé SSH) | 🔴 Critique, **hors git** | VM + poste local | Gestionnaire de mots de passe (voir §5) |
 | **Redis** | ⚪ Éphémère | Volume `redis_data` | **Aucune sauvegarde** : ne contient que des verrous de checkout à TTL 10 min, tout est reconstructible |
 | **Certificats TLS (Caddy)** | ⚪ Reconstructible | Volume Caddy sur la VM | Aucune : Caddy les ré-émet automatiquement (Let's Encrypt) |
-| **Fichiers uploadés** | ⚪ N/A aujourd'hui | — | Les images (`imageUrl`, `logoUrl`…) sont des URLs externes. **⚠️ Si un jour on stocke des uploads sur disque, les ajouter à ce runbook.** |
+| **Fichiers uploadés** | 🟠 Important, sur disque | Volumes `backend_uploads` (avatars, logos, covers, affiches, photos club) + `backend_uploads_private` (images de messagerie) | **Sauvegardés par `deploy/backup-db.sh`** (archive `palova-uploads-*.tar.gz`, best-effort). Perdus = à re-uploader par les clubs, non reconstructibles depuis git. |
 
 > **À retenir : la seule donnée vraiment irremplaçable, c'est Postgres** (+ les secrets). Tout le reste se reconstruit depuis git.
 
@@ -291,12 +291,13 @@ Un restore est **impossible** sans eux. À conserver dans un **gestionnaire de m
 | Partout | Secrets | Gestionnaire de mots de passe | À chaque changement | — | Oui |
 
 ### Checklist de mise en place (dans l'ordre)
+- [x] ~~Créer `deploy/backup-db.sh`~~ **fait** (Postgres + uploads, dans le repo) — reste à le **déployer + cron** sur la VM
+- [x] ~~Créer `backup-local.ps1`~~ **fait** (racine du repo)
 - [ ] Activer les **Backups Hetzner** dans la console (2 clics)
-- [ ] Créer `deploy/backup-db.sh`, le committer, le déployer, l'ajouter au **cron** de la VM
-- [ ] Commander une **Storage Box** et ajouter la copie `scp` au script
-- [ ] Créer le check **healthchecks.io** et ajouter le ping au script
+- [ ] Sur la VM : `chmod +x deploy/backup-db.sh` puis `crontab -e` → `0 3 * * * /root/palova/deploy/backup-db.sh >> /var/log/palova-backup.log 2>&1`
+- [ ] Commander une **Storage Box** (ou bucket S3) et **décommenter** le bloc hors-site (§4 du script)
+- [ ] Créer le check **healthchecks.io** et **décommenter** le ping (§5 du script)
 - [ ] Mettre tous les **secrets au coffre** (§5)
-- [ ] Créer `backup-local.ps1` pour le confort en dev
 - [ ] Faire un **premier test de restauration** (§6) et noter la date ci-dessous
 
 ---

@@ -36,6 +36,34 @@ async function main() {
   }
   const padel = await prisma.sport.findUniqueOrThrow({ where: { key: 'padel' } });
 
+  // Super-admin plateforme (idempotent) — nécessaire en PROD comme en dev.
+  // En production, refuser le repli sur le mot de passe de dev (compte le plus puissant).
+  if (process.env.NODE_ENV === 'production' && !process.env.SUPERADMIN_PASSWORD) {
+    throw new Error('SUPERADMIN_PASSWORD doit être défini pour seeder en production (compte super-admin).');
+  }
+  const superPassword = await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'password123', 10);
+  await prisma.user.upsert({
+    where: { email: 'super@palova.fr' },
+    update: { isSuperAdmin: true, password: superPassword, emailVerified: true },
+    create: {
+      email: 'super@palova.fr',
+      password: superPassword,
+      firstName: 'Super',
+      lastName: 'Admin',
+      isSuperAdmin: true,
+      emailVerified: true,
+    },
+  });
+
+  // En PRODUCTION, on s'arrête ici : aucune donnée de démo (club-demo, terrains,
+  // comptes password123, offres…) ne doit jamais exister en prod. Le catalogue de
+  // sports + le super-admin ci-dessus suffisent à démarrer une plateforme vierge ;
+  // les vrais clubs se créent ensuite via /clubs/new.
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Seed prod : catalogue de sports + super-admin (aucune donnée de démo).');
+    return;
+  }
+
   // 2. Club de démo
   const club = await prisma.club.upsert({
     where: { id: 'club-demo' },
@@ -189,26 +217,7 @@ async function main() {
     }
   }
 
-  // 5b. Super-admin plateforme (idempotent). Mot de passe via env en prod, défaut dev.
-  // En production, refuser le repli sur le mot de passe de dev (sécurité du compte le plus puissant).
-  if (process.env.NODE_ENV === 'production' && !process.env.SUPERADMIN_PASSWORD) {
-    throw new Error('SUPERADMIN_PASSWORD doit être défini pour seeder en production (compte super-admin).');
-  }
-  const superPassword = await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'password123', 10);
-  await prisma.user.upsert({
-    where: { email: 'super@palova.fr' },
-    update: { isSuperAdmin: true, password: superPassword, emailVerified: true },
-    create: {
-      email: 'super@palova.fr',
-      password: superPassword,
-      firstName: 'Super',
-      lastName: 'Admin',
-      isSuperAdmin: true,
-      emailVerified: true,
-    },
-  });
-
-  console.log('Seed terminé.');
+  console.log('Seed dev terminé (club démo + comptes de test).');
 }
 
 main().finally(() => prisma.$disconnect());

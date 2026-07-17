@@ -5,6 +5,7 @@ export const redisMock = {
   exists: jest.fn(),
   incr: jest.fn(),
   expire: jest.fn(),
+  ping: jest.fn(),
   connect: jest.fn(),
   on: jest.fn(),
 };

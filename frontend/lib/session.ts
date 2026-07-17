@@ -11,8 +11,14 @@ function cookieDomainAttr(): string {
   return root && root !== 'localhost' ? `; domain=.${root}` : '';
 }
 
+// `Secure` seulement en HTTPS (prod) : sur localhost HTTP, un cookie Secure ne serait
+// tout simplement pas posé par le navigateur.
+function secureAttr(): string {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+}
+
 function writeCookie(name: string, value: string, maxAge: number) {
-  document.cookie = `${name}=${encodeURIComponent(value)}${cookieDomainAttr()}; path=/; SameSite=Lax; max-age=${maxAge}`;
+  document.cookie = `${name}=${encodeURIComponent(value)}${cookieDomainAttr()}; path=/; SameSite=Lax${secureAttr()}; max-age=${maxAge}`;
 }
 
 export function getCookie(name: string): string | null {

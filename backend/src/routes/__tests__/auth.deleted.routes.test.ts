@@ -1,4 +1,5 @@
 import '../../__mocks__/prisma';
+import '../../__mocks__/redis';
 import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import bcrypt from 'bcrypt';

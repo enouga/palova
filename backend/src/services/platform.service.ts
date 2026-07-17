@@ -1,14 +1,16 @@
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
+import { serializableTx } from '../db/serializable';
 import { slugify, RESERVED_SLUGS } from './club.service';
 import { geocodeAddress } from './geo.service';
+import { siretIsValidFormat, checkSiret } from './siret.service';
 import { tierFor, tierPriceCents, BillingInterval } from './platformBilling/tiers';
 import { billingState, BillingState, aggregateBilling } from './platformBilling/platformBilling.service';
 import { lastMonths, bucketByMonth } from './platformStats.service';
 
 export interface CreateClubByPlatformParams {
-  club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
+  club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string; siret?: string };
   owner: { firstName: string; lastName: string; email: string; password: string };
 }
 
@@ -158,6 +160,10 @@ export class PlatformService {
       timezone: club.timezone,
       status: club.status,
       createdAt: club.createdAt,
+      siret: club.siret,
+      siretLegalName: club.siretLegalName,
+      // Miroir de createdAt/activeMemberCountAt : Date brute (ou null), sérialisée en ISO par res.json().
+      siretVerifiedAt: club.siretVerifiedAt,
       aliases: club.slugAliases.map((a) => a.slug),
       owners: club.members.map((m) => m.user),
       counts: {
@@ -256,7 +262,7 @@ export class PlatformService {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
       // un ReadCommitted laisserait un createClub concurrent interposer un slug que
       // ce changeClubSlug lirait comme absent. Serializable détecte la dépendance de lecture.
-      return await prisma.$transaction(async (tx) => {
+      return await serializableTx(async (tx) => {
         const current = await tx.club.findUnique({ where: { slug }, select: { id: true } });
         if (current) throw new Error('SLUG_TAKEN'); // slug actuel d'un autre club
         const alias = await tx.clubSlugAlias.findUnique({ where: { slug }, select: { clubId: true } });
@@ -264,7 +270,7 @@ export class PlatformService {
         if (alias) await tx.clubSlugAlias.delete({ where: { slug } }); // swap-back : le club reprend son ancien alias
         await tx.clubSlugAlias.create({ data: { slug: club.slug, clubId } }); // l'ancien slug devient alias permanent
         return tx.club.update({ where: { id: clubId }, data: { slug }, select: { id: true, slug: true, name: true } });
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      });
     } catch (err) {
       // Course concurrente : violation d'unicité (slug pris entre-temps, ou DEUX changements
       // simultanés du même club — le second échoue sur la PK alias). SLUG_TAKEN dans les deux cas.
@@ -292,6 +298,17 @@ export class PlatformService {
     });
     if (existing) throw new Error('EMAIL_TAKEN');
 
+    // SIRET optionnel côté superadmin (souverain) : format invalide bloque, mais un SIRET
+    // introuvable/inactif à l'INSEE ne bloque JAMAIS (contrairement à club.service.createClub).
+    const siret = (params.club?.siret ?? '').trim();
+    let siretLegalName: string | null = null;
+    let siretVerifiedAt: Date | null = null;
+    if (siret) {
+      if (!siretIsValidFormat(siret)) throw new Error('SIRET_INVALID');
+      const check = await checkSiret(siret); // best-effort : le superadmin est souverain
+      if (check) { siretVerifiedAt = new Date(); siretLegalName = check.legalName; }
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const geo = await geocodeAddress({ address: params.club.address, city: params.club.city });
 
@@ -299,7 +316,7 @@ export class PlatformService {
       // Isolation Serializable : sans contrainte DB entre clubs.slug et club_slug_aliases,
       // un ReadCommitted laisserait un changeClubSlug concurrent interposer un alias que
       // ce createClubWithOwner lirait comme absent. Serializable détecte la dépendance de lecture.
-      return await prisma.$transaction(async (tx) => {
+      return await serializableTx(async (tx) => {
         // Un ancien alias d'un club reste réservé à vie : aucun nouveau club ne peut le revendiquer.
         // Vérification DANS la transaction pour éviter la race TOCTOU avec changeClubSlug.
         const reservedAlias = await tx.clubSlugAlias.findUnique({ where: { slug }, select: { slug: true } });
@@ -316,6 +333,7 @@ export class PlatformService {
             timezone: params.club.timezone || 'Europe/Paris',
             status: 'ACTIVE',
             ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
+            ...(siret ? { siret, siretLegalName, ...(siretVerifiedAt ? { siretVerifiedAt } : {}) } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: owner.id, clubId: club.id, role: 'OWNER' } });
@@ -327,7 +345,7 @@ export class PlatformService {
           club,
           owner: { id: owner.id, email: owner.email, firstName: owner.firstName, lastName: owner.lastName },
         };
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const target = (err.meta?.target as string[] | undefined) ?? [];

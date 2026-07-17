@@ -18,6 +18,7 @@ import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { sportHasLevels } from './rating/level';
 import { effectiveTeams, applyTeams } from './matchTeams';
+import { serializableTx } from '../db/serializable';
 
 interface HoldSlotParams {
   resourceId: string;
@@ -370,7 +371,7 @@ export class ReservationService {
     // hors padel, on ignore toute fourchette demandée.
     const levelOk = sportHasLevels(reservation.resource.clubSport?.sport?.key);
 
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       await tx.reservationParticipant.deleteMany({ where: { reservationId } });
       await tx.reservationParticipant.createMany({
         data: this.participantRows(reservationId, userId, partners, priceCents),
@@ -405,7 +406,7 @@ export class ReservationService {
           competitive: setup.competitive ?? undefined,
         },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   async confirmReservation(
@@ -516,7 +517,7 @@ export class ReservationService {
       }
     }
 
-    const confirmed = await prisma.$transaction(async (tx) => {
+    const confirmed = await serializableTx(async (tx) => {
       const locked = await tx.$queryRaw<any[]>`
         SELECT id, status, resource_id, start_time, end_time
         FROM reservations WHERE id = ${reservationId} FOR UPDATE
@@ -654,10 +655,7 @@ export class ReservationService {
         where: { id: reservationId },
         data:  { status: 'CONFIRMED', ...(cgvAcceptedAt ? { cgvAcceptedAt } : {}) },
       });
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 10_000,
-    });
+    }, { timeout: 10_000 });
 
     await redis.del(this.lockKey(confirmed.resourceId, confirmed.startTime));
 
@@ -886,7 +884,7 @@ export class ReservationService {
     }
 
     const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await serializableTx(async (tx) => {
       const conflicts = await tx.reservation.count({
         where: {
           resourceId,
@@ -926,10 +924,7 @@ export class ReservationService {
       }
 
       return reservation;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 10_000,
-    });
+    }, { timeout: 10_000 });
 
     SSEService.getInstance().broadcast(resourceId, {
       type: 'slot_confirmed',
@@ -983,7 +978,7 @@ export class ReservationService {
     const endUtc   = end.toUTC().toJSDate();
     const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await serializableTx(async (tx) => {
       const conflicts = await tx.reservation.count({
         where: {
           id: { not: reservationId },
@@ -1002,10 +997,7 @@ export class ReservationService {
         where: { id: reservationId },
         data: { resourceId, startTime: startUtc, endTime: endUtc },
       });
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 10_000,
-    });
+    }, { timeout: 10_000 });
 
     SSEService.getInstance().broadcast(reservation.resourceId, {
       type: 'slot_released',
@@ -1072,7 +1064,7 @@ export class ReservationService {
     const title = params.title?.trim() || null;
     const holdExpiryCutoff = new Date(Date.now() - HOLD_EXPIRY_MS);
 
-    const { seriesId, createdList, skipped } = await prisma.$transaction(async (tx) => {
+    const { seriesId, createdList, skipped } = await serializableTx(async (tx) => {
       const series = await tx.reservationSeries.create({
         data: {
           clubId: params.clubId,
@@ -1141,10 +1133,7 @@ export class ReservationService {
       }
 
       return { seriesId: series.id, createdList, skipped };
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 20_000,
-    });
+    }, { timeout: 20_000 });
 
     // SSE après commit : les vues live des autres clients se mettent à jour.
     for (const r of createdList) {
@@ -1347,7 +1336,7 @@ export class ReservationService {
     const max      = playerCount(format);
     const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
 
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const existing = await tx.reservationParticipant.findMany({
         where: { reservationId: reservation.id }, orderBy: { joinedAt: 'asc' },
         select: { id: true, userId: true, isOrganizer: true },
@@ -1375,7 +1364,7 @@ export class ReservationService {
       }
       const ns = byUser.get(memberUserId)!;
       await tx.reservationParticipant.create({ data: { reservationId: reservation.id, userId: memberUserId, isOrganizer: ns.isOrganizer, share: ns.share } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   /**
@@ -1390,7 +1379,7 @@ export class ReservationService {
     participantId: string,
   ): Promise<void> {
     const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const existing = await tx.reservationParticipant.findMany({
         where: { reservationId: reservation.id }, orderBy: { joinedAt: 'asc' },
         select: { id: true, userId: true, isOrganizer: true },
@@ -1410,7 +1399,7 @@ export class ReservationService {
         const s = byUser.get(p.userId)!;
         await tx.reservationParticipant.update({ where: { id: p.id }, data: { share: s.share, isOrganizer: s.isOrganizer } });
       }
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   /**
@@ -1487,7 +1476,7 @@ export class ReservationService {
     if (!membership || membership.status === 'BLOCKED') throw new Error('MEMBER_NOT_FOUND');
 
     const dueCents = this.effectiveDueCents(reservation, reservation.resource.club);
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const existing = await tx.reservationParticipant.findMany({
         where: { reservationId }, orderBy: { joinedAt: 'asc' },
         select: { id: true, userId: true, isOrganizer: true },
@@ -1510,7 +1499,7 @@ export class ReservationService {
       }
       const ns = byUser.get(newMemberUserId)!;
       await tx.reservationParticipant.create({ data: { reservationId, userId: newMemberUserId, isOrganizer: ns.isOrganizer, share: ns.share } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
 
     await this.safeNotify(() => notifyReservationMemberAssigned(reservationId, newMemberUserId));
     return this.loadClubReservation(reservationId, clubId);
@@ -1614,9 +1603,9 @@ export class ReservationService {
     if (!reservation)                  throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId) throw new Error('UNAUTHORIZED');
     const maxPlayers = playerCount((reservation.resource.attributes as { format?: string } | null)?.format);
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       await applyTeams(tx, reservationId, teams, maxPlayers, slots);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
     return this.getOwnReservationPlayers(reservationId, userId);
   }
 
@@ -1879,7 +1868,7 @@ export class ReservationService {
 
       const sub = covering;
       try {
-        await prisma.$transaction(async (tx) => {
+        const didApply = await serializableTx(async (tx) => {
           // Reste dû GLOBAL de la résa (tous paiements, anonymes compris) : plafond absolu —
           // on n'encaisse jamais au-delà du dû de la réservation, même quand la place du
           // joueur n'a aucun paiement qui lui est lié.
@@ -1908,7 +1897,7 @@ export class ReservationService {
             remaining = Math.min(remaining, Math.max(0, slot.nominalShareCents - paidAllCents));
           }
           const amountCents = Math.min(coverCents, remaining);
-          if (amountCents <= 0) return;
+          if (amountCents <= 0) return false;
           const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
           await tx.payment.create({
             data: {
@@ -1917,8 +1906,11 @@ export class ReservationService {
               receiptNo,
             },
           });
-          applied += 1;
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+          return true;
+        });
+        // Incrément HORS transaction : le retry peut ré-exécuter le callback, mais `applied`
+        // ne doit compter que le travail réellement commité.
+        if (didApply) applied += 1;
       } catch { /* une place en échec ne doit pas bloquer les autres ; retentée au prochain chargement */ }
     }
     return { applied };
@@ -2111,11 +2103,11 @@ export class ReservationService {
     };
 
     if (method !== 'PACK_CREDIT' && method !== 'WALLET') {
-      return prisma.$transaction(async (tx) => {
+      return serializableTx(async (tx) => {
         await assertNotOverpaid(tx);
         const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
         return tx.payment.create({ data: { ...base, receiptNo } });
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      });
     }
 
     // Paiement par solde prépayé : le package doit appartenir au joueur de la résa.
@@ -2126,11 +2118,11 @@ export class ReservationService {
     if (expectedUserId && pkg.userId !== expectedUserId)         throw new Error('PACKAGE_NOT_FOUND');
     if ((method === 'PACK_CREDIT') !== (pkg.kind === 'ENTRIES')) throw new Error('VALIDATION_ERROR');
 
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       await assertNotOverpaid(tx);
       await PackageService.consume(tx, pkg, new Prisma.Decimal(params.amount));
       const receiptNo = await PackageService.nextReceiptNo(tx, params.clubId);
       return tx.payment.create({ data: { ...base, sourcePackageId: pkg.id, receiptNo } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 }

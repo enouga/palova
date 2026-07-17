@@ -41,7 +41,9 @@ export default function LoginPage() {
           setVerify({ email: data.email, devCode: r?.devCode });
           return;
         }
-        setError(data.error || 'Erreur de connexion');
+        setError(data.error === 'RATE_LIMITED'
+          ? 'Trop de tentatives. Patientez une minute avant de réessayer.'
+          : (data.error || 'Erreur de connexion'));
         return;
       }
       await finishAuth(data, slug, router, nextPath());

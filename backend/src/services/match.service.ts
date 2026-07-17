@@ -10,6 +10,7 @@ import { notifyMatchPendingConfirmation, notifyNewMatchComment } from '../email/
 import { recomputeSportRatings } from './rating/recompute';
 import { effectiveTeams } from './matchTeams';
 import { playerCount } from '../utils/courtType';
+import { serializableTx } from '../db/serializable';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -278,7 +279,7 @@ export class MatchService {
     const trimmed = (reason ?? '').trim();
     if (!trimmed || trimmed.length > 200) throw new Error('VALIDATION_ERROR');
 
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const match = await tx.match.findUnique({
         where: { id: matchId },
         select: { clubId: true, sportId: true, status: true, ratingsAppliedAt: true, players: { select: { userId: true } } },
@@ -295,12 +296,12 @@ export class MatchService {
       if (match.ratingsAppliedAt) {
         await recomputeSportRatings(tx, match.sportId, match.players.map((p) => p.userId));
       }
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   /** Finalise un match confirmé : applique Glicko aux 4 joueurs (idempotent, transaction Serializable). */
   async finalize(matchId: string): Promise<void> {
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       const match = await tx.match.findUnique({
         where: { id: matchId },
         include: { players: { select: { userId: true, team: true } } },
@@ -361,7 +362,7 @@ export class MatchService {
         where: { id: matchId },
         data: { status: 'CONFIRMED', ratingsAppliedAt: new Date() },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 }
 

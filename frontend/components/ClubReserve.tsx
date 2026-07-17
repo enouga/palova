@@ -309,9 +309,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     ) : items.length === 0 ? (
                       <div style={{ padding: '12px 0 4px', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>Aucun terrain.</div>
                     ) : view === 'grid' ? (
-                    // Clamp desktop : la grille de créneaux garde une largeur de cellule fixe
-                    // (colonnes horaires compactes) → à 1080 elle laissait un grand vide à droite.
-                    <div style={{ maxWidth: 900, margin: '0 auto', opacity: loading ? 0.55 : 1, transition: 'opacity .15s' }}>
+                    <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity .15s' }}>
                       <SportGrid
                         items={items}
                         nowMs={nowMs}

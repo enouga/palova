@@ -4,6 +4,7 @@ import { api, CoachLessonRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/atoms';
 import { ClubNav } from '@/components/ClubNav';
@@ -29,6 +30,9 @@ export default function MeCoachingPage() {
   const [error, setError] = useState<string | null>(null);
   const [addFor, setAddFor] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<{ lessonId: string; enrollId: string } | null>(null);
+  // Horloge unique posée au mount : jamais de `new Date()` au rendu (hydration).
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => { setNow(new Date()); }, []);
 
   const load = useCallback(async () => {
     if (!token || !slug) return;
@@ -53,7 +57,9 @@ export default function MeCoachingPage() {
   return (
     <Screen>
       {slug && club && <ClubNav club={club} />}
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Pas de largeur par page : le ClubNav collant vit dans la colonne 1080 de Screen,
+          une largeur locale ferait sauter la barre en naviguant (cf. Screen.tsx). */}
+      <div style={{ padding: '16px 20px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 24, margin: 0, color: th.text }}>Mes cours</h1>
           <span style={{ marginLeft: 'auto' }}><ProfileMenu /></span>
@@ -65,14 +71,21 @@ export default function MeCoachingPage() {
           <>
             <Segmented<'upcoming' | 'past'> value={scope} onChange={setScope}
               options={[{ value: 'upcoming', label: 'À venir' }, { value: 'past', label: 'Passés' }]} />
-            {error && <div style={{ background: th.accent, color: th.onAccent, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13 }}>{error}</div>}
+            {/* Coral : une erreur ne se peint pas avec l'accent du club (bleu = état normal). */}
+            {error && (
+              <div style={{
+                background: th.mode === 'floodlit' ? `${ACCENTS.coral}26` : `${ACCENTS.coral}40`,
+                color: th.mode === 'floodlit' ? ACCENTS.coral : th.ink,
+                borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600,
+              }}>{error}</div>
+            )}
             {loading ? (
               <span style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</span>
             ) : lessons.length === 0 ? (
               <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textFaint }}>{scope === 'upcoming' ? 'Aucun cours à venir.' : 'Aucun cours passé.'}</p>
             ) : (
               lessons.map((l) => (
-                <CoachLessonCard key={l.id} lesson={l} tz={tz} editable={scope === 'upcoming'}
+                <CoachLessonCard key={l.id} lesson={l} tz={tz} now={now} editable={scope === 'upcoming'}
                   onAddStudent={(lessonId) => setAddFor(lessonId)}
                   onRemoveStudent={(lessonId, enrollId) => setRemoveFor({ lessonId, enrollId })} />
               ))

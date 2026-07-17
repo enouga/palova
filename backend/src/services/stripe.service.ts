@@ -1,6 +1,6 @@
 import { stripe } from '../db/stripe';
 import { prisma } from '../db/prisma';
-import { Prisma } from '@prisma/client';
+import { serializableTx } from '../db/serializable';
 
 export class StripeService {
   async createConnectedAccount(clubId: string, refreshUrl: string, returnUrl: string): Promise<string> {
@@ -359,7 +359,7 @@ export class StripeService {
       throw Object.assign(new Error('STRIPE_HAS_PENDING_ONLINE_PAYMENTS'), { count: pending });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await serializableTx(async (tx) => {
       await tx.club.update({
         where: { id: clubId },
         data: {
@@ -370,7 +370,7 @@ export class StripeService {
         },
       });
       await tx.clubStripeCustomer.deleteMany({ where: { clubId } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   /** Détails (marque/4 chiffres/expiration) d'une carte enregistrée, lus sur le compte connecté. */

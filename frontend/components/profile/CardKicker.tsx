@@ -15,7 +15,7 @@ export function CardKicker({ children, tone = 'accent' }: { children: ReactNode;
     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
       <span aria-hidden style={{ width: 16, height: 3, borderRadius: 2, background: dash, flexShrink: 0 }} />
       <span style={{
-        fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 1.2,
+        fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, letterSpacing: 1,
         textTransform: 'uppercase', color: tone === 'coral' ? ACCENTS.coral : th.textFaint,
       }}>{children}</span>
     </div>

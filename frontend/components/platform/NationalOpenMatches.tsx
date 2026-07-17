@@ -17,7 +17,8 @@ export function NationalOpenMatches({ matches }: { matches: NationalOpenMatch[] 
   const { th } = useTheme();
   if (matches.length === 0) return null;
   return (
-    <div className="sp-scroll-x" style={{ display: 'flex', gap: 14, margin: '0 -20px', padding: '16px 20px 18px', scrollSnapType: 'x mandatory' }}>
+    // scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage.
+    <div className="sp-scroll-x" style={{ display: 'flex', gap: 14, margin: '0 -20px', padding: '16px 20px 18px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
       {matches.map((m) => {
         const empty = matchSeats(m);
         const urgent = m.spotsLeft === 1;

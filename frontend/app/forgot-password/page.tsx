@@ -26,8 +26,11 @@ export default function ForgotPasswordPage() {
     try {
       const r = await api.forgotPassword(email.trim());
       setSent({ email: email.trim(), devCode: r.devCode });
-    } catch {
-      setError('Impossible de contacter le serveur');
+    } catch (err) {
+      const msg = (err as Error)?.message;
+      setError(msg === 'RATE_LIMITED'
+        ? 'Trop de tentatives. Patientez une minute avant de réessayer.'
+        : 'Impossible de contacter le serveur');
     } finally {
       setLoading(false);
     }

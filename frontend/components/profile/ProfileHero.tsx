@@ -39,14 +39,18 @@ export function ProfileHero({
   const fullName = `${profile.firstName} ${profile.lastName}`;
 
   const chip = (bg: string, color: string) => ({
-    display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, padding: '4px 9px',
-    fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, background: bg, color,
+    display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, padding: '6px 11px',
+    fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, background: bg, color,
   } as const);
 
   return (
-    <div style={{ background: HERO_GRADIENT, padding: compact ? '14px 20px 0' : '20px 20px 0' }}>
+    // Inset 20px de chaque côté (comme AgendaHero et les cartes en dessous — sinon le
+    // panneau, plein-bleed, déborde visuellement des cartes plus étroites qui suivent).
+    // Coins arrondis en haut seulement : le bas reste carré pour souder l'onglet actif.
+    <div style={{ padding: '0 20px' }}>
+    <div style={{ background: HERO_GRADIENT, borderRadius: '18px 18px 0 0', padding: compact ? '14px 20px 0' : '20px 20px 0' }}>
       <div style={{
-        fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
+        fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
         textTransform: 'uppercase', color: HERO_INK_MUTED,
       }}>{kicker}</div>
 
@@ -105,7 +109,7 @@ export function ProfileHero({
 
           {!compact && (
             <>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12, color: HERO_INK_MUTED, marginTop: 3 }}>
+              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: HERO_INK_MUTED, marginTop: 3 }}>
                 {profile.email}
               </div>
               {(isSubscriber || sinceYear != null) && (
@@ -131,7 +135,7 @@ export function ProfileHero({
                 key={t.key} type="button" onClick={() => onTab(t.key)}
                 style={{
                   border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
+                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
                   padding: active ? '9px 15px' : '9px 12px',
                   borderRadius: active ? '11px 11px 0 0' : 0,
                   background: active ? th.bg : 'transparent',
@@ -142,6 +146,7 @@ export function ProfileHero({
           })}
         </div>
       </div>
+    </div>
     </div>
   );
 }

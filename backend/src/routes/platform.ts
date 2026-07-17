@@ -17,6 +17,7 @@ const moderationService = new ModerationService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR: 400,
+  SIRET_INVALID:    400,
   SLUG_INVALID:     400,
   SLUG_RESERVED:    400,
   TIER_INVALID:     400,

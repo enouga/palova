@@ -4,6 +4,7 @@ import { Prisma, PaymentMethod, SubscriptionBenefit } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { PackageService } from './package.service';
 import { OFFERS_DIR } from '../utils/uploads';
+import { serializableTx } from '../db/serializable';
 
 /** Méthodes acceptées pour encaisser la VENTE d'un abonnement (1re mensualité). */
 const SALE_METHODS = ['CASH', 'CARD', 'TRANSFER', 'VOUCHER', 'OTHER'] as const;
@@ -213,7 +214,7 @@ export class SubscriptionService {
     const method = this.buildSaleMethod(body);
     const newExpiry = new Date(Math.max(Date.now(), sub.expiresAt.getTime()));
     newExpiry.setMonth(newExpiry.getMonth() + sub.plan.commitmentMonths);
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       const updated = await tx.subscription.update({ where: { id }, data: { expiresAt: newExpiry } });
       const receiptNo = await PackageService.nextReceiptNo(tx, clubId);
       const payment = await tx.payment.create({
@@ -228,7 +229,7 @@ export class SubscriptionService {
         },
       });
       return { subscription: updated, payment };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   /** Changement de forfait : résilie l'actuel + vend le nouveau (snapshot, plein tarif, pas de prorata), 1 transaction. */
@@ -242,10 +243,10 @@ export class SubscriptionService {
     const method = this.buildSaleMethod(body);
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + plan.commitmentMonths);
-    return prisma.$transaction(async (tx) => {
+    return serializableTx(async (tx) => {
       await tx.subscription.update({ where: { id }, data: { status: 'CANCELLED' } });
       return this.createPeriodTx(tx, { clubId, userId: current.userId, plan, method, body, expiresAt, note: `Changement d'abonnement → ${plan.name} — 1re mensualité` });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
   }
 
   async listMySubscriptionsBySlug(slug: string, userId: string) {
