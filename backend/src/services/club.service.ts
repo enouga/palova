@@ -418,7 +418,7 @@ export class ClubService {
         where: { clubId, user: { deletedAt: null, isSuperAdmin: false } },
         orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
         select: {
-          id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, createdAt: true,
+          id: true, isSubscriber: true, membershipNo: true, status: true, note: true, watch: true, isReferee: true, createdAt: true,
           user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatarUrl: true } },
         },
       }),
@@ -500,6 +500,7 @@ export class ClubService {
       hasActivePackage: usableByUser.has(m.user.id),
       lastSeenAt: lastSeenBy.get(m.user.id)?.toISOString() ?? null,
       isCoach: coachUserIds.has(m.user.id),
+      isReferee: m.isReferee,
     }));
   }
 
@@ -508,6 +509,35 @@ export class ClubService {
     const res = await prisma.clubMembership.updateMany({ where: { clubId, userId }, data: { watch } });
     if (res.count === 0) throw new Error('MEMBER_NOT_FOUND');
     return { userId, watch };
+  }
+
+  /**
+   * Facette « juge-arbitre » d'un membre (colonne ClubMembership.isReferee). Idempotent.
+   * Pas de garde self/owner — être J/A ne confère aucun privilège sur le club, seulement sur
+   * les tournois qu'on lui assigne (miroir de CoachService.setMemberCoach).
+   * Lève : MEMBER_NOT_FOUND si la cible n'est pas membre du club.
+   */
+  async setMemberReferee(clubId: string, userId: string, isReferee: boolean) {
+    const res = await prisma.clubMembership.updateMany({ where: { clubId, userId }, data: { isReferee } });
+    if (res.count === 0) throw new Error('MEMBER_NOT_FOUND');
+    return { userId, isReferee };
+  }
+
+  /**
+   * Vivier des J/A du club (membres ACTIVE portant la facette) — alimente le picker du tournoi.
+   * Le prédicat ACTIVE + facette est le miroir de TournamentService.resolveReferee (le gate de
+   * l'espace arbitrage) : on ne propose jamais un J/A que la garde refuserait ensuite.
+   * Comptes supprimés / super-admin exclus, comme listMembers (leurs lignes sont inertes ou techniques).
+   */
+  async listReferees(clubId: string) {
+    const rows = await prisma.clubMembership.findMany({
+      where: { clubId, isReferee: true, status: 'ACTIVE', user: { deletedAt: null, isSuperAdmin: false } },
+      orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+      select: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } },
+    });
+    return rows.map((r) => ({
+      userId: r.user.id, firstName: r.user.firstName, lastName: r.user.lastName, avatarUrl: r.user.avatarUrl ?? null,
+    }));
   }
 
   /**
