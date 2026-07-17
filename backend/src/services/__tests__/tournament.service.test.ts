@@ -1575,6 +1575,13 @@ describe('table de marque — remplacement', () => {
     expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
   });
 
+  // Parité avec les méthodes sœurs de ce même bloc (setPresence, declareForfeit) : hors
+  // club / hors tournoi / déjà annulée → REGISTRATION_NOT_FOUND, avant tout autre contrôle.
+  it('replacePlayer : REGISTRATION_NOT_FOUND hors club/tournoi/déjà annulée', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock).mockResolvedValue(null as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('REGISTRATION_NOT_FOUND');
+  });
+
   it('replacePlayer : refuse un non-membre (NOT_A_MEMBER)', async () => {
     (prismaMock.tournamentRegistration.findFirst as jest.Mock).mockResolvedValue(baseReg as any);
     (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue(null as any);
