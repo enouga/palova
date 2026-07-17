@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@/lib/ThemeProvider';
-import { SwitchRow } from '@/components/admin/settings/SwitchRow';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 
 const wrap = (checked: boolean, onChange = jest.fn()) =>
   render(

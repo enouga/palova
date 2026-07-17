@@ -4,7 +4,7 @@ import { Segmented } from '@/components/ui/atoms';
 import { CANCEL_PRESETS } from '@/lib/onboarding';
 import { DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER } from '@/lib/adminSettings';
 import { PresetChips } from './PresetChips';
-import { SwitchRow } from './SwitchRow';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { SettingsTabProps, useSettingsStyles } from './shared';
 
 const CANCEL_HOURS = CANCEL_PRESETS.map((p) => p.hours);              // [0, 4, 24]

@@ -1,6 +1,6 @@
 'use client';
 import { Segmented } from '@/components/ui/atoms';
-import { SwitchRow } from './SwitchRow';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { OffPeakEditor } from './OffPeakEditor';
 import { SettingsTabProps, useSettingsStyles } from './shared';
 import type { BookingQuotas } from '@/lib/api';

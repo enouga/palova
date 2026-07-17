@@ -1,7 +1,7 @@
 'use client';
 import { QUICK_METHODS, QUICK_METHOD_LABEL } from '@/lib/caisse';
 import type { PaymentMethod } from '@/lib/api';
-import { SwitchRow } from './SwitchRow';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { SettingsTabProps, useSettingsStyles } from './shared';
 
 export function SettingsCollect({ club, set }: SettingsTabProps) {
