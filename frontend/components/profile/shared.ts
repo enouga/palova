@@ -2,6 +2,7 @@
 import { CSSProperties } from 'react';
 import type { MyProfile } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { cardStyle } from '@/components/clubhouse/SectionHeader';
 
 /** Setter typé d'un champ du brouillon (fourni par la page orchestratrice). */
 export type SetProfileField = <K extends keyof MyProfile>(k: K, v: MyProfile[K]) => void;
@@ -15,12 +16,9 @@ export interface ProfileTabProps {
 /** Styles partagés (carte, titre, label, champ, bouton). Hook car dépend du thème. */
 export function useProfileStyles() {
   const { th } = useTheme();
-  // Ombre douce (même recette que cardStyle() du Club-house) — fini le liseré inset gris.
+  // Surface + ombre du Club-house ; padding/layout restent locaux (cardStyle ne les porte pas).
   const card: CSSProperties = {
-    background: th.surface, borderRadius: 18,
-    boxShadow: th.mode === 'floodlit'
-      ? `0 14px 34px rgba(0,0,0,0.42), inset 0 0 0 1px ${th.line}`
-      : '0 14px 34px rgba(24,21,16,0.08), 0 1px 2px rgba(24,21,16,0.05)',
+    ...cardStyle(th),
     padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14,
   };
   const cardTitle: CSSProperties = {

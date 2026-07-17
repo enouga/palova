@@ -57,6 +57,7 @@ export function ProfileSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
+  const { th } = useTheme();
   const [focused, setFocused] = useState(false);
   const bare = useBareStyle();
   return (
@@ -65,7 +66,10 @@ export function ProfileSelect({ label, value, onChange, options }: {
         value={value} aria-label={label}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         onChange={(e) => onChange(e.target.value)}
-        style={{ ...bare, cursor: 'pointer' }}
+        // Fond opaque : sans lui, le popup d'options hérite du blanc UA et th.text (quasi blanc
+        // en floodlit) devient illisible dessus. Le bloc FieldShell est déjà th.surface2 fermé,
+        // donc ça ne change rien visuellement quand le select est fermé.
+        style={{ ...bare, cursor: 'pointer', background: th.surface2 }}
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
