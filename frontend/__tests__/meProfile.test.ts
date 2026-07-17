@@ -101,7 +101,6 @@ describe('memberSinceYear', () => {
 
   it('renvoie null sur une date illisible', () => {
     expect(memberSinceYear('bientôt')).toBeNull();
-    // Année parseable mais implausible : c’est `> 1900` qui l’attrape, pas `Number.isInteger`.
     expect(memberSinceYear('0024-03-01T10:00:00.000Z')).toBeNull();
   });
 });
