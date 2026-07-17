@@ -19,6 +19,8 @@ function mockLeaderboardSuccess(sportKey = 'padel') {
   prismaMock.clubMembership.findMany.mockResolvedValue([]);
   prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
   prismaMock.user.findUnique
+    // 1er appel : authMiddleware (tokenVersion/deletedAt)
+    .mockResolvedValueOnce({ deletedAt: null } as any)
     // 2e appel : meUser (showInLeaderboard + playerRatings)
     .mockResolvedValueOnce({ showInLeaderboard: false, playerRatings: [] } as any);
 }
@@ -29,10 +31,11 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
   });
 
   it('sans ?sport utilise le sport préféré de l\'appelant', async () => {
-    // 1er appel à user.findUnique : résolution du sport préféré (preferredSport.ts)
+    // 1er appel à user.findUnique : authMiddleware ; 2e : résolution du sport préféré
+    // (preferredSport.ts) ; 3e : meUser dans clubLeaderboard.
     prismaMock.user.findUnique
+      .mockResolvedValueOnce({ deletedAt: null } as any)
       .mockResolvedValueOnce({ preferredSport: { key: 'tennis' } } as any)
-      // 2e appel : meUser dans clubLeaderboard
       .mockResolvedValueOnce({ showInLeaderboard: false, playerRatings: [] } as any);
 
     prismaMock.club.findUnique.mockResolvedValue({
@@ -63,6 +66,7 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
 
   it('sans préférence retombe sur padel', async () => {
     prismaMock.user.findUnique
+      .mockResolvedValueOnce({ deletedAt: null } as any)
       .mockResolvedValueOnce({ preferredSport: null } as any)
       .mockResolvedValueOnce({ showInLeaderboard: false, playerRatings: [] } as any);
 
@@ -88,8 +92,9 @@ describe('GET /api/clubs/:slug/leaderboard — sport préféré', () => {
   });
 
   it('?sport=padel explicite court-circuite la résolution des préférences', async () => {
-    // Seul le 2e user.findUnique (meUser) est attendu, PAS la résolution de sport préféré
+    // 1er appel : authMiddleware. Seul le 2e (meUser) suit, PAS de résolution de sport préféré.
     prismaMock.user.findUnique
+      .mockResolvedValueOnce({ deletedAt: null } as any)
       .mockResolvedValueOnce({ showInLeaderboard: false, playerRatings: [] } as any);
 
     prismaMock.club.findUnique.mockResolvedValue({

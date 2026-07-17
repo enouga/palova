@@ -2,6 +2,13 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
 
+// authMiddleware revérifie l'identité en base (tokenVersion/deletedAt, audit pré-MEP §2.2) ;
+// cette suite mocke déjà les services, rien d'autre à faire avec Prisma.
+jest.mock('../../db/prisma', () => ({
+  __esModule: true,
+  prisma: { user: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null }) } },
+}));
+
 // jest.mock is hoisted — the factory runs before const initialisers.
 // Use let + closure so the factory captures the variable by reference.
 let mockFollow: jest.Mock;

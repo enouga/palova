@@ -488,6 +488,9 @@ model User {
   preferredSport   Sport?  @relation("UserPreferredSport", fields: [preferredSportId], references: [id], onDelete: SetNull)
   emailVerified Boolean @default(false) @map("email_verified")
   isSuperAdmin Boolean @default(false) @map("is_super_admin")
+  /// Incrémenté à la suppression de compte ou à la réinitialisation du mot de passe :
+  /// un JWT signé avec une version antérieure est révoqué (cf. authMiddleware).
+  tokenVersion Int @default(0) @map("token_version")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")

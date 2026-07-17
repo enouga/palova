@@ -20,8 +20,8 @@ const RESEND_COOLDOWN_MS = 60 * 1000;       // délai mini entre deux envois
 
 interface BasicUser { id: string; email: string; firstName: string; lastName: string; isSuperAdmin: boolean; }
 
-function signToken(user: { id: string; email: string }): string {
-  return jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+function signToken(user: { id: string; email: string; tokenVersion: number }): string {
+  return jwt.sign({ id: user.id, email: user.email, tokenVersion: user.tokenVersion }, process.env.JWT_SECRET!, { expiresIn: '7d' });
 }
 
 function publicUser(u: BasicUser) {
@@ -263,11 +263,14 @@ router.post('/reset-password', rateLimit(
       return;
     }
     const hashed = await bcrypt.hash(newPassword, 10);
+    // tokenVersion incrémenté : un mot de passe réinitialisé révoque tout JWT déjà émis
+    // (ex. compte compromis) — cf. audit pré-MEP §2.2, vérifié par authMiddleware.
+    const nextTokenVersion = (user.tokenVersion ?? 0) + 1;
     await prisma.$transaction([
-      prisma.user.update({ where: { id: user.id }, data: { password: hashed } }),
+      prisma.user.update({ where: { id: user.id }, data: { password: hashed, tokenVersion: nextTokenVersion } }),
       prisma.passwordReset.delete({ where: { userId: user.id } }),
     ]);
-    res.json({ token: signToken(user), user: publicUser(user) });
+    res.json({ token: signToken({ ...user, tokenVersion: nextTokenVersion }), user: publicUser(user) });
   } catch (err) {
     next(err);
   }

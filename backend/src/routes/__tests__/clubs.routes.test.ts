@@ -2,6 +2,13 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
 
+// authMiddleware revérifie l'identité en base (tokenVersion/deletedAt, audit pré-MEP §2.2) ;
+// cette suite n'a rien d'autre à faire avec Prisma (createClub est mocké en dessous).
+jest.mock('../../db/prisma', () => ({
+  __esModule: true,
+  prisma: { user: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null }) } },
+}));
+
 let mockCreateClub: jest.Mock;
 
 jest.mock('../../services/club.service', () => ({

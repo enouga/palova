@@ -94,7 +94,10 @@ describe('GET /api/me/rating — sport préféré', () => {
     prismaMock.playerRating.findUnique.mockResolvedValue(null);
     await request(app).get('/api/me/rating?sport=padel').set('Authorization', `Bearer ${token()}`);
     expect(prismaMock.sport.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'padel' } }));
-    // user.findUnique NE doit PAS avoir été appelé pour résoudre le sport préféré
-    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    // user.findUnique NE doit PAS avoir été appelé pour résoudre le sport préféré (le seul appel
+    // toléré est celui d'authMiddleware, reconnaissable à son select tokenVersion/deletedAt).
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ preferredSport: expect.anything() }) }),
+    );
   });
 });
