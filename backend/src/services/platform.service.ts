@@ -3,12 +3,13 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../db/prisma';
 import { slugify, RESERVED_SLUGS } from './club.service';
 import { geocodeAddress } from './geo.service';
+import { siretIsValidFormat, checkSiret } from './siret.service';
 import { tierFor, tierPriceCents, BillingInterval } from './platformBilling/tiers';
 import { billingState, BillingState, aggregateBilling } from './platformBilling/platformBilling.service';
 import { lastMonths, bucketByMonth } from './platformStats.service';
 
 export interface CreateClubByPlatformParams {
-  club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string };
+  club: { name: string; address?: string; city?: string; timezone?: string; sportKey?: string; siret?: string };
   owner: { firstName: string; lastName: string; email: string; password: string };
 }
 
@@ -292,6 +293,17 @@ export class PlatformService {
     });
     if (existing) throw new Error('EMAIL_TAKEN');
 
+    // SIRET optionnel côté superadmin (souverain) : format invalide bloque, mais un SIRET
+    // introuvable/inactif à l'INSEE ne bloque JAMAIS (contrairement à club.service.createClub).
+    const siret = (params.club?.siret ?? '').trim();
+    let siretLegalName: string | null = null;
+    let siretVerifiedAt: Date | null = null;
+    if (siret) {
+      if (!siretIsValidFormat(siret)) throw new Error('SIRET_INVALID');
+      const check = await checkSiret(siret); // best-effort : le superadmin est souverain
+      if (check) { siretVerifiedAt = new Date(); siretLegalName = check.legalName; }
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const geo = await geocodeAddress({ address: params.club.address, city: params.club.city });
 
@@ -316,6 +328,7 @@ export class PlatformService {
             timezone: params.club.timezone || 'Europe/Paris',
             status: 'ACTIVE',
             ...(geo ? { latitude: geo.latitude, longitude: geo.longitude, region: geo.region, department: geo.department, departmentCode: geo.departmentCode, postalCode: geo.postalCode } : {}),
+            ...(siret ? { siret, siretLegalName, ...(siretVerifiedAt ? { siretVerifiedAt } : {}) } : {}),
           },
         });
         await tx.clubMember.create({ data: { userId: owner.id, clubId: club.id, role: 'OWNER' } });

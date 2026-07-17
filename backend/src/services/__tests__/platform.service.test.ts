@@ -7,6 +7,14 @@ jest.mock('../geo.service', () => ({ ...jest.requireActual('../geo.service'), ge
 import { geocodeAddress } from '../geo.service';
 const geocodeMock = geocodeAddress as jest.Mock;
 
+jest.mock('../siret.service', () => ({
+  siretIsValidFormat: jest.fn(),
+  checkSiret: jest.fn(),
+}));
+import { siretIsValidFormat, checkSiret } from '../siret.service';
+const siretValidMock = siretIsValidFormat as jest.Mock;
+const checkSiretMock = checkSiret as jest.Mock;
+
 describe('PlatformService.getStats', () => {
   const service = new PlatformService();
 
@@ -356,6 +364,64 @@ describe('PlatformService.createClubWithOwner', () => {
 
     const data = (tx.club.create as jest.Mock).mock.calls[0][0].data;
     expect(data).toMatchObject({ department: 'Rhône', departmentCode: '69' });
+  });
+});
+
+describe('PlatformService.createClubWithOwner — SIRET (superadmin souverain)', () => {
+  const service = new PlatformService();
+
+  function makeTx(overrides: { clubCreate?: unknown } = {}) {
+    return {
+      clubSlugAlias: { findUnique: jest.fn().mockResolvedValue(null) },
+      user: { create: jest.fn().mockResolvedValue({ id: 'u-new', email: 'a@b.fr', firstName: 'A', lastName: 'B' }) },
+      club: { create: jest.fn().mockResolvedValue(
+        overrides.clubCreate ?? { id: 'club-new', slug: 'club-test', name: 'Club Test', status: 'ACTIVE' },
+      ) },
+      clubMember: { create: jest.fn().mockResolvedValue({}) },
+      sport: { findUnique: jest.fn() },
+      clubSport: { create: jest.fn() },
+    };
+  }
+
+  const baseBody = {
+    club: { name: 'Club Test' },
+    owner: { firstName: 'A', lastName: 'B', email: 'a@b.fr', password: 'password123' },
+  };
+
+  beforeEach(() => {
+    prismaMock.user.findFirst.mockResolvedValue(null as any);
+  });
+
+  it('SIRET absent : le club est créé sans vérification', async () => {
+    const tx = makeTx();
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    const result = await service.createClubWithOwner(baseBody);
+    expect(result.club.id).toBe('club-new');
+    expect(siretValidMock).not.toHaveBeenCalled();
+    expect(checkSiretMock).not.toHaveBeenCalled();
+  });
+
+  it('SIRET au mauvais format : rejette SIRET_INVALID avant toute transaction', async () => {
+    siretValidMock.mockReturnValue(false);
+    await expect(service.createClubWithOwner({
+      ...baseBody,
+      club: { ...baseBody.club, siret: 'bad' },
+    })).rejects.toThrow('SIRET_INVALID');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('SIRET valide mais introuvable/inactif à l\'INSEE : créé quand même (best-effort, souverain)', async () => {
+    siretValidMock.mockReturnValue(true);
+    checkSiretMock.mockResolvedValue({ exists: false, active: false, legalName: null, city: null });
+    const tx = makeTx();
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    const result = await service.createClubWithOwner({
+      ...baseBody,
+      club: { ...baseBody.club, siret: '44306184100047' },
+    });
+    expect(result.club.id).toBe('club-new');
   });
 });
 
