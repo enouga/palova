@@ -1,4 +1,4 @@
-import { isPlayerChangeOpen, isCancellationOpen, cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
+import { isPlayerChangeOpen, isCancellationOpen, cancellationPolicyLabel, quotaBites, tightQuotaOnly } from '@/lib/reservations';
 import { MyReservation } from '@/lib/api';
 
 const NOW = Date.now();
@@ -69,5 +69,38 @@ describe('quotaBites', () => {
   it('false quand il reste ≥ 2 réservations', () => {
     expect(quotaBites({ model: 'WEEKLY', peak: { used: 1, limit: 5 }, offPeak: null }, false)).toBe(false);
     expect(quotaBites({ model: 'WEEKLY', peak: null, offPeak: { used: 0, limit: 2 } }, true)).toBe(false);
+  });
+});
+
+describe('tightQuotaOnly (affichages permanents : ne garder que les classes qui mordent)', () => {
+  it('null sans statut', () => {
+    expect(tightQuotaOnly(null)).toBeNull();
+    expect(tightQuotaOnly(undefined)).toBeNull();
+  });
+
+  it('null quand les deux classes sont confortables (reste ≥ 2) — plus de bruit 0/10', () => {
+    expect(tightQuotaOnly({ model: 'WEEKLY', peak: { used: 15, limit: 100 }, offPeak: { used: 0, limit: 67 } })).toBeNull();
+  });
+
+  it('ne garde que la classe tendue, met l autre à null', () => {
+    expect(tightQuotaOnly({ model: 'WEEKLY', peak: { used: 5, limit: 5 }, offPeak: { used: 0, limit: 10 } }))
+      .toEqual({ model: 'WEEKLY', peak: { used: 5, limit: 5 }, offPeak: null }); // pleines au plafond, creuses confortables
+    expect(tightQuotaOnly({ model: 'UPCOMING', peak: { used: 0, limit: 4 }, offPeak: { used: 2, limit: 3 } }))
+      .toEqual({ model: 'UPCOMING', peak: null, offPeak: { used: 2, limit: 3 } }); // creuses reste 1
+  });
+
+  it('garde les deux quand les deux mordent', () => {
+    const s = { model: 'WEEKLY' as const, peak: { used: 4, limit: 5 }, offPeak: { used: 3, limit: 3 } };
+    expect(tightQuotaOnly(s)).toEqual(s);
+  });
+
+  it('une classe illimitée (null) n est jamais tendue', () => {
+    expect(tightQuotaOnly({ model: 'WEEKLY', peak: { used: 4, limit: 5 }, offPeak: null }))
+      .toEqual({ model: 'WEEKLY', peak: { used: 4, limit: 5 }, offPeak: null });
+  });
+
+  it('seuil : reste 1 → tendue, reste 2 → masquée', () => {
+    expect(tightQuotaOnly({ model: 'WEEKLY', peak: { used: 4, limit: 5 }, offPeak: null })).not.toBeNull(); // reste 1
+    expect(tightQuotaOnly({ model: 'WEEKLY', peak: { used: 3, limit: 5 }, offPeak: null })).toBeNull();      // reste 2
   });
 });

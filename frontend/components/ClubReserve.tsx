@@ -19,6 +19,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { SportPicker } from '@/components/reserve/SportPicker';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { splitPastSlots, scarcityLabel, RESERVE_VIEW_KEY, type ReserveView } from '@/lib/reserveView';
+import { tightQuotaOnly } from '@/lib/reservations';
 import { ViewToggle } from '@/components/reserve/ViewToggle';
 import { SportGrid } from '@/components/reserve/SportGrid';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
@@ -208,6 +209,10 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
     setAlertSheet(slotToAlertWindow(startIso, endIso, club.timezone));
   }, [token, club.timezone]);
 
+  // Quotas : n'afficher que les classes qui mordent (reste ≤ 1) — sinon c'est du bruit
+  // permanent. `quotaStatus` complet reste passé à BookingModal (gate propre au créneau).
+  const tightQuota = tightQuotaOnly(quotaStatus);
+
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
@@ -216,16 +221,17 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.5, margin: '16px 20px 0' }}>{club.description}</p>
         )}
 
-        {quotaStatus && (
-          // Quotas seuls : porte-monnaie/carnets et abonnement vivent déjà dans le menu profil
-          // (pas de doublon ici — ils restent chargés pour BookingModal : payer avec son solde,
-          // couverture abo).
+        {tightQuota && (
+          // Quotas seuls, et seulement ceux qui mordent (reste ≤ 1) — sinon rien : montrer un
+          // compteur confortable en continu est du bruit. Porte-monnaie/carnets et abonnement
+          // vivent déjà dans le menu profil (pas de doublon ici — ils restent chargés pour
+          // BookingModal : payer avec son solde, couverture abo).
           isDesktop ? (
             // Desktop : rangée défilante, pastilles à largeur naturelle, fondu au bord droit
             // (swipe), suffixe de période dans chaque jauge.
             <div style={{ margin: '14px 0 0', position: 'relative' }}>
               <div data-testid="balances-row" className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '0 20px' }}>
-                <QuotaStatus status={quotaStatus} inline />
+                <QuotaStatus status={tightQuota} inline />
               </div>
               <div aria-hidden="true" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 28, background: `linear-gradient(90deg, ${th.bg}00, ${th.bg})`, pointerEvents: 'none' }} />
             </div>
@@ -233,7 +239,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
             // Mobile : deux colonnes égales sur UNE seule ligne (compact) → « Heures pleines » et
             // « Heures creuses » en entier, jamais coupé, suffixe mutualisé dessous.
             <div data-testid="balances-row" style={{ margin: '14px 0 0', padding: '0 20px' }}>
-              <QuotaStatus status={quotaStatus} compact />
+              <QuotaStatus status={tightQuota} compact />
             </div>
           )
         )}

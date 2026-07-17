@@ -19,6 +19,7 @@ import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
+import { tightQuotaOnly } from '@/lib/reservations';
 import { canRecordResult } from '@/lib/match';
 import { OpenMatchChatSheet } from '@/components/openmatch/OpenMatchChatSheet';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -147,6 +148,10 @@ export default function MyReservationsPage() {
     finally { setCancelling(false); }
   };
 
+  // Quotas : n'afficher que les classes qui mordent (reste ≤ 1) — un compteur confortable en
+  // continu est du bruit ; la rangée disparaît tant qu'on est loin du plafond.
+  const tightQuota = tightQuotaOnly(quotaStatus);
+
   return (
     <Screen>
       <div style={{ paddingBottom: 40 }}>
@@ -171,18 +176,19 @@ export default function MyReservationsPage() {
           Mes réservations
         </div>
 
-        {quotaStatus && (
+        {tightQuota && (
+          // Seulement les quotas qui mordent (reste ≤ 1) — sinon la rangée est masquée.
           <div style={{ margin: '14px 0 0', padding: '0 20px' }}>
             {isDesktop ? (
               // Desktop : pastilles à largeur naturelle en rangée (place de reste, look d'origine).
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                <QuotaStatus status={quotaStatus} inline />
+                <QuotaStatus status={tightQuota} inline />
               </div>
             ) : (
               // Mobile : deux colonnes égales sur UNE seule ligne (mode compact) → « Heures pleines »
               // et « Heures creuses » côte à côte même sur téléphone étroit (elles se rétrécissent
               // au lieu de déborder), le suffixe de période s'affiche une fois dessous.
-              <QuotaStatus status={quotaStatus} compact />
+              <QuotaStatus status={tightQuota} compact />
             )}
           </div>
         )}

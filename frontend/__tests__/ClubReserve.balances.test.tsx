@@ -72,21 +72,21 @@ describe('ClubReserve — rangée quotas défilante', () => {
   });
   afterEach(() => { document.cookie = 'token=; max-age=0; path=/'; jest.clearAllMocks(); });
 
-  it('rend les quotas seuls (compact mobile, deux colonnes sur une ligne, suffixe mutualisé) — pas de porte-monnaie ni d\'Abonné', async () => {
+  it('rend les quotas qui mordent (reste ≤ 1) — compact mobile, suffixe mutualisé, pas de porte-monnaie ni d\'Abonné', async () => {
     mocked.getMyClubPackages.mockResolvedValue(wallet as never);
     mocked.getMyClubSubscriptions.mockResolvedValue(subs as never);
     mocked.getMyQuotaStatus.mockResolvedValue({
       model: 'WEEKLY',
-      peak: { used: 15, limit: 100 },
-      offPeak: { used: 0, limit: 67 },
+      peak: { used: 99, limit: 100 },   // reste 1 → mord
+      offPeak: { used: 67, limit: 67 }, // plafond atteint → mord
     } as never);
 
     render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
 
-    // jsdom = mobile (useIsDesktop false) → rendu compact contenant les deux jauges.
+    // jsdom = mobile (useIsDesktop false) → rendu compact contenant les deux jauges tendues.
     const row = await screen.findByTestId('balances-row');
-    expect(row).toContainElement(screen.getByText('15/100'));
-    expect(row).toContainElement(screen.getByText('0/67'));
+    expect(row).toContainElement(screen.getByText('99/100'));
+    expect(row).toContainElement(screen.getByText('67/67'));
 
     // Compact : le suffixe de période est mutualisé (une seule occurrence sous la rangée).
     expect(screen.getAllByText('cette semaine')).toHaveLength(1);
@@ -96,6 +96,36 @@ describe('ClubReserve — rangée quotas défilante', () => {
     expect(screen.queryByText('padel · h. creuses')).not.toBeInTheDocument();
     expect(screen.queryByText('Porte-monnaie')).not.toBeInTheDocument();
     expect(screen.queryByText('Abonné')).not.toBeInTheDocument();
+  });
+
+  it('ne garde que la classe tendue : creuses au plafond affichées, pleines confortables masquées', async () => {
+    mocked.getMyQuotaStatus.mockResolvedValue({
+      model: 'WEEKLY',
+      peak: { used: 3, limit: 20 },     // reste 17 → confortable, masqué
+      offPeak: { used: 5, limit: 5 },   // plafond → mord, affiché
+    } as never);
+
+    render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
+
+    const row = await screen.findByTestId('balances-row');
+    expect(row).toContainElement(screen.getByText('5/5'));
+    expect(screen.queryByText('3/20')).not.toBeInTheDocument();
+    expect(screen.queryByText('Heures pleines')).not.toBeInTheDocument();
+    expect(screen.getByText('Heures creuses')).toBeInTheDocument();
+  });
+
+  it("masque la rangée quand aucun quota ne mord (reste ≥ 2), même avec porte-monnaie et abonnement", async () => {
+    mocked.getMyClubPackages.mockResolvedValue(wallet as never);
+    mocked.getMyClubSubscriptions.mockResolvedValue(subs as never);
+    mocked.getMyQuotaStatus.mockResolvedValue({
+      model: 'WEEKLY',
+      peak: { used: 15, limit: 100 },
+      offPeak: { used: 0, limit: 67 },
+    } as never);
+
+    render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
+    await screen.findByText(/Aucun terrain/);
+    expect(screen.queryByTestId('balances-row')).not.toBeInTheDocument();
   });
 
   it("n'affiche pas la rangée sans quota, même avec porte-monnaie et abonnement", async () => {
