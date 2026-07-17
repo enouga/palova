@@ -572,7 +572,7 @@ router.get('/:slug/open-matches/:id/chat/stream', async (req: AuthRequest, res: 
   SSEService.getInstance().addMatchClient(asString(req.params.id), userId, res);
 });
 
-// Adhésion du joueur connecté à ce club (licence / statut).
+// Adhésion du joueur connecté à ce club (licence / statut / date d'adhésion).
 router.get('/:slug/me/membership', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await clubService.getMyMembership(asString(req.params.slug), req.user!.id)); }
   catch (err) { handleError(err, res, next); }

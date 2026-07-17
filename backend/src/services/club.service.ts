@@ -884,9 +884,12 @@ export class ClubService {
       select: { membershipNo: true, status: true, isSubscriber: true, createdAt: true },
     });
     if (!m) throw new Error('MEMBERSHIP_REQUIRED');
-    // `createdAt` (= date d'adhésion) sort sous le nom métier `since`, comme Member.since.
-    const { createdAt, ...rest } = m;
-    return { ...rest, since: createdAt.toISOString() };
+    return {
+      membershipNo: m.membershipNo,
+      status: m.status,
+      isSubscriber: m.isSubscriber,
+      since: m.createdAt.toISOString(),
+    };
   }
 
   /** Le club a-t-il déjà une carte enregistrée (empreinte no-show) pour ce joueur ? */
