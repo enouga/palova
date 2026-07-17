@@ -1084,4 +1084,80 @@ export class TournamentService {
     }
     return removed;
   }
+
+  // ------------------------------------------------------- Forfait & banc
+
+  /** Adhésion ACTIVE requise (pas BLOCKED, pas absente). NOT_A_MEMBER sinon. Pas de garde phone/licence (spec : le J/A juge). */
+  private async assertActiveMember(clubId: string, userId: string): Promise<void> {
+    const m = await prisma.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } }, select: { status: true } });
+    if (!m || m.status !== 'ACTIVE') throw new Error('NOT_A_MEMBER');
+  }
+
+  /**
+   * Forfait d'un côté d'un binôme : annule TOUTE l'inscription (le schéma n'autorise pas un
+   * côté vide) et place le coéquipier survivant sur le banc pour qu'il puisse être repêché
+   * (appariement ou remplacement ailleurs — hors périmètre ici). Réutilise `cancelAndPromoteTx`
+   * (promotion auto du 1er en attente, mêmes règles que `adminRemoveRegistration`).
+   */
+  async declareForfeit(clubId: string, tournamentId: string, regId: string, side: 'CAPTAIN' | 'PARTNER', actorUserId: string) {
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { id: regId, tournamentId, tournament: { clubId }, status: { not: 'CANCELLED' } },
+      select: {
+        id: true, status: true, captainUserId: true, partnerUserId: true,
+        captain: { select: { firstName: true, lastName: true } }, partner: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { requirePrepayment: true } });
+    const forfeited = side === 'CAPTAIN' ? reg.captain : reg.partner;
+    const remaining = side === 'CAPTAIN' ? { user: reg.partner, id: reg.partnerUserId } : { user: reg.captain, id: reg.captainUserId };
+
+    const { cancelled, promotedRegistrationId } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
+      const res = await this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
+      await tx.tournamentBenchEntry.create({ data: { tournamentId, userId: remaining.id, source: 'FORFEIT', addedById: actorUserId } });
+      await this.writeLog(tx, tournamentId, actorUserId, 'FORFEIT', {
+        forfeitedName: `${forfeited.firstName} ${forfeited.lastName}`.trim(),
+        remainingName: `${remaining.user.firstName} ${remaining.user.lastName}`.trim(),
+      });
+      return res;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
+
+    if (promotedRegistrationId && t?.requirePrepayment) {
+      await this.safeNotify(() => notify.notifyTournamentCancellation(cancelled.id));
+      await this.safeCharge(promotedRegistrationId);
+    } else {
+      await this.notifyCancellation(cancelled.id, promotedRegistrationId);
+    }
+    return cancelled;
+  }
+
+  /** Ajoute un retardataire au banc (membre actif requis). Idempotent via l'index unique.
+   *  N'assure PAS que `tournamentId` appartient à `clubId` : c'est le rôle de la route
+   *  appelante (cf. commentaire d'en-tête « Gate = fait de la ROUTE appelante ») —
+   *  `clubId` ne sert ici qu'à vérifier l'adhésion du joueur ajouté. */
+  async addToBench(clubId: string, tournamentId: string, userId: string, actorUserId: string) {
+    await this.assertActiveMember(clubId, userId);
+    const dup = await prisma.tournamentRegistration.findFirst({
+      where: { tournamentId, status: { not: 'CANCELLED' }, OR: [{ captainUserId: userId }, { partnerUserId: userId }] },
+      select: { id: true },
+    });
+    if (dup) throw new Error('ALREADY_REGISTERED');
+    const already = await prisma.tournamentBenchEntry.findUnique({ where: { tournamentId_userId: { tournamentId, userId } } });
+    if (already) throw new Error('ALREADY_ON_BENCH');
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    await prisma.$transaction(async (tx) => {
+      await tx.tournamentBenchEntry.create({ data: { tournamentId, userId, source: 'WALK_IN', addedById: actorUserId } });
+      await this.writeLog(tx, tournamentId, actorUserId, 'ADD_LATE', { playerName: user ? `${user.firstName} ${user.lastName}`.trim() : userId });
+    });
+  }
+
+  /** Retrait manuel du banc. BENCH_ENTRY_NOT_FOUND si absent. L'appartenance au club est
+   *  vérifiée dans le `deleteMany` lui-même (`tournament: { clubId }`) plutôt que via un
+   *  aller-retour séparé : un tournoi d'un autre club ne supprime simplement rien (count 0). */
+  async removeFromBench(clubId: string, tournamentId: string, userId: string, actorUserId: string) {
+    const del = await prisma.tournamentBenchEntry.deleteMany({ where: { tournamentId, userId, tournament: { clubId } } });
+    if (del.count === 0) throw new Error('BENCH_ENTRY_NOT_FOUND');
+    void actorUserId; // pas de journal pour un simple retrait manuel (acte correctif, pas un événement de jeu)
+  }
 }

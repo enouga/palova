@@ -1402,3 +1402,85 @@ describe('table de marque — pointage', () => {
     }));
   });
 });
+
+describe('table de marque — forfait & banc', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('declareForfeit : annule l\'inscription, met le coéquipier au banc, promeut l\'attente', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({
+      id: 'r1', status: 'CONFIRMED', captainUserId: 'c1', partnerUserId: 'p1',
+      captain: { firstName: 'Bernard', lastName: 'X' }, partner: { firstName: 'Andre', lastName: 'Y' },
+    } as any);
+    const tx = {
+      $queryRaw: jest.fn(),
+      tournamentRegistration: { update: jest.fn().mockResolvedValue({ id: 'r1' }), findFirst: jest.fn().mockResolvedValue(null) },
+      tournamentBenchEntry: { create: jest.fn() },
+      tournamentLogEntry: { create: jest.fn() },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+
+    await svc.declareForfeit('club-1', 't1', 'r1', 'CAPTAIN', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'r1' }, data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(tx.tournamentBenchEntry.create).toHaveBeenCalledWith({
+      data: { tournamentId: 't1', userId: 'p1', source: 'FORFEIT', addedById: 'staff-1' },
+    });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'FORFEIT' }),
+    }));
+  });
+
+  it('declareForfeit : REGISTRATION_NOT_FOUND hors club/tournoi/déjà annulé', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    await expect(svc.declareForfeit('club-1', 't1', 'r1', 'CAPTAIN', 'staff-1')).rejects.toThrow('REGISTRATION_NOT_FOUND');
+  });
+
+  it('addToBench : refuse un non-membre (NOT_A_MEMBER)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('addToBench : refuse un déjà-inscrit (ALREADY_REGISTERED)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r-existing' } as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('ALREADY_REGISTERED');
+  });
+
+  it('addToBench : idempotent (ALREADY_ON_BENCH)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    (prismaMock.tournamentBenchEntry.findUnique as jest.Mock).mockResolvedValue({ id: 'b1' } as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('ALREADY_ON_BENCH');
+  });
+
+  it('addToBench : membre éligible, pas encore inscrit → créé + journalisé', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    (prismaMock.tournamentBenchEntry.findUnique as jest.Mock).mockResolvedValue(null as any);
+    prismaMock.user.findUnique.mockResolvedValue({ firstName: 'Zoé', lastName: 'K' } as any);
+    const tx = { tournamentBenchEntry: { create: jest.fn() }, tournamentLogEntry: { create: jest.fn() } };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+
+    await svc.addToBench('club-1', 't1', 'u9', 'staff-1');
+
+    expect(tx.tournamentBenchEntry.create).toHaveBeenCalledWith({
+      data: { tournamentId: 't1', userId: 'u9', source: 'WALK_IN', addedById: 'staff-1' },
+    });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'ADD_LATE' }),
+    }));
+  });
+
+  it('removeFromBench : BENCH_ENTRY_NOT_FOUND si absent', async () => {
+    (prismaMock.tournamentBenchEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 0 } as any);
+    await expect(svc.removeFromBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('BENCH_ENTRY_NOT_FOUND');
+  });
+
+  it('removeFromBench : supprime l\'entrée présente', async () => {
+    (prismaMock.tournamentBenchEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 1 } as any);
+    await expect(svc.removeFromBench('club-1', 't1', 'u9', 'staff-1')).resolves.toBeUndefined();
+  });
+});
