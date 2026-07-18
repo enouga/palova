@@ -86,4 +86,47 @@ describe('OfferService.fulfillPaidIntent', () => {
     prismaMock.subscriptionPlan.findUnique.mockResolvedValue({ id: 'pl1', clubId: 'c1', isActive: false } as any);
     await expect(service.fulfillPaidIntent(meta, 'pi_3', 3900)).rejects.toThrow('OFFER_NOT_FOUND');
   });
+
+  it('fulfillPaidIntent pose cgvAcceptedAt sur le Payment quand la metadata le porte (carnet)', async () => {
+    prismaMock.payment.findFirst.mockResolvedValue(null as any);
+    prismaMock.packageTemplate.findUnique.mockResolvedValue({
+      id: 'tp1', clubId: 'c1', isActive: true, name: 'Carnet 10', kind: 'ENTRIES',
+      price: '90', entriesCount: 10, walletAmount: null, validityDays: null,
+    } as any);
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+    prismaMock.memberPackage.create.mockResolvedValue({ id: 'pkg1' } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay1' } as any);
+
+    await service.fulfillPaidIntent(
+      { offerPackageTemplateId: 'tp1', offerUserId: 'u1', clubId: 'c1', offerCgvAcceptedAt: '2026-07-18T10:00:00.000Z' },
+      'pi_1',
+      4000,
+    );
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ cgvAcceptedAt: new Date('2026-07-18T10:00:00.000Z') }),
+    }));
+  });
+
+  it('fulfillPaidIntent pose cgvAcceptedAt sur le Payment quand la metadata le porte (abonnement)', async () => {
+    prismaMock.payment.findFirst.mockResolvedValue(null as any);
+    prismaMock.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'pl1', clubId: 'c1', isActive: true, name: 'Or', monthlyPrice: '39',
+      commitmentMonths: 12, sportKeys: ['padel'], offPeakOnly: true, benefit: 'INCLUDED',
+      discountPercent: null, dailyCap: null, weeklyCap: null,
+    } as any);
+    prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+    prismaMock.subscription.create.mockResolvedValue({ id: 'sub1' } as any);
+    prismaMock.payment.create.mockResolvedValue({ id: 'pay1' } as any);
+
+    await service.fulfillPaidIntent(
+      { offerPlanId: 'pl1', offerUserId: 'u1', clubId: 'c1', offerCgvAcceptedAt: '2026-07-18T10:00:00.000Z' },
+      'pi_1',
+      3900,
+    );
+
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ cgvAcceptedAt: new Date('2026-07-18T10:00:00.000Z') }),
+    }));
+  });
 });

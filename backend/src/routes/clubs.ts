@@ -236,7 +236,12 @@ router.post('/:slug/offers/plans/:id/intent', authMiddleware, async (req: AuthRe
     if (!plan || plan.clubId !== clubId || !plan.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
     const amountCents = entryFeeCents(plan.monthlyPrice);
     if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
-    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'plan', offerId: plan.id, amountCents });
+    // L'acceptation des CGV du club précède tout paiement CB (pattern confirmReservation).
+    if (req.body?.cgvAccepted !== true) return void res.status(400).json({ error: 'CGV_NOT_ACCEPTED' });
+    const r = await offerStripe.createOfferPaymentIntent({
+      clubId, userId: req.user!.id, kind: 'plan', offerId: plan.id, amountCents,
+      cgvAcceptedAtIso: new Date().toISOString(),
+    });
     res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
   } catch (err) { handleError(err, res, next); }
 });
@@ -251,7 +256,12 @@ router.post('/:slug/offers/packages/:id/intent', authMiddleware, async (req: Aut
     if (!tpl || tpl.clubId !== clubId || !tpl.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
     const amountCents = entryFeeCents(tpl.price);
     if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
-    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'package', offerId: tpl.id, amountCents });
+    // L'acceptation des CGV du club précède tout paiement CB (pattern confirmReservation).
+    if (req.body?.cgvAccepted !== true) return void res.status(400).json({ error: 'CGV_NOT_ACCEPTED' });
+    const r = await offerStripe.createOfferPaymentIntent({
+      clubId, userId: req.user!.id, kind: 'package', offerId: tpl.id, amountCents,
+      cgvAcceptedAtIso: new Date().toISOString(),
+    });
     res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
   } catch (err) { handleError(err, res, next); }
 });

@@ -258,6 +258,7 @@ export class StripeService {
   /** PaymentIntent d'achat d'offre (abonnement 1re mensualité ou carnet), metadata pour le webhook. */
   async createOfferPaymentIntent(params: {
     clubId: string; userId: string; kind: 'plan' | 'package'; offerId: string; amountCents: number;
+    cgvAcceptedAtIso?: string;
   }): Promise<{ clientSecret: string; customerSessionClientSecret: string | null }> {
     const club = await prisma.club.findUnique({
       where: { id: params.clubId }, select: { stripeAccountId: true, stripeAccountStatus: true },
@@ -272,6 +273,7 @@ export class StripeService {
           [params.kind === 'plan' ? 'offerPlanId' : 'offerPackageTemplateId']: params.offerId,
           offerUserId: params.userId,
           clubId: params.clubId,
+          ...(params.cgvAcceptedAtIso ? { offerCgvAcceptedAt: params.cgvAcceptedAtIso } : {}),
         },
       },
       { stripeAccount: club.stripeAccountId },
