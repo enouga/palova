@@ -6,6 +6,7 @@ import './globals.css';
 import { ClubProvider } from '@/lib/ClubProvider';
 import { Footer } from '@/components/Footer';
 import { DmWidgetHost } from '@/components/messages/DmWidgetHost';
+import { LegalUpdateBanner } from '@/components/LegalUpdateBanner';
 import { api, API_BASE_URL } from '@/lib/api';
 import { CANONICAL_ROOT } from '@/lib/roots';
 
@@ -85,7 +86,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body suppressHydrationWarning>
         <ClubProvider slug={slug}>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <div style={{ flex: '1 0 auto' }}>{children}</div>
+            <div style={{ flex: '1 0 auto' }}>
+              <LegalUpdateBanner />
+              {children}
+            </div>
             <DmWidgetHost />
             <Footer />
           </div>

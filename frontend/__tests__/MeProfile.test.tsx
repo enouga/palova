@@ -20,7 +20,7 @@ jest.mock('../lib/api', () => ({
     getAccountDeletionSummary: jest.fn(), deleteMyAccount: jest.fn(),
     updateMyProfile: jest.fn(), updateMyClubMembership: jest.fn(), uploadMyAvatar: jest.fn(),
     getMyRating: jest.fn().mockResolvedValue(null), getRatingHistory: jest.fn().mockResolvedValue([]),
-    getMyClubMatchStats: jest.fn(), calibrateRating: jest.fn(), changePassword: jest.fn(),
+    getMyClubMatchStats: jest.fn(), calibrateRating: jest.fn(), changePassword: jest.fn(), exportMyData: jest.fn(),
     getSports: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
@@ -289,6 +289,15 @@ describe('Page Mon profil — onglets + SaveBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Modifier le mot de passe' }));
     expect(await screen.findByText('Le mot de passe doit faire au moins 8 caractères.')).toBeInTheDocument();
     expect(api.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('Sécurité : télécharge l\'export JSON de mes données', async () => {
+    api.exportMyData.mockResolvedValue({ generatedAt: '2026-07-18T10:00:00Z', profile: {} });
+    wrap();
+    await screen.findByRole('region', { name: 'Informations' });
+    goTab('Sécurité');
+    fireEvent.click(await screen.findByRole('button', { name: /Télécharger mes données/ }));
+    await waitFor(() => expect(api.exportMyData).toHaveBeenCalledWith('abc'));
   });
 
   // --- Identité / Niveau ---

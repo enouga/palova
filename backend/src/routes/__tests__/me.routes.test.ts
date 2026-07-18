@@ -430,3 +430,50 @@ describe('GET /api/me/matches/to-record', () => {
     expect(res.body[0].players).toHaveLength(4);
   });
 });
+
+describe('statut légal', () => {
+  it('GET /profile expose legal { accepted, current } par document', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(PROFILE as any);
+    prismaMock.legalAcceptance.findMany.mockResolvedValue([{ document: 'CGU', version: '2026-07-18' }] as any);
+    prismaMock.clubMember.findFirst.mockResolvedValue(null);
+    const res = await request(app).get('/api/me/profile').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body.legal.cgu.accepted).toBe('2026-07-18');
+    expect(res.body.legal.privacy.accepted).toBeNull();
+    expect(res.body.legal.cgvSaas).toBeUndefined();
+  });
+
+  it('POST /legal/accept écrit la version courante avec context update_banner', async () => {
+    prismaMock.legalAcceptance.create.mockResolvedValue({ id: 'la1' } as any);
+    const res = await request(app).post('/api/me/legal/accept')
+      .set('Authorization', `Bearer ${token()}`).send({ document: 'CGU' });
+    expect(res.status).toBe(200);
+    expect(prismaMock.legalAcceptance.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'u1', document: 'CGU', context: 'update_banner' }),
+    });
+  });
+
+  it('POST /legal/accept refuse un document inconnu', async () => {
+    const res = await request(app).post('/api/me/legal/accept')
+      .set('Authorization', `Bearer ${token()}`).send({ document: 'NIMPORTE' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/me/export', () => {
+  it('renvoie un JSON attaché avec les données du demandeur', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(PROFILE as any);
+    prismaMock.legalAcceptance.findMany.mockResolvedValue([{ document: 'CGU', version: '2026-07-18' }] as any);
+    const res = await request(app).get('/api/me/export').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toContain('palova-mes-donnees.json');
+    expect(res.body.legalAcceptances).toHaveLength(1);
+    expect(res.body.profile.email).toBe('test@x.fr');
+  });
+
+  it('429 si un export a déjà été généré dans l\'heure', async () => {
+    jest.spyOn(require('../../services/rateLimit'), 'assertRateLimit').mockRejectedValueOnce(new Error('RATE_LIMITED'));
+    const res = await request(app).get('/api/me/export').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(429);
+  });
+});

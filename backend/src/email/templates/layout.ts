@@ -13,6 +13,8 @@ export interface Brand {
   email?: string | null;
   /** URL « Gérer mes notifications » (profil membre sur le sous-domaine du club). */
   manageUrl?: string | null;
+  /** Lien de désinscription en un clic (emails de diffusion club.broadcast), signé par destinataire. */
+  unsubscribeUrl?: string | null;
 }
 
 // Identité Palova = bleu primaire du site (ACCENTS.blue). Le logo est injecté par l'appelant
@@ -136,6 +138,9 @@ export function renderLayout(input: LayoutInput): string {
   const manageLink = brand.manageUrl
     ? `<a href="${escapeHtml(brand.manageUrl)}" style="color:${FAINT};text-decoration:underline;">Gérer mes notifications</a> · `
     : '';
+  const unsubLink = brand.unsubscribeUrl
+    ? `<a href="${escapeHtml(brand.unsubscribeUrl)}" style="color:${FAINT};text-decoration:underline;">Se désabonner</a> · `
+    : '';
 
   return `<!doctype html>
 <html lang="fr">
@@ -165,7 +170,7 @@ export function renderLayout(input: LayoutInput): string {
         </td></tr>
         <tr><td align="center" style="border-top:1px solid ${HAIR};padding:18px 30px 22px;font-family:${SANS};font-size:11.5px;line-height:19px;color:${FAINT};">
           ${coordLine}<br/>
-          ${manageLink}Envoyé avec Palova
+          ${manageLink}${unsubLink}Envoyé avec Palova
         </td></tr>
       </table>
     </td></tr>

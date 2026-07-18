@@ -31,3 +31,12 @@ it('viewer ADMIN : charge le contenu', async () => {
   mount('ADMIN');
   await waitFor(() => expect(api.adminGetPages).toHaveBeenCalled());
 });
+
+it('affiche le champ médiateur de la consommation (onglet Coordonnées légales, par défaut)', async () => {
+  (api.adminGetClub as jest.Mock).mockResolvedValue({ id: 'c1', name: 'Club', mediatorName: 'CM2C', mediatorUrl: 'https://cm2c.net' });
+  mount('ADMIN');
+  await waitFor(() => expect(api.adminGetClub).toHaveBeenCalled());
+  expect(await screen.findByText('Médiateur de la consommation')).toBeInTheDocument();
+  expect(screen.getByDisplayValue('CM2C')).toBeInTheDocument();
+  expect(screen.getByDisplayValue('https://cm2c.net')).toBeInTheDocument();
+});
