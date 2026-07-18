@@ -25,6 +25,7 @@ export default function RegisterPage() {
   const [pending, setPending]     = useState<{ email: string; devCode?: string } | null>(null);
   const [sports, setSports]       = useState<Sport[]>([]);
   const [preferredSportId, setPreferredSportId] = useState('');
+  const [accepted, setAccepted]   = useState(false);
 
   useEffect(() => {
     api.getSports().then(setSports).catch(() => {});
@@ -41,9 +42,10 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) { setError('Mot de passe : 8 caractères minimum.'); return; }
+    if (!accepted) { setError('Merci d\'accepter les conditions générales d\'utilisation et la politique de confidentialité.'); return; }
     setLoading(true);
     try {
-      const r = await api.register({ email, password, firstName, lastName, ...(preferredSportId ? { preferredSportId } : {}) });
+      const r = await api.register({ email, password, firstName, lastName, acceptTerms: true, ...(preferredSportId ? { preferredSportId } : {}) });
       setPending({ email: r.email, devCode: r.devCode });
       setStep('verify');
     } catch (err) {
@@ -92,6 +94,17 @@ export default function RegisterPage() {
               {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
             </SelectField>
           )}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer' }}>
+            <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)}
+              aria-label="J'accepte les conditions générales d'utilisation et la politique de confidentialité"
+              style={{ width: 15, height: 15, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.5 }}>
+              J&apos;accepte les{' '}
+              <a href="/cgu" target="_blank" rel="noopener noreferrer" style={{ color: th.text, textDecoration: 'underline' }}>conditions générales d&apos;utilisation</a>
+              {' '}et la{' '}
+              <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.text, textDecoration: 'underline' }}>politique de confidentialité</a>.
+            </span>
+          </label>
           <div style={{ height: 4 }} />
           <Btn type="submit" full icon="arrowR" disabled={loading}>{loading ? 'Envoi du code…' : 'Créer mon compte'}</Btn>
           <button type="button" onClick={() => router.push('/login')}

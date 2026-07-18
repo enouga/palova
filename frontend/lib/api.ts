@@ -1618,6 +1618,7 @@ export interface CreateClubBody {
   timezone?: string;
   siret: string;      // requis en self-service (/clubs/new)
   ownerPhone: string; // requis en self-service (/clubs/new)
+  acceptSaasTerms: boolean; // case CGV Palova + annexe DPA obligatoire, cf. spec conformité légale
 }
 
 export interface RegisterBody {
@@ -1627,6 +1628,7 @@ export interface RegisterBody {
   lastName: string;
   phone?: string;
   preferredSportId?: string;
+  acceptTerms: boolean; // case CGU + confidentialité obligatoire, cf. spec conformité légale
 }
 
 export interface AuthResponse {
