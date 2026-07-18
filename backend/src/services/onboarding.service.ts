@@ -8,7 +8,10 @@ export class OnboardingService {
   async getStatus(clubId: string) {
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      select: { logoUrl: true, presentationText: true, stripeAccountStatus: true },
+      select: {
+        logoUrl: true, presentationText: true, stripeAccountStatus: true,
+        legalEntityName: true, siret: true, legalEmail: true, mediatorName: true,
+      },
     });
     if (!club) throw new Error('CLUB_NOT_FOUND');
 
@@ -30,6 +33,8 @@ export class OnboardingService {
       stripeStatus: club.stripeAccountStatus,
       offersCount: templatesCount + plansCount,
       eventsCount: tournamentsCount + clubEventsCount,
+      hasLegalInfo: [club.legalEntityName, club.siret, club.legalEmail, club.mediatorName]
+        .every((v) => (v ?? '').trim().length > 0),
     };
   }
 }
