@@ -69,6 +69,8 @@ export interface Theme {
   danger: string;
   /** Vert de succès/confirmation. */
   success: string;
+  /** Vert de succès LISIBLE en texte sur fond neutre (le vert vif success sert aux fonds/jauges). */
+  successInk: string;
   /** Orange d'avertissement (ex. facturation à régulariser) — attention sans être bloquant. */
   warning: string;
 }
@@ -107,6 +109,7 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
       glow: 'none',
       danger: '#b23c17',
       success: '#22c55e',
+      successInk: '#1c7a4f',
       warning: '#e8804f',
     };
   }
@@ -135,6 +138,7 @@ export function makeTheme(mode: ThemeMode, opts: MakeThemeOpts = {}): Theme {
     glow: '0 0 0 1px rgba(214,255,63,0.0)',
     danger: ACCENTS.coral,
     success: '#22c55e',
+    successInk: ACCENTS.emerald,
     warning: '#e8804f',
   };
 }
