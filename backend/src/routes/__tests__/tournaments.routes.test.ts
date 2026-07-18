@@ -133,7 +133,8 @@ describe('POST /api/tournaments/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe('cs_reg_payment');
@@ -156,7 +157,8 @@ describe('POST /api/tournaments/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.customerSessionClientSecret).toBe('cuss_reg');
@@ -173,7 +175,8 @@ describe('POST /api/tournaments/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('AMOUNT_TOO_SMALL');
@@ -191,7 +194,8 @@ describe('POST /api/tournaments/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe('cs_reg_setup');
@@ -199,6 +203,48 @@ describe('POST /api/tournaments/:id/registrations/:regId/intent', () => {
     expect(createRegistrationSetupIntent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'tournament' }),
     );
+  });
+
+  it('intent refuse sans cgvAccepted (400 CGV_NOT_ACCEPTED)', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({
+      captainUserId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      tournament: { clubId: 'club-1', entryFee: 15, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('CGV_NOT_ACCEPTED');
+    expect(prismaMock.tournamentRegistration.updateMany).not.toHaveBeenCalled();
+    expect(createRegistrationPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it('intent horodate cgvAcceptedAt une seule fois (updateMany conditionnel)', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({
+      captainUserId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      tournament: { clubId: 'club-1', entryFee: 15, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+    prismaMock.tournamentRegistration.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(app)
+      .post('/api/tournaments/tourn-1/registrations/reg-1/intent')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.tournamentRegistration.updateMany).toHaveBeenCalledWith({
+      where: { id: 'reg-1', cgvAcceptedAt: null },
+      data: { cgvAcceptedAt: expect.any(Date) },
+    });
   });
 });
 

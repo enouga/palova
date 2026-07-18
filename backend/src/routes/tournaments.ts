@@ -29,6 +29,7 @@ const ERROR_STATUS: Record<string, number> = {
   AMOUNT_TOO_SMALL:             400,
   NOT_PAYABLE:                  409,
   VALIDATION_ERROR:             400,
+  CGV_NOT_ACCEPTED:             400,
 };
 
 function asString(v: unknown): string {
@@ -101,6 +102,13 @@ router.post('/:id/registrations/:regId/intent', authMiddleware, async (req: Auth
     if (!reg) return void res.status(404).json({ error: 'REGISTRATION_NOT_FOUND' });
     if (reg.captainUserId !== req.user!.id) return void res.status(403).json({ error: 'UNAUTHORIZED' });
     if (reg.paymentStatus !== 'DUE') return void res.status(409).json({ error: 'NOT_PAYABLE' });
+
+    // L'acceptation des CGV du club précède tout paiement CB (pattern confirmReservation).
+    if (req.body?.cgvAccepted !== true) return void res.status(400).json({ error: 'CGV_NOT_ACCEPTED' });
+    await prisma.tournamentRegistration.updateMany({
+      where: { id: regId, cgvAcceptedAt: null },
+      data: { cgvAcceptedAt: new Date() },
+    });
 
     const svc = new StripeService();
     const clubId = reg.tournament.clubId;
