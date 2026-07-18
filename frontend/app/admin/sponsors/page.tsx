@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const EMPTY = { name: '', logoUrl: '', linkUrl: '', sortOrder: '0', isActive: true, offerText: '', offerCode: '', offerUntil: '', pinned: false };
 const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -24,6 +25,7 @@ export default function AdminSponsorsPage() {
   const [saving, setSaving]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Sponsor | null>(null);
   const logoFileRef = useRef<HTMLInputElement>(null);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
@@ -205,7 +207,7 @@ export default function AdminSponsorsPage() {
                   <td style={cell}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => startEdit(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Modifier</button>
-                      <button onClick={() => remove(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
+                      <button onClick={() => setPendingDelete(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
                     </div>
                   </td>
                 </tr>
@@ -213,6 +215,17 @@ export default function AdminSponsorsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Supprimer ce partenaire ?"
+          detail={pendingDelete.name}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          onConfirm={() => { const s = pendingDelete; setPendingDelete(null); remove(s); }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );
