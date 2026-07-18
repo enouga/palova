@@ -738,6 +738,8 @@ export const api = {
 
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
+  acceptLegal: (document: LegalDocumentKey, token: string) =>
+    request<{ ok: boolean }>('/api/me/legal/accept', { method: 'POST', body: JSON.stringify({ document }) }, token),
 
   updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
@@ -2344,7 +2346,11 @@ export interface MyProfile {
   acceptsFriendRequests: boolean;
   acceptsDirectMessages: boolean;
   preferredSport: { id: string; key: string; name: string } | null;
+  legal?: { cgu: LegalDocStatus; privacy: LegalDocStatus; cgvSaas?: LegalDocStatus };
 }
+
+export interface LegalDocStatus { accepted: string | null; current: string }
+export type LegalDocumentKey = 'CGU' | 'PRIVACY' | 'CGV_SAAS';
 
 export interface MyRating {
   calibrated: boolean;
