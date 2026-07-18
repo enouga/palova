@@ -8,7 +8,18 @@ jest.mock('../availabilityCache', () => ({
   invalidateClubAvailability: (...a: unknown[]) => mockInvalidateAvailability(...a),
 }));
 
-beforeEach(() => { mockInvalidateAvailability.mockReset(); });
+// Émission jumelle sur le canal club (grille Réserver en direct).
+const mockBroadcast = jest.fn();
+const mockBroadcastClub = jest.fn();
+jest.mock('../sse.service', () => ({
+  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast, broadcastClub: mockBroadcastClub })) },
+}));
+
+beforeEach(() => {
+  mockInvalidateAvailability.mockReset();
+  mockBroadcast.mockReset();
+  mockBroadcastClub.mockReset();
+});
 
 describe('ReservationService.adminCreateSeries', () => {
   let service: ReservationService;
@@ -45,6 +56,19 @@ describe('ReservationService.adminCreateSeries', () => {
     });
 
     expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+  });
+
+  it('émet slot_confirmed sur le canal club pour chaque occurrence créée', async () => {
+    prismaMock.reservation.count.mockResolvedValue(0 as any);
+
+    await service.adminCreateSeries({
+      clubId: 'club-demo', resourceId: 'res1', type: 'COACHING',
+      weekday: 2, startLocal: '18:00', durationMin: 90,
+      startDate: '2026-06-02', endDate: '2026-06-16',
+    });
+
+    expect(mockBroadcastClub).toHaveBeenCalledTimes(3); // 3 occurrences
+    expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_confirmed' }));
   });
 
   it('saute les occurrences en conflit et les remonte dans skipped', async () => {
@@ -123,6 +147,19 @@ describe('ReservationService.adminCancelSeries', () => {
     await service.adminCancelSeries('ser1', 'club-demo');
 
     expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+  });
+
+  it("émet slot_released sur le canal club à l'annulation d'une série", async () => {
+    prismaMock.reservationSeries.findUnique.mockResolvedValue({ id: 'ser1', clubId: 'club-demo' } as any);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { id: 'r1', resourceId: 'res1', startTime: new Date('2999-01-01T10:00:00Z'), endTime: new Date('2999-01-01T11:00:00Z') },
+    ] as any);
+    prismaMock.reservation.updateMany.mockResolvedValue({ count: 1 } as any);
+    prismaMock.reservationSeries.update.mockResolvedValue({ id: 'ser1' } as any);
+
+    await service.adminCancelSeries('ser1', 'club-demo');
+
+    expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_released', reservationId: 'r1' }));
   });
 
   it('rejette SERIES_NOT_FOUND', async () => {
