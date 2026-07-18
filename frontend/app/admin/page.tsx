@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { StartChecklist } from '@/components/admin/StartChecklist';
 import { BillingBanner } from '@/components/admin/BillingBanner';
+import { LegalBanner } from '@/components/admin/LegalBanner';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 
 function StatCard({ label, value, unit, hint, icon, big }: { label: string; value: string | number; unit?: string; hint?: string; icon: IconName; big?: boolean }) {
@@ -84,6 +85,7 @@ export default function AdminDashboard() {
       {/* Réservé aux admins : le backend répond 403 au staff sur ces deux endpoints. */}
       {isClubAdmin(role) && clubId && token && <StartChecklist clubId={clubId} token={token} />}
       {isClubAdmin(role) && clubId && token && <BillingBanner clubId={clubId} token={token} />}
+      {isClubAdmin(role) && clubId && token && <LegalBanner clubId={clubId} token={token} />}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
         <StatCard label="Réservations du jour" value={confirmed} icon="ticket" big hint={`${pending} en attente`} />

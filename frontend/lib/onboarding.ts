@@ -24,13 +24,13 @@ export interface PreviewState {
 }
 
 export interface ChecklistItem {
-  key: 'club' | 'logo' | 'sports' | 'courts' | 'page' | 'stripe' | 'offers' | 'event';
+  key: 'club' | 'logo' | 'sports' | 'courts' | 'page' | 'legal' | 'stripe' | 'offers' | 'event';
   label: string;
   done: boolean;
   href: string | null;   // page admin idoine ; null = pas de lien (déjà fait par nature)
 }
 
-/** Les 8 jalons du guide de démarrage, dérivés du statut serveur. */
+/** Les 9 jalons du guide de démarrage, dérivés du statut serveur. */
 export function buildChecklist(s: OnboardingStatus): ChecklistItem[] {
   return [
     { key: 'club',   label: 'Créer votre club',                          done: true,                          href: null },
@@ -38,6 +38,7 @@ export function buildChecklist(s: OnboardingStatus): ChecklistItem[] {
     { key: 'sports', label: 'Vos sports',                                done: s.sportsCount > 0,             href: '/admin/settings?tab=sports' },
     { key: 'courts', label: 'Vos terrains',                              done: s.resourcesCount > 0,          href: '/admin/courts' },
     { key: 'page',   label: 'Votre page club (photos, présentation)',    done: s.hasPresentation,             href: '/admin/club' },
+    { key: 'legal',  label: 'Vos informations légales (mentions, CGV, médiateur)', done: s.hasLegalInfo,       href: '/admin/pages' },
     { key: 'stripe', label: 'Le paiement en ligne (Stripe)',             done: s.stripeStatus === 'ACTIVE',   href: '/admin/payments' },
     { key: 'offers', label: 'Vos formules (carnets, abonnements)',       done: s.offersCount > 0,             href: '/admin/packages' },
     { key: 'event',  label: 'Votre premier tournoi ou event',            done: s.eventsCount > 0,             href: '/admin/events' },
