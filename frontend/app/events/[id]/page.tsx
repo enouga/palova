@@ -19,6 +19,7 @@ import { ShareActions } from '@/components/tournament/ShareActions';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { openDm } from '@/lib/messages';
+import { dangerBanner } from '@/lib/theme';
 
 const ERROR_LABEL: Record<string, string> = {
   MEMBERSHIP_REQUIRED: 'Cet event est réservé aux membres du club.',
@@ -159,7 +160,7 @@ export default function EventDetailPage() {
         {event.description && <AboutCard text={event.description} />}
 
         <div style={{ padding: '24px 20px 0' }}>
-          {error && <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>{error}</div>}
+          {error && <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>}
 
           {!token && ready && (
             <div style={{ display: 'flex', justifyContent: 'center' }}>

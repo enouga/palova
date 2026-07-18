@@ -14,6 +14,7 @@ import { ClubNav } from '@/components/ClubNav';
 import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
 import { RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
 import { ParticipantsGrid } from '@/components/event/ParticipantsGrid';
+import { dangerBanner } from '@/lib/theme';
 
 const ERROR_LABEL: Record<string, string> = {
   SELF_ENROLL_DISABLED: "L’inscription directe n’est pas disponible — contactez le club.",
@@ -163,7 +164,7 @@ export default function LessonDetailPage() {
         {/* CTA */}
         <div style={{ padding: '24px 20px 0' }}>
           {error && (
-            <div style={{ background: '#3a1d1d', color: '#ff6b6b', borderRadius: 11, padding: '11px 13px', fontFamily: th.fontUI, fontSize: 13.5, marginBottom: 14 }}>
+            <div style={{ ...dangerBanner(th), marginBottom: 14 }}>
               {error}
             </div>
           )}
