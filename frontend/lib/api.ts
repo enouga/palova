@@ -93,6 +93,9 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string, token: string) =>
     request<{ ok: boolean }>('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }, token),
 
+  // Export RGPD (portabilité) — JSON synchrone, 1 export / heure.
+  exportMyData: (token: string) => request<Record<string, unknown>>('/api/me/export', {}, token),
+
   // Suppression de compte (anonymisation) — résumé des blocages/avertissements puis suppression.
   getAccountDeletionSummary: (token: string) =>
     request<AccountDeletionSummary>('/api/me/account-deletion-summary', {}, token),
