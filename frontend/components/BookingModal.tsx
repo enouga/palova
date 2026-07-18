@@ -123,8 +123,8 @@ function BookingHeaderCard({ slot, timezone, resourceName, format, totalPrice, p
           </span>
           <span style={{ whiteSpace: 'nowrap' }}>· {durLabel}</span>
           {slot.offPeak && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: '#b45309', background: '#fde9c8', borderRadius: 6, padding: '2px 7px' }}>
-              <Icon name="moon" size={10} color="#b45309" />heures creuses
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, color: th.warning, background: `${th.warning}22`, borderRadius: 6, padding: '2px 7px' }}>
+              <Icon name="moon" size={10} color={th.warning} />heures creuses
             </span>
           )}
         </div>
