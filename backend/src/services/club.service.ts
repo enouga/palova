@@ -256,7 +256,9 @@ export class ClubService {
         id: true, slug: true, name: true, city: true, region: true, latitude: true, longitude: true,
         description: true, accentColor: true, logoUrl: true, coverImageUrl: true,
         clubSports: { select: { sport: { select: { key: true, name: true, icon: true } } } },
-        _count: { select: { resources: true } },
+        // Ressources actives seulement — même définition que la vitrine (getClubBySlug),
+        // sinon un terrain désactivé gonfle le compte de l'annuaire par rapport au club-house.
+        _count: { select: { resources: { where: { isActive: true } } } },
       },
     });
 
