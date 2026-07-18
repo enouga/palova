@@ -90,6 +90,7 @@ export class ClubPageService {
       select: {
         name: true, legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
         legalRepresentative: true, legalEmail: true, legalPhone: true, address: true, city: true,
+        mediatorName: true, mediatorUrl: true,
       },
     });
     if (!club) throw new Error('CLUB_NOT_FOUND');

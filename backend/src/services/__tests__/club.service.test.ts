@@ -741,6 +741,8 @@ describe('ClubService — updateClub identité légale', () => {
     expect(arg.data.vatNumber).toBeUndefined();
     expect(arg.data.legalRepresentative).toBeUndefined();
     expect(arg.data.legalPhone).toBeUndefined();
+    expect(arg.data.mediatorName).toBeUndefined();
+    expect(arg.data.mediatorUrl).toBeUndefined();
   });
 
   it('vide un champ d\'identité légale passé en chaîne vide (→ null)', async () => {
@@ -748,6 +750,21 @@ describe('ClubService — updateClub identité légale', () => {
     await svc.updateClub('club-1', { legalPhone: '   ' });
     const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
     expect(arg.data.legalPhone).toBeNull();
+  });
+
+  it('écrit le médiateur de la consommation (trim) et l\'efface en chaîne vide', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { mediatorName: '  CM2C  ', mediatorUrl: ' https://cm2c.net ' });
+    const arg = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg.data.mediatorName).toBe('CM2C');
+    expect(arg.data.mediatorUrl).toBe('https://cm2c.net');
+
+    prismaMock.club.update.mockClear();
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { mediatorName: '   ' });
+    const arg2 = (prismaMock.club.update as jest.Mock).mock.calls[0][0];
+    expect(arg2.data.mediatorName).toBeNull();
+    expect(arg2.data.mediatorUrl).toBeUndefined();
   });
 
   it('getClubForAdmin sélectionne les champs d\'identité légale', async () => {
@@ -761,6 +778,8 @@ describe('ClubService — updateClub identité légale', () => {
     expect(arg.select.legalRepresentative).toBe(true);
     expect(arg.select.legalEmail).toBe(true);
     expect(arg.select.legalPhone).toBe(true);
+    expect(arg.select.mediatorName).toBe(true);
+    expect(arg.select.mediatorUrl).toBe(true);
   });
 });
 

@@ -382,6 +382,7 @@ export class ClubService {
         clubHouseKioskSeconds: true,
         legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
         legalRepresentative: true, legalEmail: true, legalPhone: true,
+        mediatorName: true, mediatorUrl: true,
       },
     });
   }
@@ -414,6 +415,8 @@ export class ClubService {
     legalRepresentative?: string;
     legalEmail?: string;
     legalPhone?: string;
+    mediatorName?: string;
+    mediatorUrl?: string;
   }) {
     // Re-géocode uniquement si l'adresse ou la ville change (BAN gratuit mais on évite le bruit).
     let geoData: Record<string, unknown> = {};
@@ -478,6 +481,8 @@ export class ClubService {
         ...(params.legalRepresentative !== undefined ? { legalRepresentative: legal(params.legalRepresentative) } : {}),
         ...(params.legalEmail !== undefined ? { legalEmail: legal(params.legalEmail) } : {}),
         ...(params.legalPhone !== undefined ? { legalPhone: legal(params.legalPhone) } : {}),
+        ...(params.mediatorName !== undefined ? { mediatorName: legal(params.mediatorName) } : {}),
+        ...(params.mediatorUrl !== undefined ? { mediatorUrl: legal(params.mediatorUrl) } : {}),
       },
     });
   }
