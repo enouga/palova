@@ -4,7 +4,7 @@ import { CSSProperties, ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn } from '@/lib/theme';
+import { ACCENTS, inkOn } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
@@ -76,7 +76,7 @@ export function Btn({
     dark: { background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee' },
     ghost: { background: 'transparent', color: th.text, boxShadow: `inset 0 0 0 1.5px ${th.lineStrong}` },
     surface: { background: th.surface2, color: th.text },
-    danger: { background: '#ff7a4d', color: '#fff' },
+    danger: { background: ACCENTS.coral, color: '#fff' },
   };
   const iconColor = variant === 'primary' ? th.onAccent : (skins[variant].color as string);
   return (

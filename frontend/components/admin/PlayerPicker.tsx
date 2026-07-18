@@ -128,7 +128,7 @@ export function PlayerPicker({ members, value, onSelect, onClear, onCreate, plac
           </div>
           <input aria-label="Email" type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <input aria-label="Téléphone" placeholder="Téléphone (optionnel)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
-          {createErr && <div style={{ color: '#ff7a4d', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{createErr}</div>}
+          {createErr && <div style={{ color: th.danger, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{createErr}</div>}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={submitCreate} disabled={creating}
               style={{ border: 'none', background: th.accent, color: '#fff', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{creating ? 'Création…' : 'Créer le joueur'}</button>

@@ -4,7 +4,7 @@ import { api, Announcement, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AnnouncementStudio } from '@/components/admin/AnnouncementStudio';
@@ -124,7 +124,7 @@ export default function AdminAnnouncementsPage() {
                 <button onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Monter ${a.title}`} style={arrow(idx === 0)}>↑</button>
                 <button onClick={() => move(idx, 1)} disabled={idx === items.length - 1} aria-label={`Descendre ${a.title}`} style={arrow(idx === items.length - 1)}>↓</button>
                 <button onClick={() => setStudio({ editing: a })} style={rowBtn}>Modifier</button>
-                <button onClick={() => setPendingDelete(a)} style={{ ...rowBtn, color: '#ff7a4d' }}>Supprimer</button>
+                <button onClick={() => setPendingDelete(a)} style={{ ...rowBtn, color: ACCENTS.coral }}>Supprimer</button>
               </div>
             </div>
           ))}

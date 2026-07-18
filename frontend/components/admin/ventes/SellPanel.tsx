@@ -137,7 +137,7 @@ export function SellPanel({ members, templates, plans, buyer, buyerPackages, bus
           {method === 'VOUCHER' && (
             <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
               <input type="text" value={ref} onChange={(e) => { setRef(e.target.value); setRefError(false); }} placeholder="N° du ticket"
-                style={{ ...input, flex: 1, minWidth: 120, border: `1px solid ${refError ? '#ff7a4d' : th.line}` }} />
+                style={{ ...input, flex: 1, minWidth: 120, border: `1px solid ${refError ? ACCENTS.coral : th.line}` }} />
               <input type="text" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="ANCV…" style={{ ...input, width: 110 }} />
             </div>
           )}

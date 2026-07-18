@@ -121,7 +121,7 @@ export function ReservationAgendaCard({
           {!past && (
             <span style={{ marginLeft: 'auto' }}>
               <button onClick={() => onCancel(r)} disabled={!canCancel}
-                style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? '#ff7a4d' : th.textFaint }}>
+                style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? ACCENTS.coral : th.textFaint }}>
                 Annuler
               </button>
             </span>

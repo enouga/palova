@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 
 interface Props {
   clubId: string;
@@ -60,7 +61,7 @@ export default function NoShowChargeModal({ clubId, reservationId, defaultAmount
         style={{ background: th.bgElev, borderRadius: 18, padding: 24, width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: th.shadow }}>
         <h3 style={{ margin: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, color: th.text }}>Facturer un no-show</h3>
         {previousCount > 0 && (
-          <p style={{ margin: 0, background: '#ff7a4d1a', border: '1px solid #ff7a4d55', borderRadius: 9, padding: '8px 12px', color: '#ff7a4d', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+          <p style={{ margin: 0, background: `${ACCENTS.coral}1a`, border: `1px solid ${ACCENTS.coral}55`, borderRadius: 9, padding: '8px 12px', color: ACCENTS.coral, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
             ⚠️ Déjà facturé {previousCount} fois pour no-show{lastChargedAt ? ` · dernier le ${fmtDate(lastChargedAt)}` : ''}.
           </p>
         )}
@@ -80,11 +81,11 @@ export default function NoShowChargeModal({ clubId, reservationId, defaultAmount
             style={{ border: `1px solid ${th.line}`, borderRadius: 6, padding: '6px 10px', fontSize: 15, background: th.bg, color: th.text, fontFamily: th.fontUI }}
           />
         </label>
-        {error && <p style={{ color: '#ff7a4d', fontSize: 13, margin: 0 }}>{error}</p>}
+        {error && <p style={{ color: th.danger, fontSize: 13, margin: 0 }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ border: `1px solid ${th.line}`, background: 'transparent', color: th.textMute, borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14 }}>Annuler</button>
           <button onClick={handleCharge} disabled={loading}
-            style={{ border: 'none', background: '#ff7a4d', color: '#fff', borderRadius: 9, padding: '8px 16px', cursor: loading ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
+            style={{ border: 'none', background: ACCENTS.coral, color: '#fff', borderRadius: 9, padding: '8px 16px', cursor: loading ? 'default' : 'pointer', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Débit…' : `Facturer ${parseFloat(amount) > 0 ? parseFloat(amount).toFixed(2) + ' €' : ''}`}
           </button>
         </div>

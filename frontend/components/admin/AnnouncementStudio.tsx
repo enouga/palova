@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { api, Announcement, AnnouncementBody, AnnouncementKind, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { Btn } from '@/components/ui/atoms';
 import { ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from '@/lib/clubhouse';
@@ -146,7 +147,7 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
               )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => fileInputRef.current?.click()} style={miniBtn}>{hasImage ? "Changer l'image" : 'Ajouter une image'}</button>
-                {hasImage && <button type="button" onClick={clearImage} style={{ ...miniBtn, color: '#ff7a4d' }}>Retirer l&apos;image</button>}
+                {hasImage && <button type="button" onClick={clearImage} style={{ ...miniBtn, color: ACCENTS.coral }}>Retirer l&apos;image</button>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 2 }}>
@@ -159,7 +160,7 @@ export function AnnouncementStudio({ clubId, token, editing, onClose, onSaved }:
                 Publiée
               </label>
             </div>
-            {formError && <div role="alert" style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: '#ff7a4d' }}>{formError}</div>}
+            {formError && <div role="alert" style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.danger }}>{formError}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
               <Btn onClick={submit} icon={effectiveId ? 'check' : 'plus'} disabled={saving}>{saving ? '…' : effectiveId ? 'Enregistrer' : 'Publier'}</Btn>
               <Btn variant="ghost" onClick={onClose} disabled={saving}>Annuler</Btn>

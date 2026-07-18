@@ -47,7 +47,7 @@ export function OfferCard(props: OfferCardProps) {
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: isActive ? ACCENTS.emerald : th.textFaint }} />
         <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, color: th.textMute, marginRight: 'auto' }}>{isActive ? 'En vente' : 'Retirée de la vente'}</span>
         <button type="button" onClick={onEdit} disabled={busy} style={mini}>Modifier</button>
-        <button type="button" onClick={onToggleActive} disabled={busy} style={{ ...mini, color: isActive ? '#ff7a4d' : th.text }}>
+        <button type="button" onClick={onToggleActive} disabled={busy} style={{ ...mini, color: isActive ? ACCENTS.coral : th.text }}>
           {isActive ? 'Retirer' : 'Remettre en vente'}
         </button>
       </div>

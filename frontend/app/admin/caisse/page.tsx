@@ -282,7 +282,7 @@ export default function AdminCaissePage() {
             <div style={{ fontSize: 13, color: th.textMute, marginBottom: 16 }}>
               {paymentLabel(refundTarget)} · <b style={{ color: th.text }}>{euro(refundTarget.amount)}</b>
               {toCents(refundTarget.refundedAmount ?? '0') > 0 && (
-                <span style={{ marginLeft: 8, color: '#ff7a4d' }}>déjà remboursé {fmtEuros(toCents(refundTarget.refundedAmount ?? '0'))}</span>
+                <span style={{ marginLeft: 8, color: ACCENTS.coral }}>déjà remboursé {fmtEuros(toCents(refundTarget.refundedAmount ?? '0'))}</span>
               )}
             </div>
             {error && <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>}
@@ -292,7 +292,7 @@ export default function AdminCaissePage() {
                   type="number" min={0.01} step="0.01" value={refundAmount}
                   onChange={(e) => setRefundAmount(e.target.value)}
                   style={{ ...input, width: '100%', boxSizing: 'border-box',
-                    border: `1px solid ${!validatePaymentAmount(toCents(refundAmount), Math.max(0, toCents(refundTarget.amount) - toCents(refundTarget.refundedAmount ?? '0'))) && refundAmount !== '' ? '#ff7a4d' : th.line}` }}
+                    border: `1px solid ${!validatePaymentAmount(toCents(refundAmount), Math.max(0, toCents(refundTarget.amount) - toCents(refundTarget.refundedAmount ?? '0'))) && refundAmount !== '' ? ACCENTS.coral : th.line}` }}
                 />
               </label>
               <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Motif (optionnel)
