@@ -44,7 +44,7 @@ describe('notifyReservationReminder', () => {
         clubId: 'club-1',
         category: 'REMINDERS',
         type: 'reminder.upcoming_game',
-        title: "Ta partie est dans 2 h",
+        title: "Votre partie est dans 2 h",
         body: expect.stringContaining('Court 1'),
         data: { reservationId: 'r1', window: 'H-2' },
       }),
