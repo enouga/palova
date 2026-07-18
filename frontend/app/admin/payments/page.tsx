@@ -8,13 +8,16 @@ import { isClubOwner, useAdminRole } from '@/lib/adminRole';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StripeSetupGuide } from '@/components/admin/StripeSetupGuide';
+import { Theme } from '@/lib/theme';
 
-const STATUS_META: Record<string, { dot: string; label: string }> = {
-  NONE:       { dot: '#9ca3af', label: 'Non connecté' },
-  PENDING:    { dot: '#f59e0b', label: 'Onboarding en cours' },
-  RESTRICTED: { dot: '#f59e0b', label: 'Compte restreint' },
-  ACTIVE:     { dot: '#22c55e', label: 'Compte actif' },
-};
+function statusMeta(th: Theme): Record<string, { dot: string; label: string }> {
+  return {
+    NONE:       { dot: th.textFaint, label: 'Non connecté' },
+    PENDING:    { dot: th.warning, label: 'Onboarding en cours' },
+    RESTRICTED: { dot: th.warning, label: 'Compte restreint' },
+    ACTIVE:     { dot: th.success, label: 'Compte actif' },
+  };
+}
 
 export default function AdminPaymentsPage() {
   const { th } = useTheme();
@@ -136,6 +139,7 @@ export default function AdminPaymentsPage() {
   if (error || !club) return <div style={{ padding: 24, fontFamily: th.fontUI, color: '#ef4444' }}>{error ?? 'Erreur de chargement'}</div>;
 
   const status = club.stripeAccountStatus;
+  const STATUS_META = statusMeta(th);
   const meta = STATUS_META[status] ?? STATUS_META.NONE;
   const linked = status !== 'NONE';
 
