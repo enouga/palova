@@ -4,7 +4,7 @@ import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminRes
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack, dangerBanner } from '@/lib/theme';
+import { ACCENTS, gaugeTrack, dangerBanner } from '@/lib/theme';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { Receipt } from '@/components/admin/Receipt';
@@ -19,8 +19,6 @@ import { QueueList } from '@/components/admin/caisse/QueueList';
 import { CashRegister } from '@/components/admin/caisse/CashRegister';
 import { queueGroups } from '@/lib/caisseRegister';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-
-const CORAL = '#ff7a4d';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -379,7 +377,7 @@ export default function AdminEncaissementPage() {
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', background: th.surface, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${th.line}`, padding: '6px 2px' }}>
             {kpiStat("Encaissé", fmtEuros(paidDay), th.mode === 'floodlit' ? th.accent : SETTLED_COLOR, `${encCount} enc.`)}
             {kpiSep}
-            {kpiStat('Reste', fmtEuros(restDay), CORAL, `${dueCount} résa`, pctDay)}
+            {kpiStat('Reste', fmtEuros(restDay), ACCENTS.coral, `${dueCount} résa`, pctDay)}
             {kpiSep}
             {kpiStat('Total', fmtEuros(totalDay), th.text, `${kpiRows.length} résa`)}
           </div>
@@ -478,7 +476,7 @@ export default function AdminEncaissementPage() {
                           <Icon name="check" size={24} color={SETTLED_COLOR} />Soldé
                         </div>
                       ) : (
-                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 32, letterSpacing: -1, lineHeight: 1, marginTop: 6, color: CORAL }}>{fmtEuros(restC)}</div>
+                        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 32, letterSpacing: -1, lineHeight: 1, marginTop: 6, color: ACCENTS.coral }}>{fmtEuros(restC)}</div>
                       )}
                     </div>
                     {dueC > 0 && (

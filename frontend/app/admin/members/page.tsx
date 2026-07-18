@@ -5,7 +5,7 @@ import { api, Member, SubscriptionPlan, SubscriptionPlanSummary } from '@/lib/ap
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { computeVirtualRange } from '@/lib/virtualList';
@@ -34,8 +34,6 @@ const STAFF_ERRORS: Record<string, string> = {
   CANNOT_CHANGE_SELF:  'Vous ne pouvez pas modifier votre propre rôle.',
   MEMBER_IS_STAFF:     'Ce membre a un rôle staff : retirez d\'abord son rôle (bloc « Rôle ») avant de le bloquer ou de le supprimer.',
 };
-
-const CORAL = '#ff7a4d';
 
 export default function AdminMembersPage() {
   const { th } = useTheme();
@@ -243,7 +241,7 @@ export default function AdminMembersPage() {
             {kpiSep}
             {kpiStat('Actifs 30 j', kpis.activeRecent, th.mode === 'floodlit' ? th.accent : th.text)}
             {kpiSep}
-            {kpiStat('Bloqués', kpis.blocked, kpis.blocked > 0 ? CORAL : th.textFaint)}
+            {kpiStat('Bloqués', kpis.blocked, kpis.blocked > 0 ? ACCENTS.coral : th.textFaint)}
           </div>
         )}
       </div>

@@ -5,13 +5,12 @@ import { toCents, fmtEuros, isOptimisticId, PaymentIntent, QUICK_METHOD_LABEL } 
 import { slotStatuses, nextSelectable, selectionTotal, SlotStatus } from '@/lib/caisseRegister';
 import { pickPackageFor, packageLabel } from '@/lib/packages';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn, gaugeTrack } from '@/lib/theme';
+import { ACCENTS, inkOn, gaugeTrack } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { AssociateMemberPicker } from '@/components/admin/caisse/AssociateMemberPicker';
 import { SETTLED_COLOR } from '@/components/admin/PaymentDots';
 
-const CORAL = '#ff7a4d';
 const TOAST_MS = 6000;
 const METHOD_ICON: Record<string, IconName> = { CASH: 'euro', CARD: 'card', VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', TRANSFER: 'arrowR', MEMBER: 'user', PACK_CREDIT: 'ticket', WALLET: 'euro', ONLINE: 'card', OTHER: 'euro', SUBSCRIPTION: 'user' };
 const METHOD_LABEL_FULL: Record<string, string> = { CASH: 'Espèces', CARD: 'CB', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement' };
@@ -375,7 +374,7 @@ export function CashRegister({ reservation, players, due, members, quickMethods,
               <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: SETTLED_COLOR, transition: 'width .3s ease' }} />
             </span>
             <div style={{ textAlign: 'right', fontSize: 11.5, color: th.textMute, whiteSpace: 'nowrap' }}>
-              encaissé {fmtEuros(paid)}<br />reste <b style={{ color: settled ? SETTLED_COLOR : CORAL, fontSize: 13 }}>{fmtEuros(remaining)}</b>
+              encaissé {fmtEuros(paid)}<br />reste <b style={{ color: settled ? SETTLED_COLOR : ACCENTS.coral, fontSize: 13 }}>{fmtEuros(remaining)}</b>
             </div>
           </>
         )}
