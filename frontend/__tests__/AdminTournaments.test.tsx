@@ -148,6 +148,61 @@ it('le vivier indisponible (API en échec) ne casse pas le formulaire', async ()
   expect(adminCreateTournament).toHaveBeenCalledWith('c1', expect.objectContaining({ refereeUserId: null }), 'tok');
 });
 
+describe('Modifier un tournoi existant (formulaire)', () => {
+  it('affiche « Modifier » sur chaque carte et pré-remplit le formulaire', async () => {
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 't1', name: 'Open Test', category: 'P250', gender: 'MIXED', status: 'PUBLISHED', startTime: new Date(Date.now() + 5 * 86_400_000).toISOString(), entryFee: '12', requirePrepayment: true }),
+    ]);
+    adminGetClub.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' });
+    renderPage();
+
+    const modifierBtn = await screen.findByRole('button', { name: /Modifier/ });
+    fireEvent.click(modifierBtn);
+
+    expect(await screen.findByText('Modifier le tournoi')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Open Test')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('12')).toBeInTheDocument();
+    const cb = await screen.findByRole('checkbox', { name: /Inscription à régler en ligne/ });
+    await waitFor(() => expect(cb).toBeChecked());
+  });
+
+  it('Enregistrer appelle adminUpdateTournament avec les champs édités', async () => {
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 't1', name: 'Open Test', category: 'P250', gender: 'MIXED', status: 'PUBLISHED', startTime: new Date(Date.now() + 5 * 86_400_000).toISOString() }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Modifier/ }));
+    const nameInput = await screen.findByDisplayValue('Open Test');
+    fireEvent.change(nameInput, { target: { value: 'Open Test Renommé' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer/ }));
+
+    await waitFor(() => expect(adminUpdateTournament).toHaveBeenCalled());
+    const [clubId, id, body, tok] = adminUpdateTournament.mock.calls[0];
+    expect(clubId).toBe('c1');
+    expect(id).toBe('t1');
+    expect(body.name).toBe('Open Test Renommé');
+    expect(tok).toBe('tok');
+    expect(adminCreateTournament).not.toHaveBeenCalled();
+  });
+
+  it('« Nouveau tournoi » depuis un état d’édition repasse en mode création', async () => {
+    adminGetTournaments.mockResolvedValue([
+      tournament({ id: 't1', name: 'Open Test', category: 'P250', gender: 'MIXED', status: 'PUBLISHED', startTime: new Date(Date.now() + 5 * 86_400_000).toISOString() }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Modifier/ }));
+    await screen.findByText('Modifier le tournoi');
+    fireEvent.click(screen.getByRole('button', { name: /Nouveau tournoi/ }));
+
+    await waitFor(() => expect(screen.queryByText('Modifier le tournoi')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+    await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+    expect(adminUpdateTournament).not.toHaveBeenCalled();
+  });
+});
+
 const iso = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 const tournament = (over: Record<string, unknown>) => ({
   id: 'x', clubId: 'c1', clubSportId: 'cs', category: 'P100', name: 'X', gender: 'MIXED',
