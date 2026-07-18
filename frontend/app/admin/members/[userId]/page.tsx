@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Chip, BackButton, Segmented, Btn } from '@/components/ui/atoms';
 import { Avatar } from '@/components/ui/Avatar';
 import { colorForSeed } from '@/lib/playerColors';
@@ -156,7 +156,7 @@ export default function MemberHistoryPage() {
   if (error) return (
     <div>
       <BackButton href="/admin/members" label="Membres" />
-      <div style={{ marginTop: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+      <div style={{ ...dangerBanner(th), marginTop: 16 }}>{error}</div>
     </div>
   );
   if (!data) return null;

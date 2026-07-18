@@ -2,6 +2,7 @@
 import { useState, CSSProperties } from 'react';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 
 // Mappe les codes d'erreur backend en messages français pour l'override de niveau.
@@ -75,7 +76,7 @@ export function LevelOverrideForm({
       </p>
 
       {error && (
-        <div style={{ marginBottom: 14, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>
       )}
       {ok && !error && (
         <div style={{ marginBottom: 14, background: `${th.accent}22`, color: th.text, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>Niveau corrigé.</div>

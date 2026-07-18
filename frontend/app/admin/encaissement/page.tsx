@@ -4,7 +4,7 @@ import { api, ClubReservation, ClubReservationsResponse, PaymentMethod, AdminRes
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack } from '@/lib/theme';
+import { gaugeTrack, dangerBanner } from '@/lib/theme';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CollectPanel } from '@/components/admin/CollectPanel';
 import { Receipt } from '@/components/admin/Receipt';
@@ -388,7 +388,7 @@ export default function AdminEncaissementPage() {
 
       {filtersEl}
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/useAuth';
 import { api, PlatformClub } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ChangeSlugDialog } from '@/components/superadmin/ChangeSlugDialog';
 
@@ -80,7 +81,7 @@ export default function SuperAdminClubs() {
         }}
       />
       {error && (
-        <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 16 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>
       )}
       <div style={{ background: th.bgElev, border: `1px solid ${th.line}`, borderRadius: 14, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

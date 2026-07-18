@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Field, Btn } from '@/components/ui/atoms';
 
 export default function NewClubByPlatform() {
@@ -45,7 +46,7 @@ export default function NewClubByPlatform() {
     <div style={{ maxWidth: 520 }}>
       <h1 style={{ fontFamily: th.fontDisplay, fontSize: 28, fontWeight: 700, color: th.text, marginBottom: 20 }}>Créer un club</h1>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {error && <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>}
+        {error && <div style={dangerBanner(th)}>{error}</div>}
         <div style={{ fontSize: 12.5, color: th.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Club</div>
         <Field label="Nom du club" value={name} onChange={setName} required />
         <Field label="Ville" value={city} onChange={setCity} />

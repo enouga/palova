@@ -4,6 +4,7 @@ import { api, assetUrl, Sponsor, SponsorBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 
@@ -104,7 +105,7 @@ export default function AdminSponsorsPage() {
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 8px', color: th.text }}>Partenaires</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 22px' }}>Mettez en avant les sponsors et partenaires du club, classés par ordre d&apos;affichage.</p>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       <div style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 16 }}>
         <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 14px', color: th.text }}>{editId ? 'Modifier le partenaire' : 'Nouveau partenaire'}</h2>

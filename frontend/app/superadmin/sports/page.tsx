@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, Sport, SportCatalogBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn, Field } from '@/components/ui/atoms';
 
@@ -86,7 +87,7 @@ export default function SuperAdminSportsPage() {
         {editId === null && <Btn onClick={startCreate}>Ajouter un sport</Btn>}
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {editId !== null && (
         <div style={card}>

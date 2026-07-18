@@ -4,6 +4,7 @@ import { api, Announcement, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AnnouncementStudio } from '@/components/admin/AnnouncementStudio';
@@ -80,7 +81,7 @@ export default function AdminAnnouncementsPage() {
         <Btn onClick={() => setStudio({ editing: null })} icon="plus">Nouvelle annonce</Btn>
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>

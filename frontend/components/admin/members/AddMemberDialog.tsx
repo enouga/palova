@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { api } from '@/lib/api';
 import { Btn, Segmented } from '@/components/ui/atoms';
 
@@ -77,7 +78,7 @@ export function AddMemberDialog({ clubId, token, onClose, onAdded }: {
           />
         </div>
 
-        {err && <div style={{ marginBottom: 12, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ ...dangerBanner(th), marginBottom: 12 }}>{err}</div>}
         {created && <div style={{ marginBottom: 12, background: `${th.accent}22`, color: th.text, borderRadius: 10, padding: '10px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, userSelect: 'all' }}>{created}</div>}
 
         {tab === 'existing' ? (

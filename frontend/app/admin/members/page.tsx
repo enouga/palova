@@ -5,6 +5,7 @@ import { api, Member, SubscriptionPlan, SubscriptionPlanSummary } from '@/lib/ap
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { computeVirtualRange } from '@/lib/virtualList';
@@ -251,7 +252,7 @@ export default function AdminMembersPage() {
       </p>
 
       {error && !selected && (
-        <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>
       )}
 
       {loading ? (
