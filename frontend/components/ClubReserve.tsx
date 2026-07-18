@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
+import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription, clubAvailabilityStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE, lightingIsInformative } from '@/lib/courtType';
@@ -24,6 +24,8 @@ import { ViewToggle } from '@/components/reserve/ViewToggle';
 import { SportGrid } from '@/components/reserve/SportGrid';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
 import { slotToAlertWindow } from '@/lib/matchAlerts';
+import { applySlotEvent, type SlotStreamEvent } from '@/lib/reserveLive';
+import { LiveDot } from '@/components/reserve/LiveDot';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -182,6 +184,45 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { if (tab === 'book') reloadAll(); }, [tab, reloadAll]);
 
+  // Flux SSE des disponibilités du club : la grille vit toute seule (patch local),
+  // le F5 devient inutile. 'reconnecting' = EventSource en re-tentative native.
+  const [liveStatus, setLiveStatus] = useState<'live' | 'reconnecting'>('live');
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reloadAllRef = useRef(reloadAll);
+  reloadAllRef.current = reloadAll;
+
+  // Une EventSource par onglet sur l'onglet Réserver. Patch local pour held/confirmed ;
+  // released → refetch débouncé (le cache serveur, invalidé avant broadcast, est frais).
+  // Jamais de onerror→close : reconnexion native, puis resync au retour.
+  useEffect(() => {
+    if (tab !== 'book') return;
+    let wasDown = false;
+    const es = new EventSource(clubAvailabilityStreamUrl(club.slug));
+    es.onmessage = (msg) => {
+      let ev: SlotStreamEvent;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      setAvailBySport((prev) => {
+        const { next, needsRefetch } = applySlotEvent(prev, ev);
+        if (needsRefetch && !refetchTimer.current) {
+          refetchTimer.current = setTimeout(() => {
+            refetchTimer.current = null;
+            reloadAllRef.current();
+          }, 500);
+        }
+        return next;
+      });
+    };
+    es.onerror = () => { wasDown = true; setLiveStatus('reconnecting'); };
+    es.onopen = () => {
+      setLiveStatus('live');
+      if (wasDown) { wasDown = false; reloadAllRef.current(); } // resync post-coupure
+    };
+    return () => {
+      es.close();
+      if (refetchTimer.current) { clearTimeout(refetchTimer.current); refetchTimer.current = null; }
+    };
+  }, [tab, club.slug]);
+
   const changeDuration = (clubSportId: string, dur: number) => {
     setDurationBySport((s) => ({ ...s, [clubSportId]: dur }));
     loadSport(clubSportId, dur, date);
@@ -280,7 +321,8 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     onChange={changeSports}
                   />
                 ) : <span aria-hidden="true" />}
-                <div style={{ marginLeft: 'auto' }}>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <LiveDot status={liveStatus} />
                   <ViewToggle value={view} onChange={changeView} />
                 </div>
               </div>
@@ -376,7 +418,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 const canAlert = cs.sport.key === 'padel' && !isPast && !!token && !s.available;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background .35s ease, box-shadow .35s ease, color .35s ease' }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && resource.offPeakPrice && <span style={{ position: 'absolute', top: -7, right: -4, background: th.accentWarm, color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 800, lineHeight: 1.2, padding: '2px 7px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.22)' }}>{Number(s.price)}€</span>}
                                   </button>
