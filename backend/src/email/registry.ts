@@ -371,7 +371,7 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
 
   'open_match.proposed': {
     type: 'open_match.proposed', group: 'parties',
-    title: 'Partie — proposée à ton niveau',
+    title: 'Partie — proposée à votre niveau',
     description: "Aux membres opt-in « à mon niveau » dont le niveau correspond.",
     hasCta: true,
     vars: [
@@ -384,9 +384,9 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
       { key: 'lien', label: 'Lien', sample: 'https://club.palova.fr/parties' },
     ],
     defaults: {
-      subject: 'Une partie à ton niveau — {{club}}',
-      heading: 'Une partie pour toi ! 🎾',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Une partie ouverte correspond à ton niveau et cherche des joueurs. {{phrase_places}}</p>',
+      subject: 'Une partie à votre niveau — {{club}}',
+      heading: 'Une partie pour vous ! 🎾',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Une partie ouverte correspond à votre niveau et cherche des joueurs. {{phrase_places}}</p>',
       ctaLabel: 'Voir la partie',
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Niveau', v.niveau), row('Club', v.club)],
@@ -430,8 +430,8 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     ],
     defaults: {
       subject: 'Nouveau message — {{terrain}}',
-      heading: 'Nouveau message dans ta partie 💬',
-      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Un nouveau message a été posté dans ta partie :</p><blockquote><strong>{{auteur}}</strong> : {{message}}</blockquote>',
+      heading: 'Nouveau message dans votre partie 💬',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Un nouveau message a été posté dans votre partie :</p><blockquote><strong>{{auteur}}</strong> : {{message}}</blockquote>',
       ctaLabel: 'Voir la discussion',
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Club', v.club)],

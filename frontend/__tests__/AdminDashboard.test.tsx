@@ -62,4 +62,11 @@ describe('AdminDashboard — gating par rôle', () => {
     expect(api.adminGetBilling).toHaveBeenCalled();
     expect(await screen.findByRole('status')).toBeInTheDocument(); // bannière TO_REGULARIZE
   });
+
+  it('montants du jour au format français (virgule, pas de point anglais)', async () => {
+    api.adminGetReservations.mockResolvedValue({ reservations: [], summary: { paidTotal: '32.25', total: '32.25' } });
+    await mount('STAFF');
+    expect(await screen.findAllByText('32,25')).not.toHaveLength(0);
+    expect(screen.queryByText('32.25')).not.toBeInTheDocument();
+  });
 });

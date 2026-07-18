@@ -110,6 +110,11 @@ body {
   .rv-slot:hover { transform: none; }
 }
 
+/* LiveDot (pastille « en direct » pulsée) : respecte prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .sp-live-dot { animation: none !important; }
+}
+
 /* Retour visuel discret sur les boutons : léger relèvement au survol,
    enfoncement au clic. Transform/filter uniquement → n'écrase pas les
    couleurs ni les ombres posées en style inline. Respecte prefers-reduced-motion. */

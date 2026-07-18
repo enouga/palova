@@ -405,6 +405,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                     {showPast && past.map((s) => renderSlot(s, true))}
                                     {rest.map((s) => renderSlot(s))}
                                   </div>
+                                  {rest.length === 0 && past.length > 0 && (
+                                    <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+                                      Plus de créneaux aujourd&apos;hui — essayez un autre jour.
+                                    </div>
+                                  )}
                                   {scarcity && (
                                     <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: ACCENTS.coral }}>{scarcity}</div>
                                   )}

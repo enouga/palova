@@ -802,6 +802,13 @@ describe('ClubService — annuaire (listClubs)', () => {
     const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.select.coverImageUrl).toBe(true);
   });
+
+  it('compte les terrains actifs seulement (meme definition que la vitrine getClubBySlug)', async () => {
+    prismaMock.club.findMany.mockResolvedValue([] as any);
+    await svc.listClubs({});
+    const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.select._count.select.resources).toEqual({ where: { isActive: true } });
+  });
 });
 
 describe('normalizeQuickPaymentMethods', () => {

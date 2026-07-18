@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ClubReservationsResponse } from '@/lib/api';
+import { fmtAmount } from '@/lib/accounting';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -89,8 +90,8 @@ export default function AdminDashboard() {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
         <StatCard label="Réservations du jour" value={confirmed} icon="ticket" big hint={`${pending} en attente`} />
-        <StatCard label="Encaissé (confirmées)" value={data ? data.summary.paidTotal : '—'} unit="€" icon="euro" hint="aujourd'hui" />
-        <StatCard label="Total du jour" value={data ? data.summary.total : '—'} unit="€" icon="chart" hint="toutes réservations" />
+        <StatCard label="Encaissé (confirmées)" value={data ? fmtAmount(data.summary.paidTotal).replace(/\s*€$/, '') : '—'} unit="€" icon="euro" hint="aujourd'hui" />
+        <StatCard label="Total du jour" value={data ? fmtAmount(data.summary.total).replace(/\s*€$/, '') : '—'} unit="€" icon="chart" hint="toutes réservations" />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 16 }}>
