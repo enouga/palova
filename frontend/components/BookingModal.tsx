@@ -526,23 +526,23 @@ export default function BookingModal({
                     </button>
                   )}
 
-                  {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). */}
+                  {/* Avenue 1 — régler au club (caché si paiement en ligne imposé). Toute la carte est cliquable (pas seulement le titre). */}
                   {!requireOnlinePayment && (() => {
                     const sel = !useSub && payMode === 'club' && !paySource;
                     return (
-                    <div style={{ ...payCard(sel), padding: '11px 13px' }}>
-                      <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+                    <button type="button" onClick={() => { setUseSub(false); setPayMode('club'); setPaySource(null); }}
+                      style={{ ...payCard(sel), display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', cursor: 'pointer', padding: '11px 13px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={payTile(sel)}><Icon name="home" size={18} color={sel ? th.onAccent : th.accent} /></span>
                         <span style={payTitle}>Régler au club</span>
                         {sel && checkBadge}
-                      </button>
-                      <div style={payDesc}>
+                      </span>
+                      <span style={{ ...payDesc, display: 'block' }}>
                         {requireCardFingerprint
                           ? <>Le club enregistre une <b style={{ color: th.textMute }}>empreinte de votre carte</b> (protection no-show) ; le règlement se fait sur place.</>
                           : <>Vous réglez directement au club — <b style={{ color: th.textMute }}>aucune carte enregistrée</b>.</>}
-                      </div>
-                    </div>
+                      </span>
+                    </button>
                     );
                   })()}
 
