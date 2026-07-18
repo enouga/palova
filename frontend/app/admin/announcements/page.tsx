@@ -8,6 +8,7 @@ import { dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AnnouncementStudio } from '@/components/admin/AnnouncementStudio';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ANNOUNCEMENT_KIND_LABEL } from '@/lib/clubhouse';
 
 // Page « Annonces » : liste déplaçable (glisser natif, pattern ClubHouseSectionsCard, + ↑↓
@@ -23,6 +24,7 @@ export default function AdminAnnouncementsPage() {
   const [error, setError] = useState<string | null>(null);
   const [studio, setStudio] = useState<{ editing: Announcement | null } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !clubId) return;
@@ -122,7 +124,7 @@ export default function AdminAnnouncementsPage() {
                 <button onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Monter ${a.title}`} style={arrow(idx === 0)}>↑</button>
                 <button onClick={() => move(idx, 1)} disabled={idx === items.length - 1} aria-label={`Descendre ${a.title}`} style={arrow(idx === items.length - 1)}>↓</button>
                 <button onClick={() => setStudio({ editing: a })} style={rowBtn}>Modifier</button>
-                <button onClick={() => remove(a)} style={{ ...rowBtn, color: '#ff7a4d' }}>Supprimer</button>
+                <button onClick={() => setPendingDelete(a)} style={{ ...rowBtn, color: '#ff7a4d' }}>Supprimer</button>
               </div>
             </div>
           ))}
@@ -132,6 +134,17 @@ export default function AdminAnnouncementsPage() {
       {studio && clubId && token && (
         <AnnouncementStudio clubId={clubId} token={token} editing={studio.editing}
           onClose={() => setStudio(null)} onSaved={load} />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Supprimer cette annonce ?"
+          detail={pendingDelete.title}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          onConfirm={() => { const a = pendingDelete; setPendingDelete(null); remove(a); }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

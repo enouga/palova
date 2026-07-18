@@ -90,10 +90,13 @@ describe('/admin/announcements', () => {
     await waitFor(() => expect(mocked.adminReorderAnnouncements).toHaveBeenCalledWith('c1', ['a2', 'a1'], 't'));
   });
 
-  it('« Supprimer » appelle l’API puis recharge', async () => {
+  it('« Supprimer » demande confirmation puis appelle l’API et recharge', async () => {
     wrap();
     await screen.findByText('Un');
     fireEvent.click(screen.getAllByRole('button', { name: 'Supprimer' })[0]);
+    expect(mocked.adminDeleteAnnouncement).not.toHaveBeenCalled();
+    const buttons = screen.getAllByRole('button', { name: 'Supprimer' });
+    fireEvent.click(buttons[buttons.length - 1]);
     await waitFor(() => expect(mocked.adminDeleteAnnouncement).toHaveBeenCalledWith('c1', 'a1', 't'));
     await waitFor(() => expect(mocked.adminGetAnnouncements).toHaveBeenCalledTimes(2));
   });
