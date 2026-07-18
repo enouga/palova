@@ -330,6 +330,9 @@ model Club {
   legalRepresentative String? @map("legal_representative")  // directeur de la publication
   legalEmail          String? @map("legal_email")
   legalPhone          String? @map("legal_phone")
+  /// Médiation de la consommation (obligation B2C du club) — injecté dans le modèle CGV.
+  mediatorName String? @map("mediator_name")
+  mediatorUrl  String? @map("mediator_url")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
@@ -538,6 +541,7 @@ model User {
   blocksReceived          UserBlock[] @relation("BlocksReceived")
   messageReportsFiled     MessageReport[] @relation("MessageReportsFiled")
   messageReportsResolved  MessageReport[] @relation("MessageReportsResolved")
+  legalAcceptances        LegalAcceptance[]
 
   @@map("users")
 }
@@ -838,6 +842,7 @@ model Payment {
   receiptNo       Int?           @map("receipt_no") // numéro de reçu séquentiel par club
   stripePaymentIntentId String? @map("stripe_payment_intent_id")
   stripePaymentMethodId String? @map("stripe_payment_method_id")
+  cgvAcceptedAt   DateTime?      @map("cgv_accepted_at")
 
   reservation   Reservation?            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   participant   ReservationParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
@@ -1121,6 +1126,7 @@ model TournamentRegistration {
   status          RegistrationStatus        @default(CONFIRMED)
   paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
   paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
+  cgvAcceptedAt   DateTime?                 @map("cgv_accepted_at")
   cancelledAt     DateTime?                 @map("cancelled_at")
   createdAt       DateTime                  @default(now()) @map("created_at") // = ordre liste d'attente
   updatedAt       DateTime                  @updatedAt @map("updated_at")
@@ -1174,6 +1180,7 @@ model EventRegistration {
   status          RegistrationStatus        @default(CONFIRMED)
   paymentStatus   RegistrationPaymentStatus @default(NONE) @map("payment_status")
   paymentDeadline DateTime?                 @map("payment_deadline") @db.Timestamptz
+  cgvAcceptedAt   DateTime?                 @map("cgv_accepted_at")
   cancelledAt     DateTime?                 @map("cancelled_at") @db.Timestamptz
   createdAt       DateTime                  @default(now()) @map("created_at") // = ordre de liste d'attente
   updatedAt       DateTime                  @updatedAt @map("updated_at")
@@ -1304,6 +1311,13 @@ enum NotificationCategory {
   MODERATION
 }
 
+/// Documents légaux plateforme dont l'acceptation est tracée (versions dans src/content/legalVersions.ts).
+enum LegalDocument {
+  CGU
+  CGV_SAAS
+  PRIVACY
+}
+
 enum NotificationChannel {
   INAPP
   PUSH
@@ -1330,6 +1344,24 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// Preuve d'acceptation d'un document légal — INSERT-ONLY : on n'update ni ne supprime
+/// jamais une ligne (historique = piste d'audit). clubId renseigné pour CGV_SAAS
+/// acceptées à la création d'un club (le club qui contracte).
+model LegalAcceptance {
+  id         String        @id @default(cuid())
+  userId     String        @map("user_id")
+  clubId     String?       @map("club_id")
+  document   LegalDocument
+  version    String
+  context    String        // 'register' | 'club_create' | 'update_banner'
+  acceptedAt DateTime      @default(now()) @map("accepted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, document])
+  @@map("legal_acceptances")
 }
 
 /// Écart au défaut (opt-out) : une ligne = ce canal explicitement (dés)activé pour cette
