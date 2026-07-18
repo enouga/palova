@@ -17,6 +17,7 @@ import platformRouter from './routes/platform';
 import notificationsRouter from './routes/notifications';
 import { meMessagingRouter, conversationsRouter } from './routes/conversations';
 import pushRouter from './routes/push';
+import unsubscribeRouter from './routes/unsubscribe';
 import { authMiddleware } from './middleware/auth';
 import { requireSuperAdmin } from './middleware/requireSuperAdmin';
 import { startCleanupJob } from './jobs/cleanup.job';
@@ -68,6 +69,7 @@ app.use(express.json());
 ensureUploadDirs();
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '365d', immutable: true }));
 
+app.use('/api/unsubscribe',   unsubscribeRouter);
 app.use('/api/auth',          authRouter);
 app.use('/api/me',            meRouter);
 app.use('/api/me',            notificationsRouter);
