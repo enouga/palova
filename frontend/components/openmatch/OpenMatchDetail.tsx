@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, OpenMatch } from '@/lib/api';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
@@ -97,7 +98,7 @@ export function OpenMatchDetail({ matchId }: { matchId: string }) {
               }}
             />
             {a.error && (
-              <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{a.error}</div>
+              <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{a.error}</div>
             )}
             <div data-match-grid style={{ padding: '14px 20px 0', display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12, alignItems: 'start' }}>
               <OpenMatchCard

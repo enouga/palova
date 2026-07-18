@@ -7,6 +7,7 @@ import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
 import { useCourtSSE } from '@/lib/useCourtSSE';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
@@ -148,7 +149,7 @@ function CourtBooking() {
 
         <div style={{ padding: '0 20px' }}>
           {error && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 12 }}>{error}</div>
+            <div style={{ ...dangerBanner(th), marginBottom: 12 }}>{error}</div>
           )}
           {loading ? (
             <div style={{ padding: '40px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>

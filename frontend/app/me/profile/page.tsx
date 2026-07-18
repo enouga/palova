@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, assetUrl, ClubMatchStats, MyProfile, MyRating, RatingPoint, MemberPackage, Subscription, MyPayment, MyClubMembership, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
@@ -243,7 +244,7 @@ export default function MyProfilePage() {
         )}
 
         {error && (
-          <div style={{ margin: '14px 20px 0', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.onAccent, background: th.accent, borderRadius: 12, padding: '10px 14px' }}>
+          <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>
             {error}
           </div>
         )}

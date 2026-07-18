@@ -3,6 +3,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useClub } from '@/lib/ClubProvider';
 import { finishAuth } from '@/lib/postAuth';
 import { AuthShell } from '@/components/auth/AuthShell';
@@ -55,7 +56,7 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {error && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+            <div style={dangerBanner(th)}>{error}</div>
           )}
           <Field label="Adresse e-mail" icon="mail" type="email" value={email} onChange={setEmail} required autoComplete="email" />
           <div style={{ height: 4 }} />

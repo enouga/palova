@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api, AuthResponse } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Field, Btn } from '@/components/ui/atoms';
 
 const ERR_FR: Record<string, string> = {
@@ -62,7 +63,7 @@ export function VerifyCodeForm({ email, devCode, onVerified }: {
       </div>
 
       {error && (
-        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+        <div style={dangerBanner(th)}>{error}</div>
       )}
       {hintCode && (
         <div style={{ fontFamily: th.fontMono, fontSize: 13, color: th.textMute, background: th.surface2, borderRadius: 10, padding: '8px 12px' }}>(dev) code : {hintCode}</div>
