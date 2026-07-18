@@ -42,14 +42,27 @@ function keyToDate(key: string): Date {
  *  défiler d'une page. Jour actif en pastille accent, point apricot = jour ouvert. */
 export default function DateSelector({ value, onChange, openDates, days = 7, maxKey }: DateSelectorProps) {
   const { th } = useTheme();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayKey = toKey(today);
+
+  // Horloge posée en effet — hydration-safe : `today` reste null tant que le composant
+  // n'est pas monté, donc le marquage « aujourd'hui / passé » (seul contenu qui pourrait
+  // différer entre le rendu serveur et le client) n'apparaît qu'après hydration.
+  const [today, setToday] = useState<Date | null>(null);
+  useEffect(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    setToday(d);
+  }, []);
+
+  // Ancre de génération de la bande : avant montage, une date du même instant sert
+  // uniquement à poser la géométrie (nombre/valeurs des cellules) — aucun marquage
+  // « aujourd'hui/passé » n'en dépend tant que `today` (state) est null.
+  const anchor = today ?? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const todayKey = today ? toKey(today) : null;
 
   // Nombre de cellules : au moins `days`, étendu pour couvrir toute la fenêtre réservable.
-  const windowDays = maxKey ? Math.round((keyToDate(maxKey).getTime() - today.getTime()) / MS_PER_DAY) + 1 : 0;
+  const windowDays = maxKey ? Math.round((keyToDate(maxKey).getTime() - anchor.getTime()) / MS_PER_DAY) + 1 : 0;
   const count = Math.min(Math.max(days, windowDays), 90);
-  const list = Array.from({ length: count }, (_, i) => addDays(today, i));
+  const list = Array.from({ length: count }, (_, i) => addDays(anchor, i));
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -75,8 +88,8 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
     el.scrollBy?.({ left: dir * amount, behavior: 'smooth' });
   };
 
-  const headDate = list[Math.min(visibleIdx, list.length - 1)] ?? today;
-  const headLabel = headDate.getFullYear() === today.getFullYear()
+  const headDate = list[Math.min(visibleIdx, list.length - 1)] ?? anchor;
+  const headLabel = headDate.getFullYear() === anchor.getFullYear()
     ? MONTHS[headDate.getMonth()]
     : `${MONTHS[headDate.getMonth()]} ${headDate.getFullYear()}`;
 
@@ -111,13 +124,13 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
       >
         {list.map((d) => {
           const key = toKey(d);
-          const isPast = key < todayKey;
+          const isPast = todayKey ? key < todayKey : false;
           const isSel = key === value;
           const tooFar = maxKey ? key > maxKey : false;
           const disabled = isPast || tooFar;
           const isOpen = !disabled && (openDates ? openDates.has(key) : true);
           const isHover = hover === key && !disabled && !isSel;
-          const isToday = key === todayKey;
+          const isToday = todayKey ? key === todayKey : false;
 
           return (
             <button
