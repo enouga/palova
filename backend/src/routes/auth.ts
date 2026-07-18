@@ -6,6 +6,7 @@ import { prisma } from '../db/prisma';
 import { generateCode } from '../utils/code';
 import { sendVerificationEmail, sendPasswordResetEmail, emailDevMode } from '../email/mailer';
 import { rateLimit } from '../middleware/rateLimit';
+import { LEGAL_VERSIONS } from '../content/legalVersions';
 
 const router = Router();
 
@@ -88,13 +89,18 @@ router.post('/register', rateLimit(
   { bucket: 'register', by: 'email', max: 5, windowSec: MIN },
 ), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, firstName, lastName, phone, preferredSportId } = req.body;
+    const { email, password, firstName, lastName, phone, preferredSportId, acceptTerms } = req.body;
     if (!email || !password || !firstName || !lastName) {
       res.status(400).json({ error: 'email, password, firstName, lastName requis' });
       return;
     }
     if (typeof password !== 'string' || password.length < 8) {
       res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum)' });
+      return;
+    }
+    // Preuve d'acceptation obligatoire (spec conformité légale) — la case du formulaire.
+    if (acceptTerms !== true) {
+      res.status(400).json({ error: 'CGU_NOT_ACCEPTED' });
       return;
     }
 
@@ -116,6 +122,14 @@ router.post('/register', rateLimit(
     const user = existing
       ? await prisma.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
       : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
+
+    // Trace d'acceptation insert-only (CGU + politique de confidentialité). Une reprise
+    // d'inscription (compte non vérifié) ré-écrit des lignes : historique, pas doublon.
+    await prisma.legalAcceptance.createMany({
+      data: (['CGU', 'PRIVACY'] as const).map((document) => ({
+        userId: user.id, document, version: LEGAL_VERSIONS[document], context: 'register',
+      })),
+    });
 
     const code = await issueCode(user.id, email);
     res.status(201).json({ pendingVerification: true, email, ...(emailDevMode ? { devCode: code } : {}) });
