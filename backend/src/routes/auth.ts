@@ -118,17 +118,24 @@ router.post('/register', rateLimit(
     }
 
     const hashed = await bcrypt.hash(password, 10);
-    // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
-    const user = existing
-      ? await prisma.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
-      : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
+    // Compte + preuve d'acceptation posés dans UNE transaction : si legalAcceptance.createMany
+    // échoue après l'écriture du compte (coupure DB…), il ne doit jamais rester un compte
+    // persisté sans trace de consentement — exactement ce que cette fonctionnalité garantit.
+    const user = await prisma.$transaction(async (tx) => {
+      // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
+      const u = existing
+        ? await tx.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
+        : await tx.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
 
-    // Trace d'acceptation insert-only (CGU + politique de confidentialité). Une reprise
-    // d'inscription (compte non vérifié) ré-écrit des lignes : historique, pas doublon.
-    await prisma.legalAcceptance.createMany({
-      data: (['CGU', 'PRIVACY'] as const).map((document) => ({
-        userId: user.id, document, version: LEGAL_VERSIONS[document], context: 'register',
-      })),
+      // Trace d'acceptation insert-only (CGU + politique de confidentialité). Une reprise
+      // d'inscription (compte non vérifié) ré-écrit des lignes : historique, pas doublon.
+      await tx.legalAcceptance.createMany({
+        data: (['CGU', 'PRIVACY'] as const).map((document) => ({
+          userId: u.id, document, version: LEGAL_VERSIONS[document], context: 'register',
+        })),
+      });
+
+      return u;
     });
 
     const code = await issueCode(user.id, email);

@@ -17,6 +17,7 @@ if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environ
 
 describe('POST /api/auth/register', () => {
   it('crée un compte non vérifié, envoie un code, ne renvoie PAS de token', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u1', email: 'new@x.fr' } as any);
     prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
@@ -52,6 +53,7 @@ describe('POST /register — acceptation CGU', () => {
   });
 
   it('écrit les acceptations CGU + PRIVACY à la création du compte', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u-new', email: 'new@test.fr' } as any);
     prismaMock.legalAcceptance.createMany.mockResolvedValue({ count: 2 } as any);
@@ -71,6 +73,7 @@ describe('POST /register — acceptation CGU', () => {
 
 describe('POST /api/auth/register — preferredSportId', () => {
   it('enregistre le preferredSportId fourni si le sport est publié', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel', published: true } as any);
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u2', email: 'pref@x.fr' } as any);
@@ -88,6 +91,7 @@ describe('POST /api/auth/register — preferredSportId', () => {
   });
 
   it('ignore un preferredSportId inconnu et inscrit quand même', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.sport.findUnique.mockResolvedValue(null as any);
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u3', email: 'nopref@x.fr' } as any);
