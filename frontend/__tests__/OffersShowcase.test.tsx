@@ -98,6 +98,8 @@ describe('OffersShowcase', () => {
     wrap({});
     fireEvent.click(screen.getAllByRole('button', { name: /Souscrire/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Souscrire ·/i }));
+    // Case CGV obligatoire avant que le formulaire de paiement n'apparaisse
+    fireEvent.click(screen.getByRole('checkbox'));
     expect(screen.getByTestId('stripe-step')).toBeInTheDocument();
   });
 

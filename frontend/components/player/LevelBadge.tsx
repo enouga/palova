@@ -1,27 +1,27 @@
 'use client';
 import { MyRating } from '@/lib/api';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
+import { useTheme } from '@/lib/ThemeProvider';
+import { inkOn } from '@/lib/theme';
 import { ReliabilityMeter } from './ReliabilityMeter';
 
 // Pastille niveau réutilisable (profil v1 ; pastilles joueurs au Lot 3).
 export function LevelBadge({ rating }: { rating: MyRating }) {
   if (!useLevelSystemEnabled()) return null;
+  const { th } = useTheme();
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
-      style={{ background: 'rgba(0,0,0,0.06)' }}
-    >
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px', fontSize: 14, fontWeight: 600, background: th.surface2 }}>
       {rating.level != null ? (
         <>
           <strong>{rating.level.toFixed(1)}</strong>
-          <span className="opacity-70">{rating.tier}</span>
+          <span style={{ opacity: 0.7 }}>{rating.tier}</span>
         </>
       ) : (
-        <span className="opacity-70">Non calibré</span>
+        <span style={{ opacity: 0.7 }}>Non calibré</span>
       )}
       <ReliabilityMeter pct={rating.reliability} />
       {rating.isProvisional && (
-        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: '#ffb020', color: '#1a1a1a' }}>
+        <span style={{ borderRadius: 999, padding: '2px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', background: th.warning, color: inkOn(th.warning) }}>
           en calibrage
         </span>
       )}

@@ -12,10 +12,12 @@ import { api } from '@/lib/api';
 const partial = {
   hasLogo: true, sportsCount: 1, resourcesCount: 4,
   hasPresentation: false, stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
+  hasLegalInfo: false,
 };
 const complete = {
   hasLogo: true, sportsCount: 1, resourcesCount: 4,
   hasPresentation: true, stripeStatus: 'ACTIVE', offersCount: 1, eventsCount: 1,
+  hasLegalInfo: true,
 };
 
 const wrap = () => render(
@@ -28,7 +30,7 @@ describe('StartChecklist', () => {
   it('affiche la progression, les jalons faits barrés et les ouverts en lien', async () => {
     (api.adminGetOnboardingStatus as jest.Mock).mockResolvedValue(partial);
     wrap();
-    expect(await screen.findByText('4/8')).toBeInTheDocument();
+    expect(await screen.findByText('4/9')).toBeInTheDocument();
     // jalon fait : présent mais PAS un lien ; jalon ouvert : lien vers sa page admin
     expect(screen.getByText('Vos terrains')).toBeInTheDocument();
     expect(screen.getByText('Vos terrains').closest('a')).toBeNull();
@@ -41,9 +43,9 @@ describe('StartChecklist', () => {
   it('la croix masque la carte et persiste en localStorage', async () => {
     (api.adminGetOnboardingStatus as jest.Mock).mockResolvedValue(partial);
     wrap();
-    await screen.findByText('4/8');
+    await screen.findByText('4/9');
     fireEvent.click(screen.getByLabelText('Masquer le guide de démarrage'));
-    expect(screen.queryByText('4/8')).not.toBeInTheDocument();
+    expect(screen.queryByText('4/9')).not.toBeInTheDocument();
     expect(window.localStorage.getItem(ONBOARDING_HIDDEN_KEY('c1'))).toBe('hidden');
   });
 
@@ -55,7 +57,7 @@ describe('StartChecklist', () => {
     expect(api.adminGetOnboardingStatus).not.toHaveBeenCalled();
   });
 
-  it('club complet (8/8) : ne rend rien', async () => {
+  it('club complet (9/9) : ne rend rien', async () => {
     (api.adminGetOnboardingStatus as jest.Mock).mockResolvedValue(complete);
     const { container } = wrap();
     await waitFor(() => expect(api.adminGetOnboardingStatus).toHaveBeenCalled());

@@ -17,12 +17,14 @@ if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environ
 
 describe('POST /api/auth/register', () => {
   it('crée un compte non vérifié, envoie un code, ne renvoie PAS de token', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u1', email: 'new@x.fr' } as any);
     prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+    prismaMock.legalAcceptance.createMany.mockResolvedValue({ count: 2 } as any);
 
     const res = await request(app).post('/api/auth/register').send({
-      email: 'new@x.fr', password: 'password123', firstName: 'Jean', lastName: 'Test',
+      email: 'new@x.fr', password: 'password123', firstName: 'Jean', lastName: 'Test', acceptTerms: true,
     });
 
     expect(res.status).toBe(201);
@@ -35,22 +37,52 @@ describe('POST /api/auth/register', () => {
   it('refuse (409) si l\'email existe déjà ET est vérifié', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', email: 'taken@x.fr', emailVerified: true } as any);
     const res = await request(app).post('/api/auth/register').send({
-      email: 'taken@x.fr', password: 'password123', firstName: 'Jean', lastName: 'Test',
+      email: 'taken@x.fr', password: 'password123', firstName: 'Jean', lastName: 'Test', acceptTerms: true,
     });
     expect(res.status).toBe(409);
   });
 });
 
+describe('POST /register — acceptation CGU', () => {
+  it('refuse sans acceptTerms (400 CGU_NOT_ACCEPTED)', async () => {
+    const res = await request(app).post('/api/auth/register').send({
+      email: 'new@test.fr', password: 'motdepasse', firstName: 'A', lastName: 'B',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('CGU_NOT_ACCEPTED');
+  });
+
+  it('écrit les acceptations CGU + PRIVACY à la création du compte', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.user.findUnique.mockResolvedValue(null as any);
+    prismaMock.user.create.mockResolvedValue({ id: 'u-new', email: 'new@test.fr' } as any);
+    prismaMock.legalAcceptance.createMany.mockResolvedValue({ count: 2 } as any);
+    prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+    const res = await request(app).post('/api/auth/register').send({
+      email: 'new@test.fr', password: 'motdepasse', firstName: 'A', lastName: 'B', acceptTerms: true,
+    });
+    expect(res.status).toBe(201);
+    expect(prismaMock.legalAcceptance.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ userId: 'u-new', document: 'CGU', context: 'register' }),
+        expect.objectContaining({ userId: 'u-new', document: 'PRIVACY', context: 'register' }),
+      ],
+    });
+  });
+});
+
 describe('POST /api/auth/register — preferredSportId', () => {
   it('enregistre le preferredSportId fourni si le sport est publié', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.sport.findUnique.mockResolvedValue({ id: 'sport-padel', published: true } as any);
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u2', email: 'pref@x.fr' } as any);
     prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+    prismaMock.legalAcceptance.createMany.mockResolvedValue({ count: 2 } as any);
 
     await request(app).post('/api/auth/register').send({
       email: 'pref@x.fr', password: 'password123', firstName: 'P', lastName: 'Q',
-      preferredSportId: 'sport-padel',
+      preferredSportId: 'sport-padel', acceptTerms: true,
     });
 
     expect(prismaMock.user.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -59,14 +91,16 @@ describe('POST /api/auth/register — preferredSportId', () => {
   });
 
   it('ignore un preferredSportId inconnu et inscrit quand même', async () => {
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.sport.findUnique.mockResolvedValue(null as any);
     prismaMock.user.findUnique.mockResolvedValue(null as any);
     prismaMock.user.create.mockResolvedValue({ id: 'u3', email: 'nopref@x.fr' } as any);
     prismaMock.emailVerification.upsert.mockResolvedValue({} as any);
+    prismaMock.legalAcceptance.createMany.mockResolvedValue({ count: 2 } as any);
 
     const res = await request(app).post('/api/auth/register').send({
       email: 'nopref@x.fr', password: 'password123', firstName: 'N', lastName: 'P',
-      preferredSportId: 'sport-inconnu',
+      preferredSportId: 'sport-inconnu', acceptTerms: true,
     });
 
     expect(res.status).toBe(201);

@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEventDetail, EventParticipant, MyEventRegistration } from '@/lib/api';
 import StripePaymentStep from '@/components/StripePaymentStep';
+import { CgvGate } from '@/components/CgvGate';
 import { KIND_LABEL } from '@/lib/events';
 import { fillRatio, formatDateShortTimeRange, formatDateTimeShort, heroPlacesLabel, waitlistPosition } from '@/lib/tournament';
 import { Screen } from '@/components/ui/Screen';
@@ -175,19 +176,21 @@ export default function EventDetailPage() {
                   Votre carte sera débitée seulement si une place se libère.
                 </div>
               )}
-              <StripePaymentStep
-                type={payStep.mode}
-                amountLabel={`${Number(event.price ?? 0)} €`}
-                createIntent={async () => {
-                  const r = await api.createRegistrationIntent('events', event.id, payStep.regId, token!);
-                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
-                }}
-                confirm={payStep.mode === 'payment'
-                  ? async (ids) => { await api.confirmRegistrationPayment('events', event.id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
-                  : async () => {}}
-                onSuccess={() => { setPayStep(null); load(); }}
-                onCancel={() => setPayStep(null)}
-              />
+              <CgvGate>
+                <StripePaymentStep
+                  type={payStep.mode}
+                  amountLabel={`${Number(event.price ?? 0)} €`}
+                  createIntent={async () => {
+                    const r = await api.createRegistrationIntent('events', event.id, payStep.regId, token!);
+                    return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
+                  }}
+                  confirm={payStep.mode === 'payment'
+                    ? async (ids) => { await api.confirmRegistrationPayment('events', event.id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
+                    : async () => {}}
+                  onSuccess={() => { setPayStep(null); load(); }}
+                  onCancel={() => setPayStep(null)}
+                />
+              </CgvGate>
             </div>
           )}
 

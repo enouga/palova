@@ -18,6 +18,7 @@ import { ProfileCompletion } from '@/components/tournament/ProfileCompletion';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { waitlistPosition } from '@/lib/tournament';
 import StripePaymentStep from '@/components/StripePaymentStep';
+import { CgvGate } from '@/components/CgvGate';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { openDm } from '@/lib/messages';
 import { dangerBanner } from '@/lib/theme';
@@ -218,22 +219,24 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ id:
                   Votre carte sera débitée seulement si une place se libère.
                 </div>
               )}
-              <StripePaymentStep
-                type={payStep.mode}
-                amountLabel={`${Number(t.entryFee ?? 0)} €`}
-                createIntent={async () => {
-                  const r = await api.createRegistrationIntent('tournaments', id, payStep.regId, token!);
-                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
-                }}
-                confirm={payStep.mode === 'payment'
-                  ? async (ids) => { await api.confirmRegistrationPayment('tournaments', id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
-                  : async () => {}}
-                onSuccess={async () => {
-                  setPayStep(null);
-                  await reloadAfterRegistration();
-                }}
-                onCancel={() => setPayStep(null)}
-              />
+              <CgvGate>
+                <StripePaymentStep
+                  type={payStep.mode}
+                  amountLabel={`${Number(t.entryFee ?? 0)} €`}
+                  createIntent={async () => {
+                    const r = await api.createRegistrationIntent('tournaments', id, payStep.regId, token!);
+                    return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
+                  }}
+                  confirm={payStep.mode === 'payment'
+                    ? async (ids) => { await api.confirmRegistrationPayment('tournaments', id, payStep.regId, ids.stripePaymentIntentId ?? '', token!); }
+                    : async () => {}}
+                  onSuccess={async () => {
+                    setPayStep(null);
+                    await reloadAfterRegistration();
+                  }}
+                  onCancel={() => setPayStep(null)}
+                />
+              </CgvGate>
             </div>
           )}
 

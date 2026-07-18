@@ -100,7 +100,7 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscription
             const soon = days <= 30;
             return (
               <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: soon ? '#fdeee2' : '#e3f0e6', color: soon ? '#b45309' : '#2c7a44' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 10px', background: soon ? `${th.warning}22` : `${th.success}22`, color: soon ? th.warning : th.successInk }}>
                   {soon ? `Expire dans ${days} j` : 'Actif'}
                 </span>
                 <div style={{ fontSize: 11, color: th.textFaint, marginTop: 3 }}>échéance {fdate(m.subscription.expiresAt)}</div>

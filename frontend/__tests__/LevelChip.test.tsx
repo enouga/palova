@@ -10,7 +10,7 @@ const lvl = { level: 4.2, tier: 'Intermédiaire', isProvisional: false, reliabil
 
 it('LevelChip affiche le niveau quand activé', () => {
   clubVal.club = { levelSystemEnabled: true };
-  render(<LevelChip level={lvl as any} />);
+  render(<ThemeProvider><LevelChip level={lvl as any} /></ThemeProvider>);
   expect(screen.getByText('4.2')).toBeInTheDocument();
 });
 it('LevelChip ne rend rien quand désactivé', () => {

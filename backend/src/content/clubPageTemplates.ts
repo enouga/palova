@@ -18,7 +18,20 @@ export interface TemplateClubContext {
   legalPhone: string | null;
   address: string;
   city: string | null;
+  mediatorName: string | null;
+  mediatorUrl: string | null;
 }
+
+/**
+ * Select Prisma exact pour `TemplateClubContext` : si l'interface gagne/perd un champ
+ * sans que ce select suive, `tsc` casse (satisfies `Record<keyof TemplateClubContext, true>`).
+ * Source unique réutilisée par `ClubPageService.getPublicPage` et `.renderTemplate`.
+ */
+export const TEMPLATE_CLUB_SELECT = {
+  name: true, legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
+  legalRepresentative: true, legalEmail: true, legalPhone: true, address: true, city: true,
+  mediatorName: true, mediatorUrl: true,
+} satisfies Record<keyof TemplateClubContext, true>;
 
 /** Hébergeur du site (commun à tous les clubs) — injecté dans les mentions légales. */
 export const HOSTING_PROVIDER = {
@@ -61,12 +74,15 @@ Le traitement de vos données est décrit dans notre politique de confidentialit
 
 function renderCgv(club: TemplateClubContext): string {
   const merchant = orTodo(club.legalEntityName);
+  const mediator = club.mediatorName?.trim()
+    ? `**${club.mediatorName.trim()}**${club.mediatorUrl?.trim() ? ` — ${club.mediatorUrl.trim()}` : ''}`
+    : TODO;
   return `# Conditions générales de vente
 
 Les présentes conditions générales de vente (CGV) régissent les réservations et achats effectués auprès de **${merchant}**, exploitant le club **${club.name}**.
 
 ## 1. Objet
-Les CGV s'appliquent à toute réservation de terrain, inscription à un tournoi ou un événement, et à tout achat d'offre proposée par le club via la plateforme.
+Les CGV s'appliquent à toute réservation de terrain, inscription à un tournoi ou un événement, et à tout achat d'offre proposée par le club via la plateforme. Toute réservation ou tout achat, y compris effectuée à l'accueil du club, implique l'adhésion aux présentes CGV.
 
 ## 2. Prix
 Les prix sont indiqués en euros, toutes taxes comprises. Le club peut faire évoluer ses tarifs à tout moment ; le tarif applicable est celui affiché au moment de la réservation.
@@ -75,7 +91,7 @@ Les prix sont indiqués en euros, toutes taxes comprises. Le club peut faire év
 La réservation est confirmée après validation et, le cas échéant, paiement en ligne sécurisé via Stripe. Le paiement sur place reste possible selon les modalités du club.
 
 ## 4. Annulation et remboursement
-Les conditions et délais d'annulation, ainsi que les modalités de remboursement, sont précisés dans la fiche de réservation et dans la FAQ du club.
+Les conditions et délais d'annulation, ainsi que les modalités de remboursement, sont précisés dans la fiche de réservation et dans la FAQ du club. Les conditions d'annulation applicables sont celles affichées au moment de la réservation.
 
 ## 5. Droit de rétractation
 Conformément à l'article L221-28 du Code de la consommation, le droit de rétractation ne s'applique pas aux prestations de loisirs fournies à une date déterminée.
@@ -83,8 +99,16 @@ Conformément à l'article L221-28 du Code de la consommation, le droit de rétr
 ## 6. Responsabilité
 Le club met tout en œuvre pour assurer la disponibilité des installations. Sa responsabilité ne saurait être engagée en cas de force majeure.
 
-## 7. Litiges
-Les présentes CGV sont soumises au droit français. En cas de litige, une solution amiable sera recherchée avant toute action ; le consommateur peut recourir à un médiateur de la consommation.
+## 7. Médiation de la consommation et litiges
+Les présentes CGV sont soumises au droit français. En cas de litige, une solution amiable sera
+recherchée avant toute action. Conformément aux articles L611-1 et suivants du Code de la
+consommation, le consommateur peut saisir gratuitement le médiateur de la consommation dont
+relève le club : ${mediator}.
+
+## 8. Plateforme
+Le site du club est fourni par la plateforme Palova : l'utilisation du site (compte joueur,
+messagerie, réservation en ligne) est également régie par les
+[conditions générales d'utilisation de la plateforme Palova](https://palova.fr/cgu).
 `;
 }
 
@@ -108,7 +132,7 @@ Les traitements reposent sur l'exécution du contrat et votre consentement. Les 
 Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation et d'opposition. Pour les exercer, contactez-nous à ${contact}.
 
 ## Sous-traitants
-La plateforme technique est fournie par Palova ; les paiements en ligne sont traités par Stripe. Ces prestataires agissent comme sous-traitants au sens du RGPD.
+La plateforme technique est fournie par Palova ; les paiements en ligne sont traités par Stripe. Ces prestataires agissent comme sous-traitants au sens du RGPD. L'utilisation de la plateforme elle-même (compte joueur) est décrite dans la [politique de confidentialité de Palova](https://palova.fr/confidentialite).
 
 ## Cookies
 Le site utilise des cookies strictement nécessaires à son fonctionnement.

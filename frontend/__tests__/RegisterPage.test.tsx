@@ -36,6 +36,34 @@ describe('Page inscription (RegisterPage)', () => {
     api.register.mockResolvedValue({ email: 'a@b.fr', devCode: '123456' });
   });
 
+  it('bloque la soumission tant que la case CGU n\'est pas cochée', async () => {
+    api.getSports.mockResolvedValue([]);
+    wrap();
+
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'alice@test.fr' } });
+    fireEvent.change(screen.getByLabelText('Mot de passe (8+ caractères)'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+
+    await waitFor(() => expect(screen.getByText(/accepter les conditions/i)).toBeInTheDocument());
+    expect(api.register).not.toHaveBeenCalled();
+  });
+
+  it('envoie acceptTerms: true quand la case est cochée', async () => {
+    api.getSports.mockResolvedValue([]);
+    wrap();
+
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'alice@test.fr' } });
+    fireEvent.change(screen.getByLabelText('Mot de passe (8+ caractères)'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+
+    await waitFor(() => expect(api.register).toHaveBeenCalledWith(expect.objectContaining({ acceptTerms: true })));
+  });
+
   it('appelle api.register sans preferredSportId quand aucun sport n\'est sélectionné', async () => {
     api.getSports.mockResolvedValue([]);
     wrap();
@@ -44,6 +72,7 @@ describe('Page inscription (RegisterPage)', () => {
     fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
     fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'alice@test.fr' } });
     fireEvent.change(screen.getByLabelText('Mot de passe (8+ caractères)'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
 
     await waitFor(() =>
@@ -68,6 +97,7 @@ describe('Page inscription (RegisterPage)', () => {
     // Sélectionner un sport
     fireEvent.change(screen.getByLabelText('Sport préféré (facultatif)'), { target: { value: 'sport-padel' } });
 
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
 
     await waitFor(() =>
@@ -90,6 +120,7 @@ describe('Page inscription (RegisterPage)', () => {
     // Laisser la sélection vide (option par défaut)
     fireEvent.change(screen.getByLabelText('Sport préféré (facultatif)'), { target: { value: '' } });
 
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
 
     await waitFor(() =>
