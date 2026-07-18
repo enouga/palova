@@ -59,6 +59,20 @@ describe('ClubPageService.getPublicPage — repli légal', () => {
     expect(p.bodyMarkdown).toContain('Arena SAS');
   });
 
+  it.each(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE'] as const)(
+    '%s non publiée → repli sur le modèle Palova (isFallback true, corps non vide)',
+    async (kind) => {
+      prismaMock.club.findUnique.mockResolvedValue(legalClubFields as any);
+      prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
+      const p = await svc.getPublicPage('padel-arena', kind);
+      expect(p.kind).toBe(kind);
+      expect(p.isFallback).toBe(true);
+      expect(p.updatedAt).toBeNull();
+      expect(p.bodyMarkdown).toContain('Arena SAS');
+      expect(p.bodyMarkdown.trim().length).toBeGreaterThan(0);
+    },
+  );
+
   it('page publiée → contenu du club, isFallback false', async () => {
     prismaMock.club.findUnique.mockResolvedValue({
       id: 'c1', status: 'ACTIVE', name: 'X',

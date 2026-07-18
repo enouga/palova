@@ -22,6 +22,17 @@ export interface TemplateClubContext {
   mediatorUrl: string | null;
 }
 
+/**
+ * Select Prisma exact pour `TemplateClubContext` : si l'interface gagne/perd un champ
+ * sans que ce select suive, `tsc` casse (satisfies `Record<keyof TemplateClubContext, true>`).
+ * Source unique réutilisée par `ClubPageService.getPublicPage` et `.renderTemplate`.
+ */
+export const TEMPLATE_CLUB_SELECT = {
+  name: true, legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
+  legalRepresentative: true, legalEmail: true, legalPhone: true, address: true, city: true,
+  mediatorName: true, mediatorUrl: true,
+} satisfies Record<keyof TemplateClubContext, true>;
+
 /** Hébergeur du site (commun à tous les clubs) — injecté dans les mentions légales. */
 export const HOSTING_PROVIDER = {
   name: 'Palova',

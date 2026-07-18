@@ -1,7 +1,7 @@
 import { ClubPageKind } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { buildSocleFaq } from '../content/faqSocle';
-import { renderClubPageTemplate } from '../content/clubPageTemplates';
+import { renderClubPageTemplate, TEMPLATE_CLUB_SELECT } from '../content/clubPageTemplates';
 
 /**
  * Pages de contenu éditable d'un club (CGV, mentions légales, confidentialité, offres)
@@ -22,20 +22,23 @@ export class ClubPageService {
 
   /** Contenu publié d'une page ; pages LÉGALES : repli permanent sur le modèle Palova
    *  rendu avec les coordonnées du club (un site club a TOUJOURS des pages opposables).
-   *  OFFRES (commercial) garde son 404. */
+   *  OFFRES (commercial) garde son 404.
+   *  Lecture directe (comme `renderTemplate`, sans passer par `activeClubBySlug`) : le select
+   *  passé en LITTÉRAL à `findUnique` laisse Prisma inférer un type précis, donc `club` satisfait
+   *  `TemplateClubContext` structurellement — aucun cast nécessaire pour `renderClubPageTemplate`. */
   async getPublicPage(slug: string, kind: ClubPageKind) {
-    const club = await this.activeClubBySlug(slug, {
-      id: true, status: true, name: true, legalEntityName: true, legalForm: true, siret: true,
-      vatNumber: true, legalRepresentative: true, legalEmail: true, legalPhone: true,
-      address: true, city: true, mediatorName: true, mediatorUrl: true,
+    const club = await prisma.club.findUnique({
+      where: { slug },
+      select: { id: true, status: true, ...TEMPLATE_CLUB_SELECT },
     });
+    if (!club || club.status !== 'ACTIVE') throw new Error('CLUB_NOT_FOUND');
     const page = await prisma.clubPage.findFirst({
       where: { clubId: club.id, kind, published: true },
       select: { kind: true, bodyMarkdown: true, updatedAt: true },
     });
     if (page) return { kind: page.kind, bodyMarkdown: page.bodyMarkdown, updatedAt: page.updatedAt, isFallback: false };
     if (!ClubPageService.LEGAL_KINDS.includes(kind)) throw new Error('PAGE_NOT_FOUND');
-    const body = renderClubPageTemplate(kind, club as unknown as Parameters<typeof renderClubPageTemplate>[1]);
+    const body = renderClubPageTemplate(kind, club);
     return { kind, bodyMarkdown: body, updatedAt: null, isFallback: true };
   }
 
@@ -98,11 +101,7 @@ export class ClubPageService {
   async renderTemplate(clubId: string, kind: ClubPageKind): Promise<string> {
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      select: {
-        name: true, legalEntityName: true, legalForm: true, siret: true, vatNumber: true,
-        legalRepresentative: true, legalEmail: true, legalPhone: true, address: true, city: true,
-        mediatorName: true, mediatorUrl: true,
-      },
+      select: TEMPLATE_CLUB_SELECT,
     });
     if (!club) throw new Error('CLUB_NOT_FOUND');
     return renderClubPageTemplate(kind, club);
