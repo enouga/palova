@@ -13,6 +13,7 @@ import { formatDateShortTimeRange, waitlistPosition } from '@/lib/tournament';
 import { groupAdminAgenda, agendaItemGroup } from '@/lib/adminAgenda';
 import { AgendaAdminCard } from '@/components/admin/AgendaAdminCard';
 import { AgendaAdminList } from '@/components/admin/AgendaAdminList';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE'];
 
@@ -33,6 +34,7 @@ export default function AdminEventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [stripeActive, setStripeActive] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ClubEvent | null>(null);
 
   useEffect(() => { setNow(new Date()); }, []);
 
@@ -110,7 +112,7 @@ export default function AdminEventsPage() {
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => setStatus(e.id, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'DRAFT')} style={ghost}>Repasser en brouillon</button>}
         {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'CANCELLED')} style={ghost}>Annuler</button>}
-        {e.confirmedCount === 0 && e.waitlistCount === 0 && <button onClick={() => removeEvent(e.id)} style={ghost}>Supprimer</button>}
+        {e.confirmedCount === 0 && e.waitlistCount === 0 && <button onClick={() => setPendingDelete(e)} style={ghost}>Supprimer</button>}
       </>
     );
     return (
@@ -254,6 +256,17 @@ export default function AdminEventsPage() {
             })}
           </div>
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Supprimer cet event ?"
+          detail={pendingDelete.name}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          onConfirm={() => { const ev = pendingDelete; setPendingDelete(null); removeEvent(ev.id); }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

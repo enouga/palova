@@ -6,6 +6,7 @@ const adminGetEvents = jest.fn();
 const adminGetClub = jest.fn();
 const adminCreateEvent = jest.fn();
 const adminUpdateEvent = jest.fn();
+const adminDeleteEvent = jest.fn();
 
 jest.mock('../lib/api', () => ({
   api: {
@@ -13,7 +14,7 @@ jest.mock('../lib/api', () => ({
     adminGetClub: (...a: unknown[]) => adminGetClub(...a),
     adminCreateEvent: (...a: unknown[]) => adminCreateEvent(...a),
     adminUpdateEvent: (...a: unknown[]) => adminUpdateEvent(...a),
-    adminDeleteEvent: jest.fn(),
+    adminDeleteEvent: (...a: unknown[]) => adminDeleteEvent(...a),
     adminGetEvent: jest.fn(),
     adminPromoteEventRegistration: jest.fn(),
     adminRemoveEventRegistration: jest.fn(),
@@ -36,6 +37,7 @@ beforeEach(() => {
   adminGetClub.mockResolvedValue({ stripeAccountStatus: 'NONE' });
   adminCreateEvent.mockResolvedValue({});
   adminUpdateEvent.mockResolvedValue({});
+  adminDeleteEvent.mockResolvedValue({});
 });
 
 it('affiche le formulaire au clic sur « Nouvel event »', async () => {
@@ -73,6 +75,22 @@ it('cocher la case et créer envoie requirePrepayment: true', async () => {
   await waitFor(() => expect(adminCreateEvent).toHaveBeenCalled());
   const [, body] = adminCreateEvent.mock.calls[0];
   expect(body.requirePrepayment).toBe(true);
+});
+
+it('supprimer un event (0 inscrit) demande confirmation avant d\'appeler l\'API', async () => {
+  const existingEvent = {
+    id: 'ev1', name: 'Mêlée test', kind: 'MELEE', description: '', status: 'DRAFT',
+    startTime: '2026-07-01T10:00:00Z', endTime: null, registrationDeadline: '2026-06-30T10:00:00Z',
+    capacity: null, price: null, memberOnly: false, clubSportId: null,
+    requirePrepayment: false, confirmedCount: 0, waitlistCount: 0,
+  };
+  adminGetEvents.mockResolvedValue([existingEvent]);
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+  expect(adminDeleteEvent).not.toHaveBeenCalled();
+  const buttons = screen.getAllByRole('button', { name: 'Supprimer' });
+  fireEvent.click(buttons[buttons.length - 1]);
+  await waitFor(() => expect(adminDeleteEvent).toHaveBeenCalledWith('c1', 'ev1', 'tok'));
 });
 
 it('éditer un event charge requirePrepayment depuis l\'event existant', async () => {
