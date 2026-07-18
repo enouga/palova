@@ -42,7 +42,8 @@ jest.mock('next/navigation', () => ({
 const HISTORY: MemberHistory = {
   member: { userId: 'u1', firstName: 'Alice', lastName: 'Martin', email: 'alice@ex.fr', phone: null, avatarUrl: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: false, since: '2026-01-01T00:00:00.000Z' },
   reservations: [],
-  counts: { total: 0, confirmed: 0, cancelled: 0, lateCancelled: 0, noShow: 0, upcoming: 0 },
+  counts: { total: 0, confirmed: 0, cancelled: 0, lateCancelled: 0, noShow: 0, upcoming: 0, noShowCharged: 0 },
+  noShowChargedLastAt: null,
   heatmap: Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0)),
   favorites: { resource: null, sportKey: null, weekday: null },
   finance: {

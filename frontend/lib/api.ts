@@ -240,6 +240,13 @@ export const api = {
     ),
 
   // --- No-show (admin) ---
+  /** Récidive : nombre de no-show déjà facturés à l'organisateur de cette résa, et quand. */
+  getNoShowPreview: (clubId: string, reservationId: string, token: string) =>
+    request<{ previousCount: number; lastChargedAt: string | null }>(
+      `/api/clubs/${clubId}/admin/reservations/${reservationId}/no-show-preview`,
+      {},
+      token,
+    ),
   chargeNoShow: (
     clubId: string,
     reservationId: string,
@@ -1445,7 +1452,8 @@ export interface MemberHistory {
     status: 'ACTIVE' | 'BLOCKED'; watch: boolean; hasActivePackage: boolean; since: string;
   };
   reservations: MemberHistoryReservation[];
-  counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number };
+  counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number; noShowCharged: number };
+  noShowChargedLastAt: string | null;
   heatmap: number[][];
   favorites: { resource: { name: string; count: number } | null; sportKey: string | null; weekday: number | null };
   finance: {

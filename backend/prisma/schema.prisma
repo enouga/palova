@@ -824,6 +824,7 @@ model Payment {
   method          PaymentMethod  @default(CASH)
   payerName       String?        @map("payer_name")
   note            String?
+  noShow          Boolean        @default(false) @map("no_show") // débit d'absence (no-show), distinct d'un paiement normal
   memberPackageId String?        @map("member_package_id") // = vente de ce package
   sourcePackageId String?        @map("source_package_id") // = consommation de ce package
   subscriptionId       String? @map("subscription_id")        // = vente de cet abonnement

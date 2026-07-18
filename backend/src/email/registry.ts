@@ -542,6 +542,28 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Club', v.club), row('Remboursé', v.montant)],
   },
+
+  'payment.no_show_charged': {
+    type: 'payment.no_show_charged', group: 'paiement',
+    title: 'Débit pour absence (no-show)',
+    description: "Au joueur quand le club le débite pour une réservation non honorée.",
+    hasCta: true,
+    vars: [
+      { key: 'prenom', label: 'Prénom', sample: 'Marc' },
+      { key: 'terrain', label: 'Terrain', sample: 'Court 2' },
+      { key: 'date', label: 'Date', sample: 'samedi 5 juillet 2026 à 18h00' },
+      { key: 'club', label: 'Club', sample: 'Padel Arena Paris' },
+      { key: 'montant', label: 'Montant débité', sample: '25,00 €' },
+      { key: 'lien', label: 'Lien', sample: 'https://club.palova.fr/me/reservations' },
+    ],
+    defaults: {
+      subject: 'Débit pour absence non signalée — {{club}}',
+      heading: 'Réservation non honorée',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>Vous ne vous êtes pas présenté·e à votre réservation du {{date}} sans prévenir le club. Un débit de <strong>{{montant}}</strong> a été appliqué sur votre carte enregistrée, conformément à la politique du club.</p>',
+      ctaLabel: 'Voir mes réservations',
+    },
+    infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Club', v.club), row('Débité', v.montant)],
+  },
 };
 
 /** Surcharge club minimale (sous-ensemble du modèle ClubEmailTemplate). */

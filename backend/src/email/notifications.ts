@@ -758,6 +758,41 @@ export async function notifyReservationRefunded(
   });
 }
 
+/** Prévient le joueur débité off-session d'un no-show (transparence — jamais de débit muet). */
+export async function notifyNoShowCharged(reservationId: string, userId: string, amountCents: number): Promise<void> {
+  const resa = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: { resource: { select: { name: true, club: { select: EMAIL_CLUB_SELECT } } } },
+  });
+  if (!resa) return;
+  const player = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, email: true } });
+  if (!player?.email) return;
+
+  const club = resa.resource.club;
+  const dateLabel = formatDateRangeFr(resa.startTime, resa.endTime, club.timezone);
+  const amountLabel = (amountCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
+  const url = clubAppUrl(club.slug, '/me/reservations');
+  const override = await emailTemplates.getOverride(club.id, 'payment.no_show_charged');
+  const mail = renderClubEmail('payment.no_show_charged', {
+    prenom: player.firstName,
+    terrain: resa.resource.name,
+    date: dateLabel,
+    club: club.name,
+    montant: amountLabel,
+    lien: url,
+  }, brandFromClub(club), override);
+  await dispatch({
+    userId,
+    clubId: club.id,
+    category: 'PAYMENTS',
+    type: 'payment.no_show_charged',
+    title: 'Débit pour absence',
+    body: `Vous avez été débité de ${amountLabel} pour une réservation non honorée du ${dateLabel}.`,
+    url,
+    email: { to: player.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
+}
+
 // ------------------------------------------------------------------- Cours (Lesson)
 
 /**

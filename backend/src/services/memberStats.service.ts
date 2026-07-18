@@ -41,7 +41,8 @@ export interface MemberHistory {
     since: string;               // ClubMembership.createdAt = date d'adhésion
   };
   reservations: MemberHistoryReservation[];
-  counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number };
+  counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number; noShowCharged: number };
+  noShowChargedLastAt: string | null; // dernier débit d'absence réel (Payment.noShow), distinct de l'estimation counts.noShow
   heatmap: number[][];           // [weekday 0=lundi..6=dimanche][heure 0..23] — résas confirmées
   favorites: { resource: { name: string; count: number } | null; sportKey: string | null; weekday: number | null };
   finance: {
@@ -118,7 +119,7 @@ export class MemberStatsService {
         participants: { select: { id: true, userId: true, share: true, isOrganizer: true } },
         payments: {
           select: {
-            amount: true, method: true, participantId: true, createdAt: true,
+            amount: true, method: true, participantId: true, createdAt: true, noShow: true,
             refunds: { select: { amount: true, createdAt: true } },
           },
         },
@@ -131,7 +132,8 @@ export class MemberStatsService {
     let totalSpentCents = 0;
     let outstandingCents = 0;
     let paidReservations = 0;
-    let confirmed = 0, cancelled = 0, lateCancelled = 0, upcoming = 0, noShow = 0;
+    let confirmed = 0, cancelled = 0, lateCancelled = 0, upcoming = 0, noShow = 0, noShowCharged = 0;
+    let noShowChargedLastMs: number | null = null;
     const resourceCount: Record<string, number> = {};
     const sportCount: Record<string, number> = {};
     const weekdayCount: Record<number, number> = {};
@@ -149,6 +151,12 @@ export class MemberStatsService {
       // Argent net attribué au joueur sur cette résa.
       let attrCents = 0;
       for (const p of r.payments) {
+        // No-show réellement facturé à ce joueur (débit off-session explicite du staff) —
+        // suivi de récidive indépendant de l'estimation ci-dessous (créneau jamais réglé).
+        if (p.noShow) {
+          noShowCharged++;
+          noShowChargedLastMs = noShowChargedLastMs == null ? p.createdAt.getTime() : Math.max(noShowChargedLastMs, p.createdAt.getTime());
+        }
         const belongs = p.participantId
           ? p.participantId === mine?.id
           : isOrganizer; // paiement « résa » global → à l'organisateur
@@ -294,7 +302,8 @@ export class MemberStatsService {
         since: membership.createdAt.toISOString(),
       },
       reservations: rows,
-      counts: { total: reservations.length, confirmed, cancelled, lateCancelled, noShow, upcoming },
+      counts: { total: reservations.length, confirmed, cancelled, lateCancelled, noShow, upcoming, noShowCharged },
+      noShowChargedLastAt: noShowChargedLastMs == null ? null : new Date(noShowChargedLastMs).toISOString(),
       heatmap,
       favorites: {
         resource: favResource ? { name: favResource[0], count: favResource[1] } : null,

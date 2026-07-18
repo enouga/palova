@@ -39,13 +39,13 @@ const fmtAdjustDate = (iso: string) => {
 const STATUS_FR: Record<string, string> = { CONFIRMED: 'Confirmée', CANCELLED: 'Annulée', PENDING: 'En attente' };
 const TYPE_FR: Record<string, string> = { COURT: 'Terrain', COACHING: 'Cours', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
 
-function StatCard({ label, value, unit, hint, accent }: { label: string; value: string | number; unit?: string; hint?: string; accent?: boolean }) {
+function StatCard({ label, value, unit, hint, accent, danger }: { label: string; value: string | number; unit?: string; hint?: string; accent?: boolean; danger?: boolean }) {
   const { th } = useTheme();
   return (
     <div style={{ flex: 1, minWidth: 140, background: th.surface, borderRadius: 18, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
       <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 10 }}>
-        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 32, lineHeight: 0.9, color: accent ? th.accent : th.text, letterSpacing: -0.5 }}>{value}</span>
+        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 32, lineHeight: 0.9, color: danger ? th.danger : accent ? th.accent : th.text, letterSpacing: -0.5 }}>{value}</span>
         {unit && <span style={{ fontFamily: th.fontUI, fontSize: 15, color: th.textMute, fontWeight: 600 }}>{unit}</span>}
       </div>
       {hint && <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, marginTop: 5 }}>{hint}</div>}
@@ -238,6 +238,12 @@ export default function MemberHistoryPage() {
               <StatCard label="Annulées" value={counts.cancelled} hint={cancellationLabel(loyalty.cancellationRate) + ' du total'} />
               <StatCard label="Annulations tardives" value={counts.lateCancelled} hint="hors délai d'annulation" />
               <StatCard label="No-show" value={counts.noShow} hint="estimation" />
+              <StatCard
+                label="No-show facturés"
+                value={counts.noShowCharged}
+                danger={counts.noShowCharged > 0}
+                hint={data.noShowChargedLastAt ? `dernier le ${fmtDate(data.noShowChargedLastAt)}` : 'aucun'}
+              />
             </div>
 
             <Section title="Habitudes de jeu">

@@ -91,6 +91,41 @@ describe('MemberStatsService.getMemberHistory', () => {
     expect(out.counts.confirmed).toBe(2);
   });
 
+  it('compte les no-show réellement facturés (Payment.noShow), distinct de l\'estimation', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      {
+        id: 'r1', status: 'CONFIRMED', type: 'COURT',
+        startTime: D('2026-06-10T18:00:00Z'), endTime: D('2026-06-10T19:00:00Z'),
+        totalPrice: 25, cancelledAt: null, userId: 'u1',
+        resource: { name: 'Court 1', price: 25, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [{ id: 'p1a', userId: 'u1', share: 25, isOrganizer: true }],
+        payments: [
+          { amount: 25, method: 'ONLINE', participantId: 'p1a', createdAt: D('2026-06-10T20:00:00Z'), refunds: [], noShow: true },
+        ],
+      },
+      {
+        id: 'r2', status: 'CONFIRMED', type: 'COURT',
+        startTime: D('2026-06-17T18:00:00Z'), endTime: D('2026-06-17T19:00:00Z'),
+        totalPrice: 25, cancelledAt: null, userId: 'u1',
+        resource: { name: 'Court 1', price: 25, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [{ id: 'p2a', userId: 'u1', share: 25, isOrganizer: true }],
+        payments: [
+          { amount: 25, method: 'ONLINE', participantId: 'p2a', createdAt: D('2026-06-17T20:00:00Z'), refunds: [], noShow: true },
+        ],
+      },
+    ] as any);
+
+    const out = await service.getMemberHistory('club-1', 'u1');
+    expect(out.counts.noShowCharged).toBe(2);
+    expect(out.noShowChargedLastAt).toBe('2026-06-17T20:00:00.000Z');
+  });
+
+  it('counts.noShowCharged = 0 et noShowChargedLastAt = null sans débit no-show', async () => {
+    const out = await service.getMemberHistory('club-1', 'u1');
+    expect(out.counts.noShowCharged).toBe(0);
+    expect(out.noShowChargedLastAt).toBeNull();
+  });
+
   it('exclut PACK_CREDIT/MEMBER du total, expose soldes + consommation + hasActivePackage', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([
       {
