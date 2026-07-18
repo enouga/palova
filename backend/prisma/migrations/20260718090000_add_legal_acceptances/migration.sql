@@ -1,6 +1,8 @@
 -- Preuves d'acceptation des documents legaux plateforme (spec 2026-07-17-conformite-legale).
 -- Insert-only : une ligne = qui a accepte quoi, quelle version, quand, dans quel contexte.
-CREATE TYPE "LegalDocument" AS ENUM ('CGU', 'CGV_SAAS', 'PRIVACY');
+DO $$ BEGIN
+  CREATE TYPE "LegalDocument" AS ENUM ('CGU', 'CGV_SAAS', 'PRIVACY');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 CREATE TABLE IF NOT EXISTS "legal_acceptances" (
   "id" TEXT NOT NULL,
   "user_id" TEXT NOT NULL,
