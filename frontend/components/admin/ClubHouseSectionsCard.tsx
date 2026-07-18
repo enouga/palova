@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState, CSSProperties } from 'react';
 import { api, ClubHouseSectionKey, ClubHouseSectionSetting } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { fullSectionSettings, SECTION_DEFS } from '@/lib/clubhouse';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -117,7 +118,7 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
         {!customized && ' Par défaut, l’ordre s’adapte automatiquement (visiteur / membre) ; dès que vous personnalisez, le même ordre s’applique à tous.'}
       </p>
 
-      {error &&<div style={{ marginBottom: 12, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error &&<div style={{ ...dangerBanner(th), marginBottom: 12 }}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {items.map((s, idx) => {
           const def = defs.get(s.key);

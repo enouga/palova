@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ClubDetail, OpenMatch, MyMatch } from '@/lib/api';
 import { subscribeNotifications } from '@/lib/notificationsStream';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { Screen } from '@/components/ui/Screen';
 import { ClubNav } from '@/components/ClubNav';
@@ -196,7 +197,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
         </div>
 
         {a.error && (
-          <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '10px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{a.error}</div>
+          <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{a.error}</div>
         )}
 
         {token && recommended.length > 0 && (

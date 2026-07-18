@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import type { Theme } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const KINDS: { key: ClubPageKind; label: string; path: string }[] = [
   { key: 'MENTIONS_LEGALES', label: 'Mentions légales', path: '/mentions-legales' },
@@ -174,14 +175,15 @@ function PageEditor({ clubId, token, kind, path, initial, onSaved }: {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingTpl, setLoadingTpl] = useState(false);
+  const [confirmPrefill, setConfirmPrefill] = useState(false);
 
-  const prefill = async () => {
-    if (body.trim() && !window.confirm('Remplacer le contenu actuel par le modèle Palova ?')) return;
+  const doPrefill = async () => {
     setLoadingTpl(true); setError(null);
     try { const { bodyMarkdown } = await api.adminGetPageTemplate(clubId, kind, token); setBody(bodyMarkdown); setSaved(false); }
     catch (e) { setError((e as Error).message); }
     finally { setLoadingTpl(false); }
   };
+  const prefill = () => { if (body.trim()) setConfirmPrefill(true); else doPrefill(); };
 
   const save = async () => {
     if (!body.trim()) { setError('Le contenu ne peut pas être vide.'); return; }
@@ -219,6 +221,15 @@ function PageEditor({ clubId, token, kind, path, initial, onSaved }: {
           </span>
         )}
       </div>
+      {confirmPrefill && (
+        <ConfirmDialog
+          title="Remplacer le contenu ?"
+          message="Le contenu actuel sera remplacé par le modèle Palova."
+          confirmLabel="Remplacer"
+          onConfirm={() => { setConfirmPrefill(false); doPrefill(); }}
+          onCancel={() => setConfirmPrefill(false)}
+        />
+      )}
     </div>
   );
 }
@@ -234,6 +245,7 @@ function FaqEditor({ clubId, token, items, onChanged }: { clubId: string; token:
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDeleteIdx, setConfirmDeleteIdx] = useState<number | null>(null);
 
   const setRow = (idx: number, patch: Partial<FaqDraft>) => setRows((r) => r.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
 
@@ -250,17 +262,19 @@ function FaqEditor({ clubId, token, items, onChanged }: { clubId: string; token:
     finally { setBusy(false); }
   };
 
-  const removeRow = async (idx: number) => {
+  const doDeleteRow = async (idx: number) => {
     const row = rows[idx];
-    if (row.id) {
-      if (!window.confirm('Supprimer cette question ?')) return;
-      setBusy(true);
-      try { await api.adminDeleteFaq(clubId, row.id, token); onChanged(); }
-      catch (e) { setError((e as Error).message); }
-      finally { setBusy(false); }
-    } else {
-      setRows((r) => r.filter((_, i) => i !== idx));
-    }
+    if (!row?.id) return;
+    setBusy(true);
+    try { await api.adminDeleteFaq(clubId, row.id, token); onChanged(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const removeRow = (idx: number) => {
+    const row = rows[idx];
+    if (row.id) setConfirmDeleteIdx(idx);
+    else setRows((r) => r.filter((_, i) => i !== idx));
   };
 
   const move = async (idx: number, dir: -1 | 1) => {
@@ -311,6 +325,18 @@ function FaqEditor({ clubId, token, items, onChanged }: { clubId: string; token:
       ))}
 
       <div><Btn variant="surface" icon="plus" onClick={addRow}>Nouvelle question</Btn></div>
+
+      {confirmDeleteIdx !== null && (
+        <ConfirmDialog
+          title="Supprimer cette question ?"
+          detail={rows[confirmDeleteIdx]?.question || undefined}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          busy={busy}
+          onConfirm={() => { const idx = confirmDeleteIdx; setConfirmDeleteIdx(null); doDeleteRow(idx); }}
+          onCancel={() => setConfirmDeleteIdx(null)}
+        />
+      )}
     </div>
   );
 }

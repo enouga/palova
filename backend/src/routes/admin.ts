@@ -36,6 +36,7 @@ import { ModerationService } from '../services/moderation.service';
 import { billingState } from '../services/platformBilling/platformBilling.service';
 import { createBillingCheckout, createBillingPortal } from '../services/platformBilling/stripeBilling';
 import { tierFor, tierPriceCents, tierLabel } from '../services/platformBilling/tiers';
+import { notifyNoShowCharged } from '../email/notifications';
 
 // mergeParams pour accéder à :clubId défini sur le point de montage.
 const router = Router({ mergeParams: true });
@@ -1168,6 +1169,34 @@ router.post('/stripe/disconnect', requireClubMember('OWNER'), async (req: ClubSc
   }
 });
 
+// Récidive : combien de fois l'organisateur de cette résa a déjà été facturé pour no-show
+// au club, et quand — permet au staff de décider en connaissance de cause avant de débiter.
+router.get('/reservations/:id/no-show-preview', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const reservationId = asString(req.params.id);
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        resource: { select: { clubId: true } },
+        participants: { where: { isOrganizer: true }, select: { userId: true }, take: 1 },
+      },
+    });
+    if (!reservation || reservation.resource.clubId !== req.membership!.clubId) {
+      return void res.status(404).json({ error: 'RESERVATION_NOT_FOUND' });
+    }
+    const organizer = reservation.participants[0];
+    if (!organizer) return void res.json({ previousCount: 0, lastChargedAt: null });
+
+    const where = { clubId: req.membership!.clubId, noShow: true, participant: { userId: organizer.userId } };
+    const previousCount = await prisma.payment.count({ where });
+    const last = previousCount > 0
+      ? await prisma.payment.findFirst({ where, orderBy: { createdAt: 'desc' }, select: { createdAt: true } })
+      : null;
+
+    res.json({ previousCount, lastChargedAt: last ? last.createdAt.toISOString() : null });
+  } catch (err) { handleError(err, res, next); }
+});
+
 router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
     const reservationId = asString(req.params.id);
@@ -1210,8 +1239,13 @@ router.post('/reservations/:id/no-show-charge', async (req: ClubScopedRequest, r
         stripePaymentMethodId: undefined,
         note: typeof req.body?.note === 'string' ? req.body.note : null,
         createdByUserId: req.user?.id ?? null,
+        noShow: true,
       },
     });
+
+    // Transparence : le joueur doit toujours savoir qu'il a été débité (best-effort, ne casse jamais le débit).
+    notifyNoShowCharged(reservationId, organizer.userId, amountCents)
+      .catch((err) => console.error('[admin] notification no-show échouée', err));
 
     res.status(201).json({ paymentId: payment.id, stripePaymentIntentId: piId });
   } catch (err) { handleError(err, res, next); }

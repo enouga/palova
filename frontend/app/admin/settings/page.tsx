@@ -4,6 +4,7 @@ import { api, ClubAdminDetail, AdminClubSport, Sport } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { PillTabs } from '@/components/ui/atoms';
 import {
@@ -217,7 +218,7 @@ export default function AdminSettingsPage() {
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 20px', color: th.text }}>Réglages du club</h1>
 
       {error && (
-        <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>
       )}
 
       <div className="sp-scroll-x" style={{ marginBottom: 20 }}>

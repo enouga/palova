@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Chip } from '@/components/ui/atoms';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { sportHasLevels } from '@/lib/level';
@@ -81,7 +82,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   return (
     <div style={{ marginBottom: 10 }}>
       {error && (
-        <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 8 }}>{error}</div>
       )}
 
       {isPublic ? (

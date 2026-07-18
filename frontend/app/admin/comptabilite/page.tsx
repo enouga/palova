@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
-import { gaugeTrack } from '@/lib/theme';
+import { gaugeTrack, dangerBanner } from '@/lib/theme';
 import { monthLabel, monthRange, methodLabel, fmtAmount } from '@/lib/accounting';
 import { toCents } from '@/lib/caisse';
 
@@ -129,7 +129,7 @@ export default function AdminComptabilitePage() {
       </div>
 
       {error && (
-        <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>
+        <div style={{ ...dangerBanner(th), marginBottom: 16 }}>
           {error}
         </div>
       )}

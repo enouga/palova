@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { api, AuthResponse, Sport } from '@/lib/api';
 import { siretIsValidFormat } from '@/lib/siret';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { setSession } from '@/lib/session';
 import { clubUrl } from '@/lib/clubUrl';
 import { AuthShell } from '@/components/auth/AuthShell';
@@ -94,7 +95,7 @@ export default function NewClubPage() {
       ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {error && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+            <div style={dangerBanner(th)}>{error}</div>
           )}
 
           <div style={{ ...sectionLabel, marginTop: 4 }}>Gérant</div>

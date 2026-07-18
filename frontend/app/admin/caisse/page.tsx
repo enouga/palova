@@ -6,7 +6,7 @@ import { addDaysKey, frLongLabel, frWeekday, todayKey } from '@/lib/calendar';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { Receipt } from '@/components/admin/Receipt';
@@ -186,7 +186,7 @@ export default function AdminCaissePage() {
         </div>
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {trend && <TrendKpis collectedCents={collectedCents} outstanding={outstanding} count={caisse?.payments.length ?? 0} trend={trend} weekday={frWeekday(date)} />}
 
@@ -285,7 +285,7 @@ export default function AdminCaissePage() {
                 <span style={{ marginLeft: 8, color: '#ff7a4d' }}>déjà remboursé {fmtEuros(toCents(refundTarget.refundedAmount ?? '0'))}</span>
               )}
             </div>
-            {error && <div style={{ marginBottom: 14, background: '#ff7a4d', color: '#fff', borderRadius: 10, padding: '9px 13px', fontSize: 13, fontWeight: 600 }}>{error}</div>}
+            {error && <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <label style={{ fontSize: 12, color: th.textMute, display: 'flex', flexDirection: 'column', gap: 4 }}>Montant à rembourser (€)
                 <input

@@ -2,6 +2,7 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Member } from '@/lib/api';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip, Segmented } from '@/components/ui/atoms';
@@ -76,7 +77,7 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
         Voir la fiche complète →
       </Link>
 
-      {error && <div style={{ background: th.accent, color: th.onAccent, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={dangerBanner(th)}>{error}</div>}
 
       {/* Rôle back-office + statut coach — visible pour un viewer OWNER/ADMIN uniquement */}
       {canManageStaff && viewer && (

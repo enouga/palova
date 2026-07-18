@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api, SubscriberRow, SubscriptionPlanSummary, PaymentMethod } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { Theme } from '@/lib/theme';
+import { Theme, dangerBanner } from '@/lib/theme';
 import { eurosTrim as eur } from '@/lib/payments';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -120,4 +120,4 @@ const label = (th: Theme): React.CSSProperties => ({ fontFamily: th.fontUI, font
 const chip = (th: Theme, on: boolean): React.CSSProperties => ({ border: `1.5px solid ${on ? th.accent : th.lineStrong}`, background: on ? `${th.accent}14` : th.surface, color: th.text, borderRadius: 10, padding: '8px 12px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700 });
 const planCard = (th: Theme, on: boolean): React.CSSProperties => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `1.5px solid ${on ? th.accent : th.lineStrong}`, background: on ? `${th.accent}14` : th.surface, color: th.text, borderRadius: 12, padding: '11px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13 });
 const input = (th: Theme): React.CSSProperties => ({ marginTop: 8, width: '100%', border: `1px solid ${th.lineStrong}`, borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, background: th.surface, color: th.text });
-const errBox = (th: Theme): React.CSSProperties => ({ marginTop: 12, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 });
+const errBox = (th: Theme): React.CSSProperties => ({ ...dangerBanner(th), marginTop: 12 });

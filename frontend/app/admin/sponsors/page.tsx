@@ -4,8 +4,10 @@ import { api, assetUrl, Sponsor, SponsorBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const EMPTY = { name: '', logoUrl: '', linkUrl: '', sortOrder: '0', isActive: true, offerText: '', offerCode: '', offerUntil: '', pinned: false };
 const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -23,6 +25,7 @@ export default function AdminSponsorsPage() {
   const [saving, setSaving]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Sponsor | null>(null);
   const logoFileRef = useRef<HTMLInputElement>(null);
 
   const cell: CSSProperties = { padding: '12px 16px', fontFamily: th.fontUI, fontSize: 14, color: th.text };
@@ -104,7 +107,7 @@ export default function AdminSponsorsPage() {
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 8px', color: th.text }}>Partenaires</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 22px' }}>Mettez en avant les sponsors et partenaires du club, classés par ordre d&apos;affichage.</p>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       <div style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 16 }}>
         <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, margin: '0 0 14px', color: th.text }}>{editId ? 'Modifier le partenaire' : 'Nouveau partenaire'}</h2>
@@ -204,7 +207,7 @@ export default function AdminSponsorsPage() {
                   <td style={cell}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => startEdit(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Modifier</button>
-                      <button onClick={() => remove(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
+                      <button onClick={() => setPendingDelete(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
                     </div>
                   </td>
                 </tr>
@@ -212,6 +215,17 @@ export default function AdminSponsorsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Supprimer ce partenaire ?"
+          detail={pendingDelete.name}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          onConfirm={() => { const s = pendingDelete; setPendingDelete(null); remove(s); }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

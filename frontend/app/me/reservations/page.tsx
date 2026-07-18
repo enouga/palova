@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, MyReservation, MyTournamentRegistration, MyEventRegistration, MyLessonEnrollment, CancelledWithRefund, MyMatch, MyQuotaStatus } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Screen } from '@/components/ui/Screen';
@@ -202,7 +203,7 @@ export default function MyReservationsPage() {
             ]} />
         </div>
 
-        {error && <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+        {error && <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{error}</div>}
         {refundMsg && <div style={{ margin: '14px 20px 0', background: th.surface, color: th.text, border: `1px solid ${th.line}`, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{refundMsg}</div>}
 
         {tab === 'calendar' ? (

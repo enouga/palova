@@ -3,8 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, Sport, SportCatalogBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn, Field } from '@/components/ui/atoms';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const NOUNS = ['terrain', 'court', 'table', 'piste', 'baie'];
 const DURATION_PRESETS = [30, 45, 60, 90, 120];
@@ -22,6 +24,7 @@ export default function SuperAdminSportsPage() {
   const [surfaceInput, setSurfaceInput] = useState('');
   const [otherDuration, setOtherDuration] = useState('');
   const [busy, setBusy]       = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Sport | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -67,7 +70,7 @@ export default function SuperAdminSportsPage() {
   };
 
   const remove = async (s: Sport) => {
-    if (!token || !window.confirm(`Supprimer « ${s.name} » du catalogue ?`)) return;
+    if (!token) return;
     setBusy(true);
     try { setError(null); await api.platformDeleteSport(s.id, token); await load(); }
     catch (e) { const m = (e as Error).message; setError(m === 'SPORT_IN_USE' ? `« ${s.name} » est utilisé par au moins un club : suppression impossible.` : 'Suppression impossible.'); }
@@ -86,7 +89,7 @@ export default function SuperAdminSportsPage() {
         {editId === null && <Btn onClick={startCreate}>Ajouter un sport</Btn>}
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {editId !== null && (
         <div style={card}>
@@ -165,10 +168,22 @@ export default function SuperAdminSportsPage() {
               </div>
               <Btn variant="surface" onClick={() => togglePublished(s)} disabled={busy}>{s.published ? 'Dépublier' : 'Publier'}</Btn>
               <Btn variant="surface" onClick={() => startEdit(s)}>Modifier</Btn>
-              <Btn variant="danger" onClick={() => remove(s)} disabled={busy}>Suppr.</Btn>
+              <Btn variant="danger" onClick={() => setPendingDelete(s)} disabled={busy}>Suppr.</Btn>
             </div>
           ))}
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Supprimer ce sport du catalogue ?"
+          detail={pendingDelete.name}
+          message="Cette action est définitive."
+          confirmLabel="Supprimer"
+          busy={busy}
+          onConfirm={() => { const s = pendingDelete; setPendingDelete(null); remove(s); }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

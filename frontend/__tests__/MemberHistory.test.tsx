@@ -34,7 +34,8 @@ const HISTORY: MemberHistory = {
     { id: 'r1', status: 'CONFIRMED', type: 'COURT', startTime: '2026-06-15T18:00:00.000Z', endTime: '2026-06-15T19:00:00.000Z', cancelledAt: null, lateCancel: false, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '36.00' },
     { id: 'r2', status: 'CANCELLED', type: 'COURT', startTime: '2026-06-10T18:00:00.000Z', endTime: '2026-06-10T19:00:00.000Z', cancelledAt: '2026-06-10T12:00:00.000Z', lateCancel: true, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '0.00' },
   ],
-  counts: { total: 2, confirmed: 1, cancelled: 1, lateCancelled: 1, noShow: 0, upcoming: 0 },
+  counts: { total: 2, confirmed: 1, cancelled: 1, lateCancelled: 1, noShow: 0, upcoming: 0, noShowCharged: 0 },
+  noShowChargedLastAt: null,
   heatmap: Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => (d === 0 && h === 20 ? 1 : 0))),
   favorites: { resource: { name: 'Court 1', count: 1 }, sportKey: 'padel', weekday: 1 },
   finance: {
@@ -80,6 +81,27 @@ it('onglet Activité : compteur d\'annulations tardives', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   expect(screen.getByText('Annulations tardives')).toBeInTheDocument();
+});
+
+it('onglet Activité : No-show facturés à 0 → hint "aucun", ton neutre', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  expect(screen.getByText('No-show facturés')).toBeInTheDocument();
+  expect(screen.getByText('aucun')).toBeInTheDocument();
+});
+
+it('onglet Activité : No-show facturés > 0 → récidive visible, ton coral', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY,
+    counts: { ...HISTORY.counts, noShowCharged: 3 },
+    noShowChargedLastAt: '2026-06-17T20:00:00.000Z',
+  });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  expect(screen.getByText('No-show facturés')).toBeInTheDocument();
+  const value = screen.getByText('3');
+  expect(value).toHaveStyle({ color: '#b23c17' }); // th.danger (thème clair, AA sur fond blanc)
+  expect(screen.getByText(/dernier le/i)).toBeInTheDocument();
 });
 
 it('bascule sur Finances et formate les montants', async () => {

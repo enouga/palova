@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/useAuth';
 import { api, PlatformClubDetail } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MemberGauge } from '@/components/billing/MemberGauge';
 import { ChangeSlugDialog } from '@/components/superadmin/ChangeSlugDialog';
@@ -112,7 +113,7 @@ export default function SuperAdminClubDetail() {
       </div>
 
       {error && (
-        <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginBottom: 16 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>
       )}
 
       {/* Billing */}

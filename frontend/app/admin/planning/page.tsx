@@ -24,12 +24,13 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack } from '@/lib/theme';
+import { gaugeTrack, dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
 import NoShowChargeModal from '@/components/admin/NoShowChargeModal';
 import { DateField } from '@/components/ui/DateField';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CreateEventModal, CreateEventFormState, CreateEventPrefill } from '@/components/admin/planning/CreateEventModal';
 
 const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', CONFIRMED: 'Confirmée', CANCELLED: 'Annulée' };
@@ -145,6 +146,7 @@ export default function AdminPlanningPage() {
   const [subscribedIds, setSubscribedIds] = useState<Set<string>>(new Set());   // joueurs de la résa ouverte avec un abonnement ACTIF
   const [busy, setBusy]           = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [pendingCancelSeries, setPendingCancelSeries] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);   // modale « Détails / options » (CollectPanel avancé) au-dessus de la caisse
   const optSeq = useRef(0);                                 // ids uniques des encaissements optimistes (CashRegister)
@@ -580,7 +582,6 @@ export default function AdminPlanningPage() {
 
   const cancelSeries = async () => {
     if (!token || !clubId || !selected?.seriesId) return;
-    if (!confirm('Annuler toutes les séances FUTURES de cette série ? Le passé est conservé.')) return;
     setBusy(true);
     try {
       setError(null);
@@ -715,7 +716,7 @@ export default function AdminPlanningPage() {
         </span>
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -864,7 +865,7 @@ export default function AdminPlanningPage() {
             </div>
 
             {error && (
-              <div style={{ marginTop: 10, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+              <div style={{ ...dangerBanner(th), marginTop: 10 }}>{error}</div>
             )}
             {/* Bandeau d'état — reste à encaisser / soldé. Pour une résa active, l'en-tête de la
                 caisse (CashRegister) l'affiche déjà → on ne le garde que pour une résa annulée. */}
@@ -1101,7 +1102,7 @@ export default function AdminPlanningPage() {
                     <button onClick={() => setConfirmCancel(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5 }}>Retour</button>
                   </div>
                 ) : (
-                  <button type="button" onClick={cancelSeries} disabled={busy}
+                  <button type="button" onClick={() => setPendingCancelSeries(true)} disabled={busy}
                     style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
                     Annuler toute la série
                   </button>
@@ -1162,6 +1163,18 @@ export default function AdminPlanningPage() {
           token={token ?? ''}
           onSuccess={() => { setNoShowTarget(null); load(); }}
           onClose={() => setNoShowTarget(null)}
+        />
+      )}
+
+      {pendingCancelSeries && (
+        <ConfirmDialog
+          title="Annuler toute la série ?"
+          message="Toutes les séances FUTURES de cette série seront annulées. Le passé est conservé."
+          confirmLabel="Annuler la série"
+          cancelLabel="Retour"
+          busy={busy}
+          onConfirm={() => { setPendingCancelSeries(false); cancelSeries(); }}
+          onCancel={() => setPendingCancelSeries(false)}
         />
       )}
 

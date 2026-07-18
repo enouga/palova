@@ -4,7 +4,7 @@ import { api, RefereeTournamentRow, RefereeRegistrationRow } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
+import { dangerBanner } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/atoms';
 import { ClubNav } from '@/components/ClubNav';
@@ -112,14 +112,7 @@ export default function MeRefereeingPage() {
           <>
             <Segmented<'upcoming' | 'past'> value={scope} onChange={setScope}
               options={[{ value: 'upcoming', label: 'À venir' }, { value: 'past', label: 'Passés' }]} />
-            {/* Coral : une erreur ne se peint pas avec l'accent du club (bleu = état normal). */}
-            {error && (
-              <div style={{
-                background: th.mode === 'floodlit' ? `${ACCENTS.coral}26` : `${ACCENTS.coral}40`,
-                color: th.mode === 'floodlit' ? ACCENTS.coral : th.ink,
-                borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600,
-              }}>{error}</div>
-            )}
+            {error && <div style={dangerBanner(th)}>{error}</div>}
             {loading ? (
               <span style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</span>
             ) : tournaments.length === 0 ? (

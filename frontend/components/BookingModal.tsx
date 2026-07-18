@@ -5,7 +5,7 @@ import { api, TimeSlot, Reservation, MemberPackage, MyQuotaStatus, Subscription 
 import { packageLabel, canCover, remainingAfterLabel, paidWithLabel, pickPackageFor } from '@/lib/packages';
 import { coveringSubscription, coverageLabel } from '@/lib/subscriptions';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS, Theme, gaugeTrack } from '@/lib/theme';
+import { ACCENTS, Theme, gaugeTrack, dangerBanner } from '@/lib/theme';
 import { durationLabel } from '@/lib/duration';
 import { Btn } from '@/components/ui/atoms';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
@@ -439,7 +439,7 @@ export default function BookingModal({
 
           {phase === 'error' ? (
             <>
-              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.onAccent, background: th.accent, padding: '12px 14px', borderRadius: 12, fontWeight: 600 }}>{errorMsg}</div>
+              <div style={dangerBanner(th)}>{errorMsg}</div>
               <div style={{ marginTop: 14 }}><Btn full variant="surface" onClick={onClose}>Fermer</Btn></div>
             </>
           ) : phase === 'confirmed' && confirmedInfo ? (
@@ -633,7 +633,7 @@ export default function BookingModal({
               <CancellationNotice text={cancellationPolicyLabel(cancellationCutoffHours, refundOnCancelWithinCutoff ?? false)} th={th} />
 
               {errorMsg && (
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.onAccent, background: th.accent, padding: '8px 12px', borderRadius: 10, fontWeight: 600, marginTop: 14 }}>{errorMsg}</div>
+                <div style={{ ...dangerBanner(th), marginTop: 14 }}>{errorMsg}</div>
               )}
 
               {/* Pied d'action : chemin Stripe → CGV puis formulaire Stripe DIRECT (ses propres

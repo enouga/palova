@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, MyMatch } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { clubHasPadel } from '@/lib/sport';
@@ -73,7 +74,7 @@ export default function MyMatchesPage() {
           Mes matchs
         </div>
 
-        {error && <div style={{ margin: '14px 20px 0', background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+        {error && <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{error}</div>}
 
         <div style={{ padding: '18px 20px 0' }}>
           <ResultsToRecord token={token}

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { slugify } from '@/lib/slug';
 import { CANONICAL_ROOT } from '@/lib/roots';
@@ -80,7 +81,7 @@ export function ChangeSlugDialog({ club, onDone, onCancel }: {
         </div>
 
         {error && (
-          <div style={{ fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600, marginTop: 12 }}>{error}</div>
+          <div style={{ ...dangerBanner(th), marginTop: 12 }}>{error}</div>
         )}
 
         <div style={{ display: 'flex', gap: 11, marginTop: 24 }}>

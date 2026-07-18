@@ -4,7 +4,7 @@ import { api, ClubReservation, Member, MemberPackage, CreateMemberBody, PaymentM
 import { packageLabel, isUsable, canCover, prepaidHint } from '@/lib/packages';
 import { toCents, centsToInput, quickAmounts, fmtEuros, validatePaymentAmount, DEFAULT_QUICK_METHODS } from '@/lib/caisse';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn } from '@/lib/theme';
+import { ACCENTS, inkOn } from '@/lib/theme';
 import { colorForSeed } from '@/lib/playerColors';
 import { PlayerPicker } from '@/components/admin/PlayerPicker';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -16,8 +16,6 @@ const METHOD_SHORT: Record<string, string> = { CASH: 'Espèces', CARD: 'Carte', 
 // Tous les moyens de paiement manuels du comptoir (carnets/porte-monnaie = boutons package à part).
 const ALL_METHODS: PaymentMethod[] = ['CARD', 'CASH', 'TRANSFER', 'VOUCHER', 'CHEQUE', 'MEMBER', 'OTHER'];
 const METHOD_ICON: Partial<Record<PaymentMethod, IconName>> = { CARD: 'card', MEMBER: 'user', VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', CASH: 'euro', TRANSFER: 'arrowR', OTHER: 'euro' };
-
-const CORAL = '#ff7a4d';
 
 export interface CollectPanelProps {
   reservation: ClubReservation;
@@ -448,7 +446,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
           {/* Montant */}
           <div style={caption}>Montant à encaisser</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: th.surface, borderRadius: 12, boxShadow: `inset 0 0 0 1.5px ${overCap ? CORAL : th.line}`, padding: '0 14px', height: 46 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: th.surface, borderRadius: 12, boxShadow: `inset 0 0 0 1.5px ${overCap ? ACCENTS.coral : th.line}`, padding: '0 14px', height: 46 }}>
               <input type="number" min={0} step="0.1" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} aria-label="Montant à encaisser"
                 style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: th.fontMono, fontWeight: 600, fontSize: 21, color: th.text, width: 84, textAlign: 'right' }} />
               <span style={{ fontFamily: th.fontMono, fontSize: 18, color: th.textMute }}>€</span>
@@ -460,7 +458,7 @@ export function CollectPanel({ reservation, due, players, members, clubId, token
               </button>
             ))}
           </div>
-          {overCap && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: CORAL }}>Plafond : {fmtEuros(maxPayable)}</div>}
+          {overCap && <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: ACCENTS.coral }}>Plafond : {fmtEuros(maxPayable)}</div>}
 
           {payAtClubOnly ? (
             /* Option club « paiement au club » : un seul bouton, pas de choix de moyen (moyen neutre CLUB). */

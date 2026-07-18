@@ -9,7 +9,7 @@ import { COURT_FORMATS, COVERAGE_OPTIONS, Coverage } from '@/lib/courtType';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ACCENTS } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { validateResourceFields, ResourceFieldErrors, ResourceFieldKey } from '@/lib/resourceValidation';
 
 const STEP_OPTIONS = [15, 30, 45, 60, 90, 120];
@@ -224,7 +224,7 @@ export default function AdminResourcesPage() {
     <div>
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 24px', color: th.text }}>Ressources</h1>
 
-      {error && <div style={{ marginBottom: 16, background: th.accent, color: th.onAccent, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>

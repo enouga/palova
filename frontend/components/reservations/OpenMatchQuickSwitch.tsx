@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { sportHasLevels } from '@/lib/level';
 import { loadLevelPref, saveLevelPref } from '@/lib/levelPrefs';
 import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
@@ -184,7 +185,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
       )}
 
       {error && (
-        <div style={{ marginTop: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginTop: 8 }}>{error}</div>
       )}
     </div>
   );

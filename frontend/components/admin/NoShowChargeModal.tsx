@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 
@@ -12,12 +12,26 @@ interface Props {
   onClose: () => void;
 }
 
+const fmtDate = (iso: string) =>
+  new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+
 export default function NoShowChargeModal({ clubId, reservationId, defaultAmount, token, onSuccess, onClose }: Props) {
   const { th } = useTheme();
   const [amount, setAmount] = useState(String(defaultAmount));
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Récidive (best-effort) : combien de fois ce joueur a déjà été facturé pour no-show au club.
+  const [previousCount, setPreviousCount] = useState(0);
+  const [lastChargedAt, setLastChargedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.getNoShowPreview(clubId, reservationId, token)
+      .then((p) => { if (alive) { setPreviousCount(p.previousCount); setLastChargedAt(p.lastChargedAt); } })
+      .catch(() => {}); // informatif seulement — ne bloque jamais le débit
+    return () => { alive = false; };
+  }, [clubId, reservationId, token]);
 
   const handleCharge = async () => {
     const parsed = parseFloat(amount);
@@ -45,6 +59,11 @@ export default function NoShowChargeModal({ clubId, reservationId, defaultAmount
       <div onClick={(e) => e.stopPropagation()}
         style={{ background: th.bgElev, borderRadius: 18, padding: 24, width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: th.shadow }}>
         <h3 style={{ margin: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, color: th.text }}>Facturer un no-show</h3>
+        {previousCount > 0 && (
+          <p style={{ margin: 0, background: '#ff7a4d1a', border: '1px solid #ff7a4d55', borderRadius: 9, padding: '8px 12px', color: '#ff7a4d', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>
+            ⚠️ Déjà facturé {previousCount} fois pour no-show{lastChargedAt ? ` · dernier le ${fmtDate(lastChargedAt)}` : ''}.
+          </p>
+        )}
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
           Montant (€)
           <input

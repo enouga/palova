@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { api, MyReservation } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { isPlayerChangeOpen } from '@/lib/reservations';
 import { PartnerSearch } from '@/components/tournament/PartnerSearch';
 import { PlayerPills } from '@/components/player/PlayerPills';
@@ -95,7 +96,7 @@ export function ReservationPlayersInline({ reservation, token, now, onChanged, h
         <OpenMatchToggle reservation={reservation} token={token} now={now} onChanged={onChanged} />
       )}
       {error && (
-        <div style={{ marginBottom: 8, background: th.accent, color: th.onAccent, borderRadius: 10, padding: '8px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+        <div style={{ ...dangerBanner(th), marginBottom: 8 }}>{error}</div>
       )}
       {isPadel ? (
         <MatchTeams

@@ -4,9 +4,8 @@ import { ClubReservation } from '@/lib/api';
 import { fmtEuros } from '@/lib/caisse';
 import { QueueEntry, placePaymentDots, queueDayKey } from '@/lib/caisseRegister';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { PaymentDots, SETTLED_COLOR } from '@/components/admin/PaymentDots';
-
-const CORAL = '#ff7a4d';
 
 function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
 function fmtDay(iso: string): string { return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); }
@@ -53,7 +52,7 @@ export function QueueList({ toCollect, settled, playersOf, selectedId, onSelect 
         {dots && !done && <PaymentDots dots={dots} color={th.accent} />}
         {done
           ? <span style={{ fontSize: 12, fontWeight: 700, color: SETTLED_COLOR, whiteSpace: 'nowrap' }}>✓ Soldé</span>
-          : <span style={{ fontSize: 14, fontWeight: 800, color: CORAL, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(e.remaining)}</span>}
+          : <span style={{ fontSize: 14, fontWeight: 800, color: ACCENTS.coral, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtEuros(e.remaining)}</span>}
       </button>
     );
   };

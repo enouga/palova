@@ -1,11 +1,16 @@
 'use client';
-import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, CSSProperties, ReactNode } from 'react';
 import { api, PackageTemplate, SubscriptionPlan, SubscriptionOverview } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
-import { offerTint, planPulse, packagePulse, planRevenueCents, splitByActive } from '@/lib/adminOffers';
+import { clubIsMultiSport } from '@/lib/sportBadge';
+import {
+  offerTint, sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersBySport,
+  planPulse, packagePulse, planRevenueCents, splitByActive,
+} from '@/lib/adminOffers';
 import { OfferCard } from '@/components/admin/offers/OfferCard';
 import { OfferStudio, OfferStudioResult } from '@/components/admin/offers/OfferStudio';
 import { eurosFromString as euro } from '@/lib/payments';
@@ -13,6 +18,7 @@ import { eurosFromString as euro } from '@/lib/payments';
 const SPORT_OPTIONS = ['padel', 'squash', 'tennis', 'badminton', 'pickleball', 'pingpong'];
 
 type Editing = { kind: 'plan'; plan: SubscriptionPlan } | { kind: 'package'; tpl: PackageTemplate };
+type Entry = { sportKeys: string[]; render: () => ReactNode };
 
 export default function AdminPackagesPage() {
   const { th } = useTheme();
@@ -109,11 +115,59 @@ export default function AdminPackagesPage() {
   const orderedPlans = [...activePlans, ...inactivePlans];
   const orderedTpls = [...activeTpls, ...inactiveTpls];
 
+  const multiSport = clubIsMultiSport(club);
+
+  const planEntries: Entry[] = orderedPlans.map((p): Entry => ({
+    sportKeys: p.sportKeys,
+    render: () => (
+      <OfferCard key={p.id} typeTint={offerTint('SUBSCRIPTION')}
+        sportTint={multiSport ? sportOfferTint(p.sportKeys) : offerTint('SUBSCRIPTION')}
+        kindLabel="Abonnement" name={p.name}
+        price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
+        features={[
+          p.sportKeys.length > 0 ? p.sportKeys.join(', ') : 'Tous sports',
+          p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
+          p.benefit === 'INCLUDED' ? 'inclus' : `−${p.discountPercent} %`,
+        ].join(' · ')}
+        pulse={
+          activeCountFor(p.id) > 0 ? (
+            <a href={membersHref(p.id)} style={{ color: 'inherit', textDecoration: 'none' }}>
+              {planPulse(activeCountFor(p.id), planRevenueCents(subscribers, p.id, nowMs))} <span aria-hidden>→</span>
+            </a>
+          ) : planPulse(0, 0)
+        }
+        isActive={p.isActive} busy={busy} onEdit={() => openEditPlan(p)} onToggleActive={() => togglePlan(p)} />
+    ),
+  }));
+
+  const tplEntries: Entry[] = orderedTpls.map((t): Entry => ({
+    sportKeys: t.sportKeys,
+    render: () => (
+      <OfferCard key={t.id} typeTint={offerTint(t.kind)}
+        sportTint={multiSport ? sportOfferTint(t.sportKeys) : offerTint(t.kind)}
+        kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
+        price={euro(t.price)}
+        priceSuffix={t.kind === 'ENTRIES' ? `· ${t.entriesCount} entrées` : `· ${euro(t.walletAmount ?? 0)} crédités`}
+        features={[
+          t.sportKeys.length > 0 ? t.sportKeys.join(', ') : 'Tous sports',
+          t.validityDays ? `valable ${t.validityDays} j` : 'sans expiration',
+        ].join(' · ')}
+        pulse={packagePulse(t.stats, t.kind)}
+        isActive={t.isActive} busy={busy} onEdit={() => openEditTpl(t)} onToggleActive={() => toggleTpl(t)} />
+    ),
+  }));
+
+  const sportGroups = multiSport ? groupOffersBySport([...planEntries, ...tplEntries], club?.clubSports ?? []) : [];
+
   const h1: CSSProperties = { fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: 0, color: th.text };
   const kicker: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, fontFamily: th.fontUI, fontSize: 12, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: th.textMute, margin: '26px 0 12px' };
   const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 };
-  const Kicker = ({ children }: { children: React.ReactNode }) => (
-    <div style={kicker}><span>{children}</span><span aria-hidden style={{ flex: 1, height: 1, background: th.line }} /></div>
+  const Kicker = ({ children, dot }: { children: React.ReactNode; dot?: string }) => (
+    <div style={kicker} data-testid={dot ? 'offer-sport-kicker' : undefined}>
+      {dot && <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: dot }} />}
+      <span>{children}</span>
+      <span aria-hidden style={{ flex: 1, height: 1, background: th.line }} />
+    </div>
   );
 
   const empty = !loading && plans.length === 0 && templates.length === 0;
@@ -133,7 +187,7 @@ export default function AdminPackagesPage() {
         </button>
       </div>
 
-      {error && <div style={{ marginTop: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginTop: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ marginTop: 20, fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -143,57 +197,32 @@ export default function AdminPackagesPage() {
           <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 6 }}>Abonnements, carnets d’entrées ou porte-monnaie — vos joueurs les verront sur le Club-house.</div>
           <button type="button" onClick={openCreate} style={{ marginTop: 16, border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '10px 18px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 800 }}>＋ Créer une offre</button>
         </div>
+      ) : multiSport ? (
+        sportGroups.map((g) => (
+          <div key={g.key ?? '_other'}>
+            <Kicker dot={sportKeyColor(g.key)}>{sportGroupLabel(g.key, club)}</Kicker>
+            <div style={grid}>{g.items.map((e) => e.render())}</div>
+          </div>
+        ))
       ) : (
         <>
-          {orderedPlans.length > 0 && (
+          {planEntries.length > 0 && (
             <>
               <Kicker>Abonnements</Kicker>
-              <div style={grid}>
-                {orderedPlans.map((p) => (
-                  <OfferCard key={p.id} tint={offerTint('SUBSCRIPTION')} kindLabel="Abonnement" name={p.name}
-                    price={euro(p.monthlyPrice)} priceSuffix={`/mois · ${p.commitmentMonths} mois`}
-                    features={[
-                      p.sportKeys.length > 0 ? p.sportKeys.join(', ') : 'Tous sports',
-                      p.offPeakOnly ? 'Heures creuses' : 'Toutes heures',
-                      p.benefit === 'INCLUDED' ? 'inclus' : `−${p.discountPercent} %`,
-                    ].join(' · ')}
-                    pulse={
-                      activeCountFor(p.id) > 0 ? (
-                        <a href={membersHref(p.id)} style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {planPulse(activeCountFor(p.id), planRevenueCents(subscribers, p.id, nowMs))} <span aria-hidden>→</span>
-                        </a>
-                      ) : planPulse(0, 0)
-                    }
-                    isActive={p.isActive} busy={busy} onEdit={() => openEditPlan(p)} onToggleActive={() => togglePlan(p)} />
-                ))}
-              </div>
+              <div style={grid}>{planEntries.map((e) => e.render())}</div>
             </>
           )}
-
-          {orderedTpls.length > 0 && (
+          {tplEntries.length > 0 && (
             <>
               <Kicker>Carnets &amp; Porte-monnaie</Kicker>
-              <div style={grid}>
-                {orderedTpls.map((t) => (
-                  <OfferCard key={t.id} tint={offerTint(t.kind)}
-                    kindLabel={t.kind === 'ENTRIES' ? 'Carnet' : 'Porte-monnaie'} name={t.name}
-                    price={euro(t.price)}
-                    priceSuffix={t.kind === 'ENTRIES' ? `· ${t.entriesCount} entrées` : `· ${euro(t.walletAmount ?? 0)} crédités`}
-                    features={[
-                      t.sportKeys.length > 0 ? t.sportKeys.join(', ') : 'Tous sports',
-                      t.validityDays ? `valable ${t.validityDays} j` : 'sans expiration',
-                    ].join(' · ')}
-                    pulse={packagePulse(t.stats, t.kind)}
-                    isActive={t.isActive} busy={busy} onEdit={() => openEditTpl(t)} onToggleActive={() => toggleTpl(t)} />
-                ))}
-              </div>
+              <div style={grid}>{tplEntries.map((e) => e.render())}</div>
             </>
           )}
         </>
       )}
 
       <OfferStudio open={studioOpen} editing={editing}
-        sportOptions={SPORT_OPTIONS} busy={busy} error={studioOpen ? error : null}
+        sportOptions={SPORT_OPTIONS} multiSport={multiSport} busy={busy} error={studioOpen ? error : null}
         onClose={() => { setStudioOpen(false); setEditing(undefined); }} onSubmit={submitStudio} />
     </div>
   );

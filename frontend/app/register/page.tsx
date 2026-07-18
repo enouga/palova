@@ -3,6 +3,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, AuthResponse, Sport } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { setSession } from '@/lib/session';
 import { useClub } from '@/lib/ClubProvider';
 import { safeNext } from '@/lib/postAuth';
@@ -76,7 +77,7 @@ export default function RegisterPage() {
       ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {error && (
-            <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.onAccent, background: th.accent, padding: '11px 14px', borderRadius: 12, fontWeight: 600 }}>{error}</div>
+            <div style={dangerBanner(th)}>{error}</div>
           )}
           <div style={{ display: 'flex', gap: 12 }}>
             {/* minWidth 0 : sans lui, min-width:auto clampe chaque colonne à la largeur

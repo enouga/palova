@@ -56,11 +56,12 @@ it('viewer STAFF : page réservée aux administrateurs, aucun fetch offres', asy
   expect(api.adminGetPackageTemplates).not.toHaveBeenCalled();
 });
 
-it('affiche le titre « Offres » et les deux sections', async () => {
+it('affiche le titre « Offres » et une section par sport', async () => {
+  (api.adminGetPackageTemplates as jest.Mock).mockResolvedValue([tpl, { ...tpl, id: 'tpl-2', name: 'Carte Tennis', sportKeys: ['tennis'] }]);
   mount();
   expect(await screen.findByRole('heading', { name: 'Offres' })).toBeInTheDocument();
-  expect(await screen.findByText('Abonnements')).toBeInTheDocument();
-  expect(screen.getByText('Carnets & Porte-monnaie')).toBeInTheDocument();
+  const kickers = await screen.findAllByTestId('offer-sport-kicker');
+  expect(kickers.map((k) => k.textContent)).toEqual(['Padel', 'Tennis']);
 });
 
 it('rend une carte par offre avec son pouls', async () => {
@@ -119,13 +120,13 @@ it('« Retirer » désactive l’offre', async () => {
   ));
 });
 
-it('une section vide ne rend pas son intitulé', async () => {
+it('un sport sans offre ne rend pas son intitulé', async () => {
   (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([]);
   (api.adminGetSubscriptionOverview as jest.Mock).mockResolvedValue({ kpis: { activeCount: 0, monthlyRevenueCents: 0, expiringSoonCount: 0 }, plans: [], subscribers: [] });
   mount();
   await screen.findByText('Carte 10 parties');
-  expect(screen.getByText('Carnets & Porte-monnaie')).toBeInTheDocument();
-  expect(screen.queryByText('Abonnements')).toBeNull();
+  const kickers = screen.getAllByTestId('offer-sport-kicker');
+  expect(kickers.map((k) => k.textContent)).toEqual(['Padel']);
 });
 
 it('aucune offre → carte d’état vide seule, pas d’intitulés de section', async () => {
@@ -134,6 +135,14 @@ it('aucune offre → carte d’état vide seule, pas d’intitulés de section',
   (api.adminGetSubscriptionOverview as jest.Mock).mockResolvedValue({ kpis: { activeCount: 0, monthlyRevenueCents: 0, expiringSoonCount: 0 }, plans: [], subscribers: [] });
   mount();
   expect(await screen.findByText('Créez votre première offre')).toBeInTheDocument();
-  expect(screen.queryByText('Abonnements')).toBeNull();
-  expect(screen.queryByText('Carnets & Porte-monnaie')).toBeNull();
+  expect(screen.queryByTestId('offer-sport-kicker')).toBeNull();
+});
+
+it('club multi-sport : bandeau de couleur de sport, badge de couleur de type, distincts', async () => {
+  mount();
+  await screen.findByText('Padel illimité');
+  const planCard = screen.getByText('Padel illimité').closest('div')!.parentElement!.parentElement!;
+  const stripe = within(planCard).getByTestId('offer-card-stripe');
+  expect(stripe).toHaveStyle({ background: '#7FAE86' }); // couleur padel
+  expect(within(planCard).getByText('Abonnement')).toBeInTheDocument(); // badge de type toujours présent
 });
