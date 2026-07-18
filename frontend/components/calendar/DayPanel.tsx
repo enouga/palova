@@ -1,6 +1,7 @@
 'use client';
 
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { CalendarEntry, agendaKindMeta, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
@@ -111,7 +112,7 @@ export function DayPanel({
                     ) : (!e.past && (
                       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                         <button onClick={() => onCancel(r)} disabled={!isCancellationOpen(r, now)}
-                          style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: isCancellationOpen(r, now) ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: isCancellationOpen(r, now) ? '#ff7a4d' : th.textFaint }}>
+                          style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: isCancellationOpen(r, now) ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: isCancellationOpen(r, now) ? ACCENTS.coral : th.textFaint }}>
                           Annuler
                         </button>
                       </span>

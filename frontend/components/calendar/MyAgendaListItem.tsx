@@ -1,6 +1,7 @@
 'use client';
 
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AgendaListItem, agendaKindMeta, agendaItemClubSlug, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
@@ -99,7 +100,7 @@ export function MyAgendaListItem({ item, now, localSlug, token, onCancel, onPlay
             <span style={{ fontFamily: th.fontMono }}>{Number(r.totalPrice)}€</span>
             {isForeign ? goHint : (!item.past && (
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <button onClick={() => onCancel(r)} disabled={!canCancel} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? '#ff7a4d' : th.textFaint }}>Annuler</button>
+                <button onClick={() => onCancel(r)} disabled={!canCancel} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: canCancel ? 'pointer' : 'not-allowed', borderRadius: 9, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: canCancel ? ACCENTS.coral : th.textFaint }}>Annuler</button>
               </span>
             ))}
           </div>

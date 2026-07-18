@@ -2,7 +2,7 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Member } from '@/lib/api';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip, Segmented } from '@/components/ui/atoms';
@@ -133,7 +133,7 @@ export function MemberPanel({ member, viewer, canManageStaff, isDesktop, error, 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: `1px solid ${th.line}`, paddingTop: 14 }}>
         <button onClick={onToggleBlocked} style={ghostBtn}>{blocked ? 'Débloquer' : 'Bloquer'}</button>
-        <button onClick={onDelete} style={{ ...ghostBtn, color: '#ff7a4d', marginLeft: 'auto' }}>Supprimer le membre</button>
+        <button onClick={onDelete} style={{ ...ghostBtn, color: ACCENTS.coral, marginLeft: 'auto' }}>Supprimer le membre</button>
       </div>
     </div>
   );

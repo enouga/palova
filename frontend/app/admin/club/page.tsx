@@ -4,7 +4,7 @@ import { api, ClubPresentation, ClubPhoto, assetUrl } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -201,7 +201,7 @@ export default function AdminClubPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => move(idx, -1)} disabled={idx === 0} aria-label="Monter" style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: idx === 0 ? 'default' : 'pointer', borderRadius: 8, padding: '4px 9px', fontFamily: th.fontUI, fontSize: 12.5, color: idx === 0 ? th.textFaint : th.text }}>↑</button>
                   <button onClick={() => move(idx, 1)} disabled={idx === photos.length - 1} aria-label="Descendre" style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: idx === photos.length - 1 ? 'default' : 'pointer', borderRadius: 8, padding: '4px 9px', fontFamily: th.fontUI, fontSize: 12.5, color: idx === photos.length - 1 ? th.textFaint : th.text }}>↓</button>
-                  <button onClick={() => setConfirmDelete(p)} style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 8, padding: '4px 9px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
+                  <button onClick={() => setConfirmDelete(p)} style={{ marginLeft: 'auto', border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 8, padding: '4px 9px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: ACCENTS.coral }}>Supprimer</button>
                 </div>
               </div>
             </div>

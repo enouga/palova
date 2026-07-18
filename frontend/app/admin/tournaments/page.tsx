@@ -4,7 +4,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClubSport, ClubReferee } from '@/lib/api';
-import { localInputToISO } from '@/lib/datetimeLocal';
+import { localInputToISO, isoToLocalInput } from '@/lib/datetimeLocal';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
 import { ACCENTS, dangerBanner } from '@/lib/theme';
@@ -43,6 +43,7 @@ export default function AdminTournamentsPage() {
   const [sports, setSports] = useState<AdminClubSport[]>([]);
   const [referees, setReferees] = useState<ClubReferee[]>([]);
   const [form, setForm] = useState<CreateTournamentBody | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminTournamentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stripeActive, setStripeActive] = useState(false);
@@ -75,11 +76,11 @@ export default function AdminTournamentsPage() {
 
   const padelSportId = sports.find((s) => s.sport.key === 'padel')?.id ?? sports[0]?.id ?? '';
 
-  const submit = async () => {
+  const save = async () => {
     if (!form) return;
     setError(null);
     try {
-      await api.adminCreateTournament(club.id, {
+      const body = {
         ...form,
         startTime: localInputToISO(form.startTime),
         registrationDeadline: localInputToISO(form.registrationDeadline),
@@ -87,9 +88,24 @@ export default function AdminTournamentsPage() {
         maxTeams: form.maxTeams ? Number(form.maxTeams) : null,
         entryFee: form.entryFee ? Number(form.entryFee) : null,
         refereeUserId: form.refereeUserId ?? null, // explicite : « Aucun » doit envoyer null, jamais undefined
-      }, token);
-      setForm(null); reload();
+      };
+      if (editingId) await api.adminUpdateTournament(club.id, editingId, body, token);
+      else await api.adminCreateTournament(club.id, body, token);
+      setForm(null); setEditingId(null); reload();
     } catch (e) { setError(messageFor(e)); }
+  };
+
+  const startEdit = (t: Tournament) => {
+    setEditingId(t.id);
+    setForm({
+      clubSportId: t.clubSportId, name: t.name, category: t.category, gender: t.gender,
+      openToWomen: t.openToWomen, description: t.description ?? '', contactInfo: t.contactInfo ?? '',
+      refereeUserId: t.refereeUserId ?? null,
+      startTime: isoToLocalInput(t.startTime), endTime: t.endTime ? isoToLocalInput(t.endTime) : null,
+      registrationDeadline: isoToLocalInput(t.registrationDeadline),
+      maxTeams: t.maxTeams, entryFee: t.entryFee != null ? Number(t.entryFee) : null,
+      requirePrepayment: t.requirePrepayment ?? false,
+    });
   };
 
   const publish = async (t: Tournament, status: 'PUBLISHED' | 'CANCELLED' | 'DRAFT') => {
@@ -153,6 +169,7 @@ export default function AdminTournamentsPage() {
           </select>
         )}
         <button onClick={() => openDetail(t)} style={ghost}>Inscrits</button>
+        <button onClick={() => startEdit(t)} style={ghost}>Modifier</button>
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => publish(t, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
       </>
@@ -182,7 +199,7 @@ export default function AdminTournamentsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, margin: 0 }}>Tournois</h1>
-        <button onClick={() => setForm(emptyForm(padelSportId))} style={btn}><Icon name="plus" size={15} color={th.onAccent} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Nouveau tournoi</button>
+        <button onClick={() => { setEditingId(null); setForm(emptyForm(padelSportId)); }} style={btn}><Icon name="plus" size={15} color={th.onAccent} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Nouveau tournoi</button>
       </div>
 
       {error && (
@@ -192,7 +209,7 @@ export default function AdminTournamentsPage() {
       {/* Formulaire de création */}
       {form && (
         <div style={{ background: th.surface, borderRadius: 16, padding: 18, boxShadow: th.shadow, marginBottom: 22 }}>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>Nouveau tournoi</div>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 17, color: th.text }}>{editingId ? 'Modifier le tournoi' : 'Nouveau tournoi'}</div>
           <div style={label}>Nom</div>
           <input style={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Open de printemps" />
           <div style={{ display: 'flex', gap: 12 }}>
@@ -261,8 +278,8 @@ export default function AdminTournamentsPage() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button onClick={submit} style={btn}>Créer (brouillon)</button>
-            <button onClick={() => setForm(null)} style={ghost}>Annuler</button>
+            <button onClick={save} style={btn}>{editingId ? 'Enregistrer' : 'Créer (brouillon)'}</button>
+            <button onClick={() => { setForm(null); setEditingId(null); }} style={ghost}>Annuler</button>
           </div>
         </div>
       )}

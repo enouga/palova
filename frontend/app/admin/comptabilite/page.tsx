@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
-import { gaugeTrack, dangerBanner } from '@/lib/theme';
+import { ACCENTS, gaugeTrack, dangerBanner } from '@/lib/theme';
 import { monthLabel, monthRange, methodLabel, fmtAmount } from '@/lib/accounting';
 import { toCents } from '@/lib/caisse';
 
@@ -155,7 +155,7 @@ export default function AdminComptabilitePage() {
             </div>
             <div style={card}>
               <div style={label2}>Remboursé</div>
-              <div style={{ fontFamily: th.fontDisplay, fontSize: 26, fontWeight: 600, color: '#ff7a4d', marginTop: 4 }}>
+              <div style={{ fontFamily: th.fontDisplay, fontSize: 26, fontWeight: 600, color: ACCENTS.coral, marginTop: 4 }}>
                 {fmtAmount(summary.refunded)}
               </div>
             </div>
@@ -191,11 +191,11 @@ export default function AdminComptabilitePage() {
                       <div style={{ flex: 1, ...gaugeTrack(th, 8, 4) }}>
                         <div style={{
                           width: `${pct}%`, height: '100%', borderRadius: 4,
-                          background: positive ? th.accent : '#ff7a4d',
+                          background: positive ? th.accent : ACCENTS.coral,
                           transition: 'width 0.2s',
                         }} />
                       </div>
-                      <span style={{ width: 72, textAlign: 'right', fontWeight: 600, color: positive ? th.text : '#ff7a4d', flexShrink: 0 }}>
+                      <span style={{ width: 72, textAlign: 'right', fontWeight: 600, color: positive ? th.text : ACCENTS.coral, flexShrink: 0 }}>
                         {fmtAmount(d.net)}
                       </span>
                     </div>

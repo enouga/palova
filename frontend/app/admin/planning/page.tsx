@@ -24,7 +24,7 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack, dangerBanner } from '@/lib/theme';
+import { ACCENTS, gaugeTrack, dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
@@ -836,8 +836,8 @@ export default function AdminPlanningPage() {
 
             {/* barre d'heure courante */}
             {nowVisible && (
-              <div style={{ position: 'absolute', top: HEADER_H + nowTop, left: TIME_W, right: 0, height: 2, background: '#ff7a4d', zIndex: 6, pointerEvents: 'none' }}>
-                <div style={{ position: 'absolute', top: -3, left: -3, width: 8, height: 8, borderRadius: 4, background: '#ff7a4d' }} />
+              <div style={{ position: 'absolute', top: HEADER_H + nowTop, left: TIME_W, right: 0, height: 2, background: ACCENTS.coral, zIndex: 6, pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', top: -3, left: -3, width: 8, height: 8, borderRadius: 4, background: ACCENTS.coral }} />
               </div>
             )}
           </div>
@@ -890,7 +890,7 @@ export default function AdminPlanningPage() {
                       ) : done ? (
                         <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 19, lineHeight: 1, color: SETTLED_COLOR }}>✓ Soldé</span>
                       ) : (
-                        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, letterSpacing: -0.5, lineHeight: 1, color: '#ff7a4d' }}>{fmtEuros(restC)}</span>
+                        <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, letterSpacing: -0.5, lineHeight: 1, color: ACCENTS.coral }}>{fmtEuros(restC)}</span>
                       )}
                     </div>
                     {dueC > 0 && (
@@ -1098,12 +1098,12 @@ export default function AdminPlanningPage() {
                 {confirmCancel ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.text }}>Confirmer l&apos;annulation ?</span>
-                    <button onClick={doCancel} disabled={busy} style={{ border: 'none', background: '#ff7a4d', color: '#fff', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{busy ? '…' : 'Oui, annuler'}</button>
+                    <button onClick={doCancel} disabled={busy} style={{ border: 'none', background: ACCENTS.coral, color: '#fff', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>{busy ? '…' : 'Oui, annuler'}</button>
                     <button onClick={() => setConfirmCancel(false)} style={{ border: 'none', background: 'transparent', color: th.textMute, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5 }}>Retour</button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => setPendingCancelSeries(true)} disabled={busy}
-                    style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
+                    style={{ border: `1px solid ${ACCENTS.coral}`, background: 'transparent', color: ACCENTS.coral, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>
                     Annuler toute la série
                   </button>
                 )}
@@ -1114,7 +1114,7 @@ export default function AdminPlanningPage() {
             {selected.hasCardFingerprint && selected.status !== 'CANCELLED' && (
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${th.line}` }}>
                 <button onClick={() => setNoShowTarget(selected.id)}
-                  style={{ border: '1px solid #ff7a4d', background: 'transparent', color: '#ff7a4d', borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
+                  style={{ border: `1px solid ${ACCENTS.coral}`, background: 'transparent', color: ACCENTS.coral, borderRadius: 9, padding: '7px 13px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600 }}>
                   💳 Facturer no-show
                 </button>
               </div>

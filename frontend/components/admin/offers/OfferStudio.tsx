@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { assetUrl, CreatePackageTemplateBody, CreateSubscriptionPlanBody, PackageKind, PackageTemplate, SubscriptionBenefit, SubscriptionPlan } from '@/lib/api';
 import { offerTint, sportOfferTint } from '@/lib/adminOffers';
 import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
@@ -236,7 +236,7 @@ export function OfferStudio(props: OfferStudioProps) {
                 🖼 {shownImageUrl ? "Changer l'affiche" : 'Ajouter une affiche'}
               </button>
               {shownImageUrl && (
-                <button type="button" onClick={() => { setPendingFile(null); setRemoveImage(true); if (fileRef.current) fileRef.current.value = ''; }} style={{ ...chip(false), color: '#ff7a4d' }}>
+                <button type="button" onClick={() => { setPendingFile(null); setRemoveImage(true); if (fileRef.current) fileRef.current.value = ''; }} style={{ ...chip(false), color: ACCENTS.coral }}>
                   Retirer l'affiche
                 </button>
               )}

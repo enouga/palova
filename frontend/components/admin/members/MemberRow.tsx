@@ -1,7 +1,7 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Member } from '@/lib/api';
-import { Theme } from '@/lib/theme';
+import { ACCENTS, Theme } from '@/lib/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
@@ -15,7 +15,7 @@ export type SubActionKind = 'renew' | 'change' | 'cancel';
 const fdate = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
 const subActionBtn = (th: Theme, danger: boolean): React.CSSProperties => ({
   border: `1px solid ${danger ? '#f0b8a4' : th.lineStrong}`, background: th.surface,
-  color: danger ? '#ff7a4d' : th.textMute, borderRadius: 999, padding: '5px 11px',
+  color: danger ? ACCENTS.coral : th.textMute, borderRadius: 999, padding: '5px 11px',
   fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
 });
 

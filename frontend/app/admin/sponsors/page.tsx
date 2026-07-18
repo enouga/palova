@@ -4,7 +4,7 @@ import { api, assetUrl, Sponsor, SponsorBody } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { dangerBanner } from '@/lib/theme';
+import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { DateField } from '@/components/ui/DateField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -207,7 +207,7 @@ export default function AdminSponsorsPage() {
                   <td style={cell}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => startEdit(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.text }}>Modifier</button>
-                      <button onClick={() => setPendingDelete(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: '#ff7a4d' }}>Supprimer</button>
+                      <button onClick={() => setPendingDelete(s)} style={{ border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '6px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: ACCENTS.coral }}>Supprimer</button>
                     </div>
                   </td>
                 </tr>

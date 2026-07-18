@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
-import type { Theme } from '@/lib/theme';
+import { ACCENTS, type Theme } from '@/lib/theme';
 import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -156,7 +156,7 @@ function LegalForm({ clubId, token, club, onSaved }: { clubId: string; token: st
           </label>
         ))}
       </div>
-      {error && <p style={{ color: '#ff7a4d', fontSize: 13, marginTop: 12 }}>{error}</p>}
+      {error && <p style={{ color: th.danger, fontSize: 13, marginTop: 12 }}>{error}</p>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
         <Btn onClick={save} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Btn>
         {saved && <span style={{ color: th.accent, fontSize: 14, fontWeight: 600 }}>Enregistré ✓</span>}
@@ -210,7 +210,7 @@ function PageEditor({ clubId, token, kind, path, initial, onSaved }: {
         Format Markdown : <code># Titre</code>, <code>## Sous-titre</code>, <code>**gras**</code>, listes avec <code>-</code>.
       </p>
       <textarea value={body} onChange={(e) => { setBody(e.target.value); setSaved(false); }} style={areaStyle(th)} />
-      {error && <p style={{ color: '#ff7a4d', fontSize: 13, marginTop: 10 }}>{error}</p>}
+      {error && <p style={{ color: th.danger, fontSize: 13, marginTop: 10 }}>{error}</p>}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, marginTop: 16 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: th.text }}>
           <input type="checkbox" checked={published} onChange={(e) => { setPublished(e.target.checked); setSaved(false); }} />
@@ -304,7 +304,7 @@ function FaqEditor({ clubId, token, items, onChanged }: { clubId: string; token:
         </p>
       </div>
 
-      {error && <p style={{ color: '#ff7a4d', fontSize: 13, margin: 0 }}>{error}</p>}
+      {error && <p style={{ color: th.danger, fontSize: 13, margin: 0 }}>{error}</p>}
 
       {rows.map((row, idx) => (
         <div key={row.id ?? `new-${idx}`} style={card(th)}>
@@ -321,7 +321,7 @@ function FaqEditor({ clubId, token, items, onChanged }: { clubId: string; token:
             </label>
             <button onClick={() => move(idx, -1)} disabled={idx === 0 || busy} aria-label="Monter" style={iconBtn(th)}>↑</button>
             <button onClick={() => move(idx, 1)} disabled={idx === rows.length - 1 || busy} aria-label="Descendre" style={iconBtn(th)}>↓</button>
-            <button onClick={() => removeRow(idx)} disabled={busy} style={{ ...iconBtn(th), color: '#ff7a4d', marginLeft: 'auto' }}>Supprimer</button>
+            <button onClick={() => removeRow(idx)} disabled={busy} style={{ ...iconBtn(th), color: ACCENTS.coral, marginLeft: 'auto' }}>Supprimer</button>
             <Btn onClick={() => saveRow(idx)} disabled={busy}>{row.id ? 'Enregistrer' : 'Ajouter'}</Btn>
           </div>
         </div>
