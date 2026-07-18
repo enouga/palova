@@ -7,9 +7,17 @@ jest.mock('../reservation.service', () => ({
   ReservationService: jest.fn().mockImplementation(() => ({ cancelFutureReservationsForUser })),
 }));
 
+// La suppression pose deletedAt → tout token existant doit être refusé IMMÉDIATEMENT,
+// sans attendre l'expiration du cache d'identité du middleware.
+const mockInvalidateAuth = jest.fn();
+jest.mock('../../middleware/authCache', () => ({
+  ...jest.requireActual('../../middleware/authCache'),
+  invalidateAuthIdentity: (...a: unknown[]) => mockInvalidateAuth(...a),
+}));
+
 import { AccountService } from '../account.service';
 
-beforeEach(() => { cancelFutureReservationsForUser.mockReset(); });
+beforeEach(() => { cancelFutureReservationsForUser.mockReset(); mockInvalidateAuth.mockReset(); });
 
 describe('AccountService.getDeletionSummary', () => {
   it('signale les clubs où je suis unique OWNER', async () => {
@@ -75,5 +83,18 @@ describe('AccountService.deleteAccount', () => {
     expect(prismaMock.user.update.mock.calls[0][0].data.deletedAt).toBeInstanceOf(Date);
     expect(prismaMock.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
     expect(res).toEqual({ ok: true });
+  });
+
+  it("purge le cache d'identité du middleware après suppression", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(await userRow() as any);
+    prismaMock.clubMember.findMany.mockResolvedValue([] as any);
+    cancelFutureReservationsForUser.mockResolvedValue(0);
+    (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(prismaMock));
+    prismaMock.user.update.mockResolvedValue({} as any);
+    prismaMock.pushSubscription.deleteMany.mockResolvedValue({ count: 0 } as any);
+
+    await new AccountService().deleteAccount('u1', 'password123');
+
+    expect(mockInvalidateAuth).toHaveBeenCalledWith('u1');
   });
 });

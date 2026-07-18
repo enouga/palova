@@ -1,5 +1,7 @@
 import '../../__mocks__/prisma';
+import '../../__mocks__/redis';
 import { prismaMock } from '../../__mocks__/prisma';
+import { redisMock } from '../../__mocks__/redis';
 import { TournamentService } from '../../services/tournament.service';
 import { EventService } from '../../services/event.service';
 
@@ -13,9 +15,55 @@ jest.mock('../../services/match.service', () => ({
 }));
 jest.mock('node-cron', () => ({ schedule: jest.fn() }));
 
-import { releaseExpiredRegistrations } from '../cleanup.job';
+const mockBroadcast = jest.fn();
+jest.mock('../../services/sse.service', () => ({
+  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast })) },
+}));
+
+const mockInvalidateAvailability = jest.fn();
+jest.mock('../../services/availabilityCache', () => ({
+  invalidateClubAvailability: (...a: unknown[]) => mockInvalidateAvailability(...a),
+}));
+
+import { releaseExpiredRegistrations, releaseExpiredHolds } from '../cleanup.job';
 
 const now = new Date('2026-06-25T10:00:00Z');
+
+describe('releaseExpiredHolds', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('annule les PENDING expirés, libère les verrous, diffuse slot_released et purge le cache de dispo', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { id: 'r1', resourceId: 'res1', startTime: new Date('2026-06-25T12:00:00Z'), endTime: new Date('2026-06-25T13:00:00Z'), resource: { clubId: 'club-a' } },
+      { id: 'r2', resourceId: 'res2', startTime: new Date('2026-06-25T14:00:00Z'), endTime: new Date('2026-06-25T15:00:00Z'), resource: { clubId: 'club-a' } },
+    ] as any);
+    prismaMock.reservation.updateMany.mockResolvedValue({ count: 2 } as any);
+    redisMock.del.mockResolvedValue(1 as any);
+
+    await releaseExpiredHolds(now);
+
+    expect(prismaMock.reservation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: ['r1', 'r2'] } },
+      data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(redisMock.del).toHaveBeenCalledTimes(2);
+    expect(mockBroadcast).toHaveBeenCalledWith('res1', expect.objectContaining({ type: 'slot_released', reservationId: 'r1' }));
+    expect(mockBroadcast).toHaveBeenCalledWith('res2', expect.objectContaining({ type: 'slot_released', reservationId: 'r2' }));
+    // Les deux holds sont dans le même club → UNE purge (clubs dédupliqués).
+    expect(mockInvalidateAvailability).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-a');
+  });
+
+  it('ne fait rien quand aucun hold expiré', async () => {
+    prismaMock.reservation.findMany.mockResolvedValue([] as any);
+
+    await releaseExpiredHolds(now);
+
+    expect(prismaMock.reservation.updateMany).not.toHaveBeenCalled();
+    expect(redisMock.del).not.toHaveBeenCalled();
+    expect(mockInvalidateAvailability).not.toHaveBeenCalled();
+  });
+});
 
 describe('releaseExpiredRegistrations', () => {
   beforeEach(() => {

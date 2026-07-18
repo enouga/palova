@@ -13,9 +13,29 @@
 	}
 }
 
+# Compression des réponses (ni Express ni Next côté backend API n'en font) : ~5× de
+# bande passante en moins sur le JSON de la grille Réserver, martelée au rush de minuit.
+# Liste de types EXPLICITE, sans text/event-stream : les 4 canaux SSE traversent le
+# proxy sans compresseur intermédiaire (zéro risque de buffering des événements).
+(compress) {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type application/json*
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type application/javascript*
+			header Content-Type image/svg+xml*
+		}
+	}
+}
+
 # Plateforme (apex des deux domaines) → frontend. Un apex ne matche PAS le wildcard
 # *.<domaine>, donc pas de chevauchement : certificat managé classique.
 palova.fr, palova.app {
+	import compress
 	reverse_proxy frontend:3000
 }
 
@@ -27,6 +47,7 @@ api.palova.fr {
 	tls {
 		on_demand
 	}
+	import compress
 	reverse_proxy backend:3001
 }
 
@@ -38,5 +59,6 @@ api.palova.fr {
 	tls {
 		on_demand
 	}
+	import compress
 	reverse_proxy frontend:3000
 }

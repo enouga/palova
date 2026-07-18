@@ -16,6 +16,7 @@ import { RefundService } from './refund.service';
 import { RatingService } from './rating.service';
 import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
+import { invalidateClubAvailability } from './availabilityCache';
 import { sportHasLevels } from './rating/level';
 import { effectiveTeams, applyTeams } from './matchTeams';
 import { serializableTx } from '../db/serializable';
@@ -301,6 +302,7 @@ export class ReservationService {
         return created;
       });
 
+      invalidateClubAvailability(resource.clubId);
       SSEService.getInstance().broadcast(resourceId, {
         type: 'slot_held',
         resourceId,
@@ -659,6 +661,7 @@ export class ReservationService {
 
     await redis.del(this.lockKey(confirmed.resourceId, confirmed.startTime));
 
+    invalidateClubAvailability(reservation.resource.clubId);
     SSEService.getInstance().broadcast(confirmed.resourceId, {
       type: 'slot_confirmed',
       resourceId:    confirmed.resourceId,
@@ -696,6 +699,7 @@ export class ReservationService {
 
   private async performCancel(reservation: {
     id: string; resourceId: string; startTime: Date; endTime: Date;
+    resource: { clubId: string };
   }) {
     const cancelled = await prisma.reservation.update({
       where: { id: reservation.id },
@@ -704,6 +708,7 @@ export class ReservationService {
 
     await redis.del(this.lockKey(reservation.resourceId, reservation.startTime));
 
+    invalidateClubAvailability(reservation.resource.clubId);
     SSEService.getInstance().broadcast(reservation.resourceId, {
       type: 'slot_released',
       resourceId:    reservation.resourceId,
@@ -764,7 +769,7 @@ export class ReservationService {
   async cancelFutureReservationsForUser(userId: string): Promise<number> {
     const future = await prisma.reservation.findMany({
       where: { userId, status: { in: ['CONFIRMED', 'PENDING'] }, startTime: { gt: new Date() } },
-      select: { id: true, resourceId: true, startTime: true, endTime: true },
+      select: { id: true, resourceId: true, startTime: true, endTime: true, resource: { select: { clubId: true } } },
     });
     for (const r of future) {
       await this.performCancel(r);
@@ -926,6 +931,7 @@ export class ReservationService {
       return reservation;
     }, { timeout: 10_000 });
 
+    invalidateClubAvailability(clubId);
     SSEService.getInstance().broadcast(resourceId, {
       type: 'slot_confirmed',
       resourceId,
@@ -999,6 +1005,7 @@ export class ReservationService {
       });
     }, { timeout: 10_000 });
 
+    invalidateClubAvailability(clubId);
     SSEService.getInstance().broadcast(reservation.resourceId, {
       type: 'slot_released',
       resourceId: reservation.resourceId,
@@ -1145,6 +1152,7 @@ export class ReservationService {
         endTime: r.endUtc.toISOString(),
       });
     }
+    if (createdList.length > 0) invalidateClubAvailability(params.clubId);
 
     return { seriesId, created: createdList.length, skipped };
   }
@@ -1186,6 +1194,7 @@ export class ReservationService {
         endTime: r.endTime.toISOString(),
       });
     }
+    if (future.length > 0) invalidateClubAvailability(series.clubId);
 
     return { cancelled: future.length };
   }

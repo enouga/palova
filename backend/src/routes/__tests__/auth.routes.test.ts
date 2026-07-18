@@ -13,6 +13,15 @@ jest.mock('../../email/mailer', () => ({
 }));
 import { sendPasswordResetEmail } from '../../email/mailer';
 
+// Un reset de mot de passe révoque les tokens (tokenVersion++) : le cache
+// d'identité du middleware doit être purgé immédiatement, sinon le NOUVEAU
+// token du joueur serait refusé jusqu'à expiration du TTL.
+const mockInvalidateAuth = jest.fn();
+jest.mock('../../middleware/authCache', () => ({
+  ...jest.requireActual('../../middleware/authCache'),
+  invalidateAuthIdentity: (...a: unknown[]) => mockInvalidateAuth(...a),
+}));
+
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant dans l environnement de test (.env)');
 
 describe('POST /api/auth/register', () => {
@@ -213,6 +222,20 @@ describe('POST /api/auth/reset-password', () => {
     expect(typeof res.body.token).toBe('string');
     expect(res.body.user.email).toBe('a@x.fr');
     expect(prismaMock.$transaction).toHaveBeenCalled();
+  });
+
+  it("purge le cache d'identité du middleware après un reset réussi", async () => {
+    mockInvalidateAuth.mockReset();
+    const codeHash = await bcrypt.hash('123456', 10);
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1', email: 'a@x.fr', firstName: 'Jean', lastName: 'Test', isSuperAdmin: false,
+      passwordReset: { codeHash, expiresAt: new Date(Date.now() + 600000), attempts: 0 },
+    } as any);
+    prismaMock.$transaction.mockResolvedValue([{}, {}] as any);
+
+    await request(app).post('/api/auth/reset-password').send({ email: 'a@x.fr', code: '123456', newPassword: 'newpass123' });
+
+    expect(mockInvalidateAuth).toHaveBeenCalledWith('u1');
   });
 
   it('rejette un mauvais code (400 CODE_INVALID) et incrémente les essais', async () => {

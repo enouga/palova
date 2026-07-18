@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../db/prisma';
+import { getAuthIdentity } from './authCache';
 
 export interface AuthRequest extends Request {
   user?: { id: string; email: string };
@@ -10,12 +10,14 @@ interface TokenPayload { id: string; email: string; tokenVersion?: number }
 
 /** Compte supprimé/mot de passe réinitialisé après l'émission du token → révoqué
  *  (cf. audit pré-MEP §2.2 : l'identité n'était jamais revérifiée en base pendant
- *  les 7 j de validité du JWT). Tokens émis avant l'ajout du champ = version 0. */
+ *  les 7 j de validité du JWT). Tokens émis avant l'ajout du champ = version 0.
+ *  L'identité passe par authCache (TTL 30 s + invalidation aux écritures révocantes) :
+ *  fini le SELECT user systématique sur chaque appel authentifié. */
 async function tokenRevoked(payload: TokenPayload): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: payload.id }, select: { tokenVersion: true, deletedAt: true } });
-  if (!user || user.deletedAt) return true;
-  // ?? 0 des deux côtés : tolère les fixtures de test écrites à la main sans tokenVersion.
-  return (payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0);
+  const identity = await getAuthIdentity(payload.id);
+  if (!identity || identity.deleted) return true;
+  // ?? 0 côté payload : tolère les fixtures de test écrites à la main sans tokenVersion.
+  return (payload.tokenVersion ?? 0) !== identity.tokenVersion;
 }
 
 /**

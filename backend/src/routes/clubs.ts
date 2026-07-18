@@ -113,6 +113,7 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_A_REFEREE:         403,
   TOURNAMENT_NOT_YOURS:  403,
   TOURNAMENT_NOT_FOUND:  404,
+  INVALID_DATE:          400,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -165,6 +166,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Disponibilités de tous les terrains du club pour une date+durée (vue planning).
+// Endpoint public le plus martelé du backend (rush de minuit) : servi par le
+// micro-cache TTL court + single-flight (availabilityCache) — la résolution
+// slug→club vit dans le calcul mis en cache, un hit ne touche pas la base.
 router.get('/:slug/availability', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const date = asString(req.query.date);
@@ -172,11 +176,8 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
     if (isNaN(duration) || duration <= 0 || duration > 240) return void res.status(400).json({ error: 'duration invalide' });
 
-    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
-    if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
-
     const clubSportId = req.query.clubSportId ? asString(req.query.clubSportId) : undefined;
-    res.json(await availabilityService.getClubAvailability(club.id, date, duration, clubSportId));
+    res.json(await availabilityService.getClubAvailabilityBySlug(asString(req.params.slug), date, duration, clubSportId));
   } catch (err) { handleError(err, res, next); }
 });
 

@@ -60,6 +60,13 @@ Incompatible avec Turbopack. Ne pas l'activer dans next.config.ts.
 
 **Créneaux** : 8h–22h heure Paris (UTC+2 hardcodé), pas de 30 min.
 
+**Perfs « rush de minuit » (2026-07-18)** — durcissement du chemin chaud de lecture (audit perfs : des centaines de joueurs rafraîchissent la grille Réserver à l'ouverture des créneaux). Quatre briques, backend + Caddy, AUCUN changement frontend :
+1. **Micro-cache disponibilités** `src/services/availabilityCache.ts` (mémoire process, TTL 2 s + single-flight, garde-fou 1000 entrées) servi par `AvailabilityService.getClubAvailabilityBySlug` — la route publique `GET /:slug/availability` ne touche plus la base sur un hit (la résolution slug→club vit DANS le calcul caché). ⚠️ **Invariant : toute écriture qui change une disponibilité DOIT appeler `invalidateClubAvailability(clubId)`** — câblé sur hold, confirm, performCancel, admin create/reschedule, séries (create/cancel) et le job cleanup (`releaseExpiredHolds`, extrait et testé) ; une invalidation oubliée se répare seule à l'expiration du TTL. Cache **désactivé sous jest** (TTL 0 — les suites de routes mockent Prisma requête par requête) ; les tests du cache le réactivent via `_setAvailabilityCacheTtl`.
+2. **Fini le N+1 d'availability** : `getClubAvailability` = 3 requêtes SQL constantes (club, terrains, réservations groupées `resourceId IN`) au lieu de 2+2×terrains ; `classifySlot` calculé UNE fois par créneau (le prix en découle — `slotPriceCents` refaisait la même marche luxon en interne). Grille construite par le helper pur partagé `buildSlots`.
+3. **Cache d'identité auth** `src/middleware/authCache.ts` (TTL 30 s, désactivé sous jest) : `tokenRevoked` ne fait plus un SELECT user par requête authentifiée. ⚠️ **Invariant : toute écriture révocante (tokenVersion++, deletedAt) DOIT appeler `invalidateAuthIdentity(userId)`** — câblé sur reset-password et suppression de compte (sans quoi le NOUVEAU token post-reset serait refusé jusqu'à 30 s).
+4. **Compression Caddy** : snippet `(compress)` (`encode zstd gzip`) importé par les 3 blocs du `Caddyfile`, liste de types explicite **sans `text/event-stream`** (les 4 canaux SSE traversent sans compresseur). Ni Express ni l'API n'en faisaient nulle part.
+Les deux caches sont **process-local** (comme les canaux SSE) : passage en multi-instance un jour ⇒ les remplacer par Redis, même chantier que le pub/sub SSE. Tests : `availabilityCache`/`authCache` (nouvelles suites), `availability.service` (N+1/groupage), `clubs.availability.routes` (nouvelle — 404/400/câblage cache), blocs « invalide le cache » dans `reservation.service`/`reservation.series`/`cleanup.job`/`auth.routes`/`account.service`.
+
 ## Bugs connus et résolus
 
 - **EPIPE crash** dev server → géré dans `frontend/instrumentation.ts`

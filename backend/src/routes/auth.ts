@@ -6,6 +6,7 @@ import { prisma } from '../db/prisma';
 import { generateCode } from '../utils/code';
 import { sendVerificationEmail, sendPasswordResetEmail, emailDevMode } from '../email/mailer';
 import { rateLimit } from '../middleware/rateLimit';
+import { invalidateAuthIdentity } from '../middleware/authCache';
 import { LEGAL_VERSIONS } from '../content/legalVersions';
 
 const router = Router();
@@ -291,6 +292,8 @@ router.post('/reset-password', rateLimit(
       prisma.user.update({ where: { id: user.id }, data: { password: hashed, tokenVersion: nextTokenVersion } }),
       prisma.passwordReset.delete({ where: { userId: user.id } }),
     ]);
+    // Sans cette purge, le NOUVEAU token serait refusé jusqu'à expiration du cache (TTL 30 s).
+    invalidateAuthIdentity(user.id);
     res.json({ token: signToken({ ...user, tokenVersion: nextTokenVersion }), user: publicUser(user) });
   } catch (err) {
     next(err);
