@@ -221,7 +221,7 @@ export const api = {
   ) =>
     request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null; customerSessionClientSecret: string | null }>(
       `/api/${kind}/${eventId}/registrations/${regId}/intent`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) },
       token,
     ),
 
@@ -653,10 +653,10 @@ export const api = {
   getClubTopMonth: (slug: string) => request<TopMonthEntry[]>(`/api/clubs/${encodeURIComponent(slug)}/top-month`),
   createOfferPlanIntent: (slug: string, planId: string, token: string) =>
     request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
-      `/api/clubs/${encodeURIComponent(slug)}/offers/plans/${planId}/intent`, { method: 'POST' }, token),
+      `/api/clubs/${encodeURIComponent(slug)}/offers/plans/${planId}/intent`, { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) }, token),
   createOfferPackageIntent: (slug: string, templateId: string, token: string) =>
     request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
-      `/api/clubs/${encodeURIComponent(slug)}/offers/packages/${templateId}/intent`, { method: 'POST' }, token),
+      `/api/clubs/${encodeURIComponent(slug)}/offers/packages/${templateId}/intent`, { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) }, token),
   confirmOfferPayment: (slug: string, stripePaymentIntentId: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${encodeURIComponent(slug)}/offers/confirm`,
       { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) }, token),
