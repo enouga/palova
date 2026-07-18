@@ -40,6 +40,10 @@ it('un token a jour (meme tokenVersion, compte actif) reste valide', async () =>
       ? Promise.resolve({ tokenVersion: 2, deletedAt: null })
       : Promise.resolve({ id: 'u1', email: 't@x.fr', firstName: 'X', lastName: 'Y', isSuperAdmin: false })
   )) as never);
+  // GET /profile calcule aussi le statut légal (legalService.statusFor) : mocks requis
+  // sinon rows/ownsClub valent undefined et le service casse sur undefined.find (cf. me.ts).
+  prismaMock.legalAcceptance.findMany.mockResolvedValue([]);
+  prismaMock.clubMember.findFirst.mockResolvedValue(null);
   const res = await request(app).get('/api/me/profile').set('Authorization', `Bearer ${validToken}`);
   expect(res.status).toBe(200);
 });

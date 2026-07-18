@@ -17,6 +17,7 @@ import { AccountService } from '../services/account.service';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
 import { MatchService } from '../services/match.service';
+import { legalService } from '../services/legal.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -106,7 +107,21 @@ router.get('/reservations', authMiddleware, async (req: AuthRequest, res: Respon
 router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: PROFILE_SELECT });
-    res.json(user);
+    if (!user) return void res.json(user);
+    const legal = await legalService.statusFor(req.user!.id);
+    res.json({ ...user, legal });
+  } catch (err) { next(err); }
+});
+
+// Acceptation d'une nouvelle version d'un document légal depuis le bandeau « conditions ont évolué ».
+router.post('/legal/accept', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const document = String(req.body?.document ?? '');
+    if (!['CGU', 'PRIVACY', 'CGV_SAAS'].includes(document)) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    await legalService.record({ userId: req.user!.id, document: document as 'CGU' | 'PRIVACY' | 'CGV_SAAS', context: 'update_banner' });
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
