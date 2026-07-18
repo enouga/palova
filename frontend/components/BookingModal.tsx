@@ -455,7 +455,7 @@ export default function BookingModal({
               {/* En-tête : pill « créneau bloqué » + chip timer */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700,
-                  color: phase === 'held' ? '#15803d' : th.textMute, background: phase === 'held' ? 'rgba(34,197,94,0.13)' : th.surface2, borderRadius: 999, padding: '5px 12px 5px 10px' }}>
+                  color: phase === 'held' ? th.successInk : th.textMute, background: phase === 'held' ? `${th.success}22` : th.surface2, borderRadius: 999, padding: '5px 12px 5px 10px' }}>
                   {phase === 'held'
                     ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: th.success, boxShadow: `0 0 0 4px ${th.success}2e` }} />Créneau bloqué pour vous</>
                     : <><span style={{ width: 7, height: 7, borderRadius: '50%', background: th.textFaint }} />Blocage du créneau…</>}

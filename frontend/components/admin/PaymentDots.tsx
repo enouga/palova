@@ -1,9 +1,10 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import type { PaymentDotsModel } from '@/lib/caisse';
 
 /** Vert « soldé » des pastilles de paiement. */
-export const SETTLED_COLOR = '#34b888';
+export const SETTLED_COLOR = ACCENTS.emerald;
 
 /**
  * Rangée de pastilles de paiement d'un bloc du planning : 1 point plein par

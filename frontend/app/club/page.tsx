@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { api, ClubPresentation, assetUrl } from '@/lib/api';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn } from '@/lib/theme';
+import { ACCENTS, inkOn } from '@/lib/theme';
 import { ClubNav } from '@/components/ClubNav';
 import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
@@ -144,7 +144,7 @@ export default function ClubPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
                 {hours && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700 }}>
-                    <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 99, background: hours.open ? '#34b27b' : th.textFaint, display: 'inline-block' }} />
+                    <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 99, background: hours.open ? ACCENTS.emerald : th.textFaint, display: 'inline-block' }} />
                     {hours.label}
                   </div>
                 )}
