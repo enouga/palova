@@ -97,7 +97,8 @@ function shiftDate(iso: string, days: number): string {
 
 function fmtDay(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
+  const raw = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 function nowMinutes(tz: string): number {
@@ -677,7 +678,7 @@ export default function AdminPlanningPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button type="button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Jour précédent" style={arrow}>‹</button>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 17, color: th.text, textTransform: 'capitalize', lineHeight: 1.1 }}>{fmtDay(date)}</span>
+            <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 17, color: th.text, lineHeight: 1.1 }}>{fmtDay(date)}</span>
             <div style={{ marginTop: 4 }}><DateField value={date} onChange={setDate} size="sm" /></div>
           </div>
           <button type="button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Jour suivant" style={arrow}>›</button>
