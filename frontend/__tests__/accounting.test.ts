@@ -50,6 +50,10 @@ describe('methodLabel', () => {
   it('renvoie la clé brute si inconnue', () => {
     expect(methodLabel('UNKNOWN_METHOD')).toBe('UNKNOWN_METHOD');
   });
+
+  it('traduit SUBSCRIPTION (couverture abonnement auto)', () => {
+    expect(methodLabel('SUBSCRIPTION')).toBe('Abonnement (auto)');
+  });
 });
 
 describe('fmtAmount', () => {
