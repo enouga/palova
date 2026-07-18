@@ -1691,6 +1691,8 @@ export interface ClubAdminDetail {
   legalRepresentative: string | null;
   legalEmail: string | null;
   legalPhone: string | null;
+  mediatorName: string | null;
+  mediatorUrl: string | null;
 }
 
 /** Statut d'avancement du paramétrage (guide de démarrage), dérivé de l'état réel. */
@@ -1702,6 +1704,7 @@ export interface OnboardingStatus {
   stripeStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
   offersCount: number;
   eventsCount: number;
+  hasLegalInfo: boolean;
 }
 
 // --- Contenu club (pages légales/offres + FAQ) ---
@@ -1711,7 +1714,8 @@ export type ClubPageKind = 'CGV' | 'MENTIONS_LEGALES' | 'CONFIDENTIALITE' | 'OFF
 export interface PublicClubPage {
   kind: ClubPageKind;
   bodyMarkdown: string;
-  updatedAt: string;
+  updatedAt: string | null;
+  isFallback?: boolean;
 }
 
 export interface FaqEntry { id: string; category: string; question: string; answer: string }
@@ -1797,6 +1801,8 @@ export type UpdateClubBody = Partial<{
   legalRepresentative: string;
   legalEmail: string;
   legalPhone: string;
+  mediatorName: string;
+  mediatorUrl: string;
 }>;
 
 // --- Types back-office ---

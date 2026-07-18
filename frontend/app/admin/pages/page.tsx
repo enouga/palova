@@ -114,6 +114,7 @@ function LegalForm({ clubId, token, club, onSaved }: { clubId: string; token: st
     vatNumber: club.vatNumber ?? '', legalRepresentative: club.legalRepresentative ?? '',
     legalEmail: club.legalEmail ?? '', legalPhone: club.legalPhone ?? '',
     address: club.address ?? '', city: club.city ?? '',
+    mediatorName: club.mediatorName ?? '', mediatorUrl: club.mediatorUrl ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -137,6 +138,8 @@ function LegalForm({ clubId, token, club, onSaved }: { clubId: string; token: st
     ['legalPhone', 'Téléphone'],
     ['address', 'Adresse'],
     ['city', 'Ville'],
+    ['mediatorName', 'Médiateur de la consommation', 'ex. CM2C — obligatoire pour vendre aux particuliers'],
+    ['mediatorUrl', 'Site du médiateur', 'https://…'],
   ];
 
   return (
