@@ -28,6 +28,7 @@ export default function NewClubPage() {
   const [loading, setLoading]     = useState(false);
   const [step, setStep]           = useState<'form' | 'verify'>('form');
   const [pending, setPending]     = useState<{ email: string; devCode?: string } | null>(null);
+  const [accepted, setAccepted]   = useState(false);
 
   useEffect(() => {
     api.getSports().then((s) => { setSports(s); if (s[0]) setSportId(s[0].id); }).catch(() => setSports([]));
@@ -36,7 +37,7 @@ export default function NewClubPage() {
   // Après validation du code : le compte gérant est actif → on crée son club et on bascule sur l'admin.
   const finishClub = async (auth: AuthResponse) => {
     try {
-      const club = await api.createClub({ name: clubName, city: city || undefined, siret: siret.trim(), ownerPhone: phone.trim() }, auth.token);
+      const club = await api.createClub({ name: clubName, city: city || undefined, siret: siret.trim(), ownerPhone: phone.trim(), acceptSaasTerms: true }, auth.token);
       if (sportId) {
         try { await api.adminAddSport(club.id, sportId, auth.token); } catch { /* sport activable plus tard */ }
       }
@@ -61,9 +62,10 @@ export default function NewClubPage() {
     if (password.length < 8) { setError('Mot de passe : 8 caractères minimum.'); return; }
     if (!siretIsValidFormat(siret.trim())) { setError('Le numéro SIRET est invalide (14 chiffres).'); return; }
     if (!phone.trim()) { setError('Le téléphone du gérant est requis.'); return; }
+    if (!accepted) { setError('Merci d\'accepter les CGV Palova pour créer votre club.'); return; }
     setLoading(true);
     try {
-      const r = await api.register({ email, password, firstName, lastName });
+      const r = await api.register({ email, password, firstName, lastName, acceptTerms: true });
       setPending({ email: r.email, devCode: r.devCode });
       setStep('verify');
     } catch (err) {
@@ -123,6 +125,17 @@ export default function NewClubPage() {
             {sports.map((s) => <option key={s.id} value={s.id}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>)}
           </SelectField>
 
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer' }}>
+            <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)}
+              aria-label="J'accepte les conditions générales d'utilisation, les CGV Palova et l'annexe de sous-traitance des données"
+              style={{ width: 15, height: 15, marginTop: 2, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
+            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, lineHeight: 1.5 }}>
+              J&apos;accepte les{' '}
+              <a href="/cgu" target="_blank" rel="noopener noreferrer" style={{ color: th.text, textDecoration: 'underline' }}>CGU</a>,{' '}
+              les <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.text, textDecoration: 'underline' }}>CGV Palova</a>{' '}
+              et leur annexe de sous-traitance des données (RGPD).
+            </span>
+          </label>
           <div style={{ height: 4 }} />
           <Btn type="submit" full icon="arrowR" disabled={loading}>
             {loading ? 'Envoi du code…' : 'Créer mon club'}
