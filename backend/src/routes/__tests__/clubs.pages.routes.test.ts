@@ -37,11 +37,22 @@ describe('public — pages de contenu', () => {
     expect(res.body.bodyMarkdown).toBe('# CGV');
   });
 
-  it('GET /api/clubs/:slug/pages/:kind non publiée → 404', async () => {
+  it('GET /api/clubs/:slug/pages/:kind OFFRES non publiée → 404 (pas de repli commercial)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
+    prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
+    const res = await request(app).get('/api/clubs/arena/pages/OFFRES');
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/clubs/:slug/pages/:kind CGV non publiée → 200 repli légal (isFallback true)', async () => {
     prismaMock.club.findUnique.mockResolvedValue({ id: 'club-1', status: 'ACTIVE' } as any);
     prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
     const res = await request(app).get('/api/clubs/arena/pages/CGV');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body.isFallback).toBe(true);
+    expect(res.body.updatedAt).toBeNull();
+    expect(typeof res.body.bodyMarkdown).toBe('string');
+    expect(res.body.bodyMarkdown.length).toBeGreaterThan(0);
   });
 
   it('GET /api/clubs/:slug/pages/:kind type inconnu → 400', async () => {
