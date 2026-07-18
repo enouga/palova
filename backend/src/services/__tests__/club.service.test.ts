@@ -428,14 +428,14 @@ describe('ClubService.createClub — slugs réservés / alias', () => {
       clubMember: { create: jest.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(tx));
-    await expect(service.createClub({ ownerId: 'u1', name: 'Ancien Club', siret: '44306184100047', ownerPhone: '0600000000' })).rejects.toThrow('SLUG_TAKEN');
+    await expect(service.createClub({ ownerId: 'u1', name: 'Ancien Club', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true })).rejects.toThrow('SLUG_TAKEN');
     expect(tx.club.create).not.toHaveBeenCalled();
   });
 });
 
 describe('createClub — garde SIRET', () => {
   let service: ClubService;
-  const base = { ownerId: 'u1', name: 'Padel Arena', siret: '44306184100047', ownerPhone: '0600000000' };
+  const base = { ownerId: 'u1', name: 'Padel Arena', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true };
 
   beforeEach(() => {
     service = new ClubService();
@@ -481,6 +481,21 @@ describe('createClub — garde SIRET', () => {
     sendMailMock.mockRejectedValue(new Error('SMTP down'));
     const result = await service.createClub(base);
     expect(result).toBeDefined();
+  });
+
+  it('refuse la création sans acceptation des CGV SaaS', async () => {
+    await expect(service.createClub({
+      ownerId: 'u1', name: 'Club Test', siret: '44306184100047', ownerPhone: '0600000000',
+    })).rejects.toThrow('CGV_NOT_ACCEPTED');
+  });
+
+  it('trace l\'acceptation CGV_SAAS dans la transaction de création', async () => {
+    await service.createClub({
+      ownerId: 'u1', name: 'Club Test', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true,
+    });
+    expect(prismaMock.legalAcceptance.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'u1', clubId: expect.any(String), document: 'CGV_SAAS', context: 'club_create' }),
+    });
   });
 });
 
@@ -844,7 +859,7 @@ describe('club.service — persistance du département', () => {
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
     const service = new ClubService();
-    await service.createClub({ name: 'Test', address: '1 rue', city: 'Paris', ownerId: 'u1', siret: '44306184100047', ownerPhone: '0600000000' } as any);
+    await service.createClub({ name: 'Test', address: '1 rue', city: 'Paris', ownerId: 'u1', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true } as any);
 
     const data = prismaMock.club.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ department: 'Paris', departmentCode: '75' });
@@ -900,7 +915,7 @@ describe('ClubService — géocodage create/update', () => {
     prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
-    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000' });
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true });
 
     expect(geocodeMock).toHaveBeenCalledWith({ address: '12 rue X', city: 'Paris' });
     const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
@@ -913,7 +928,7 @@ describe('ClubService — géocodage create/update', () => {
     prismaMock.club.create.mockResolvedValue({ id: 'c1' } as any);
     prismaMock.clubMember.create.mockResolvedValue({} as any);
 
-    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000' });
+    await service.createClub({ ownerId: 'o1', name: 'Le Padel', address: '12 rue X', city: 'Paris', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true });
 
     const data = (prismaMock.club.create as jest.Mock).mock.calls[0][0].data;
     expect(data.latitude).toBeUndefined();

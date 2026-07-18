@@ -12,6 +12,7 @@ import { computeResultStats, ResultStats } from './rating/resultStats';
 import { resolvePreferredSportKey } from './rating/preferredSport';
 import { geocodeAddress, haversineKm } from './geo.service';
 import { siretIsValidFormat, checkSiret } from './siret.service';
+import { LEGAL_VERSIONS } from '../content/legalVersions';
 import { sendMail } from '../email/mailer';
 import { buildNewClubEmail } from '../email/templates/clubLifecycle';
 import { PALOVA_BRAND } from '../email/templates/layout';
@@ -123,6 +124,7 @@ interface CreateClubParams {
   timezone?: string;
   siret?: string;
   ownerPhone?: string;
+  acceptSaasTerms?: boolean;
 }
 
 export class ClubService {
@@ -141,6 +143,10 @@ export class ClubService {
     const ownerPhone = (params.ownerPhone ?? '').trim();
     if (!siret || !siretIsValidFormat(siret)) throw new Error('SIRET_INVALID');
     if (!ownerPhone) throw new Error('VALIDATION_ERROR');
+
+    // Contrat SaaS : la case « J'accepte les CGV Palova (incluant l'annexe de
+    // sous-traitance des données) » est obligatoire en self-service.
+    if (params.acceptSaasTerms !== true) throw new Error('CGV_NOT_ACCEPTED');
 
     // Vérification API d'État HORS transaction. null = API injoignable → club « non vérifié ».
     const siretCheck = await checkSiret(siret);
@@ -178,6 +184,12 @@ export class ClubService {
         });
         await tx.clubMember.create({ data: { userId: params.ownerId, clubId: created.id, role: 'OWNER' } });
         await tx.user.update({ where: { id: params.ownerId }, data: { phone: ownerPhone } });
+        await tx.legalAcceptance.create({
+          data: {
+            userId: params.ownerId, clubId: created.id, document: 'CGV_SAAS',
+            version: LEGAL_VERSIONS.CGV_SAAS, context: 'club_create',
+          },
+        });
         return created;
       });
     } catch (err) {

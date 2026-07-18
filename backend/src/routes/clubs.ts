@@ -61,6 +61,7 @@ const matchAlertService = new MatchAlertService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
+  CGV_NOT_ACCEPTED:      400,
   SIRET_INVALID:         400,
   SIRET_NOT_FOUND:       400,
   SIRET_INACTIVE:        400,
@@ -138,8 +139,8 @@ router.get('/_resolve/:slug', async (req: Request, res: Response, next: NextFunc
 // Auto-inscription : crée un club, l'auteur devient OWNER.
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { name, slug, address, city, timezone, siret, ownerPhone } = req.body;
-    const club = await clubService.createClub({ ownerId: req.user!.id, name, slug, address, city, timezone, siret, ownerPhone });
+    const { name, slug, address, city, timezone, siret, ownerPhone, acceptSaasTerms } = req.body;
+    const club = await clubService.createClub({ ownerId: req.user!.id, name, slug, address, city, timezone, siret, ownerPhone, acceptSaasTerms });
     res.status(201).json(club);
   } catch (err) { handleError(err, res, next); }
 });

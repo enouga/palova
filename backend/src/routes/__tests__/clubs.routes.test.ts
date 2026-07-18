@@ -34,15 +34,25 @@ describe('routes clubs — POST /api/clubs', () => {
     expect(res.body).toEqual({ error: 'SIRET_INVALID' });
   });
 
-  it('transmet siret et ownerPhone au service', async () => {
+  it('transmet siret, ownerPhone et acceptSaasTerms au service', async () => {
     mockCreateClub.mockResolvedValue({ id: 'club-1', slug: 'padel-test' });
     const res = await request(app)
       .post('/api/clubs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Padel Test', siret: '44306184100047', ownerPhone: '0600000000' });
+      .send({ name: 'Padel Test', siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true });
     expect(res.status).toBe(201);
     expect(mockCreateClub).toHaveBeenCalledWith(
-      expect.objectContaining({ siret: '44306184100047', ownerPhone: '0600000000' }),
+      expect.objectContaining({ siret: '44306184100047', ownerPhone: '0600000000', acceptSaasTerms: true }),
     );
+  });
+
+  it('mappe CGV_NOT_ACCEPTED sur 400', async () => {
+    mockCreateClub.mockRejectedValue(new Error('CGV_NOT_ACCEPTED'));
+    const res = await request(app)
+      .post('/api/clubs')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Padel Test', siret: '44306184100047', ownerPhone: '0600000000' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'CGV_NOT_ACCEPTED' });
   });
 });
