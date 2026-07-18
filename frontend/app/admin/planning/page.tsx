@@ -24,7 +24,7 @@ import { Icon, IconName } from '@/components/ui/Icon';
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack } from '@/lib/theme';
+import { gaugeTrack, dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useAdminChrome } from '../layout';
 import { Btn } from '@/components/ui/atoms';
@@ -715,7 +715,7 @@ export default function AdminPlanningPage() {
         </span>
       </div>
 
-      {error && <div style={{ marginBottom: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginBottom: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -864,7 +864,7 @@ export default function AdminPlanningPage() {
             </div>
 
             {error && (
-              <div style={{ marginTop: 10, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+              <div style={{ ...dangerBanner(th), marginTop: 10 }}>{error}</div>
             )}
             {/* Bandeau d'état — reste à encaisser / soldé. Pour une résa active, l'en-tête de la
                 caisse (CashRegister) l'affiche déjà → on ne le garde que pour une résa annulée. */}

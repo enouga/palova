@@ -4,6 +4,7 @@ import { api, PackageTemplate, SubscriptionPlan, SubscriptionOverview } from '@/
 import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import {
@@ -186,7 +187,7 @@ export default function AdminPackagesPage() {
         </button>
       </div>
 
-      {error && <div style={{ marginTop: 16, background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ ...dangerBanner(th), marginTop: 16 }}>{error}</div>}
 
       {loading ? (
         <div style={{ marginTop: 20, fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>

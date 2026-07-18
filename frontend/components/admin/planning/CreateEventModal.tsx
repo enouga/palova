@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { AdminResource, ClubReservation, Coach, CreateMemberBody, Member, ReservationType } from '@/lib/api';
 import { effectiveDurations, defaultDuration, endTimeFrom } from '@/lib/duration';
 import { tariffCents, fmtEuros } from '@/lib/caisse';
@@ -217,7 +218,7 @@ export function CreateEventModal({
         </div>
 
         {error && (
-          <div style={{ margin: '12px 22px 0', background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+          <div style={{ ...dangerBanner(th), margin: '12px 22px 0' }}>{error}</div>
         )}
 
         <div className="pl-create-grid" style={{ padding: 22, overflow: 'auto' }}>

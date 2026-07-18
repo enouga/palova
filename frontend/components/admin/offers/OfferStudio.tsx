@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { assetUrl, CreatePackageTemplateBody, CreateSubscriptionPlanBody, PackageKind, PackageTemplate, SubscriptionBenefit, SubscriptionPlan } from '@/lib/api';
 import { offerTint, sportOfferTint } from '@/lib/adminOffers';
 import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
@@ -156,7 +157,7 @@ export function OfferStudio(props: OfferStudioProps) {
         </div>
 
         {error && (
-          <div style={{ margin: '12px 20px 0', background: '#ff7a4d', color: '#fff', borderRadius: 12, padding: '10px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{error}</div>
+          <div style={{ ...dangerBanner(th), margin: '12px 20px 0' }}>{error}</div>
         )}
 
         <div className="pl-create-grid" style={{ padding: 20, overflow: 'auto' }}>

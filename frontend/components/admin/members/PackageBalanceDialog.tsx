@@ -1,6 +1,7 @@
 'use client';
 import { useState, CSSProperties } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { dangerBanner } from '@/lib/theme';
 import { api, PaymentMethod } from '@/lib/api';
 
 type Bal = {
@@ -82,7 +83,7 @@ export function PackageBalanceDialog({ clubId, userId, token, mode, bal, onClose
             : 'Ajuste le solde sans encaissement (correction d’erreur). La modification est journalisée dans les notes.'}
         </p>
 
-        {err && <div style={{ marginBottom: 12, background: '#ff7a4d', color: '#fff', borderRadius: 10, padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ ...dangerBanner(th), marginBottom: 12 }}>{err}</div>}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {mode === 'recharge' ? (
