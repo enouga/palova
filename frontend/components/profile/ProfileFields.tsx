@@ -8,7 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
  * un lecteur d'écran annoncerait deux fois le même mot.
  * `focused` colore le bord + le libellé (piloté par le champ qui vit dedans).
  */
-export function FieldShell({ label, focused, children }: { label: string; focused?: boolean; children: ReactNode }) {
+export function FieldShell({ label, focused, children }: { label?: string; focused?: boolean; children: ReactNode }) {
   const { th } = useTheme();
   return (
     <div style={{
@@ -18,10 +18,12 @@ export function FieldShell({ label, focused, children }: { label: string; focuse
         : `inset 0 0 0 1px ${th.lineStrong}`,
       transition: 'box-shadow .15s',
     }}>
-      <span aria-hidden style={{
-        position: 'absolute', top: 7, left: 13, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
-        letterSpacing: 0.4, textTransform: 'uppercase', color: focused ? th.accent : th.textFaint,
-      }}>{label}</span>
+      {label && (
+        <span aria-hidden style={{
+          position: 'absolute', top: 7, left: 13, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
+          letterSpacing: 0.4, textTransform: 'uppercase', color: focused ? th.accent : th.textFaint,
+        }}>{label}</span>
+      )}
       {children}
     </div>
   );
@@ -78,12 +80,12 @@ export function ProfileSelect({ label, value, onChange, options }: {
 }
 
 /** Choix court (2-4 valeurs) rendu en pills DANS le bloc de champ : sexe, sport préféré… */
-export function PillChoice<T extends string>({ label, value, onChange, options }: {
-  label: string; value: T | null; onChange: (v: T) => void; options: { value: T; label: string }[];
+export function PillChoice<T extends string>({ label, hideLabel, value, onChange, options }: {
+  label: string; hideLabel?: boolean; value: T | null; onChange: (v: T) => void; options: { value: T; label: string }[];
 }) {
   const { th } = useTheme();
   return (
-    <FieldShell label={label}>
+    <FieldShell label={hideLabel ? undefined : label}>
       <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 3 }}>
         {options.map((o) => {
           const active = o.value === value;
