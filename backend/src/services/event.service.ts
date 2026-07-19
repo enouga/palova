@@ -519,6 +519,31 @@ export class EventService {
     return { created };
   }
 
+  /**
+   * Annule une série : passe CANCELLED toutes les occurrences FUTURES encore actives, en
+   * réutilisant updateEvent (déjà testé) pour chacune — donc notif « activité annulée par
+   * le club » + remboursement des inscrits payés, sans dupliquer cette logique. Les
+   * occurrences passées ne sont jamais touchées. Idempotent (série déjà annulée → 0).
+   */
+  async adminCancelSeries(seriesId: string, clubId: string): Promise<{ cancelled: number }> {
+    const series = await prisma.clubEventSeries.findUnique({ where: { id: seriesId } });
+    if (!series) throw new Error('SERIES_NOT_FOUND');
+    if (series.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const now = new Date();
+    const future = await prisma.clubEvent.findMany({
+      where: { seriesId, status: { not: 'CANCELLED' }, startTime: { gt: now } },
+      select: { id: true },
+    });
+
+    for (const e of future) {
+      await this.updateEvent(e.id, clubId, { status: 'CANCELLED' });
+    }
+
+    await prisma.clubEventSeries.update({ where: { id: seriesId }, data: { cancelledAt: now } });
+    return { cancelled: future.length };
+  }
+
   async createEvent(clubId: string, input: CreateEventInput) {
     const data = this.validateEventInput(input, true);
     if (input.clubSportId != null) {

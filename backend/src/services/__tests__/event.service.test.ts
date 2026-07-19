@@ -918,3 +918,48 @@ describe('EventService.adminExtendSeries', () => {
       .rejects.toThrow('SERIES_TOO_LONG');
   });
 });
+
+describe('EventService.adminCancelSeries', () => {
+  let service: EventService;
+  beforeEach(() => { service = new EventService(); });
+
+  it('SERIES_NOT_FOUND si la série n\'existe pas', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(null);
+    await expect(service.adminCancelSeries('missing', 'club-demo')).rejects.toThrow('SERIES_NOT_FOUND');
+  });
+
+  it('CLUB_MISMATCH si la série appartient à un autre club', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'other' } as any);
+    await expect(service.adminCancelSeries('series-1', 'club-demo')).rejects.toThrow('CLUB_MISMATCH');
+  });
+
+  it('annule chaque occurrence future non annulée via updateEvent (notif + remboursement réutilisés), laisse les passées intactes', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'club-demo' } as any);
+    prismaMock.clubEvent.findMany.mockResolvedValue([{ id: 'ev-future-1' }, { id: 'ev-future-2' }] as any);
+    const updateSpy = jest.spyOn(service, 'updateEvent').mockResolvedValue({} as any);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+
+    const result = await service.adminCancelSeries('series-1', 'club-demo');
+
+    expect(result.cancelled).toBe(2);
+    expect(updateSpy).toHaveBeenCalledWith('ev-future-1', 'club-demo', { status: 'CANCELLED' });
+    expect(updateSpy).toHaveBeenCalledWith('ev-future-2', 'club-demo', { status: 'CANCELLED' });
+    // La requête ne cible que les occurrences futures non déjà annulées.
+    expect(prismaMock.clubEvent.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ seriesId: 'series-1', status: { not: 'CANCELLED' }, startTime: { gt: expect.any(Date) } }),
+    }));
+    expect(prismaMock.clubEventSeries.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'series-1' }, data: expect.objectContaining({ cancelledAt: expect.any(Date) }),
+    }));
+    updateSpy.mockRestore();
+  });
+
+  it('idempotent : renvoie {cancelled:0} sans erreur si aucune occurrence future ne reste (série déjà annulée)', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'club-demo' } as any);
+    prismaMock.clubEvent.findMany.mockResolvedValue([]);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+
+    const result = await service.adminCancelSeries('series-1', 'club-demo');
+    expect(result.cancelled).toBe(0);
+  });
+});
