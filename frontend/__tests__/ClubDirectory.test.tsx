@@ -152,3 +152,22 @@ it('mode contrôlé : un changement de la prop city relance listClubs avec la no
     expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ city: 'Marseille' })),
   );
 });
+
+const clubFixture = {
+  id: 'c1', slug: 'club-1', name: 'Padel Club 1', city: 'Paris', description: null,
+  accentColor: '#123456', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1,
+};
+
+it('prop deptCodes → listClubs reçoit dept', async () => {
+  authToken = null;
+  render(<ThemeProvider><ClubDirectory deptCodes={['2A', '2B']} /></ThemeProvider>);
+  await waitFor(() => expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ dept: ['2A', '2B'] })));
+});
+
+it('onCount reçoit le nombre de clubs affichés', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture]);
+  const onCount = jest.fn();
+  render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
+  await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
+});

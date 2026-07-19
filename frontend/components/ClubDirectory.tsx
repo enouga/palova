@@ -12,7 +12,7 @@ import { ClubCard } from '@/components/ClubCard';
 // Mode contrôlé (props city/coords, ex. future page /decouvrir) : la page porte une barre de
 // localisation PARTAGÉE (ville + géoloc) au-dessus — le composant masque alors ses propres
 // contrôles de localisation et se contente d'appliquer city/coords reçus comme filtre.
-export function ClubDirectory({ city: cityProp, coords: coordsProp }: { city?: string; coords?: { lat: number; lng: number } | null } = {}) {
+export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, onCount }: { city?: string; coords?: { lat: number; lng: number } | null; deptCodes?: string[]; onCount?: (n: number) => void } = {}) {
   const { th } = useTheme();
   const { token } = useAuth();
   const [sports, setSports] = useState<Sport[]>([]);
@@ -25,7 +25,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp }: { city?: s
   const [coordsInput, setCoordsInput] = useState<{ lat: number; lng: number } | null>(null);
   const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied'>('idle');
 
-  const controlled = cityProp !== undefined || coordsProp !== undefined;
+  const controlled = cityProp !== undefined || coordsProp !== undefined || deptCodes !== undefined;
   const effCity = controlled ? (cityProp ?? '') : cityInput;
   const effCoords = controlled ? (coordsProp ?? null) : coordsInput;
 
@@ -42,14 +42,17 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp }: { city?: s
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setClubs(await api.listClubs({
+      const list = await api.listClubs({
         q: q || undefined, city: effCity || undefined, sport: sport || undefined,
         ...(effCoords ? { lat: effCoords.lat, lng: effCoords.lng } : {}),
-      }));
+        ...(deptCodes && deptCodes.length ? { dept: deptCodes } : {}),
+      });
+      setClubs(list);
       setError(false);
-    } catch { setClubs([]); setError(true); }
+      onCount?.(list.length);
+    } catch { setClubs([]); setError(true); onCount?.(0); }
     finally { setLoading(false); }
-  }, [q, effCity, effCoords, sport]);
+  }, [q, effCity, effCoords, sport, deptCodes?.join(','), onCount]);
 
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
