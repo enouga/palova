@@ -183,7 +183,11 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           .cn-actions > a, .cn-actions > button, .cn-actions > div > button, .cn-actions > div > a {
             width: 34px !important; height: 34px !important;
           }
-          .cn-actions > div > button > span, .cn-actions > div > button > img {
+          /* :not([style*="position: absolute"]) exclut le badge de non-lus de NotificationBell
+             (span position:absolute en coin, même grappe div > button > span que l'avatar
+             ProfileMenu) — sans lui la pastille 16x16 était écrasée à 34x34 et débordait sur
+             la cloche. L'avatar (photo ou initiales) n'a jamais position:absolute. */
+          .cn-actions > div > button > span:not([style*="position: absolute"]), .cn-actions > div > button > img {
             width: 34px !important; height: 34px !important;
           }
         }

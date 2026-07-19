@@ -354,4 +354,19 @@ describe('ClubNav', () => {
     // les onglets sans version courte n'en rendent pas
     expect(screen.getByText('Réserver').closest('a')!.querySelector('.cn-lbl-short')).toBeNull();
   });
+
+  it("la règle CSS mobile ≤400px qui rétrécit l'avatar exclut le badge de non-lus (position:absolute) pour ne pas l'écraser (régression collision de sélecteur)", () => {
+    // jsdom n'applique pas les media queries au layout : ce test ne peut vérifier que la
+    // PRÉSENCE littérale de l'exclusion dans le texte de la règle CSS, pas son effet visuel
+    // réel (pastille 16x16 non écrasée à 34x34 sur un vrai navigateur ≤400px). Le badge de
+    // NotificationBell a toujours position:absolute en première propriété de son style inline
+    // (span overlay) ; l'avatar ProfileMenu (span d'initiales) ne l'a jamais — c'est la
+    // distinction que le sélecteur `:not([style*="position: absolute"])` exploite.
+    wrap();
+    const style = document.querySelector('style');
+    expect(style).not.toBeNull();
+    expect(style!.textContent).toContain(
+      '.cn-actions > div > button > span:not([style*="position: absolute"]), .cn-actions > div > button > img'
+    );
+  });
 });
