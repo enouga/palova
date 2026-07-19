@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import dns from 'dns/promises';
+import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -38,6 +40,46 @@ export function iconCacheFile(clubId: string, variant: string, logoUrl: string):
 
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // garde poids/SSRF : 5 Mo max
+const MAX_LOGO_REDIRECTS = 5;
+
+// Bloque les cibles internes (metadata cloud, réseau Docker, LAN…) : logoUrl est saisi par
+// un admin de club et fetché serveur-side depuis 2 routes PUBLIQUES (icône PWA, carte de
+// partie) — sans ce garde, n'importe qui peut déclencher une requête serveur vers une IP
+// interne (SSRF) en pointant le logo dessus. Revalidé à CHAQUE redirection suivie.
+function isPrivateOrReservedIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    if (a === 127) return true; // loopback
+    if (a === 10) return true; // RFC1918
+    if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918
+    if (a === 192 && b === 168) return true; // RFC1918
+    if (a === 169 && b === 254) return true; // link-local / metadata cloud
+    if (a === 0) return true;
+    if (a >= 224) return true; // multicast/reserved
+    return false;
+  }
+  const lower = ip.toLowerCase();
+  if (lower === '::1') return true; // loopback
+  if (lower.startsWith('fe80:') || lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // link-local
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // unique local
+  if (lower.startsWith('::ffff:')) return isPrivateOrReservedIp(lower.slice(7)); // IPv4-mapped
+  return false;
+}
+
+async function assertPublicHttpUrl(rawUrl: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('LOGO_URL_INVALID');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('LOGO_URL_INVALID');
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
+  if (hostname === 'localhost') throw new Error('LOGO_URL_INVALID');
+  const literalIp = net.isIP(hostname) ? hostname : null;
+  const addresses = literalIp ? [literalIp] : (await dns.lookup(hostname, { all: true })).map((a) => a.address);
+  if (addresses.length === 0 || addresses.some(isPrivateOrReservedIp)) throw new Error('LOGO_URL_INVALID');
+}
 
 export async function fetchLogo(url: string): Promise<Buffer> {
   // Logo uploadé localement (/uploads/...) : lecture disque directe — `fetch` exigerait
@@ -49,11 +91,20 @@ export async function fetchLogo(url: string): Promise<Buffer> {
     if (buf.byteLength > MAX_LOGO_BYTES) throw new Error('LOGO_TOO_LARGE');
     return buf;
   }
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), redirect: 'follow' });
-  if (!res.ok) throw new Error(`LOGO_HTTP_${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.byteLength > MAX_LOGO_BYTES) throw new Error('LOGO_TOO_LARGE');
-  return buf;
+  let target = url;
+  for (let hop = 0; ; hop++) {
+    await assertPublicHttpUrl(target);
+    const res = await fetch(target, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (hop >= MAX_LOGO_REDIRECTS) throw new Error('LOGO_TOO_MANY_REDIRECTS');
+      target = new URL(res.headers.get('location')!, target).toString();
+      continue;
+    }
+    if (!res.ok) throw new Error(`LOGO_HTTP_${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > MAX_LOGO_BYTES) throw new Error('LOGO_TOO_LARGE');
+    return buf;
+  }
 }
 
 async function renderIcon(logo: Buffer, accentColor: string, v: IconVariant): Promise<Buffer> {
