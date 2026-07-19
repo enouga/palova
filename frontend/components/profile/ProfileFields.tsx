@@ -2,32 +2,45 @@
 import { CSSProperties, ReactNode, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 
+/** Libellé au-dessus d'un champ : petites capitales, même convention que le composant
+ * `Field` des pages d'inscription (`components/ui/atoms.tsx`) — cohérence entre le
+ * profil et l'onboarding. Peint `aria-hidden` (c'est le champ qui porte l'`aria-label`,
+ * sinon un lecteur d'écran annoncerait deux fois le même mot). */
+function FieldLabel({ label, focused }: { label: string; focused?: boolean }) {
+  const { th } = useTheme();
+  return (
+    <span aria-hidden style={{
+      display: 'block', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600,
+      letterSpacing: 0.4, textTransform: 'uppercase', color: focused ? th.accent : th.textMute,
+      marginBottom: 7,
+    }}>{label}</span>
+  );
+}
+
 /**
- * Bloc de champ « label intégré » : le libellé vit DANS le bloc, en petites capitales.
- * Le libellé peint est `aria-hidden` — c'est le champ qui porte l'`aria-label`, sinon
- * un lecteur d'écran annoncerait deux fois le même mot.
- * `focused` colore le bord + le libellé (piloté par le champ qui vit dedans).
+ * Bloc de champ : libellé au-dessus (petites capitales), champ dans une boîte arrondie
+ * en dessous. `focused` colore le libellé + le bord de la boîte (piloté par le champ
+ * qui vit dedans).
  */
 export function FieldShell({ label, focused, children }: { label: string; focused?: boolean; children: ReactNode }) {
   const { th } = useTheme();
   return (
-    <div style={{
-      background: th.surface2, borderRadius: 13, padding: '19px 13px 12px', position: 'relative',
-      boxShadow: focused
-        ? `inset 0 0 0 1.5px ${th.accent}, 0 0 0 3px ${th.accent}29`
-        : `inset 0 0 0 1px ${th.lineStrong}`,
-      transition: 'box-shadow .15s',
-    }}>
-      <span aria-hidden style={{
-        position: 'absolute', top: 7, left: 13, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700,
-        letterSpacing: 0.4, textTransform: 'uppercase', color: focused ? th.accent : th.textFaint,
-      }}>{label}</span>
-      {children}
+    <div>
+      <FieldLabel label={label} focused={focused} />
+      <div data-testid="field-box" style={{
+        background: th.surface2, borderRadius: 13, padding: '12px 13px',
+        boxShadow: focused
+          ? `inset 0 0 0 1.5px ${th.accent}, 0 0 0 3px ${th.accent}29`
+          : `inset 0 0 0 1px ${th.lineStrong}`,
+        transition: 'box-shadow .15s',
+      }}>
+        {children}
+      </div>
     </div>
   );
 }
 
-/** Style du champ nu posé dans un FieldShell : le bloc porte la bordure, pas l'input. */
+/** Style du champ nu posé dans la boîte : la boîte porte la bordure, pas l'input. */
 function useBareStyle(): CSSProperties {
   const { th } = useTheme();
   return {
@@ -67,8 +80,8 @@ export function ProfileSelect({ label, value, onChange, options }: {
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         onChange={(e) => onChange(e.target.value)}
         // Fond opaque : sans lui, le popup d'options hérite du blanc UA et th.text (quasi blanc
-        // en floodlit) devient illisible dessus. Le bloc FieldShell est déjà th.surface2 fermé,
-        // donc ça ne change rien visuellement quand le select est fermé.
+        // en floodlit) devient illisible dessus. La boîte est déjà th.surface2 fermée, donc ça
+        // ne change rien visuellement quand le select est fermé.
         style={{ ...bare, cursor: 'pointer', background: th.surface2 }}
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -77,14 +90,16 @@ export function ProfileSelect({ label, value, onChange, options }: {
   );
 }
 
-/** Choix court (2-4 valeurs) rendu en pills DANS le bloc de champ : sexe, sport préféré… */
+/** Choix court (2-4 valeurs) en pills NUES sous le libellé — pas de boîte autour, les
+ * pills portent déjà leur propre fond. */
 export function PillChoice<T extends string>({ label, value, onChange, options }: {
   label: string; value: T | null; onChange: (v: T) => void; options: { value: T; label: string }[];
 }) {
   const { th } = useTheme();
   return (
-    <FieldShell label={label}>
-      <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 3 }}>
+    <div>
+      <FieldLabel label={label} />
+      <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
         {options.map((o) => {
           const active = o.value === value;
           return (
@@ -100,6 +115,6 @@ export function PillChoice<T extends string>({ label, value, onChange, options }
           );
         })}
       </div>
-    </FieldShell>
+    </div>
   );
 }
