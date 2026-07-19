@@ -171,3 +171,20 @@ it('onCount reçoit le nombre de clubs affichés', async () => {
   render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
   await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
 });
+
+it('deptCodes vide (tableau explicite) → listClubs ne reçoit pas de clé dept', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture]);
+  render(<ThemeProvider><ClubDirectory deptCodes={[]} /></ThemeProvider>);
+  await waitFor(() => expect(listClubs).toHaveBeenCalled());
+  const calls = listClubs.mock.calls as [Record<string, unknown>][];
+  calls.forEach((args) => expect(args[0]).not.toHaveProperty('dept'));
+});
+
+it('onCount reçoit 0 quand listClubs échoue', async () => {
+  authToken = null;
+  listClubs.mockRejectedValue(new Error('network'));
+  const onCount = jest.fn();
+  render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
+  await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(0));
+});

@@ -49,10 +49,14 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
       });
       setClubs(list);
       setError(false);
-      onCount?.(list.length);
-    } catch { setClubs([]); setError(true); onCount?.(0); }
+    } catch { setClubs([]); setError(true); }
     finally { setLoading(false); }
-  }, [q, effCity, effCoords, sport, deptCodes?.join(','), onCount]);
+  }, [q, effCity, effCoords, sport, deptCodes?.join(',')]);
+
+  // Notifie le parent du nombre de clubs affichés — effet DÉDIÉ, découplé de `load` (dont
+  // l'identité pilote le debounce de fetch) pour qu'un changement d'identité de `onCount`
+  // ne relance jamais le fetch. `clubs` reflète déjà le résultat (y compris `[]` sur erreur).
+  useEffect(() => { onCount?.(clubs.length); }, [clubs.length, onCount]);
 
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
