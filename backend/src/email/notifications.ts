@@ -350,6 +350,205 @@ export async function notifyEventPromotion(registrationId: string): Promise<void
   await sendEventPlayerEmail(reg, 'promoted');
 }
 
+// ------------------------------------- Rappels tournoi/event (clôture, jour J)
+
+/** Vrai si `t`/`e` est une épreuve publiée (les rappels ne concernent jamais DRAFT/CANCELLED). */
+function isPublished(status: string): boolean {
+  return status === 'PUBLISHED';
+}
+
+export async function notifyTournamentDeadlineReminder(tournamentId: string): Promise<void> {
+  const t = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      club: { select: EMAIL_CLUB_SELECT },
+      registrations: {
+        where: { status: 'CONFIRMED' },
+        include: {
+          captain: { select: { id: true, email: true, firstName: true, lastName: true } },
+          partner: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  if (!t || !isPublished(t.status) || t.registrations.length === 0) return;
+  const brand = brandFromClub(t.club);
+  const url = clubAppUrl(t.club.slug, `/tournois/${t.id}`);
+  const dateLimite = formatDateFr(t.registrationDeadline, t.club.timezone);
+  const override = await emailTemplates.getOverride(t.club.id, 'registration.deadline_reminder');
+  for (const reg of t.registrations) {
+    const recipients = [
+      { user: reg.captain, partner: reg.partner },
+      { user: reg.partner, partner: reg.captain },
+    ];
+    for (const { user, partner } of recipients) {
+      if (!user.email) continue;
+      const coequipier = fullName(partner);
+      const vars: Record<string, string> = {
+        prenom: user.firstName,
+        activite: t.name,
+        ref_activite: refActivite('tournament'),
+        club: t.club.name,
+        date_limite: dateLimite,
+        lien: url,
+        coequipier,
+        phrase_coequipier: coequipier ? ` Vous êtes inscrit·e en binôme avec ${coequipier}.` : '',
+      };
+      const mail = renderClubEmail('registration.deadline_reminder', vars, brand, override);
+      await dispatch({
+        userId: user.id,
+        clubId: t.club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'registration.deadline_reminder',
+        title: 'La clôture des inscriptions approche',
+        body: `Dernier délai pour modifier ton inscription à « ${t.name} » : ${dateLimite}.`,
+        url,
+        email: { to: user.email, subject: mail.subject, html: mail.html, text: mail.text },
+      });
+    }
+  }
+}
+
+export async function notifyEventDeadlineReminder(eventId: string): Promise<void> {
+  const e = await prisma.clubEvent.findUnique({
+    where: { id: eventId },
+    include: {
+      club: { select: EMAIL_CLUB_SELECT },
+      registrations: {
+        where: { status: 'CONFIRMED' },
+        include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+      },
+    },
+  });
+  if (!e || !isPublished(e.status) || e.registrations.length === 0) return;
+  const brand = brandFromClub(e.club);
+  const url = clubAppUrl(e.club.slug, `/events/${e.id}`);
+  const dateLimite = formatDateFr(e.registrationDeadline, e.club.timezone);
+  const override = await emailTemplates.getOverride(e.club.id, 'registration.deadline_reminder');
+  for (const reg of e.registrations) {
+    if (!reg.user.email) continue;
+    const vars: Record<string, string> = {
+      prenom: reg.user.firstName,
+      activite: e.name,
+      ref_activite: refActivite('event'),
+      club: e.club.name,
+      date_limite: dateLimite,
+      lien: url,
+      coequipier: '',
+      phrase_coequipier: '',
+    };
+    const mail = renderClubEmail('registration.deadline_reminder', vars, brand, override);
+    await dispatch({
+      userId: reg.user.id,
+      clubId: e.club.id,
+      category: 'MY_REGISTRATIONS',
+      type: 'registration.deadline_reminder',
+      title: 'La clôture des inscriptions approche',
+      body: `Dernier délai pour modifier ton inscription à « ${e.name} » : ${dateLimite}.`,
+      url,
+      email: { to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
+  }
+}
+
+export async function notifyTournamentUpcomingReminder(tournamentId: string, window: 'J-1' | 'H-2'): Promise<void> {
+  const t = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      club: { select: EMAIL_CLUB_SELECT },
+      registrations: {
+        where: { status: 'CONFIRMED' },
+        include: {
+          captain: { select: { id: true, email: true, firstName: true, lastName: true } },
+          partner: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  if (!t || !isPublished(t.status) || t.registrations.length === 0) return;
+  const brand = brandFromClub(t.club);
+  const url = clubAppUrl(t.club.slug, `/tournois/${t.id}`);
+  const dateLabel = formatDateRangeFr(t.startTime, t.endTime, t.club.timezone);
+  const delai = window === 'H-2' ? 'dans 2 heures' : 'demain';
+  const override = await emailTemplates.getOverride(t.club.id, 'registration.upcoming_reminder');
+  for (const reg of t.registrations) {
+    const recipients = [
+      { user: reg.captain, partner: reg.partner },
+      { user: reg.partner, partner: reg.captain },
+    ];
+    for (const { user, partner } of recipients) {
+      if (!user.email) continue;
+      const coequipier = fullName(partner);
+      const vars: Record<string, string> = {
+        prenom: user.firstName,
+        activite: t.name,
+        ref_activite: refActivite('tournament'),
+        club: t.club.name,
+        date: dateLabel,
+        delai,
+        lien: url,
+        coequipier,
+        phrase_coequipier: coequipier ? ` Vous êtes inscrit·e en binôme avec ${coequipier}.` : '',
+      };
+      const mail = renderClubEmail('registration.upcoming_reminder', vars, brand, override);
+      await dispatch({
+        userId: user.id,
+        clubId: t.club.id,
+        category: 'MY_REGISTRATIONS',
+        type: 'registration.upcoming_reminder',
+        title: window === 'H-2' ? "C'est dans 2 heures" : "C'est demain",
+        body: `« ${t.name} », c'est ${delai} — ${dateLabel}.`,
+        url,
+        email: { to: user.email, subject: mail.subject, html: mail.html, text: mail.text },
+      });
+    }
+  }
+}
+
+export async function notifyEventUpcomingReminder(eventId: string, window: 'J-1' | 'H-2'): Promise<void> {
+  const e = await prisma.clubEvent.findUnique({
+    where: { id: eventId },
+    include: {
+      club: { select: EMAIL_CLUB_SELECT },
+      registrations: {
+        where: { status: 'CONFIRMED' },
+        include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+      },
+    },
+  });
+  if (!e || !isPublished(e.status) || e.registrations.length === 0) return;
+  const brand = brandFromClub(e.club);
+  const url = clubAppUrl(e.club.slug, `/events/${e.id}`);
+  const dateLabel = formatDateRangeFr(e.startTime, e.endTime, e.club.timezone);
+  const delai = window === 'H-2' ? 'dans 2 heures' : 'demain';
+  const override = await emailTemplates.getOverride(e.club.id, 'registration.upcoming_reminder');
+  for (const reg of e.registrations) {
+    if (!reg.user.email) continue;
+    const vars: Record<string, string> = {
+      prenom: reg.user.firstName,
+      activite: e.name,
+      ref_activite: refActivite('event'),
+      club: e.club.name,
+      date: dateLabel,
+      delai,
+      lien: url,
+      coequipier: '',
+      phrase_coequipier: '',
+    };
+    const mail = renderClubEmail('registration.upcoming_reminder', vars, brand, override);
+    await dispatch({
+      userId: reg.user.id,
+      clubId: e.club.id,
+      category: 'MY_REGISTRATIONS',
+      type: 'registration.upcoming_reminder',
+      title: window === 'H-2' ? "C'est dans 2 heures" : "C'est demain",
+      body: `« ${e.name} », c'est ${delai} — ${dateLabel}.`,
+      url,
+      email: { to: reg.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
+  }
+}
+
 // ------------------------------------------------------ Parties ouvertes
 
 /** Prévient l'organisateur (propriétaire de la résa) qu'un joueur a rejoint sa partie ouverte. */
