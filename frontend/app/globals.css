@@ -96,8 +96,20 @@ body {
   .pl-lift { transition: none; }
   .pl-lift:hover { transform: none; }
   .sp-hero-rise { animation: none !important; }
+  .pl-cgv-nudge { animation: none !important; }
 }
 .sp-hero-rise { animation: sp-hero-rise .55s cubic-bezier(.2, 0, 0, 1) both; }
+
+/* Carte CGV : secousse + halo quand on tape le CTA sans avoir coché (CgvConsent, rejouée via key) */
+@keyframes pl-cgv-nudge {
+  0% { transform: translateX(0); outline: 2px solid transparent; outline-offset: 2px; }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); outline-color: currentColor; }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+  100% { transform: translateX(0); outline-color: transparent; }
+}
+.pl-cgv-nudge { animation: pl-cgv-nudge .5s ease; }
 
 /* Réserver — pills de créneau : lavis d'accent au repos, remplissage plein au survol
    (couleur/encre fournies en variables --rv-fill / --rv-ink car l'accent est propre au club) */

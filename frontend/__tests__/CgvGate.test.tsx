@@ -28,4 +28,12 @@ describe('CgvGate', () => {
     wrap();
     expect(screen.getByRole('link', { name: /conditions générales de vente/ })).toHaveAttribute('href', '/cgv');
   });
+
+  it('déjà accepté pour ce club → rappel « déjà accepté » (plus de case), enfants montés directement', () => {
+    window.localStorage.setItem('palova:cgv-accepted:padel-arena', '1');
+    wrap();
+    expect(screen.getByText(/déjà accepté/i)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText('formulaire-stripe')).toBeInTheDocument();
+  });
 });
