@@ -22,18 +22,41 @@ describe('OnboardingService.getStatus', () => {
   it('club nu : tout à faux/zéro', async () => {
     prismaMock.club.findUnique.mockResolvedValue({
       logoUrl: null, presentationText: null, stripeAccountStatus: 'NONE',
+      legalEntityName: null, siret: null, legalEmail: null, mediatorName: null,
     } as any);
     mockCounts({});
     const s = await service.getStatus('c1');
     expect(s).toEqual({
       hasLogo: false, sportsCount: 0, resourcesCount: 0,
       hasPresentation: false, stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
+      hasLegalInfo: false,
     });
+  });
+
+  it('hasLegalInfo vrai ssi les 4 champs clés sont remplis', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      logoUrl: null, presentationText: null, stripeAccountStatus: 'NONE',
+      legalEntityName: 'Arena SAS', siret: '12345678901234', legalEmail: 'c@x.fr', mediatorName: 'CM2C',
+    } as any);
+    mockCounts({});
+    const s = await service.getStatus('c1');
+    expect(s.hasLegalInfo).toBe(true);
+  });
+
+  it('hasLegalInfo faux si un seul des 4 champs manque', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      logoUrl: null, presentationText: null, stripeAccountStatus: 'NONE',
+      legalEntityName: 'Arena SAS', siret: '12345678901234', legalEmail: 'c@x.fr', mediatorName: null,
+    } as any);
+    mockCounts({});
+    const s = await service.getStatus('c1');
+    expect(s.hasLegalInfo).toBe(false);
   });
 
   it('club configuré : dérive logo, présentation (texte OU photos), offres et events cumulés', async () => {
     prismaMock.club.findUnique.mockResolvedValue({
       logoUrl: '/uploads/logo.png', presentationText: '  ', stripeAccountStatus: 'ACTIVE',
+      legalEntityName: null, siret: null, legalEmail: null, mediatorName: null,
     } as any);
     mockCounts({ sports: 2, resources: 4, photos: 3, templates: 1, plans: 2, tournaments: 1, events: 1 });
     const s = await service.getStatus('c1');
@@ -59,6 +82,7 @@ describe('OnboardingService.getStatus', () => {
   it('presentationText non vide suffit sans photo', async () => {
     prismaMock.club.findUnique.mockResolvedValue({
       logoUrl: null, presentationText: 'Bienvenue', stripeAccountStatus: 'PENDING',
+      legalEntityName: null, siret: null, legalEmail: null, mediatorName: null,
     } as any);
     mockCounts({});
     const s = await service.getStatus('c1');

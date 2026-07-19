@@ -1,8 +1,9 @@
 import { prisma } from '../db/prisma';
 import { dispatch } from './notification/dispatcher';
 import { buildBroadcastEmail } from '../email/templates/emails';
-import { clubAppUrl, absoluteAsset } from '../email/links';
+import { clubAppUrl, absoluteAsset, apiPublicUrl } from '../email/links';
 import { Brand } from '../email/templates/layout';
+import { unsubscribeToken } from './unsubscribeToken';
 
 interface SendInput {
   title: string;
@@ -19,7 +20,7 @@ export class BroadcastService {
     clubId: string,
     sentByUserId: string,
     input: SendInput,
-  ): Promise<{ recipientCount: number; broadcastId: string }> {
+  ): Promise<{ recipientCount: number; broadcastId: string; emailOptOuts: number }> {
     const title = input.title.trim();
     const body = input.body.trim();
     if (!title || !body) throw new Error('VALIDATION_ERROR');
@@ -41,18 +42,36 @@ export class BroadcastService {
       data: { clubId, sentByUserId, title, body, url: input.url ?? null, recipientCount: members.length },
     });
 
-    // Build brand + email once (same for everyone)
+    // Brand commun (logo/couleur), le lien de désinscription est ajouté PAR destinataire
+    // ci-dessous (signé par userId — cf. unsubscribeToken.ts).
     const brand: Brand = {
       name: club.name,
       logoUrl: absoluteAsset(club.logoUrl),
       accentColor: club.accentColor || '#5e93da',
     };
     const targetUrl = input.url ?? clubAppUrl(club.slug, '/');
-    const { subject, html, text } = buildBroadcastEmail({ title, body, url: targetUrl, brand });
+
+    // Informationnel seulement : dispatch()/resolveChannels() font DÉJÀ le vrai filtrage
+    // par préférence (cf. dispatcher.ts) — ce compte ne change qui reçoit quoi.
+    const optOuts = await prisma.notificationPreference.count({
+      where: {
+        category: 'CLUB_MESSAGES',
+        channel: 'EMAIL',
+        enabled: false,
+        userId: { in: members.map((m) => m.user.id) },
+      },
+    });
 
     // V1: synchronous fan-out (one dispatch per member). Fine for typical club sizes.
     // A queue-based approach is explicitly out of scope for V1.
     for (const m of members) {
+      const unsubscribeUrl = apiPublicUrl(`/api/unsubscribe?token=${unsubscribeToken(m.user.id)}`);
+      const { subject, html, text } = buildBroadcastEmail({
+        title,
+        body,
+        url: targetUrl,
+        brand: { ...brand, unsubscribeUrl },
+      });
       await dispatch({
         userId: m.user.id,
         clubId,
@@ -65,7 +84,7 @@ export class BroadcastService {
       });
     }
 
-    return { recipientCount: members.length, broadcastId: broadcast.id };
+    return { recipientCount: members.length, broadcastId: broadcast.id, emailOptOuts: optOuts };
   }
 
   async history(clubId: string) {

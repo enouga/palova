@@ -91,14 +91,15 @@ export function ProfileSelect({ label, value, onChange, options }: {
 }
 
 /** Choix court (2-4 valeurs) en pills NUES sous le libellé — pas de boîte autour, les
- * pills portent déjà leur propre fond. */
-export function PillChoice<T extends string>({ label, value, onChange, options }: {
-  label: string; value: T | null; onChange: (v: T) => void; options: { value: T; label: string }[];
+ * pills portent déjà leur propre fond. `hideLabel` omet le libellé (ex. « Sport préféré »
+ * quand la carte porte déjà ce titre via CardKicker juste au-dessus). */
+export function PillChoice<T extends string>({ label, hideLabel, value, onChange, options }: {
+  label: string; hideLabel?: boolean; value: T | null; onChange: (v: T) => void; options: { value: T; label: string }[];
 }) {
   const { th } = useTheme();
   return (
     <div>
-      <FieldLabel label={label} />
+      {!hideLabel && <FieldLabel label={label} />}
       <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
         {options.map((o) => {
           const active = o.value === value;

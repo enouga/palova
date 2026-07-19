@@ -38,7 +38,7 @@ describe('TournamentFinder', () => {
   it('filtrer par département 75 ne garde que Paris', async () => {
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     await screen.findByText('GP Paris');
-    fireEvent.click(screen.getByText(/Paris 1/)); // chip « Paris 1 » (compteur)
+    fireEvent.click(screen.getByRole('button', { name: 'Paris' })); // chip département (compteur en aria-hidden)
     await waitFor(() => expect(screen.queryByText('Open Lyon')).not.toBeInTheDocument());
     expect(screen.getByText('GP Paris')).toBeInTheDocument();
   });

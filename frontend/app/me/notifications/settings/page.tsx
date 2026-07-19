@@ -78,7 +78,7 @@ export default function NotificationSettingsPage() {
 
         <div style={{ padding: '18px 20px 0' }}>
       <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginBottom: 16 }}>
-        Choisis comment tu veux être prévenu. Active le push pour être prévenu même l'app fermée.
+        Choisissez comment vous voulez être prévenu. Activez le push pour être prévenu même l'app fermée.
       </p>
 
       {pushStatus === 'default' && (
@@ -91,7 +91,7 @@ export default function NotificationSettingsPage() {
       )}
       {pushStatus === 'ios-needs-install' && (
         <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: th.surface2, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
-          Installe Palova sur ton écran d'accueil pour activer le push
+          Installez Palova sur votre écran d'accueil pour activer le push
         </div>
       )}
       {pushStatus === 'denied' && (

@@ -143,6 +143,9 @@ describe('EventDetailPage — inscription payante (requirePrepayment)', () => {
     // Le bouton S'inscrire apparaît une fois l'event chargé
     fireEvent.click(await screen.findByRole('button', { name: /inscrire/i }));
 
+    // Case CGV obligatoire avant que le formulaire de paiement n'apparaisse
+    fireEvent.click(await screen.findByRole('checkbox'));
+
     const step = await screen.findByTestId('stripe-step');
     expect(step).toBeInTheDocument();
     expect(step).toHaveAttribute('data-type', 'payment');
@@ -160,6 +163,7 @@ describe('EventDetailPage — inscription payante (requirePrepayment)', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /Rejoindre/i }));
+    fireEvent.click(await screen.findByRole('checkbox'));
 
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-type', 'setup');

@@ -94,6 +94,9 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string, token: string) =>
     request<{ ok: boolean }>('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }, token),
 
+  // Export RGPD (portabilité) — JSON synchrone, 1 export / heure.
+  exportMyData: (token: string) => request<Record<string, unknown>>('/api/me/export', {}, token),
+
   // Suppression de compte (anonymisation) — résumé des blocages/avertissements puis suppression.
   getAccountDeletionSummary: (token: string) =>
     request<AccountDeletionSummary>('/api/me/account-deletion-summary', {}, token),
@@ -222,7 +225,7 @@ export const api = {
   ) =>
     request<{ clientSecret: string; type: 'payment' | 'setup'; stripeAccountId: string | null; customerSessionClientSecret: string | null }>(
       `/api/${kind}/${eventId}/registrations/${regId}/intent`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) },
       token,
     ),
 
@@ -661,10 +664,10 @@ export const api = {
   getClubTopMonth: (slug: string) => request<TopMonthEntry[]>(`/api/clubs/${encodeURIComponent(slug)}/top-month`),
   createOfferPlanIntent: (slug: string, planId: string, token: string) =>
     request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
-      `/api/clubs/${encodeURIComponent(slug)}/offers/plans/${planId}/intent`, { method: 'POST' }, token),
+      `/api/clubs/${encodeURIComponent(slug)}/offers/plans/${planId}/intent`, { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) }, token),
   createOfferPackageIntent: (slug: string, templateId: string, token: string) =>
     request<{ clientSecret: string; stripeAccountId: string | null; customerSessionClientSecret: string | null; type: 'payment' }>(
-      `/api/clubs/${encodeURIComponent(slug)}/offers/packages/${templateId}/intent`, { method: 'POST' }, token),
+      `/api/clubs/${encodeURIComponent(slug)}/offers/packages/${templateId}/intent`, { method: 'POST', body: JSON.stringify({ cgvAccepted: true }) }, token),
   confirmOfferPayment: (slug: string, stripePaymentIntentId: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${encodeURIComponent(slug)}/offers/confirm`,
       { method: 'POST', body: JSON.stringify({ stripePaymentIntentId }) }, token),
@@ -746,6 +749,8 @@ export const api = {
 
   // --- Profil joueur ---
   getMyProfile: (token: string) => request<MyProfile>('/api/me/profile', {}, token),
+  acceptLegal: (document: LegalDocumentKey, token: string) =>
+    request<{ ok: boolean }>('/api/me/legal/accept', { method: 'POST', body: JSON.stringify({ document }) }, token),
 
   updateMyProfile: (body: { phone?: string | null; sex?: Sex | null; birthDate?: string | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null }, token: string) =>
     request<MyProfile>('/api/me', { method: 'PATCH', body: JSON.stringify(body) }, token),
@@ -1627,6 +1632,7 @@ export interface CreateClubBody {
   timezone?: string;
   siret: string;      // requis en self-service (/clubs/new)
   ownerPhone: string; // requis en self-service (/clubs/new)
+  acceptSaasTerms: boolean; // case CGV Palova + annexe DPA obligatoire, cf. spec conformité légale
 }
 
 export interface RegisterBody {
@@ -1636,6 +1642,7 @@ export interface RegisterBody {
   lastName: string;
   phone?: string;
   preferredSportId?: string;
+  acceptTerms: boolean; // case CGU + confidentialité obligatoire, cf. spec conformité légale
 }
 
 export interface AuthResponse {
@@ -1696,6 +1703,8 @@ export interface ClubAdminDetail {
   legalRepresentative: string | null;
   legalEmail: string | null;
   legalPhone: string | null;
+  mediatorName: string | null;
+  mediatorUrl: string | null;
 }
 
 /** Statut d'avancement du paramétrage (guide de démarrage), dérivé de l'état réel. */
@@ -1707,6 +1716,7 @@ export interface OnboardingStatus {
   stripeStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'RESTRICTED';
   offersCount: number;
   eventsCount: number;
+  hasLegalInfo: boolean;
 }
 
 // --- Contenu club (pages légales/offres + FAQ) ---
@@ -1716,7 +1726,8 @@ export type ClubPageKind = 'CGV' | 'MENTIONS_LEGALES' | 'CONFIDENTIALITE' | 'OFF
 export interface PublicClubPage {
   kind: ClubPageKind;
   bodyMarkdown: string;
-  updatedAt: string;
+  updatedAt: string | null;
+  isFallback?: boolean;
 }
 
 export interface FaqEntry { id: string; category: string; question: string; answer: string }
@@ -1802,6 +1813,8 @@ export type UpdateClubBody = Partial<{
   legalRepresentative: string;
   legalEmail: string;
   legalPhone: string;
+  mediatorName: string;
+  mediatorUrl: string;
 }>;
 
 // --- Types back-office ---
@@ -2355,7 +2368,11 @@ export interface MyProfile {
   acceptsFriendRequests: boolean;
   acceptsDirectMessages: boolean;
   preferredSport: { id: string; key: string; name: string } | null;
+  legal?: { cgu: LegalDocStatus; privacy: LegalDocStatus; cgvSaas?: LegalDocStatus };
 }
+
+export interface LegalDocStatus { accepted: string | null; current: string }
+export type LegalDocumentKey = 'CGU' | 'PRIVACY' | 'CGV_SAAS';
 
 export interface MyRating {
   calibrated: boolean;
@@ -2953,6 +2970,11 @@ export function chatStreamUrl(slug: string, id: string, token: string): string {
 /** URL du flux SSE d'une conversation privée (token en query : EventSource ne pose pas d'en-tête). */
 export function conversationStreamUrl(conversationId: string, token: string): string {
   return `${BASE_URL}/api/conversations/${conversationId}/stream?token=${encodeURIComponent(token)}`;
+}
+
+/** Flux SSE public des disponibilités d'un club (grille Réserver en direct). */
+export function clubAvailabilityStreamUrl(slug: string): string {
+  return `${BASE_URL}/api/clubs/${slug}/availability/stream`;
 }
 
 /** URL de la photo d'un message privé (streaming authentifié — les <img> ne posent pas d'Authorization). */

@@ -26,6 +26,7 @@ export function ProfileIdentity({ profile, set, sports, licence, clubName, onLic
           <CardKicker>Sport préféré</CardKicker>
           <PillChoice
             label="Sport préféré"
+            hideLabel
             value={profile.preferredSport?.id ?? NO_SPORT}
             onChange={(id) => set('preferredSport', id === NO_SPORT ? null : (sports.find((s) => s.id === id) ?? null))}
             options={[...sports.map((s) => ({ value: s.id, label: s.name })), { value: NO_SPORT, label: 'Aucun' }]}

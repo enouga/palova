@@ -13,6 +13,7 @@ jest.mock('../lib/api', () => ({
     adminGetReservations: jest.fn(),
     adminGetOnboardingStatus: jest.fn(),
     adminGetBilling: jest.fn(),
+    adminGetClub: jest.fn(),
   },
   assetUrl: (p: string | null) => p,
 }));
@@ -39,13 +40,19 @@ describe('AdminDashboard — gating par rôle', () => {
     // (couvert par StartChecklist.test) — et la forme d'OnboardingStatus n'importe pas ici.
     api.adminGetOnboardingStatus.mockReturnValue(new Promise(() => {}));
     api.adminGetBilling.mockResolvedValue({ state: 'TO_REGULARIZE', activeMembers: 60, monthlyPriceCents: 2900 });
+    // LegalBanner : infos légales complètes → jamais rendue (évite la collision de rôle
+    // "status" avec BillingBanner dans le test ADMIN ci-dessous, hors sujet ici).
+    api.adminGetClub.mockResolvedValue({
+      stripeAccountStatus: 'ACTIVE', legalEntityName: 'X', siret: '1', legalEmail: 'a@b.fr', mediatorName: 'CM2C',
+    });
   });
 
-  it('STAFF : ni guide ni bannière — aucun appel onboarding-status/billing', async () => {
+  it('STAFF : ni guide ni bannière — aucun appel onboarding-status/billing/legal', async () => {
     await mount('STAFF');
     expect(screen.getByText('Tableau de bord')).toBeInTheDocument();
     expect(api.adminGetOnboardingStatus).not.toHaveBeenCalled();
     expect(api.adminGetBilling).not.toHaveBeenCalled();
+    expect(api.adminGetClub).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument(); // pas de bannière
   });
 
@@ -54,5 +61,12 @@ describe('AdminDashboard — gating par rôle', () => {
     expect(api.adminGetOnboardingStatus).toHaveBeenCalled();
     expect(api.adminGetBilling).toHaveBeenCalled();
     expect(await screen.findByRole('status')).toBeInTheDocument(); // bannière TO_REGULARIZE
+  });
+
+  it('montants du jour au format français (virgule, pas de point anglais)', async () => {
+    api.adminGetReservations.mockResolvedValue({ reservations: [], summary: { paidTotal: '32.25', total: '32.25' } });
+    await mount('STAFF');
+    expect(await screen.findAllByText('32,25')).not.toHaveLength(0);
+    expect(screen.queryByText('32.25')).not.toBeInTheDocument();
   });
 });

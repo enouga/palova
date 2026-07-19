@@ -86,4 +86,12 @@ describe('PillChoice', () => {
     expect(container.querySelector('[data-testid="field-box"]')).toBeNull();
     expect(screen.getByText('Sexe')).toBeInTheDocument();
   });
+
+  it('hideLabel omet le libellé (carte dont le titre le porte déjà)', () => {
+    wrap(<PillChoice label="Sport préféré" hideLabel value="MALE" onChange={() => {}}
+      options={[{ value: 'MALE', label: 'Padel' }]} />);
+    expect(screen.queryByText('Sport préféré')).not.toBeInTheDocument();
+    // Le groupe garde son nom accessible même sans libellé peint.
+    expect(screen.getByRole('group', { name: 'Sport préféré' })).toBeInTheDocument();
+  });
 });

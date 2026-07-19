@@ -20,6 +20,7 @@ jest.mock('../components/BookingModal', () => ({
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  clubAvailabilityStreamUrl: (slug: string) => `http://test/api/clubs/${slug}/availability/stream`,
   notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),

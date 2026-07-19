@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { api, ClubPresentation, assetUrl } from '@/lib/api';
 import { useClub } from '@/lib/ClubProvider';
 import { useTheme } from '@/lib/ThemeProvider';
-import { inkOn } from '@/lib/theme';
+import { ACCENTS, inkOn } from '@/lib/theme';
 import { ClubNav } from '@/components/ClubNav';
 import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
@@ -43,6 +43,10 @@ export default function ClubPage() {
   const kicker = [showcaseKicker(club.city, pres?.foundedYear ?? null), sportNames].filter(Boolean).join(' · ');
   const hours = openNowChip(hoursRange(club.clubSports), club.timezone, now);
   const amenities = amenityList(pres?.amenities);
+  // Ne pas répéter la ville si l'adresse la contient déjà (ex. "12 rue du Padel, 75011 Paris").
+  const addressLine = club.city && !club.address.toLowerCase().includes(club.city.toLowerCase())
+    ? `${club.address}, ${club.city}`
+    : club.address;
   const ink = onPhoto ? '#fff' : HERO_INK;
 
   const glassChip: React.CSSProperties = {
@@ -142,14 +146,14 @@ export default function ClubPage() {
             <section style={{ ...cardStyle(th), padding: '16px 18px' }}>
               <p style={h5}>Infos pratiques</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: th.fontUI, fontSize: 14, color: th.text }}>
-                {hours && (
+                {!pres?.openingHoursText && hours && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700 }}>
-                    <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 99, background: hours.open ? '#34b27b' : th.textFaint, display: 'inline-block' }} />
+                    <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 99, background: hours.open ? ACCENTS.emerald : th.textFaint, display: 'inline-block' }} />
                     {hours.label}
                   </div>
                 )}
                 {pres?.openingHoursText && <div>{pres.openingHoursText}</div>}
-                <div>{club.address}{club.city ? `, ${club.city}` : ''} — <a href={mapsHref} target="_blank" rel="noreferrer" style={{ color: th.accent, fontWeight: 700 }}>Itinéraire →</a></div>
+                <div>{addressLine} — <a href={mapsHref} target="_blank" rel="noreferrer" style={{ color: th.accent, fontWeight: 700 }}>Itinéraire →</a></div>
                 {pres?.contactPhone && <a href={`tel:${pres.contactPhone}`} style={{ color: th.accent }}>{pres.contactPhone}</a>}
                 {pres?.contactEmail && <a href={`mailto:${pres.contactEmail}`} style={{ color: th.accent }}>{pres.contactEmail}</a>}
               </div>

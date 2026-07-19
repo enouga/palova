@@ -23,6 +23,7 @@ export function monthRange(year: number, month: number): { from: string; to: str
 const METHOD_LABEL: Partial<Record<PaymentMethod, string>> = {
   CASH: 'Espèces', CARD: 'Carte', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre',
   VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre',
+  SUBSCRIPTION: 'Abonnement (auto)',
 };
 
 /** Libellé d'une méthode de paiement (clé brute si inconnue). */

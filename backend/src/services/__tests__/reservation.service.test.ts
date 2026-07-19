@@ -15,9 +15,10 @@ jest.mock('../../db/stripe', () => ({
 }));
 
 const mockBroadcast = jest.fn();
+const mockBroadcastClub = jest.fn();
 
 jest.mock('../sse.service', () => ({
-  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast })) },
+  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast, broadcastClub: mockBroadcastClub })) },
 }));
 
 const mockNotifyPartners = jest.fn();
@@ -42,6 +43,13 @@ jest.mock('../matchAlert.service', () => ({
   MatchAlertService: jest.fn().mockImplementation(() => ({ matchAndNotify: matchAndNotifyMock })),
 }));
 
+// Toute écriture qui change une disponibilité doit purger le micro-cache du club
+// (sinon la grille Réserver peut servir un créneau fantôme pendant le TTL).
+const mockInvalidateAvailability = jest.fn();
+jest.mock('../availabilityCache', () => ({
+  invalidateClubAvailability: (...a: unknown[]) => mockInvalidateAvailability(...a),
+}));
+
 const sseBroadcast = () => mockBroadcast;
 
 describe('ReservationService', () => {
@@ -50,6 +58,7 @@ describe('ReservationService', () => {
   beforeEach(() => {
     service = new ReservationService();
     mockBroadcast.mockReset();
+    mockBroadcastClub.mockReset();
     mockNotifyPartners.mockReset().mockResolvedValue(undefined);
     mockNotifyAssigned.mockReset().mockResolvedValue(undefined);
     mockNotifyRefunded.mockReset().mockResolvedValue(undefined);
@@ -57,6 +66,7 @@ describe('ReservationService', () => {
     mockNotifyActivityCancelled.mockReset().mockResolvedValue(undefined);
     mockNotifyRescheduled.mockReset().mockResolvedValue(undefined);
     matchAndNotifyMock.mockReset().mockResolvedValue([]);
+    mockInvalidateAvailability.mockReset();
   });
 
   const baseParams = {
@@ -94,6 +104,32 @@ describe('ReservationService', () => {
         }),
       );
       expect(result.status).toBe('PENDING');
+    });
+
+    it('invalide le cache de disponibilités du club après un hold réussi', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ price: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.reservation.create.mockResolvedValue({
+        id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 25, createdAt: new Date(),
+      } as any);
+
+      await service.holdSlot(baseParams);
+
+      expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+    });
+
+    it('émet slot_held sur le canal club après un hold réussi', async () => {
+      redisMock.set.mockResolvedValue('OK');
+      prismaMock.reservation.count.mockResolvedValue(0);
+      prismaMock.resource.findUniqueOrThrow.mockResolvedValue({ price: 25, clubId: 'club-demo', club: { timezone: 'Europe/Paris', publicBookingDays: 7, memberBookingDays: 14 } } as any);
+      prismaMock.reservation.create.mockResolvedValue({
+        id: 'res-1', ...baseParams, status: 'PENDING', totalPrice: 25, createdAt: new Date(),
+      } as any);
+
+      await service.holdSlot(baseParams);
+
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_held', resourceId: 'court-1' }));
     });
 
     it('lève SLOT_ALREADY_HELD si Redis NX retourne null', async () => {
@@ -328,6 +364,42 @@ describe('ReservationService', () => {
       );
     });
 
+    it("invalide le cache de disponibilités du club à l'annulation", async () => {
+      const future = new Date(Date.now() + 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000),
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000),
+      } as any);
+      redisMock.del.mockResolvedValue(1);
+
+      await service.cancelReservation('res-1', 'user-1');
+
+      expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+    });
+
+    it("émet slot_released sur le canal club à l'annulation", async () => {
+      const future = new Date(Date.now() + 3_600_000);
+      prismaMock.reservation.findUnique.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000),
+        resource: { clubId: 'club-demo', club: { cancellationCutoffHours: 0, refundOnCancelWithinCutoff: false } },
+      } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', status: 'CANCELLED', resourceId: 'court-1',
+        startTime: future, endTime: new Date(future.getTime() + 3_600_000),
+      } as any);
+      redisMock.del.mockResolvedValue(1);
+
+      await service.cancelReservation('res-1', 'user-1');
+
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_released' }));
+    });
+
     it('lève CANCELLATION_TOO_LATE après le délai du club', async () => {
       prismaMock.reservation.findUnique.mockResolvedValue({
         id: 'res-1', resourceId: 'court-1', userId: 'user-1', status: 'CONFIRMED',
@@ -510,6 +582,28 @@ describe('ReservationService', () => {
       expect(res.id).toBe('r-new');
     });
 
+    it('invalide le cache de disponibilités du club après création', async () => {
+      mockResource();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'r-new', resourceId: 'court-1', startTime: new Date(), endTime: new Date() } as any);
+
+      await service.adminCreateReservation({ ...base, title: 'Maintenance' });
+
+      expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+    });
+
+    it('émet slot_confirmed sur le canal club après création', async () => {
+      mockResource();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.create.mockResolvedValue({ id: 'r-new', resourceId: 'court-1', startTime: new Date(), endTime: new Date() } as any);
+
+      await service.adminCreateReservation({ ...base, title: 'Maintenance' });
+
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_confirmed', reservationId: 'r-new' }));
+    });
+
     it('rattache le membre quand memberUserId est fourni et membre du club', async () => {
       mockResource();
       prismaMock.clubMembership.findUnique.mockResolvedValue({ id: 'm1', status: 'ACTIVE' } as any);
@@ -597,6 +691,37 @@ describe('ReservationService', () => {
       expect(sseBroadcast()).toHaveBeenCalledWith('court-2', expect.objectContaining({ type: 'slot_confirmed', reservationId: 'res-1' }));
       expect(mockNotifyRescheduled).toHaveBeenCalledWith('res-1');
       expect(res.resourceId).toBe('court-2');
+    });
+
+    it('invalide le cache de disponibilités du club après déplacement', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-2',
+        startTime: new Date('2026-06-16T16:00:00.000Z'), endTime: new Date('2026-06-16T17:30:00.000Z'),
+      } as any);
+
+      await service.adminRescheduleReservation(reschedule);
+
+      expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+    });
+
+    it('émet released + confirmed sur le canal club après déplacement', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(existing() as any);
+      mockTarget();
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+      prismaMock.reservation.count.mockResolvedValue(0 as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-2',
+        startTime: new Date('2026-06-16T16:00:00.000Z'), endTime: new Date('2026-06-16T17:30:00.000Z'),
+      } as any);
+
+      await service.adminRescheduleReservation(reschedule);
+
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_released' }));
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_confirmed' }));
     });
 
     it('le conflit exclut la résa elle-même (déplacer sur son propre créneau fonctionne)', async () => {
@@ -1001,6 +1126,40 @@ describe('ReservationService', () => {
       expect(prismaMock.payment.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ method: 'PACK_CREDIT', sourcePackageId: 'pkg-1', reservationId: 'res-1' }),
       }));
+    });
+
+    it('invalide le cache de disponibilités du club après confirmation', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResa() as any);
+      mockHappyTx();
+      prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
+      prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED',
+        startTime: new Date(), endTime: new Date(),
+      } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
+
+      expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-demo');
+    });
+
+    it('émet slot_confirmed sur le canal club après confirmation', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(pendingResa() as any);
+      mockHappyTx();
+      prismaMock.memberPackage.findUnique.mockResolvedValue({ id: 'pkg-1', clubId: 'club-demo', userId: 'user-1', kind: 'ENTRIES' } as any);
+      prismaMock.memberPackage.updateMany.mockResolvedValue({ count: 1 } as any);
+      prismaMock.clubCounter.upsert.mockResolvedValue({ value: 1 } as any);
+      prismaMock.payment.create.mockResolvedValue({ id: 'pay-1' } as any);
+      prismaMock.reservation.update.mockResolvedValue({
+        id: 'res-1', resourceId: 'court-1', status: 'CONFIRMED',
+        startTime: new Date(), endTime: new Date(),
+      } as any);
+
+      await service.confirmReservation('res-1', 'user-1', { paymentSource: { packageId: 'pkg-1' } });
+
+      expect(mockBroadcastClub).toHaveBeenCalledWith('club-demo', expect.objectContaining({ type: 'slot_confirmed' }));
     });
 
     it('solde insuffisant → INSUFFICIENT_BALANCE et la résa reste PENDING', async () => {
@@ -2948,8 +3107,8 @@ describe('ReservationService', () => {
 describe('cancelFutureReservationsForUser', () => {
   it('annule chaque résa future (CONFIRMED/PENDING) de l organisateur', async () => {
     prismaMock.reservation.findMany.mockResolvedValue([
-      { id: 'r1', resourceId: 'res-1', startTime: new Date(Date.now() + 86400000), endTime: new Date(Date.now() + 90000000) },
-      { id: 'r2', resourceId: 'res-2', startTime: new Date(Date.now() + 172800000), endTime: new Date(Date.now() + 176400000) },
+      { id: 'r1', resourceId: 'res-1', startTime: new Date(Date.now() + 86400000), endTime: new Date(Date.now() + 90000000), resource: { clubId: 'club-a' } },
+      { id: 'r2', resourceId: 'res-2', startTime: new Date(Date.now() + 172800000), endTime: new Date(Date.now() + 176400000), resource: { clubId: 'club-b' } },
     ] as any);
     prismaMock.reservation.update.mockResolvedValue({ id: 'r1' } as any);
 
@@ -2959,5 +3118,8 @@ describe('cancelFutureReservationsForUser', () => {
     expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ userId: 'u1', status: { in: ['CONFIRMED', 'PENDING'] } }),
     }));
+    // Résas dans deux clubs → les deux caches de disponibilités sont purgés.
+    expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-a');
+    expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-b');
   });
 });

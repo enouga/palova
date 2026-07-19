@@ -15,7 +15,7 @@ const TOAST_MS = 6000;
 const METHOD_ICON: Record<string, IconName> = { CASH: 'euro', CARD: 'card', VOUCHER: 'ticket', CHEQUE: 'ticket', CLUB: 'home', TRANSFER: 'arrowR', MEMBER: 'user', PACK_CREDIT: 'ticket', WALLET: 'euro', ONLINE: 'card', OTHER: 'euro', SUBSCRIPTION: 'user' };
 const METHOD_LABEL_FULL: Record<string, string> = { CASH: 'Espèces', CARD: 'CB', TRANSFER: 'Virement', ONLINE: 'En ligne', OTHER: 'Autre', VOUCHER: 'Ticket CE', CHEQUE: 'Chèque', CLUB: 'Au club', PACK_CREDIT: 'Carnet', WALLET: 'Porte-monnaie', MEMBER: 'Abo / Membre', SUBSCRIPTION: 'Abonnement' };
 
-function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); }
 function fmtDay(iso: string): string { return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); }
 function mapPayError(e: unknown, perPlayer: boolean): string {
   const m = (e as Error).message;

@@ -19,7 +19,7 @@ export const EMAIL_CLUB_SELECT = {
   address: true, city: true, contactPhone: true, contactEmail: true,
 } as const;
 
-/** Libellé français d'une fourchette de niveau (0–8) pour l'email « partie à ton niveau ». */
+/** Libellé français d'une fourchette de niveau (0–8) pour l'email « partie à votre niveau ». */
 export function levelRangeLabel(min: number | null, max: number | null): string {
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
   if (min != null && max != null) return `Niveau ${fmt(min)} à ${fmt(max)}`;
@@ -122,19 +122,19 @@ function playerNotifContent(
 ): { title: string; body: string } {
   switch (action) {
     case 'confirmed':
-      return { title: 'Inscription confirmée', body: `Ton inscription à « ${activityName} » est confirmée.` };
+      return { title: 'Inscription confirmée', body: `Votre inscription à « ${activityName} » est confirmée.` };
     case 'waitlisted':
       return {
         title: "Inscription en liste d'attente",
-        body: `Tu es en liste d'attente pour « ${activityName} ».`,
+        body: `Vous êtes en liste d'attente pour « ${activityName} ».`,
       };
     case 'promoted':
       return {
         title: "Une place s'est libérée",
-        body: `Tu passes de la liste d'attente à confirmé pour « ${activityName} ».`,
+        body: `Vous passez de la liste d'attente à confirmé pour « ${activityName} ».`,
       };
     case 'cancelled':
-      return { title: 'Inscription annulée', body: `Ton inscription à « ${activityName} » a été annulée.` };
+      return { title: 'Inscription annulée', body: `Votre inscription à « ${activityName} » a été annulée.` };
   }
 }
 
@@ -589,7 +589,7 @@ export async function notifyOpenMatchJoin(reservationId: string, joinerUserId: s
   }, brandFromClub(club), override);
   await dispatch({
     userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.joined',
-    title: 'Nouveau joueur dans ta partie', body: `${fullName(joiner)} a rejoint ta partie du ${dateLabel}.`,
+    title: 'Nouveau joueur dans votre partie', body: `${fullName(joiner)} a rejoint votre partie du ${dateLabel}.`,
     url, email: { to: organizer.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
 }
@@ -735,8 +735,8 @@ export async function notifyOpenMatchProposed(reservationId: string, excludeUser
     try {
       await dispatch({
         userId: c.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.proposed',
-        title: 'Une partie à ton niveau',
-        body: `Une partie ouverte du ${dateLabel} correspond à ton niveau.`,
+        title: 'Une partie à votre niveau',
+        body: `Une partie ouverte du ${dateLabel} correspond à votre niveau.`,
         url, email: { to: c.user.email, subject: mail.subject, html: mail.html, text: mail.text },
       });
     } catch (err) {
@@ -777,8 +777,8 @@ export async function notifyMatchPartnersInvited(reservationId: string): Promise
     }, brand, override);
     await dispatch({
       userId: p.userId, clubId: club.id, category: 'MY_GAMES', type: 'match.partners_invited',
-      title: 'Tu as été ajouté à une partie',
-      body: `${byName ? byName + " t'a ajouté à" : "Tu as été ajouté à"} une partie le ${dateLabel}.`,
+      title: 'Vous avez été ajouté à une partie',
+      body: `${byName ? byName + " vous a ajouté à" : "Vous avez été ajouté à"} une partie le ${dateLabel}.`,
       url, email: { to: p.user.email, subject: mail.subject, html: mail.html, text: mail.text },
     });
   }
@@ -806,7 +806,7 @@ export async function notifyOpenMatchRemoved(reservationId: string, removedUserI
   }, brandFromClub(club), override);
   await dispatch({
     userId: removedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.removed',
-    title: "Tu as été retiré d'une partie", body: `Tu as été retiré de la partie du ${dateLabel}.`,
+    title: "Vous avez été retiré d'une partie", body: `Vous avez été retiré de la partie du ${dateLabel}.`,
     url, email: { to: member.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
 }
@@ -840,7 +840,7 @@ export async function notifyOpenMatchAdded(reservationId: string, addedUserId: s
   }, brandFromClub(club), override);
   await dispatch({
     userId: addedUserId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.added',
-    title: 'Tu as été ajouté à une partie', body: `Tu as été ajouté à la partie du ${dateLabel}.`,
+    title: 'Vous avez été ajouté à une partie', body: `Vous avez été ajouté à la partie du ${dateLabel}.`,
     url, email: { to: added.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
 }
@@ -876,7 +876,7 @@ export async function notifyOpenMatchLeft(reservationId: string, leaverUserId: s
   }, brandFromClub(club), override);
   await dispatch({
     userId: organizerP.userId, clubId: club.id, category: 'MY_GAMES', type: 'open_match.left',
-    title: 'Un joueur a quitté ta partie', body: `${fullName(leaver)} a quitté ta partie du ${dateLabel}.`,
+    title: 'Un joueur a quitté votre partie', body: `${fullName(leaver)} a quitté votre partie du ${dateLabel}.`,
     url, email: { to: organizerP.user.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
 }
@@ -909,7 +909,7 @@ export async function notifyReservationMemberAssigned(reservationId: string, mem
     category: 'MY_GAMES',
     type: 'reservation.member_assigned',
     title: "Ajout à une réservation",
-    body: "Tu as été ajouté à une réservation par le club.",
+    body: "Vous avez été ajouté à une réservation par le club.",
     url,
     email: { to: member.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
@@ -951,7 +951,7 @@ export async function notifyReservationRefunded(
     category: 'PAYMENTS',
     type: 'payment.refunded',
     title: "Remboursement",
-    body: `Tu as été remboursé de ${amountLabel} pour ta réservation.`,
+    body: `Vous avez été remboursé de ${amountLabel} pour votre réservation.`,
     url,
     email: { to: resa.user.email, subject: mail.subject, html: mail.html, text: mail.text },
   });
@@ -1337,7 +1337,7 @@ export async function notifyReservationCancelled(reservationId: string, actorUse
       category: 'MY_GAMES',
       type: 'reservation.cancelled',
       title: "Réservation annulée",
-      body: `Ta réservation du ${dateLabel} a été annulée.`,
+      body: `Votre réservation du ${dateLabel} a été annulée.`,
       url,
     });
   }
@@ -1365,7 +1365,7 @@ export async function notifyReservationRescheduled(reservationId: string, actorU
       category: 'MY_GAMES',
       type: 'reservation.rescheduled',
       title: "Réservation déplacée",
-      body: `Ta réservation a été déplacée au ${newDateLabel}.`,
+      body: `Votre réservation a été déplacée au ${newDateLabel}.`,
       url,
     });
   }
@@ -1591,8 +1591,8 @@ export async function notifyReservationReminder(reservationId: string, window: '
       clubId: club.id,
       category: 'REMINDERS',
       type: 'reminder.upcoming_game',
-      title: window === 'H-2' ? "Ta partie est dans 2 h" : "Rappel : partie demain",
-      body: `Ta réservation ${resa.resource.name} — ${dateLabel}.`,
+      title: window === 'H-2' ? "Votre partie est dans 2 h" : "Rappel : partie demain",
+      body: `Votre réservation ${resa.resource.name} — ${dateLabel}.`,
       url,
       data: { reservationId, window },
     });

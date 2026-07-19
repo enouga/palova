@@ -1,13 +1,13 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
-import { gaugeTrack } from '@/lib/theme';
+import { ACCENTS, gaugeTrack } from '@/lib/theme';
 
 // Jauge de fiabilité réutilisable (façon Pista) : un % + barre. Pur présentationnel.
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
 // Teinte : rouge/orange si faible, vert si élevée.
 function tone(pct: number): string {
-  if (pct >= 85) return '#1f9d55'; // fiabilisé
+  if (pct >= 85) return ACCENTS.emerald; // fiabilisé
   if (pct >= 70) return '#c98a00';
   return '#d9822b';
 }

@@ -9,6 +9,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('../components/BookingModal', () => ({ __esModule: true, default: () => null }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  clubAvailabilityStreamUrl: (slug: string) => `http://test/api/clubs/${slug}/availability/stream`,
   notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),

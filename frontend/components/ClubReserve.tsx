@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription } from '@/lib/api';
+import { api, ClubDetail, ClubAvailability, TimeSlot, MemberPackage, MyQuotaStatus, Subscription, clubAvailabilityStreamUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { coverageType, courtFormat, SINGLE_COLOR, playerCount, LIGHTING_BADGE, lightingIsInformative } from '@/lib/courtType';
@@ -12,7 +12,7 @@ import { Chip, Placeholder, PillTabs } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import BookingModal from '@/components/BookingModal';
 import DateSelector from '@/components/DateSelector';
-import { bookingWindow } from '@/lib/bookingWindow';
+import { bookingWindow, nextOpening, type NextOpening } from '@/lib/bookingWindow';
 import { ClubNav } from '@/components/ClubNav';
 import { QuotaStatus } from '@/components/quota/QuotaStatus';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -24,12 +24,20 @@ import { ViewToggle } from '@/components/reserve/ViewToggle';
 import { SportGrid } from '@/components/reserve/SportGrid';
 import { MatchAlertSheet } from '@/components/openmatch/MatchAlertSheet';
 import { slotToAlertWindow } from '@/lib/matchAlerts';
+import { applySlotEvent, type SlotStreamEvent } from '@/lib/reserveLive';
+import { LiveDot } from '@/components/reserve/LiveDot';
+import { OpeningPanel, OpeningBanner } from '@/components/reserve/OpeningCountdown';
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
 
 function formatHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
+}
+
+function fmtDayLabel(dayKey: string): string {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(y, m - 1, d));
 }
 
 // Expérience de réservation du club — rendue sur /reserver (la racine du sous-domaine affiche le Club-house).
@@ -182,6 +190,93 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
 
   useEffect(() => { if (tab === 'book') reloadAll(); }, [tab, reloadAll]);
 
+  // Flux SSE des disponibilités du club : la grille vit toute seule (patch local),
+  // le F5 devient inutile. 'reconnecting' = EventSource en re-tentative native.
+  const [liveStatus, setLiveStatus] = useState<'live' | 'reconnecting'>('live');
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reloadAllRef = useRef(reloadAll);
+  reloadAllRef.current = reloadAll;
+
+  // Une EventSource par onglet sur l'onglet Réserver. Patch local pour held/confirmed ;
+  // released → refetch débouncé (le cache serveur, invalidé avant broadcast, est frais).
+  // Jamais de onerror→close : reconnexion native, puis resync au retour.
+  useEffect(() => {
+    if (tab !== 'book') return;
+    let wasDown = false;
+    const es = new EventSource(clubAvailabilityStreamUrl(club.slug));
+    es.onmessage = (msg) => {
+      let ev: SlotStreamEvent;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      setAvailBySport((prev) => {
+        const { next, needsRefetch } = applySlotEvent(prev, ev);
+        if (needsRefetch && !refetchTimer.current) {
+          refetchTimer.current = setTimeout(() => {
+            refetchTimer.current = null;
+            reloadAllRef.current();
+          }, 500);
+        }
+        return next;
+      });
+    };
+    es.onerror = () => { wasDown = true; setLiveStatus('reconnecting'); };
+    es.onopen = () => {
+      setLiveStatus('live');
+      if (wasDown) { wasDown = false; reloadAllRef.current(); } // resync post-coupure
+    };
+    return () => {
+      es.close();
+      if (refetchTimer.current) { clearTimeout(refetchTimer.current); refetchTimer.current = null; }
+    };
+  }, [tab, club.slug]);
+
+  // Rendez-vous d'ouverture : prochaine bascule de la fenêtre DU JOUEUR (abonné ou non).
+  // Horloge d'affichage (1 tick/s), posée en effet — jamais de Date.now() au rendu initial
+  // (hydration-safe : `clock` démarre à null, rien de daté n'est affiché avant le 1er tick).
+  const [clock, setClock] = useState<number | null>(null);
+  const [lockedSelected, setLockedSelected] = useState(false);
+  const [justOpenedDay, setJustOpenedDay] = useState<string | null>(null);
+  // Cible d'ouverture : calculée une fois (au montage / si les paramètres de fenêtre
+  // changent), PUIS seulement après avoir été franchie — jamais recalculée à chaque tick
+  // d'horloge (nextOpening(now) renvoie TOUJOURS un instant futur ; la recalculer à chaque
+  // tick ferait fuir la cible devant `clock` et la bascule ne se déclencherait jamais).
+  const [openingTarget, setOpeningTarget] = useState<NextOpening | null>(null);
+  const openingTargetRef = useRef<NextOpening | null>(null);
+  openingTargetRef.current = openingTarget;
+  const lockedSelectedRef = useRef(lockedSelected);
+  lockedSelectedRef.current = lockedSelected;
+
+  useEffect(() => {
+    setOpeningTarget(nextOpening(new Date(), club.timezone, windowDays, club.bookingReleaseMode, releaseHour));
+  }, [club.timezone, windowDays, club.bookingReleaseMode, releaseHour]);
+
+  // Horloge + détection du franchissement : UN SEUL intervalle long-vécu (pas un effet
+  // relancé à chaque tick, qui annulerait un jitter en attente sans jamais le reprogrammer).
+  useEffect(() => {
+    let firing: ReturnType<typeof setTimeout> | null = null;
+    const tick = () => {
+      const now = Date.now();
+      setClock(now);
+      const target = openingTargetRef.current;
+      if (firing || !target || now < target.opensAtMs) return;
+      const openedDay = target.dayKey;
+      // Jitter aléatoire 0-3 s : étale la pointe de F5/refetch au lieu que tout le monde
+      // tape la même seconde.
+      firing = setTimeout(() => {
+        firing = null;
+        reloadAllRef.current();
+        setJustOpenedDay(openedDay);
+        if (lockedSelectedRef.current) { setLockedSelected(false); setDate(openedDay); }
+        setOpeningTarget(nextOpening(new Date(), club.timezone, windowDays, club.bookingReleaseMode, releaseHour));
+      }, Math.round(Math.random() * 3_000));
+    };
+    tick();
+    const id = setInterval(tick, 1_000);
+    return () => { clearInterval(id); if (firing) clearTimeout(firing); };
+  }, [club.timezone, windowDays, club.bookingReleaseMode, releaseHour]);
+
+  const bannerVisible = openingTarget !== null && clock !== null && !lockedSelected
+    && clock < openingTarget.opensAtMs && openingTarget.opensAtMs - clock < 3_600_000;
+
   const changeDuration = (clubSportId: string, dur: number) => {
     setDurationBySport((s) => ({ ...s, [clubSportId]: dur }));
     loadSport(clubSportId, dur, date);
@@ -266,8 +361,30 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
           <>
             {/* sélecteur de dates — bande défilante (cellules confortables, swipe horizontal) */}
             <div style={{ padding: '18px 20px 4px' }}>
-              <DateSelector value={date} onChange={setDate} days={7} maxKey={win.maxDayKey} />
+              <DateSelector
+                value={date}
+                onChange={(d) => { setDate(d); setLockedSelected(false); setJustOpenedDay(null); }}
+                days={7}
+                maxKey={win.maxDayKey}
+                lockedKey={openingTarget?.dayKey}
+                onSelectLocked={() => setLockedSelected(true)}
+              />
             </div>
+
+            {bannerVisible && openingTarget && (
+              <div style={{ padding: '10px 20px 0' }}>
+                <OpeningBanner dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock!} />
+              </div>
+            )}
+            {justOpenedDay && !lockedSelected && date !== justOpenedDay && (
+              <div style={{ padding: '10px 20px 0' }}>
+                <OpeningBanner
+                  dayLabel={fmtDayLabel(justOpenedDay)}
+                  opensAtMs={0} nowMs={1}
+                  onGoToDay={() => { setDate(justOpenedDay); setJustOpenedDay(null); }}
+                />
+              </div>
+            )}
 
             {/* rangée : sélecteur de sport (si plusieurs sports) à gauche, bascule de vue à droite.
                 Masquée si le club n'a aucun terrain réservable (rien à afficher/basculer). */}
@@ -280,12 +397,19 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                     onChange={changeSports}
                   />
                 ) : <span aria-hidden="true" />}
-                <div style={{ marginLeft: 'auto' }}>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <LiveDot status={liveStatus} />
                   <ViewToggle value={view} onChange={changeView} />
                 </div>
               </div>
             )}
-            {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres */}
+            {/* grille : une section par sport sélectionné — durée propre + terrains + créneaux libres.
+                Remplacée par le compte à rebours plein cadre quand le joueur a choisi le jour verrouillé. */}
+            {lockedSelected && openingTarget ? (
+              <div style={{ padding: '8px 20px 0' }}>
+                <OpeningPanel dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock ?? Date.now()} />
+              </div>
+            ) : (
             <div style={{ padding: '8px 20px 0' }}>
               {bookableSports.length === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun terrain disponible pour le moment.</div>
@@ -376,7 +500,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                 const canAlert = cs.sport.key === 'padel' && !isPast && !!token && !s.available;
                                 return (s.available && !isPast && win.slotAllowed(s.startTime)) ? (
                                   <button key={s.startTime} className="rv-slot" onClick={() => onSlot(resource.id, s.price, s, selDur, typeof resource.attributes?.format === 'string' ? resource.attributes.format : undefined, cs.sport.key, resource.name)} title={s.offPeak ? 'Heures creuses' : undefined}
-                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    style={{ ...slotVars, position: 'relative', border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 4px', background: `${fill}40`, boxShadow: `inset 0 0 0 1px ${fill}80`, color: th.text, fontFamily: th.fontMono, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background .35s ease, box-shadow .35s ease, color .35s ease' }}>
                                     {formatHour(s.startTime, club.timezone)}
                                     {s.offPeak && resource.offPeakPrice && <span style={{ position: 'absolute', top: -7, right: -4, background: th.accentWarm, color: inkOn(th.accentWarm), fontFamily: th.fontUI, fontSize: 9.5, fontWeight: 800, lineHeight: 1.2, padding: '2px 7px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.22)' }}>{Number(s.price)}€</span>}
                                   </button>
@@ -405,6 +529,11 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                                     {showPast && past.map((s) => renderSlot(s, true))}
                                     {rest.map((s) => renderSlot(s))}
                                   </div>
+                                  {rest.length === 0 && past.length > 0 && (
+                                    <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+                                      Plus de créneaux aujourd&apos;hui — essayez un autre jour.
+                                    </div>
+                                  )}
                                   {scarcity && (
                                     <div style={{ marginTop: 8, fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: ACCENTS.coral }}>{scarcity}</div>
                                   )}
@@ -420,6 +549,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                   );
                 })}
             </div>
+            )}
           </>
         ) : (
           /* onglet Terrains : cartes vers la page détail (sports sans terrain masqués) */

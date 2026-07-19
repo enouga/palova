@@ -104,6 +104,7 @@ describe('Page création de club (NewClubPage)', () => {
     // SIRET Luhn-valide (14 chiffres, clé correcte) pour passer la garde client.
     fireEvent.change(screen.getByLabelText('SIRET du club'), { target: { value: '12345678901237' } });
     fireEvent.change(screen.getByLabelText('Téléphone du gérant'), { target: { value: '0612345678' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation, les CGV Palova/ }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Créer mon club' }));
 
@@ -117,5 +118,49 @@ describe('Page création de club (NewClubPage)', () => {
       ),
     );
     await waitFor(() => expect(screen.getByText(/n'existe pas/i)).toBeInTheDocument());
+  });
+
+  it('bloque la soumission sans acceptation des conditions', async () => {
+    render(<ThemeProvider><NewClubPage /></ThemeProvider>);
+    await waitFor(() => expect(screen.getByLabelText('Sport principal')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'alice@test.fr' } });
+    fireEvent.change(screen.getByLabelText('Mot de passe (8+ caractères)'), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText('Nom du club'), { target: { value: 'Padel Club' } });
+    fireEvent.change(screen.getByLabelText('SIRET du club'), { target: { value: '12345678901237' } });
+    fireEvent.change(screen.getByLabelText('Téléphone du gérant'), { target: { value: '0612345678' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer mon club' }));
+
+    await waitFor(() => expect(screen.getByText(/accepter les CGV/i)).toBeInTheDocument());
+    expect(api.register).not.toHaveBeenCalled();
+  });
+
+  it('createClub reçoit acceptSaasTerms: true', async () => {
+    api.register.mockResolvedValue({ email: 'gerant@test.fr', devCode: '123456' });
+    api.createClub.mockResolvedValue({ id: 'c1', slug: 'club-test' });
+
+    render(<ThemeProvider><NewClubPage /></ThemeProvider>);
+    await waitFor(() => expect(screen.getByLabelText('Sport principal')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
+    fireEvent.change(screen.getByLabelText('Adresse e-mail'), { target: { value: 'alice@test.fr' } });
+    fireEvent.change(screen.getByLabelText('Mot de passe (8+ caractères)'), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText('Nom du club'), { target: { value: 'Padel Club' } });
+    fireEvent.change(screen.getByLabelText('SIRET du club'), { target: { value: '12345678901237' } });
+    fireEvent.change(screen.getByLabelText('Téléphone du gérant'), { target: { value: '0612345678' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /J'accepte les conditions générales d'utilisation, les CGV Palova/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer mon club' }));
+
+    const verifyBtn = await screen.findByRole('button', { name: 'Déclencher la vérification' });
+    fireEvent.click(verifyBtn);
+
+    await waitFor(() => expect(api.createClub).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptSaasTerms: true }), 'tok',
+    ));
   });
 });

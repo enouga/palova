@@ -7,23 +7,25 @@ import { OnboardingStatus } from '@/lib/api';
 const bare: OnboardingStatus = {
   hasLogo: false, sportsCount: 0, resourcesCount: 0,
   hasPresentation: false, stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
+  hasLegalInfo: false,
 };
 
 describe('buildChecklist', () => {
-  it('club nu : 8 jalons, seul « Créer votre club » est fait', () => {
+  it('club nu : 9 jalons, seul « Créer votre club » est fait', () => {
     const items = buildChecklist(bare);
-    expect(items).toHaveLength(8);
+    expect(items).toHaveLength(9);
     // fige l'ordre d'affichage consommé par la carte StartChecklist
-    expect(items.map((i) => i.key)).toEqual(['club', 'logo', 'sports', 'courts', 'page', 'stripe', 'offers', 'event']);
+    expect(items.map((i) => i.key)).toEqual(['club', 'logo', 'sports', 'courts', 'page', 'legal', 'stripe', 'offers', 'event']);
     expect(items[0]).toMatchObject({ key: 'club', done: true, href: null });
     expect(items.filter((i) => i.done)).toHaveLength(1);
-    expect(checklistProgress(items)).toEqual({ done: 1, total: 8 });
+    expect(checklistProgress(items)).toEqual({ done: 1, total: 9 });
   });
 
   it('dérive chaque jalon de son état + href vers la bonne page admin', () => {
     const items = buildChecklist({
       hasLogo: true, sportsCount: 1, resourcesCount: 4,
       hasPresentation: true, stripeStatus: 'ACTIVE', offersCount: 2, eventsCount: 1,
+      hasLegalInfo: true,
     });
     expect(items.every((i) => i.done)).toBe(true);
     const byKey = Object.fromEntries(items.map((i) => [i.key, i]));
@@ -31,6 +33,7 @@ describe('buildChecklist', () => {
     expect(byKey.sports.href).toBe('/admin/settings?tab=sports');
     expect(byKey.courts.href).toBe('/admin/courts');
     expect(byKey.page.href).toBe('/admin/club');
+    expect(byKey.legal.href).toBe('/admin/pages');
     expect(byKey.stripe.href).toBe('/admin/payments');
     expect(byKey.offers.href).toBe('/admin/packages');
     expect(byKey.event.href).toBe('/admin/events');
@@ -44,9 +47,14 @@ describe('buildChecklist', () => {
   it('deep-links the logo item to the Identité tab of settings', () => {
     const items = buildChecklist({
       hasLogo: false, sportsCount: 0, resourcesCount: 0, hasPresentation: false,
-      stripeStatus: 'NONE', offersCount: 0, eventsCount: 0,
+      stripeStatus: 'NONE', offersCount: 0, eventsCount: 0, hasLegalInfo: false,
     });
     expect(items.find((i) => i.key === 'logo')?.href).toBe('/admin/settings?tab=identite');
+  });
+
+  it('jalon légal fait ssi hasLegalInfo', () => {
+    const items = buildChecklist({ ...bare, hasLegalInfo: true });
+    expect(items.find((i) => i.key === 'legal')!.done).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../db/prisma';
 import { ReservationService } from './reservation.service';
+import { invalidateAuthIdentity } from '../middleware/authCache';
 import { AVATARS_DIR } from '../utils/uploads';
 
 export interface AccountDeletionSummary {
@@ -72,6 +73,10 @@ export class AccountService {
       });
       await tx.pushSubscription.deleteMany({ where: { userId } });
     });
+
+    // Tout token existant doit être refusé immédiatement (deletedAt posé),
+    // sans attendre l'expiration du cache d'identité du middleware.
+    invalidateAuthIdentity(userId);
 
     // Nettoyage best-effort du fichier avatar (hors transaction).
     if (user.avatarUrl?.startsWith('/uploads/avatars/')) {

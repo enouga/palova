@@ -241,7 +241,7 @@ export default function AdminEventsPage() {
               const pos = waitlistPosition(detail.registrations, r.id);
               return (
                 <div key={r.id} style={{ background: th.surface, borderRadius: 13, padding: '12px 14px', marginBottom: 10, boxShadow: th.shadow }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '3px 9px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, background: confirmed ? `${ACCENTS.emerald}22` : th.surface2, color: confirmed ? (th.mode === 'floodlit' ? ACCENTS.emerald : '#1c7a4f') : th.textMute }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '3px 9px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, background: confirmed ? `${ACCENTS.emerald}22` : th.surface2, color: confirmed ? th.successInk : th.textMute }}>
                     {confirmed ? 'Confirmé' : pos ? `Liste d'attente · ${pos}` : "Liste d'attente"}
                   </span>
                   <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 6 }}>
