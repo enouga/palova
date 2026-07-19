@@ -597,14 +597,20 @@ export class TournamentService {
   async adminRemoveRegistration(tournamentId: string, regId: string, clubId: string) {
     await this.findClubRegistration(tournamentId, regId, clubId); // vérifie l'appartenance au club
     const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { requirePrepayment: true } });
-    const { cancelled, promotedRegistrationId } = await serializableTx(async (tx) => {
+    const { cancelled, promotedRegistrationId, refundInfo } = await serializableTx(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
       const reg = await tx.tournamentRegistration.findFirst({
         where: { id: regId, status: { not: 'CANCELLED' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, paymentStatus: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
+      const res = await this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
+      let refundInfo: { paymentId: string; amount: number; regId: string } | null = null;
+      if (reg.paymentStatus === 'PAID') {
+        const pay = await tx.payment.findFirst({ where: { tournamentRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+        if (pay) refundInfo = { paymentId: pay.id, amount: Number(pay.amount), regId: reg.id };
+      }
+      return { ...res, refundInfo };
     }, { timeout: 10_000 });
 
     if (promotedRegistrationId && t?.requirePrepayment) {
@@ -614,6 +620,8 @@ export class TournamentService {
     } else {
       await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
+    // Remboursement best-effort du binôme retiré (post-commit, seulement si paiement ONLINE trouvé).
+    if (refundInfo) await this.safeRefund(refundInfo, clubId, 'Retrait par le club');
     return cancelled;
   }
 
