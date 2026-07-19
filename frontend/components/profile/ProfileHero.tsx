@@ -4,6 +4,7 @@ import type { MyProfile } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
+import { Icon, IconName } from '@/components/ui/Icon';
 import { memberSinceYear, ProfileTabKey } from '@/lib/meProfile';
 
 interface Props {
@@ -27,6 +28,15 @@ interface Props {
   compact: boolean;
 }
 
+// Icône par onglet (catalogue existant d'Icon.tsx, aucune icône nouvelle) et libellé court
+// réservé au mobile (colonne étroite) — seuls les deux onglets au nom long en ont un.
+const TAB_ICON: Record<ProfileTabKey, IconName> = {
+  identite: 'user', niveau: 'chart', preferences: 'settings', portefeuille: 'wallet', securite: 'lock',
+};
+const TAB_SHORT: Partial<Record<ProfileTabKey, string>> = {
+  preferences: 'Préfs', portefeuille: 'Solde',
+};
+
 // Hero « carte de joueur ». Le dégradé est CLAIR dans les deux thèmes → l'encre est
 // FIXE (HERO_INK), jamais th.text (qui virerait au clair en sombre et deviendrait illisible).
 export function ProfileHero({
@@ -46,9 +56,8 @@ export function ProfileHero({
   return (
     // Inset 20px de chaque côté (comme AgendaHero et les cartes en dessous — sinon le
     // panneau, plein-bleed, déborde visuellement des cartes plus étroites qui suivent).
-    // Coins arrondis en haut seulement : le bas reste carré pour souder l'onglet actif.
     <div style={{ padding: '0 20px' }}>
-    <div style={{ background: HERO_GRADIENT, borderRadius: '18px 18px 0 0', padding: compact ? '14px 20px 0' : '20px 20px 0' }}>
+    <div style={{ background: HERO_GRADIENT, borderRadius: 18, padding: compact ? '14px 20px' : '20px' }}>
       <div style={{
         fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, letterSpacing: 1.2,
         textTransform: 'uppercase', color: HERO_INK_MUTED,
@@ -125,26 +134,46 @@ export function ProfileHero({
         </div>
       </div>
 
-      {/* Onglets « dossier » : l'actif prend le fond de page → il s'y soude visuellement. */}
-      <div className="sp-scroll-x" style={{ marginTop: compact ? 12 : 18 }}>
-        <div style={{ display: 'flex', gap: 2 }}>
-          {tabs.map((t) => {
-            const active = t.key === activeTab;
-            return (
-              <button
-                key={t.key} type="button" onClick={() => onTab(t.key)}
-                style={{
-                  border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
-                  padding: active ? '9px 15px' : '9px 12px',
-                  borderRadius: active ? '11px 11px 0 0' : 0,
-                  background: active ? th.bg : 'transparent',
-                  color: active ? th.text : HERO_INK_MUTED,
-                }}
-              >{t.label}</button>
-            );
-          })}
-        </div>
+      {/* Onglets « tuiles » : icône + libellé, pills horizontales en desktop → colonnes en
+          mobile (≤600px, même bascule que ClubNav — .ph-lbl-full/.ph-lbl-short reprennent sa
+          technique de libellé court). Le hero est refermé (coins arrondis partout) : plus
+          d'onglet « soudé » au fond de page. */}
+      <style>{`
+        .ph-lbl-short { display: none; }
+        .ph-tab:not(.is-active) { background: rgba(255,255,255,0.45); }
+        @media (max-width: 600px) {
+          .ph-tabs { gap: 4px !important; }
+          .ph-tab { flex: 1 !important; flex-direction: column !important; gap: 3px !important; padding: 7px 2px !important; border-radius: 13px !important; }
+          .ph-tab svg { width: 20px !important; height: 20px !important; }
+          .ph-tab .ph-tab-label { font-size: 10px !important; letter-spacing: 0 !important; line-height: 1.1; }
+          .ph-tab:not(.is-active) { background: transparent !important; }
+          .ph-tab:has(.ph-lbl-short) .ph-lbl-full { display: none; }
+          .ph-tab .ph-lbl-short { display: inline; }
+        }
+      `}</style>
+      <div className="ph-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: compact ? 12 : 18 }}>
+        {tabs.map((t) => {
+          const active = t.key === activeTab;
+          const short = TAB_SHORT[t.key];
+          return (
+            <button
+              key={t.key} type="button" onClick={() => onTab(t.key)}
+              aria-label={t.label} className={`ph-tab${active ? ' is-active' : ''}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderRadius: 999,
+                padding: '9px 16px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: active ? 700 : 600,
+                background: active ? th.accent : undefined,
+                color: active ? th.onAccent : HERO_INK,
+                boxShadow: active ? `0 4px 12px ${th.accent}66` : 'none',
+              }}
+            >
+              <Icon name={TAB_ICON[t.key]} size={16} color={active ? th.onAccent : HERO_INK} />
+              <span className="ph-tab-label ph-lbl-full">{t.label}</span>
+              {short && <span className="ph-tab-label ph-lbl-short">{short}</span>}
+            </button>
+          );
+        })}
       </div>
     </div>
     </div>
