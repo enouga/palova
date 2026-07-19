@@ -9,6 +9,24 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
 
+// ── LogoBall : la balle monoligne seule (mark Palova sans wordmark), réutilisée
+//    partout où l'icône seule suffit (ex. icône « Découvrir » du ClubNav).
+//    Couleur par défaut = accent du thème ; halo neon conservé.
+export function LogoBall({ size = 20, color }: { size?: number; color?: string }) {
+  const { th } = useTheme();
+  const c = color ?? th.accent;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <g fill="none" stroke={c} strokeWidth={6.5} strokeLinecap="round"
+         style={{ filter: th.neon ? `drop-shadow(0 0 ${size * 0.18}px ${c}66)` : 'none' }}>
+        <circle cx="50" cy="50" r="37" />
+        <path d="M20 30 Q50 50 20 70" />
+        <path d="M80 30 Q50 50 80 70" />
+      </g>
+    </svg>
+  );
+}
+
 // ── Logotype Palova : mark (balle monoligne, couleur marque) + wordmark
 //    « palova » suivi de la petite balle apricot. Theme-aware (clair/sombre).
 export function Logotype({ size = 26, color, href }: { size?: number; color?: string; href?: string }) {
@@ -23,14 +41,7 @@ export function Logotype({ size = 26, color, href }: { size?: number; color?: st
   return (
     <Link href={target} aria-label="Accueil Palova" style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.24, userSelect: 'none', cursor: 'pointer' }}>
-        <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
-          <g fill="none" stroke={th.accent} strokeWidth={6.5} strokeLinecap="round"
-             style={{ filter: th.neon ? `drop-shadow(0 0 ${size * 0.18}px ${th.accent}66)` : 'none' }}>
-            <circle cx="50" cy="50" r="37" />
-            <path d="M20 30 Q50 50 20 70" />
-            <path d="M80 30 Q50 50 80 70" />
-          </g>
-        </svg>
+        <LogoBall size={size} color={th.accent} />
         <span style={{
           fontFamily: th.fontDisplay, fontWeight: 700, fontSize: size * 0.92, color: c,
           letterSpacing: -0.5, display: 'inline-flex', alignItems: 'baseline', lineHeight: 1,

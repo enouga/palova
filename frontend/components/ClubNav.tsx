@@ -8,7 +8,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { Theme } from '@/lib/theme';
 import { useAuth } from '@/lib/useAuth';
 import { platformUrl, clubUrl } from '@/lib/clubUrl';
-import { Logotype, ThemeToggle } from '@/components/ui/atoms';
+import { Logotype, LogoBall, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -171,6 +171,21 @@ export function ClubNav({ club }: { club: ClubDetail }) {
              comme les compteurs « À venir / Passées ») : hors flux → l'onglet garde la même taille
              qu'il y ait un compteur ou non. */
           .cn-badge { position: absolute; top: 4px; right: 8px; }
+          /* Logo du club : plafonné pour ne jamais écraser la grappe d'icônes à droite. */
+          .cn-club-logo { max-width: 90px; }
+        }
+        @media (max-width:400px){
+          /* Grappe d'icônes trop serrée sur les très petits écrans (jusqu'à 6 icônes rondes
+             chez un gérant multi-club) : on resserre le gap et on réduit chaque icône ronde
+             38px → 34px, sans toucher aux composants partagés (ThemeToggle/NotificationBell/
+             ProfileMenu) — sélecteurs limités aux enfants directs de .cn-actions. */
+          .cn-actions { gap: 6px !important; }
+          .cn-actions > a, .cn-actions > button, .cn-actions > div > button, .cn-actions > div > a {
+            width: 34px !important; height: 34px !important;
+          }
+          .cn-actions > div > button > span, .cn-actions > div > button > img {
+            width: 34px !important; height: 34px !important;
+          }
         }
       `}</style>
 
@@ -195,7 +210,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           {showClubLogo ? (
             <Link href="/" style={{ display: 'inline-flex', flexShrink: 0 }}>
               <img src={assetUrl(bannerLogo) ?? undefined} alt={`Logo ${club.name}`}
-                onError={() => setLogoFailed(true)}
+                onError={() => setLogoFailed(true)} className="cn-club-logo"
                 style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block' }} />
             </Link>
           ) : (
@@ -204,6 +219,13 @@ export function ClubNav({ club }: { club: ClubDetail }) {
           <span className="cn-title" style={{ flex: 1, minWidth: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, color: th.text, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{club.name}</span>
           <div className="cn-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ThemeToggle />
+            {/* Icône Palova : point d'entrée vers /decouvrir (clubs, parties, tournois), sur l'hôte
+                plateforme — visible de TOUT visiteur (anonyme compris), aucune condition token. */}
+            <a href={platformUrl('/decouvrir')} aria-label="Palova — découvrir clubs, parties et tournois" title="Palova — découvrir clubs, parties et tournois"
+              style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
+              <LogoBall size={20} />
+            </a>
             {showMessages && (
               // Icône Messages : même langage que la cloche (rond surface2, badge rouge non-lus).
               <Link href="/me/messages" aria-label="Messages" title="Messages"
