@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { PillTabs, Pill } from '@/components/ui/atoms';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
-import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod } from '@/lib/discover';
+import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
 
 const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
   { value: 'today', label: "Aujourd'hui" },
@@ -14,21 +14,25 @@ const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
 ];
 
 // Onglet « Parties » de la future page /decouvrir : grille de parties ouvertes nationales
-// (GET /api/open-matches/national, chargées par le parent) filtrées par période/ville/niveau
-// et triées par distance. Pur côté données — `matches`/`city`/`coords`/`now` arrivent en
-// props, seuls `period`/`levelOn`/`rating` sont un état local à ce composant.
+// (GET /api/open-matches/national, chargées par le parent) filtrées par période/localisation/
+// niveau et triées par distance. Pur côté données — `matches`/`location`/`coords`/`now`
+// arrivent en props, seuls `period`/`levelOn`/`rating` sont un état local à ce composant.
+// `onCount` (optionnel) reporte au parent le nombre de cartes affichées après filtrage —
+// pas appelé tant que `matches`/`now` ne sont pas chargés (compteur inconnu).
 export function DiscoverMatches({
   matches,
-  city,
+  location,
   coords,
   now,
   onSeeClubs,
+  onCount,
 }: {
   matches: NationalOpenMatch[] | null;
-  city: string;
+  location: LocationQuery;
   coords: { lat: number; lng: number } | null;
   now: Date | null;
   onSeeClubs: () => void;
+  onCount?: (n: number) => void;
 }) {
   const { th } = useTheme();
   const { token } = useAuth();
@@ -41,6 +45,20 @@ export function DiscoverMatches({
     api.getMyRating(token, 'padel').then(setRating).catch(() => setRating(null));
   }, [token]);
 
+  const levelChipVisible = Boolean(token) && rating?.level != null;
+  const myLevel = levelChipVisible && levelOn ? rating!.level : null;
+
+  // `ranked` reste `null` tant que `matches`/`now` ne sont pas chargés (compteur inconnu) —
+  // calculé AVANT l'early return de chargement pour respecter les règles des hooks (le
+  // useEffect ci-dessous doit être appelé à chaque rendu, jamais conditionnellement).
+  const ranked = matches != null && now != null
+    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords)
+    : null;
+
+  useEffect(() => {
+    if (ranked) onCount?.(ranked.length);
+  }, [ranked?.length, onCount]);
+
   if (matches == null || now == null) {
     return (
       <div style={{ padding: '40px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
@@ -49,10 +67,7 @@ export function DiscoverMatches({
     );
   }
 
-  const levelChipVisible = Boolean(token) && rating?.level != null;
-  const myLevel = levelChipVisible && levelOn ? rating!.level : null;
-  const filtered = filterNationalMatches(matches, { period, city, myLevel }, now);
-  const ranked = sortMatchesByDistance(filtered, coords);
+  const list = ranked ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -63,7 +78,7 @@ export function DiscoverMatches({
         )}
       </div>
 
-      {ranked.length === 0 ? (
+      {list.length === 0 ? (
         <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
           <div>Aucune partie ne correspond pour le moment.</div>
           <button
@@ -78,7 +93,7 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
-          {ranked.map((r) => (
+          {list.map((r) => (
             <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} />
           ))}
         </div>

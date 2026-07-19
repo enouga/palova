@@ -31,7 +31,7 @@ function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
       { userId: 'org', firstName: 'Léa', lastName: 'Martin', avatarUrl: null, isOrganizer: true, team: 1, slot: 0 },
       { userId: 'p2', firstName: 'Tom', lastName: 'Durand', avatarUrl: null, isOrganizer: false, team: 2, slot: 0 },
     ],
-    club: { slug: 'padel-arena-paris', name: 'Padel Arena Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522 },
+    club: { slug: 'padel-arena-paris', name: 'Padel Arena Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522, department: null, departmentCode: null },
     ...over,
   };
 }
@@ -47,10 +47,11 @@ const wrap = (props: Partial<React.ComponentProps<typeof DiscoverMatches>> = {})
     <ThemeProvider>
       <DiscoverMatches
         matches={props.matches !== undefined ? props.matches : [makeMatch()]}
-        city={props.city ?? ''}
+        location={props.location ?? { city: null, deptCodes: [] }}
         coords={props.coords !== undefined ? props.coords : null}
         now={props.now !== undefined ? props.now : NOW}
         onSeeClubs={props.onSeeClubs ?? jest.fn()}
+        onCount={props.onCount}
       />
     </ThemeProvider>,
   );
@@ -83,9 +84,9 @@ describe('DiscoverMatches', () => {
     expect(screen.queryByText('Club plus tard')).not.toBeInTheDocument();
   });
 
-  it('prop city filtre par ville', () => {
+  it('location.city filtre par ville', () => {
     wrap({
-      city: 'lyon',
+      location: { city: 'lyon', deptCodes: [] },
       matches: [
         makeMatch({ id: 'paris', club: { ...makeMatch().club, name: 'Club Paris', city: 'Paris' } }),
         makeMatch({ id: 'lyon', club: { ...makeMatch().club, name: 'Club Lyon', city: 'Lyon' } }),
@@ -95,17 +96,46 @@ describe('DiscoverMatches', () => {
     expect(screen.queryByText('Club Paris')).not.toBeInTheDocument();
   });
 
+  it('location.deptCodes filtre par code département', async () => {
+    const matchParis = makeMatch({
+      id: 'paris',
+      club: { ...makeMatch().club, name: 'Padel Paris', city: 'Paris', departmentCode: '75' },
+    });
+    const matchLyon = makeMatch({
+      id: 'lyon',
+      club: { ...makeMatch().club, name: 'Padel Lyon', city: 'Lyon', departmentCode: '69' },
+    });
+    wrap({ matches: [matchParis, matchLyon], location: { city: null, deptCodes: ['69'] } });
+    expect(await screen.findByText('Padel Lyon')).toBeInTheDocument();
+    expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument();
+  });
+
+  it('onCount reçoit le nombre de cartes affichées', async () => {
+    const onCount = jest.fn();
+    const matchParis = makeMatch({
+      id: 'paris',
+      club: { ...makeMatch().club, name: 'Padel Paris', city: 'Paris', departmentCode: '75' },
+    });
+    const matchLyon = makeMatch({
+      id: 'lyon',
+      club: { ...makeMatch().club, name: 'Padel Lyon', city: 'Lyon', departmentCode: '69' },
+    });
+    wrap({ matches: [matchParis, matchLyon], location: { city: null, deptCodes: [] }, onCount });
+    await screen.findByText('Padel Paris');
+    expect(onCount).toHaveBeenLastCalledWith(2);
+  });
+
   it('coords Paris trie Paris avant Lyon et affiche la distance', () => {
     wrap({
       coords: { lat: 48.8566, lng: 2.3522 }, // Paris
       matches: [
         makeMatch({
           id: 'lyon',
-          club: { slug: 'club-lyon', name: 'Club Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357 },
+          club: { slug: 'club-lyon', name: 'Club Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357, department: null, departmentCode: null },
         }),
         makeMatch({
           id: 'paris',
-          club: { slug: 'club-paris', name: 'Club Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522 },
+          club: { slug: 'club-paris', name: 'Club Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522, department: null, departmentCode: null },
         }),
       ],
     });

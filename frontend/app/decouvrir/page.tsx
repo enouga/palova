@@ -143,7 +143,7 @@ export default function DiscoverPage() {
         <div style={{ paddingTop: 18 }}>
           {tab === 'parties' && (
             <div style={{ padding: '0 20px' }}>
-              <DiscoverMatches matches={matches} city={city} coords={coords} now={now} onSeeClubs={() => setTab('clubs')} />
+              <DiscoverMatches matches={matches} location={{ city, deptCodes: [] }} coords={coords} now={now} onSeeClubs={() => setTab('clubs')} />
             </div>
           )}
           {tab === 'tournois' && <TournamentFinder hideTitle coords={coords} city={city} />}
