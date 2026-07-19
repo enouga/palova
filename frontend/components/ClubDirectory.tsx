@@ -9,18 +9,25 @@ import { ClubCard } from '@/components/ClubCard';
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
 // Bloc embeddable : ne rend QUE la recherche + les résultats (pas de Screen ni de titre de page),
 // pour être réutilisé sur /clubs comme sur l'accueil plateforme.
-export function ClubDirectory() {
+// Mode contrôlé (props city/coords, ex. future page /decouvrir) : la page porte une barre de
+// localisation PARTAGÉE (ville + géoloc) au-dessus — le composant masque alors ses propres
+// contrôles de localisation et se contente d'appliquer city/coords reçus comme filtre.
+export function ClubDirectory({ city: cityProp, coords: coordsProp }: { city?: string; coords?: { lat: number; lng: number } | null } = {}) {
   const { th } = useTheme();
   const { token } = useAuth();
   const [sports, setSports] = useState<Sport[]>([]);
   const [clubs, setClubs]   = useState<ClubSummary[]>([]);
   const [q, setQ]           = useState('');
-  const [city, setCity]     = useState('');
+  const [cityInput, setCityInput] = useState('');
   const [sport, setSport]   = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [coordsInput, setCoordsInput] = useState<{ lat: number; lng: number } | null>(null);
   const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied'>('idle');
+
+  const controlled = cityProp !== undefined || coordsProp !== undefined;
+  const effCity = controlled ? (cityProp ?? '') : cityInput;
+  const effCoords = controlled ? (coordsProp ?? null) : coordsInput;
 
   useEffect(() => { api.getSports().then(setSports).catch(() => setSports([])); }, []);
 
@@ -36,19 +43,19 @@ export function ClubDirectory() {
     setLoading(true);
     try {
       setClubs(await api.listClubs({
-        q: q || undefined, city: city || undefined, sport: sport || undefined,
-        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+        q: q || undefined, city: effCity || undefined, sport: sport || undefined,
+        ...(effCoords ? { lat: effCoords.lat, lng: effCoords.lng } : {}),
       }));
       setError(false);
     } catch { setClubs([]); setError(true); }
     finally { setLoading(false); }
-  }, [q, city, sport, coords]);
+  }, [q, effCity, effCoords, sport]);
 
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
     setGeoState('locating');
     navigator.geolocation.getCurrentPosition(
-      (p) => { setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }); setGeoState('idle'); },
+      (p) => { setCoordsInput({ lat: p.coords.latitude, lng: p.coords.longitude }); setGeoState('idle'); },
       () => setGeoState('denied'),
       { timeout: 8000 },
     );
@@ -64,7 +71,9 @@ export function ClubDirectory() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px 0' }}>
         <div style={{ display: 'flex', gap: 10 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom du club" style={inputStyle} />
-          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
+          {!controlled && (
+            <input value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
+          )}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
@@ -74,16 +83,18 @@ export function ClubDirectory() {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={locateMe} style={chipBtn(th, !!coords)}>
-            📍 {coords ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
-          </button>
-          {geoState === 'denied' && (
-            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
-              Localisation indisponible — cherchez par ville ou région.
-            </span>
-          )}
-        </div>
+        {!controlled && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={locateMe} style={chipBtn(th, !!coordsInput)}>
+              📍 {coordsInput ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
+            </button>
+            {geoState === 'denied' && (
+              <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+                Localisation indisponible — cherchez par ville ou région.
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* résultats */}
