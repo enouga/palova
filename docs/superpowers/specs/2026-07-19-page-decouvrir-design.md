@@ -81,9 +81,10 @@ Décisions de cadrage (maquettes comparées) :
     même UX que `ClubDirectory`) ;
   - champ **ville** (texte libre).
 - Portée : la géoloc alimente les **3 onglets** (tri par distance des clubs et parties, seed du
-  « Autour de moi » du TournamentFinder). Le champ **ville** ne s'applique qu'aux onglets
-  **Parties** (ville du club) et **Clubs** — les tournois gardent leur filtre par département,
-  plus adapté à leur usage.
+  « Autour de moi » du TournamentFinder). Le champ **ville** s'applique aussi aux **3 onglets** :
+  Parties et Tournois filtrent sur la **ville du club** (déjà présente dans les deux payloads),
+  Clubs sur son paramètre `city` existant. Les tournois **conservent en plus** leur facette
+  Département (les deux se cumulent, ET inter-dimensions).
 
 ### Onglets
 
@@ -115,7 +116,7 @@ Décisions de cadrage (maquettes comparées) :
 
 - **Réutilise `TournamentFinder`** tel quel (facettes Quand/Département/Catégorie/Genre,
   compteurs, cartes `AgendaCard` cross-sous-domaine).
-- Deux adaptations :
+- Trois adaptations :
   1. **Préservation des paramètres d'URL étrangers** : son `writeUrl` reconstruit la query à
      neuf — il doit désormais préserver les paramètres qu'il ne gère pas (dont `tab=`), sinon
      chaque changement de facette éjecte l'onglet de l'URL.
@@ -123,6 +124,10 @@ Décisions de cadrage (maquettes comparées) :
      reçoit en seed (`coordsRef`) et active `nearMe` sans re-demander la permission. Sans prop,
      comportement actuel intact (la page `/tournois` n'existant plus, seul `/decouvrir` le
      monte, mais la prop reste optionnelle pour les tests existants).
+  3. **Prop optionnelle `city`** : filtre client sur la **ville du club** (`club.city`, déjà
+     dans la projection publique du calendrier national ; comparaison insensible aux
+     accents/casse via `norm()`), appliqué **avant** `applyFilters` — les compteurs de facettes
+     reflètent ainsi le sous-ensemble de la ville. Se cumule avec la facette Département.
 
 ### Onglet Clubs
 
@@ -171,7 +176,8 @@ Types front (`lib/api.ts`) : `NationalOpenMatchClub` gagne `latitude`/`longitude
   - `DiscoverPage.test.tsx` — onglets + `?tab=`, filtres parties, état vide, anonyme (pas de
     chip niveau), redirection hôte club ;
   - `ClubDirectory.test.tsx` — props localisation (contrôles masqués, `listClubs` piloté) ;
-  - `TournamentFinder.test.tsx` — `writeUrl` préserve `tab=`, prop `coords` seed `nearMe` ;
+  - `TournamentFinder.test.tsx` — `writeUrl` préserve `tab=`, prop `coords` seed `nearMe`,
+    prop `city` filtre les tournois (et se cumule avec Département) ;
   - `ClubNav.test.tsx` — icône Palova visible (connecté ET anonyme), cible `/decouvrir` ;
   - `ProfileMenu.test.tsx` — entrée « Palova » ;
   - stubs de redirection `/clubs` et `/tournois` (remplace l'assertion actuelle du
