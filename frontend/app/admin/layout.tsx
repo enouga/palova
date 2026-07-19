@@ -200,6 +200,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
            { href: '/admin/settings', label: 'Réglages',           icon: 'settings' } as NavItem]
         : []),
     ] },
+    // Sans titre, visible de tout le staff (pas de gate rôle) : le comptoir croise le bug en premier.
+    { items: [
+      { href: '/admin/support', label: 'Support', icon: 'mail' },
+    ] },
   ];
 
   // Une section sans items (ex. Configuration pour un STAFF) ne doit pas afficher son titre seul.
