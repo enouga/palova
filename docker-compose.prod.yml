@@ -68,6 +68,10 @@ services:
       STRIPE_BILLING_WEBHOOK_SECRET: ${STRIPE_BILLING_WEBHOOK_SECRET}
       # URL publique de l'API — construit les liens absolus DANS les emails (désinscription…).
       API_PUBLIC_URL: ${API_PUBLIC_URL}
+      # Support club → Palova (issues GitHub) — sans TOKEN/REPO, mode console (ticket loggé).
+      GITHUB_SUPPORT_TOKEN: ${GITHUB_SUPPORT_TOKEN}
+      GITHUB_SUPPORT_REPO: ${GITHUB_SUPPORT_REPO}
+      SUPPORT_FALLBACK_EMAIL: ${SUPPORT_FALLBACK_EMAIL}
     volumes:
       # Fichiers uploadés (avatars) — sans volume, perdus à chaque rebuild.
       - backend_uploads:/app/uploads
