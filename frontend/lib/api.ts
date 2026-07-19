@@ -56,7 +56,7 @@ export const api = {
 
   listNationalTournaments: () => request<NationalTournament[]>('/api/tournaments/national'),
 
-  /** Vitrine palova.fr : parties ouvertes publiques agrégées tous clubs (7 jours, jamais pleines). */
+  /** Vitrine palova.fr : parties ouvertes publiques agrégées tous clubs (7 jours, jamais pleines). Alimente aussi l'onglet « Parties » de /decouvrir (lib/discover.ts). */
   listNationalOpenMatches: () => request<NationalOpenMatch[]>('/api/open-matches/national'),
 
   /** Résout un libellé de sous-domaine (slug actuel ou alias historique). 404 si inconnu. */
@@ -2276,6 +2276,8 @@ export interface NationalOpenMatchClub {
   timezone: string;
   accentColor: string;
   logoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** Partie ouverte agrégée sur la vitrine palova.fr : partie publique + son club. */
