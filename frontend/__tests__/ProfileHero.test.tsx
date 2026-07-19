@@ -13,6 +13,7 @@ const profile = {
 const TABS = [
   { key: 'identite' as const, label: 'Identité' },
   { key: 'preferences' as const, label: 'Préférences' },
+  { key: 'portefeuille' as const, label: 'Portefeuille' },
 ];
 
 const base = {
@@ -86,5 +87,21 @@ describe('ProfileHero', () => {
     expect(screen.queryByText(/Membre depuis/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Changer la photo' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Préférences' })).toBeInTheDocument();
+  });
+
+  it('chaque onglet porte une icône (svg) à côté du libellé', () => {
+    wrap();
+    const tab = screen.getByRole('button', { name: 'Identité' });
+    expect(tab.querySelector('svg')).not.toBeNull();
+  });
+
+  it('un onglet à libellé court garde son nom complet comme nom accessible', () => {
+    wrap();
+    // "Portefeuille" a un libellé court ("Solde") réservé au mobile via CSS — le nom
+    // accessible (aria-label) doit rester le libellé complet dans les deux cas.
+    const tab = screen.getByRole('button', { name: 'Portefeuille' });
+    expect(tab).toHaveAttribute('aria-label', 'Portefeuille');
+    expect(tab.textContent).toContain('Portefeuille');
+    expect(tab.textContent).toContain('Solde');
   });
 });

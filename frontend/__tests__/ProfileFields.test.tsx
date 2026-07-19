@@ -30,14 +30,24 @@ describe('ProfileInput', () => {
     expect(screen.getByLabelText('Téléphone').tagName).toBe('INPUT');
   });
 
-  it('le focus se reflète sur le bloc (anneau d’accent)', () => {
-    const { container } = wrap(<ProfileInput label="Téléphone" value="" onChange={() => {}} />);
-    const shell = container.firstElementChild as HTMLElement;
-    const atRest = shell.style.boxShadow;
+  it('le focus se reflète sur la boîte du champ (anneau d’accent)', () => {
+    wrap(<ProfileInput label="Téléphone" value="" onChange={() => {}} />);
+    const box = screen.getByTestId('field-box');
+    const atRest = box.style.boxShadow;
     fireEvent.focus(screen.getByLabelText('Téléphone'));
-    expect(shell.style.boxShadow).not.toBe(atRest);
+    expect(box.style.boxShadow).not.toBe(atRest);
     fireEvent.blur(screen.getByLabelText('Téléphone'));
-    expect(shell.style.boxShadow).toBe(atRest);
+    expect(box.style.boxShadow).toBe(atRest);
+  });
+
+  it('le libellé est rendu AVANT la boîte du champ dans le DOM (au-dessus, pas dedans)', () => {
+    const { container } = wrap(<ProfileInput label="Téléphone" value="" onChange={() => {}} />);
+    const label = screen.getByText('Téléphone');
+    const box = screen.getByTestId('field-box');
+    // compareDocumentPosition bit 4 (DOCUMENT_POSITION_FOLLOWING) = label vient avant box.
+    // eslint-disable-next-line no-bitwise
+    expect(label.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('[data-testid="field-box"] [aria-hidden]')).toBeNull();
   });
 });
 
@@ -68,5 +78,20 @@ describe('PillChoice', () => {
       options={[{ value: 'MALE', label: 'Homme' }, { value: 'FEMALE', label: 'Femme' }]} />);
     expect(screen.getByRole('button', { name: 'Homme' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Femme' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('les pills ne sont pas posées dans une boîte de champ (pas de field-box)', () => {
+    const { container } = wrap(<PillChoice label="Sexe" value="MALE" onChange={() => {}}
+      options={[{ value: 'MALE', label: 'Homme' }, { value: 'FEMALE', label: 'Femme' }]} />);
+    expect(container.querySelector('[data-testid="field-box"]')).toBeNull();
+    expect(screen.getByText('Sexe')).toBeInTheDocument();
+  });
+
+  it('hideLabel omet le libellé (carte dont le titre le porte déjà)', () => {
+    wrap(<PillChoice label="Sport préféré" hideLabel value="MALE" onChange={() => {}}
+      options={[{ value: 'MALE', label: 'Padel' }]} />);
+    expect(screen.queryByText('Sport préféré')).not.toBeInTheDocument();
+    // Le groupe garde son nom accessible même sans libellé peint.
+    expect(screen.getByRole('group', { name: 'Sport préféré' })).toBeInTheDocument();
   });
 });
