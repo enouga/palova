@@ -1,0 +1,38 @@
+'use client';
+import { useTheme } from '@/lib/ThemeProvider';
+
+export interface DiscoverAnchorItem { id: string; label: string; count: number | null }
+
+// Rangée d'ancres collante de /decouvrir : navigation dans le scroll (PAS des onglets —
+// les sections restent toutes rendues). Le parent fournit la section active (scroll-spy).
+export function DiscoverAnchors({ items, active, onJump }: {
+  items: DiscoverAnchorItem[];
+  active: string;
+  onJump: (id: string) => void;
+}) {
+  const { th } = useTheme();
+  return (
+    <div style={{ position: 'sticky', top: 0, zIndex: 30, background: th.bg, padding: '8px 20px' }}>
+      <div style={{ display: 'flex', gap: 4, background: th.surface2, borderRadius: 999, padding: 4 }}>
+        {items.map((it) => {
+          const isActive = it.id === active;
+          return (
+            <button key={it.id} onClick={() => onJump(it.id)} aria-current={isActive ? 'true' : undefined}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 6px',
+                fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap',
+                background: isActive ? th.surface : 'transparent',
+                color: isActive ? th.text : th.textMute,
+                boxShadow: isActive ? th.shadowSoft : 'none' }}>
+              {it.label}
+              {it.count != null && (
+                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '1px 7px',
+                  background: isActive ? `${th.accent}26` : th.surface, color: th.textMute }}>{it.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
