@@ -13,6 +13,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { capacityFor, courtFormat } from '@/lib/courtType';
 import { cancellationPolicyLabel, quotaBites } from '@/lib/reservations';
 import { hasAcceptedCgv, rememberCgvAccepted } from '@/lib/cgv';
+import { CgvConsent } from '@/components/CgvConsent';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { BookingSuccess } from '@/components/booking/BookingSuccess';
 
@@ -192,6 +193,10 @@ export default function BookingModal({
   const [useSub, setUseSub]           = useState(false); // utiliser l'abonnement couvrant (défaut true s'il existe)
   // Acceptation CGV — requise dès qu'on passe par une empreinte/paiement CB Stripe.
   const [cgvAccepted, setCgvAccepted] = useState(false);
+  // Acceptation retrouvée en mémoire locale (joueur récurrent) → rappel au lieu de la carte.
+  const [cgvPreAccepted, setCgvPreAccepted] = useState(false);
+  // Incrémenté quand on tape le CTA sans avoir coché → la carte CGV pulse.
+  const [cgvNudge, setCgvNudge] = useState(0);
   // Le club a-t-il publié ses CGV ? ('published' → lien /cgv ; 'fallback' → CGV plateforme).
   const [cgvStatus, setCgvStatus]     = useState<'published' | 'fallback' | null>(null);
   // Empreinte forcée : le backend a renvoyé CARD_FINGERPRINT_REQUIRED alors que la prop
@@ -299,7 +304,7 @@ export default function BookingModal({
   // `?resource=&start=` peut pré-ouvrir la modale (hydration-safe). La trace légale
   // reste envoyée par transaction au confirmReservation ; ceci ne fait que pré-cocher.
   useEffect(() => {
-    if (hasAcceptedCgv(slug)) setCgvAccepted(true);
+    if (hasAcceptedCgv(slug)) { setCgvAccepted(true); setCgvPreAccepted(true); }
   }, [slug]);
 
   // Au moment où le chemin CB Stripe devient actif, on vérifie (une seule fois) si le
@@ -640,24 +645,16 @@ export default function BookingModal({
                   boutons « Annuler / Payer ») ; sinon rangée « Abandonner / Confirmer ». */}
               {cardPath ? (
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${th.line}` }}>
-                  {/* CGV — requise avant tout intent CB ; cocher révèle le formulaire Stripe. */}
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={cgvAccepted}
-                      onChange={(e) => { const v = e.target.checked; setCgvAccepted(v); if (v) rememberCgvAccepted(slug); }}
-                      aria-label="J'accepte les conditions générales de vente et la politique de confidentialité"
-                      style={{ width: 15, height: 15, marginTop: 1, accentColor: th.accent, flex: '0 0 auto', cursor: 'pointer' }} />
-                    <span style={{ fontFamily: th.fontUI, fontSize: 11, color: th.textFaint, lineHeight: 1.4 }}>
-                      J&apos;accepte les{' '}
-                      <a href="/cgv" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>conditions générales de vente</a>
-                      {' '}et la{' '}
-                      <a href="/confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: th.textMute, textDecoration: 'underline' }}>politique de confidentialité</a>.
-                      {cgvStatus === 'fallback' && (
-                        <span style={{ display: 'block', color: th.textFaint, fontSize: 10, marginTop: 2 }}>
-                          Les conditions générales de la plateforme s&apos;appliquent.
-                        </span>
-                      )}
-                    </span>
-                  </label>
+                  {/* CGV — requise avant tout intent CB ; cocher révèle le formulaire Stripe.
+                      Déjà accepté (mémoire locale) → simple rappel ; la trace légale par
+                      transaction reste envoyée au confirmReservation. */}
+                  <CgvConsent
+                    accepted={cgvAccepted}
+                    alreadyAccepted={cgvPreAccepted}
+                    fallbackNote={cgvStatus === 'fallback'}
+                    nudge={cgvNudge}
+                    onChange={(v) => { setCgvAccepted(v); if (v) rememberCgvAccepted(slug); }}
+                  />
 
                   {cgvAccepted && reservation ? (
                     <div style={{ marginTop: 16 }}>
@@ -689,9 +686,22 @@ export default function BookingModal({
                         onCancel={handleClose} />
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
-                      <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint }}>Acceptez les conditions pour continuer.</span>
-                      <Btn variant="surface" onClick={handleClose} disabled={busy}>Abandonner</Btn>
+                    <div style={{ marginTop: 14 }}>
+                      {/* CTA toujours visible : dimmé tant que la case n'est pas cochée — le
+                          taper fait pulser la carte CGV (au lieu d'un pied sans action). */}
+                      <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', gap: 11 }}>
+                        <Btn variant="surface" onClick={handleClose} disabled={busy} style={isDesktop ? { flex: '0 0 38%' } : { width: '100%' }}>Abandonner</Btn>
+                        <Btn icon="arrowR"
+                          onClick={() => { if (!cgvAccepted) setCgvNudge((n) => n + 1); }}
+                          style={{ ...(isDesktop ? { flex: 1 } : { width: '100%' }), ...(cgvAccepted ? {} : { opacity: 0.45 }) }}>
+                          {(payMode === 'online' && onlineAvailable) ? `Valider le paiement · ${onlineAmountLabel}` : 'Enregistrer ma carte'}
+                        </Btn>
+                      </div>
+                      {!cgvAccepted && (
+                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 8, textAlign: isDesktop ? 'right' : 'center' }}>
+                          Acceptez les conditions pour continuer.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

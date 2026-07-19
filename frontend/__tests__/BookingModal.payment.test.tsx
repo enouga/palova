@@ -269,13 +269,13 @@ describe('BookingModal — CGV pré-cochée si déjà acceptée pour le club (m�
     (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
   });
 
-  it('déjà accepté pour ce club → case pré-cochée et étape Stripe affichée sans clic', async () => {
+  it('déjà accepté pour ce club → rappel « déjà accepté » (plus de case) et étape Stripe affichée sans clic', async () => {
     localStorage.setItem('palova:cgv-accepted:club-demo', '1');
     renderModal({ requireOnlinePayment: true, stripeActive: true, slug: 'club-demo' });
 
-    // La case est cochée d'emblée et le formulaire Stripe s'affiche sans interaction.
-    const checkbox = await screen.findByRole('checkbox', { name: /conditions générales/i });
-    expect(checkbox).toBeChecked();
+    // Rappel explicite au lieu d'une case silencieusement pré-cochée.
+    expect(await screen.findByText(/déjà accepté/i)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /conditions générales/i })).not.toBeInTheDocument();
     const step = await screen.findByTestId('stripe-step');
     expect(step).toHaveAttribute('data-cgv', 'true');
   });
@@ -297,6 +297,53 @@ describe('BookingModal — CGV pré-cochée si déjà acceptée pour le club (m�
     fireEvent.click(checkbox);
     await screen.findByTestId('stripe-step');
     expect(localStorage.getItem('palova:cgv-accepted:club-demo')).toBe('1');
+  });
+});
+
+describe('BookingModal — clarté de l\'acceptation CGV (CTA toujours visible)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockClub = null;
+    localStorage.clear();
+    (api.holdSlot as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING', totalPrice: '40' });
+    (api.confirmReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CONFIRMED' });
+    (api.cancelReservation as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'CANCELLED' });
+    (api.applyHoldSetup as jest.Mock).mockResolvedValue({ id: 'res-1', status: 'PENDING' });
+    (api.getClubPage as jest.Mock).mockResolvedValue({ kind: 'CGV', bodyMarkdown: '...', updatedAt: '' });
+  });
+
+  it('paiement en ligne, case non cochée → le CTA « Valider le paiement · montant » reste visible ; cliquer n\'ouvre PAS Stripe', async () => {
+    renderModal({ stripeActive: true });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+
+    // Le CTA principal est rendu même sans acceptation (au lieu du seul « Abandonner »).
+    const cta = screen.getByRole('button', { name: /Valider le paiement · 10€/ });
+    fireEvent.click(cta);
+    // Sans CGV, le clic ne révèle jamais le formulaire Stripe (il pulse la carte CGV).
+    expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
+    // La case reste là, prête à être cochée.
+    expect(screen.getByRole('checkbox', { name: /conditions générales/i })).toBeInTheDocument();
+  });
+
+  it('empreinte requise, case non cochée → CTA « Enregistrer ma carte » visible ; clic sans effet Stripe', async () => {
+    renderModal({ requireCardFingerprint: true, stripeActive: false });
+    await screen.findByText(/Créneau bloqué/);
+
+    const cta = screen.getByRole('button', { name: /Enregistrer ma carte/ });
+    fireEvent.click(cta);
+    expect(screen.queryByTestId('stripe-step')).not.toBeInTheDocument();
+  });
+
+  it('cocher après avoir tapé le CTA → le formulaire Stripe apparaît (le CTA cède la place)', async () => {
+    renderModal({ stripeActive: true });
+    await screen.findByText(/Créneau bloqué/);
+    fireEvent.click(screen.getByRole('button', { name: /Payer en ligne/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Valider le paiement · 10€/ }));
+
+    acceptCgv();
+    await screen.findByTestId('stripe-step');
+    expect(screen.queryByRole('button', { name: /Valider le paiement · 10€/ })).not.toBeInTheDocument();
   });
 });
 
