@@ -469,6 +469,56 @@ export class EventService {
     return { seriesId, created };
   }
 
+  /**
+   * Prolonge une série : recalcule weeklyOccurrences sur toute la fenêtre startDate..newEndDate
+   * et ne crée que les occurrences postérieures à la dernière déjà existante (évite les
+   * doublons). Plafond 60 occurrences AU TOTAL sur la série (existantes + delta).
+   */
+  async adminExtendSeries(seriesId: string, clubId: string, newEndDate: string): Promise<{ created: number }> {
+    const series = await prisma.clubEventSeries.findUnique({ where: { id: seriesId } });
+    if (!series) throw new Error('SERIES_NOT_FOUND');
+    if (series.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+    if (series.cancelledAt) throw new Error('SERIES_CANCELLED');
+
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { timezone: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+
+    const startDateStr = series.startDate.toISOString().slice(0, 10);
+    const occurrences = weeklyOccurrences({
+      weekday: series.weekday, startLocal: series.startLocal, durationMin: series.durationMin,
+      startDate: startDateStr, endDate: newEndDate, tz: club.timezone,
+    });
+
+    const last = await prisma.clubEvent.findFirst({
+      where: { seriesId }, orderBy: { startTime: 'desc' }, select: { startTime: true },
+    });
+    const delta = last ? occurrences.filter((o) => o.startUtc > last.startTime) : occurrences;
+
+    const existingCount = await prisma.clubEvent.count({ where: { seriesId } });
+    if (existingCount + delta.length > 60) throw new Error('SERIES_TOO_LONG');
+
+    const created = await prisma.$transaction(async (tx) => {
+      let created = 0;
+      for (const occ of delta) {
+        await tx.clubEvent.create({
+          data: {
+            clubId, name: series.name, kind: series.kind, description: series.description,
+            startTime: occ.startUtc, endTime: occ.endUtc,
+            registrationDeadline: new Date(occ.startUtc.getTime() - series.deadlineLeadMinutes * 60000),
+            capacity: series.capacity, price: series.price, memberOnly: series.memberOnly,
+            requirePrepayment: series.requirePrepayment, clubSportId: series.clubSportId,
+            status: 'PUBLISHED', seriesId: series.id,
+          } as Prisma.ClubEventUncheckedCreateInput,
+        });
+        created++;
+      }
+      await tx.clubEventSeries.update({ where: { id: seriesId }, data: { endDate: new Date(`${newEndDate}T00:00:00.000Z`) } });
+      return created;
+    });
+
+    return { created };
+  }
+
   async createEvent(clubId: string, input: CreateEventInput) {
     const data = this.validateEventInput(input, true);
     if (input.clubSportId != null) {

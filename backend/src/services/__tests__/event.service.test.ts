@@ -857,3 +857,64 @@ describe('EventService.adminCreateSeries', () => {
       .rejects.toThrow('VALIDATION_ERROR');
   });
 });
+
+describe('EventService.adminExtendSeries', () => {
+  let service: EventService;
+  const series = () => ({
+    id: 'series-1', clubId: 'club-demo', name: 'Mêlée du jeudi', kind: 'MELEE', description: null,
+    capacity: 12, price: new (require('@prisma/client').Prisma.Decimal)(5), memberOnly: true,
+    requirePrepayment: false, clubSportId: null, weekday: 4, startLocal: '18:00', durationMin: 90,
+    deadlineLeadMinutes: 240, startDate: new Date('2026-08-06T00:00:00.000Z'),
+    endDate: new Date('2026-08-27T00:00:00.000Z'), cancelledAt: null,
+  });
+
+  beforeEach(() => {
+    service = new EventService();
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    let n = 0;
+    (prismaMock.clubEvent.create as any).mockImplementation(async ({ data }: any) => ({ id: `ev-new-${++n}`, ...data }));
+  });
+
+  it('SERIES_NOT_FOUND si la série n\'existe pas', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(null);
+    await expect(service.adminExtendSeries('missing', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('SERIES_NOT_FOUND');
+  });
+
+  it('CLUB_MISMATCH si la série appartient à un autre club', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ ...series(), clubId: 'other-club' } as any);
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('CLUB_MISMATCH');
+  });
+
+  it('SERIES_CANCELLED si la série est déjà annulée', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ ...series(), cancelledAt: new Date() } as any);
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('SERIES_CANCELLED');
+  });
+
+  it('ne crée que le delta (occurrences après la dernière existante), met à jour endDate', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(series() as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ startTime: new Date('2026-08-27T16:00:00.000Z') } as any);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+    prismaMock.clubEvent.count.mockResolvedValue(4 as any); // 4 occurrences existantes
+
+    const result = await service.adminExtendSeries('series-1', 'club-demo', '2026-09-10');
+
+    // Prolongation du 27 août au 10 sept 2026 → jeudis 03 et 10 sept = 2 nouvelles occurrences.
+    expect(result.created).toBe(2);
+    expect(prismaMock.clubEventSeries.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'series-1' },
+      data: expect.objectContaining({ endDate: new Date('2026-09-10T00:00:00.000Z') }),
+    }));
+  });
+
+  it('refuse si le total (existantes + delta) dépasserait 60 (SERIES_TOO_LONG)', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(series() as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ startTime: new Date('2026-08-27T16:00:00.000Z') } as any);
+    prismaMock.clubEvent.count.mockResolvedValue(59 as any); // 59 existantes + 2 nouvelles > 60
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-10'))
+      .rejects.toThrow('SERIES_TOO_LONG');
+  });
+});
