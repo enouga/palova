@@ -161,9 +161,9 @@ export default function MyReservationsPage() {
         ) : (
           <div style={{ padding: '28px 20px 6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <BackButton href="/clubs" />
+              <BackButton href="/decouvrir?tab=clubs" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => router.push('/clubs')}
+                <button onClick={() => router.push('/decouvrir?tab=clubs')}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer', borderRadius: 12, padding: '8px 13px', background: th.accent, color: th.onAccent, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
                   <Icon name="plus" size={16} color={th.onAccent} />Réserver
                 </button>
