@@ -805,3 +805,161 @@ describe('EventService.updateEvent — remboursement à l annulation', () => {
     expect(refundSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('EventService.adminCreateSeries', () => {
+  let service: EventService;
+  beforeEach(() => {
+    service = new EventService();
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    (prismaMock.clubEventSeries.create as any).mockImplementation(async ({ data }: any) => ({ id: 'series-1', ...data }));
+    let n = 0;
+    (prismaMock.clubEvent.create as any).mockImplementation(async ({ data }: any) => ({ id: `ev-${++n}`, ...data }));
+  });
+
+  const seriesInput = {
+    name: 'Mêlée du jeudi', kind: 'MELEE' as const, description: null,
+    capacity: 12, price: 5, memberOnly: true, requirePrepayment: false, clubSportId: null,
+    weekday: 4, startLocal: '18:00', durationMin: 90, deadlineLeadMinutes: 240,
+    startDate: '2026-08-06', endDate: '2026-08-27', status: 'PUBLISHED' as const,
+  };
+
+  it('crée la série et une occurrence par jeudi entre startDate et endDate', async () => {
+    const result = await service.adminCreateSeries('club-demo', seriesInput);
+    expect(result.seriesId).toBe('series-1');
+    expect(result.created).toBe(4); // 4 jeudis (06,13,20,27 août 2026)
+    expect(prismaMock.clubEvent.create).toHaveBeenCalledTimes(4);
+  });
+
+  it('calcule registrationDeadline = début − deadlineLeadMinutes pour chaque occurrence', async () => {
+    await service.adminCreateSeries('club-demo', seriesInput);
+    const firstCall = (prismaMock.clubEvent.create as jest.Mock).mock.calls[0][0];
+    const start = firstCall.data.startTime as Date;
+    const deadline = firstCall.data.registrationDeadline as Date;
+    expect(deadline.getTime()).toBe(start.getTime() - 240 * 60000);
+  });
+
+  it('applique le même statut (DRAFT/PUBLISHED) à toutes les occurrences', async () => {
+    await service.adminCreateSeries('club-demo', { ...seriesInput, status: 'DRAFT' });
+    const calls = (prismaMock.clubEvent.create as jest.Mock).mock.calls;
+    for (const c of calls) expect(c[0].data.status).toBe('DRAFT');
+  });
+
+  it('rejette une série de plus de 60 occurrences (SERIES_TOO_LONG)', async () => {
+    await expect(service.adminCreateSeries('club-demo', {
+      ...seriesInput, startDate: '2026-01-01', endDate: '2028-01-01',
+    })).rejects.toThrow('SERIES_TOO_LONG');
+  });
+
+  it('rejette un clubSportId qui n\'appartient pas au club (VALIDATION_ERROR)', async () => {
+    prismaMock.clubSport.findFirst.mockResolvedValue(null);
+    await expect(service.adminCreateSeries('club-demo', { ...seriesInput, clubSportId: 'cs-other' }))
+      .rejects.toThrow('VALIDATION_ERROR');
+  });
+});
+
+describe('EventService.adminExtendSeries', () => {
+  let service: EventService;
+  const series = () => ({
+    id: 'series-1', clubId: 'club-demo', name: 'Mêlée du jeudi', kind: 'MELEE', description: null,
+    capacity: 12, price: new (require('@prisma/client').Prisma.Decimal)(5), memberOnly: true,
+    requirePrepayment: false, clubSportId: null, weekday: 4, startLocal: '18:00', durationMin: 90,
+    deadlineLeadMinutes: 240, startDate: new Date('2026-08-06T00:00:00.000Z'),
+    endDate: new Date('2026-08-27T00:00:00.000Z'), cancelledAt: null,
+  });
+
+  beforeEach(() => {
+    service = new EventService();
+    prismaMock.club.findUnique.mockResolvedValue({ timezone: 'Europe/Paris' } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    let n = 0;
+    (prismaMock.clubEvent.create as any).mockImplementation(async ({ data }: any) => ({ id: `ev-new-${++n}`, ...data }));
+  });
+
+  it('SERIES_NOT_FOUND si la série n\'existe pas', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(null);
+    await expect(service.adminExtendSeries('missing', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('SERIES_NOT_FOUND');
+  });
+
+  it('CLUB_MISMATCH si la série appartient à un autre club', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ ...series(), clubId: 'other-club' } as any);
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('CLUB_MISMATCH');
+  });
+
+  it('SERIES_CANCELLED si la série est déjà annulée', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ ...series(), cancelledAt: new Date() } as any);
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-24'))
+      .rejects.toThrow('SERIES_CANCELLED');
+  });
+
+  it('ne crée que le delta (occurrences après la dernière existante), met à jour endDate', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(series() as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ startTime: new Date('2026-08-27T16:00:00.000Z') } as any);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+    prismaMock.clubEvent.count.mockResolvedValue(4 as any); // 4 occurrences existantes
+
+    const result = await service.adminExtendSeries('series-1', 'club-demo', '2026-09-10');
+
+    // Prolongation du 27 août au 10 sept 2026 → jeudis 03 et 10 sept = 2 nouvelles occurrences.
+    expect(result.created).toBe(2);
+    expect(prismaMock.clubEventSeries.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'series-1' },
+      data: expect.objectContaining({ endDate: new Date('2026-09-10T00:00:00.000Z') }),
+    }));
+  });
+
+  it('refuse si le total (existantes + delta) dépasserait 60 (SERIES_TOO_LONG)', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(series() as any);
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ startTime: new Date('2026-08-27T16:00:00.000Z') } as any);
+    prismaMock.clubEvent.count.mockResolvedValue(59 as any); // 59 existantes + 2 nouvelles > 60
+    await expect(service.adminExtendSeries('series-1', 'club-demo', '2026-09-10'))
+      .rejects.toThrow('SERIES_TOO_LONG');
+  });
+});
+
+describe('EventService.adminCancelSeries', () => {
+  let service: EventService;
+  beforeEach(() => { service = new EventService(); });
+
+  it('SERIES_NOT_FOUND si la série n\'existe pas', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue(null);
+    await expect(service.adminCancelSeries('missing', 'club-demo')).rejects.toThrow('SERIES_NOT_FOUND');
+  });
+
+  it('CLUB_MISMATCH si la série appartient à un autre club', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'other' } as any);
+    await expect(service.adminCancelSeries('series-1', 'club-demo')).rejects.toThrow('CLUB_MISMATCH');
+  });
+
+  it('annule chaque occurrence future non annulée via updateEvent (notif + remboursement réutilisés), laisse les passées intactes', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'club-demo' } as any);
+    prismaMock.clubEvent.findMany.mockResolvedValue([{ id: 'ev-future-1' }, { id: 'ev-future-2' }] as any);
+    const updateSpy = jest.spyOn(service, 'updateEvent').mockResolvedValue({} as any);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+
+    const result = await service.adminCancelSeries('series-1', 'club-demo');
+
+    expect(result.cancelled).toBe(2);
+    expect(updateSpy).toHaveBeenCalledWith('ev-future-1', 'club-demo', { status: 'CANCELLED' });
+    expect(updateSpy).toHaveBeenCalledWith('ev-future-2', 'club-demo', { status: 'CANCELLED' });
+    // La requête ne cible que les occurrences futures non déjà annulées.
+    expect(prismaMock.clubEvent.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ seriesId: 'series-1', status: { not: 'CANCELLED' }, startTime: { gt: expect.any(Date) } }),
+    }));
+    expect(prismaMock.clubEventSeries.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'series-1' }, data: expect.objectContaining({ cancelledAt: expect.any(Date) }),
+    }));
+    updateSpy.mockRestore();
+  });
+
+  it('idempotent : renvoie {cancelled:0} sans erreur si aucune occurrence future ne reste (série déjà annulée)', async () => {
+    prismaMock.clubEventSeries.findUnique.mockResolvedValue({ id: 'series-1', clubId: 'club-demo' } as any);
+    prismaMock.clubEvent.findMany.mockResolvedValue([]);
+    prismaMock.clubEventSeries.update.mockResolvedValue({} as any);
+
+    const result = await service.adminCancelSeries('series-1', 'club-demo');
+    expect(result.cancelled).toBe(0);
+  });
+});

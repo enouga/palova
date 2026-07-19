@@ -7,6 +7,25 @@ import { occupiesSpotWhere, holdDeadline, entryFeeCents } from './registrationPa
 import { PackageService } from './package.service';
 import { StripeService } from './stripe.service';
 import { RefundService } from './refund.service';
+import { weeklyOccurrences } from './recurrence';
+
+export interface CreateEventSeriesInput {
+  name: string;
+  kind: ClubEventKind;
+  description?: string | null;
+  capacity?: number | null;
+  price?: number | null;
+  memberOnly?: boolean;
+  requirePrepayment?: boolean;
+  clubSportId?: string | null;
+  weekday: number;
+  startLocal: string;    // "HH:mm"
+  durationMin: number;
+  deadlineLeadMinutes: number;
+  startDate: string;     // "YYYY-MM-DD"
+  endDate: string;       // "YYYY-MM-DD"
+  status: ClubEventStatus;
+}
 
 export interface CreateEventInput {
   name: string;
@@ -384,6 +403,145 @@ export class EventService {
     });
     const [event] = await this.withCounts([e]);
     return { event, registrations };
+  }
+
+  /**
+   * Crée une série d'animations récurrentes hebdomadaires — une occurrence (ClubEvent
+   * indépendant) par semaine entre startDate et endDate (bornes incluses), plafond 60
+   * (weeklyOccurrences lève SERIES_TOO_LONG au-delà). Chaque occurrence reçoit le même
+   * statut (DRAFT/PUBLISHED) et registrationDeadline = début − deadlineLeadMinutes.
+   */
+  async adminCreateSeries(clubId: string, input: CreateEventSeriesInput): Promise<{ seriesId: string; created: number }> {
+    const name = input.name.trim();
+    if (!name) throw new Error('VALIDATION_ERROR');
+    if (!KINDS.includes(input.kind)) throw new Error('VALIDATION_ERROR');
+    if (!['DRAFT', 'PUBLISHED'].includes(input.status)) throw new Error('VALIDATION_ERROR');
+    if (input.clubSportId != null) {
+      const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId } });
+      if (!cs) throw new Error('VALIDATION_ERROR');
+    }
+    if (!Number.isInteger(input.deadlineLeadMinutes) || input.deadlineLeadMinutes < 0) throw new Error('VALIDATION_ERROR');
+
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { timezone: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+
+    // Calculée AVANT toute écriture (lève VALIDATION_ERROR / SERIES_TOO_LONG).
+    const occurrences = weeklyOccurrences({
+      weekday: input.weekday, startLocal: input.startLocal, durationMin: input.durationMin,
+      startDate: input.startDate, endDate: input.endDate, tz: club.timezone,
+    });
+
+    const capacity = input.capacity ?? null;
+    const price = input.price != null ? new Prisma.Decimal(input.price) : null;
+    const memberOnly = input.memberOnly ?? true;
+    const requirePrepayment = Boolean(input.requirePrepayment);
+    if (requirePrepayment) {
+      await this.assertPrepaymentAllowed(clubId, Math.round(Number(input.price ?? 0) * 100));
+    }
+
+    const { seriesId, created } = await prisma.$transaction(async (tx) => {
+      const series = await tx.clubEventSeries.create({
+        data: {
+          clubId, name, kind: input.kind, description: input.description?.trim() || null,
+          capacity, price, memberOnly, requirePrepayment, clubSportId: input.clubSportId ?? null,
+          weekday: input.weekday, startLocal: input.startLocal, durationMin: input.durationMin,
+          deadlineLeadMinutes: input.deadlineLeadMinutes,
+          startDate: new Date(`${input.startDate}T00:00:00.000Z`),
+          endDate: new Date(`${input.endDate}T00:00:00.000Z`),
+        },
+      });
+      let created = 0;
+      for (const occ of occurrences) {
+        await tx.clubEvent.create({
+          data: {
+            clubId, name, kind: input.kind, description: input.description?.trim() || null,
+            startTime: occ.startUtc, endTime: occ.endUtc,
+            registrationDeadline: new Date(occ.startUtc.getTime() - input.deadlineLeadMinutes * 60000),
+            capacity, price, memberOnly, requirePrepayment, clubSportId: input.clubSportId ?? null,
+            status: input.status, seriesId: series.id,
+          } as Prisma.ClubEventUncheckedCreateInput,
+        });
+        created++;
+      }
+      return { seriesId: series.id, created };
+    });
+
+    return { seriesId, created };
+  }
+
+  /**
+   * Prolonge une série : recalcule weeklyOccurrences sur toute la fenêtre startDate..newEndDate
+   * et ne crée que les occurrences postérieures à la dernière déjà existante (évite les
+   * doublons). Plafond 60 occurrences AU TOTAL sur la série (existantes + delta).
+   */
+  async adminExtendSeries(seriesId: string, clubId: string, newEndDate: string): Promise<{ created: number }> {
+    const series = await prisma.clubEventSeries.findUnique({ where: { id: seriesId } });
+    if (!series) throw new Error('SERIES_NOT_FOUND');
+    if (series.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+    if (series.cancelledAt) throw new Error('SERIES_CANCELLED');
+
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { timezone: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+
+    const startDateStr = series.startDate.toISOString().slice(0, 10);
+    const occurrences = weeklyOccurrences({
+      weekday: series.weekday, startLocal: series.startLocal, durationMin: series.durationMin,
+      startDate: startDateStr, endDate: newEndDate, tz: club.timezone,
+    });
+
+    const last = await prisma.clubEvent.findFirst({
+      where: { seriesId }, orderBy: { startTime: 'desc' }, select: { startTime: true },
+    });
+    const delta = last ? occurrences.filter((o) => o.startUtc > last.startTime) : occurrences;
+
+    const existingCount = await prisma.clubEvent.count({ where: { seriesId } });
+    if (existingCount + delta.length > 60) throw new Error('SERIES_TOO_LONG');
+
+    const created = await prisma.$transaction(async (tx) => {
+      let created = 0;
+      for (const occ of delta) {
+        await tx.clubEvent.create({
+          data: {
+            clubId, name: series.name, kind: series.kind, description: series.description,
+            startTime: occ.startUtc, endTime: occ.endUtc,
+            registrationDeadline: new Date(occ.startUtc.getTime() - series.deadlineLeadMinutes * 60000),
+            capacity: series.capacity, price: series.price, memberOnly: series.memberOnly,
+            requirePrepayment: series.requirePrepayment, clubSportId: series.clubSportId,
+            status: 'PUBLISHED', seriesId: series.id,
+          } as Prisma.ClubEventUncheckedCreateInput,
+        });
+        created++;
+      }
+      await tx.clubEventSeries.update({ where: { id: seriesId }, data: { endDate: new Date(`${newEndDate}T00:00:00.000Z`) } });
+      return created;
+    });
+
+    return { created };
+  }
+
+  /**
+   * Annule une série : passe CANCELLED toutes les occurrences FUTURES encore actives, en
+   * réutilisant updateEvent (déjà testé) pour chacune — donc notif « activité annulée par
+   * le club » + remboursement des inscrits payés, sans dupliquer cette logique. Les
+   * occurrences passées ne sont jamais touchées. Idempotent (série déjà annulée → 0).
+   */
+  async adminCancelSeries(seriesId: string, clubId: string): Promise<{ cancelled: number }> {
+    const series = await prisma.clubEventSeries.findUnique({ where: { id: seriesId } });
+    if (!series) throw new Error('SERIES_NOT_FOUND');
+    if (series.clubId !== clubId) throw new Error('CLUB_MISMATCH');
+
+    const now = new Date();
+    const future = await prisma.clubEvent.findMany({
+      where: { seriesId, status: { not: 'CANCELLED' }, startTime: { gt: now } },
+      select: { id: true },
+    });
+
+    for (const e of future) {
+      await this.updateEvent(e.id, clubId, { status: 'CANCELLED' });
+    }
+
+    await prisma.clubEventSeries.update({ where: { id: seriesId }, data: { cancelledAt: now } });
+    return { cancelled: future.length };
   }
 
   async createEvent(clubId: string, input: CreateEventInput) {

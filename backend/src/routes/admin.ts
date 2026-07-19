@@ -129,6 +129,7 @@ const ERROR_STATUS: Record<string, number> = {
   ALREADY_SUBSCRIBED:     409,
   NOTHING_TO_SUBSCRIBE:   409,
   NO_BILLING_ACCOUNT:     409,
+  SERIES_CANCELLED:       409,
 };
 
 function asString(v: unknown): string {
@@ -907,6 +908,38 @@ router.patch('/events/:id/registrations/:regId', async (req: ClubScopedRequest, 
 });
 router.delete('/events/:id/registrations/:regId', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await eventService.adminRemoveRegistration(asString(req.params.id), asString(req.params.regId), req.membership!.clubId)); } catch (e) { handleError(e, res, next); }
+});
+
+// --- Séries d'animations récurrentes (mêlée hebdo…) ---
+router.post('/event-series', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, kind, description, capacity, price, memberOnly, requirePrepayment, clubSportId } = req.body;
+    const { weekday, startLocal, durationMin, deadlineLeadMinutes, startDate, endDate, status } = req.body;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(asString(startDate)) || !/^\d{4}-\d{2}-\d{2}$/.test(asString(endDate))) {
+      return void res.status(400).json({ error: 'dates doivent être YYYY-MM-DD' });
+    }
+    if (!/^\d{2}:\d{2}$/.test(asString(startLocal))) return void res.status(400).json({ error: 'startLocal doit être HH:mm' });
+    if (!Number.isInteger(Number(weekday)) || !Number.isInteger(Number(durationMin)) || !Number.isInteger(Number(deadlineLeadMinutes))) {
+      return void res.status(400).json({ error: 'weekday/durationMin/deadlineLeadMinutes invalides' });
+    }
+    const created = await eventService.adminCreateSeries(req.membership!.clubId, {
+      name, kind, description, capacity, price, memberOnly, requirePrepayment, clubSportId,
+      weekday: Number(weekday), startLocal: asString(startLocal), durationMin: Number(durationMin),
+      deadlineLeadMinutes: Number(deadlineLeadMinutes), startDate: asString(startDate), endDate: asString(endDate),
+      status: status === 'DRAFT' ? 'DRAFT' : 'PUBLISHED',
+    });
+    res.status(201).json(created);
+  } catch (err) { handleError(err, res, next); }
+});
+router.post('/event-series/:id/extend', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const endDate = asString(req.body.endDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return void res.status(400).json({ error: 'endDate doit être YYYY-MM-DD' });
+    res.json(await eventService.adminExtendSeries(asString(req.params.id), req.membership!.clubId, endDate));
+  } catch (err) { handleError(err, res, next); }
+});
+router.delete('/event-series/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await eventService.adminCancelSeries(asString(req.params.id), req.membership!.clubId)); } catch (err) { handleError(err, res, next); }
 });
 
 // --- Offres prépayées (carnets / porte-monnaie) ---

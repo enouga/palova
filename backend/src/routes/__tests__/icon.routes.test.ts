@@ -3,6 +3,14 @@ import { prismaMock } from '../../__mocks__/prisma';
 import request from 'supertest';
 import fs from 'fs';
 import sharp from 'sharp';
+import dns from 'dns/promises';
+
+// Les logos de test pointent vers un domaine fictif (logos.example) : la garde SSRF de
+// fetchLogo (icon.service.ts) résout le host via dns.lookup AVANT tout fetch (mocké plus
+// bas) — sans ce mock, la résolution DNS réelle échoue (ENOTFOUND) et fait silencieusement
+// tomber tous les tests dans le repli Palova au lieu du logo mocké.
+jest.mock('dns/promises');
+(dns.lookup as jest.Mock).mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
 
 // Les fichiers de cache vont dans un tmpdir (jamais dans le repo pendant les tests).
 jest.mock('../../utils/uploads', () => {

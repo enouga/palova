@@ -943,6 +943,15 @@ export const api = {
   adminRemoveEventRegistration: (clubId: string, eventId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${clubId}/admin/events/${eventId}/registrations/${regId}`, { method: 'DELETE' }, token),
 
+  adminCreateEventSeries: (clubId: string, body: CreateEventSeriesBody, token: string) =>
+    request<CreateEventSeriesResult>(`/api/clubs/${clubId}/admin/event-series`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminExtendEventSeries: (clubId: string, seriesId: string, endDate: string, token: string) =>
+    request<{ created: number }>(`/api/clubs/${clubId}/admin/event-series/${seriesId}/extend`, { method: 'POST', body: JSON.stringify({ endDate }) }, token),
+
+  adminCancelEventSeries: (clubId: string, seriesId: string, token: string) =>
+    request<{ cancelled: number }>(`/api/clubs/${clubId}/admin/event-series/${seriesId}`, { method: 'DELETE' }, token),
+
   // --- Plateforme (super-admin) ---
   platformStats: (token: string) => request<PlatformStats>('/api/platform/stats', {}, token),
 
@@ -2593,6 +2602,7 @@ export interface ClubEvent {
   waitlistCount: number;
   clubSportId?: string | null;
   sport?: { key: string; name: string } | null; // peuplé par les listes/détail events + mes events
+  seriesId?: string | null;        // additif — présent si l'event fait partie d'une série récurrente
 }
 
 export interface ClubEventDetail extends ClubEvent {
@@ -2647,6 +2657,25 @@ export type CreateEventBody = {
   requirePrepayment?: boolean;
 };
 export type UpdateEventBody = Partial<CreateEventBody & { status: ClubEventStatus }>;
+
+export interface CreateEventSeriesBody {
+  name: string;
+  kind: ClubEventKind;
+  description?: string | null;
+  capacity?: number | null;
+  price?: number | null;
+  memberOnly?: boolean;
+  requirePrepayment?: boolean;
+  clubSportId?: string | null;
+  weekday: number;               // 1–7 (1=lundi)
+  startLocal: string;            // "HH:mm"
+  durationMin: number;
+  deadlineLeadMinutes: number;
+  startDate: string;              // "YYYY-MM-DD"
+  endDate: string;                // "YYYY-MM-DD"
+  status: 'DRAFT' | 'PUBLISHED';
+}
+export interface CreateEventSeriesResult { seriesId: string; created: number; }
 
 export interface PlatformStats {
   clubs: { total: number; active: number; suspended: number };

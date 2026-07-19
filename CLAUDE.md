@@ -214,6 +214,30 @@ L'onglet « Tournois » devient **« Events »** (`/events`, redirection `/tourn
 
 > **Évolution (2026-07-05) — barre de filtres `/events` v2 (identité + compteurs + « Quand ») :** les `PillTabs` et la rangée de pills orphelines sont remplacés par **`components/events/EventsFilterBar.tsx`**. (1) **Onglets sources identitaires** : chaque source porte la tuile icône + l'accent de ses cartes (Tout·grid·encre, Compétitions·trophy·apricot, Animations·bolt·cyan, Cours·user·bleu) + **compteur d'items à venir** ; actif = pill pleine de son accent ; rangée scrollable pleine largeur (`.sp-scroll-x`, marges négatives). (2) **Tiroir de facettes** (`th.bgElev`, animation `sp-rise` rejouée au changement de source) : groupes **labellisés** (Quand/Catégorie/Genre/Type/Accès), chips avec **compteurs live** — helper pur **`agendaCounts(items, state, now, facets)`** dans `lib/events.ts` (une facette ne se compte jamais elle-même, évaluée sous les AUTRES dimensions ; catégories/genres ne comptent que les tournois, kinds/membres que les animations) — sélection = encre pleine + ✓, option à 0 estompée mais cliquable. (3) **Nouveau filtre « Quand »** transverse aux sources (`AgendaWhen` weekend/thisMonth/days30, `whenWindow` miroir des presets du calendrier national — dupliqué pour éviter le cycle events↔tournamentCalendar) : `EventFilterState.when` + `applyAgendaFilters(items, state, now?)` (sans `now` la fenêtre est ignorée — hydration-safe) ; **persiste au changement de source** (les autres facettes se réinitialisent), URL `?quand=`. (4) Pied de tiroir « N résultats · ✕ Effacer les filtres » + **état vide intelligent** (« Aucun event ne correspond à vos filtres » + bouton Effacer). La page consolide ses 5 états de filtre en **un seul `EventFilterState`** ; `GENDER_LABEL` déplacé dans `lib/events.ts`. Tests : `EventsFilterBar.test.tsx` + blocs `whenWindow`/`agendaCounts`/« quand » dans `events.test.ts`.
 
+> **Évolution (2026-07-19) — récurrence hebdomadaire (mêlée hebdo) :** un `ClubEvent` peut
+> désormais se répéter chaque semaine — nouveau modèle **`ClubEventSeries`** (mirroir de
+> `ReservationSeries`, migration additive `add_club_event_series`) portant le gabarit
+> (nom/type/description/capacité/prix/membres/CB en ligne/sport) + les paramètres de
+> récurrence (jour, heure, durée, délai de clôture, bornes start/end). **Bornée, pas de fin
+> ouverte** : `EventService.adminCreateSeries` réutilise tel quel `weeklyOccurrences`
+> (`recurrence.ts`, non modifié), plafond 60 occurrences, chaque occurrence est un `ClubEvent`
+> **indépendant** (`seriesId` additif) avec `registrationDeadline = début − délai fixe`.
+> **`adminExtendSeries`** ne génère que le delta (dédoublonnage sur la dernière occurrence
+> existante, plafond 60 au total). **`adminCancelSeries`** annule toutes les occurrences
+> futures — **même déjà inscrites** — en réutilisant `updateEvent(...,{status:'CANCELLED'})`
+> tel quel (donc la notif « activité annulée par le club » + le remboursement des inscrits
+> payés, déjà testés, sans duplication) ; les occurrences passées ne sont jamais touchées.
+> Routes `POST /admin/event-series`, `POST /admin/event-series/:id/extend`,
+> `DELETE /admin/event-series/:id`. Front : case **« Se répète chaque semaine »** dans le
+> formulaire de création (`RecurrenceFields.tsx` : jour, date de fin, chips de délai
+> `CANCEL_PRESETS`), puce **« Série »** + bouton **« Série… »** sur les cartes concernées
+> (`chips`/`actions` de `AgendaAdminCard`, aucun changement du composant partagé),
+> **`SeriesManageDialog.tsx`** (Prolonger / Annuler la série, confirmation explicite). Rien ne
+> change côté joueur (chaque occurrence est un event ordinaire sur `/events`). Hors v1 :
+> récurrence à durée indéterminée, clôture à heure absolue récurrente, édition en masse d'un
+> champ gabarit après coup, récurrence pour les tournois. Spec & plan :
+> `docs/superpowers/{specs,plans}/2026-07-19-recurrence-animations*`.
+
 ## Quotas de réservation (v1) ✅ implémenté
 
 Limites de réservations COURT par joueur, choisies par le club : **`Club.bookingQuotas`** (Json nullable, migration `add_booking_quotas` + index `[userId, startTime]` sur reservations). Format `{ "model": "UPCOMING"|"WEEKLY", "subscriber": { "peak": n|null, "offPeak": n|null }, "nonSubscriber": idem }` — `UPCOMING` = résas à venir simultanées, `WEEKLY` = semaine calendaire lun-dim (fuseau club, Luxon `startOf('week')`), limite `null` = illimité, `0` = bloqué, les 4 limites null → DbNull (désactivé). Une résa compte en **creuses ssi 100 % de ses minutes le sont** (`classifySlot` de `pricing.ts`). Backend : `src/services/quotas.ts` (`normalizeBookingQuotas`, branché dans `club.service.ts`), `assertQuota` dans `reservation.service.ts` — appelé par `holdSlot` **et** `rescheduleReservation` (la résa déplacée est exclue du comptage via `excludeReservationId`) ; comptage = CONFIRMED + PENDING < 10 min (même filtre que les conflits), erreurs **409 `QUOTA_PEAK_REACHED` / `QUOTA_OFFPEAK_REACHED`**. Check hors transaction : deux holds simultanés peuvent dépasser de 1 (accepté). Frontend : carte « Quotas de réservation » dans `/admin/settings` (case d'activation, modèle, grille abonnés/non-abonnés × pleines/creuses), messages d'erreur dans `BookingModal` (`BOOKING_ERRORS`, réutilisés par le mode move), types `BookingQuotas`/`QuotaLimits` dans `lib/api.ts`. Tests : `__tests__/quotas.test.ts` + bloc « quotas de réservation » dans `reservation.service.test.ts`.
@@ -393,6 +417,6 @@ Socle légal complet du modèle SaaS multi-tenant : la plateforme (`palova.fr`) 
 - Paiement : règlement en ligne des inscriptions tournois/events **fait** (cf. section ci-dessus) ; reste : autres frais (abonnements, etc.)
 - Gestion admin du club (créneaux, tarifs)
 - Timezone dynamique depuis `club.timezone` (actuellement UTC_OFFSET=2 hardcodé)
-- Tournois & events — évolutions : tableaux/poules/scores & résultats, **rappels e-mail avant échéance** (les emails d'inscription/désinscription/promotion liste d'attente sont faits, cf. section « Notifications email »), blocage automatique de terrains par un tournoi ou un event, récurrence des animations (mêlée hebdo)
+- Tournois & events — évolutions : tableaux/poules/scores & résultats, **rappels e-mail avant échéance** (les emails d'inscription/désinscription/promotion liste d'attente sont faits, cf. section « Notifications email »), blocage automatique de terrains par un tournoi ou un event ; **récurrence des animations (mêlée hebdo) faite**, cf. section « Events & animations »
 - Club-house — évolutions : cherche-partenaire, pouls du club (SSE), identité visuelle par club (photo de couverture, couleur d'accent)
 - Caisse — évolutions : recrédit auto à l'annulation, export comptable, consommation de package lors d'un déplacement de résa

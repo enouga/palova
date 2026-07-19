@@ -14,6 +14,8 @@ import { groupAdminAgenda, agendaItemGroup } from '@/lib/adminAgenda';
 import { AgendaAdminCard } from '@/components/admin/AgendaAdminCard';
 import { AgendaAdminList } from '@/components/admin/AgendaAdminList';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { RecurrenceFields, RecurrenceState } from '@/components/admin/events/RecurrenceFields';
+import { SeriesManageDialog } from '@/components/admin/events/SeriesManageDialog';
 
 const KINDS: ClubEventKind[] = ['MELEE', 'STAGE', 'SOIREE', 'INITIATION', 'AUTRE'];
 
@@ -35,6 +37,9 @@ export default function AdminEventsPage() {
   const [stripeActive, setStripeActive] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ClubEvent | null>(null);
+  const [recurring, setRecurring] = useState(false);
+  const [recurrence, setRecurrence] = useState<RecurrenceState>({ weekday: 1, endDate: '', deadlineLeadHours: 4 });
+  const [managingSeriesId, setManagingSeriesId] = useState<string | null>(null);
 
   useEffect(() => { setNow(new Date()); }, []);
 
@@ -55,11 +60,35 @@ export default function AdminEventsPage() {
     if (!form) return;
     setError(null);
     try {
-      const body = { ...form, startTime: localInputToISO(form.startTime), registrationDeadline: localInputToISO(form.registrationDeadline), endTime: form.endTime ? localInputToISO(form.endTime) : null };
-      if (editingId) await api.adminUpdateEvent(club.id, editingId, body, token);
-      else await api.adminCreateEvent(club.id, body, token);
-      setForm(null); setEditingId(null); reload();
+      if (!editingId && recurring) {
+        if (!form.endTime) { setError("Une heure de fin est requise pour une animation récurrente (elle fixe la durée de chaque occurrence)."); return; }
+        const durationMin = Math.round((new Date(form.endTime).getTime() - new Date(form.startTime).getTime()) / 60000);
+        if (durationMin <= 0) { setError('La fin doit être après le début.'); return; }
+        await api.adminCreateEventSeries(club.id, {
+          name: form.name, kind: form.kind, description: form.description,
+          capacity: form.capacity, price: form.price, memberOnly: form.memberOnly,
+          requirePrepayment: form.requirePrepayment, clubSportId: form.clubSportId,
+          weekday: recurrence.weekday, startLocal: form.startTime.slice(11, 16),
+          durationMin, deadlineLeadMinutes: recurrence.deadlineLeadHours * 60,
+          startDate: form.startTime.slice(0, 10), endDate: recurrence.endDate,
+          status: 'PUBLISHED',
+        }, token);
+      } else {
+        const body = { ...form, startTime: localInputToISO(form.startTime), registrationDeadline: localInputToISO(form.registrationDeadline), endTime: form.endTime ? localInputToISO(form.endTime) : null };
+        if (editingId) await api.adminUpdateEvent(club.id, editingId, body, token);
+        else await api.adminCreateEvent(club.id, body, token);
+      }
+      setForm(null); setEditingId(null); setRecurring(false); reload();
     } catch (e) { setError((e as Error).message); }
+  };
+
+  const extendSeries = async (seriesId: string, endDate: string) => {
+    try { await api.adminExtendEventSeries(club.id, seriesId, endDate, token); setManagingSeriesId(null); reload(); }
+    catch (e) { setError((e as Error).message); }
+  };
+  const cancelSeries = async (seriesId: string) => {
+    try { await api.adminCancelEventSeries(club.id, seriesId, token); setManagingSeriesId(null); reload(); }
+    catch (e) { setError((e as Error).message); }
   };
 
   const setStatus = async (id: string, status: 'DRAFT' | 'PUBLISHED' | 'CANCELLED') => {
@@ -109,6 +138,7 @@ export default function AdminEventsPage() {
       <>
         <button onClick={() => openDetail(e.id)} style={ghost}>Inscrits</button>
         <button onClick={() => startEdit(e)} style={ghost}>Modifier</button>
+        {e.seriesId && <button onClick={() => setManagingSeriesId(e.seriesId!)} style={ghost}>Série…</button>}
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => setStatus(e.id, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'DRAFT')} style={ghost}>Repasser en brouillon</button>}
         {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'CANCELLED')} style={ghost}>Annuler</button>}
@@ -130,7 +160,7 @@ export default function AdminEventsPage() {
         full={e.capacity != null && e.confirmedCount >= e.capacity}
         countLabel={`${e.confirmedCount}${e.capacity != null ? ` / ${e.capacity}` : ''} inscrits`}
         waitlist={e.waitlistCount}
-        chips={[e.sport?.name ?? null, e.price != null ? `${Number(e.price)} €` : null, e.memberOnly ? 'Membres' : null, e.requirePrepayment ? 'CB en ligne' : null]}
+        chips={[e.sport?.name ?? null, e.price != null ? `${Number(e.price)} €` : null, e.memberOnly ? 'Membres' : null, e.requirePrepayment ? 'CB en ligne' : null, e.seriesId ? 'Série' : null]}
         actions={actions}
       />
     );
@@ -211,6 +241,23 @@ export default function AdminEventsPage() {
               <a href="/admin/payments" style={{ color: th.accent }}>Paiement en ligne →</a>
             </div>
           )}
+          {!editingId && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 12, cursor: 'pointer' }}>
+              <input type="checkbox" checked={recurring} onChange={(e) => {
+                const checked = e.target.checked;
+                setRecurring(checked);
+                // Pré-coche le jour de la semaine du début déjà saisi (Luxon : 1=lundi … 7=dimanche).
+                if (checked && form.startTime) {
+                  const jsDay = new Date(form.startTime).getDay(); // 0=dimanche … 6=samedi (natif)
+                  setRecurrence((r) => ({ ...r, weekday: jsDay === 0 ? 7 : jsDay }));
+                }
+              }} />
+              Se répète chaque semaine
+            </label>
+          )}
+          {!editingId && recurring && (
+            <RecurrenceFields state={recurrence} onChange={setRecurrence} />
+          )}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button onClick={save} style={btn}>{editingId ? 'Enregistrer' : 'Créer (brouillon)'}</button>
             <button onClick={() => { setForm(null); setEditingId(null); }} style={ghost}>Annuler</button>
@@ -266,6 +313,14 @@ export default function AdminEventsPage() {
           confirmLabel="Supprimer"
           onConfirm={() => { const ev = pendingDelete; setPendingDelete(null); removeEvent(ev.id); }}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {managingSeriesId && (
+        <SeriesManageDialog
+          onExtend={(endDate) => extendSeries(managingSeriesId, endDate)}
+          onCancelSeries={() => cancelSeries(managingSeriesId)}
+          onClose={() => setManagingSeriesId(null)}
         />
       )}
     </div>
