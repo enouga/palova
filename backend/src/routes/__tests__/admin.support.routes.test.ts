@@ -60,5 +60,6 @@ describe('POST /admin/support/tickets', () => {
     const res = await request(app).post(url).set('Authorization', `Bearer ${token}`).send(BODY);
     expect(res.status).toBe(429);
     expect(res.body.error).toBe('RATE_LIMITED');
+    expect(fetchMock).not.toHaveBeenCalled(); // rate-limited AVANT tout travail couteux (GitHub)
   });
 });
