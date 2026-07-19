@@ -266,13 +266,13 @@ export class TournamentService {
     }
   }
 
-  /** Remboursement best-effort (avant clôture) ; ne fait jamais échouer la désinscription. */
-  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string): Promise<void> {
+  /** Remboursement best-effort ; ne fait jamais échouer l'annulation. Motif traçable. */
+  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string, reason = 'Désinscription avant clôture'): Promise<void> {
     try {
-      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason: 'Désinscription avant clôture' });
+      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason });
       await prisma.tournamentRegistration.update({ where: { id: info.regId }, data: { paymentStatus: 'REFUNDED' } });
     } catch (err) {
-      console.error('[refund] désinscription tournoi : remboursement échoué', err);
+      console.error('[refund] remboursement tournoi échoué', err);
     }
   }
 

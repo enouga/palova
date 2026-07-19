@@ -206,13 +206,13 @@ export class EventService {
     }
   }
 
-  /** Remboursement best-effort (avant clôture) ; ne fait jamais échouer la désinscription. */
-  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string): Promise<void> {
+  /** Remboursement best-effort ; ne fait jamais échouer l'annulation. Motif traçable. */
+  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string, reason = 'Désinscription avant clôture'): Promise<void> {
     try {
-      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason: 'Désinscription avant clôture' });
+      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason });
       await prisma.eventRegistration.update({ where: { id: info.regId }, data: { paymentStatus: 'REFUNDED' } });
     } catch (err) {
-      console.error('[refund] désinscription event : remboursement échoué', err);
+      console.error('[refund] remboursement event échoué', err);
     }
   }
 
