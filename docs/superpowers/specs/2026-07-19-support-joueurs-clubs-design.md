@@ -33,10 +33,12 @@ rendue sur `/faq` via `FaqView`) cible déjà les gérants de club. Le système 
 - **Sur l'hôte plateforme**, `/aide` **redirige vers `/faq`** (la FAQ plateforme existante) —
   même pattern que `/decouvrir` sur un hôte club (redirection au montage, chemin public).
 - **Contenu** (3 blocs) :
-  1. **FAQ joueur** : nouveau contenu statique **`PLAYER_FAQ`** (nouveau fichier
-     `frontend/lib/helpContent.ts`, même forme que `PlatformFaqEntry`), rendu via le composant
-     `FaqView` existant. Catégories : Réserver, Annuler & déplacer, Payer, Parties & niveau,
-     Mon compte. Contenu générique plateforme (pas personnalisable par club en v1).
+  1. **FAQ joueur** : **réutilise la FAQ club EXISTANTE** (découverte à l'écriture du plan :
+     `FaqView` sur un hôte club rend déjà `api.getClubFaq` = socle Palova interpolé
+     (`backend/src/content/faqSocle.ts` — Réserver, Annuler, Paiement, Parties & tournois,
+     Compte) + entrées personnalisées du club). La page `/aide` embarque `FaqView` tel quel
+     sous les cartes de contact — **aucun nouveau contenu `PLAYER_FAQ` à créer** (amendement
+     de la v1 de cette spec, qui prévoyait un `frontend/lib/helpContent.ts` statique).
   2. **Carte « Contacter le club »** : téléphone (`tel:`), email (`mailto:`), adresse, horaires
      — données déjà en base et déjà servies par la route publique `GET /:slug/presentation`
      (`contactPhone`, `contactEmail`, `openingHoursText`) + l'adresse du club (`useClub`).
