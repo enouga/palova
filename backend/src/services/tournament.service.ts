@@ -558,6 +558,9 @@ export class TournamentService {
     const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
       await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
+      // Rembourse les inscrits payés en ligne APRÈS la notif (la notif cible les regs par
+      // status, pas paymentStatus — aucune interférence). Best-effort, jamais bloquant.
+      await this.refundAllPaidRegistrations(tournamentId, clubId, 'Annulation par le club');
     }
     return updated;
   }
@@ -591,6 +594,18 @@ export class TournamentService {
     const promoted = await prisma.tournamentRegistration.update({ where: { id: regId }, data: { status: 'CONFIRMED' } });
     await this.safeNotify(() => notify.notifyTournamentPromotion(promoted.id));
     return promoted;
+  }
+
+  /** Rembourse (best-effort) toutes les inscriptions payées en ligne d'un tournoi — utilisé quand le club annule l'épreuve entière. */
+  private async refundAllPaidRegistrations(tournamentId: string, clubId: string, reason: string): Promise<void> {
+    const paid = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' }, paymentStatus: 'PAID' },
+      select: { id: true },
+    });
+    for (const reg of paid) {
+      const pay = await prisma.payment.findFirst({ where: { tournamentRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+      if (pay) await this.safeRefund({ paymentId: pay.id, amount: Number(pay.amount), regId: reg.id }, clubId, reason);
+    }
   }
 
   /** Désinscription manuelle par le club (promeut le 1er en attente si c'était un CONFIRMED). */

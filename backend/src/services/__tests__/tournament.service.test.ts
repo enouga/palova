@@ -1272,3 +1272,36 @@ describe('TournamentService.adminRemoveRegistration — remboursement', () => {
     expect(refundSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('TournamentService.updateTournament — remboursement à l annulation', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('annulation du tournoi par le club → rembourse chaque inscription PAID (motif club)', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1', status: 'PUBLISHED', entryFee: 12, requirePrepayment: true } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any); // assertPrepaymentAllowed
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1', status: 'CANCELLED' } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }] as any);
+    prismaMock.payment.findFirst
+      .mockResolvedValueOnce({ id: 'pay1', amount: 12 } as any)
+      .mockResolvedValueOnce({ id: 'pay2', amount: 12 } as any);
+    prismaMock.tournamentRegistration.update.mockResolvedValue({} as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'rf' } as any);
+
+    await new TournamentService().updateTournament('t1', 'club-demo', { status: 'CANCELLED' });
+
+    expect(refundSpy).toHaveBeenCalledTimes(2);
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay1', clubId: 'club-demo', amount: 12, reason: 'Annulation par le club' }));
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay2', amount: 12, reason: 'Annulation par le club' }));
+  });
+
+  it('mise à jour SANS transition vers CANCELLED → aucun remboursement', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1', status: 'PUBLISHED', entryFee: 12, requirePrepayment: false } as any);
+    prismaMock.tournament.update.mockResolvedValue({ id: 't1', status: 'PUBLISHED' } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund');
+
+    await new TournamentService().updateTournament('t1', 'club-demo', { name: 'Nouveau nom' });
+
+    expect(refundSpy).not.toHaveBeenCalled();
+  });
+});
