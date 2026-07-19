@@ -10,8 +10,27 @@ export type DiscoverPeriod = 'today' | 'weekend' | 'all';
 
 export interface DiscoverMatchFilter {
   period: DiscoverPeriod;
-  city: string;
+  location: LocationQuery;
   myLevel: number | null;
+}
+
+/** Requête de localisation parsée : ville OU codes département (exclusifs). */
+export interface LocationQuery { city: string | null; deptCodes: string[] }
+
+/** « Ville, code postal ou département » : un CP est réduit à son département (97x → 3 chiffres,
+ *  Corse 20xxx → 2A+2B) ; un code 2-3 chiffres passe tel quel ; sinon recherche par nom. */
+export function parseLocationQuery(q: string): LocationQuery {
+  const t = q.trim();
+  if (!t) return { city: null, deptCodes: [] };
+  if (/^\d{5}$/.test(t)) {
+    if (t.startsWith('20')) return { city: null, deptCodes: ['2A', '2B'] };
+    if (t.startsWith('97')) return { city: null, deptCodes: [t.slice(0, 3)] };
+    return { city: null, deptCodes: [t.slice(0, 2)] };
+  }
+  if (/^2[abAB]$/.test(t)) return { city: null, deptCodes: [t.toUpperCase()] };
+  if (t === '20') return { city: null, deptCodes: ['2A', '2B'] };
+  if (/^\d{2,3}$/.test(t)) return { city: null, deptCodes: [t] };
+  return { city: t, deptCodes: [] };
 }
 
 export interface RankedMatch {
@@ -48,12 +67,14 @@ function myLevelWindow(myLevel: number): [number, number] {
 }
 
 /**
- * Filtre les parties nationales par période + ville + niveau (ET entre dimensions).
- * Ville : comparaison insensible accents/casse (`norm`), substring — filtre vide = pas
- * de contrainte, sinon un club sans ville (`city: null`) est exclu. Niveau : une partie
- * sans fourchette (`targetLevelMin/Max` null) est toujours « ouverte à tous » — géré
- * nativement par `rangesOverlap` (bornes null = non bornées) sans cas particulier ;
- * `myLevel: null` désactive entièrement le filtre de niveau.
+ * Filtre les parties nationales par période + localisation + niveau (ET entre dimensions).
+ * Localisation : soit une liste de codes département (`club.departmentCode`, comparaison
+ * insensible casse, club sans code exclu), soit une recherche texte insensible accents/casse
+ * (`norm`, substring) sur la ville OU le nom du département — les deux formes sont exclusives
+ * (cf. `parseLocationQuery`) ; filtre vide = pas de contrainte. Niveau : une partie sans
+ * fourchette (`targetLevelMin/Max` null) est toujours « ouverte à tous » — géré nativement par
+ * `rangesOverlap` (bornes null = non bornées) sans cas particulier ; `myLevel: null` désactive
+ * entièrement le filtre de niveau.
  */
 export function filterNationalMatches(
   matches: NationalOpenMatch[],
@@ -61,17 +82,23 @@ export function filterNationalMatches(
   now: Date,
 ): NationalOpenMatch[] {
   const win = discoverWindow(f.period, now);
-  const cityQuery = norm(f.city.trim());
+  const { city, deptCodes } = f.location;
+  const needle = city ? norm(city) : null;
   const levelWin = f.myLevel != null ? myLevelWindow(f.myLevel) : null;
+
+  const locOk = (m: NationalOpenMatch) => {
+    if (deptCodes.length) return m.club.departmentCode != null && deptCodes.includes(m.club.departmentCode.toUpperCase());
+    if (needle) return (m.club.city != null && norm(m.club.city).includes(needle))
+      || (m.club.department != null && norm(m.club.department).includes(needle));
+    return true;
+  };
 
   return matches.filter((m) => {
     if (win) {
       const t = new Date(m.startTime).getTime();
       if (t < win.from.getTime() || t > win.to.getTime()) return false;
     }
-    if (cityQuery) {
-      if (m.club.city == null || !norm(m.club.city).includes(cityQuery)) return false;
-    }
+    if (!locOk(m)) return false;
     if (levelWin && !rangesOverlap(m.targetLevelMin, m.targetLevelMax, levelWin[0], levelWin[1])) return false;
     return true;
   });

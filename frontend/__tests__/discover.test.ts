@@ -1,4 +1,4 @@
-import { discoverWindow, filterNationalMatches, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
+import { discoverWindow, filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
 import type { DiscoverMatchFilter } from '@/lib/discover';
 import type { NationalOpenMatch, NationalOpenMatchClub } from '@/lib/api';
 
@@ -15,6 +15,8 @@ function makeClub(over: Partial<NationalOpenMatchClub> = {}): NationalOpenMatchC
     logoUrl: null,
     latitude: 48.8566,
     longitude: 2.3522,
+    department: null,
+    departmentCode: null,
     ...over,
   };
 }
@@ -65,7 +67,7 @@ describe('discoverWindow', () => {
 });
 
 describe('filterNationalMatches — période', () => {
-  const base: DiscoverMatchFilter = { period: 'today', city: '', myLevel: null };
+  const base: DiscoverMatchFilter = { period: 'today', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it('match dans 2 h → gardé en today', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 2 * 3_600_000).toISOString() });
@@ -89,26 +91,52 @@ describe('filterNationalMatches — période', () => {
 });
 
 describe('filterNationalMatches — ville', () => {
-  const base: DiscoverMatchFilter = { period: 'all', city: '', myLevel: null };
+  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it("insensible accents/casse : 'sete' trouve « Sète »", () => {
-    const m = makeMatch({ club: makeClub({ city: 'Sète' }) });
-    expect(filterNationalMatches([m], { ...base, city: 'sete' }, NOW)).toEqual([m]);
+    const match = makeMatch({ club: makeClub({ city: 'Sète' }) });
+    expect(filterNationalMatches([match], { ...base, location: { city: 'sete', deptCodes: [] } }, NOW)).toEqual([match]);
   });
 
   it('city: null exclu si le filtre ville est actif', () => {
-    const m = makeMatch({ club: makeClub({ city: null }) });
-    expect(filterNationalMatches([m], { ...base, city: 'paris' }, NOW)).toEqual([]);
+    const match = makeMatch({ club: makeClub({ city: null }) });
+    expect(filterNationalMatches([match], { ...base, location: { city: 'paris', deptCodes: [] } }, NOW)).toEqual([]);
   });
 
   it('filtre ville vide → tout passe (y compris une ville null)', () => {
-    const m = makeMatch({ club: makeClub({ city: null }) });
-    expect(filterNationalMatches([m], base, NOW)).toEqual([m]);
+    const match = makeMatch({ club: makeClub({ city: null }) });
+    expect(filterNationalMatches([match], base, NOW)).toEqual([match]);
+  });
+
+  // Fabrique de match localisée pour les tests ci-dessous : id + ville/département/code
+  // département du club (le reste = défauts de makeMatch/makeClub).
+  function m(over: { id?: string; city?: string; department?: string; departmentCode?: string } = {}): NationalOpenMatch {
+    const clubOverride: Partial<NationalOpenMatchClub> = {
+      department: over.department ?? null,
+      departmentCode: over.departmentCode ?? null,
+    };
+    if (over.city !== undefined) clubOverride.city = over.city;
+    return makeMatch({ id: over.id, club: makeClub(clubOverride) });
+  }
+
+  it('deptCodes filtre sur club.departmentCode (insensible casse)', () => {
+    const inDept  = m({ id: 'a', departmentCode: '31' });
+    const outDept = m({ id: 'b', departmentCode: '75' });
+    const noDept  = m({ id: 'c' }); // departmentCode null → exclu quand filtre actif
+    const out = filterNationalMatches([inDept, outDept, noDept], { period: 'all', location: { city: null, deptCodes: ['31'] }, myLevel: null }, NOW);
+    expect(out.map((x) => x.id)).toEqual(['a']);
+  });
+
+  it('city texte matche aussi le nom du département', () => {
+    const byDeptName = m({ id: 'a', city: 'Muret', department: 'Haute-Garonne' });
+    const other      = m({ id: 'b', city: 'Paris', department: 'Paris' });
+    const out = filterNationalMatches([byDeptName, other], { period: 'all', location: { city: 'haute-garonne', deptCodes: [] }, myLevel: null }, NOW);
+    expect(out.map((x) => x.id)).toEqual(['a']);
   });
 });
 
 describe('filterNationalMatches — niveau', () => {
-  const base: DiscoverMatchFilter = { period: 'all', city: '', myLevel: 6.2 };
+  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: 6.2 };
 
   it('myLevel 6.2 → fourchette [5,7] : garde une partie 4–6 (chevauchement)', () => {
     const m = makeMatch({ targetLevelMin: 4, targetLevelMax: 6 });
@@ -171,5 +199,33 @@ describe('distanceLabel', () => {
 
   it('12.6 km → « 13 km »', () => {
     expect(distanceLabel(12.6)).toBe('13 km');
+  });
+});
+
+describe('parseLocationQuery — ville, code postal ou département', () => {
+  it('vide → aucun filtre', () => {
+    expect(parseLocationQuery('')).toEqual({ city: null, deptCodes: [] });
+    expect(parseLocationQuery('   ')).toEqual({ city: null, deptCodes: [] });
+  });
+  it('code postal 5 chiffres → département (2 premiers chiffres)', () => {
+    expect(parseLocationQuery('31770')).toEqual({ city: null, deptCodes: ['31'] });
+  });
+  it('code postal DOM 97x → département 3 chiffres', () => {
+    expect(parseLocationQuery('97400')).toEqual({ city: null, deptCodes: ['974'] });
+  });
+  it('code postal corse 20xxx → 2A et 2B', () => {
+    expect(parseLocationQuery('20090')).toEqual({ city: null, deptCodes: ['2A', '2B'] });
+  });
+  it('code département direct (2 ou 3 chiffres)', () => {
+    expect(parseLocationQuery('31')).toEqual({ city: null, deptCodes: ['31'] });
+    expect(parseLocationQuery('974')).toEqual({ city: null, deptCodes: ['974'] });
+  });
+  it('20 seul → 2A et 2B ; 2a/2b → code corse majuscule', () => {
+    expect(parseLocationQuery('20')).toEqual({ city: null, deptCodes: ['2A', '2B'] });
+    expect(parseLocationQuery('2a')).toEqual({ city: null, deptCodes: ['2A'] });
+    expect(parseLocationQuery('2B')).toEqual({ city: null, deptCodes: ['2B'] });
+  });
+  it('texte → recherche par nom (ville ou département)', () => {
+    expect(parseLocationQuery('Colomiers')).toEqual({ city: 'Colomiers', deptCodes: [] });
   });
 });

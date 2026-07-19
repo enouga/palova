@@ -38,7 +38,7 @@ export const api = {
   // --- Public ---
   getSports: () => request<Sport[]>('/api/sports'),
 
-  listClubs: (filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number } = {}) => {
+  listClubs: (filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number; dept?: string[] } = {}) => {
     const qs = new URLSearchParams();
     if (filters.sport)  qs.set('sport', filters.sport);
     if (filters.city)   qs.set('city', filters.city);
@@ -48,6 +48,7 @@ export const api = {
       qs.set('lat', String(filters.lat));
       qs.set('lng', String(filters.lng));
     }
+    if (filters.dept && filters.dept.length) qs.set('dept', filters.dept.join(','));
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<ClubSummary[]>(`/api/clubs${suffix}`);
   },
@@ -2278,6 +2279,8 @@ export interface NationalOpenMatchClub {
   logoUrl: string | null;
   latitude: number | null;
   longitude: number | null;
+  department: string | null;
+  departmentCode: string | null;
 }
 
 /** Partie ouverte agrégée sur la vitrine palova.fr : partie publique + son club. */
