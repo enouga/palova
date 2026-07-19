@@ -6,7 +6,7 @@ export type IconName =
   | 'indoor' | 'sun' | 'users' | 'euro' | 'grid' | 'chart' | 'ticket' | 'settings'
   | 'moon' | 'logout' | 'grip' | 'trophy' | 'eye' | 'eyeOff' | 'info' | 'home'
   | 'share' | 'download' | 'ball' | 'trash' | 'menu' | 'wallet' | 'chat' | 'send'
-  | 'cup' | 'cart' | 'shower' | 'parking' | 'racket' | 'parasol' | 'wifi' | 'whistle' | 'camera' | 'flag';
+  | 'cup' | 'cart' | 'shower' | 'parking' | 'racket' | 'parasol' | 'wifi' | 'whistle' | 'camera' | 'flag' | 'phone';
 
 interface IconProps {
   name: IconName;
@@ -74,6 +74,7 @@ export function Icon({ name, size = 20, color = 'currentColor', stroke = 1.7, fi
     case 'whistle': glyph = <><circle cx="9.5" cy="14" r="5.5" {...p} /><path d="M14.5 11.5L21 8.5v4.5l-6 1.5" {...p} /></>; break;
     case 'camera': glyph = <><rect x="3" y="7" width="18" height="13" rx="2.5" {...p} /><path d="M8.5 7l1.5-2.5h4L15.5 7" {...p} /><circle cx="12" cy="13.5" r="3.5" {...p} /></>; break;
     case 'flag': glyph = <><path d="M5 3v18" {...p} /><path d="M5 4.5h13l-2.5 3.75L18 12H5" {...p} /></>; break;
+    case 'phone': glyph = <path d="M7 4.5c.6 1.8 1.4 3.4 2.4 4.9l-1.7 1.7c1.4 2.6 3.6 4.8 6.2 6.2l1.7-1.7c1.5 1 3.1 1.8 4.9 2.4V21c-9.4-.6-16.9-8.1-17.5-17.5H7z" {...p} />; break;
   }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0, ...style }}>
