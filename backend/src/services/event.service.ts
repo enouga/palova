@@ -465,14 +465,20 @@ export class EventService {
   async adminRemoveRegistration(eventId: string, regId: string, clubId: string) {
     await this.findClubRegistration(eventId, regId, clubId); // vérifie l'appartenance au club
     const e = await prisma.clubEvent.findUnique({ where: { id: eventId }, select: { requirePrepayment: true } });
-    const { cancelled, promotedRegistrationId } = await serializableTx(async (tx) => {
+    const { cancelled, promotedRegistrationId, refundInfo } = await serializableTx(async (tx) => {
       await tx.$queryRaw`SELECT id FROM club_events WHERE id = ${eventId} FOR UPDATE`;
       const reg = await tx.eventRegistration.findFirst({
         where: { id: regId, status: { not: 'CANCELLED' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, paymentStatus: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, eventId, regId, reg.status === 'CONFIRMED', e?.requirePrepayment ?? false);
+      const res = await this.cancelAndPromoteTx(tx, eventId, regId, reg.status === 'CONFIRMED', e?.requirePrepayment ?? false);
+      let refundInfo: { paymentId: string; amount: number; regId: string } | null = null;
+      if (reg.paymentStatus === 'PAID') {
+        const pay = await tx.payment.findFirst({ where: { eventRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+        if (pay) refundInfo = { paymentId: pay.id, amount: Number(pay.amount), regId: reg.id };
+      }
+      return { ...res, refundInfo };
     }, { timeout: 10_000 });
 
     if (promotedRegistrationId && e?.requirePrepayment) {
@@ -482,6 +488,8 @@ export class EventService {
     } else {
       await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
+    // Remboursement best-effort de l'inscrit retiré (post-commit, seulement si paiement ONLINE trouvé).
+    if (refundInfo) await this.safeRefund(refundInfo, clubId, 'Retrait par le club');
     return cancelled;
   }
 
