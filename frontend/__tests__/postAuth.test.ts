@@ -78,3 +78,15 @@ describe('finishAuth — hôte plateforme, gérant → admin du sous-domaine clu
     expect(((hardNavigate as jest.Mock).mock.calls[0][0] as string)).not.toContain('session-bridge');
   });
 });
+
+describe('finishAuth — hôte plateforme, joueur (pas staff) → accueil plateforme', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('sans club géré → redirige vers / (accueil personnalisé), pas /clubs', async () => {
+    (api.getMyClubs as jest.Mock).mockResolvedValue([]);
+    const push = jest.fn();
+    await finishAuth(auth, null, { push });
+    expect(push).toHaveBeenCalledWith('/');
+    expect(hardNavigate).not.toHaveBeenCalled();
+  });
+});
