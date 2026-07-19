@@ -29,7 +29,7 @@ const NATIONAL_INCLUDE = {
     select: {
       id: true, name: true, attributes: true, clubId: true,
       clubSport: { select: { sport: { select: { key: true, name: true } } } },
-      club: { select: { slug: true, name: true, city: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true } },
+      club: { select: { slug: true, name: true, city: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true, department: true, departmentCode: true } },
     },
   },
   participants: {

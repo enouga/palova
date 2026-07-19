@@ -812,7 +812,7 @@ describe('OpenMatchService', () => {
   });
 
   describe('listNationalOpenMatches', () => {
-    const clubProj = { slug: 'padel-arena-paris', name: 'Padel Arena Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35 };
+    const clubProj = { slug: 'padel-arena-paris', name: 'Padel Arena Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35, department: 'Paris', departmentCode: '75' };
     const row = (id: string, participants: unknown[], over: Record<string, unknown> = {}) => ({
       id, startTime: future(24), endTime: future(25),
       targetLevelMin: null, targetLevelMax: null,
@@ -837,7 +837,7 @@ describe('OpenMatchService', () => {
       expect(args.where.startTime.lte.getTime() - args.where.startTime.gt.getTime()).toBe(14 * 24 * 3_600_000);
       expect(args.take).toBe(120);
       expect(args.include.resource.select.club.select).toEqual(
-        expect.objectContaining({ latitude: true, longitude: true }),
+        expect.objectContaining({ latitude: true, longitude: true, department: true, departmentCode: true }),
       );
       expect(out[0]).toMatchObject({ id: 'm1', spotsLeft: 3, full: false, sport: { key: 'padel', name: 'Padel' }, club: clubProj });
       // Chaque joueur reçoit un côté concret (dérivé effectiveTeams), comme les cartes club.
