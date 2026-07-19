@@ -57,21 +57,27 @@ function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
     targetLevelMin: null,
     targetLevelMax: null,
     players: [],
-    club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522 },
+    club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522, department: 'Paris', departmentCode: '75' },
     ...over,
   };
 }
 
 const MATCH_PARIS = makeMatch({
   id: 'paris',
-  club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522 },
+  club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.8566, longitude: 2.3522, department: 'Paris', departmentCode: '75' },
 });
 const MATCH_LYON = makeMatch({
   id: 'lyon',
-  club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357 },
+  club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357, department: 'Rhône', departmentCode: '69' },
 });
 
 const wrap = () => render(<ThemeProvider><DiscoverPage /></ThemeProvider>);
+
+// jsdom n'implémente pas scrollIntoView : stub commun à tous les tests (les ancres/deep-links
+// l'appellent pour naviguer entre les sections empilées).
+beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -87,70 +93,69 @@ beforeEach(() => {
 });
 
 describe('DiscoverPage', () => {
-  it('par défaut : onglet Parties, titre Découvrir, 2 cartes, tournois non chargé', async () => {
+  it('rend les 3 sections simultanément (plus d\'onglets)', async () => {
     wrap();
-    expect(screen.getByText('Découvrir')).toBeInTheDocument();
-    await waitFor(() => expect(listNationalOpenMatches).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(2));
-    expect(listNationalTournaments).not.toHaveBeenCalled();
-  });
-
-  it('?tab=clubs au montage : charge les clubs, masque l\'input « Ville ou région »', async () => {
-    window.history.replaceState(null, '', '/decouvrir?tab=clubs');
-    wrap();
+    expect(await screen.findAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(2);
+    await waitFor(() => expect(listNationalTournaments).toHaveBeenCalledTimes(1)); // fetch page, dès l'arrivée
     await waitFor(() => expect(listClubs).toHaveBeenCalled());
-    expect(screen.queryByPlaceholderText('Ville ou région')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Parties' })).not.toBeInTheDocument(); // plus de PillTabs onglets
   });
 
-  it('?tab=inconnu retombe sur Parties', async () => {
-    window.history.replaceState(null, '', '/decouvrir?tab=inconnu');
+  it('les ancres portent les compteurs et scrollent vers la section', async () => {
     wrap();
-    await waitFor(() => expect(listNationalOpenMatches).toHaveBeenCalled());
-    expect(listClubs).not.toHaveBeenCalled();
-    expect(listNationalTournaments).not.toHaveBeenCalled();
+    const anchor = await screen.findByRole('button', { name: 'Parties 2' });
+    fireEvent.click(screen.getByRole('button', { name: /Clubs/ }));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(anchor).toBeInTheDocument();
   });
 
-  it('clic sur l\'onglet Tournois : URL tab=tournois, calendrier chargé, titre interne masqué', async () => {
+  it('#clubs au chargement scrolle vers la section clubs une fois les données arrivées', async () => {
+    window.history.replaceState(null, '', '/decouvrir#clubs');
     wrap();
-    fireEvent.click(screen.getByRole('button', { name: 'Tournois' }));
-    await waitFor(() => expect(listNationalTournaments).toHaveBeenCalled());
-    expect(window.location.search).toContain('tab=tournois');
-    expect(screen.queryByText('Calendrier des tournois')).not.toBeInTheDocument();
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
   });
 
-  it('hôte club : redirige vers la plateforme (URL préservée), rien rendu', () => {
-    window.history.replaceState(null, '', '/decouvrir?tab=clubs');
+  it('champ localisation : un code postal filtre les 3 sections par département', async () => {
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    fireEvent.change(screen.getByPlaceholderText('Ville, code postal ou département'), { target: { value: '69000' } });
+    await waitFor(() => expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument());
+    expect(screen.getByText('Padel Lyon')).toBeInTheDocument();
+    await waitFor(() => expect(listClubs).toHaveBeenLastCalledWith(expect.objectContaining({ dept: ['69'] })));
+  });
+
+  it('champ localisation : une ville filtre par nom', async () => {
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    fireEvent.change(screen.getByPlaceholderText('Ville, code postal ou département'), { target: { value: 'Lyon' } });
+    await waitFor(() => expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument());
+    await waitFor(() => expect(listClubs).toHaveBeenLastCalledWith(expect.objectContaining({ city: 'Lyon' })));
+  });
+
+  it('hôte club : redirige vers la plateforme (hash préservé), rien rendu', () => {
+    window.history.replaceState(null, '', '/decouvrir#clubs');
     clubCtx = { slug: 'demo', club: null, loading: false };
     const { container } = wrap();
     expect(hardNavigate).toHaveBeenCalledTimes(1);
     const url = hardNavigate.mock.calls[0][0] as string;
-    expect(url).toContain('/decouvrir?tab=clubs');
+    expect(url).toContain('/decouvrir');
+    expect(url).toContain('#clubs');
     expect(url).not.toContain('demo.');
     expect(container).toBeEmptyDOMElement();
   });
 
   it('anonyme : pas de chip « À mon niveau », getMyRating jamais appelé', async () => {
     wrap();
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(2));
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
     expect(screen.queryByRole('button', { name: 'À mon niveau' })).not.toBeInTheDocument();
     expect(getMyRating).not.toHaveBeenCalled();
   });
 
-  it('ville partagée (input « Ville ») filtre les cartes Parties', async () => {
-    wrap();
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(2));
-    fireEvent.change(screen.getByPlaceholderText('Ville'), { target: { value: 'Lyon' } });
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(1));
-    expect(screen.getByText('Padel Lyon')).toBeInTheDocument();
-    expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument();
-  });
-
-  it('état vide : « Voir les clubs » bascule sur l\'onglet Clubs', async () => {
+  it('état vide parties : « Voir les clubs » scrolle vers la section clubs', async () => {
     listNationalOpenMatches.mockResolvedValue([]);
     wrap();
     const btn = await screen.findByRole('button', { name: /Voir les clubs/ });
     fireEvent.click(btn);
-    await waitFor(() => expect(listClubs).toHaveBeenCalled());
-    expect(window.location.search).toContain('tab=clubs');
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 });
