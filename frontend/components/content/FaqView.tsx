@@ -38,15 +38,20 @@ function AccordionItem({ entry }: { entry: Entry }) {
   );
 }
 
-/** FAQ publique : club (socle interpolé + items du club) ou plateforme (statique). */
-export function FaqView() {
+/**
+ * FAQ publique : club (socle interpolé + items du club) ou plateforme (statique).
+ * `source="platform"` force la FAQ plateforme même sur un hôte club (ex. `/admin/support`,
+ * qui veut afficher la FAQ générale Palova au staff, indépendamment du club courant).
+ * `heading={null}` masque le titre (la page appelante fournit le sien).
+ */
+export function FaqView({ source = 'auto', heading = 'Questions fréquentes' }: { source?: 'auto' | 'platform'; heading?: string | null } = {}) {
   const { slug } = useClub();
   const { th } = useTheme();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!slug) {
+    if (source === 'platform' || !slug) {
       setEntries(PLATFORM_FAQ.map((e, i) => ({ id: `p${i}`, ...e })));
       return;
     }
@@ -63,7 +68,7 @@ export function FaqView() {
       })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [slug, source]);
 
   // Regroupe par rubrique, dans l'ordre de première apparition.
   const groups = useMemo(() => {
@@ -82,7 +87,7 @@ export function FaqView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-      <h1 style={{ fontFamily: th.fontUI, fontSize: 28, fontWeight: 800, letterSpacing: -0.4, color: th.text, margin: '0 0 -4px' }}>Questions fréquentes</h1>
+      {heading && <h1 style={{ fontFamily: th.fontUI, fontSize: 28, fontWeight: 800, letterSpacing: -0.4, color: th.text, margin: '0 0 -4px' }}>{heading}</h1>}
       {groups.map((g) => (
         <section key={g.cat} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h2 style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: th.textMute, margin: '0 0 2px' }}>{g.cat}</h2>

@@ -4,6 +4,7 @@ export const PUBLIC_PATHS = [
   '/login', '/register', '/clubs/new', '/forgot-password',
   '/parties', '/club', '/session-bridge',
   '/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs',
+  '/aide',
 ];
 
 /** true si le chemin est public (exact ou sous-chemin d'un PUBLIC_PATHS). */
