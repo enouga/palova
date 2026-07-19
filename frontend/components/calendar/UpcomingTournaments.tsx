@@ -58,7 +58,7 @@ export function UpcomingTournaments({ items: preloaded, hideTitle }: { items?: N
             onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
           />
         ))}
-        <a href={platformUrl('/decouvrir?tab=tournois')} style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none', marginTop: 2 }}>
+        <a href={platformUrl('/decouvrir#tournois')} style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, color: th.text, textDecoration: 'none', marginTop: 2 }}>
           Voir tout le calendrier →
         </a>
       </div>

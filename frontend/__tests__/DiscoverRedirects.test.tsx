@@ -17,14 +17,14 @@ beforeEach(() => {
 });
 
 describe('redirections /decouvrir', () => {
-  it('/clubs (hôte plateforme) redirige vers /decouvrir?tab=clubs', () => {
+  it('/clubs (hôte plateforme) redirige vers /decouvrir#clubs', () => {
     render(<ClubsPage />);
-    expect(replace).toHaveBeenCalledWith('/decouvrir?tab=clubs');
+    expect(replace).toHaveBeenCalledWith('/decouvrir#clubs');
   });
 
-  it('/tournois (hôte plateforme) redirige vers /decouvrir?tab=tournois', () => {
+  it('/tournois (hôte plateforme) redirige vers /decouvrir#tournois', () => {
     render(<TournoisPage />);
-    expect(replace).toHaveBeenCalledWith('/decouvrir?tab=tournois');
+    expect(replace).toHaveBeenCalledWith('/decouvrir#tournois');
   });
 
   it('/tournois (hôte club) redirige toujours vers /events?filtre=competitions', () => {

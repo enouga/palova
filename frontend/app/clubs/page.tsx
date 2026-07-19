@@ -6,6 +6,6 @@ import { useRouter } from 'next/navigation';
 // On redirige les anciens liens / favoris vers le bon onglet.
 export default function ClubsDirectoryRedirect() {
   const router = useRouter();
-  useEffect(() => { router.replace('/decouvrir?tab=clubs'); }, [router]);
+  useEffect(() => { router.replace('/decouvrir#clubs'); }, [router]);
   return null;
 }

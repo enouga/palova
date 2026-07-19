@@ -11,7 +11,7 @@ export default function TournoisPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(slug ? '/events?filtre=competitions' : '/decouvrir?tab=tournois');
+    router.replace(slug ? '/events?filtre=competitions' : '/decouvrir#tournois');
   }, [slug, router]);
 
   return null;
