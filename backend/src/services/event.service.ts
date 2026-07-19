@@ -7,6 +7,25 @@ import { occupiesSpotWhere, holdDeadline, entryFeeCents } from './registrationPa
 import { PackageService } from './package.service';
 import { StripeService } from './stripe.service';
 import { RefundService } from './refund.service';
+import { weeklyOccurrences } from './recurrence';
+
+export interface CreateEventSeriesInput {
+  name: string;
+  kind: ClubEventKind;
+  description?: string | null;
+  capacity?: number | null;
+  price?: number | null;
+  memberOnly?: boolean;
+  requirePrepayment?: boolean;
+  clubSportId?: string | null;
+  weekday: number;
+  startLocal: string;    // "HH:mm"
+  durationMin: number;
+  deadlineLeadMinutes: number;
+  startDate: string;     // "YYYY-MM-DD"
+  endDate: string;       // "YYYY-MM-DD"
+  status: ClubEventStatus;
+}
 
 export interface CreateEventInput {
   name: string;
@@ -384,6 +403,70 @@ export class EventService {
     });
     const [event] = await this.withCounts([e]);
     return { event, registrations };
+  }
+
+  /**
+   * Crée une série d'animations récurrentes hebdomadaires — une occurrence (ClubEvent
+   * indépendant) par semaine entre startDate et endDate (bornes incluses), plafond 60
+   * (weeklyOccurrences lève SERIES_TOO_LONG au-delà). Chaque occurrence reçoit le même
+   * statut (DRAFT/PUBLISHED) et registrationDeadline = début − deadlineLeadMinutes.
+   */
+  async adminCreateSeries(clubId: string, input: CreateEventSeriesInput): Promise<{ seriesId: string; created: number }> {
+    const name = input.name.trim();
+    if (!name) throw new Error('VALIDATION_ERROR');
+    if (!KINDS.includes(input.kind)) throw new Error('VALIDATION_ERROR');
+    if (!['DRAFT', 'PUBLISHED'].includes(input.status)) throw new Error('VALIDATION_ERROR');
+    if (input.clubSportId != null) {
+      const cs = await prisma.clubSport.findFirst({ where: { id: input.clubSportId, clubId } });
+      if (!cs) throw new Error('VALIDATION_ERROR');
+    }
+    if (!Number.isInteger(input.deadlineLeadMinutes) || input.deadlineLeadMinutes < 0) throw new Error('VALIDATION_ERROR');
+
+    const club = await prisma.club.findUnique({ where: { id: clubId }, select: { timezone: true } });
+    if (!club) throw new Error('CLUB_NOT_FOUND');
+
+    // Calculée AVANT toute écriture (lève VALIDATION_ERROR / SERIES_TOO_LONG).
+    const occurrences = weeklyOccurrences({
+      weekday: input.weekday, startLocal: input.startLocal, durationMin: input.durationMin,
+      startDate: input.startDate, endDate: input.endDate, tz: club.timezone,
+    });
+
+    const capacity = input.capacity ?? null;
+    const price = input.price != null ? new Prisma.Decimal(input.price) : null;
+    const memberOnly = input.memberOnly ?? true;
+    const requirePrepayment = Boolean(input.requirePrepayment);
+    if (requirePrepayment) {
+      await this.assertPrepaymentAllowed(clubId, Math.round(Number(input.price ?? 0) * 100));
+    }
+
+    const { seriesId, created } = await prisma.$transaction(async (tx) => {
+      const series = await tx.clubEventSeries.create({
+        data: {
+          clubId, name, kind: input.kind, description: input.description?.trim() || null,
+          capacity, price, memberOnly, requirePrepayment, clubSportId: input.clubSportId ?? null,
+          weekday: input.weekday, startLocal: input.startLocal, durationMin: input.durationMin,
+          deadlineLeadMinutes: input.deadlineLeadMinutes,
+          startDate: new Date(`${input.startDate}T00:00:00.000Z`),
+          endDate: new Date(`${input.endDate}T00:00:00.000Z`),
+        },
+      });
+      let created = 0;
+      for (const occ of occurrences) {
+        await tx.clubEvent.create({
+          data: {
+            clubId, name, kind: input.kind, description: input.description?.trim() || null,
+            startTime: occ.startUtc, endTime: occ.endUtc,
+            registrationDeadline: new Date(occ.startUtc.getTime() - input.deadlineLeadMinutes * 60000),
+            capacity, price, memberOnly, requirePrepayment, clubSportId: input.clubSportId ?? null,
+            status: input.status, seriesId: series.id,
+          } as Prisma.ClubEventUncheckedCreateInput,
+        });
+        created++;
+      }
+      return { seriesId: series.id, created };
+    });
+
+    return { seriesId, created };
   }
 
   async createEvent(clubId: string, input: CreateEventInput) {
