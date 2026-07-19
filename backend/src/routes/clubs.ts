@@ -145,7 +145,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: N
 });
 
 // Annuaire public — filtres optionnels sport (key), city (ville ou région), q (nom),
-// region (exact), lat/lng (tri par distance).
+// region (exact), dept (codes département CSV), lat/lng (tri par distance).
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const latRaw = asString(req.query.lat), lngRaw = asString(req.query.lng);
@@ -156,6 +156,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       city:   asString(req.query.city) || undefined,
       q:      asString(req.query.q) || undefined,
       region: asString(req.query.region) || undefined,
+      dept: asString(req.query.dept) ? asString(req.query.dept).split(',').filter(Boolean) : undefined,
       lat: Number.isFinite(lat) ? lat : undefined,
       lng: Number.isFinite(lng) ? lng : undefined,
     });

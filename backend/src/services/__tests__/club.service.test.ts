@@ -864,9 +864,28 @@ describe('ClubService — listClubs (géo)', () => {
     await service.listClubs({ city: 'occ' });
     const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
     expect(arg.where.OR).toEqual([
-      { city:   { contains: 'occ', mode: 'insensitive' } },
-      { region: { contains: 'occ', mode: 'insensitive' } },
+      { city:       { contains: 'occ', mode: 'insensitive' } },
+      { region:     { contains: 'occ', mode: 'insensitive' } },
+      { department: { contains: 'occ', mode: 'insensitive' } },
     ]);
+  });
+
+  it('listClubs filtre par codes departement (dept)', async () => {
+    prismaMock.club.findMany.mockResolvedValue([] as any);
+    await service.listClubs({ dept: ['2A', '2B'] });
+    const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.departmentCode).toEqual({ in: ['2A', '2B'] });
+  });
+
+  it('listClubs : le filtre city matche aussi le nom de departement', async () => {
+    prismaMock.club.findMany.mockResolvedValue([] as any);
+    await service.listClubs({ city: 'gironde' });
+    const arg = (prismaMock.club.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where.OR).toEqual(expect.arrayContaining([
+      { city: { contains: 'gironde', mode: 'insensitive' } },
+      { region: { contains: 'gironde', mode: 'insensitive' } },
+      { department: { contains: 'gironde', mode: 'insensitive' } },
+    ]));
   });
 
   it('trie par distance croissante quand lat/lng fournis ; clubs sans coords en dernier', async () => {
