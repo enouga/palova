@@ -9,13 +9,30 @@ import { FacetPanel } from '@/components/calendar/FacetPanel';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
+import { norm } from '@/lib/members';
 import {
   CalendarFilterState, DatePreset, emptyCalendarState, applyFilters, calendarFacets,
 } from '@/lib/tournamentCalendar';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
-export function TournamentFinder() {
+// Clés propres à writeUrl (préservées à la lecture, purgées puis réécrites — le reste de la
+// query string de la page hôte, ex. ?tab=, doit survivre intact).
+const OWN_URL_KEYS = ['quand', 'du', 'au', 'dept', 'cat', 'genre', 'near'] as const;
+
+export interface TournamentFinderProps {
+  /** Coordonnées fournies par une barre de localisation externe (page hôte) : active « Autour
+   * de moi » sans jamais solliciter navigator.geolocation (déjà obtenues ailleurs). */
+  coords?: { lat: number; lng: number } | null;
+  /** Filtre libre par ville du club (recherche insensible accents/casse), posé AVANT le calcul
+   * des facettes — les compteurs reflètent donc le sous-ensemble filtré. */
+  city?: string;
+  /** Masque le titre H1 « Calendrier des tournois » (embarqué sous un onglet d'une page hôte
+   * qui porte déjà son propre titre). */
+  hideTitle?: boolean;
+}
+
+export function TournamentFinder({ coords = null, city = '', hideTitle = false }: TournamentFinderProps = {}) {
   const { th } = useTheme();
   const [items, setItems] = useState<NationalTournament[] | null>(null);
   const [state, setState] = useState<CalendarFilterState>(emptyCalendarState());
@@ -55,10 +72,13 @@ export function TournamentFinder() {
     urlReady.current = true;
   }, []);
 
-  // Écriture de l'URL (replaceState : lien partageable)
+  // Écriture de l'URL (replaceState : lien partageable). Part de la query string ACTUELLE
+  // (pas d'une neuve) pour préserver les paramètres étrangers de la page hôte (ex. ?tab=) —
+  // seules les 7 clés propres à ce composant sont purgées puis réécrites.
   useEffect(() => {
     if (!urlReady.current) return;
-    const q = new URLSearchParams();
+    const q = new URLSearchParams(window.location.search);
+    for (const k of OWN_URL_KEYS) q.delete(k);
     if (state.datePreset && !state.from && !state.to) q.set('quand', state.datePreset);
     if (state.from) q.set('du', state.from);
     if (state.to) q.set('au', state.to);
@@ -69,6 +89,15 @@ export function TournamentFinder() {
     const qs = q.toString();
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
   }, [state]);
+
+  // Coordonnées fournies par la page hôte (barre de localisation partagée) : seed le ref puis
+  // active nearMe, sans jamais appeler navigator.geolocation (déjà obtenues ailleurs). Sur [coords]
+  // pour couvrir le cas où la prop arrive après le montage (géoloc résolue en différé côté hôte).
+  useEffect(() => {
+    if (!coords) return;
+    coordsRef.current = coords;
+    setState((s) => (s.nearMe ? s : { ...s, nearMe: true }));
+  }, [coords]);
 
   // Toggle d'une valeur dans un Set d'une dimension
   function toggleIn(key: 'deptCodes' | 'categories' | 'genders', value: string) {
@@ -97,24 +126,35 @@ export function TournamentFinder() {
     );
   };
 
-  const facets = useMemo(() => (items && now ? calendarFacets(items, state, now) : null), [items, state, now]);
+  // Filtre ville (prop externe, ex. barre de localisation partagée) : posé AVANT le calcul des
+  // facettes et des résultats, pour que compteurs ET liste reflètent le même sous-ensemble.
+  const filteredItems = useMemo(() => {
+    if (!items) return items;
+    const needle = norm(city.trim());
+    if (!needle) return items;
+    return items.filter((t) => t.club.city != null && norm(t.club.city).includes(needle));
+  }, [items, city]);
+
+  const facets = useMemo(() => (filteredItems && now ? calendarFacets(filteredItems, state, now) : null), [filteredItems, state, now]);
   // results: pass coords only when nearMe active; coordsRef.current is always
   // current at render time because it is written before setState.
   const results = useMemo(
-    () => (items && now
-      ? applyFilters(items, state, now, state.nearMe ? coordsRef.current ?? undefined : undefined)
+    () => (filteredItems && now
+      ? applyFilters(filteredItems, state, now, state.nearMe ? coordsRef.current ?? undefined : undefined)
       : null),
-    [items, state, now],
+    [filteredItems, state, now],
   );
   // Vue cross-club : chip sport seulement si l'ensemble affiché couvre plusieurs sports.
   const showSport = setSpansMultipleSports((results ?? []).map((r) => r.tournament.sport?.key));
 
   return (
     <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
-      <div style={{ padding: '22px 20px 0' }}>
-        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
-        <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
-      </div>
+      {!hideTitle && (
+        <div style={{ padding: '22px 20px 0' }}>
+          <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
+          <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, marginTop: 6 }}>Toutes les épreuves des clubs Palova, partout en France.</p>
+        </div>
+      )}
 
       {facets && (
         <FacetPanel

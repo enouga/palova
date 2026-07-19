@@ -49,4 +49,33 @@ describe('TournamentFinder', () => {
       expect(titles[0]).toBe('Open Lyon');
     });
   });
+
+  it("l'écriture de l'URL fusionne avec les paramètres existants de la page hôte (ex. ?tab=)", async () => {
+    window.history.replaceState(null, '', '/decouvrir?tab=tournois');
+    render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    fireEvent.click(screen.getByText(/Paris 1/)); // chip « Paris 1 » (compteur)
+    await waitFor(() => expect(window.location.search).toContain('dept=75'));
+    expect(window.location.search).toContain('tab=tournois');
+  });
+
+  it('prop coords trie par distance sans solliciter la géolocalisation native', async () => {
+    const getCurrentPosition = jest.fn();
+    (navigator.geolocation.getCurrentPosition as any) = getCurrentPosition;
+    render(<ThemeProvider><TournamentFinder coords={{ lat: 45.76, lng: 4.83 }} /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    await waitFor(() => {
+      const titles = screen.getAllByText(/GP Paris|Open Lyon/).map((n) => n.textContent);
+      expect(titles[0]).toBe('Open Lyon');
+    });
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Autour de moi/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('prop city filtre les résultats ET les facettes de département', async () => {
+    render(<ThemeProvider><TournamentFinder city="lyon" /></ThemeProvider>);
+    await screen.findByText('Open Lyon');
+    expect(screen.queryByText('GP Paris')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Paris 1/)).not.toBeInTheDocument();
+  });
 });
