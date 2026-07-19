@@ -24,17 +24,28 @@ export interface TournamentFinderProps {
   /** Coordonnées fournies par une barre de localisation externe (page hôte) : active « Autour
    * de moi » sans jamais solliciter navigator.geolocation (déjà obtenues ailleurs). */
   coords?: { lat: number; lng: number } | null;
-  /** Filtre libre par ville du club (recherche insensible accents/casse), posé AVANT le calcul
-   * des facettes — les compteurs reflètent donc le sous-ensemble filtré. */
+  /** Filtre libre par ville OU département du club (recherche insensible accents/casse), posé
+   * AVANT le calcul des facettes — les compteurs reflètent donc le sous-ensemble filtré. */
   city?: string;
+  /** Codes département (ex. ['75','69']) fournis par une barre de localisation externe — filtre
+   * additif à `city`, posé lui aussi avant le calcul des facettes. */
+  deptCodes?: string[];
   /** Masque le titre H1 « Calendrier des tournois » (embarqué sous un onglet d'une page hôte
    * qui porte déjà son propre titre). */
   hideTitle?: boolean;
+  /** Tournois préchargés par le parent (évite un double fetch, pattern `UpcomingTournaments`) ;
+   * `undefined` = le composant fetch lui-même (comportement historique). */
+  items?: NationalTournament[] | null;
+  /** Rappelé avec le nombre de résultats affichés (page hôte : compteur d'onglet). */
+  onCount?: (n: number) => void;
 }
 
-export function TournamentFinder({ coords = null, city = '', hideTitle = false }: TournamentFinderProps = {}) {
+export function TournamentFinder({
+  coords = null, city = '', deptCodes = [], hideTitle = false, items: preloaded, onCount,
+}: TournamentFinderProps = {}) {
   const { th } = useTheme();
-  const [items, setItems] = useState<NationalTournament[] | null>(null);
+  const [fetched, setFetched] = useState<NationalTournament[] | null>(null);
+  const selfFetch = preloaded === undefined;
   const [state, setState] = useState<CalendarFilterState>(emptyCalendarState());
   // coords stored in a ref (not state) so that setting coords and nearMe=true
   // happen in a single state update, avoiding ordering races in the test environment.
@@ -43,8 +54,12 @@ export function TournamentFinder({ coords = null, city = '', hideTitle = false }
   const [now, setNow] = useState<Date | null>(null);
   const urlReady = useRef(false);
 
-  // Chargement
-  useEffect(() => { api.listNationalTournaments().then(setItems).catch(() => setItems([])); }, []);
+  // Chargement (sauté si `items` préchargé par le parent)
+  useEffect(() => {
+    if (!selfFetch) return;
+    api.listNationalTournaments().then(setFetched).catch(() => setFetched([]));
+  }, [selfFetch]);
+  const items = selfFetch ? fetched : (preloaded ?? null);
 
   // Horloge (hydration-safe : null au 1er rendu)
   useEffect(() => {
@@ -87,7 +102,7 @@ export function TournamentFinder({ coords = null, city = '', hideTitle = false }
     if (state.genders.size) q.set('genre', [...state.genders].join(','));
     if (state.nearMe) q.set('near', '1');
     const qs = q.toString();
-    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+    window.history.replaceState(null, '', (qs ? `?${qs}` : window.location.pathname) + window.location.hash);
   }, [state]);
 
   // Coordonnées fournies par la page hôte (barre de localisation partagée) : seed le ref puis
@@ -126,26 +141,37 @@ export function TournamentFinder({ coords = null, city = '', hideTitle = false }
     );
   };
 
-  // Filtre ville (prop externe, ex. barre de localisation partagée) : posé AVANT le calcul des
-  // facettes et des résultats, pour que compteurs ET liste reflètent le même sous-ensemble.
-  const filteredItems = useMemo(() => {
+  // Filtre localisation (props externes, ex. barre de localisation partagée) : posé AVANT le
+  // calcul des facettes et des résultats, pour que compteurs ET liste reflètent le même
+  // sous-ensemble. `deptCodes` filtre par code département exact, `city` matche ville OU nom
+  // de département (recherche libre insensible accents/casse).
+  const locItems = useMemo(() => {
     if (!items) return items;
-    const needle = norm(city.trim());
-    if (!needle) return items;
-    return items.filter((t) => t.club.city != null && norm(t.club.city).includes(needle));
-  }, [items, city]);
+    let out = items;
+    if (deptCodes.length) out = out.filter((t) => t.club.departmentCode != null && deptCodes.includes(t.club.departmentCode.toUpperCase()));
+    if (city.trim()) {
+      const needle = norm(city.trim());
+      out = out.filter((t) => (t.club.city != null && norm(t.club.city).includes(needle))
+        || (t.club.department != null && norm(t.club.department).includes(needle)));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, city, deptCodes.join(',')]);
 
-  const facets = useMemo(() => (filteredItems && now ? calendarFacets(filteredItems, state, now) : null), [filteredItems, state, now]);
+  const facets = useMemo(() => (locItems && now ? calendarFacets(locItems, state, now) : null), [locItems, state, now]);
   // results: pass coords only when nearMe active; coordsRef.current is always
   // current at render time because it is written before setState.
   const results = useMemo(
-    () => (filteredItems && now
-      ? applyFilters(filteredItems, state, now, state.nearMe ? coordsRef.current ?? undefined : undefined)
+    () => (locItems && now
+      ? applyFilters(locItems, state, now, state.nearMe ? coordsRef.current ?? undefined : undefined)
       : null),
-    [filteredItems, state, now],
+    [locItems, state, now],
   );
   // Vue cross-club : chip sport seulement si l'ensemble affiché couvre plusieurs sports.
   const showSport = setSpansMultipleSports((results ?? []).map((r) => r.tournament.sport?.key));
+
+  // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
+  useEffect(() => { if (results) onCount?.(results.length); }, [results?.length, onCount]);
 
   return (
     <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
