@@ -31,13 +31,14 @@ export function LogoBall({ size = 20, color }: { size?: number; color?: string }
 //    « palova » suivi de la petite balle apricot. Theme-aware (clair/sombre).
 export function Logotype({ size = 26, color, href }: { size?: number; color?: string; href?: string }) {
   const { th } = useTheme();
-  const { token, clubId, ready } = useAuth();
+  const { clubId, ready } = useAuth();
   const { slug } = useClub();
   const c = color || th.text;
   const ball = Math.max(3, Math.round(size * 0.16));
   // Destination contextuelle : sur un sous-domaine club, le logo ramène à la home du club (/).
-  // Sinon (plateforme) : membre → back-office, joueur → annuaire, visiteur → accueil.
-  const target = href ?? (slug ? '/' : (!ready ? '/' : clubId ? '/admin' : token ? '/clubs' : '/'));
+  // Sinon (plateforme) : staff → back-office, tout le reste (joueur connecté ou visiteur) → accueil
+  // personnalisé (cf. lib/postAuth.ts qui envoie déjà le joueur non-staff sur / après login).
+  const target = href ?? (slug ? '/' : (!ready ? '/' : clubId ? '/admin' : '/'));
   return (
     <Link href={target} aria-label="Accueil Palova" style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.24, userSelect: 'none', cursor: 'pointer' }}>

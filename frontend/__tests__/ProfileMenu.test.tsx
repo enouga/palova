@@ -111,7 +111,8 @@ describe('ProfileMenu', () => {
     expect(screen.getAllByText('MB')).toHaveLength(2);
     expect(screen.getByText('Se déconnecter')).toBeInTheDocument();
     expect(screen.queryByText('Mes réservations')).not.toBeInTheDocument();
-    expect(screen.getByText('Mes clubs')).toBeInTheDocument();
+    expect(screen.getByText('Palova')).toBeInTheDocument();
+    expect(screen.queryByText('Mes clubs')).not.toBeInTheDocument();
   });
 
   it('hôte club : chip Abonné et soldes utilisables', async () => {
@@ -234,7 +235,7 @@ describe('ProfileMenu', () => {
     clubCtx = { slug: 'demo', club: { id: 'c1', slug: 'demo', name: 'Club Démo' }, loading: false };
     wrap();
     openMenu();
-    await screen.findByText('Mes clubs'); // menu chargé
+    await screen.findByText('Palova'); // menu chargé
     expect(screen.queryByText('Espace club')).not.toBeInTheDocument();
     expect(screen.queryByText(/Espace club — /)).not.toBeInTheDocument();
     expect(api.getMyClubs).not.toHaveBeenCalled();
