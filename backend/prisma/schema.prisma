@@ -345,6 +345,7 @@ model Club {
   sponsors      Sponsor[]
   tournaments  Tournament[]
   clubEvents   ClubEvent[]
+  clubEventSeries ClubEventSeries[]
   packageTemplates PackageTemplate[]
   memberPackages   MemberPackage[]
   slugAliases      ClubSlugAlias[]
@@ -1163,13 +1164,47 @@ model ClubEvent {
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
   clubSportId   String?             @map("club_sport_id")
+  seriesId      String?             @map("series_id") // récurrence hebdo (mêlée récurrente) — null = event ponctuel
 
   club          Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
   clubSport     ClubSport?          @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
+  series        ClubEventSeries?    @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   registrations EventRegistration[]
 
   @@index([clubId, status, startTime])
+  @@index([seriesId])
   @@map("club_events")
+}
+
+/// Série récurrente hebdomadaire bornée d'animations (mêlée hebdo…), mirroir de `ReservationSeries`.
+/// Génère des `ClubEvent` normaux (ClubEvent.seriesId) — la série ne sert qu'à la génération
+/// initiale et aux actions de gestion en bloc (prolonger / annuler).
+model ClubEventSeries {
+  id                  String    @id @default(cuid())
+  clubId              String    @map("club_id")
+  name                String
+  kind                ClubEventKind
+  description         String?
+  capacity            Int?
+  price               Decimal?  @db.Decimal(10, 2)
+  memberOnly          Boolean   @default(true) @map("member_only")
+  requirePrepayment   Boolean   @default(false) @map("require_prepayment")
+  clubSportId         String?   @map("club_sport_id")
+  weekday             Int                                    // 1=lundi … 7=dimanche (Luxon)
+  startLocal          String    @map("start_local")          // "HH:mm"
+  durationMin         Int       @map("duration_min")
+  deadlineLeadMinutes Int       @map("deadline_lead_minutes") // clôture = début − ce délai
+  startDate           DateTime  @map("start_date") @db.Date
+  endDate             DateTime  @map("end_date") @db.Date
+  cancelledAt         DateTime? @map("cancelled_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  club   Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  events ClubEvent[]
+
+  @@index([clubId])
+  @@map("club_event_series")
 }
 
 /// Inscription individuelle d'un joueur à un ClubEvent. Une seule ligne par joueur
