@@ -2967,6 +2967,11 @@ export function conversationStreamUrl(conversationId: string, token: string): st
   return `${BASE_URL}/api/conversations/${conversationId}/stream?token=${encodeURIComponent(token)}`;
 }
 
+/** Flux SSE public des disponibilités d'un club (grille Réserver en direct). */
+export function clubAvailabilityStreamUrl(slug: string): string {
+  return `${BASE_URL}/api/clubs/${slug}/availability/stream`;
+}
+
 /** URL de la photo d'un message privé (streaming authentifié — les <img> ne posent pas d'Authorization). */
 export function dmImageUrl(conversationId: string, messageId: string, token: string): string {
   return `${BASE_URL}/api/conversations/${conversationId}/messages/${messageId}/image?token=${encodeURIComponent(token)}`;

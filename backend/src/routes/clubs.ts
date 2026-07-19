@@ -181,6 +181,16 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
   } catch (err) { handleError(err, res, next); }
 });
 
+// Flux SSE des disponibilités du club (grille Réserver en direct). Public comme
+// la route availability ci-dessus et le flux par terrain /api/resources/:id/stream.
+router.get('/:slug/availability/stream', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
+    if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
+    SSEService.getInstance().addClubClient(club.id, res);
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Auto-inscription du joueur connecté à un club (adhésion automatique, idempotente).
 router.post('/:slug/join', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

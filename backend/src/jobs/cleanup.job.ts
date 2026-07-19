@@ -33,22 +33,26 @@ export async function releaseExpiredHolds(now: Date): Promise<void> {
     data:  { status: 'CANCELLED', cancelledAt: new Date() },
   });
 
+  // Invalidation AVANT le broadcast (invariant `publishSlotChange`) : un client qui
+  // refetch en réaction à l'événement doit trouver le cache déjà purgé.
+  for (const clubId of new Set(expired.map((r) => r.resource.clubId))) {
+    invalidateClubAvailability(clubId);
+  }
+
   await Promise.all(
     expired.map(async (r) => {
       await redis.del(`lock:resource:${r.resourceId}:${r.startTime.toISOString()}`);
-      SSEService.getInstance().broadcast(r.resourceId, {
-        type:          'slot_released',
+      const event = {
+        type:          'slot_released' as const,
         resourceId:    r.resourceId,
         reservationId: r.id,
         startTime:     r.startTime.toISOString(),
         endTime:       r.endTime.toISOString(),
-      });
+      };
+      SSEService.getInstance().broadcast(r.resourceId, event);
+      SSEService.getInstance().broadcastClub(r.resource.clubId, event);
     }),
   );
-
-  for (const clubId of new Set(expired.map((r) => r.resource.clubId))) {
-    invalidateClubAvailability(clubId);
-  }
 
   console.log(`[cleanup] ${expired.length} réservation(s) PENDING expirée(s) annulées`);
 }

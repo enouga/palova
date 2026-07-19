@@ -12,6 +12,10 @@ interface DateSelectorProps {
   days?: number;
   /** dernier jour sélectionnable 'YYYY-MM-DD' (fenêtre de réservation). Optionnel. */
   maxKey?: string;
+  /** Jour « bientôt ouvert » (cadenas 🔒, cliquable) affiché APRÈS maxKey. Optionnel. */
+  lockedKey?: string;
+  /** Tap sur le jour verrouillé (affiche le compte à rebours côté parent). */
+  onSelectLocked?: () => void;
 }
 
 const WEEKDAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -40,7 +44,7 @@ function keyToDate(key: string): Date {
 /** Sélecteur de dates « bande défilante » : cellules à largeur fixe confortable,
  *  scroll-snap horizontal (swipe sur mobile, la semaine tient sur web), flèches pour
  *  défiler d'une page. Jour actif en pastille accent, point apricot = jour ouvert. */
-export default function DateSelector({ value, onChange, openDates, days = 7, maxKey }: DateSelectorProps) {
+export default function DateSelector({ value, onChange, openDates, days = 7, maxKey, lockedKey, onSelectLocked }: DateSelectorProps) {
   const { th } = useTheme();
 
   // Horloge posée en effet — hydration-safe : `today` reste null tant que le composant
@@ -59,8 +63,10 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
   const anchor = today ?? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
   const todayKey = today ? toKey(today) : null;
 
-  // Nombre de cellules : au moins `days`, étendu pour couvrir toute la fenêtre réservable.
-  const windowDays = maxKey ? Math.round((keyToDate(maxKey).getTime() - anchor.getTime()) / MS_PER_DAY) + 1 : 0;
+  // Nombre de cellules : au moins `days`, étendu pour couvrir toute la fenêtre réservable
+  // (et le jour verrouillé, s'il est plus loin que maxKey — cas normal).
+  const lastKey = lockedKey && (!maxKey || lockedKey > maxKey) ? lockedKey : maxKey;
+  const windowDays = lastKey ? Math.round((keyToDate(lastKey).getTime() - anchor.getTime()) / MS_PER_DAY) + 1 : 0;
   const count = Math.min(Math.max(days, windowDays), 90);
   const list = Array.from({ length: count }, (_, i) => addDays(anchor, i));
 
@@ -126,8 +132,9 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
           const key = toKey(d);
           const isPast = todayKey ? key < todayKey : false;
           const isSel = key === value;
+          const isLocked = lockedKey === key;
           const tooFar = maxKey ? key > maxKey : false;
-          const disabled = isPast || tooFar;
+          const disabled = isPast || (tooFar && !isLocked);
           const isOpen = !disabled && (openDates ? openDates.has(key) : true);
           const isHover = hover === key && !disabled && !isSel;
           const isToday = todayKey ? key === todayKey : false;
@@ -136,19 +143,19 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
             <button
               key={key}
               type="button"
-              onClick={() => !disabled && onChange(key)}
+              onClick={() => { if (isLocked) { onSelectLocked?.(); return; } if (!disabled) onChange(key); }}
               onMouseEnter={() => setHover(key)}
               onMouseLeave={() => setHover((h) => (h === key ? null : h))}
               disabled={disabled}
               aria-pressed={isSel}
-              aria-label={`${WEEKDAYS[d.getDay()]} ${d.getDate()}`}
+              aria-label={isLocked ? `${WEEKDAYS[d.getDay()]} ${d.getDate()} (ouvre bientôt)` : `${WEEKDAYS[d.getDay()]} ${d.getDate()}`}
               style={{
                 flexShrink: 0, width: CELL_W, scrollSnapAlign: 'start', cursor: disabled ? 'not-allowed' : 'pointer',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                 padding: '10px 0 9px', borderRadius: 14,
                 border: `1px solid ${isSel ? th.accent : isHover ? th.lineStrong : th.line}`,
                 background: isSel ? th.accent : isHover ? th.surface2 : th.surface,
-                opacity: disabled ? 0.4 : 1,
+                opacity: disabled ? 0.4 : isLocked ? 0.75 : 1,
                 transition: 'background .16s, border-color .16s, box-shadow .18s, transform .14s, filter .15s',
                 boxShadow: isSel ? (th.neon ? `0 0 0 1px ${th.accent}, 0 5px 14px ${th.accent}55` : `0 4px 12px ${th.accent}40`) : 'none',
               }}
@@ -161,11 +168,15 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
                 fontFamily: th.fontDisplay, fontSize: 19, fontWeight: 600, lineHeight: 1,
                 color: isSel ? th.onAccent : disabled ? th.textFaint : th.text,
               }}>{String(d.getDate()).padStart(2, '0')}</span>
-              <span style={{
-                width: 5, height: 5, borderRadius: '50%',
-                background: isSel ? th.onAccent : th.accentWarm,
-                opacity: isOpen ? (isSel ? 0.9 : 1) : 0, transition: 'opacity .15s',
-              }} />
+              {isLocked
+                ? <span aria-hidden style={{ fontSize: 10, lineHeight: '5px' }}>🔒</span>
+                : (
+                  <span style={{
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: isSel ? th.onAccent : th.accentWarm,
+                    opacity: isOpen ? (isSel ? 0.9 : 1) : 0, transition: 'opacity .15s',
+                  }} />
+                )}
             </button>
           );
         })}

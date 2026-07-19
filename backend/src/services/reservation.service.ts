@@ -4,7 +4,7 @@ import { weeklyOccurrences } from './recurrence';
 import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { stripe } from '../db/stripe';
-import { SSEService } from './sse.service';
+import { SSEService, SSEEvent } from './sse.service';
 import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
 import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
@@ -302,8 +302,7 @@ export class ReservationService {
         return created;
       });
 
-      invalidateClubAvailability(resource.clubId);
-      SSEService.getInstance().broadcast(resourceId, {
+      this.publishSlotChange(resource.clubId, resourceId, {
         type: 'slot_held',
         resourceId,
         reservationId: reservation.id,
@@ -661,8 +660,7 @@ export class ReservationService {
 
     await redis.del(this.lockKey(confirmed.resourceId, confirmed.startTime));
 
-    invalidateClubAvailability(reservation.resource.clubId);
-    SSEService.getInstance().broadcast(confirmed.resourceId, {
+    this.publishSlotChange(reservation.resource.clubId, confirmed.resourceId, {
       type: 'slot_confirmed',
       resourceId:    confirmed.resourceId,
       reservationId: confirmed.id,
@@ -697,6 +695,19 @@ export class ReservationService {
     if (Date.now() > deadline) throw new Error(errorCode);
   }
 
+  /**
+   * Publication d'un changement de disponibilité : purge du micro-cache PUIS
+   * émission de l'événement — par terrain (page /courts/[id]) ET par club
+   * (grille Réserver en direct). L'ordre invalidation → broadcast est un
+   * invariant : un client qui refetch en réaction doit trouver le cache frais.
+   */
+  private publishSlotChange(clubId: string, resourceId: string, event: SSEEvent): void {
+    invalidateClubAvailability(clubId);
+    const sse = SSEService.getInstance();
+    sse.broadcast(resourceId, event);
+    sse.broadcastClub(clubId, event);
+  }
+
   private async performCancel(reservation: {
     id: string; resourceId: string; startTime: Date; endTime: Date;
     resource: { clubId: string };
@@ -708,8 +719,7 @@ export class ReservationService {
 
     await redis.del(this.lockKey(reservation.resourceId, reservation.startTime));
 
-    invalidateClubAvailability(reservation.resource.clubId);
-    SSEService.getInstance().broadcast(reservation.resourceId, {
+    this.publishSlotChange(reservation.resource.clubId, reservation.resourceId, {
       type: 'slot_released',
       resourceId:    reservation.resourceId,
       reservationId: cancelled.id,
@@ -931,8 +941,7 @@ export class ReservationService {
       return reservation;
     }, { timeout: 10_000 });
 
-    invalidateClubAvailability(clubId);
-    SSEService.getInstance().broadcast(resourceId, {
+    this.publishSlotChange(clubId, resourceId, {
       type: 'slot_confirmed',
       resourceId,
       reservationId: created.id,
@@ -1005,15 +1014,14 @@ export class ReservationService {
       });
     }, { timeout: 10_000 });
 
-    invalidateClubAvailability(clubId);
-    SSEService.getInstance().broadcast(reservation.resourceId, {
+    this.publishSlotChange(clubId, reservation.resourceId, {
       type: 'slot_released',
       resourceId: reservation.resourceId,
       reservationId: updated.id,
       startTime: reservation.startTime.toISOString(),
       endTime: reservation.endTime.toISOString(),
     });
-    SSEService.getInstance().broadcast(resourceId, {
+    this.publishSlotChange(clubId, resourceId, {
       type: 'slot_confirmed',
       resourceId,
       reservationId: updated.id,
@@ -1144,7 +1152,7 @@ export class ReservationService {
 
     // SSE après commit : les vues live des autres clients se mettent à jour.
     for (const r of createdList) {
-      SSEService.getInstance().broadcast(params.resourceId, {
+      this.publishSlotChange(params.clubId, params.resourceId, {
         type: 'slot_confirmed',
         resourceId: params.resourceId,
         reservationId: r.id,
@@ -1152,7 +1160,6 @@ export class ReservationService {
         endTime: r.endUtc.toISOString(),
       });
     }
-    if (createdList.length > 0) invalidateClubAvailability(params.clubId);
 
     return { seriesId, created: createdList.length, skipped };
   }
@@ -1186,7 +1193,7 @@ export class ReservationService {
 
     for (const r of future) {
       await redis.del(this.lockKey(r.resourceId, r.startTime));
-      SSEService.getInstance().broadcast(r.resourceId, {
+      this.publishSlotChange(series.clubId, r.resourceId, {
         type: 'slot_released',
         resourceId: r.resourceId,
         reservationId: r.id,
@@ -1194,7 +1201,6 @@ export class ReservationService {
         endTime: r.endTime.toISOString(),
       });
     }
-    if (future.length > 0) invalidateClubAvailability(series.clubId);
 
     return { cancelled: future.length };
   }

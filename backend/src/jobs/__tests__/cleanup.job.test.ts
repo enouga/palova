@@ -16,8 +16,9 @@ jest.mock('../../services/match.service', () => ({
 jest.mock('node-cron', () => ({ schedule: jest.fn() }));
 
 const mockBroadcast = jest.fn();
+const mockBroadcastClub = jest.fn();
 jest.mock('../../services/sse.service', () => ({
-  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast })) },
+  SSEService: { getInstance: jest.fn(() => ({ broadcast: mockBroadcast, broadcastClub: mockBroadcastClub })) },
 }));
 
 const mockInvalidateAvailability = jest.fn();
@@ -49,6 +50,8 @@ describe('releaseExpiredHolds', () => {
     expect(redisMock.del).toHaveBeenCalledTimes(2);
     expect(mockBroadcast).toHaveBeenCalledWith('res1', expect.objectContaining({ type: 'slot_released', reservationId: 'r1' }));
     expect(mockBroadcast).toHaveBeenCalledWith('res2', expect.objectContaining({ type: 'slot_released', reservationId: 'r2' }));
+    expect(mockBroadcastClub).toHaveBeenCalledWith('club-a', expect.objectContaining({ type: 'slot_released', reservationId: 'r1' }));
+    expect(mockBroadcastClub).toHaveBeenCalledWith('club-a', expect.objectContaining({ type: 'slot_released', reservationId: 'r2' }));
     // Les deux holds sont dans le même club → UNE purge (clubs dédupliqués).
     expect(mockInvalidateAvailability).toHaveBeenCalledTimes(1);
     expect(mockInvalidateAvailability).toHaveBeenCalledWith('club-a');
