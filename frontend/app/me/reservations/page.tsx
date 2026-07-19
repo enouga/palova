@@ -40,7 +40,7 @@ export default function MyReservationsPage() {
   const { slug, club } = useClub();
   const levelEnabled = club?.levelSystemEnabled !== false;
   // Sur un sous-domaine club, réserver dans CE club (même host) ; sur la plateforme, l'annuaire.
-  const reserveHref = slug ? '/reserver' : '/clubs';
+  const reserveHref = slug ? '/reserver' : '/decouvrir?tab=clubs';
   const [items, setItems]     = useState<MyReservation[]>([]);
   const [regs, setRegs]       = useState<MyTournamentRegistration[]>([]);
   const [evts, setEvts]       = useState<MyEventRegistration[]>([]);
