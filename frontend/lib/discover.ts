@@ -38,10 +38,13 @@ export function discoverWindow(period: DiscoverPeriod, now: Date): { from: Date;
   return { from: sat, to: new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999) };
 }
 
-/** Fourchette de niveau autour du niveau du joueur (arrondi ±1), pour le filtre « à mon niveau ». */
+/**
+ * Fourchette de niveau autour du niveau du joueur (arrondi ±1), clampée [1,8] (bornes du
+ * système de niveau — miroir du clamp de `OpenMatches.tsx`), pour le filtre « à mon niveau ».
+ */
 function myLevelWindow(myLevel: number): [number, number] {
   const center = Math.round(myLevel);
-  return [center - 1, center + 1];
+  return [Math.max(1, center - 1), Math.min(8, center + 1)];
 }
 
 /**

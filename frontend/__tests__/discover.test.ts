@@ -129,6 +129,11 @@ describe('filterNationalMatches — niveau', () => {
     const m = makeMatch({ targetLevelMin: 1, targetLevelMax: 2 });
     expect(filterNationalMatches([m], { ...base, myLevel: null }, NOW)).toEqual([m]);
   });
+
+  it('myLevel 8 → fourchette clampée [7,8] (pas [7,9], niveau max = 8) : exclut une partie 9–9', () => {
+    const m = makeMatch({ targetLevelMin: 9, targetLevelMax: 9 });
+    expect(filterNationalMatches([m], { ...base, myLevel: 8 }, NOW)).toEqual([]);
+  });
 });
 
 describe('sortMatchesByDistance', () => {
