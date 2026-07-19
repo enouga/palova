@@ -51,6 +51,6 @@ export async function finishAuth(auth: AuthResponse, slug: string | null, router
     const managed = memberships[0];
     setSession(auth.token, managed?.clubId ?? null);
     if (managed) goToClubAdmin(managed.slug, auth.token, managed.clubId);
-    else router.push('/clubs');
+    else router.push('/'); // joueur (pas staff) → accueil plateforme personnalisé (« Vos clubs » + annuaire)
   }
 }

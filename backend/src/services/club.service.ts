@@ -238,16 +238,18 @@ export class ClubService {
     );
   }
 
-  /** Annuaire public : clubs actifs. `city` matche ville OU région ; `lat`/`lng` trient par distance. */
-  async listClubs(filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number }) {
+  /** Annuaire public : clubs actifs. `city` matche ville, région OU nom de département ; `dept` filtre par codes département ; `lat`/`lng` trient par distance. */
+  async listClubs(filters: { sport?: string; city?: string; q?: string; region?: string; lat?: number; lng?: number; dept?: string[] }) {
     const where: Prisma.ClubWhereInput = { status: 'ACTIVE', listedInDirectory: true };
     if (filters.q)    where.name = { contains: filters.q, mode: 'insensitive' };
     if (filters.city) where.OR = [
-      { city:   { contains: filters.city, mode: 'insensitive' } },
-      { region: { contains: filters.city, mode: 'insensitive' } },
+      { city:       { contains: filters.city, mode: 'insensitive' } },
+      { region:     { contains: filters.city, mode: 'insensitive' } },
+      { department: { contains: filters.city, mode: 'insensitive' } },
     ];
     if (filters.region) where.region = { equals: filters.region, mode: 'insensitive' };
     if (filters.sport)  where.clubSports = { some: { sport: { key: filters.sport } } };
+    if (filters.dept?.length) where.departmentCode = { in: filters.dept };
 
     const clubs = await prisma.club.findMany({
       where,

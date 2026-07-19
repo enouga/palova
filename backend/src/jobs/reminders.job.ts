@@ -1,6 +1,13 @@
 import cron from 'node-cron';
 import { prisma } from '../db/prisma';
-import { notifyReservationReminder, notifyMatchResultPrompt } from '../email/notifications';
+import {
+  notifyReservationReminder,
+  notifyMatchResultPrompt,
+  notifyTournamentDeadlineReminder,
+  notifyEventDeadlineReminder,
+  notifyTournamentUpcomingReminder,
+  notifyEventUpcomingReminder,
+} from '../email/notifications';
 
 // Idempotency by design: each reservation falls into a window's narrow [lead−period, lead] slice
 // for exactly one 15-min job run, so it's reminded once per window.
@@ -19,6 +26,10 @@ export const REMINDER_WINDOWS = [
 ];
 export const REMINDER_PERIOD_MIN = 15;
 
+// Rappel de clôture d'inscription (tournoi/event) : une seule fenêtre J-1, découplée de
+// REMINDER_WINDOWS (qui ne concerne que le jour J) pour pouvoir évoluer indépendamment.
+export const DEADLINE_REMINDER_LEAD_MIN = 1440;
+
 // Invitation à saisir le résultat : lead 15 min après la fin du match (le temps de sortir
 // du terrain). Tranche = [now − (lead + période), now − lead] = [-30min, -15min].
 export const RESULT_PROMPT_LEAD_MIN = 15;
@@ -36,6 +47,62 @@ export async function runReminders(now: Date): Promise<void> {
         await notifyReservationReminder(r.id, w.key);
       } catch (e) {
         console.error('[reminders]', (e as Error).message);
+      }
+    }
+  }
+
+  // Rappel clôture d'inscription (tournoi/event) — fenêtre unique J-1.
+  {
+    const from = new Date(now.getTime() + (DEADLINE_REMINDER_LEAD_MIN - REMINDER_PERIOD_MIN) * 60000);
+    const to = new Date(now.getTime() + DEADLINE_REMINDER_LEAD_MIN * 60000);
+    const tournaments = await prisma.tournament.findMany({
+      where: { status: 'PUBLISHED', registrationDeadline: { gt: from, lte: to } },
+      select: { id: true },
+    });
+    for (const t of tournaments) {
+      try {
+        await notifyTournamentDeadlineReminder(t.id);
+      } catch (e) {
+        console.error('[reminders:tournament-deadline]', (e as Error).message);
+      }
+    }
+    const deadlineEvents = await prisma.clubEvent.findMany({
+      where: { status: 'PUBLISHED', registrationDeadline: { gt: from, lte: to } },
+      select: { id: true },
+    });
+    for (const ev of deadlineEvents) {
+      try {
+        await notifyEventDeadlineReminder(ev.id);
+      } catch (e) {
+        console.error('[reminders:event-deadline]', (e as Error).message);
+      }
+    }
+  }
+
+  // Rappel jour J (tournoi/event) — mêmes fenêtres J-1/H-2 que les réservations.
+  for (const w of REMINDER_WINDOWS) {
+    const from = new Date(now.getTime() + (w.leadMin - REMINDER_PERIOD_MIN) * 60000);
+    const to = new Date(now.getTime() + w.leadMin * 60000);
+    const tournaments = await prisma.tournament.findMany({
+      where: { status: 'PUBLISHED', startTime: { gt: from, lte: to } },
+      select: { id: true },
+    });
+    for (const t of tournaments) {
+      try {
+        await notifyTournamentUpcomingReminder(t.id, w.key);
+      } catch (e) {
+        console.error('[reminders:tournament-upcoming]', (e as Error).message);
+      }
+    }
+    const upcomingEvents = await prisma.clubEvent.findMany({
+      where: { status: 'PUBLISHED', startTime: { gt: from, lte: to } },
+      select: { id: true },
+    });
+    for (const ev of upcomingEvents) {
+      try {
+        await notifyEventUpcomingReminder(ev.id, w.key);
+      } catch (e) {
+        console.error('[reminders:event-upcoming]', (e as Error).message);
       }
     }
   }

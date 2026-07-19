@@ -29,7 +29,7 @@ const NATIONAL_INCLUDE = {
     select: {
       id: true, name: true, attributes: true, clubId: true,
       clubSport: { select: { sport: { select: { key: true, name: true } } } },
-      club: { select: { slug: true, name: true, city: true, timezone: true, accentColor: true, logoUrl: true } },
+      club: { select: { slug: true, name: true, city: true, timezone: true, accentColor: true, logoUrl: true, latitude: true, longitude: true, department: true, departmentCode: true } },
     },
   },
   participants: {
@@ -180,14 +180,15 @@ export class OpenMatchService {
   }
 
   /**
-   * Agrégat public de la vitrine palova.fr : parties ouvertes padel à venir (7 jours)
+   * Agrégat public de la vitrine palova.fr : parties ouvertes padel à venir (14 jours)
    * des clubs ACTIVE listés dans l'annuaire, jamais pleines (la vitrine vend des places
    * à prendre). Miroir du calendrier national des tournois — la projection `club`
-   * (slug/timezone/couleur) permet le lien cross-sous-domaine et la date au bon fuseau.
+   * (slug/timezone/couleur/lat/lng) permet le lien cross-sous-domaine, la date au bon
+   * fuseau et le tri/filtre par distance côté page /decouvrir.
    */
   async listNationalOpenMatches() {
     const now = new Date();
-    const horizon = new Date(now.getTime() + 7 * 24 * 3_600_000);
+    const horizon = new Date(now.getTime() + 14 * 24 * 3_600_000);
     const matches = await prisma.reservation.findMany({
       where: {
         visibility: 'PUBLIC',
@@ -196,7 +197,7 @@ export class OpenMatchService {
         resource: { club: { status: 'ACTIVE', listedInDirectory: true }, clubSport: { sport: { key: 'padel' } } },
       },
       orderBy: { startTime: 'asc' },
-      take: 40,
+      take: 120,
       include: NATIONAL_INCLUDE,
     });
 
@@ -229,7 +230,7 @@ export class OpenMatchService {
         };
       })
       .filter((m) => m.spotsLeft > 0)
-      .slice(0, 12);
+      .slice(0, 60);
   }
 
   /** Lecture d'UNE partie ouverte (page /parties/[id]) — publique, autorise les parties passées. */

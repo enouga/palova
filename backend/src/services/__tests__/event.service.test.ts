@@ -735,3 +735,73 @@ describe('EventService.cancelRegistration — remboursement', () => {
     expect(refundSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('EventService.adminRemoveRegistration — remboursement', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('retrait admin d une inscription PAID → RefundService.refund appelé (motif club) + REFUNDED', async () => {
+    prismaMock.eventRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED' } as any) // findClubRegistration
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'PAID' } as any); // dans la tx
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ requirePrepayment: true } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    // 3e appel findFirst (recherche de promotion dans cancelAndPromoteTx) → undefined = pas de promu.
+    prismaMock.payment.findFirst.mockResolvedValue({ id: 'pay1', amount: 8 } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'rf1' } as any);
+
+    await new EventService().adminRemoveRegistration('e1', 'r1', 'club-demo');
+
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay1', clubId: 'club-demo', amount: 8, reason: 'Retrait par le club' }));
+  });
+
+  it('retrait admin d une inscription non payée → pas de remboursement', async () => {
+    prismaMock.eventRegistration.findFirst
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED' } as any)
+      .mockResolvedValueOnce({ id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE' } as any);
+    prismaMock.clubEvent.findUnique.mockResolvedValue({ requirePrepayment: false } as any);
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({ id: 'r1', status: 'CANCELLED' } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund');
+
+    await new EventService().adminRemoveRegistration('e1', 'r1', 'club-demo');
+
+    expect(refundSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventService.updateEvent — remboursement à l annulation', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('annulation de l event par le club → rembourse chaque inscription PAID (motif club)', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: 8, requirePrepayment: true } as any);
+    prismaMock.club.findUnique.mockResolvedValue({ stripeAccountStatus: 'ACTIVE' } as any); // assertPrepaymentAllowed
+    prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1', status: 'CANCELLED' } as any);
+    prismaMock.eventRegistration.findMany.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }] as any);
+    prismaMock.payment.findFirst
+      .mockResolvedValueOnce({ id: 'pay1', amount: 8 } as any)
+      .mockResolvedValueOnce({ id: 'pay2', amount: 8 } as any);
+    prismaMock.eventRegistration.update.mockResolvedValue({} as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund').mockResolvedValue({ id: 'rf' } as any);
+
+    await new EventService().updateEvent('e1', 'club-demo', { status: 'CANCELLED' });
+
+    expect(refundSpy).toHaveBeenCalledTimes(2);
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay1', clubId: 'club-demo', amount: 8, reason: 'Annulation par le club' }));
+    expect(refundSpy).toHaveBeenCalledWith(expect.objectContaining({ paymentId: 'pay2', amount: 8, reason: 'Annulation par le club' }));
+  });
+
+  it('mise à jour SANS transition vers CANCELLED → aucun remboursement', async () => {
+    prismaMock.clubEvent.findFirst.mockResolvedValue({ id: 'e1', status: 'PUBLISHED', price: 8, requirePrepayment: false } as any);
+    prismaMock.clubEvent.update.mockResolvedValue({ id: 'e1', status: 'PUBLISHED' } as any);
+    const refundSpy = jest.spyOn(RefundService.prototype, 'refund');
+
+    await new EventService().updateEvent('e1', 'club-demo', { name: 'Nouveau nom' });
+
+    expect(refundSpy).not.toHaveBeenCalled();
+  });
+});

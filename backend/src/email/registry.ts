@@ -564,6 +564,63 @@ export const EMAIL_DEFS: Record<string, EmailDef> = {
     },
     infoRows: (v) => [row('Terrain', v.terrain), row('Date', v.date), row('Club', v.club), row('Débité', v.montant)],
   },
+
+  'registration.deadline_reminder': {
+    type: 'registration.deadline_reminder', group: 'inscriptions',
+    title: "Rappel — clôture des inscriptions",
+    description: "Aux inscrits confirmés, la veille de la date limite d'inscription (changer de coéquipier, annuler).",
+    hasCta: true,
+    vars: [
+      { key: 'prenom', label: 'Prénom du destinataire', sample: 'Marie' },
+      { key: 'activite', label: "Nom de l'activité", sample: 'Tournoi P100 du dimanche' },
+      { key: 'ref_activite', label: "Référence (le tournoi / l'événement)", sample: 'le tournoi' },
+      { key: 'club', label: 'Nom du club', sample: 'Padel Arena Paris' },
+      { key: 'date_limite', label: "Date limite d'inscription", sample: 'mardi 30 juin 2026 à 23h59' },
+      { key: 'coequipier', label: 'Coéquipier (tournoi, sinon vide)', sample: 'Lucas Martin' },
+      { key: 'phrase_coequipier', label: 'Phrase coéquipier (auto)', sample: ' Vous êtes inscrit·e en binôme avec Lucas Martin.' },
+      { key: 'lien', label: "Lien vers l'activité", sample: 'https://club.palova.fr/tournois/1' },
+    ],
+    defaults: {
+      subject: 'Dernier délai pour {{activite}}',
+      heading: '⏰ La clôture des inscriptions approche',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p>La date limite pour modifier ton inscription (changer de coéquipier, annuler) à <strong>{{activite}}</strong> est <strong>demain, le {{date_limite}}</strong>.{{phrase_coequipier}}</p>',
+      ctaLabel: 'Voir {{ref_activite}}',
+    },
+    infoRows: (v) => [
+      row('Date limite', v.date_limite),
+      row('Club', v.club),
+      ...(v.coequipier ? [row('Coéquipier', v.coequipier)] : []),
+    ],
+  },
+
+  'registration.upcoming_reminder': {
+    type: 'registration.upcoming_reminder', group: 'inscriptions',
+    title: 'Rappel — jour J',
+    description: "Aux inscrits confirmés, la veille (J-1) et 2h avant (H-2) le début de l'activité.",
+    hasCta: true,
+    vars: [
+      { key: 'prenom', label: 'Prénom du destinataire', sample: 'Marie' },
+      { key: 'activite', label: "Nom de l'activité", sample: 'Tournoi P100 du dimanche' },
+      { key: 'ref_activite', label: "Référence (le tournoi / l'événement)", sample: 'le tournoi' },
+      { key: 'club', label: 'Nom du club', sample: 'Padel Arena Paris' },
+      { key: 'date', label: 'Date et heure de début', sample: 'dimanche 6 juillet 2026 à 14h00' },
+      { key: 'delai', label: 'Délai avant le début (auto)', sample: 'demain' },
+      { key: 'coequipier', label: 'Coéquipier (tournoi, sinon vide)', sample: 'Lucas Martin' },
+      { key: 'phrase_coequipier', label: 'Phrase coéquipier (auto)', sample: ' Vous êtes inscrit·e en binôme avec Lucas Martin.' },
+      { key: 'lien', label: "Lien vers l'activité", sample: 'https://club.palova.fr/tournois/1' },
+    ],
+    defaults: {
+      subject: '{{activite}}, c\'est {{delai}} !',
+      heading: '🎾 Rappel',
+      bodyHtml: '<p>Bonjour {{prenom}},</p><p><strong>{{activite}}</strong>, c’est {{delai}} — rendez-vous le {{date}}.{{phrase_coequipier}}</p>',
+      ctaLabel: 'Voir {{ref_activite}}',
+    },
+    infoRows: (v) => [
+      row('Date', v.date),
+      row('Club', v.club),
+      ...(v.coequipier ? [row('Coéquipier', v.coequipier)] : []),
+    ],
+  },
 };
 
 /** Surcharge club minimale (sous-ensemble du modèle ClubEmailTemplate). */

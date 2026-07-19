@@ -266,13 +266,13 @@ export class TournamentService {
     }
   }
 
-  /** Remboursement best-effort (avant clôture) ; ne fait jamais échouer la désinscription. */
-  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string): Promise<void> {
+  /** Remboursement best-effort ; ne fait jamais échouer l'annulation. Motif traçable. */
+  private async safeRefund(info: { paymentId: string; amount: number; regId: string }, clubId: string, reason = 'Désinscription avant clôture'): Promise<void> {
     try {
-      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason: 'Désinscription avant clôture' });
+      await new RefundService().refund({ paymentId: info.paymentId, clubId, amount: info.amount, reason });
       await prisma.tournamentRegistration.update({ where: { id: info.regId }, data: { paymentStatus: 'REFUNDED' } });
     } catch (err) {
-      console.error('[refund] désinscription tournoi : remboursement échoué', err);
+      console.error('[refund] remboursement tournoi échoué', err);
     }
   }
 
@@ -558,6 +558,9 @@ export class TournamentService {
     const updated = await prisma.tournament.update({ where: { id: tournamentId }, data });
     if (input.status === 'CANCELLED' && found.status !== 'CANCELLED') {
       await this.safeNotify(() => notify.notifyActivityCancelledByClub('tournament', tournamentId));
+      // Rembourse les inscrits payés en ligne APRÈS la notif (la notif cible les regs par
+      // status, pas paymentStatus — aucune interférence). Best-effort, jamais bloquant.
+      await this.refundAllPaidRegistrations(tournamentId, clubId, 'Annulation par le club');
     }
     return updated;
   }
@@ -593,18 +596,36 @@ export class TournamentService {
     return promoted;
   }
 
+  /** Rembourse (best-effort) toutes les inscriptions payées en ligne d'un tournoi — utilisé quand le club annule l'épreuve entière. */
+  private async refundAllPaidRegistrations(tournamentId: string, clubId: string, reason: string): Promise<void> {
+    const paid = await prisma.tournamentRegistration.findMany({
+      where: { tournamentId, status: { not: 'CANCELLED' }, paymentStatus: 'PAID' },
+      select: { id: true },
+    });
+    for (const reg of paid) {
+      const pay = await prisma.payment.findFirst({ where: { tournamentRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+      if (pay) await this.safeRefund({ paymentId: pay.id, amount: Number(pay.amount), regId: reg.id }, clubId, reason);
+    }
+  }
+
   /** Désinscription manuelle par le club (promeut le 1er en attente si c'était un CONFIRMED). */
   async adminRemoveRegistration(tournamentId: string, regId: string, clubId: string) {
     await this.findClubRegistration(tournamentId, regId, clubId); // vérifie l'appartenance au club
     const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { requirePrepayment: true } });
-    const { cancelled, promotedRegistrationId } = await serializableTx(async (tx) => {
+    const { cancelled, promotedRegistrationId, refundInfo } = await serializableTx(async (tx) => {
       await tx.$queryRaw`SELECT id FROM tournaments WHERE id = ${tournamentId} FOR UPDATE`;
       const reg = await tx.tournamentRegistration.findFirst({
         where: { id: regId, status: { not: 'CANCELLED' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, paymentStatus: true },
       });
       if (!reg) throw new Error('REGISTRATION_NOT_FOUND');
-      return this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
+      const res = await this.cancelAndPromoteTx(tx, tournamentId, regId, reg.status === 'CONFIRMED', t?.requirePrepayment ?? false);
+      let refundInfo: { paymentId: string; amount: number; regId: string } | null = null;
+      if (reg.paymentStatus === 'PAID') {
+        const pay = await tx.payment.findFirst({ where: { tournamentRegistrationId: reg.id, method: 'ONLINE' }, select: { id: true, amount: true } });
+        if (pay) refundInfo = { paymentId: pay.id, amount: Number(pay.amount), regId: reg.id };
+      }
+      return { ...res, refundInfo };
     }, { timeout: 10_000 });
 
     if (promotedRegistrationId && t?.requirePrepayment) {
@@ -614,6 +635,8 @@ export class TournamentService {
     } else {
       await this.notifyCancellation(cancelled.id, promotedRegistrationId);
     }
+    // Remboursement best-effort du binôme retiré (post-commit, seulement si paiement ONLINE trouvé).
+    if (refundInfo) await this.safeRefund(refundInfo, clubId, 'Retrait par le club');
     return cancelled;
   }
 

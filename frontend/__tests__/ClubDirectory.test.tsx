@@ -116,3 +116,75 @@ it('fait tourner la banque de couvertures → cartes voisines distinctes', async
   const covers = screen.getAllByTestId('club-card').map((el) => el.getAttribute('data-cover'));
   expect(new Set(covers).size).toBe(3); // 3 cartes → 3 couvertures distinctes (rotation)
 });
+
+it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et masque ville + géoloc', async () => {
+  authToken = null; // simplifie : pas de filtre sport asynchrone en plus
+  render(
+    <ThemeProvider>
+      <ClubDirectory city="Lyon" coords={{ lat: 45.75, lng: 4.85 }} />
+    </ThemeProvider>,
+  );
+
+  await waitFor(() =>
+    expect(listClubs).toHaveBeenCalledWith(
+      expect.objectContaining({ city: 'Lyon', lat: 45.75, lng: 4.85 }),
+    ),
+  );
+
+  expect(screen.queryByPlaceholderText('Ville ou région')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /autour de moi/i })).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText('Nom du club')).toBeInTheDocument();
+});
+
+it('mode contrôlé : un changement de la prop city relance listClubs avec la nouvelle valeur', async () => {
+  authToken = null;
+  const { rerender } = render(
+    <ThemeProvider><ClubDirectory city="Lyon" /></ThemeProvider>,
+  );
+  await waitFor(() =>
+    expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ city: 'Lyon' })),
+  );
+
+  rerender(
+    <ThemeProvider><ClubDirectory city="Marseille" /></ThemeProvider>,
+  );
+  await waitFor(() =>
+    expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ city: 'Marseille' })),
+  );
+});
+
+const clubFixture = {
+  id: 'c1', slug: 'club-1', name: 'Padel Club 1', city: 'Paris', description: null,
+  accentColor: '#123456', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1,
+};
+
+it('prop deptCodes → listClubs reçoit dept', async () => {
+  authToken = null;
+  render(<ThemeProvider><ClubDirectory deptCodes={['2A', '2B']} /></ThemeProvider>);
+  await waitFor(() => expect(listClubs).toHaveBeenCalledWith(expect.objectContaining({ dept: ['2A', '2B'] })));
+});
+
+it('onCount reçoit le nombre de clubs affichés', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture]);
+  const onCount = jest.fn();
+  render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
+  await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
+});
+
+it('deptCodes vide (tableau explicite) → listClubs ne reçoit pas de clé dept', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture]);
+  render(<ThemeProvider><ClubDirectory deptCodes={[]} /></ThemeProvider>);
+  await waitFor(() => expect(listClubs).toHaveBeenCalled());
+  const calls = listClubs.mock.calls as [Record<string, unknown>][];
+  calls.forEach((args) => expect(args[0]).not.toHaveProperty('dept'));
+});
+
+it('onCount reçoit 0 quand listClubs échoue', async () => {
+  authToken = null;
+  listClubs.mockRejectedValue(new Error('network'));
+  const onCount = jest.fn();
+  render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
+  await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(0));
+});

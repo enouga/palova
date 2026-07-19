@@ -38,6 +38,10 @@ describe('isPublicPath', () => {
   it('rend /club public (présentation du club visible sans login)', () => {
     expect(isPublicPath('/club')).toBe(true);
   });
+
+  it('ne rend PAS /decouvrir public ici (référencée explicitement par hôte, pas dans PUBLIC_PATHS)', () => {
+    expect(isPublicPath('/decouvrir')).toBe(false);
+  });
 });
 
 describe('isPlatformPublicPath', () => {
@@ -61,6 +65,10 @@ describe('isPlatformPublicPath', () => {
 
   it('/tournois/abc (fiche) n\'est PAS forcé public par cette règle (vit sur l\'hôte club)', () => {
     expect(isPlatformPublicPath('/tournois/abc')).toBe(false);
+  });
+
+  it('/decouvrir est public sur l\'hôte plateforme (la page y vit réellement)', () => {
+    expect(isPlatformPublicPath('/decouvrir')).toBe(true);
   });
 
   it('n\'altère pas isPublicPath : `/` n\'y est pas (la racine club passe par isClubPublicPath)', () => {
@@ -90,5 +98,9 @@ describe('isClubPublicPath', () => {
     expect(isClubPublicPath('/tournois/abc123')).toBe(true);
     expect(isClubPublicPath('/events')).toBe(true);
     expect(isClubPublicPath('/events/xyz789')).toBe(true);
+  });
+
+  it('/decouvrir est public sur un hôte club (la page s\'y renvoie elle-même vers la plateforme)', () => {
+    expect(isClubPublicPath('/decouvrir')).toBe(true);
   });
 });

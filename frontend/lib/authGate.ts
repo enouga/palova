@@ -15,7 +15,8 @@ export function isPublicPath(pathname: string): boolean {
  * marketing, en plus des pages publiques communes). N'affecte PAS les sous-domaines club. */
 export function isPlatformPublicPath(pathname: string): boolean {
   // `/` = vitrine, `/tournois` = calendrier national public (la fiche /tournois/[id] vit sur l'hôte club).
-  return pathname === '/' || pathname === '/tournois' || isPublicPath(pathname);
+  // `/decouvrir` = la page vit réellement ici, sur l'hôte plateforme.
+  return pathname === '/' || pathname === '/tournois' || pathname === '/decouvrir' || isPublicPath(pathname);
 }
 
 /** true si le chemin est accessible sans login sur un HÔTE CLUB : la racine `/` est le
@@ -25,8 +26,12 @@ export function isClubPublicPath(pathname: string): boolean {
   // La racine = Club-house (vitrine publique). Les fiches tournoi/event et leurs listes sont
   // liées depuis cette vitrine et conçues pour l'anonyme (CTA « Se connecter pour s'inscrire ») :
   // sans ça, un visiteur qui clique un event « à la une » tombait sur /login (cul-de-sac).
+  // `/decouvrir` n'a rien à faire sur un hôte club — la page se renvoie elle-même vers la
+  // plateforme dès son montage — mais cette redirection doit pouvoir s'exécuter sans passer
+  // par /login d'abord, donc elle doit rester publique ici aussi.
   return pathname === '/'
     || pathname === '/tournois' || pathname.startsWith('/tournois/')
     || pathname === '/events' || pathname.startsWith('/events/')
+    || pathname === '/decouvrir'
     || isPublicPath(pathname);
 }

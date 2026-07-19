@@ -88,7 +88,7 @@ describe('EMAIL_DEFS', () => {
   const entries = Object.entries(EMAIL_DEFS);
 
   it('contient 20 définitions et la clé == type', () => {
-    expect(entries).toHaveLength(20);
+    expect(entries).toHaveLength(22);
     for (const [key, def] of entries) expect(def.type).toBe(key);
   });
 
@@ -263,5 +263,33 @@ describe("email open_match.alert", () => {
     const mail = renderClubEmail('open_match.alert', sampleVars(def), brand);
     expect(mail.subject).toContain('alerte');
     expect(mail.html).toContain(sampleVars(def).terrain);
+  });
+});
+
+describe('renderClubEmail — rappels tournoi/event', () => {
+  it('registration.deadline_reminder utilise les défauts', () => {
+    const mail = renderClubEmail('registration.deadline_reminder', {
+      prenom: 'Marie', activite: 'Tournoi P100', ref_activite: 'le tournoi',
+      club: 'Padel Arena', date_limite: 'mardi 30 juin 2026 à 23h59',
+      coequipier: '', phrase_coequipier: '', lien: 'https://x.fr/t/1',
+    }, brand, null);
+    expect(mail.subject).toBe('Dernier délai pour Tournoi P100');
+    expect(mail.html).toContain('La clôture des inscriptions approche');
+    expect(mail.html).toContain('mardi 30 juin 2026 à 23h59');
+  });
+
+  it('registration.upcoming_reminder distingue J-1 (demain) et H-2 (dans 2 heures) via la variable delai', () => {
+    const base = {
+      prenom: 'Marie', activite: 'Tournoi P100', ref_activite: 'le tournoi',
+      club: 'Padel Arena', date: 'dim. 6 juil. 14h00',
+      coequipier: '', phrase_coequipier: '', lien: 'https://x.fr/t/1',
+    };
+    const j1 = renderClubEmail('registration.upcoming_reminder', { ...base, delai: 'demain' }, brand, null);
+    expect(j1.subject).toBe('Tournoi P100, c\'est demain !');
+    expect(j1.html).toContain('c’est demain');
+
+    const h2 = renderClubEmail('registration.upcoming_reminder', { ...base, delai: 'dans 2 heures' }, brand, null);
+    expect(h2.subject).toBe('Tournoi P100, c\'est dans 2 heures !');
+    expect(h2.html).toContain('c’est dans 2 heures');
   });
 });

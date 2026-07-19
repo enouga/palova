@@ -192,3 +192,84 @@ Types front (`lib/api.ts`) : `NationalOpenMatchClub` gagne `latitude`/`longitude
 - Rayon de recherche configurable, carte interactive.
 - Section « Vos clubs » sur `/decouvrir` (elle vit sur `/`, l'accueil connecté).
 - Notifications/alertes cross-clubs (les alertes de parties restent club-scopées).
+
+---
+
+## Révision v2 (2026-07-19) — page unique sans onglets + recherche code postal/département
+
+Décision d'Eric après avoir vu la v1 implémentée : **les onglets ne conviennent pas** — tout doit
+vivre sur **une seule page**. Trois pistes comparées dans le companion visuel (A sections empilées
++ ancres collantes / B aperçus + « Tout afficher » / C moteur de recherche unifié) — **A retenue**.
+Deuxième demande : la recherche de localisation doit accepter **le code postal et le département**,
+pas seulement la ville. Cette révision **remplace la section « Onglets » du §2** ; tout le reste de
+la spec (points d'entrée §1, backend §3 — complété ci-dessous, composants §4, tests §5) reste
+acquis, la v1 étant déjà implémentée sur la branche `feat/page-decouvrir` (les composants
+construits sont réutilisés, seule l'orchestration de la page change).
+
+### Structure de la page (remplace « Onglets »)
+
+- **Un seul scroll**, trois sections empilées dans cet ordre : **« Ça joue bientôt » (parties)**
+  → **« Tournois »** → **« Clubs »**. Chaque section a un intitulé avec **compteur** d'items
+  (après filtre de localisation).
+- **Rangée d'ancres collante** (sticky sous la barre de recherche) : `Parties N · Tournois N ·
+  Clubs N` — un clic **scrolle en douceur** vers la section (ce n'est PAS des onglets : les trois
+  sections restent rendues et visibles). État actif par **scroll-spy** (`IntersectionObserver`,
+  déjà stubé dans `jest.setup.ts` — le pattern existait dans l'ex-`ProfileSectionNav`).
+- **Section Parties** = le `DiscoverMatches` existant tel quel (chips période + « À mon niveau »,
+  grille `NationalMatchCard` avec distance).
+- **Section Tournois** = le `TournamentFinder` existant embarqué (`hideTitle`, coords, filtre de
+  localisation) avec ses facettes complètes.
+- **Section Clubs** = le `ClubDirectory` contrôlé existant (nom + chips sport internes).
+- **Deep-links** : les redirections passent de `?tab=` aux **ancres de hash** — `/clubs` →
+  `/decouvrir#clubs`, `/tournois` → `/decouvrir#tournois` ; au chargement, la page scrolle vers la
+  section du hash **après le rendu des données** (le scroll natif du navigateur arriverait avant).
+  `?tab=` n'est plus lu (les seuls producteurs étaient nos propres redirections, mises à jour en
+  même temps) ; le `writeUrl` du TournamentFinder continue de préserver les params étrangers
+  (inoffensif désormais, on le garde). Le hash est laissé intact par `replaceState`.
+
+### Recherche de localisation unifiée (ville, code postal ou département)
+
+- Le champ unique de la barre partagée devient **« Ville, code postal ou département »**.
+  Helper pur **`parseLocationQuery(q)`** (dans `lib/discover.ts`) :
+  - `^\d{5}$` (code postal) → **réduit au département** : `deptCode` = 2 premiers chiffres
+    (DOM `97x` → 3 chiffres ; `20xxx` (Corse) → matche `2A` ET `2B`) — un CP exact cherche donc
+    « dans mon département », comportement assumé v1 ;
+  - `^\d{2,3}$` ou `2a`/`2b` → `deptCode` direct ;
+  - sinon → recherche par **nom de ville** (insensible accents/casse via `norm()`), et à défaut
+    par **nom de département** (« gironde ») quand la donnée est disponible.
+  - Retour : `{ city: string | null, deptCode: string | null }` (exclusifs).
+- **Application aux 3 sections** :
+  - **Parties** : filtre client — nécessite d'ajouter **`department`/`departmentCode`** à la
+    projection club de `listNationalOpenMatches` (additif backend, symétrique du calendrier des
+    tournois) + les 2 champs dans `NationalOpenMatchClub` (front).
+  - **Tournois** : filtre client — `club.department`/`departmentCode` déjà dans le payload ;
+    le `TournamentFinder` gagne une prop optionnelle **`deptCode?: string`** (cumulable avec sa
+    facette Département, même mécanique que la prop `city` existante, appliquée avant les
+    facettes).
+  - **Clubs** : l'annuaire est filtré serveur — **`GET /api/clubs` (listClubs) gagne un param
+    additif `dept`** (matche `Club.departmentCode`) ; `ClubDirectory` gagne une prop
+    **`deptCode?: string`** transmise au fetch. Le param `city` existant ne change pas.
+- La géoloc (📍 Autour de moi) est **inchangée** et cumulable (tri par distance).
+
+### Ce qui est conservé tel quel de la v1
+
+Backend §3 (fenêtre 14 j/cap 60/lat-lng), `lib/discover.ts` (+ `parseLocationQuery`),
+`NationalMatchCard`, `DiscoverMatches`, les props embeddable du `TournamentFinder` et de
+`ClubDirectory` (+ `deptCode`), authGate (2 hôtes), icône ClubNav, entrée ProfileMenu, cible du
+Logotype, redirections (cibles ajustées en `#hash`). Seule `app/decouvrir/page.tsx` est réécrite
+(sections + ancres + scroll-spy au lieu du montage exclusif par onglet) — conséquence assumée :
+**les 3 sections fetchent toutes dès l'arrivée** (plus de montage paresseux du Finder/annuaire),
+acceptable (3 requêtes publiques légères, cache navigateur).
+
+### Tests (delta)
+
+- `discover.test.ts` : `parseLocationQuery` (CP 5 chiffres → dept, DOM 97x, Corse 20→2A/2B,
+  code direct, `2a`/`2b`, ville, nom de département, vide).
+- `DiscoverPage.test.tsx` : réécrit — 3 sections rendues simultanément (compteurs), ancres
+  scrollent (stub `scrollIntoView`), `#clubs`/`#tournois` au chargement, champ unique filtre les
+  3 sections (`31` ne garde que les items du 31), plus aucun `?tab=`.
+- `DiscoverRedirects.test.tsx` : cibles `#clubs`/`#tournois`.
+- `TournamentFinder.test.tsx` : prop `deptCode` (+ cumul facette). `ClubDirectory.test.tsx` :
+  prop `deptCode` → `listClubs` reçoit `dept`. Backend : projection dept dans
+  `openMatch.service.test.ts`, param `dept` de listClubs dans la suite club/clubs routes.
+- Vérification visuelle CDP : mêmes points que v1 + ancres collantes au scroll, 390 px.
