@@ -39,4 +39,18 @@ describe('FacetPanel', () => {
     fireEvent.click(screen.getByText('Effacer'));
     expect(p.onClear).toHaveBeenCalled();
   });
+
+  it('la rangée Quand porte la chip « Dates » (plus d\'inputs natifs)', () => {
+    setup();
+    expect(screen.getByRole('button', { name: 'Dates' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Du')).not.toBeInTheDocument(); // les <input type=date> ont disparu
+  });
+
+  it('avec une plage posée : chip pleine + ✕ → onSetRange(null, null)', () => {
+    const state = { ...emptyCalendarState(), from: '2026-07-24', to: '2026-08-02' };
+    const p = setup({ state });
+    expect(screen.getByRole('button', { name: /24 juil\. → 2 août/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer les dates' }));
+    expect(p.onSetRange).toHaveBeenCalledWith(null, null);
+  });
 });

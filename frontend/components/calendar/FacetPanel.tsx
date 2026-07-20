@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Pill } from '@/components/ui/atoms';
+import { DateRangeChip } from '@/components/calendar/DateRangeChip';
 import { CalendarFilterState, DatePreset, calendarFacets } from '@/lib/tournamentCalendar';
 import { TournamentGender } from '@/lib/api';
 
@@ -75,13 +76,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
           <Pill key={p.key} size="sm" activeBg={th.text} label={p.label} active={state.datePreset === p.key && !state.from && !state.to}
             onClick={() => onSetPreset(state.datePreset === p.key ? null : p.key)} />
         ))}
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
-          <input type="date" aria-label="Du" value={state.from ?? ''} onChange={(e) => onSetRange(e.target.value || null, state.to)}
-            style={dateInput(th)} />
-          <span style={{ color: th.textFaint, fontFamily: th.fontUI, fontSize: 13 }}>→</span>
-          <input type="date" aria-label="au" value={state.to ?? ''} onChange={(e) => onSetRange(state.from, e.target.value || null)}
-            style={dateInput(th)} />
-        </span>
+        <DateRangeChip from={state.from} to={state.to} onChange={onSetRange} />
       </Group>
 
       {/* Département */}
@@ -123,9 +118,6 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
   );
 }
 
-function dateInput(th: ReturnType<typeof useTheme>['th']): React.CSSProperties {
-  return { fontFamily: th.fontUI, fontSize: 13, color: th.text, background: th.surface, border: `1px solid ${th.line}`, borderRadius: 8, padding: '5px 8px' };
-}
 function linkBtn(th: ReturnType<typeof useTheme>['th']): React.CSSProperties {
   return { border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint, padding: '5px 8px' };
 }
