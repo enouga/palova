@@ -126,39 +126,13 @@ Console Hetzner → serveur → **Backups** → activer (**+20 % du prix de la V
 
 ### Niveau 2 — `pg_dump` quotidien + rotation (le cœur du dispositif)
 
-Créer `deploy/backup-db.sh` (dans le repo, donc versionné et déployé avec le reste) :
+Le script réel vit dans le repo : **`deploy/backup-db.sh`** (versionné, déployé avec le reste). Il fait plus que le minimum :
+- **Postgres** — dump cohérent format custom compressé (échec dur + garde-fou sur la taille) ;
+- **Uploads** — archive `palova-uploads-*.tar.gz` des volumes disque (avatars, photos club, affiches, images de messagerie privée), en best-effort (ne fait jamais échouer le dump DB) ;
+- **rotation locale** 14 jours (`RETENTION_DAYS`) ;
+- **hors-site + supervision + chiffrement pilotés par variables d'env** (niveau 3 ci-dessous) — rien à décommenter : on remplit une variable dans `.env.prod` et l'option s'active.
 
-```bash
-#!/usr/bin/env bash
-# Sauvegarde quotidienne de la BDD Palova — à lancer par cron sur la VM.
-set -euo pipefail
-
-PALOVA_DIR=/root/palova
-BACKUP_DIR=/root/backups
-RETENTION_DAYS=14
-STAMP=$(date +%F-%H%M)
-
-mkdir -p "$BACKUP_DIR"
-cd "$PALOVA_DIR"
-
-# Dump cohérent (format custom compressé), directement depuis le conteneur
-docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres \
-  pg_dump -U palovauser -Fc palova > "$BACKUP_DIR/palova-$STAMP.dump"
-
-# Garde-fou : un dump anormalement petit = problème (base vide, conteneur HS…)
-SIZE=$(stat -c%s "$BACKUP_DIR/palova-$STAMP.dump")
-if [ "$SIZE" -lt 10000 ]; then
-  echo "ERREUR : dump suspect ($SIZE octets)" >&2
-  exit 1
-fi
-
-# Rotation locale
-find "$BACKUP_DIR" -name 'palova-*.dump' -mtime +"$RETENTION_DAYS" -delete
-
-echo "OK $STAMP ($SIZE octets)"
-```
-
-Puis sur la VM, l'inscrire dans cron (3 h du matin, heure creuse) :
+Sur la VM, l'inscrire dans cron (3 h du matin, heure creuse) :
 ```bash
 chmod +x /root/palova/deploy/backup-db.sh
 crontab -e
@@ -171,26 +145,25 @@ crontab -e
 
 ### Niveau 3 — Copie hors site (le « 1 » du 3-2-1)
 
-Un dump qui reste sur la VM disparaît **avec** la VM (suppression accidentelle, incident datacenter, compromission). Deux bonnes options :
+Un dump qui reste sur la VM disparaît **avec** la VM (suppression accidentelle, incident datacenter, compromission). Le script gère déjà la copie hors-site : **on ne touche pas au script, on renseigne une variable dans `.env.prod`** (le script la lit au lancement). Deux bonnes options :
 
 **Option A — Hetzner Storage Box (recommandée : même console, ~3,8 €/mois pour 1 To)**
-1. Console Hetzner → commander une **Storage Box** (BX11) → activer l'accès SSH/SCP.
-2. Sur la VM, ajouter à la fin de `backup-db.sh` :
-```bash
-# Copie hors site vers la Storage Box (mot de passe via clé SSH dédiée, port 23)
-scp -P 23 "$BACKUP_DIR/palova-$STAMP.dump" uXXXXXX@uXXXXXX.your-storagebox.de:backups/
+1. Console Hetzner → commander une **Storage Box** (BX11) → activer l'accès SSH/SCP + déposer la clé SSH de la VM.
+2. Dans `.env.prod`, renseigner (port 23 par défaut) :
+```dotenv
+OFFSITE_SCP_DEST=uXXXXXX@uXXXXXX.your-storagebox.de:backups/
 ```
 
-**Option B — S3 compatible (Backblaze B2, Scaleway, AWS S3…)** avec `rclone` :
-```bash
-rclone copy "$BACKUP_DIR/palova-$STAMP.dump" b2:palova-backups/
+**Option B — S3 compatible (Backblaze B2, Scaleway, AWS S3…)** avec `rclone` préconfiguré sur la VM :
+```dotenv
+OFFSITE_RCLONE_REMOTE=b2:palova-backups/
 ```
 
-**Chiffrement (recommandé dès que le dump quitte la VM)** — avec [`age`](https://github.com/FiloSottile/age), plus simple que GPG :
-```bash
-age -r age1<clé_publique> -o "$BACKUP_DIR/palova-$STAMP.dump.age" "$BACKUP_DIR/palova-$STAMP.dump"
-# → c'est le .age qu'on copie hors site ; la clé privée vit dans le gestionnaire de mots de passe
+**Chiffrement (recommandé dès que le dump quitte la VM)** — avec [`age`](https://github.com/FiloSottile/age), plus simple que GPG. Installer `age` sur la VM, générer une paire (`age-keygen`), mettre la clé **privée au coffre**, puis dans `.env.prod` :
+```dotenv
+AGE_RECIPIENT=age1<clé_publique>
 ```
+Le script chiffre alors chaque dump en `.age` avant l'envoi (c'est le `.age` qui part hors-site ; le `.dump` en clair reste seulement en local). ⚠️ **Perdre la clé privée = dumps hors-site illisibles** — ne l'active qu'une fois la clé sauvegardée au coffre.
 
 ### Restauration en prod (runbook)
 
@@ -218,10 +191,11 @@ curl -fsS https://api.palova.fr/health
 4. Repointer le DNS OVH si l'IP a changé.
 
 ### Supervision : savoir quand une sauvegarde **n'a pas** tourné
-Un cron qui meurt en silence = des mois sans sauvegarde sans le savoir. Solution simple et gratuite : [healthchecks.io](https://healthchecks.io) (dead man's switch) — ajouter en dernière ligne de `backup-db.sh` :
-```bash
-curl -fsS -m 10 https://hc-ping.com/<uuid-du-check> > /dev/null
+Un cron qui meurt en silence = des mois sans sauvegarde sans le savoir. Solution simple et gratuite : [healthchecks.io](https://healthchecks.io) (dead man's switch). Là encore, **rien à ajouter au script** — créer un check, copier son URL de ping dans `.env.prod` :
+```dotenv
+HC_PING_URL=https://hc-ping.com/<uuid-du-check>
 ```
+Le script pinge alors `/start` au début, l'URL de base **à la réussite**, et **`/fail` à tout échec** (via le trap EXIT — dump suspect, conteneur HS, `set -e`…). Si le ping de réussite n'arrive pas dans les temps, healthchecks t'envoie un **e-mail d'alerte**.
 Si le ping n'arrive pas dans les temps (cron cassé, script en erreur grâce à `set -e`), tu reçois un **e-mail d'alerte**.
 
 ---
@@ -290,15 +264,27 @@ Un restore est **impossible** sans eux. À conserver dans un **gestionnaire de m
 | Partout | Code | GitHub (`git push`) | À chaque commit | Infinie | Oui |
 | Partout | Secrets | Gestionnaire de mots de passe | À chaque changement | — | Oui |
 
-### Checklist de mise en place (dans l'ordre)
-- [x] ~~Créer `deploy/backup-db.sh`~~ **fait** (Postgres + uploads, dans le repo) — reste à le **déployer + cron** sur la VM
-- [x] ~~Créer `backup-local.ps1`~~ **fait** (racine du repo)
-- [ ] Activer les **Backups Hetzner** dans la console (2 clics)
-- [ ] Sur la VM : `chmod +x deploy/backup-db.sh` puis `crontab -e` → `0 3 * * * /root/palova/deploy/backup-db.sh >> /var/log/palova-backup.log 2>&1`
-- [ ] Commander une **Storage Box** (ou bucket S3) et **décommenter** le bloc hors-site (§4 du script)
-- [ ] Créer le check **healthchecks.io** et **décommenter** le ping (§5 du script)
-- [ ] Mettre tous les **secrets au coffre** (§5)
-- [x] ~~Faire un premier test de restauration~~ **mécanisme local validé** (§6) — reste le test **prod** une fois la VM déployée (cron + hors-site en place)
+### Checklist de mise en place (dans l'ordre de priorité)
+
+**Fait (dans le repo) :**
+- [x] ~~Créer `deploy/backup-db.sh`~~ (Postgres + uploads + hors-site/supervision/chiffrement pilotés par variables d'env)
+- [x] ~~Créer `backup-local.ps1`~~ (racine du repo)
+- [x] ~~Mécanisme de restauration **local** validé~~ (§6)
+
+**Le plus urgent — le filet contre l'incident disque (à faire sur la VM / la console) :**
+- [ ] Activer les **Backups Hetzner** dans la console (2 clics) — filet global de la VM
+- [ ] Sur la VM : `git pull` puis `chmod +x deploy/backup-db.sh`
+- [ ] Cron : `crontab -e` → `0 3 * * * /root/palova/deploy/backup-db.sh >> /var/log/palova-backup.log 2>&1`
+- [ ] Lancer **une fois à la main** (`/root/palova/deploy/backup-db.sh`) et vérifier `ls -lh /root/backups` (dump > 10 ko + archive uploads)
+- [ ] Mettre tous les **secrets au coffre** (§5) — un restore est impossible sans eux
+
+**Supervision (5 min, gratuit) :**
+- [ ] Créer un check **healthchecks.io** → coller son URL dans `.env.prod` : `HC_PING_URL=https://hc-ping.com/<uuid>` (le script pinge start/succès/échec automatiquement)
+
+**Ensuite — le « 1 » hors-site du 3-2-1 :**
+- [ ] Commander une **Storage Box** (ou bucket S3) → renseigner `OFFSITE_SCP_DEST=` (ou `OFFSITE_RCLONE_REMOTE=`) dans `.env.prod` (§3 niveau 3)
+- [ ] (option) `AGE_RECIPIENT=` dans `.env.prod` **après** avoir mis la clé privée `age` au coffre
+- [ ] **Test de restauration prod** grandeur nature (§6) une fois le cron + hors-site en place
 
 ---
 
