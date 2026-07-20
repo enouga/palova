@@ -816,8 +816,11 @@ export class TournamentService {
   /**
    * Étage 2 — « ce tournoi est-il le tien ? ».
    * TOURNAMENT_NOT_FOUND (inexistant / autre club) | TOURNAMENT_NOT_YOURS (autre J/A).
+   * Publique : appelée aussi bien depuis les méthodes ci-dessous que directement par les
+   * routes de la table de marque (clubs.ts), dont le cœur partagé (assertTournamentInClub)
+   * ne vérifie que le club, jamais la propriété — l'étage 2 doit donc être posé à la porte J/A.
    */
-  private async assertRefereeOwnsTournament(tournamentId: string, clubId: string, userId: string) {
+  async assertRefereeOwnsTournament(tournamentId: string, clubId: string, userId: string) {
     const t = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { clubId: true, refereeUserId: true },

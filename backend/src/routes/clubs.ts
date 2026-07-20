@@ -414,6 +414,7 @@ router.get('/:slug/me/referee/tournaments/:id/mark-table', authMiddleware, async
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     res.json(await tournamentService.listMarkTable(clubId, asString(req.params.id)));
   } catch (err) { handleError(err, res, next); }
 });
@@ -423,6 +424,7 @@ router.get('/:slug/me/referee/tournaments/:id/mark-table/log', authMiddleware, a
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     res.json(await tournamentService.listMarkTableLog(clubId, asString(req.params.id)));
   } catch (err) { handleError(err, res, next); }
 });
@@ -432,6 +434,7 @@ router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/presence', a
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const side = asString(req.body?.side);
     const presence = asString(req.body?.presence);
     if (!['CAPTAIN', 'PARTNER'].includes(side) || !['UNSEEN', 'PRESENT', 'ABSENT'].includes(presence)) throw new Error('VALIDATION_ERROR');
@@ -445,6 +448,7 @@ router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/forfeit', au
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const side = asString(req.body?.side);
     if (!['CAPTAIN', 'PARTNER'].includes(side)) throw new Error('VALIDATION_ERROR');
     res.json(await tournamentService.declareForfeit(clubId, asString(req.params.id), asString(req.params.regId), side as 'CAPTAIN' | 'PARTNER', req.user!.id));
@@ -456,6 +460,7 @@ router.post('/:slug/me/referee/tournaments/:id/registrations/:regId/replace', au
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const side = asString(req.body?.side);
     const newUserId = asString(req.body?.newUserId);
     if (!['CAPTAIN', 'PARTNER'].includes(side) || !newUserId) throw new Error('VALIDATION_ERROR');
@@ -469,6 +474,7 @@ router.post('/:slug/me/referee/tournaments/:id/bench', authMiddleware, async (re
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const userId = asString(req.body?.userId);
     if (!userId) throw new Error('VALIDATION_ERROR');
     await tournamentService.addToBench(clubId, asString(req.params.id), userId, req.user!.id);
@@ -481,6 +487,7 @@ router.delete('/:slug/me/referee/tournaments/:id/bench/:userId', authMiddleware,
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     await tournamentService.removeFromBench(clubId, asString(req.params.id), asString(req.params.userId), req.user!.id);
     res.json({ ok: true });
   } catch (err) { handleError(err, res, next); }
@@ -491,6 +498,7 @@ router.post('/:slug/me/referee/tournaments/:id/bench/pair', authMiddleware, asyn
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const userAId = asString(req.body?.userAId);
     const userBId = asString(req.body?.userBId);
     if (!userAId || !userBId) throw new Error('VALIDATION_ERROR');
@@ -503,6 +511,7 @@ router.post('/:slug/me/referee/tournaments/:id/registrations', authMiddleware, a
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     const captainUserId = asString(req.body?.captainUserId);
     const partnerUserId = asString(req.body?.partnerUserId);
     if (!captainUserId || !partnerUserId) throw new Error('VALIDATION_ERROR');
@@ -515,6 +524,7 @@ router.post('/:slug/me/referee/tournaments/:id/mark-table/registrations/:regId/p
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     res.json(await tournamentService.markTablePromote(clubId, asString(req.params.id), asString(req.params.regId), req.user!.id));
   } catch (err) { handleError(err, res, next); }
 });
@@ -524,6 +534,7 @@ router.delete('/:slug/me/referee/tournaments/:id/mark-table/registrations/:regId
   try {
     const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
     if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    await tournamentService.assertRefereeOwnsTournament(asString(req.params.id), clubId, req.user!.id);
     res.json(await tournamentService.markTableRemove(clubId, asString(req.params.id), asString(req.params.regId), req.user!.id));
   } catch (err) { handleError(err, res, next); }
 });

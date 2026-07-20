@@ -38,16 +38,20 @@ jest.mock('../../services/moderation.service', () => ({
 const resolveReferee = jest.fn(), listRefereeTournaments = jest.fn(), refereeListRegistrations = jest.fn(),
   refereePromoteRegistration = jest.fn(), refereeRemoveRegistration = jest.fn();
 // Table de marque — cœur partagé, appelé par les nouvelles routes J/A de cette Task 8.
+// assertRefereeOwnsTournament (étage 2) est posée à la porte J/A depuis le fix de la faille
+// d'autorisation : sans elle, n'importe quel J/A actif du club pouvait agir sur la table de
+// marque de n'importe quel tournoi du club, pas seulement le sien.
 const listMarkTable = jest.fn(), listMarkTableLog = jest.fn(), setPresence = jest.fn(),
   markTablePromote = jest.fn(), markTableRemove = jest.fn(), declareForfeit = jest.fn(),
   replacePlayer = jest.fn(), addToBench = jest.fn(), removeFromBench = jest.fn(),
-  pairFromBench = jest.fn(), addLateRegistration = jest.fn();
+  pairFromBench = jest.fn(), addLateRegistration = jest.fn(), assertRefereeOwnsTournament = jest.fn();
 jest.mock('../../services/tournament.service', () => ({
   TournamentService: jest.fn().mockImplementation(() => ({
     resolveReferee, listRefereeTournaments, refereeListRegistrations,
     refereePromoteRegistration, refereeRemoveRegistration,
     listMarkTable, listMarkTableLog, setPresence, markTablePromote, markTableRemove,
     declareForfeit, replacePlayer, addToBench, removeFromBench, pairFromBench, addLateRegistration,
+    assertRefereeOwnsTournament,
     listPublicByClubSlug: jest.fn().mockResolvedValue([]),
   })),
 }));
@@ -227,6 +231,7 @@ describe('Routes espace juge-arbitre', () => {
 describe('table de marque — routes J/A', () => {
   beforeEach(() => {
     resolveReferee.mockResolvedValue(true);
+    assertRefereeOwnsTournament.mockResolvedValue(undefined);
   });
 
   // LE test du gate : sans la facette, un J/A lambda ne lit RIEN de la table de marque.
@@ -245,6 +250,35 @@ describe('table de marque — routes J/A', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ registrations: [] });
     expect(listMarkTable).toHaveBeenCalledWith('club-1', 't1');
+    expect(assertRefereeOwnsTournament).toHaveBeenCalledWith('t1', 'club-1', 'u-ref');
+  });
+
+  // Faille corrigée : la facette seule ne suffit pas — un J/A actif du club ne doit pas
+  // pouvoir agir sur la table de marque d'un tournoi qui n'est pas le sien (étage 2, TOURNAMENT_NOT_YOURS).
+  it('GET mark-table — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app).get(`${base}/tournaments/t9/mark-table`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(listMarkTable).not.toHaveBeenCalled();
+  });
+
+  it('POST forfeit — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app)
+      .post(`${base}/tournaments/t9/registrations/r1/forfeit`)
+      .set(auth).send({ side: 'PARTNER' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(declareForfeit).not.toHaveBeenCalled();
+  });
+
+  it('POST mark-table/registrations/:regId/promote — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app).post(`${base}/tournaments/t9/mark-table/registrations/r1/promote`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(markTablePromote).not.toHaveBeenCalled();
   });
 
   it('GET mark-table/log — 200, délègue listMarkTableLog', async () => {
