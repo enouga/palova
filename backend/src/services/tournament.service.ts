@@ -1,4 +1,5 @@
 import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import { serializableTx } from '../db/serializable';
 import * as notify from '../email/notifications';
@@ -209,7 +210,7 @@ export class TournamentService {
     try {
       await fn();
     } catch (err) {
-      console.error('[notifications] envoi email échoué (tournoi) :', err);
+      reportError(err, { source: 'safeNotify:tournament' });
     }
   }
 

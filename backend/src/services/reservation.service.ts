@@ -1,4 +1,5 @@
 import { Prisma, ReservationType } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { DateTime } from 'luxon';
 import { weeklyOccurrences } from './recurrence';
 import { prisma } from '../db/prisma';
@@ -47,7 +48,7 @@ export class ReservationService {
   /** Envoi d'email best-effort : un échec est loggé, jamais propagé (ne casse pas l'action). */
   private async safeNotify(fn: () => Promise<void>): Promise<void> {
     try { await fn(); }
-    catch (err) { console.error('[reservation] notification échouée', err); }
+    catch (err) { reportError(err, { source: 'safeNotify:reservation' }); }
   }
 
   /**
