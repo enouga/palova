@@ -11,7 +11,7 @@ const API_URL = API_BASE_URL;
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const slug = (await headers()).get('x-club-slug');
-  if (!slug) return { title: 'Partie ouverte · Palova' };
+  if (!slug) return { title: 'Partie ouverte · Palova', robots: { index: false, follow: true } };
   try {
     const [club, match] = await Promise.all([api.getClub(slug), api.getOpenMatch(slug, id)]);
     const when = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: club.timezone }).format(new Date(match.startTime));
@@ -25,11 +25,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     return {
       title,
       description,
+      // Contenu éphémère (créneau daté) : aucune valeur de référencement durable, mais on
+      // reste crawlable (pas de robots.txt disallow) pour que l'unfurling social continue
+      // de marcher — cf. spec.
+      robots: { index: false, follow: true },
       openGraph: { title, description, images: [{ url: image, width: 1200, height: 630 }], type: 'website' },
       twitter: { card: 'summary_large_image', title, description, images: [image] },
     };
   } catch {
-    return { title: 'Partie ouverte · Palova' };
+    return { title: 'Partie ouverte · Palova', robots: { index: false, follow: true } };
   }
 }
 
