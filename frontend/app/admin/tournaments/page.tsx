@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { api, Tournament, AdminTournamentDetail, CreateTournamentBody, AdminClubSport, ClubReferee } from '@/lib/api';
 import { localInputToISO, isoToLocalInput } from '@/lib/datetimeLocal';
+import { shiftDatesToNextFuture } from '@/lib/duplicateAgenda';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
 import { ACCENTS, dangerBanner } from '@/lib/theme';
@@ -108,6 +109,30 @@ export default function AdminTournamentsPage() {
     });
   };
 
+  const startDuplicate = (t: Tournament) => {
+    setError(null);
+    setEditingId(null); // mode création : la sauvegarde empruntera adminCreateTournament
+    const dates = shiftDatesToNextFuture(
+      {
+        startTime: isoToLocalInput(t.startTime),
+        endTime: t.endTime ? isoToLocalInput(t.endTime) : null,
+        registrationDeadline: isoToLocalInput(t.registrationDeadline),
+      },
+      new Date(),
+    );
+    setForm({
+      clubSportId: t.clubSportId, name: `${t.name} (copie)`, category: t.category,
+      gender: t.gender, openToWomen: t.openToWomen,
+      description: t.description ?? '', contactInfo: t.contactInfo ?? '',
+      // J/A copié seulement s'il est encore dans le vivier (sinon REFEREE_INVALID à la création)
+      refereeUserId: t.refereeUserId && referees.some((r) => r.userId === t.refereeUserId) ? t.refereeUserId : null,
+      startTime: dates.startTime, endTime: dates.endTime, registrationDeadline: dates.registrationDeadline,
+      maxTeams: t.maxTeams, entryFee: t.entryFee != null ? Number(t.entryFee) : null,
+      // prépaiement copié seulement si Stripe est encore actif
+      requirePrepayment: (t.requirePrepayment ?? false) && stripeActive,
+    });
+  };
+
   const publish = async (t: Tournament, status: 'PUBLISHED' | 'CANCELLED' | 'DRAFT') => {
     await api.adminUpdateTournament(club.id, t.id, { status }, token); reload();
   };
@@ -170,6 +195,7 @@ export default function AdminTournamentsPage() {
         )}
         <button onClick={() => openDetail(t)} style={ghost}>Inscrits</button>
         <button onClick={() => startEdit(t)} style={ghost}>Modifier</button>
+        <button onClick={() => startDuplicate(t)} style={ghost}>Dupliquer</button>
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => publish(t, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => publish(t, 'CANCELLED')} style={ghost}>Annuler</button>}
       </>

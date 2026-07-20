@@ -333,3 +333,69 @@ describe('J/A d’un tournoi existant (carte de la liste)', () => {
     expect(within(select).queryByRole('option', { name: /facette/i })).not.toBeInTheDocument();
   });
 });
+
+describe('Dupliquer un tournoi', () => {
+  it('ouvre le formulaire en création, nom suffixé « (copie) », dates futures', async () => {
+    adminGetTournaments.mockResolvedValue([
+      tournament({
+        id: 't1', name: 'Open Test', category: 'P250', gender: 'MIXED', status: 'PUBLISHED',
+        startTime: iso(-30), endTime: null, registrationDeadline: iso(-33), maxTeams: 16, entryFee: '20',
+      }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Dupliquer/ }));
+
+    // mode création (pas édition)
+    expect(screen.queryByText('Modifier le tournoi')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Créer/ })).toBeInTheDocument();
+    // nom copié + suffixe
+    expect(screen.getByDisplayValue('Open Test (copie)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+    await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+    expect(adminUpdateTournament).not.toHaveBeenCalled();
+    const [, body] = adminCreateTournament.mock.calls[0];
+    expect(body.name).toBe('Open Test (copie)');
+    expect(body.category).toBe('P250');
+    expect(body.maxTeams).toBe(16);
+    expect(new Date(body.registrationDeadline).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(body.startTime).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('ne copie pas le prépaiement quand Stripe est inactif', async () => {
+    adminGetClub.mockResolvedValue({ stripeAccountStatus: 'NONE' });
+    adminGetTournaments.mockResolvedValue([
+      tournament({
+        id: 't1', name: 'Open Test', status: 'PUBLISHED',
+        startTime: iso(-30), registrationDeadline: iso(-33), requirePrepayment: true,
+      }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Dupliquer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+    await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+    const [, body] = adminCreateTournament.mock.calls[0];
+    expect(body.requirePrepayment).toBe(false);
+  });
+
+  it('ne copie pas un J/A absent du vivier', async () => {
+    adminGetReferees.mockResolvedValue([{ userId: 'u1', firstName: 'Léa', lastName: 'Girard', avatarUrl: null }]);
+    adminGetTournaments.mockResolvedValue([
+      tournament({
+        id: 't1', name: 'Open Test', status: 'PUBLISHED',
+        startTime: iso(-30), registrationDeadline: iso(-33), refereeUserId: 'u9', // hors vivier
+      }),
+    ]);
+    renderPage();
+
+    // s'assurer que le vivier est chargé avant de dupliquer (le select J/A de la carte le prouve)
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Léa Girard' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Dupliquer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+    await waitFor(() => expect(adminCreateTournament).toHaveBeenCalled());
+    const [, body] = adminCreateTournament.mock.calls[0];
+    expect(body.refereeUserId).toBeNull();
+  });
+});
