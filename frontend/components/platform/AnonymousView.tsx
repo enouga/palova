@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, NationalOpenMatch, NationalTournament } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS } from '@/lib/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
@@ -10,6 +10,8 @@ import { ClubDirectory } from '@/components/ClubDirectory';
 import { UpcomingTournaments } from '@/components/calendar/UpcomingTournaments';
 import { NationalOpenMatches } from '@/components/platform/NationalOpenMatches';
 import { ClubPitch } from '@/components/platform/ClubPitch';
+import { FranceDotsMap } from '@/components/platform/FranceDotsMap';
+import { LocationSearchPill } from '@/components/discover/LocationSearchPill';
 
 type Th = ReturnType<typeof useTheme>['th'];
 
@@ -21,6 +23,9 @@ export default function AnonymousView() {
   const { th } = useTheme();
   const [matches, setMatches] = useState<NationalOpenMatch[] | null>(null);
   const [tournaments, setTournaments] = useState<NationalTournament[] | null>(null);
+  const router = useRouter();
+  const [q, setQ] = useState('');
+  const goSearch = () => router.push(q.trim() ? `/decouvrir?q=${encodeURIComponent(q.trim())}` : '/decouvrir');
 
   useEffect(() => { api.listNationalOpenMatches().then(setMatches).catch(() => setMatches([])); }, []);
   useEffect(() => { api.listNationalTournaments().then(setTournaments).catch(() => setTournaments([])); }, []);
@@ -50,40 +55,22 @@ export default function AnonymousView() {
         <div style={{ padding: '18px 20px 0' }}>
           <div className="sp-hero-rise" style={{
             position: 'relative', overflow: 'hidden', borderRadius: 26,
-            background: HERO_GRADIENT, color: HERO_INK, padding: '36px 26px 30px',
+            background: HERO_GRADIENT, color: HERO_INK, padding: '36px 26px 58px',
           }}>
-            {/* filigrane : traces du logo Palova */}
-            <svg viewBox="0 0 100 100" aria-hidden="true" style={{ position: 'absolute', right: -72, top: -58, width: 330, height: 330, opacity: 0.1 }}>
-              <g fill="none" stroke={HERO_INK} strokeWidth={3.4} strokeLinecap="round">
-                <circle cx="50" cy="50" r="37" />
-                <path d="M20 30 Q50 50 20 70" />
-                <path d="M80 30 Q50 50 80 70" />
-              </g>
-            </svg>
-            {/* orbe accent doux */}
-            <span aria-hidden="true" style={{
-              position: 'absolute', left: -90, bottom: -140, width: 320, height: 320, borderRadius: '50%',
-              background: `radial-gradient(circle, ${ACCENTS.blue}42, transparent 66%)`,
-            }} />
+            {/* la France en pointillés : le geste signature « tous les clubs à la fois » */}
+            <FranceDotsMap />
 
-            <div style={{ position: 'relative' }}>
+            <div className="pl-hero-copy">
               <div style={{ fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
                 Palova
               </div>
               <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 'clamp(34px, 8vw, 46px)', lineHeight: 1.02, letterSpacing: -1.2, margin: '14px 0 0' }}>
-                Le padel se joue ici.
+                Trouvez où jouer.
               </h1>
               <p style={{ fontFamily: th.fontUI, fontSize: 16, lineHeight: 1.55, color: HERO_INK_MUTED, margin: '14px 0 0', maxWidth: 480 }}>
                 Réservez un terrain, rejoignez une partie ouverte, visez un tournoi —
                 dans les clubs Palova près de chez vous.
               </p>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 24 }}>
-                <a href="#clubs" style={{ ...ctaBase(th), background: HERO_INK, color: '#f7f5ee' }}>Trouver mon club →</a>
-                {matches !== null && matches.length > 0 && (
-                  <a href="#parties" style={{ ...ctaBase(th), background: '#ffffff', color: HERO_INK }}>Voir les parties</a>
-                )}
-              </div>
 
               {/* pouls : rendu une fois les données connues (hydration-safe) */}
               {((matches?.length ?? 0) > 0 || (tournaments?.length ?? 0) > 0) && (
@@ -102,6 +89,9 @@ export default function AnonymousView() {
               )}
             </div>
           </div>
+          {/* recherche flottante à cheval sur le bord bas du hero → /decouvrir prérempli */}
+          <LocationSearchPill value={q} onChange={setQ} onSubmit={goSearch}
+            onNearMe={() => router.push('/decouvrir?pres=1')} nearActive={false} locating={false} />
         </div>
 
         {/* ── Parties ouvertes publiques ── */}
@@ -179,10 +169,6 @@ function Section({ id, th, kicker, title, sub, children }: {
 
 function pillBase(th: Th): React.CSSProperties {
   return { borderRadius: 30, padding: '8px 15px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' };
-}
-
-function ctaBase(th: Th): React.CSSProperties {
-  return { display: 'inline-block', borderRadius: 30, padding: '12px 20px', fontFamily: th.fontUI, fontWeight: 800, fontSize: 14.5, textDecoration: 'none', whiteSpace: 'nowrap' };
 }
 
 function pulseChip(th: Th): React.CSSProperties {
