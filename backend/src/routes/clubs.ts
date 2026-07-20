@@ -806,10 +806,18 @@ router.get('/:slug/me/match-stats', authMiddleware, async (req: AuthRequest, res
 });
 
 // Icône PWA du club (référencée par le manifest) — public, PNG, repli Palova.
+// og.png : carte de marque 1200×630 (image Open Graph des pages club), même endpoint.
 router.get('/:slug/icon/:file', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const m = asString(req.params.file).match(/^([a-z0-9-]+)\.png$/);
-    const filePath = m ? await iconService.getClubIconPath(asString(req.params.slug), m[1]) : null;
+    const file = asString(req.params.file);
+    const slug = asString(req.params.slug);
+    let filePath: string | null;
+    if (file === 'og.png') {
+      filePath = await iconService.getClubOgCardPath(slug);
+    } else {
+      const m = file.match(/^([a-z0-9-]+)\.png$/);
+      filePath = m ? await iconService.getClubIconPath(slug, m[1]) : null;
+    }
     if (!filePath) { res.status(404).json({ error: 'Icône introuvable' }); return; }
     res.sendFile(filePath, { headers: { 'Cache-Control': 'public, max-age=86400' } });
   } catch (err) { handleError(err, res, next); }

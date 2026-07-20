@@ -6,6 +6,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { prisma } from '../db/prisma';
 import { ICONS_DIR, UPLOADS_DIR } from '../utils/uploads';
+import { readableTextOn } from '../email/templates/layout';
 
 // Icônes PWA d'un club : logo recadré « contain » en carré sur fond accentColor
 // (jamais tronqué), cache disque uploads/icons (hash de l'URL du logo = invalidation
@@ -24,6 +25,44 @@ export const ICON_VARIANTS: Record<string, IconVariant> = {
   'apple-180': { size: 180, markRatio: 0.74 },
   'badge-96': { size: 96, markRatio: 0.9, monochrome: true }, // silhouette blanche Android
 };
+
+// Carte de marque générique d'un club (logo + nom sur fond accentColor, 1200×630) : image
+// Open Graph réutilisée par les pages club qui n'ont pas de carte dédiée (à la différence
+// des parties ouvertes, cf. matchCard.service.ts, qui garde sa carte dynamique par état).
+const OG_W = 1200;
+const OG_H = 630;
+const OG_FONT = "'DejaVu Sans', 'Segoe UI', Arial, sans-serif";
+const OG_RENDER_VERSION = 'v1';
+
+function fallbackOgCardPath(): string {
+  return path.join(process.cwd(), 'assets', 'og-card-fallback.png');
+}
+
+function ogCacheFile(clubId: string, logoUrl: string): string {
+  // Hash sur logoUrl seul (comme iconCacheFile) : un changement d'accentColor/nom sans
+  // changement de logo ne rebustera pas le cache — même tradeoff déjà accepté pour les
+  // icônes PWA, pas retravaillé ici.
+  const hash = crypto.createHash('md5').update(`${OG_RENDER_VERSION}:${logoUrl}`).digest('hex').slice(0, 12);
+  return path.join(ICONS_DIR, `${clubId}-og-${hash}.png`);
+}
+
+const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const clampText = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** Carte 1200×630 : fond accentColor, logo centré (contain), nom du club en dessous. */
+async function renderOgCard(logo: Buffer, accentColor: string, clubName: string): Promise<Buffer> {
+  const bg = accentColor || '#1d3557';
+  const ink = readableTextOn(bg);
+  const svg = `<svg width="${OG_W}" height="${OG_H}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${OG_W}" height="${OG_H}" fill="${escXml(bg)}"/>
+    <text x="${OG_W / 2}" y="470" text-anchor="middle" font-family="${OG_FONT}" font-size="52" font-weight="700" fill="${escXml(ink)}">${escXml(clampText(clubName, 32))}</text>
+  </svg>`;
+  const base = await sharp(Buffer.from(svg)).png().toBuffer();
+  const mark = await sharp(logo)
+    .resize(260, 260, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png().toBuffer();
+  return sharp(base).composite([{ input: mark, left: Math.round(OG_W / 2 - 130), top: 90 }]).png().toBuffer();
+}
 
 const FALLBACK_DIR = path.join(process.cwd(), 'assets', 'pwa');
 export function fallbackIconPath(variant: string): string {
@@ -159,6 +198,23 @@ export class IconService {
       return cached;
     } catch {
       return fallbackIconPath(variant); // logo injoignable/illisible → icône Palova
+    }
+  }
+
+  /** Chemin absolu de la carte OG de marque du club, ou null (club introuvable → 404). */
+  async getClubOgCardPath(slug: string): Promise<string | null> {
+    const club = await prisma.club.findUnique({ where: { slug }, select: { id: true, name: true, logoUrl: true, accentColor: true } });
+    if (!club) return null;
+    if (!club.logoUrl) return fallbackOgCardPath();
+    const cached = ogCacheFile(club.id, club.logoUrl);
+    if (fs.existsSync(cached)) return cached;
+    try {
+      const logo = await fetchLogo(club.logoUrl);
+      const png = await renderOgCard(logo, club.accentColor, club.name);
+      fs.writeFileSync(cached, png);
+      return cached;
+    } catch {
+      return fallbackOgCardPath();
     }
   }
 }
