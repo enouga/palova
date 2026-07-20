@@ -25,6 +25,9 @@ export function DateRangeChip({ from, to, onChange }: {
 }) {
   const { th } = useTheme();
   const [open, setOpen] = useState(false);
+  // Décalage horizontal de la popup : ancrée à la chip mais CLAMPÉE au viewport (sur mobile,
+  // une chip en milieu de rangée ferait déborder les 296px à droite — colonne dim. coupée).
+  const [popLeft, setPopLeft] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const base = from || todayKey();
   const [view, setView] = useState(() => ({ year: Number(base.slice(0, 4)), month: Number(base.slice(5, 7)) }));
@@ -43,6 +46,12 @@ export function DateRangeChip({ from, to, onChange }: {
   const openPicker = () => {
     const b = from || todayKey();
     setView({ year: Number(b.slice(0, 4)), month: Number(b.slice(5, 7)) });
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (rect) {
+      const MARGIN = 12, WIDTH = 296;
+      const desired = Math.min(Math.max(MARGIN, rect.left), Math.max(MARGIN, window.innerWidth - WIDTH - MARGIN));
+      setPopLeft(desired - rect.left);
+    }
     setOpen((o) => !o);
   };
 
@@ -88,7 +97,7 @@ export function DateRangeChip({ from, to, onChange }: {
       {open && (
         <div role="dialog" aria-label="Choisir des dates"
           style={{
-            position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, width: 296,
+            position: 'absolute', top: 'calc(100% + 8px)', left: popLeft, zIndex: 50, width: 296,
             background: th.surface, border: `1px solid ${th.line}`, borderRadius: 16,
             boxShadow: '0 16px 40px rgba(0,0,0,0.18)', padding: 14,
           }}>

@@ -46,13 +46,6 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
   const hasActive = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
   const depts = showAllDepts ? facets.departments : facets.departments.slice(0, DEPT_VISIBLE);
 
-  const Group = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 7 }}>{label}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>{children}</div>
-    </div>
-  );
-
   return (
     <div style={{ padding: '4px 20px 0' }}>
       {/* Autour de moi */}
@@ -71,7 +64,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       </button>
 
       {/* Quand */}
-      <Group label="Quand">
+      <Group th={th} label="Quand">
         {PRESETS.map((p) => (
           <Pill key={p.key} size="sm" activeBg={th.text} label={p.label} active={state.datePreset === p.key && !state.from && !state.to}
             onClick={() => onSetPreset(state.datePreset === p.key ? null : p.key)} />
@@ -81,7 +74,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
 
       {/* Département */}
       {facets.departments.length > 0 && (
-        <Group label="Département">
+        <Group th={th} label="Département">
           {depts.map((d) => (
             <Pill key={d.code} size="sm" activeBg={th.text} label={facetLabel(d.name, d.count)} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
           ))}
@@ -95,7 +88,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
 
       {/* Catégorie */}
       {facets.categories.length > 0 && (
-        <Group label="Catégorie">
+        <Group th={th} label="Catégorie">
           {facets.categories.map((c) => (
             <Pill key={c.value} size="sm" activeBg={th.text} label={facetLabel(c.value, c.count)} active={state.categories.has(c.value)} onClick={() => onToggleCategory(c.value)} />
           ))}
@@ -104,7 +97,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
 
       {/* Genre */}
       {facets.genders.length > 0 && (
-        <Group label="Genre">
+        <Group th={th} label="Genre">
           {facets.genders.map((g) => (
             <Pill key={g.value} size="sm" activeBg={th.text} label={facetLabel(GENDER_LABEL[g.value], g.count)} active={state.genders.has(g.value)} onClick={() => onToggleGender(g.value)} />
           ))}
@@ -114,6 +107,19 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       {hasActive && (
         <button onClick={onClear} style={{ ...linkBtn(th), marginTop: 12, display: 'block' }}>Effacer</button>
       )}
+    </div>
+  );
+}
+
+// ⚠️ Hissé HORS de FacetPanel : défini dans le corps du composant, Group changeait d'identité à
+// chaque rendu → React remontait tout le sous-arbre (le calendrier de DateRangeChip se refermait
+// au 1ᵉʳ tap, et les anciens inputs perdaient le focus). Un composant ne se définit jamais dans
+// le rendu d'un autre.
+function Group({ th, label, children }: { th: ReturnType<typeof useTheme>['th']; label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 7 }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>{children}</div>
     </div>
   );
 }

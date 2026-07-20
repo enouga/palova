@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { useState } from 'react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { FacetPanel } from '../components/calendar/FacetPanel';
 import { emptyCalendarState } from '../lib/tournamentCalendar';
@@ -52,5 +53,28 @@ describe('FacetPanel', () => {
     expect(screen.getByRole('button', { name: /24 juil\. → 2 août/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Effacer les dates' }));
     expect(p.onSetRange).toHaveBeenCalledWith(null, null);
+  });
+
+  // Régression : Group était défini DANS FacetPanel (nouvelle identité à chaque rendu → React
+  // remontait le sous-arbre, et le calendrier se refermait au 1ᵉʳ tap). Harnais à état requis :
+  // un onSetRange en jest.fn() ne re-rend pas, donc ne reproduit pas le remount.
+  it('poser un début ne referme pas le calendrier (pas de remount du groupe Quand)', () => {
+    function Harness() {
+      const [state, setState] = useState(emptyCalendarState());
+      return (
+        <ThemeProvider>
+          <FacetPanel facets={facets} state={state}
+            onToggleDept={jest.fn()} onToggleCategory={jest.fn()} onToggleGender={jest.fn()}
+            onSetPreset={jest.fn()} onSetRange={(from, to) => setState((s) => ({ ...s, from, to }))}
+            onToggleNearMe={jest.fn()} onClear={jest.fn()} />
+        </ThemeProvider>
+      );
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dates' }));
+    const dlg = screen.getByRole('dialog');
+    const day = within(dlg).getAllByRole('button', { name: /^\d{2}\/\d{2}\/\d{4}$/ })[10];
+    fireEvent.click(day);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
