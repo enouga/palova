@@ -8,6 +8,7 @@ import {
   notifyTournamentUpcomingReminder,
   notifyEventUpcomingReminder,
 } from '../email/notifications';
+import { reportError } from '../observability/reportError';
 
 // Idempotency by design: each reservation falls into a window's narrow [lead−period, lead] slice
 // for exactly one 15-min job run, so it's reminded once per window.
@@ -46,7 +47,7 @@ export async function runReminders(now: Date): Promise<void> {
       try {
         await notifyReservationReminder(r.id, w.key);
       } catch (e) {
-        console.error('[reminders]', (e as Error).message);
+        reportError(e, { source: 'reminders:reservation' });
       }
     }
   }
@@ -63,7 +64,7 @@ export async function runReminders(now: Date): Promise<void> {
       try {
         await notifyTournamentDeadlineReminder(t.id);
       } catch (e) {
-        console.error('[reminders:tournament-deadline]', (e as Error).message);
+        reportError(e, { source: 'reminders:tournament-deadline' });
       }
     }
     const deadlineEvents = await prisma.clubEvent.findMany({
@@ -74,7 +75,7 @@ export async function runReminders(now: Date): Promise<void> {
       try {
         await notifyEventDeadlineReminder(ev.id);
       } catch (e) {
-        console.error('[reminders:event-deadline]', (e as Error).message);
+        reportError(e, { source: 'reminders:event-deadline' });
       }
     }
   }
@@ -91,7 +92,7 @@ export async function runReminders(now: Date): Promise<void> {
       try {
         await notifyTournamentUpcomingReminder(t.id, w.key);
       } catch (e) {
-        console.error('[reminders:tournament-upcoming]', (e as Error).message);
+        reportError(e, { source: 'reminders:tournament-upcoming' });
       }
     }
     const upcomingEvents = await prisma.clubEvent.findMany({
@@ -102,7 +103,7 @@ export async function runReminders(now: Date): Promise<void> {
       try {
         await notifyEventUpcomingReminder(ev.id, w.key);
       } catch (e) {
-        console.error('[reminders:event-upcoming]', (e as Error).message);
+        reportError(e, { source: 'reminders:event-upcoming' });
       }
     }
   }
@@ -118,14 +119,14 @@ export async function runReminders(now: Date): Promise<void> {
     try {
       await notifyMatchResultPrompt(r.id);
     } catch (e) {
-      console.error('[reminders:post-match]', (e as Error).message);
+      reportError(e, { source: 'reminders:post-match' });
     }
   }
 }
 
 export function startReminderJob(): void {
   cron.schedule(`*/${REMINDER_PERIOD_MIN} * * * *`, () => {
-    runReminders(new Date()).catch((e) => console.error('[reminders]', e));
+    runReminders(new Date()).catch((e) => reportError(e, { source: 'reminders:run' }));
   });
   console.log('[reminders] Job de rappels démarré (toutes les 15 minutes)');
 }
