@@ -8,6 +8,7 @@ import {
 } from '../services/platformBilling/stripeBilling';
 import { upsertInvoice, StripeInvoiceLike } from '../services/platformBilling/platformInvoices';
 import { buildSubscribedEmail, sendToOwners } from '../services/platformBilling/billingEmails';
+import { reportError } from '../observability/reportError';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (err) {
     // On répond 200 quand même : Stripe re-livre sinon en boucle ; l'état sera resynchronisé
     // par le prochain événement subscription.updated.
-    console.error('[billing-webhook]', err);
+    reportError(err, { source: 'billing-webhook', eventType: event.type });
   }
 
   res.json({ received: true });

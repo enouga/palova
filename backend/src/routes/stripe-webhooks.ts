@@ -5,6 +5,7 @@ import { ReservationService } from '../services/reservation.service';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { OfferService, OfferIntentMeta } from '../services/offer.service';
+import { reportError } from '../observability/reportError';
 
 const router = Router();
 
@@ -136,7 +137,7 @@ router.post('/', async (req: Request, res: Response) => {
     } else {
       // Erreur transitoire/inattendue : renvoyer un non-2xx pour que Stripe REJOUE l'événement
       // (sinon un paiement débité mais non fulfillé serait définitivement perdu).
-      console.error('[stripe-webhook] erreur inattendue → retry Stripe', event.type, err);
+      reportError(err, { source: 'stripe-webhook', eventType: event.type });
       return void res.status(500).json({ error: 'Webhook handler failed' });
     }
   }
