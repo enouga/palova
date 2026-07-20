@@ -173,8 +173,13 @@ export function TournamentFinder({
   // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
   useEffect(() => { if (results) onCount?.(results.length); }, [results?.length, onCount]);
 
+  const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
+  const hasActiveFilters = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
+
   return (
-    <div style={{ paddingBottom: 48, background: th.bg, minHeight: '100vh' }}>
+    // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
+    // (hideTitle), la section reprend sa hauteur naturelle (fini l'écran vide sans tournoi).
+    <div style={{ paddingBottom: 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
       {!hideTitle && (
         <div style={{ padding: '22px 20px 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
@@ -192,14 +197,29 @@ export function TournamentFinder({
           onSetPreset={(p) => setState((s) => ({ ...s, datePreset: p, from: null, to: null }))}
           onSetRange={(from, to) => setState((s) => ({ ...s, from, to, datePreset: null }))}
           onToggleNearMe={toggleNearMe}
-          onClear={() => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }))}
+          onClear={clearFilters}
           nearMeBusy={nearBusy}
+          resultCount={results ? results.length : null}
         />
       )}
 
       <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {results === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-        {results?.length === 0 && <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Aucun tournoi ne correspond à votre recherche.</div>}
+        {results?.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+              {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
+            </div>
+            {hasActiveFilters && (
+              <button onClick={clearFilters} style={{
+                marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
+                fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
+              }}>
+                Effacer les filtres
+              </button>
+            )}
+          </div>
+        )}
         {results?.map(({ tournament: t, distanceKm }) => {
           const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
           return (
