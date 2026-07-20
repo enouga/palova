@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { api, ClubEvent, AdminEventDetail, CreateEventBody, ClubEventKind } from '@/lib/api';
 import { KIND_LABEL } from '@/lib/events';
 import { localInputToISO, isoToLocalInput } from '@/lib/datetimeLocal';
+import { shiftDatesToNextFuture } from '@/lib/duplicateAgenda';
 import { DateTimeField } from '@/components/ui/DateTimeField';
 import { Icon } from '@/components/ui/Icon';
 import { ACCENTS, dangerBanner } from '@/lib/theme';
@@ -114,6 +115,26 @@ export default function AdminEventsPage() {
     });
   };
 
+  const startDuplicate = (ev: ClubEvent) => {
+    setError(null);
+    setEditingId(null);   // mode création : la sauvegarde empruntera adminCreateEvent
+    setRecurring(false);  // un duplicata est un ponctuel, jamais une série
+    const dates = shiftDatesToNextFuture(
+      {
+        startTime: isoToLocalInput(ev.startTime),
+        endTime: ev.endTime ? isoToLocalInput(ev.endTime) : null,
+        registrationDeadline: isoToLocalInput(ev.registrationDeadline),
+      },
+      new Date(),
+    );
+    setForm({
+      name: `${ev.name} (copie)`, kind: ev.kind, description: ev.description ?? '',
+      startTime: dates.startTime, endTime: dates.endTime, registrationDeadline: dates.registrationDeadline,
+      capacity: ev.capacity, price: ev.price != null ? Number(ev.price) : null, memberOnly: ev.memberOnly,
+      clubSportId: ev.clubSportId ?? null, requirePrepayment: (ev.requirePrepayment ?? false) && stripeActive,
+    });
+  };
+
   const openDetail = (id: string) =>
     api.adminGetEvent(club.id, id, token).then(setDetail).catch(() => setDetail(null));
 
@@ -138,6 +159,7 @@ export default function AdminEventsPage() {
       <>
         <button onClick={() => openDetail(e.id)} style={ghost}>Inscrits</button>
         <button onClick={() => startEdit(e)} style={ghost}>Modifier</button>
+        <button onClick={() => startDuplicate(e)} style={ghost}>Dupliquer</button>
         {e.seriesId && <button onClick={() => setManagingSeriesId(e.seriesId!)} style={ghost}>Série…</button>}
         {(key === 'draft' || key === 'cancelled') && <button onClick={() => setStatus(e.id, 'PUBLISHED')} style={primarySm}>Publier</button>}
         {key === 'upcoming' && <button onClick={() => setStatus(e.id, 'DRAFT')} style={ghost}>Repasser en brouillon</button>}

@@ -193,3 +193,39 @@ describe('récurrence hebdomadaire', () => {
     await waitFor(() => expect(adminCancelEventSeries).toHaveBeenCalledWith('c1', 'series-1', 'tok'));
   });
 });
+
+describe('Dupliquer un event', () => {
+  const iso = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+  it('ouvre la création pré-remplie, nom « (copie) », sans récurrence, dates futures', async () => {
+    adminGetEvents.mockResolvedValue([
+      {
+        id: 'e1', name: 'Mêlée Test', kind: 'MELEE', description: '', status: 'PUBLISHED',
+        startTime: iso(-20), endTime: null, registrationDeadline: iso(-22),
+        capacity: 12, price: '8', memberOnly: true, clubSportId: null,
+        requirePrepayment: false, confirmedCount: 0, waitlistCount: 0,
+      },
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Dupliquer/ }));
+
+    // mode création (pas édition)
+    expect(screen.queryByText("Modifier l'event")).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Créer/ })).toBeInTheDocument();
+    // nom copié + suffixe
+    expect(screen.getByDisplayValue('Mêlée Test (copie)')).toBeInTheDocument();
+    // la récurrence n'est pas héritée
+    expect(screen.getByRole('checkbox', { name: /Se répète chaque semaine/ })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: /Créer/ }));
+    await waitFor(() => expect(adminCreateEvent).toHaveBeenCalled());
+    expect(adminUpdateEvent).not.toHaveBeenCalled();
+    expect(adminCreateEventSeries).not.toHaveBeenCalled();
+    const [, body] = adminCreateEvent.mock.calls[0];
+    expect(body.name).toBe('Mêlée Test (copie)');
+    expect(body.capacity).toBe(12);
+    expect(body.memberOnly).toBe(true);
+    expect(new Date(body.startTime).getTime()).toBeGreaterThan(Date.now());
+  });
+});
