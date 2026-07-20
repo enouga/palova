@@ -601,6 +601,16 @@ export const api = {
   adminAdjustPackage: (clubId: string, userId: string, packageId: string, body: AdjustPackageBody, token: string) =>
     request<{ package: MemberPackage }>(`/api/clubs/${clubId}/admin/members/${userId}/packages/${packageId}/adjust`, { method: 'POST', body: JSON.stringify(body) }, token),
 
+  // --- Promotions datées ---
+  adminGetPromotions: (clubId: string, token: string) =>
+    request<Promotion[]>(`/api/clubs/${clubId}/admin/promotions`, {}, token),
+  adminCreatePromotion: (clubId: string, body: CreatePromotionBody, token: string) =>
+    request<Promotion>(`/api/clubs/${clubId}/admin/promotions`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminUpdatePromotion: (clubId: string, id: string, body: UpdatePromotionBody, token: string) =>
+    request<Promotion>(`/api/clubs/${clubId}/admin/promotions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, token),
+  adminDeletePromotion: (clubId: string, id: string, token: string) =>
+    request<{ ok: true }>(`/api/clubs/${clubId}/admin/promotions/${id}`, { method: 'DELETE' }, token),
+
   // --- Override admin du niveau (réservé ADMIN/OWNER) ---
   // Fiche niveau d'un membre : niveaux courants par sport + historique des corrections.
   adminGetMemberLevel: (clubId: string, userId: string, token: string) =>
@@ -1582,6 +1592,8 @@ export interface TimeSlot {
   available: boolean;
   price: string;    // prix du créneau (tarif creux si entièrement en heures creuses)
   offPeak: boolean; // true si le créneau est ENTIÈREMENT en heures creuses
+  originalPrice?: string; // prix avant promo (présent si remisé)
+  promoName?: string;     // nom de la promo (présent si remisé)
 }
 
 export interface ClubAvailability {
@@ -2078,6 +2090,28 @@ export interface PackageTemplate {
   /** Pouls de ventes (agrégat serveur). Absent des vieux payloads → optionnel. */
   stats?: { soldCount: number; activeCount: number; outstandingAmount: string };
 }
+
+export interface Promotion {
+  id: string;
+  clubId?: string;
+  name: string;
+  startDate: string;   // 'YYYY-MM-DD'
+  endDate: string;     // 'YYYY-MM-DD'
+  windowStart: number | null; // minutes depuis minuit
+  windowEnd: number | null;
+  kind: 'PERCENT' | 'FIXED';
+  percentOff: number | null;
+  fixedPrice: string | null;  // Decimal sérialisé (euros)
+  enabled: boolean;
+  resourceIds: string[];
+  createdAt: string;
+}
+export type CreatePromotionBody = {
+  name: string; startDate: string; endDate: string;
+  kind: 'PERCENT' | 'FIXED'; percentOff?: number | null; fixedPrice?: number | null;
+  windowStart?: number | null; windowEnd?: number | null; enabled?: boolean; resourceIds?: string[];
+};
+export type UpdatePromotionBody = Partial<CreatePromotionBody>;
 
 export interface MemberPackage {
   id: string;

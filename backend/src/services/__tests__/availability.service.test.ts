@@ -2,6 +2,8 @@ import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { AvailabilityService } from '../availability.service';
 
+beforeEach(() => { prismaMock.promotion.findMany.mockResolvedValue([] as any); });
+
 // Ressource padel 8h–22h, fuseau du club par défaut Europe/Paris, pas de 30 min.
 function mockResource(
   timezone = 'Europe/Paris',
@@ -12,6 +14,7 @@ function mockResource(
     closeHour: 22,
     price: opts.price ?? 25,
     offPeakPrice: opts.offPeakPrice ?? null,
+    clubId: 'club-1',
     club: { timezone, offPeakHours: opts.offPeakHours ?? null },
     clubSport: { slotStepMin: null, sport: { defaultSlotStepMin: 30 } },
   } as any);
@@ -123,6 +126,29 @@ describe('AvailabilityService.getAvailableSlots', () => {
 
     // 8h New York le 2025-06-15 (EDT, UTC-4) = 12h UTC
     expect(slots[0].startTime).toBe('2025-06-15T12:00:00.000Z');
+  });
+
+  it('applique une promo pourcentage au prix (originalPrice + promoName)', async () => {
+    mockResource('Europe/Paris', { price: 25 });
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+    prismaMock.promotion.findMany.mockResolvedValue([
+      { name: 'Promo été', kind: 'PERCENT', percentOff: 20, fixedPrice: null, windowStart: null, windowEnd: null, resources: [] },
+    ] as any);
+
+    const slots = await service.getAvailableSlots('court-1', '2025-06-15', 60);
+
+    expect(slots[0].price).toBe('20.00');
+    expect(slots[0].originalPrice).toBe('25.00');
+    expect(slots[0].promoName).toBe('Promo été');
+  });
+
+  it('sans promo → pas de originalPrice/promoName', async () => {
+    mockResource('Europe/Paris', { price: 25 });
+    prismaMock.reservation.findMany.mockResolvedValue([]);
+    const slots = await service.getAvailableSlots('court-1', '2025-06-15', 60);
+    expect(slots[0].price).toBe('25.00');
+    expect(slots[0].originalPrice).toBeUndefined();
+    expect(slots[0].promoName).toBeUndefined();
   });
 });
 

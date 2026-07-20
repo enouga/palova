@@ -5,7 +5,8 @@ import { prisma } from '../db/prisma';
 import { redis } from '../redis/client';
 import { stripe } from '../db/stripe';
 import { SSEService, SSEEvent } from './sse.service';
-import { slotPriceCents, classifySlot, OffPeakHours } from './pricing';
+import { slotPriceCents, classifySlot, effectiveSlotPriceCents, OffPeakHours } from './pricing';
+import { loadActivePromotions } from './promotion.service';
 import { BookingQuotas, QuotaStatus } from './quotas';
 import { PackageService } from './package.service';
 import { SubscriptionService } from './subscription.service';
@@ -277,13 +278,16 @@ export class ReservationService {
       const format = (resource.attributes as { format?: string } | null)?.format;
       const partners = await this.validatePartners(userId, resource.clubId, format, partnerUserIds);
 
-      // Prix du créneau (tarif creux ssi entièrement en heures creuses).
-      const priceCents = slotPriceCents(
+      // Prix du créneau (tarif creux ssi entièrement en heures creuses), puis promotions actives.
+      const baseCents = slotPriceCents(
         resource.club.offPeakHours as OffPeakHours | null,
         startTime, endTime, resource.club.timezone,
         Math.round(Number(resource.price) * 100),
         resource.offPeakPrice != null ? Math.round(Number(resource.offPeakPrice) * 100) : null,
       );
+      const localDate = DateTime.fromJSDate(startTime, { zone: resource.club.timezone }).toISODate()!;
+      const promos = await loadActivePromotions(resource.clubId, localDate);
+      const { priceCents } = effectiveSlotPriceCents(baseCents, promos, resourceId, startTime, endTime, resource.club.timezone);
       const totalPrice = new Prisma.Decimal(priceCents).div(100);
 
       // Résa + lignes participant (organisateur + partenaires) dans une transaction.

@@ -1,7 +1,8 @@
 import { DateTime } from 'luxon';
 import { prisma } from '../db/prisma';
 import { bySortOrder } from './resource.service';
-import { classifySlot, OffPeakHours } from './pricing';
+import { classifySlot, effectiveSlotPriceCents, OffPeakHours, ActivePromo } from './pricing';
+import { loadActivePromotions } from './promotion.service';
 import { HOLD_EXPIRY_MINUTES } from './holdWindow';
 import { cachedClubAvailability } from './availabilityCache';
 
@@ -9,11 +10,14 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
-  price: string;    // prix du créneau (tarif creux si entièrement en heures creuses)
+  price: string;    // prix du créneau (tarif creux si entièrement en heures creuses, remise déduite)
   offPeak: boolean; // true si le créneau est ENTIÈREMENT en heures creuses
+  originalPrice?: string; // prix normal (avant promo), présent seulement si remisé
+  promoName?: string;     // nom de la promo appliquée, présent seulement si remisé
 }
 
 interface SlotResource {
+  id: string;
   openHour: number;
   closeHour: number;
   price: unknown;          // Prisma.Decimal
@@ -36,7 +40,9 @@ function activeReservationWhere(now: number) {
 export class AvailabilityService {
   /**
    * Grille de créneaux d'UN terrain — pur (aucun I/O), partagé par la lecture
-   * terrain-seul et la lecture club (qui a déjà chargé réservations et club).
+   * terrain-seul et la lecture club (qui a déjà chargé réservations, club et promos).
+   * `promos` est déjà filtré sur la date (cf. loadActivePromotions) ; liste vide =
+   * aucun surcoût (on saute effectiveSlotPriceCents, chemin chaud du rush de minuit).
    */
   private buildSlots(
     resource: SlotResource,
@@ -45,6 +51,7 @@ export class AvailabilityService {
     dayStartLocal: DateTime,
     durationMinutes: number,
     reservations: ActiveWindow[],
+    promos: ActivePromo[],
   ): TimeSlot[] {
     const open = dayStartLocal.set({ hour: resource.openHour }).toUTC();
     const close = dayStartLocal.set({ hour: resource.closeHour }).toUTC();
@@ -62,11 +69,21 @@ export class AvailabilityService {
         (r) => r.startTime < slotEnd && r.endTime > slotStart,
       );
 
-      // classifySlot UNE seule fois par créneau : le prix en découle directement
+      // classifySlot UNE seule fois par créneau : le prix normal en découle directement
       // (slotPriceCents refaisait la même marche luxon en interne → 2× le travail
       // CPU sur le chemin le plus chaud du backend).
       const offPeakSlot = classifySlot(offPeak, slotStart, slotEnd, tz) === 'OFF_PEAK';
-      const priceCents = offPeakSlot && offCents != null ? offCents : baseCents;
+      const normalCents = offPeakSlot && offCents != null ? offCents : baseCents;
+
+      // Promotions datées : le meilleur prix remisé remplace le prix normal (jamais à
+      // la hausse). Aucune promo active → on saute le calcul (zéro surcoût CPU).
+      let priceCents = normalCents;
+      let promoName: string | undefined;
+      if (promos.length > 0) {
+        const eff = effectiveSlotPriceCents(normalCents, promos, resource.id, slotStart, slotEnd, tz);
+        priceCents = eff.priceCents;
+        promoName = eff.promoName;
+      }
 
       slots.push({
         startTime: cursor.toISO()!,
@@ -74,6 +91,7 @@ export class AvailabilityService {
         available: !hasConflict,
         price: (priceCents / 100).toFixed(2),
         offPeak: offPeakSlot,
+        ...(priceCents < normalCents ? { originalPrice: (normalCents / 100).toFixed(2), promoName } : {}),
       });
 
       // Créneaux fixes consécutifs : on avance d'une durée pleine (et non d'une
@@ -92,10 +110,12 @@ export class AvailabilityService {
     const resource = await prisma.resource.findUniqueOrThrow({
       where: { id: resourceId },
       select: {
+        id: true,
         openHour: true,
         closeHour: true,
         price: true,
         offPeakPrice: true,
+        clubId: true,
         club: { select: { timezone: true, offPeakHours: true } },
       },
     });
@@ -119,9 +139,11 @@ export class AvailabilityService {
       select: { startTime: true, endTime: true },
     });
 
+    const promos = await loadActivePromotions(resource.clubId, date);
+
     return this.buildSlots(
       resource, tz, resource.club.offPeakHours as OffPeakHours | null,
-      dayStartLocal, durationMinutes, activeReservations,
+      dayStartLocal, durationMinutes, activeReservations, promos,
     );
   }
 
@@ -129,8 +151,8 @@ export class AvailabilityService {
    * Disponibilités des terrains actifs d'un club (vue planning joueur).
    * `clubSportId` (optionnel) restreint à un sport — la page Réserver charge chaque
    * sport avec sa propre durée. Absent = tous les terrains (comportement historique).
-   * Coût constant : 3 requêtes SQL quel que soit le nombre de terrains (club,
-   * terrains, réservations groupées) — c'était 2 + 2×terrains avant.
+   * Coût constant : 4 requêtes SQL quel que soit le nombre de terrains (club,
+   * terrains, réservations groupées, promotions) — c'était 2 + 2×terrains avant.
    */
   async getClubAvailability(clubId: string, date: string, durationMinutes: number, clubSportId?: string) {
     const club = await prisma.club.findUniqueOrThrow({
@@ -176,12 +198,16 @@ export class AvailabilityService {
       if (list) list.push(r); else byResource.set(r.resourceId, [r]);
     }
 
+    // Promotions actives du club chargées UNE fois pour toute la grille (filtrage
+    // par terrain/fenêtre horaire fait dans effectiveSlotPriceCents, en mémoire).
+    const promos = await loadActivePromotions(clubId, date);
+
     return resources.map((r) => ({
       resource: {
         id: r.id, name: r.name, attributes: r.attributes, price: r.price, offPeakPrice: r.offPeakPrice,
         sport: r.clubSport.sport, clubSportId: r.clubSport.id,
       },
-      slots: this.buildSlots(r, tz, offPeak, dayStartLocal, durationMinutes, byResource.get(r.id) ?? []),
+      slots: this.buildSlots(r, tz, offPeak, dayStartLocal, durationMinutes, byResource.get(r.id) ?? [], promos),
     }));
   }
 
