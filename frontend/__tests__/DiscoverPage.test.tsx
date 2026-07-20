@@ -42,7 +42,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 // Import après les mocks (le module lit `api`/`useClub`/`useAuth`/`hardNavigate` au montage).
-import DiscoverPage from '@/app/decouvrir/page';
+import { DiscoverClient } from '@/app/decouvrir/DiscoverClient';
 
 function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
   return {
@@ -71,7 +71,7 @@ const MATCH_LYON = makeMatch({
   club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357, department: 'Rhône', departmentCode: '69' },
 });
 
-const wrap = () => render(<ThemeProvider><DiscoverPage /></ThemeProvider>);
+const wrap = () => render(<ThemeProvider><DiscoverClient /></ThemeProvider>);
 
 // jsdom n'implémente pas scrollIntoView : stub commun à tous les tests (les ancres/deep-links
 // l'appellent pour naviguer entre les sections empilées).
