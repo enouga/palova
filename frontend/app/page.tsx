@@ -1,24 +1,37 @@
-'use client';
-import { useClub } from '@/lib/ClubProvider';
-import { useTheme } from '@/lib/ThemeProvider';
-import PlatformLanding from '@/components/PlatformLanding';
-import { Screen } from '@/components/ui/Screen';
-import { ClubNav } from '@/components/ClubNav';
-import { ClubHouse } from '@/components/ClubHouse';
+import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { api } from '@/lib/api';
+import { canonicalFor, clubOgImage, PLATFORM_OG_IMAGE } from '@/lib/seo';
+import { HomeClient } from './HomeClient';
+
+const PLATFORM_TITLE = 'Palova — Réservez votre terrain de padel en ligne';
+const PLATFORM_DESCRIPTION = 'Réservez votre terrain de padel en quelques secondes, rejoignez des parties ouvertes et suivez vos tournois — sur Palova.';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const slug = (await headers()).get('x-club-slug');
+  if (!slug) {
+    return {
+      title: PLATFORM_TITLE,
+      description: PLATFORM_DESCRIPTION,
+      openGraph: { title: PLATFORM_TITLE, description: PLATFORM_DESCRIPTION, images: [{ url: PLATFORM_OG_IMAGE, width: 1200, height: 630 }] },
+    };
+  }
+  try {
+    const club = await api.getClub(slug);
+    const title = `${club.name} — Réservez un terrain de padel`;
+    const description = club.description?.trim() || `Réservez vos créneaux de padel en ligne au ${club.name}${club.city ? `, ${club.city}` : ''}.`;
+    const image = clubOgImage(slug);
+    return {
+      title, description,
+      alternates: { canonical: canonicalFor(slug, '/') },
+      openGraph: { title, description, images: [{ url: image, width: 1200, height: 630 }] },
+      twitter: { card: 'summary_large_image', title, description, images: [image] },
+    };
+  } catch {
+    return { title: 'Palova' };
+  }
+}
 
 export default function HomePage() {
-  const { slug, club, loading } = useClub();
-  const { th } = useTheme();
-  // Plateforme (palova.fr) → accueil adaptatif ; sous-domaine club → Club-house (vitrine du club).
-  if (!slug) return <PlatformLanding />;
-  if (loading) return <div style={{ minHeight: '100vh', background: th.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>;
-  if (!club) return <div style={{ minHeight: '100vh', background: th.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, color: th.textMute }}>Club introuvable.</div>;
-  return (
-    <Screen>
-      <div style={{ paddingBottom: 40 }}>
-        <ClubNav club={club} />
-        <ClubHouse club={club} />
-      </div>
-    </Screen>
-  );
+  return <HomeClient />;
 }
