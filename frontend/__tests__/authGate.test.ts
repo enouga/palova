@@ -42,6 +42,12 @@ describe('isPublicPath', () => {
   it('ne rend PAS /decouvrir public ici (référencée explicitement par hôte, pas dans PUBLIC_PATHS)', () => {
     expect(isPublicPath('/decouvrir')).toBe(false);
   });
+
+  it('/aide est public (page Aide joueur)', () => {
+    expect(isPublicPath('/aide')).toBe(true);
+    expect(isClubPublicPath('/aide')).toBe(true);
+    expect(isPlatformPublicPath('/aide')).toBe(true);
+  });
 });
 
 describe('isPlatformPublicPath', () => {

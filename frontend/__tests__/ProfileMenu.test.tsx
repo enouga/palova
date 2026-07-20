@@ -254,6 +254,13 @@ describe('ProfileMenu', () => {
     expect(screen.queryByText('Se déconnecter')).not.toBeInTheDocument();
   });
 
+  it('propose un lien Aide', async () => {
+    document.cookie = 'token=abc; path=/';
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Aide')).toBeInTheDocument();
+  });
+
   it('le lien « Mon profil » navigue vers /me/profile', async () => {
     document.cookie = 'token=abc; path=/';
     wrap();

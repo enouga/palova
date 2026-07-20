@@ -127,6 +127,12 @@ describe('AdminLayout — toggle de la sidebar', () => {
     expect(screen.getByText('Matchs')).toBeInTheDocument();
   });
 
+  it('affiche l entrée Support pour tous les rôles (ici STAFF)', async () => {
+    api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
+    await wrap();
+    expect(screen.getByText('Support')).toBeInTheDocument();
+  });
+
   it('viewer STAFF : les 5 entrées de structure sont masquées + section Configuration absente', async () => {
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
     await wrap();

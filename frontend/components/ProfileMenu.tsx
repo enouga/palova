@@ -167,6 +167,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             {/* « Arbitrage », jamais « Mes tournois » : /api/me/tournaments désigne déjà les tournois
                 où JE SUIS INSCRIT comme joueur — deux « mes tournois » de sens opposés piégeraient. */}
             {slug && isReferee && <MenuItem th={th} icon="trophy" label="Arbitrage" onClick={() => go('/me/refereeing')} />}
+            <MenuItem th={th} icon="info" label="Aide" onClick={() => go(slug ? '/aide' : '/faq')} />
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
             <MenuItem th={th} icon="ball" label="Palova" onClick={() => { setOpen(false); window.location.assign(platformUrl('/decouvrir')); }} />
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}

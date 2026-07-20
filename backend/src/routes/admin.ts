@@ -33,6 +33,8 @@ import { EmailTemplateService } from '../services/emailTemplate.service';
 import { PresentationService } from '../services/presentation.service';
 import { OnboardingService } from '../services/onboarding.service';
 import { ModerationService } from '../services/moderation.service';
+import { SupportService } from '../services/support.service';
+import { assertRateLimit } from '../services/rateLimit';
 import { billingState } from '../services/platformBilling/platformBilling.service';
 import { createBillingCheckout, createBillingPortal } from '../services/platformBilling/stripeBilling';
 import { tierFor, tierPriceCents, tierLabel } from '../services/platformBilling/tiers';
@@ -61,6 +63,7 @@ const emailTemplateService = new EmailTemplateService();
 const presentationService = new PresentationService();
 const onboardingService = new OnboardingService();
 const moderationService = new ModerationService();
+const supportService = new SupportService();
 
 const PAGE_KINDS = new Set<ClubPageKind>(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE', 'OFFRES']);
 
@@ -130,6 +133,8 @@ const ERROR_STATUS: Record<string, number> = {
   NOTHING_TO_SUBSCRIBE:   409,
   NO_BILLING_ACCOUNT:     409,
   SERIES_CANCELLED:       409,
+  RATE_LIMITED:           429,
+  SUPPORT_UNAVAILABLE:    502,
 };
 
 function asString(v: unknown): string {
@@ -1602,6 +1607,17 @@ router.post('/moderation/reports/:reportId/resolve', requireClubMember('ADMIN'),
     const action = (req.body as { action?: unknown })?.action;
     if (action !== 'DELETE' && action !== 'REJECT') return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     res.json(await moderationService.resolveClubReport(req.membership!.clubId, asString(req.params.reportId), req.user!.id, action));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// --- Support : ticket club → Palova (issue GitHub, cf. support.service) ---
+
+router.post('/support/tickets', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    await assertRateLimit('support', req.user!.id, 5, 3600);
+    const { category, subject, description } = req.body;
+    const result = await supportService.createTicket(req.membership!.clubId, req.user!.id, { category, subject, description });
+    res.status(201).json(result);
   } catch (err) { handleError(err, res, next); }
 });
 

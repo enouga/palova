@@ -336,6 +336,9 @@ export const api = {
     request<MessageReportRow>(`/api/clubs/${clubId}/admin/moderation/reports/${reportId}/resolve`,
       { method: 'POST', body: JSON.stringify({ action }) }, token),
 
+  adminCreateSupportTicket: (clubId: string, body: { category: SupportTicketCategory; subject: string; description: string }, token: string) =>
+    request<{ number: number | null }>(`/api/clubs/${clubId}/admin/support/tickets`, { method: 'POST', body: JSON.stringify(body) }, token),
+
   // --- Abonnement Palova du club (facturation SaaS) ---
   adminGetBilling: (clubId: string, token: string) =>
     request<ClubBilling>(`/api/clubs/${clubId}/admin/billing`, {}, token),
@@ -2520,6 +2523,8 @@ export interface ConversationSummary {
 export type ReportReason = 'HARASSMENT' | 'ILLEGAL' | 'SPAM' | 'OTHER';
 export type ReportStatus = 'OPEN' | 'RESOLVED';
 export type ReportResolution = 'DELETED' | 'REJECTED';
+
+export type SupportTicketCategory = 'BUG' | 'QUESTION' | 'SUGGESTION' | 'BILLING';
 
 export interface MessageReportRow {
   id: string;

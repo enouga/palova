@@ -19,6 +19,7 @@ export function Footer() {
   // Liens selon le contexte : un club met en avant ses offres, la plateforme ses tarifs.
   const links = slug
     ? [
+        { href: '/aide', label: 'Aide' },
         { href: '/offres', label: 'Nos offres' },
         { href: '/faq', label: 'FAQ' },
         { href: '/cgv', label: 'CGV' },
