@@ -317,7 +317,9 @@ export class OpenMatchService {
     }, { timeout: 10_000 });
 
     // Après commit, best-effort : prévenir l'organisateur qu'un joueur a rejoint.
-    await this.safeNotify(() => notifyOpenMatchJoin(reservationId, userId));
+    // Fire-and-forget (pas de await) : un SMTP lent/injoignable ne doit jamais retarder
+    // la réponse au joueur qui vient de rejoindre.
+    void this.safeNotify(() => notifyOpenMatchJoin(reservationId, userId));
     return result;
   }
 
@@ -359,11 +361,11 @@ export class OpenMatchService {
       return { isSelf };
     }, { timeout: 10_000 });
 
-    // Best-effort après commit : prévenir la bonne personne.
-    if (outcome.isSelf) await this.safeNotify(() => notifyOpenMatchLeft(reservationId, targetUserId));
-    else                await this.safeNotify(() => notifyOpenMatchRemoved(reservationId, targetUserId));
+    // Best-effort après commit, fire-and-forget : prévenir la bonne personne sans retarder la réponse.
+    if (outcome.isSelf) void this.safeNotify(() => notifyOpenMatchLeft(reservationId, targetUserId));
+    else                void this.safeNotify(() => notifyOpenMatchRemoved(reservationId, targetUserId));
     // Une place vient de se libérer : prévenir les alertes horaires correspondantes.
-    await this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
+    void this.safeNotify(() => this.matchAlerts.matchAndNotify(reservationId).then(() => undefined));
     return { id: reservationId };
   }
 
@@ -416,7 +418,7 @@ export class OpenMatchService {
       return { id: reservationId };
     }, { timeout: 10_000 });
 
-    await this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
+    void this.safeNotify(() => notifyOpenMatchAdded(reservationId, targetUserId));
     return result;
   }
 

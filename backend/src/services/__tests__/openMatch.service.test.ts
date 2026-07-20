@@ -319,6 +319,20 @@ describe('OpenMatchService', () => {
       expect(mockNotifyJoin).toHaveBeenCalled();
     });
 
+    it('répond sans attendre la notification (fire-and-forget) — un SMTP lent ne retarde pas le join', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([{ id: 'p1', userId: 'org', isOrganizer: true }] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p3' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      // La notif ne se résout jamais pendant ce test : si le join l'attendait, le test « pendrait ».
+      mockNotifyJoin.mockImplementation(() => new Promise<void>(() => {}));
+
+      const result = await service.joinOpenMatch('club-demo', 'm1', 'user-3');
+
+      expect(result).toEqual({ id: 'm1' });
+      expect(mockNotifyJoin).toHaveBeenCalledWith('m1', 'user-3');
+    });
+
     it('lève MATCH_FULL quand le terrain est complet', async () => {
       happyTx(); lockRow(); resource({ attributes: { format: 'single' } }); // max 2
       prismaMock.reservationParticipant.findMany.mockResolvedValue([
@@ -605,6 +619,20 @@ describe('OpenMatchService', () => {
       await expect(service.addOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3')).resolves.toBeDefined();
     });
 
+    it('répond sans attendre la notification (fire-and-forget)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([{ id: 'p1', userId: 'org', isOrganizer: true }] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p3' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      // La notif ne se résout jamais : si l'ajout l'attendait, le test « pendrait ».
+      mockNotifyAdded.mockImplementation(() => new Promise<void>(() => {}));
+
+      const result = await service.addOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3');
+
+      expect(result).toEqual({ id: 'm1' });
+      expect(mockNotifyAdded).toHaveBeenCalledWith('m1', 'user-3');
+    });
+
     it('lève VALIDATION_ERROR si targetUserId est vide ou absent', async () => {
       await expect(service.addOpenMatchPlayer('club-demo', 'm1', 'org', '')).rejects.toThrow('VALIDATION_ERROR');
       expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
@@ -671,6 +699,21 @@ describe('OpenMatchService', () => {
       mockNotifyRemoved.mockRejectedValue(new Error('SMTP down'));
 
       await expect(service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3')).resolves.toBeDefined();
+    });
+
+    it('répond sans attendre la notification ni le matcheur d alertes (fire-and-forget)', async () => {
+      happyTx(); lockRow(); parts();
+      prismaMock.resource.findUnique.mockResolvedValue({ clubId: 'club-demo' } as any);
+      prismaMock.reservationParticipant.delete.mockResolvedValue({} as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      // Ni la notif ni le matcheur ne se résolvent : si le retrait les attendait, le test « pendrait ».
+      mockNotifyRemoved.mockImplementation(() => new Promise<void>(() => {}));
+      matchAndNotifyMock.mockImplementation(() => new Promise(() => {}));
+
+      const result = await service.removeOpenMatchPlayer('club-demo', 'm1', 'org', 'user-3');
+
+      expect(result).toEqual({ id: 'm1' });
+      expect(mockNotifyRemoved).toHaveBeenCalledWith('m1', 'user-3');
     });
   });
 
