@@ -37,10 +37,21 @@ jest.mock('../../services/moderation.service', () => ({
 // --- Mock ciblé : TournamentService (classe instanciée au chargement de clubs.ts) ---
 const resolveReferee = jest.fn(), listRefereeTournaments = jest.fn(), refereeListRegistrations = jest.fn(),
   refereePromoteRegistration = jest.fn(), refereeRemoveRegistration = jest.fn();
+// Table de marque — cœur partagé, appelé par les nouvelles routes J/A de cette Task 8.
+// assertRefereeOwnsTournament (étage 2) est posée à la porte J/A depuis le fix de la faille
+// d'autorisation : sans elle, n'importe quel J/A actif du club pouvait agir sur la table de
+// marque de n'importe quel tournoi du club, pas seulement le sien.
+const listMarkTable = jest.fn(), listMarkTableLog = jest.fn(), setPresence = jest.fn(),
+  markTablePromote = jest.fn(), markTableRemove = jest.fn(), declareForfeit = jest.fn(),
+  replacePlayer = jest.fn(), addToBench = jest.fn(), removeFromBench = jest.fn(),
+  pairFromBench = jest.fn(), addLateRegistration = jest.fn(), assertRefereeOwnsTournament = jest.fn();
 jest.mock('../../services/tournament.service', () => ({
   TournamentService: jest.fn().mockImplementation(() => ({
     resolveReferee, listRefereeTournaments, refereeListRegistrations,
     refereePromoteRegistration, refereeRemoveRegistration,
+    listMarkTable, listMarkTableLog, setPresence, markTablePromote, markTableRemove,
+    declareForfeit, replacePlayer, addToBench, removeFromBench, pairFromBench, addLateRegistration,
+    assertRefereeOwnsTournament,
     listPublicByClubSlug: jest.fn().mockResolvedValue([]),
   })),
 }));
@@ -213,6 +224,252 @@ describe('Routes espace juge-arbitre', () => {
 
   it('sans token → 401', async () => {
     const res = await request(app).get(`${base}/tournaments`);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('table de marque — routes J/A', () => {
+  beforeEach(() => {
+    resolveReferee.mockResolvedValue(true);
+    assertRefereeOwnsTournament.mockResolvedValue(undefined);
+  });
+
+  // LE test du gate : sans la facette, un J/A lambda ne lit RIEN de la table de marque.
+  // Mutation-vérifié (cf. rapport) : retirer le `if (!resolveReferee...)` d'une route fait virer ce test au rouge.
+  it('GET mark-table — 403 NOT_A_REFEREE sans la facette', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).get(`${base}/tournaments/t1/mark-table`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('NOT_A_REFEREE');
+    expect(listMarkTable).not.toHaveBeenCalled();
+  });
+
+  it('GET mark-table — 200 avec la facette', async () => {
+    listMarkTable.mockResolvedValue({ registrations: [] });
+    const res = await request(app).get(`${base}/tournaments/t1/mark-table`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ registrations: [] });
+    expect(listMarkTable).toHaveBeenCalledWith('club-1', 't1');
+    expect(assertRefereeOwnsTournament).toHaveBeenCalledWith('t1', 'club-1', 'u-ref');
+  });
+
+  // Faille corrigée : la facette seule ne suffit pas — un J/A actif du club ne doit pas
+  // pouvoir agir sur la table de marque d'un tournoi qui n'est pas le sien (étage 2, TOURNAMENT_NOT_YOURS).
+  it('GET mark-table — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app).get(`${base}/tournaments/t9/mark-table`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(listMarkTable).not.toHaveBeenCalled();
+  });
+
+  it('POST forfeit — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app)
+      .post(`${base}/tournaments/t9/registrations/r1/forfeit`)
+      .set(auth).send({ side: 'PARTNER' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(declareForfeit).not.toHaveBeenCalled();
+  });
+
+  it('POST mark-table/registrations/:regId/promote — 403 TOURNAMENT_NOT_YOURS si le tournoi n\'est pas le sien', async () => {
+    assertRefereeOwnsTournament.mockRejectedValue(new Error('TOURNAMENT_NOT_YOURS'));
+    const res = await request(app).post(`${base}/tournaments/t9/mark-table/registrations/r1/promote`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('TOURNAMENT_NOT_YOURS');
+    expect(markTablePromote).not.toHaveBeenCalled();
+  });
+
+  it('GET mark-table/log — 200, délègue listMarkTableLog', async () => {
+    listMarkTableLog.mockResolvedValue([{ id: 'log-1' }]);
+    const res = await request(app).get(`${base}/tournaments/t1/mark-table/log`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id: 'log-1' }]);
+    expect(listMarkTableLog).toHaveBeenCalledWith('club-1', 't1');
+  });
+
+  it('GET mark-table/log — 403 NOT_A_REFEREE sans la facette', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).get(`${base}/tournaments/t1/mark-table/log`).set(auth);
+    expect(res.status).toBe(403);
+    expect(listMarkTableLog).not.toHaveBeenCalled();
+  });
+
+  it('POST presence — délègue avec side+presence', async () => {
+    setPresence.mockResolvedValue(undefined);
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/presence`)
+      .set(auth).send({ side: 'CAPTAIN', presence: 'PRESENT' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(setPresence).toHaveBeenCalledWith('club-1', 't1', 'r1', 'CAPTAIN', 'PRESENT', 'u-ref');
+  });
+
+  it('POST presence — 400 VALIDATION_ERROR si side/presence invalides', async () => {
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/presence`)
+      .set(auth).send({ side: 'REFEREE', presence: 'PRESENT' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(setPresence).not.toHaveBeenCalled();
+  });
+
+  it('POST forfeit — délègue avec side, remonte le résultat', async () => {
+    declareForfeit.mockResolvedValue({ id: 'r1', status: 'CANCELLED' });
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/forfeit`)
+      .set(auth).send({ side: 'PARTNER' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 'r1', status: 'CANCELLED' });
+    expect(declareForfeit).toHaveBeenCalledWith('club-1', 't1', 'r1', 'PARTNER', 'u-ref');
+  });
+
+  it('POST forfeit — 400 VALIDATION_ERROR si side invalide', async () => {
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/forfeit`)
+      .set(auth).send({ side: 'NOBODY' });
+    expect(res.status).toBe(400);
+    expect(declareForfeit).not.toHaveBeenCalled();
+  });
+
+  it('POST replace — délègue side+newUserId', async () => {
+    replacePlayer.mockResolvedValue(undefined);
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/replace`)
+      .set(auth).send({ side: 'CAPTAIN', newUserId: 'u9' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(replacePlayer).toHaveBeenCalledWith('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'u-ref');
+  });
+
+  it('POST replace — GENDER_MISMATCH remonte 400', async () => {
+    replacePlayer.mockRejectedValue(new Error('GENDER_MISMATCH'));
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/replace`)
+      .set(auth).send({ side: 'CAPTAIN', newUserId: 'u9' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('GENDER_MISMATCH');
+  });
+
+  it('POST replace — 400 VALIDATION_ERROR si newUserId manquant', async () => {
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations/r1/replace`)
+      .set(auth).send({ side: 'CAPTAIN' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(replacePlayer).not.toHaveBeenCalled();
+  });
+
+  it('POST bench — 201, délègue userId', async () => {
+    addToBench.mockResolvedValue(undefined);
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/bench`)
+      .set(auth).send({ userId: 'u9' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ ok: true });
+    expect(addToBench).toHaveBeenCalledWith('club-1', 't1', 'u9', 'u-ref');
+  });
+
+  it('POST bench — 400 VALIDATION_ERROR si userId manquant', async () => {
+    const res = await request(app).post(`${base}/tournaments/t1/bench`).set(auth).send({});
+    expect(res.status).toBe(400);
+    expect(addToBench).not.toHaveBeenCalled();
+  });
+
+  it('POST bench — 409 ALREADY_ON_BENCH remonté', async () => {
+    addToBench.mockRejectedValue(new Error('ALREADY_ON_BENCH'));
+    const res = await request(app).post(`${base}/tournaments/t1/bench`).set(auth).send({ userId: 'u9' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('ALREADY_ON_BENCH');
+  });
+
+  it('DELETE bench/:userId — 200', async () => {
+    removeFromBench.mockResolvedValue(undefined);
+    const res = await request(app).delete(`${base}/tournaments/t1/bench/u9`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(removeFromBench).toHaveBeenCalledWith('club-1', 't1', 'u9', 'u-ref');
+  });
+
+  it('DELETE bench/:userId — 404 BENCH_ENTRY_NOT_FOUND remonté', async () => {
+    removeFromBench.mockRejectedValue(new Error('BENCH_ENTRY_NOT_FOUND'));
+    const res = await request(app).delete(`${base}/tournaments/t1/bench/u9`).set(auth);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('BENCH_ENTRY_NOT_FOUND');
+  });
+
+  it('DELETE bench/:userId — 403 NOT_A_REFEREE sans la facette', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).delete(`${base}/tournaments/t1/bench/u9`).set(auth);
+    expect(res.status).toBe(403);
+    expect(removeFromBench).not.toHaveBeenCalled();
+  });
+
+  it('POST bench/pair — 201, délègue userAId+userBId', async () => {
+    pairFromBench.mockResolvedValue({ id: 'reg-new' });
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/bench/pair`)
+      .set(auth).send({ userAId: 'ua', userBId: 'ub' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'reg-new' });
+    expect(pairFromBench).toHaveBeenCalledWith('club-1', 't1', 'ua', 'ub', 'u-ref');
+  });
+
+  it('POST bench/pair — 400 VALIDATION_ERROR si un id manque', async () => {
+    const res = await request(app).post(`${base}/tournaments/t1/bench/pair`).set(auth).send({ userAId: 'ua' });
+    expect(res.status).toBe(400);
+    expect(pairFromBench).not.toHaveBeenCalled();
+  });
+
+  it('POST registrations (binôme tardif) — 201, délègue captainUserId+partnerUserId', async () => {
+    addLateRegistration.mockResolvedValue({ id: 'reg-late' });
+    const res = await request(app)
+      .post(`${base}/tournaments/t1/registrations`)
+      .set(auth).send({ captainUserId: 'ua', partnerUserId: 'ub' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'reg-late' });
+    expect(addLateRegistration).toHaveBeenCalledWith('club-1', 't1', 'ua', 'ub', 'u-ref');
+  });
+
+  it('POST registrations (binôme tardif) — 400 VALIDATION_ERROR si partenaire manquant', async () => {
+    const res = await request(app).post(`${base}/tournaments/t1/registrations`).set(auth).send({ captainUserId: 'ua' });
+    expect(res.status).toBe(400);
+    expect(addLateRegistration).not.toHaveBeenCalled();
+  });
+
+  it('POST mark-table/registrations/:regId/promote — 200, délègue markTablePromote', async () => {
+    markTablePromote.mockResolvedValue({ id: 'r1', status: 'CONFIRMED' });
+    const res = await request(app).post(`${base}/tournaments/t1/mark-table/registrations/r1/promote`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 'r1', status: 'CONFIRMED' });
+    expect(markTablePromote).toHaveBeenCalledWith('club-1', 't1', 'r1', 'u-ref');
+  });
+
+  it('POST mark-table/registrations/:regId/promote — 403 NOT_A_REFEREE sans la facette', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).post(`${base}/tournaments/t1/mark-table/registrations/r1/promote`).set(auth);
+    expect(res.status).toBe(403);
+    expect(markTablePromote).not.toHaveBeenCalled();
+  });
+
+  it('DELETE mark-table/registrations/:regId — 200, délègue markTableRemove', async () => {
+    markTableRemove.mockResolvedValue({ cancelled: true });
+    const res = await request(app).delete(`${base}/tournaments/t1/mark-table/registrations/r1`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ cancelled: true });
+    expect(markTableRemove).toHaveBeenCalledWith('club-1', 't1', 'r1', 'u-ref');
+  });
+
+  it('DELETE mark-table/registrations/:regId — 403 NOT_A_REFEREE sans la facette', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).delete(`${base}/tournaments/t1/mark-table/registrations/r1`).set(auth);
+    expect(res.status).toBe(403);
+    expect(markTableRemove).not.toHaveBeenCalled();
+  });
+
+  it('sans token → 401 (mark-table)', async () => {
+    const res = await request(app).get(`${base}/tournaments/t1/mark-table`);
     expect(res.status).toBe(401);
   });
 });

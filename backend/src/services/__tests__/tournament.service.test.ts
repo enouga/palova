@@ -5,6 +5,7 @@ import {
   notifyTournamentRegistration,
   notifyTournamentCancellation,
   notifyTournamentPromotion,
+  notifyTournamentReplacement,
 } from '../../email/notifications';
 import { PackageService } from '../package.service';
 import { StripeService } from '../stripe.service';
@@ -1303,5 +1304,445 @@ describe('TournamentService.updateTournament — remboursement à l annulation',
     await new TournamentService().updateTournament('t1', 'club-demo', { name: 'Nouveau nom' });
 
     expect(refundSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('table de marque — lecture', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('listMarkTable expose userId (surface d\'action, pas la même règle que le roster)', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({
+      id: 't1', name: 'Grand Prix', category: 'P500', gender: 'MEN', maxTeams: 12,
+    } as any);
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      {
+        id: 'r1', status: 'CONFIRMED', paymentStatus: 'NONE', createdAt: new Date(),
+        captainUserId: 'c1', partnerUserId: 'p1', captainPresence: 'PRESENT', partnerPresence: 'ABSENT',
+        captain: { firstName: 'A', lastName: 'B', avatarUrl: null, phone: null },
+        partner: { firstName: 'C', lastName: 'D', avatarUrl: null, phone: null },
+      },
+    ] as any);
+    (prismaMock.tournamentBenchEntry.findMany as jest.Mock).mockResolvedValue([]);
+    (prismaMock.tournamentLogEntry.findMany as jest.Mock).mockResolvedValue([]);
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+
+    const view = await svc.listMarkTable('club-1', 't1');
+    expect(view.registrations[0].captain.userId).toBe('c1');
+    expect(view.registrations[0].captain.presence).toBe('PRESENT');
+    expect(view.registrations[0].partner.presence).toBe('ABSENT');
+    expect(view.pointedCount).toBe(1);
+    expect(view.totalSlots).toBe(2);
+  });
+
+  it('listMarkTable : TOURNAMENT_NOT_FOUND si autre club', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue(null as any);
+    await expect(svc.listMarkTable('club-1', 't1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('listMarkTableLog : cap 200, plus récent d\'abord', async () => {
+    prismaMock.tournament.findFirst.mockResolvedValue({ id: 't1' } as any);
+    (prismaMock.tournamentLogEntry.findMany as jest.Mock).mockResolvedValue([]);
+    await svc.listMarkTableLog('club-1', 't1');
+    const arg = (prismaMock.tournamentLogEntry.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.orderBy).toEqual({ createdAt: 'desc' });
+    expect(arg.take).toBe(200);
+  });
+});
+
+describe('table de marque — pointage', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('setPresence : écrit le côté demandé + journal CHECK_IN', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({
+      id: 'r1', captainUserId: 'c1', partnerUserId: 'p1',
+      captain: { firstName: 'A', lastName: 'B' }, partner: { firstName: 'C', lastName: 'D' },
+    } as any);
+    const tx = { tournamentRegistration: { update: jest.fn() }, tournamentLogEntry: { create: jest.fn() } };
+    (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await svc.setPresence('club-1', 't1', 'r1', 'CAPTAIN', 'PRESENT', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith({ where: { id: 'r1' }, data: { captainPresence: 'PRESENT' } });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tournamentId: 't1', actorUserId: 'staff-1', kind: 'CHECK_IN' }),
+    }));
+  });
+
+  it('setPresence : REGISTRATION_NOT_FOUND hors club/tournoi', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    await expect(svc.setPresence('club-1', 't1', 'r1', 'CAPTAIN', 'PRESENT', 'u1')).rejects.toThrow('REGISTRATION_NOT_FOUND');
+  });
+
+  it('markTablePromote délègue à adminPromoteRegistration puis journalise', async () => {
+    const spy = jest.spyOn(svc, 'adminPromoteRegistration').mockResolvedValue({ id: 'r1' } as never);
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({
+      captain: { firstName: 'A', lastName: 'B' }, partner: { firstName: 'C', lastName: 'D' },
+    } as any);
+    (prismaMock.tournamentLogEntry.create as jest.Mock).mockResolvedValue({} as any);
+    await svc.markTablePromote('club-1', 't1', 'r1', 'staff-1');
+    expect(spy).toHaveBeenCalledWith('t1', 'r1', 'club-1');
+    expect(prismaMock.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'PROMOTE' }),
+    }));
+  });
+
+  // Non demandé par la description de tâche, ajouté pour la parité avec markTablePromote
+  // (même wrapper journalisé, même risque de régression silencieuse sur le journal).
+  it('markTableRemove délègue à adminRemoveRegistration puis journalise', async () => {
+    prismaMock.tournamentRegistration.findUnique.mockResolvedValue({
+      captain: { firstName: 'A', lastName: 'B' }, partner: { firstName: 'C', lastName: 'D' },
+    } as any);
+    const spy = jest.spyOn(svc, 'adminRemoveRegistration').mockResolvedValue({ id: 'r1' } as never);
+    (prismaMock.tournamentLogEntry.create as jest.Mock).mockResolvedValue({} as any);
+    await svc.markTableRemove('club-1', 't1', 'r1', 'staff-1');
+    expect(spy).toHaveBeenCalledWith('t1', 'r1', 'club-1');
+    expect(prismaMock.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'REMOVE' }),
+    }));
+  });
+});
+
+describe('table de marque — forfait & banc', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('declareForfeit : annule l\'inscription, met le coéquipier au banc, promeut l\'attente', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({
+      id: 'r1', status: 'CONFIRMED', captainUserId: 'c1', partnerUserId: 'p1',
+      captain: { firstName: 'Bernard', lastName: 'X' }, partner: { firstName: 'Andre', lastName: 'Y' },
+    } as any);
+    const tx = {
+      $queryRaw: jest.fn(),
+      tournamentRegistration: { update: jest.fn().mockResolvedValue({ id: 'r1' }), findFirst: jest.fn().mockResolvedValue(null) },
+      tournamentBenchEntry: { create: jest.fn() },
+      tournamentLogEntry: { create: jest.fn() },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+
+    await svc.declareForfeit('club-1', 't1', 'r1', 'CAPTAIN', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'r1' }, data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(tx.tournamentBenchEntry.create).toHaveBeenCalledWith({
+      data: { tournamentId: 't1', userId: 'p1', source: 'FORFEIT', addedById: 'staff-1' },
+    });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'FORFEIT' }),
+    }));
+  });
+
+  it('declareForfeit : REGISTRATION_NOT_FOUND hors club/tournoi/déjà annulé', async () => {
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    await expect(svc.declareForfeit('club-1', 't1', 'r1', 'CAPTAIN', 'staff-1')).rejects.toThrow('REGISTRATION_NOT_FOUND');
+  });
+
+  it('addToBench : refuse un non-membre (NOT_A_MEMBER)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('addToBench : refuse un déjà-inscrit (ALREADY_REGISTERED)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue({ id: 'r-existing' } as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('ALREADY_REGISTERED');
+  });
+
+  it('addToBench : idempotent (ALREADY_ON_BENCH)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    (prismaMock.tournamentBenchEntry.findUnique as jest.Mock).mockResolvedValue({ id: 'b1' } as any);
+    await expect(svc.addToBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('ALREADY_ON_BENCH');
+  });
+
+  it('addToBench : membre éligible, pas encore inscrit → créé + journalisé', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ status: 'ACTIVE' } as any);
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(null as any);
+    (prismaMock.tournamentBenchEntry.findUnique as jest.Mock).mockResolvedValue(null as any);
+    prismaMock.user.findUnique.mockResolvedValue({ firstName: 'Zoé', lastName: 'K' } as any);
+    const tx = { tournamentBenchEntry: { create: jest.fn() }, tournamentLogEntry: { create: jest.fn() } };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+
+    await svc.addToBench('club-1', 't1', 'u9', 'staff-1');
+
+    expect(tx.tournamentBenchEntry.create).toHaveBeenCalledWith({
+      data: { tournamentId: 't1', userId: 'u9', source: 'WALK_IN', addedById: 'staff-1' },
+    });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'ADD_LATE' }),
+    }));
+  });
+
+  it('removeFromBench : BENCH_ENTRY_NOT_FOUND si absent', async () => {
+    (prismaMock.tournamentBenchEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 0 } as any);
+    await expect(svc.removeFromBench('club-1', 't1', 'u9', 'staff-1')).rejects.toThrow('BENCH_ENTRY_NOT_FOUND');
+  });
+
+  it('removeFromBench : supprime l\'entrée présente', async () => {
+    (prismaMock.tournamentBenchEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 1 } as any);
+    await expect(svc.removeFromBench('club-1', 't1', 'u9', 'staff-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('table de marque — remplacement', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const baseReg = {
+    id: 'r1', tournamentId: 't1', captainUserId: 'c1', partnerUserId: 'p1',
+    tournament: { gender: 'MEN', openToWomen: false },
+    captain: { firstName: 'Bernard', lastName: 'X', email: 'bernard@test.fr' },
+    partner: { firstName: 'Andre', lastName: 'Y', email: 'andre@test.fr' },
+  };
+
+  /** Câble prisma.$transaction pour exécuter le callback avec un tx mocké minimal. Renvoie le tx pour assertions. */
+  function mockTx() {
+    const tx = {
+      tournamentRegistration: { update: jest.fn().mockResolvedValue({ id: 'r1' }) },
+      tournamentBenchEntry: { deleteMany: jest.fn() },
+      tournamentLogEntry: { create: jest.fn() },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    return tx;
+  }
+
+  it('replacePlayer : swap le côté CAPTAIN, présence -> PRESENT, paiement intouché, journalise', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any) // fetch de la registration ciblée
+      .mockResolvedValueOnce(null as any);   // dup check : 'u9' n'est nulle part ailleurs
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    const tx = mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith({
+      where: { id: 'r1' }, data: { captainUserId: 'u9', captainPresence: 'PRESENT' },
+    });
+    expect(tx.tournamentBenchEntry.deleteMany).toHaveBeenCalledWith({ where: { tournamentId: 't1', userId: 'u9' } });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tournamentId: 't1', actorUserId: 'staff-1', kind: 'REPLACE' }),
+    }));
+    // Le paiement (paymentStatus/paymentDeadline) n'est JAMAIS touché par un remplacement
+    // (décision de conception § « Décisions » points 2 et 4) : le seul appel d'update ne
+    // doit porter aucune clé paymentStatus.
+    expect(tx.tournamentRegistration.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentStatus: expect.anything() }) }),
+    );
+  });
+
+  it('replacePlayer : swap le côté PARTNER également (branche symétrique)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    const tx = mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'PARTNER', 'u9', 'staff-1');
+
+    expect(tx.tournamentRegistration.update).toHaveBeenCalledWith({
+      where: { id: 'r1' }, data: { partnerUserId: 'u9', partnerPresence: 'PRESENT' },
+    });
+    expect(tx.tournamentBenchEntry.deleteMany).toHaveBeenCalledWith({ where: { tournamentId: 't1', userId: 'u9' } });
+  });
+
+  // Point le plus important de cette task (cf. note d'implémenteur du plan) : sans l'email
+  // réel du joueur RETIRÉ, `notifyTournamentReplacement` est un no-op silencieux
+  // (`if (!opts.removedPlayer.email) return;` dans notifications.ts) et l'email ne part jamais.
+  it('replacePlayer : notifie le joueur retiré avec SON email réel (pas null, pas undefined)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any);
+    mockTx();
+
+    await svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1');
+
+    expect(notifyTournamentReplacement).toHaveBeenCalledWith(expect.objectContaining({
+      tournamentId: 't1',
+      removedPlayer: expect.objectContaining({ id: 'c1', email: 'bernard@test.fr', firstName: 'Bernard', lastName: 'X' }),
+      remainingPlayerName: 'Andre Y',
+    }));
+    const call = (notifyTournamentReplacement as jest.Mock).mock.calls[0][0];
+    expect(call.removedPlayer.email).toBe('bernard@test.fr');
+    expect(call.removedPlayer.email).not.toBeNull();
+    expect(call.removedPlayer.email).not.toBeUndefined();
+    // Le remplaçant ET le coéquipier restant sont notifiés séparément, APRÈS le swap (même regId).
+    expect(notifyTournamentRegistration).toHaveBeenCalledWith('r1');
+  });
+
+  // Parité avec les méthodes sœurs de ce même bloc (setPresence, declareForfeit) : hors
+  // club / hors tournoi / déjà annulée → REGISTRATION_NOT_FOUND, avant tout autre contrôle.
+  it('replacePlayer : REGISTRATION_NOT_FOUND hors club/tournoi/déjà annulée', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock).mockResolvedValue(null as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('REGISTRATION_NOT_FOUND');
+  });
+
+  it('replacePlayer : refuse un non-membre (NOT_A_MEMBER)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock).mockResolvedValue(baseReg as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue(null as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('replacePlayer : refuse un déjà-inscrit dans ce tournoi (ALREADY_REGISTERED)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce(baseReg as any)
+      .mockResolvedValueOnce({ id: 'r-other' } as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('ALREADY_REGISTERED');
+  });
+
+  it('replacePlayer : composition refusée avec GENDER_MISMATCH (tableau Dames, remplaçant homme)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce({ ...baseReg, tournament: { gender: 'WOMEN', openToWomen: false } } as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    (prismaMock.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u9', sex: 'MALE' } as any);
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
+  });
+
+  // Exigence explicite de la task : prouver que assertGender reçoit les sexes des DEUX côtés
+  // correctement affectés (captainSex = celui qui occupe RÉELLEMENT la place capitaine après le
+  // swap, partnerSex = celui qui occupe la place partenaire) — pas juste qu'une erreur sort.
+  // Sexes volontairement DIFFÉRENTS (MALE/FEMALE) : une inversion captainSex<->partnerSex dans
+  // l'implémentation changerait l'appel observé ci-dessous et ferait tomber ce test.
+  it('replacePlayer : assertGender reçoit les sexes des DEUX côtés correctement affectés (détecte une inversion captain/partner)', async () => {
+    (prismaMock.tournamentRegistration.findFirst as jest.Mock)
+      .mockResolvedValueOnce({ ...baseReg, tournament: { gender: 'WOMEN', openToWomen: false } } as any)
+      .mockResolvedValueOnce(null as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    // Remplaçant (nouveau CAPTAIN, 'u9') = homme ; coéquipière conservée (partner 'p1') = femme.
+    (prismaMock.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'u9', sex: 'MALE', firstName: 'Marc', lastName: 'Z', email: 'marc@test.fr' } as any) // newUser
+      .mockResolvedValueOnce({ sex: 'FEMALE' } as any); // otherUser = partner existant (p1)
+    const spy = jest.spyOn(svc as any, 'assertGender');
+
+    await expect(svc.replacePlayer('club-1', 't1', 'r1', 'CAPTAIN', 'u9', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
+
+    // side='CAPTAIN' : captainSex doit venir du REMPLAÇANT (MALE), partnerSex du côté conservé (FEMALE).
+    expect(spy).toHaveBeenCalledWith('WOMEN', 'MALE', 'FEMALE', false);
+  });
+});
+
+describe('table de marque — appariement & tardif', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  function mockTournament(overrides: Record<string, unknown> = {}) {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 't1', clubId: 'club-1', gender: 'MEN', openToWomen: true, status: 'PUBLISHED', maxTeams: 12, requirePrepayment: false,
+      ...overrides,
+    } as any);
+  }
+
+  /** Mocke la paire ua/ub comme 2 hommes membres ACTIVE (chemin nominal). */
+  function mockEligiblePair() {
+    (prismaMock.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'ua', sex: 'MALE', firstName: 'A', lastName: 'B' } as any)
+      .mockResolvedValueOnce({ id: 'ub', sex: 'MALE', firstName: 'C', lastName: 'D' } as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+  }
+
+  /** Câble prisma.$transaction pour exécuter le callback avec un tx mocké. `registrationOverrides` ne remplace que les clés fournies. */
+  function mockTx(registrationOverrides: Record<string, any> = {}) {
+    const tx = {
+      $queryRaw: jest.fn(),
+      tournamentRegistration: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(5),
+        create: jest.fn().mockResolvedValue({ id: 'r-new', status: 'CONFIRMED' }),
+        ...registrationOverrides,
+      },
+      tournamentBenchEntry: { deleteMany: jest.fn() },
+      tournamentLogEntry: { create: jest.fn() },
+    };
+    (prismaMock.$transaction as jest.Mock).mockImplementation((fn: any) => fn(tx));
+    return tx;
+  }
+
+  it('pairFromBench : crée une inscription CONFIRMED si place libre, sort les 2 du banc', async () => {
+    mockTournament();
+    mockEligiblePair();
+    const tx = mockTx();
+
+    const reg = await svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1');
+
+    expect(tx.tournamentRegistration.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tournamentId: 't1', captainUserId: 'ua', partnerUserId: 'ub', status: 'CONFIRMED' }),
+    }));
+    expect(tx.tournamentBenchEntry.deleteMany).toHaveBeenCalledWith({ where: { tournamentId: 't1', userId: { in: ['ua', 'ub'] } } });
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'PAIR' }),
+    }));
+    expect(reg.id).toBe('r-new');
+  });
+
+  it('pairFromBench : WAITLISTED si complet', async () => {
+    mockTournament({ maxTeams: 2 });
+    mockEligiblePair();
+    mockTx({ count: jest.fn().mockResolvedValue(2), create: jest.fn().mockResolvedValue({ id: 'r-new', status: 'WAITLISTED' }) });
+
+    const reg = await svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1');
+
+    expect(reg.status).toBe('WAITLISTED');
+  });
+
+  it('pairFromBench : épreuve payante -> DUE + holdDeadline', async () => {
+    mockTournament({ requirePrepayment: true });
+    mockEligiblePair();
+    const tx = mockTx({ count: jest.fn().mockResolvedValue(1) });
+
+    await svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1');
+
+    const createArg = tx.tournamentRegistration.create.mock.calls[0][0];
+    expect(createArg.data.paymentStatus).toBe('DUE');
+    expect(createArg.data.paymentDeadline).toBeInstanceOf(Date);
+  });
+
+  it('addLateRegistration : même chemin sans passer par le banc (pas de retrait du banc)', async () => {
+    mockTournament();
+    mockEligiblePair();
+    const tx = mockTx({ count: jest.fn().mockResolvedValue(0) });
+
+    await svc.addLateRegistration('club-1', 't1', 'ua', 'ub', 'staff-1');
+
+    expect(tx.tournamentLogEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'ADD_LATE' }),
+    }));
+    expect(tx.tournamentBenchEntry.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('pairFromBench : lève PARTNER_IS_SELF si les 2 ids sont identiques', async () => {
+    mockTournament();
+    await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ua', 'staff-1')).rejects.toThrow('PARTNER_IS_SELF');
+  });
+
+  it('pairFromBench : lève TOURNAMENT_NOT_FOUND si le tournoi appartient à un autre club', async () => {
+    mockTournament({ clubId: 'club-other' });
+    await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('pairFromBench : lève TOURNAMENT_NOT_OPEN si le tournoi n\'est pas PUBLISHED (pas de gate deadline)', async () => {
+    mockTournament({ status: 'DRAFT' });
+    await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('TOURNAMENT_NOT_OPEN');
+  });
+
+  it('pairFromBench : lève NOT_A_MEMBER si un des deux n\'est pas membre actif du club', async () => {
+    mockTournament();
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue(null as any);
+    await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('pairFromBench : lève GENDER_MISMATCH si la composition ne respecte pas le tableau', async () => {
+    mockTournament({ gender: 'WOMEN', openToWomen: false });
+    (prismaMock.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'ua', sex: 'MALE', firstName: 'A', lastName: 'B' } as any)
+      .mockResolvedValueOnce({ id: 'ub', sex: 'FEMALE', firstName: 'C', lastName: 'D' } as any);
+    (prismaMock.clubMembership.findUnique as jest.Mock).mockResolvedValue({ status: 'ACTIVE' } as any);
+    await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
   });
 });

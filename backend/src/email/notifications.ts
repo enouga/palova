@@ -248,6 +248,61 @@ export async function notifyTournamentPromotion(registrationId: string): Promise
   await sendTournamentPlayerEmails(reg, 'promoted');
 }
 
+/**
+ * Un joueur est remplacé à la table de marque (J/A) : la même inscription (même id)
+ * accueille un nouveau captain/partnerUserId, donc `notifyTournamentCancellation(regId)`
+ * ne peut plus atteindre l'ancien joueur une fois le swap fait (le champ a déjà changé).
+ * On lui envoie ici, ciblé, le même email `registration.cancelled` que la désinscription
+ * classique — aucun template nouveau — avec les infos de l'ancien joueur capturées AVANT
+ * le swap par l'appelant. Le remplaçant (et le coéquipier restant) sont notifiés
+ * séparément via `notifyTournamentRegistration(regId)`, appelé APRÈS le swap.
+ */
+export async function notifyTournamentReplacement(opts: {
+  tournamentId: string;
+  removedPlayer: { id: string; email: string | null; firstName: string; lastName: string };
+  remainingPlayerName: string;
+}): Promise<void> {
+  if (!opts.removedPlayer.email) return;
+  const t = await prisma.tournament.findUnique({
+    where: { id: opts.tournamentId },
+    select: {
+      id: true, name: true, startTime: true, endTime: true, registrationDeadline: true,
+      club: { select: EMAIL_CLUB_SELECT },
+    },
+  });
+  if (!t) return;
+
+  const brand = brandFromClub(t.club);
+  const dateLabel = formatDateRangeFr(t.startTime, t.endTime, t.club.timezone);
+  const url = clubAppUrl(t.club.slug, `/tournois/${t.id}`);
+  const emailType = 'registration.cancelled';
+  const override = await emailTemplates.getOverride(t.club.id, emailType);
+  const vars: Record<string, string> = {
+    prenom: opts.removedPlayer.firstName,
+    activite: t.name,
+    ref_activite: refActivite('tournament'),
+    type_activite: typeActivite('tournament'),
+    club: t.club.name,
+    date: dateLabel,
+    lien: url,
+    coequipier: opts.remainingPlayerName,
+    phrase_coequipier: '',
+    date_limite_annulation: formatDateFr(t.registrationDeadline, t.club.timezone),
+  };
+  const mail = renderClubEmail(emailType, vars, brand, override);
+  const { title, body } = playerNotifContent('cancelled', t.name);
+  await dispatch({
+    userId: opts.removedPlayer.id,
+    clubId: t.club.id,
+    category: 'MY_REGISTRATIONS',
+    type: emailType,
+    title,
+    body,
+    url,
+    email: { to: opts.removedPlayer.email, subject: mail.subject, html: mail.html, text: mail.text },
+  });
+}
+
 // ------------------------------------------------------------------ Events
 
 const eventInclude = {

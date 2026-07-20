@@ -514,6 +514,9 @@ model User {
   partnerRegistrations TournamentRegistration[] @relation("PartnerRegistrations")
   eventRegistrations   EventRegistration[]
   refereedTournaments  Tournament[] @relation("TournamentReferee")
+  tournamentBenchEntries      TournamentBenchEntry[] @relation("TournamentBenchUser")
+  tournamentBenchEntriesAdded TournamentBenchEntry[] @relation("TournamentBenchAddedBy")
+  tournamentLogEntries        TournamentLogEntry[]   @relation("TournamentLogActor")
   emailVerification EmailVerification?
   passwordReset  PasswordReset?
   memberPackages MemberPackage[]
@@ -1112,11 +1115,24 @@ model Tournament {
   clubSport     ClubSport                @relation(fields: [clubSportId], references: [id], onDelete: Restrict)
   referee       User?                    @relation("TournamentReferee", fields: [refereeUserId], references: [id], onDelete: SetNull)
   registrations TournamentRegistration[]
+  benchEntries  TournamentBenchEntry[]
+  logEntries    TournamentLogEntry[]
 
   @@index([clubId])
   @@index([clubId, status, startTime])
   @@index([refereeUserId])
   @@map("tournaments")
+}
+
+enum TournamentPresence {
+  UNSEEN
+  PRESENT
+  ABSENT
+}
+
+enum BenchSource {
+  FORFEIT
+  WALK_IN
 }
 
 /// Un binôme inscrit à un tournoi (capitaine + coéquipier, tous deux membres du club).
@@ -1132,6 +1148,8 @@ model TournamentRegistration {
   cancelledAt     DateTime?                 @map("cancelled_at")
   createdAt       DateTime                  @default(now()) @map("created_at") // = ordre liste d'attente
   updatedAt       DateTime                  @updatedAt @map("updated_at")
+  captainPresence TournamentPresence @default(UNSEEN) @map("captain_presence")
+  partnerPresence TournamentPresence @default(UNSEEN) @map("partner_presence")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   captain    User       @relation("CaptainRegistrations", fields: [captainUserId], references: [id], onDelete: Restrict)
@@ -1142,6 +1160,39 @@ model TournamentRegistration {
   @@index([captainUserId])
   @@index([partnerUserId])
   @@map("tournament_registrations")
+}
+
+/// Le banc : joueurs seuls en attente d'une place (forfait du coéquipier, ou retardataire).
+model TournamentBenchEntry {
+  id           String     @id @default(cuid())
+  tournamentId String     @map("tournament_id")
+  userId       String     @map("user_id")
+  source       BenchSource
+  addedById    String?    @map("added_by_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation("TournamentBenchUser", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy    User?      @relation("TournamentBenchAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([tournamentId, userId])
+  @@map("tournament_bench_entries")
+}
+
+/// Journal des interventions à la table de marque (qui, quoi, quand).
+model TournamentLogEntry {
+  id           String   @id @default(cuid())
+  tournamentId String   @map("tournament_id")
+  actorUserId  String?  @map("actor_user_id")
+  kind         String
+  data         Json
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  actor      User?      @relation("TournamentLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId, createdAt])
+  @@map("tournament_log_entries")
 }
 
 /// Animation du club (mêlée, stage, soirée…) — inscription individuelle.
