@@ -162,3 +162,20 @@ export function calendarFacets(items: NationalTournament[], state: CalendarFilte
 
   return { departments, categories, genders };
 }
+
+// ── Chip « 📅 Dates » du FacetPanel ──────────────────────────────────────────
+// Libellé court d'une plage YYYY-MM-DD, sans passer par Date (aucun fuseau).
+const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+function dayMonthLabel(key: string): string {
+  const [, m, d] = key.split('-');
+  return `${Number(d)} ${MONTHS_FR[Number(m) - 1]}`;
+}
+
+/** « 24 juil. → 2 août » / « Du 24 juil. » / « Jusqu'au 2 août » / null si aucune borne. */
+export function rangeChipLabel(from: string | null, to: string | null): string | null {
+  if (from && to) return `${dayMonthLabel(from)} → ${dayMonthLabel(to)}`;
+  if (from) return `Du ${dayMonthLabel(from)}`;
+  if (to) return `Jusqu'au ${dayMonthLabel(to)}`;
+  return null;
+}
