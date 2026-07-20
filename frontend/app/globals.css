@@ -245,3 +245,16 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .pl-create-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
   .pl-create-recap { margin-top: 0; }
 }
+
+/* ── France en pointillés (FranceDotsMap) — heros brume de la vitrine et de /decouvrir ── */
+@keyframes pl-pinpop { from { transform: translate(-50%, -50%) scale(0); } to { transform: translate(-50%, -50%) scale(1); } }
+.pl-pinpop { transform: translate(-50%, -50%) scale(0); animation: pl-pinpop .5s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.pl-france-hero { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); height: 92%; aspect-ratio: 1 / 1; }
+.pl-hero-copy { position: relative; max-width: 56%; }
+@media (max-width: 700px) {
+  .pl-france-hero { right: -30px; opacity: .5; }
+  .pl-hero-copy { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-pinpop { animation: none; transform: translate(-50%, -50%) scale(1); }
+}
