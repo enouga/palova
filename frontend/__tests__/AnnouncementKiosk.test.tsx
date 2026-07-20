@@ -98,6 +98,11 @@ describe('AnnouncementKiosk', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('linkUrl hostile (javascript:) → pas de lien rendu (XSS)', () => {
+    wrap([ann({ linkUrl: "javascript:alert(1)" })]);
+    expect(screen.queryByRole('link', { name: /En savoir plus/ })).not.toBeInTheDocument();
+  });
+
   it('auto-défilement : la diapo avance après intervalSeconds', () => {
     jest.useFakeTimers();
     try {

@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ACCENTS } from '@/lib/theme';
 import { HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { clubPanelWash } from '@/lib/authShell';
+import { isSafeHttpUrl } from '@/lib/safeLink';
 
 // Type d'annonce → étiquette de chip (INFO n'a pas de chip).
 const KIND_LABEL: Partial<Record<AnnouncementKind, string>> = {
@@ -114,8 +115,8 @@ export function AnnouncementKiosk({ clubName, slides, now, intervalSeconds = 6 }
           {a.body}
         </p>
       )}
-      {a.linkUrl && (
-        <a href={a.linkUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+      {isSafeHttpUrl(a.linkUrl) && (
+        <a href={a.linkUrl!} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
           aria-label={`En savoir plus sur : ${a.title}`}
           style={{ display: 'inline-block', marginTop: 12, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: ink, textDecoration: 'none' }}>
           En savoir plus →
@@ -198,8 +199,8 @@ function PosterLightbox({ announcement, onClose }: { announcement: Announcement;
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, marginTop: 14, textAlign: 'center', cursor: 'default' }}>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 18, color: '#fff' }}>{announcement.title}</div>
         {announcement.body && <p style={{ fontFamily: th.fontUI, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', marginTop: 6, whiteSpace: 'pre-wrap' }}>{announcement.body}</p>}
-        {announcement.linkUrl && (
-          <a href={announcement.linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 10, fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: '#fff', textDecoration: 'underline' }}>
+        {isSafeHttpUrl(announcement.linkUrl) && (
+          <a href={announcement.linkUrl!} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 10, fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: '#fff', textDecoration: 'underline' }}>
             En savoir plus →
           </a>
         )}
@@ -220,9 +221,9 @@ function AnnouncementSheet({ announcement, onClose }: { announcement: Announceme
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 26, color: th.text, letterSpacing: -0.3, marginTop: 6 }}>{announcement.title}</div>
         <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, lineHeight: 1.55, margin: '12px 0 0', whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>{announcement.body}</p>
         <div style={{ display: 'flex', gap: 11, marginTop: 24, alignItems: 'center' }}>
-          <Btn variant="surface" onClick={onClose} style={{ flex: announcement.linkUrl ? '0 0 42%' : 1 }}>Fermer</Btn>
-          {announcement.linkUrl && (
-            <a href={announcement.linkUrl} target="_blank" rel="noreferrer"
+          <Btn variant="surface" onClick={onClose} style={{ flex: isSafeHttpUrl(announcement.linkUrl) ? '0 0 42%' : 1 }}>Fermer</Btn>
+          {isSafeHttpUrl(announcement.linkUrl) && (
+            <a href={announcement.linkUrl!} target="_blank" rel="noreferrer"
               style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: 54, background: th.accent, color: th.onAccent, borderRadius: 14, fontFamily: th.fontUI, fontSize: 16, fontWeight: 600, textDecoration: 'none' }}>
               En savoir plus →
             </a>

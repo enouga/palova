@@ -103,6 +103,18 @@ describe('SponsorFlipDeck', () => {
     expect(screen.queryByLabelText('Offre disponible')).toBeNull();
   });
 
+  it('dos avec linkUrl valide → lien « Visiter »', () => {
+    wrap([sponsor({ linkUrl: 'https://headpadel.fr' })], now);
+    fireEvent.click(screen.getByRole('button', { name: 'Head Padel' }));
+    expect(screen.getByRole('link', { name: /Visiter/ })).toHaveAttribute('href', 'https://headpadel.fr');
+  });
+
+  it('dos avec linkUrl hostile (javascript:) → pas de lien rendu (XSS)', () => {
+    wrap([sponsor({ linkUrl: 'javascript:alert(1)' })], now);
+    fireEvent.click(screen.getByRole('button', { name: 'Head Padel' }));
+    expect(screen.queryByRole('link', { name: /Visiter/ })).not.toBeInTheDocument();
+  });
+
   it('rien sans sponsor', () => {
     const { container } = wrap([], now);
     expect(container.firstChild).toBeNull();

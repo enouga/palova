@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../db/prisma';
 import { ANNOUNCEMENTS_DIR } from '../utils/uploads';
+import { sanitizeExternalLinkUrl } from '../utils/url';
 
 interface AnnouncementInput { title?: string; body?: string; linkUrl?: string | null; imageUrl?: string | null; isPublished?: boolean; pinned?: boolean; kind?: string; validUntil?: string | null; }
 
@@ -50,7 +51,7 @@ export class AnnouncementService {
     return prisma.announcement.create({
       data: {
         clubId, title, body,
-        linkUrl: data.linkUrl?.trim() || null,
+        linkUrl: sanitizeExternalLinkUrl(data.linkUrl),
         imageUrl: data.imageUrl?.trim() || null,
         kind: asKind(data.kind) ?? 'INFO',
         validUntil: parseValidUntil(data.validUntil) ?? null,
@@ -72,7 +73,7 @@ export class AnnouncementService {
       data: {
         ...(data.title !== undefined ? { title: data.title.trim() } : {}),
         ...(data.body !== undefined ? { body: data.body.trim() } : {}),
-        ...(data.linkUrl !== undefined ? { linkUrl: data.linkUrl?.trim() || null } : {}),
+        ...(data.linkUrl !== undefined ? { linkUrl: sanitizeExternalLinkUrl(data.linkUrl) } : {}),
         ...(data.imageUrl !== undefined ? { imageUrl: data.imageUrl?.trim() || null } : {}),
         ...(data.isPublished !== undefined ? { isPublished: data.isPublished } : {}),
         ...(data.pinned !== undefined ? { pinned: data.pinned } : {}),
