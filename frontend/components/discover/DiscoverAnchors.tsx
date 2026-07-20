@@ -13,7 +13,7 @@ export function DiscoverAnchors({ items, active, onJump }: {
   const { th } = useTheme();
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 30, background: th.bg, padding: '8px 20px' }}>
-      <div style={{ display: 'flex', gap: 4, background: th.surface2, borderRadius: 999, padding: 4 }}>
+      <div style={{ display: 'flex', gap: 4, background: th.surface2, borderRadius: 999, padding: 4, maxWidth: 430, margin: '0 auto' }}>
         {items.map((it) => {
           const isActive = it.id === active;
           return (

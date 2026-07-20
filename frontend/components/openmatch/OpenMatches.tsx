@@ -132,6 +132,34 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
 
   const a = useOpenMatchActions({ club, token, myLevel, reload: load });
 
+  // Rejoindre OU quitter fait migrer la carte de section (vers/hors « Vos parties », rendue en tête) :
+  // sur le coup on perd sa trace (elle « disparaît » d'où on a cliqué). On l'amène sous les yeux
+  // (défilement doux) et on la fait pulser une fois pour rendre visible OÙ elle est repartie —
+  // accent si rejoint, teinte neutre si quitté. flash n'est posé qu'APRÈS le reload → la carte est
+  // déjà à sa nouvelle place. Quitté + filtrée hors jauge → carte absente : le toast suffit (el null).
+  useEffect(() => {
+    const f = a.flash;
+    if (!f) return;
+    const ring = f.kind === 'joined' ? th.accent : th.textMute;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`open-match-${f.match.id}`);
+      if (!el) return;
+      try {
+        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.animate?.(
+          [
+            { boxShadow: `inset 0 0 0 1px ${th.line}, 0 0 0 0 ${ring}`, offset: 0 },
+            { boxShadow: `inset 0 0 0 1px ${th.line}, 0 0 0 5px ${ring}`, offset: 0.35 },
+            { boxShadow: `inset 0 0 0 1px ${th.line}, 0 0 0 0 ${ring}`, offset: 1 },
+          ],
+          { duration: 1400, easing: 'ease-out' },
+        );
+      } catch { /* jsdom : scrollIntoView/animate non implémentés — sans effet en test */ }
+    }, 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [a.flash]);
+
   const levelFilterActive = fMin > 1 || fMax < 8;
   // Fourchette « à mon niveau » (±1 autour du niveau arrondi) — passée à MatchesFilterBar
   // pour le chip préset (le composant décide lui-même s'il est actif).
@@ -144,11 +172,43 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
     ? byLevel
     : byLevel.filter((m) => (m.competitive === false) === (kindFilter === 'friendly'));
 
-  // Section « Pour toi » : parties recommandées à mon niveau, retirées de la liste « Autres ».
+  // Section « Vos parties » : celles où je suis inscrit (organisateur compris), toujours en
+  // tête et JAMAIS soumises aux filtres — une partie rejointe ne doit pas disparaître
+  // derrière la jauge de niveau. Retirées des deux sections de découverte.
+  const mine = token ? matches.filter((m) => m.viewerIsParticipant || m.viewerIsOrganizer) : [];
+  const mineIds = new Set(mine.map((m) => m.id));
+  const discoverable = filtered.filter((m) => !mineIds.has(m.id));
+  // Section « À votre niveau » : parties recommandées, retirées de « Toutes les parties ».
   // Désactivée si le club n'utilise pas le système de niveau. Respecte le filtre de la jauge.
-  const recommended = levelEnabled ? recommendMatches(filtered, myLevel, new Date()) : [];
+  const recommended = levelEnabled ? recommendMatches(discoverable, myLevel, new Date()) : [];
   const recoIds = new Set(recommended.map((m) => m.id));
-  const otherMatches = filtered.filter((m) => !recoIds.has(m.id));
+  const otherMatches = discoverable.filter((m) => !recoIds.has(m.id));
+
+  const sectionTitle = {
+    fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4,
+    textTransform: 'uppercase', color: th.textMute, marginBottom: 12,
+  } as const;
+  const renderCard = (m: OpenMatch) => (
+    <OpenMatchCard
+      key={m.id} match={m} friendIds={friendIds} timezone={club.timezone} slug={club.slug} token={token ?? ''}
+      busy={a.busyId === m.id} addingOpen={a.addingId === m.id}
+      onJoin={a.join}
+      onLeave={a.leave}
+      onRemovePlayer={a.removePlayer}
+      onSetTeams={a.setTeams}
+      onAddPlayer={a.addPlayerToTeam}
+      onReplacePlayer={a.replacePlayer}
+      onToggleAdd={a.onToggleAdd}
+      onCancelAdd={a.onCancelAdd}
+      onRecordResult={(mm) => a.setRecordingFor(mm)}
+      canRecordResult={levelEnabled}
+      onOpenChat={a.openChat}
+      showSport={multiSport}
+      isAnonymous={!token}
+      onAuthPrompt={a.setAuthPrompt}
+      viewerUserId={viewerUserId || undefined}
+    />
+  );
 
   return (
     <Screen>
@@ -188,7 +248,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             onLevelChange={setLevelFilter}
             kindFilter={kindFilter}
             onKindChange={setKindFilter}
-            resultCount={filtered.length}
+            resultCount={mine.length + discoverable.length}
             alerts={alerts}
             timezone={club.timezone}
             onDeleteAlert={handleDeleteAlert}
@@ -200,38 +260,27 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
           <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{a.error}</div>
         )}
 
+        {token && mine.length > 0 && (
+          <div style={{ padding: '14px 20px 0' }}>
+            <div style={sectionTitle}>Vos parties</div>
+            <div data-match-grid style={matchGrid}>
+              {mine.map(renderCard)}
+            </div>
+          </div>
+        )}
+
         {token && recommended.length > 0 && (
           <div style={{ padding: '14px 20px 0' }}>
-            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Pour toi</div>
+            <div style={sectionTitle}>À votre niveau</div>
             <div data-match-grid style={matchGrid}>
-              {recommended.map((m) => (
-                <OpenMatchCard
-                  key={m.id} match={m} friendIds={friendIds} timezone={club.timezone} slug={club.slug} token={token}
-                  busy={a.busyId === m.id} addingOpen={a.addingId === m.id}
-                  onJoin={a.join}
-                  onLeave={a.leave}
-                  onRemovePlayer={a.removePlayer}
-                  onSetTeams={a.setTeams}
-                  onAddPlayer={a.addPlayerToTeam}
-                  onReplacePlayer={a.replacePlayer}
-                  onToggleAdd={a.onToggleAdd}
-                  onCancelAdd={a.onCancelAdd}
-                  onRecordResult={(mm) => a.setRecordingFor(mm)}
-                  canRecordResult={levelEnabled}
-                  onOpenChat={a.openChat}
-                  showSport={multiSport}
-                  isAnonymous={false}
-                  onAuthPrompt={a.setAuthPrompt}
-                  viewerUserId={viewerUserId || undefined}
-                />
-              ))}
+              {recommended.map(renderCard)}
             </div>
           </div>
         )}
 
         <div style={{ padding: '14px 20px 0' }}>
-          {token && recommended.length > 0 && otherMatches.length > 0 && (
-            <div style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, marginBottom: 12 }}>Autres parties</div>
+          {token && (mine.length > 0 || recommended.length > 0) && otherMatches.length > 0 && (
+            <div style={sectionTitle}>Toutes les parties</div>
           )}
           {!ready || loading ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
@@ -243,7 +292,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               </div>
             </div>
           ) : otherMatches.length === 0 ? (
-            recommended.length > 0 ? (
+            recommended.length > 0 || mine.length > 0 ? (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Pas d&apos;autre partie ouverte.</div>
             ) : (
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
@@ -255,33 +304,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             )
           ) : (
             <div data-match-grid style={matchGrid}>
-              {otherMatches.map((m) => (
-                <OpenMatchCard
-                  key={m.id}
-                  match={m}
-                  friendIds={friendIds}
-                  timezone={club.timezone}
-                  slug={club.slug}
-                  token={token ?? ''}
-                  busy={a.busyId === m.id}
-                  addingOpen={a.addingId === m.id}
-                  onJoin={a.join}
-                  onLeave={a.leave}
-                  onRemovePlayer={a.removePlayer}
-                  onSetTeams={a.setTeams}
-                  onAddPlayer={a.addPlayerToTeam}
-                  onReplacePlayer={a.replacePlayer}
-                  onToggleAdd={a.onToggleAdd}
-                  onCancelAdd={a.onCancelAdd}
-                  onRecordResult={(mm) => a.setRecordingFor(mm)}
-                  canRecordResult={levelEnabled}
-                  onOpenChat={a.openChat}
-                  showSport={multiSport}
-                  isAnonymous={!token}
-                  onAuthPrompt={a.setAuthPrompt}
-                  viewerUserId={viewerUserId || undefined}
-                />
-              ))}
+              {otherMatches.map(renderCard)}
             </div>
           )}
         </div>

@@ -70,6 +70,12 @@ describe('DiscoverMatches', () => {
     expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 
+  it('les filtres vivent dans le tiroir compact (groupe Quand labellisé)', () => {
+    wrap();
+    expect(screen.getByText('Quand')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Aujourd'hui" })).toBeInTheDocument();
+  });
+
   it('chip Aujourd\'hui filtre les parties hors de la journée', () => {
     wrap({
       now: NOW,

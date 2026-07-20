@@ -1,6 +1,8 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { ClubDetail } from '@/lib/api';
+import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { OpenMatchActions } from '@/components/openmatch/useOpenMatchActions';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -13,6 +15,7 @@ export function OpenMatchModals({ club, token, viewerUserId, canModerate, action
   actions: OpenMatchActions; reload: () => Promise<void>; authNextPath: string;
 }) {
   const router = useRouter();
+  const { th } = useTheme();
   return (
     <>
       {a.recordingFor && token && (
@@ -56,6 +59,29 @@ export function OpenMatchModals({ club, token, viewerUserId, canModerate, action
           onLogin={() => router.push(`/login?next=${authNextPath}`)}
           onClose={() => a.setAuthPrompt(null)}
         />
+      )}
+      {/* Toast après avoir rejoint OU quitté une partie (snackbar fixe, auto-effacé ~4 s par le hook).
+          Tappable pour le fermer tout de suite ; role=status pour l'annonce lecteur d'écran.
+          Rejoint = ✓ émeraude (positif) ; quitté = ↩ neutre (pas un « succès » vert). */}
+      {a.flash && (
+        <div
+          role="status"
+          onClick={() => a.setFlash(null)}
+          style={{
+            position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 60,
+            width: 'min(420px, calc(100vw - 32px))', boxSizing: 'border-box',
+            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+            background: th.text, color: th.bg, borderRadius: 12, padding: '12px 16px',
+            fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, boxShadow: th.shadow,
+          }}
+        >
+          {a.flash.kind === 'joined'
+            ? <span style={{ color: ACCENTS.emerald, fontSize: 16, fontWeight: 800 }}>✓</span>
+            : <span style={{ color: th.bg, opacity: 0.7, fontSize: 15, fontWeight: 800 }}>↩</span>}
+          <span style={{ flex: 1 }}>
+            {a.flash.kind === 'joined' ? 'Vous avez rejoint la partie' : 'Vous avez quitté la partie'} · {a.flash.match.resourceName}
+          </span>
+        </div>
       )}
     </>
   );

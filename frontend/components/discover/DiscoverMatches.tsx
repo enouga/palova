@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, NationalOpenMatch, MyRating } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
-import { PillTabs, Pill } from '@/components/ui/atoms';
+import { FacetChip, FacetGroup } from '@/components/calendar/FacetPanel';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
 import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
 
@@ -71,11 +71,20 @@ export function DiscoverMatches({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <PillTabs options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
-        {levelChipVisible && (
-          <Pill label="À mon niveau" active={levelOn} onClick={() => setLevelOn((v) => !v)} />
-        )}
+      {/* Même tiroir compact que les filtres Tournois (FacetPanel) — langage partagé. */}
+      <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
+          <FacetGroup th={th} label="Quand">
+            {PERIOD_OPTIONS.map((o) => (
+              <FacetChip key={o.value} th={th} label={o.label} active={period === o.value} onClick={() => setPeriod(o.value)} />
+            ))}
+          </FacetGroup>
+          {levelChipVisible && (
+            <FacetGroup th={th} label="Niveau">
+              <FacetChip th={th} label="À mon niveau" active={levelOn} onClick={() => setLevelOn((v) => !v)} />
+            </FacetGroup>
+          )}
+        </div>
       </div>
 
       {list.length === 0 ? (

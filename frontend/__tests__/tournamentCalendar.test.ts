@@ -1,5 +1,5 @@
 import {
-  emptyCalendarState, resolveDateWindow, applyFilters, calendarFacets, distanceKm,
+  emptyCalendarState, resolveDateWindow, applyFilters, calendarFacets, distanceKm, rangeChipLabel,
   CalendarFilterState,
 } from '@/lib/tournamentCalendar';
 import { NationalTournament } from '@/lib/api';
@@ -86,5 +86,20 @@ describe('distanceKm', () => {
     const d = distanceKm({ lat: 48.8566, lng: 2.3522 }, { lat: 45.764, lng: 4.8357 });
     expect(d).toBeGreaterThan(370);
     expect(d).toBeLessThan(410);
+  });
+});
+
+describe('rangeChipLabel', () => {
+  it('plage complète → « 24 juil. → 2 août »', () => {
+    expect(rangeChipLabel('2026-07-24', '2026-08-02')).toBe('24 juil. → 2 août');
+  });
+  it('début seul → « Du 24 juil. »', () => {
+    expect(rangeChipLabel('2026-07-24', null)).toBe('Du 24 juil.');
+  });
+  it('fin seule → « Jusqu\'au 2 août »', () => {
+    expect(rangeChipLabel(null, '2026-08-02')).toBe("Jusqu'au 2 août");
+  });
+  it('aucune borne → null', () => {
+    expect(rangeChipLabel(null, null)).toBeNull();
   });
 });

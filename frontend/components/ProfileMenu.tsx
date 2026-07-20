@@ -174,8 +174,8 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
               <MenuItem th={th} icon="home" label="Installer l'application"
                 onClick={() => { setOpen(false); if (installState === 'native') promptInstall(); else setInstallHelp(true); }} />
             )}
-            <MenuItem th={th} icon="logout" label="Se déconnecter" onClick={() => { setOpen(false); logout(); }} />
             <MenuItem th={th} icon="info" label="Aide" onClick={() => go(slug ? '/aide' : '/faq')} />
+            <MenuItem th={th} icon="logout" label="Se déconnecter" onClick={() => { setOpen(false); logout(); }} />
           </div>
         </div>
       )}

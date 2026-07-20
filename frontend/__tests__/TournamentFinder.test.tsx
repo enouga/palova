@@ -117,4 +117,21 @@ describe('TournamentFinder', () => {
     await waitFor(() => expect(window.location.search).toContain('dept=75'));
     expect(window.location.hash).toBe('#tournois');
   });
+
+  it('hideTitle (mode embarqué) : pas de minHeight plein écran', async () => {
+    const { container } = render(<ThemeProvider><TournamentFinder hideTitle /></ThemeProvider>);
+    await screen.findByText('GP Paris');
+    expect((container.firstChild as HTMLElement).style.minHeight).toBe('');
+  });
+
+  it('0 résultat avec filtres actifs : bouton « Effacer les filtres » qui relance la liste', async () => {
+    // Les facettes ne proposent jamais de combo à 0 résultat (design) → seul le filtre DATES
+    // peut vider la liste. Posé de façon déterministe via le deep-link ?du=&au= (lu au montage).
+    window.history.replaceState(null, '', '/?du=2030-01-01&au=2030-01-02');
+    render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
+    expect(await screen.findByText('Aucun tournoi ne correspond à votre recherche.')).toBeInTheDocument();
+    const btns = screen.getAllByRole('button', { name: /Effacer les filtres/ });
+    fireEvent.click(btns[btns.length - 1]); // celui de l'état vide (le pied du tiroir en a un aussi)
+    expect(await screen.findByText('GP Paris')).toBeInTheDocument();
+  });
 });

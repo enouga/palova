@@ -42,7 +42,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 // Import après les mocks (le module lit `api`/`useClub`/`useAuth`/`hardNavigate` au montage).
-import DiscoverPage from '@/app/decouvrir/page';
+import { DiscoverClient } from '@/app/decouvrir/DiscoverClient';
 
 function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
   return {
@@ -71,7 +71,7 @@ const MATCH_LYON = makeMatch({
   club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357, department: 'Rhône', departmentCode: '69' },
 });
 
-const wrap = () => render(<ThemeProvider><DiscoverPage /></ThemeProvider>);
+const wrap = () => render(<ThemeProvider><DiscoverClient /></ThemeProvider>);
 
 // jsdom n'implémente pas scrollIntoView : stub commun à tous les tests (les ancres/deep-links
 // l'appellent pour naviguer entre les sections empilées).
@@ -157,5 +157,22 @@ describe('DiscoverPage', () => {
     const btn = await screen.findByRole('button', { name: /Voir les clubs/ });
     fireEvent.click(btn);
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('?q= préremplit la localisation et filtre dès l\'arrivée', async () => {
+    window.history.replaceState(null, '', '/decouvrir?q=Lyon');
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    expect(screen.getByPlaceholderText('Ville, code postal ou département')).toHaveValue('Lyon');
+    await waitFor(() => expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument());
+    expect(screen.getByText('Padel Lyon')).toBeInTheDocument();
+  });
+
+  it('?pres=1 déclenche la géolocalisation à l\'arrivée', async () => {
+    const getCurrentPosition = jest.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+    window.history.replaceState(null, '', '/decouvrir?pres=1');
+    wrap();
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalled());
   });
 });
