@@ -86,7 +86,9 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
 
   if (!matches.length) return <p className="p-4 text-sm opacity-60">Aucun match enregistré.</p>;
   return (
-    <ul className="space-y-2">
+    <>
+      <style>{`.mm-grid{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:700px){.mm-grid{grid-template-columns:1fr 1fr}}`}</style>
+      <ul className="mm-grid">
       {matches.map((m) => {
         const { partners, opponents } = splitTeams(m.players ?? [], m.myTeam);
         const me = (m.players ?? []).find((p) => p.isMe);
@@ -162,6 +164,7 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </>
   );
 }
