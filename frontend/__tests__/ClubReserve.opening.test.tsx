@@ -6,8 +6,12 @@ import { nextOpening } from '../lib/bookingWindow';
 const runnerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const start = new Date(Date.now() + 3 * 3600e3).toISOString();
 const end = new Date(Date.now() + 4 * 3600e3).toISOString();
+// Doit matcher la timezone du club fixture (runnerTz, ligne au-dessus) — pas une valeur figée :
+// le club affiche ses créneaux dans SA timezone, qui ici EST celle du runner. Un 'Europe/Paris'
+// en dur divergeait de runnerTz sur un CI en UTC → texte introuvable (bug révélé, pas causé, par
+// la 1re exécution de cette suite sous CI Linux/UTC).
 const fmt = (iso: string) =>
-  new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+  new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: runnerTz })
     .format(new Date(iso)).replace(':', 'h');
 
 jest.mock('next/navigation', () => ({
