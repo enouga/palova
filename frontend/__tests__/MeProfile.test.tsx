@@ -148,14 +148,14 @@ describe('Page Mon profil — onglets + SaveBar', () => {
     expect(screen.queryByRole('button', { name: 'Oui' })).not.toBeInTheDocument();
   });
 
-  it('la langue est différée et part dans le même PATCH', async () => {
+  it('la langue est un champ figé « Français », pas un sélecteur', async () => {
     wrap();
     await screen.findByRole('region', { name: 'Informations' });
     goTab('Préférences');
-    fireEvent.change(await screen.findByLabelText('Langue'), { target: { value: 'es' } });
-    expect(api.updateMyProfile).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(expect.objectContaining({ locale: 'es' }), 'abc'));
+    const field = await screen.findByLabelText('Langue');
+    expect(field.tagName).not.toBe('SELECT');
+    expect(field).toHaveTextContent('Français');
+    expect(screen.getByText(/Anglais et espagnol arriveront plus tard/)).toBeInTheDocument();
   });
 
   it('le sport préféré est différé et part en preferredSportId', async () => {

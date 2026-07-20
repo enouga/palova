@@ -2,19 +2,17 @@
 import { ReactNode } from 'react';
 import { SwitchRow } from '@/components/ui/SwitchRow';
 import { CardKicker } from '@/components/profile/CardKicker';
-import { ProfileSelect } from '@/components/profile/ProfileFields';
+import { FieldShell } from '@/components/profile/ProfileFields';
 import { ProfileTabProps, useProfileStyles } from '@/components/profile/shared';
-
-const LOCALE_OPTIONS = [
-  { value: 'fr', label: 'Français' },
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Español' },
-];
 
 // ⚠️ Pas de sélecteur de thème ici : il n'a aucun état serveur, il ne peut donc pas passer
 // par la SaveBar — et par la règle de la page (« un contrôle hors barre n'a pas le droit
 // d'être habillé en champ »), il ne peut pas rester dans cette carte. Le ThemeToggle de
 // l'en-tête (ClubNav, ou en-tête plateforme de la page) le couvre déjà.
+//
+// Langue : pas encore de vrai sélecteur — l'app est 100% FR en dur (aucune lib i18n),
+// proposer Anglais/Espagnol laissait croire que le choix changeait quelque chose alors
+// qu'il ne faisait qu'écrire une valeur inerte en base. Champ figé en attendant l'i18n.
 export function ProfilePreferences({ profile, set }: ProfileTabProps) {
   const { th, card } = useProfileStyles();
   const hint = { fontFamily: th.fontUI, fontSize: 12, color: th.textFaint };
@@ -28,8 +26,10 @@ export function ProfilePreferences({ profile, set }: ProfileTabProps) {
     <section style={card} aria-label="Préférences">
       <CardKicker>Préférences</CardKicker>
 
-      <ProfileSelect label="Langue" value={profile.locale ?? 'fr'} onChange={(v) => set('locale', v)} options={LOCALE_OPTIONS} />
-      <span style={{ ...hint, marginTop: -6 }}>L'interface reste en français pour l'instant.</span>
+      <FieldShell label="Langue">
+        <span aria-label="Langue" style={{ fontFamily: th.fontUI, fontSize: 16.5, color: th.text }}>Français</span>
+      </FieldShell>
+      <span style={{ ...hint, marginTop: -6 }}>Anglais et espagnol arriveront plus tard.</span>
 
       <div style={{ marginTop: 4 }}>
         {row(
