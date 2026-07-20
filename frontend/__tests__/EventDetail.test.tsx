@@ -3,12 +3,11 @@
  * Scope : StripePaymentStep rendu après register({ payment }), mode setup, flux libre inchangé.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import EventDetailPage from '../app/events/[id]/page';
+import { EventDetailClient } from '../app/events/[id]/EventDetailClient';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
 // --- Navigation mock --------------------------------------------------------
 jest.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'ev1' }),
   useRouter: () => ({ push: jest.fn() }),
 }));
 
@@ -118,7 +117,7 @@ const baseReg = { id: 'r1', eventId: 'ev1', userId: 'u1', status: 'CONFIRMED' as
 function renderPage() {
   return render(
     <ThemeProvider>
-      <EventDetailPage />
+      <EventDetailClient id="ev1" />
     </ThemeProvider>,
   );
 }
