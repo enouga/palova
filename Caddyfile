@@ -3,7 +3,6 @@
 # Multi-domaines : palova.fr ET palova.app servent l'app. L'API reste partagée
 # sur api.palova.fr (auth par token Bearer → cross-origin OK), donc PAS de
 # bloc api.palova.app.
-
 {
 	email admin@palova.fr
 	# Certificats « à la demande » pour les sous-domaines clubs : Caddy demande au backend
@@ -13,9 +12,37 @@
 	}
 }
 
+# En-têtes communs à tout le site (front + API) : HSTS (tout est HTTPS via Caddy, y
+# compris on_demand_tls) + durcissement de base. Pas de `preload` (soumission à la liste
+# des navigateurs = quasi irréversible) tant que la politique n'a pas tourné en prod sans
+# accroc. `X-Frame-Options` en complément de `frame-ancestors` pour les très vieux
+# navigateurs qui ignorent CSP.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+	}
+}
+
+# CSP du front uniquement (l'API ne sert pas de HTML). `unsafe-inline` sur script/style
+# reste nécessaire : Next.js App Router injecte des <script> inline pour l'hydration/le
+# streaming (pas d'infra de nonce dans proxy.ts aujourd'hui) et le design system pose des
+# styles en `style={{...}}` massivement — un `script-src`/`style-src` strict casserait le
+# rendu. Le gain reste réel : bloque le chargement de script/frame/connect vers un hôte
+# tiers non listé (exfiltration, script injecté). `img-src https:` reste large car un
+# logo sponsor peut être une URL externe historique (avant l'upload de fichier).
+(csp_frontend) {
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https://api.palova.fr https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+}
+
 # Plateforme (apex des deux domaines) → frontend. Un apex ne matche PAS le wildcard
 # *.<domaine>, donc pas de chevauchement : certificat managé classique.
 palova.fr, palova.app {
+	import security_headers
+	import csp_frontend
 	reverse_proxy frontend:3000
 }
 
@@ -27,6 +54,7 @@ api.palova.fr {
 	tls {
 		on_demand
 	}
+	import security_headers
 	reverse_proxy backend:3001
 }
 
@@ -38,5 +66,7 @@ api.palova.fr {
 	tls {
 		on_demand
 	}
+	import security_headers
+	import csp_frontend
 	reverse_proxy frontend:3000
 }
