@@ -8,6 +8,7 @@ import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { MatchAlertService } from '../services/matchAlert.service';
 import { invalidateClubAvailability } from '../services/availabilityCache';
+import { reportError } from '../observability/reportError';
 
 const matchService = new MatchService();
 const matchAlertService = new MatchAlertService();
@@ -74,27 +75,27 @@ export function startCleanupJob(): void {
     try {
       await releaseExpiredHolds(new Date());
     } catch (err) {
-      console.error('[cleanup] Erreur:', (err as Error).message);
+      reportError(err, { source: 'cleanup:releaseExpiredHolds' });
     }
 
     try {
       const finalized = await matchService.autoValidateDue(new Date());
       if (finalized > 0) console.log(`[match] ${finalized} match(s) auto-validé(s)`);
     } catch (err) {
-      console.error('[match] auto-validation:', (err as Error).message);
+      reportError(err, { source: 'cleanup:autoValidateDue' });
     }
 
     try {
       await releaseExpiredRegistrations(new Date());
     } catch (err) {
-      console.error('[cleanup] inscriptions DUE:', (err as Error).message);
+      reportError(err, { source: 'cleanup:releaseExpiredRegistrations' });
     }
 
     try {
       const purged = await matchAlertService.purgeExpired();
       if (purged > 0) console.log(`[cleanup] ${purged} alerte(s) de partie expirée(s) purgée(s)`);
     } catch (err) {
-      console.error('[cleanup] alertes:', (err as Error).message);
+      reportError(err, { source: 'cleanup:purgeExpiredAlerts' });
     }
   });
 
