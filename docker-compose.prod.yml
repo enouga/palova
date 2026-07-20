@@ -72,6 +72,8 @@ services:
       GITHUB_SUPPORT_TOKEN: ${GITHUB_SUPPORT_TOKEN}
       GITHUB_SUPPORT_REPO: ${GITHUB_SUPPORT_REPO}
       SUPPORT_FALLBACK_EMAIL: ${SUPPORT_FALLBACK_EMAIL}
+      # Observabilité GlitchTip (capture d'erreurs backend). Absent → inactif.
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN}
     volumes:
       # Fichiers uploadés (avatars) — sans volume, perdus à chaque rebuild.
       - backend_uploads:/app/uploads
@@ -101,6 +103,8 @@ services:
         NEXT_PUBLIC_ROOT_DOMAINS: palova.fr,palova.app
         # Clé publique Stripe — GELÉE au build (NEXT_PUBLIC_*) → rebuild front obligatoire si elle change.
         NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        # DSN GlitchTip front — gelé au build (comme la clé Stripe). Rebuild si changé.
+        NEXT_PUBLIC_GLITCHTIP_DSN: ${NEXT_PUBLIC_GLITCHTIP_DSN}
     restart: unless-stopped
     logging: *default-logging
     environment:
