@@ -85,18 +85,31 @@ export function OpenMatchCard({
           <Chip tone={m.full ? 'mute' : 'accent'}>{m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''}`}</Chip>
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginRight: 4 }}>
+      {/* Rangée 1 : heure + sport (Padel) côte à côte, à l'identique de la page Réserver
+          (ReservationAgendaCard) — showSport est un réglage de club, donc uniforme sur
+          toutes les cartes de la grille, jamais de variation d'une carte à l'autre ici.
+          Rangée 2 : niveau à gauche (optionnel, par match) / type Compétitive-Amicale
+          épinglé à droite (`marginLeft:auto`, TOUJOURS rendu) — sa position ne dépend jamais
+          du niveau, donc les deux rangées gardent une hauteur fixe quel que soit le match :
+          sinon les cartes voisines d'une même grille avaient des hauteurs différentes et tout
+          ce qui suit (labels d'équipe, mini-terrain, barre d'actions) démarrait à des
+          hauteurs différentes d'une carte à l'autre. */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute }}>
           <Icon name="clock" size={14} color={th.textMute} />
           {formatDateShortTimeRange(m.startTime, m.endTime, timezone)}
         </span>
         {showSport && m.sport && <Chip tone="line">{m.sport.name}</Chip>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         {(m.targetLevelMin != null || m.targetLevelMax != null) && (
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
         )}
-        {m.competitive === false
-          ? <Chip tone="line">Amicale</Chip>
-          : <Chip tone="accent">Compétitive</Chip>}
+        <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          {m.competitive === false
+            ? <Chip tone="line">Amicale</Chip>
+            : <Chip tone="accent">Compétitive</Chip>}
+        </span>
       </div>
       {friendCount > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>

@@ -75,6 +75,21 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     expect(window.location.search).toContain('tab=reservation');
   });
 
+  it('l’onglet Réservation affiche une explication propre au mode d’ouverture sélectionné', async () => {
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Réservation' }));
+    await screen.findByText(/Réservation à l/);
+    expect(screen.getByText(/journée calendaire entière s’ouvre d’un coup/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Au fil de l’eau' }));
+    expect(screen.getByText(/réservable en continu/)).toBeInTheDocument();
+    expect(screen.queryByText(/journée calendaire entière s’ouvre d’un coup/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fenêtre glissante' }));
+    expect(screen.getByText(/avance d’un jour chaque nuit à minuit/)).toBeInTheDocument();
+  });
+
   it('reveals the save bar on edit and saves via the global PATCH then refreshes', async () => {
     wrap();
     const nameInput = await screen.findByDisplayValue('Démo');

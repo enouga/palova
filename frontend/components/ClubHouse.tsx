@@ -42,7 +42,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const [presentation, setPresentation] = useState<ClubPresentation | null>(null);
   const [offers, setOffers] = useState<PublicOffers | null>(null);
   const [topMonth, setTopMonth] = useState<TopMonthEntry[]>([]);
-  const [hasSub, setHasSub] = useState(false);
   const [authPrompt, setAuthPrompt] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<MyReservation | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -93,10 +92,6 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
     if (hidden.has('top')) return;
     api.getClubTopMonth(club.slug).then(setTopMonth).catch(() => setTopMonth([]));
   }, [club.slug, hidden]);
-  useEffect(() => {
-    if (!token || hidden.has('offers')) { setHasSub(false); return; }
-    api.getMyClubSubscriptions(club.slug, token).then((subs) => setHasSub(subs.length > 0)).catch(() => setHasSub(false));
-  }, [club.slug, token, hidden]);
   useEffect(() => { if (ready && token && !hidden.has('agenda')) loadNext(); }, [ready, token, loadNext, hidden]);
   // Parties ouvertes visibles de tous : token facultatif (flags viewer à false en anonyme).
   useEffect(() => {
@@ -119,7 +114,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
   const showClubCard = showShowcase(presentation);
-  const showOffers = !!offers && ((!hasSub && offers.plans.length > 0) || offers.packages.length > 0);
+  const showOffers = !!offers && (offers.plans.length > 0 || offers.packages.length > 0);
 
   // Config admin (Club.clubHouseSections) : un seul ordre pour tous ; null → ordre adaptatif.
   const { order } = resolveSections(club.clubHouseSections, !!token);
@@ -159,9 +154,8 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
       <OffersShowcase
         offers={offers}
         token={token}
-        hasActiveSubscription={hasSub}
         onAuthPrompt={() => setAuthPrompt(true)}
-        onPurchased={() => { if (token) api.getMyClubSubscriptions(club.slug, token).then((subs) => setHasSub(subs.length > 0)).catch(() => {}); }}
+        onPurchased={() => { /* offres toujours affichées : rien à rafraîchir ici */ }}
       />
     ),
     top: topMonth.length >= 3 && <TopOfMonth entries={topMonth} />,

@@ -6,6 +6,7 @@ import { offerIsActive } from '@/lib/clubhouse';
 import { deadlineCountdown } from '@/lib/tournament';
 import { ACCENTS, inkOn } from '@/lib/theme';
 import { SectionHeader } from '@/components/clubhouse/SectionHeader';
+import { isSafeHttpUrl } from '@/lib/safeLink';
 
 // « Cartes vivantes » : grille de tuiles logo qui se retournent en 3D, une à la
 // fois en cascade, pour révéler l'offre du partenaire au dos (coupon bleu nuit
@@ -123,8 +124,8 @@ export function SponsorFlipDeck({ sponsors, now = null }: { sponsors: Sponsor[];
                 <>
                   <span className="fd-back-nm" style={{ fontFamily: th.fontUI }}>{s.name}</span>
                   <span className="fd-lb" style={{ fontFamily: th.fontUI }}>Partenaire du club</span>
-                  {s.linkUrl && (
-                    <a className="fd-visit" href={s.linkUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontFamily: th.fontUI }}>
+                  {isSafeHttpUrl(s.linkUrl) && (
+                    <a className="fd-visit" href={s.linkUrl!} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontFamily: th.fontUI }}>
                       Visiter →
                     </a>
                   )}

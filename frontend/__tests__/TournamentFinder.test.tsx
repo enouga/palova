@@ -59,7 +59,7 @@ describe('TournamentFinder', () => {
     window.history.replaceState(null, '', '/decouvrir?tab=tournois');
     render(<ThemeProvider><TournamentFinder /></ThemeProvider>);
     await screen.findByText('GP Paris');
-    fireEvent.click(screen.getByText(/Paris 1/)); // chip « Paris 1 » (compteur)
+    fireEvent.click(screen.getByRole('button', { name: 'Paris' })); // chip département (compteur en aria-hidden)
     await waitFor(() => expect(window.location.search).toContain('dept=75'));
     expect(window.location.search).toContain('tab=tournois');
   });
@@ -81,7 +81,7 @@ describe('TournamentFinder', () => {
     render(<ThemeProvider><TournamentFinder city="lyon" /></ThemeProvider>);
     await screen.findByText('Open Lyon');
     expect(screen.queryByText('GP Paris')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Paris 1/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Paris' })).not.toBeInTheDocument();
   });
 
   it('prop items : données préchargées, aucun fetch', async () => {
@@ -113,7 +113,7 @@ describe('TournamentFinder', () => {
     window.history.replaceState(null, '', '/decouvrir#tournois');
     render(<ThemeProvider><TournamentFinder items={NAT} /></ThemeProvider>);
     await screen.findByText('GP Paris');
-    fireEvent.click(screen.getByText(/Paris 1/));
+    fireEvent.click(screen.getByRole('button', { name: 'Paris' }));
     await waitFor(() => expect(window.location.search).toContain('dept=75'));
     expect(window.location.hash).toBe('#tournois');
   });

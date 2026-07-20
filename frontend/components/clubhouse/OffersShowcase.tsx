@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -8,6 +8,7 @@ import { sportTag, clubIsMultiSport } from '@/lib/sportBadge';
 import { offerTint, sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersBySport } from '@/lib/adminOffers';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
+import { inkOn } from '@/lib/theme';
 import { CgvGate } from '@/components/CgvGate';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
@@ -54,10 +55,9 @@ type CardEntry = {
 // (sections avec kicker coloré, ordre des sports du club). Le bouton « Souscrire » ouvre une
 // modale de détail (description complète + caractéristiques) ; le paiement en ligne n'y est
 // proposé que si le club l'a activé, sinon la modale invite à régler à l'accueil.
-export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPrompt, onPurchased }: {
+export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
   offers: PublicOffers;
   token: string | null;
-  hasActiveSubscription: boolean;
   onAuthPrompt: () => void;
   onPurchased: () => void;
 }) {
@@ -66,7 +66,26 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
   const [target, setTarget] = useState<Target | null>(null);
   const [stage, setStage] = useState<Stage>('details');
 
-  const plans = hasActiveSubscription ? [] : offers.plans;
+  // Affordance de défilement : on affiche un dégradé + un chevron à gauche/droite seulement
+  // quand il reste des cartes cachées de ce côté (signale clairement « il y a plus à voir »).
+  const railRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft < max - 4 });
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => { el.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+  }, [offers.plans.length, offers.packages.length]);
+
+  // Les abonnements sont TOUJOURS affichés, même si le joueur est déjà abonné (choix produit :
+  // sur un club multi-sport, un abonné padel doit pouvoir voir/souscrire l'abonnement squash).
+  const plans = offers.plans;
   if (plans.length === 0 && offers.packages.length === 0) return null;
 
   const openDetails = (t: Target) => { setStage('details'); setTarget(t); };
@@ -91,6 +110,18 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     ? groupOffersBySport(cardEntries, club?.clubSports ?? [])
     : [{ key: null as string | null, items: cardEntries }];
 
+  const scrollByPage = (dir: number) => railRef.current?.scrollBy({ left: dir * railRef.current.clientWidth * 0.8, behavior: 'smooth' });
+  const navBtn = (side: 'left' | 'right'): CSSProperties => ({
+    position: 'absolute', [side]: 8, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38,
+    borderRadius: 99, border: `2px solid ${th.surface}`, background: th.accent, color: inkOn(th.accent),
+    boxShadow: '0 3px 12px rgba(0,0,0,0.28)', fontSize: 20, fontWeight: 800, lineHeight: 1, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, fontFamily: th.fontUI,
+  });
+  const fade = (side: 'left' | 'right'): CSSProperties => ({
+    position: 'absolute', [side]: 0, top: 0, bottom: 14, width: 48, pointerEvents: 'none',
+    background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${th.bg}, transparent)`,
+  });
+
   // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
   // sportTint colore le bandeau du haut (couleur de sport ; couleur de type si le club n'a qu'un
   // sport) ; typeTint colore le badge et le bouton (abonnement/carnet/porte-monnaie), inchangé.
@@ -98,7 +129,7 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     name: string; price: string; suffix: string | null; lines: string[]; kindLabel: string;
     sportTint: string; typeTint: string; onOpen: () => void;
   }) => (
-    <div className="of-card" style={{ ...cardStyle(th), flex: '0 0 236px', scrollSnapAlign: 'start', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', overflow: 'hidden' }}>
+    <div className="of-card" style={{ ...cardStyle(th), flex: '0 0 236px', padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', overflow: 'hidden' }}>
       <span aria-hidden="true" data-testid="offer-stripe" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: sportTint }} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', borderRadius: 999, padding: '3px 8px', background: th.mode === 'floodlit' ? `${typeTint}26` : `${typeTint}40`, color: th.mode === 'floodlit' ? typeTint : th.ink }}>
@@ -140,25 +171,39 @@ export function OffersShowcase({ offers, token, hasActiveSubscription, onAuthPro
     <section>
       <SectionHeader title="Abonnements & offres" />
       <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
-      {groups.map((g) => (
-        <div key={g.key ?? '_other'}>
-          {multiSport && (
-            <div data-testid="offer-sport-kicker" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 20px 6px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>
-              <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: sportKeyColor(g.key) }} />
-              {sportGroupLabel(g.key, club)}
+      {/* Un seul rail horizontal : chaque sport est un bloc vertical — étiquette EN HAUT + sa
+          rangée de cartes dessous —, les blocs posés côte à côte dans le rail qui défile. Le sport
+          reste au-dessus de ses cartes sans jamais forcer un saut de ligne entre sports. Dégradé de
+          bord + chevron ‹ › quand il reste des cartes cachées → « on ne voit pas tout ». */}
+      <div style={{ position: 'relative', margin: '0 -20px' }}>
+        <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 24, padding: '4px 20px 14px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+          {groups.map((g) => (
+            <div key={g.key ?? '_other'} style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 8, scrollSnapAlign: 'start' }}>
+              {multiSport && (
+                <div data-testid="offer-sport-kicker" style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2, fontFamily: th.fontUI, fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>
+                  <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: sportKeyColor(g.key) }} />
+                  {sportGroupLabel(g.key, club)}
+                </div>
+              )}
+              {/* flex:1 → la rangée remplit la colonne-sport (étirée par le rail à la hauteur du
+                  plus grand groupe) ; les cartes s'égalisent donc en hauteur d'un sport à l'autre
+                  et les boutons « Souscrire » s'alignent (align-items:stretch fait le reste). */}
+              <div style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'stretch' }}>
+                {g.items.map((entry) => (
+                  <OfferCard key={entry.id} name={entry.name} price={entry.price} suffix={entry.suffix}
+                    kindLabel={entry.kindLabel} typeTint={entry.typeTint}
+                    sportTint={multiSport ? sportOfferTint(entry.sportKeys) : entry.typeTint}
+                    lines={entry.lines} onOpen={entry.onOpen} />
+                ))}
+              </div>
             </div>
-          )}
-          {/* scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage. */}
-          <div className="sp-scroll-x" style={{ display: 'flex', gap: 12, margin: '0 -20px', padding: '4px 20px 14px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
-            {g.items.map((entry) => (
-              <OfferCard key={entry.id} name={entry.name} price={entry.price} suffix={entry.suffix}
-                kindLabel={entry.kindLabel} typeTint={entry.typeTint}
-                sportTint={multiSport ? sportOfferTint(entry.sportKeys) : entry.typeTint}
-                lines={entry.lines} onOpen={entry.onOpen} />
-            ))}
-          </div>
+          ))}
         </div>
-      ))}
+        {edges.left && <span aria-hidden style={fade('left')} />}
+        {edges.right && <span aria-hidden style={fade('right')} />}
+        {edges.left && <button type="button" aria-label="Offres précédentes" onClick={() => scrollByPage(-1)} style={navBtn('left')}>‹</button>}
+        {edges.right && <button type="button" aria-label="Voir plus d’offres" onClick={() => scrollByPage(1)} style={navBtn('right')}>›</button>}
+      </div>
 
       {target && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>

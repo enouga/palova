@@ -249,12 +249,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
               <div style={{ padding: '24px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
                 {levelFilterActive && matches.length > 0 ? 'Aucune partie dans cette fourchette de niveau.' : 'Aucune partie ouverte pour le moment.'}
                 {token && (
-                  <div style={{ marginTop: 12 }}>
-                    <button onClick={handleCreateAlert}
-                      style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '9px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>
-                      🔔 Créer une alerte
-                    </button>
-                  </div>
+                  <div style={{ marginTop: 4, fontSize: 13 }}>Créez une alerte pour être prévenu dès qu&apos;une partie correspond.</div>
                 )}
               </div>
             )

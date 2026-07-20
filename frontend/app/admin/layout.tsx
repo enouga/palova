@@ -151,8 +151,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin', label: 'Tableau de bord', icon: 'grid' },
     ] },
     // Un job par surface : la Caisse (/admin/encaissement) est LE comptoir du quotidien,
-    // « Ventes & journée » (/admin/caisse) vend les offres et clôt la journée, et le
-    // contrôle des paiements (/admin/reservations) vit dans « Finances ».
+    // « Ventes & journée » (/admin/caisse) vend les offres et clôt la journée.
     { title: 'Au quotidien', color: '#5e93da', items: [
       { href: '/admin/planning',     label: 'Planning',          icon: 'calendar' },
       { href: '/admin/encaissement', label: 'Caisse',            icon: 'euro' },
@@ -179,7 +178,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: '/admin/sponsors',      label: 'Partenaires', icon: 'share' },
     ] },
     { title: 'Finances', color: '#5bbd6e', items: [
-      { href: '/admin/reservations', label: 'Paiements',         icon: 'ticket' },
       // « Paiement en ligne » (/admin/payments) MISE DE CÔTÉ (2026-07-13) : entrée masquée pour
       // TOUS les rôles, gérant compris. La page et les routes /stripe/* restent en place, en
       // sommeil (réservées OWNER). Pour réactiver (gérant uniquement), décommenter la ligne :

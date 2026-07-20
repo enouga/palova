@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../db/prisma';
 import { SPONSORS_DIR } from '../utils/uploads';
+import { sanitizeExternalLinkUrl } from '../utils/url';
 
 interface SponsorInput { name?: string; logoUrl?: string; linkUrl?: string | null; sortOrder?: number; isActive?: boolean; offerText?: string | null; offerCode?: string | null; offerUntil?: string | null; pinned?: boolean; }
 
@@ -39,7 +40,7 @@ export class SponsorService {
     return prisma.sponsor.create({
       data: {
         clubId, name, logoUrl,
-        linkUrl: data.linkUrl?.trim() || null,
+        linkUrl: sanitizeExternalLinkUrl(data.linkUrl),
         sortOrder: Number.isInteger(data.sortOrder) ? data.sortOrder! : 0,
         isActive: data.isActive ?? true,
         offerText: data.offerText?.trim() || null,
@@ -58,7 +59,7 @@ export class SponsorService {
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
         ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl.trim() } : {}),
-        ...(data.linkUrl !== undefined ? { linkUrl: data.linkUrl?.trim() || null } : {}),
+        ...(data.linkUrl !== undefined ? { linkUrl: sanitizeExternalLinkUrl(data.linkUrl) } : {}),
         ...(data.sortOrder !== undefined ? { sortOrder: Number(data.sortOrder) } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.offerText !== undefined ? { offerText: data.offerText?.trim() || null } : {}),

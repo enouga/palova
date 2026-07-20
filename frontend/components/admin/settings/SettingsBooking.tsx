@@ -2,7 +2,7 @@
 import type { ClubAdminDetail } from '@/lib/api';
 import { Segmented } from '@/components/ui/atoms';
 import { CANCEL_PRESETS } from '@/lib/onboarding';
-import { DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER } from '@/lib/adminSettings';
+import { DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER, BOOKING_RELEASE_MODE_HELP } from '@/lib/adminSettings';
 import { PresetChips } from './PresetChips';
 import { SwitchRow } from '@/components/ui/SwitchRow';
 import { SettingsTabProps, useSettingsStyles } from './shared';
@@ -37,7 +37,7 @@ export function SettingsBooking({ club, set }: SettingsTabProps) {
             onChange={(v) => set('bookingReleaseMode', v as ClubAdminDetail['bookingReleaseMode'])}
           />
           <p style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, margin: '8px 0 0' }}>
-            « Au fil de l&apos;eau » n&apos;utilise pas l&apos;heure d&apos;ouverture. Heure 0 = minuit.
+            {BOOKING_RELEASE_MODE_HELP[club.bookingReleaseMode]}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 12, marginTop: 12, opacity: rolling ? 0.4 : 1 }}>

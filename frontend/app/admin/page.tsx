@@ -96,7 +96,6 @@ export default function AdminDashboard() {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 16 }}>
         <NavCard title="Ressources" desc="Tarifs, horaires, création et activation des terrains." icon="indoor" onClick={() => router.push('/admin/courts')} />
-        <NavCard title="Réservations" desc="Planning du club, montants encaissés, annulations." icon="ticket" onClick={() => router.push('/admin/reservations')} />
       </div>
     </div>
   );
