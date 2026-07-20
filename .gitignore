@@ -45,3 +45,7 @@ bash.exe.stackdump
 # TypeScript
 *.tsbuildinfo
 .superpowers/
+
+# Artefacts locaux Claude Code (captures d'écran de vérification visuelle, worktrees scratch)
+.claude/shots/
+.worktrees/
