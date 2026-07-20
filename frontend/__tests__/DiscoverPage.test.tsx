@@ -96,6 +96,8 @@ describe('DiscoverPage', () => {
   it('rend les 3 sections simultanément (plus d\'onglets)', async () => {
     wrap();
     expect(await screen.findAllByRole('link', { name: /Rejoindre la partie/ })).toHaveLength(2);
+    expect(screen.getByTestId('discover-map')).toBeInTheDocument();
+    expect(screen.getByText('Un club, une partie, un tournoi — partout autour de vous.')).toBeInTheDocument();
     await waitFor(() => expect(listNationalTournaments).toHaveBeenCalledTimes(1)); // fetch page, dès l'arrivée
     await waitFor(() => expect(listClubs).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Parties' })).not.toBeInTheDocument(); // plus de PillTabs onglets
@@ -142,6 +144,7 @@ describe('DiscoverPage', () => {
     expect(url).toContain('#clubs');
     expect(url).not.toContain('demo.');
     expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByTestId('discover-map')).not.toBeInTheDocument();
   });
 
   it('anonyme : pas de chip « À mon niveau », getMyRating jamais appelé', async () => {

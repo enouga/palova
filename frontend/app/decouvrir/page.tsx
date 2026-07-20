@@ -13,6 +13,7 @@ import { DiscoverAnchors } from '@/components/discover/DiscoverAnchors';
 import { DiscoverMatches } from '@/components/discover/DiscoverMatches';
 import { TournamentFinder } from '@/components/calendar/TournamentFinder';
 import { ClubDirectory } from '@/components/ClubDirectory';
+import { DiscoverMapBackground } from '@/components/discover/DiscoverMapBackground';
 
 const SECTION_IDS = ['parties', 'tournois', 'clubs'] as const;
 type SectionId = (typeof SECTION_IDS)[number];
@@ -105,7 +106,8 @@ export default function DiscoverPage() {
 
   return (
     <Screen>
-      <div style={{ paddingBottom: 40 }}>
+      <DiscoverMapBackground />
+      <div style={{ position: 'relative', zIndex: 1, paddingBottom: 40 }}>
         <div style={{ padding: '28px 20px 6px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Logotype size={22} />
@@ -119,20 +121,23 @@ export default function DiscoverPage() {
             Découvrir
           </div>
           <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, marginTop: 8 }}>
-            Clubs, parties et tournois, partout sur Palova.
+            Un club, une partie, un tournoi — partout autour de vous.
           </p>
         </div>
 
         {/* Barre de localisation unique : ville, code postal ou département + géoloc. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '14px 20px 0' }}>
-          <input
-            value={locInput}
-            onChange={(e) => setLocInput(e.target.value)}
-            placeholder="Ville, code postal ou département"
-            style={{ flex: '1 1 220px', minWidth: 0, height: 46, padding: '0 14px', borderRadius: 12,
-              background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`,
-              fontFamily: th.fontUI, fontSize: 15 }}
-          />
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 0 }}>
+            <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 15, pointerEvents: 'none' }}>📍</span>
+            <input
+              value={locInput}
+              onChange={(e) => setLocInput(e.target.value)}
+              placeholder="Ville, code postal ou département"
+              style={{ width: '100%', height: 46, padding: '0 14px 0 38px', borderRadius: 12,
+                background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 2px ${th.accent}`,
+                fontFamily: th.fontUI, fontSize: 15 }}
+            />
+          </div>
           <button onClick={locateMe} style={locateBtnStyle(th, !!coords)}>
             📍 {coords ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
           </button>
