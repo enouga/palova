@@ -32,6 +32,8 @@ function fmtHour(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
 }
 
+const PAST_PAGE_SIZE = 20;
+
 export default function MyReservationsPage() {
   const router = useRouter();
   const { th } = useTheme();
@@ -61,6 +63,9 @@ export default function MyReservationsPage() {
   const [selectedDay, setSelectedDay] = useState(() => todayKey());
   // Quotas du joueur sur le club courant (sous-domaine club uniquement) — null si pas de quota.
   const [quotaStatus, setQuotaStatus] = useState<MyQuotaStatus | null>(null);
+  // Fenêtre d'affichage de « Passées » — le fetch reste complet (nécessaire au Calendrier),
+  // seul le nombre de cartes RENDUES est limité, révélé par tranches via « Charger plus ».
+  const [pastVisible, setPastVisible] = useState(PAST_PAGE_SIZE);
 
   useEffect(() => { if (ready && !token) router.replace('/login'); }, [ready, token, router]);
 
@@ -83,6 +88,7 @@ export default function MyReservationsPage() {
       setRegs(tournaments);
       setEvts(events);
       setLessons(myLessons);
+      setPastVisible(PAST_PAGE_SIZE);
     }
     catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
@@ -120,7 +126,8 @@ export default function MyReservationsPage() {
     () => agenda.filter((i) => i.past).sort((a, b) => b.start.localeCompare(a.start) || b.id.localeCompare(a.id)),
     [agenda],
   );
-  const list = tab === 'past' ? past : upcoming;
+  const visiblePast = useMemo(() => past.slice(0, pastVisible), [past, pastVisible]);
+  const list = tab === 'past' ? visiblePast : upcoming;
 
   const entries = useMemo(
     () => buildCalendarEntries(fItems, fRegs, fEvts, fLessons, nowDate),
@@ -251,22 +258,31 @@ export default function MyReservationsPage() {
               )}
             </div>
           ) : (
-            list.map((it) => (
-              <MyAgendaListItem
-                key={`${it.kind}-${it.id}`}
-                item={it}
-                now={now ?? Date.now()}
-                localSlug={slug ?? null}
-                token={token}
-                onCancel={setConfirmCancel}
-                onPlayersChanged={() => { if (token) load(token); }}
-                onOpenChat={setChatFor}
-                canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
-                onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
-                existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
-                showSport={showSport}
-              />
-            ))
+            <>
+              {list.map((it) => (
+                <MyAgendaListItem
+                  key={`${it.kind}-${it.id}`}
+                  item={it}
+                  now={now ?? Date.now()}
+                  localSlug={slug ?? null}
+                  token={token}
+                  onCancel={setConfirmCancel}
+                  onPlayersChanged={() => { if (token) load(token); }}
+                  onOpenChat={setChatFor}
+                  canRecord={(r) => now != null && canRecordResult(r, new Date(now)) && !matchFor(r.id)}
+                  onRecordResult={levelEnabled ? (r) => setRecordingFor(r) : undefined}
+                  existingMatchStatus={it.kind === 'reservation' ? matchFor(it.r.id)?.status : undefined}
+                  showSport={showSport}
+                />
+              ))}
+              {tab === 'past' && pastVisible < past.length && (
+                <button onClick={() => setPastVisible((v) => v + PAST_PAGE_SIZE)} style={{
+                  gridColumn: '1 / -1', marginTop: 4, width: '100%', padding: '10px 0', borderRadius: 10,
+                  border: `1px solid ${th.line}`, background: th.surface, color: th.text, cursor: 'pointer',
+                  fontFamily: th.fontUI, fontWeight: 600,
+                }}>Charger plus</button>
+              )}
+            </>
           )}
         </div>
         )}

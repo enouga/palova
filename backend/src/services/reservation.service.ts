@@ -1687,6 +1687,7 @@ export class ReservationService {
     const rows = await prisma.reservation.findMany({
       where: { userId },
       orderBy: { startTime: 'desc' },
+      take: 500,
       include: {
         resource: {
           select: {

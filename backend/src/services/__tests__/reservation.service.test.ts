@@ -2198,6 +2198,18 @@ describe('ReservationService', () => {
         expect(p.slot).toBeNull();
       }
     });
+
+    it('borne la requête à 500 réservations (garde-fou anti-croissance illimitée)', async () => {
+      prismaMock.reservation.findMany.mockResolvedValue([baseReservation()] as any);
+      prismaMock.sport.findMany.mockResolvedValue([{ id: 'sport-padel', key: 'padel' }] as any);
+      prismaMock.playerRating.findMany.mockResolvedValue([] as any);
+
+      await service.listUserReservations('user-1');
+
+      expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 500 }),
+      );
+    });
   });
 
   describe('addOwnReservationParticipant', () => {
