@@ -226,7 +226,6 @@ describe('AdminLayout — sections repliables', () => {
     expect(screen.getByText('Caisse')).toBeInTheDocument();            // /admin/encaissement (comptoir)
     expect(screen.getByText('Ventes & journée')).toBeInTheDocument();  // /admin/caisse
     expect(screen.getByText('Signalements')).toBeInTheDocument();     // /admin/moderation
-    expect(screen.getByText('Paiements')).toBeInTheDocument();         // /admin/reservations (Finances)
     expect(screen.getByText('Réglages')).toBeInTheDocument();
   });
 
@@ -282,10 +281,10 @@ describe('AdminLayout — entrées gatées par rôle', () => {
     expect(screen.getByText('Abonnement Palova')).toBeInTheDocument();
   });
 
-  it('STAFF : pas d’entrée « Abonnement Palova » (le reste de Finances est rendu)', async () => {
+  it('STAFF : section « Finances » absente (plus aucune entrée n’y est visible au staff)', async () => {
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'STAFF' }]);
     await wrap();
-    expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
+    expect(screen.queryByText('Finances')).not.toBeInTheDocument();
     expect(screen.queryByText('Abonnement Palova')).not.toBeInTheDocument();
   });
 
@@ -320,7 +319,7 @@ describe('AdminLayout — entrées gatées par rôle', () => {
   it('OWNER : « Paiement en ligne » masquée (page mise de côté)', async () => {
     api.getMyClubs.mockResolvedValue([{ clubId: 'c1', role: 'OWNER' }]);
     await wrap();
-    expect(screen.getByText('Paiements')).toBeInTheDocument(); // la section Finances est là
+    expect(screen.getByText('Comptabilité')).toBeInTheDocument(); // la section Finances est là
     expect(screen.queryByText('Paiement en ligne')).not.toBeInTheDocument();
   });
 });
