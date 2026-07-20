@@ -26,13 +26,12 @@ const offers: PublicOffers = {
   onlinePurchase: true,
 };
 
-const wrap = (over: { offers?: PublicOffers; token?: string | null; hasSub?: boolean; onAuthPrompt?: () => void }) =>
+const wrap = (over: { offers?: PublicOffers; token?: string | null; onAuthPrompt?: () => void }) =>
   render(
     <ThemeProvider>
       <OffersShowcase
         offers={over.offers ?? offers}
         token={over.token === undefined ? 't' : over.token}
-        hasActiveSubscription={over.hasSub ?? false}
         onAuthPrompt={over.onAuthPrompt ?? (() => {})}
         onPurchased={() => {}}
       />
@@ -53,9 +52,10 @@ describe('OffersShowcase', () => {
     expect(screen.getByText('Carnet 10')).toBeInTheDocument();
   });
 
-  it('déjà abonné → cartes plan masquées, carnets conservés', () => {
-    wrap({ hasSub: true });
-    expect(screen.queryByText('Abo Or')).toBeNull();
+  it('les abonnements sont toujours affichés (même déjà abonné)', () => {
+    // Choix produit « toujours tout afficher » : plus aucun masquage des plans.
+    wrap({});
+    expect(screen.getByText('Abo Or')).toBeInTheDocument();
     expect(screen.getByText('Carnet 10')).toBeInTheDocument();
   });
 
