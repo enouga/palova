@@ -107,7 +107,22 @@ export function PromotionForm(props: PromotionFormProps) {
   );
 
   const submitLabel = editing ? 'Enregistrer' : 'Créer la promotion';
-  const submitDisabled = busy || !name.trim() || !startDate || !endDate;
+
+  // Fix 1 — « Tous les terrains » OFF sans terrain coché : sinon resourceIds:[] créerait
+  // silencieusement une promo « tous terrains » (interprétation backend/targetLabel).
+  const courtsMissing = !allCourts && checkedIds.length === 0;
+
+  // Fix 3 — garde client sur la validité (le backend valide déjà en défense ; ceci évite
+  // à l'admin de voir un « VALIDATION_ERROR » brut). On expose le premier problème rencontré.
+  const percentNum = Number(percentOff);
+  const fixedNum = Number(fixedPrice);
+  let invalidHint: string | null = null;
+  if (startDate && endDate && startDate > endDate) invalidHint = 'La date de fin doit être après le début.';
+  else if (kind === 'PERCENT' && !(Number.isInteger(percentNum) && percentNum >= 1 && percentNum <= 100)) invalidHint = 'Le pourcentage doit être un entier entre 1 et 100.';
+  else if (kind === 'FIXED' && !(fixedPrice.trim() !== '' && fixedNum >= 0)) invalidHint = 'Le prix fixe doit être positif.';
+  else if (hasWindow && toMin(windowStart) >= toMin(windowEnd)) invalidHint = 'La fin de plage doit être après le début.';
+
+  const submitDisabled = busy || !name.trim() || !startDate || !endDate || courtsMissing || invalidHint !== null;
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -145,13 +160,20 @@ export function PromotionForm(props: PromotionFormProps) {
               <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>Tous les terrains</span>
             </div>
             {!allCourts && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {courts.map((c) => (
-                  <button key={c.id} type="button" onClick={() => toggleCourt(c.id)} style={chip(checkedIds.includes(c.id))}>
-                    {c.name}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {courts.map((c) => (
+                    <button key={c.id} type="button" onClick={() => toggleCourt(c.id)} style={chip(checkedIds.includes(c.id))}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                {courtsMissing && (
+                  <div style={{ marginTop: 6, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.accentWarm }}>
+                    Cochez au moins un terrain.
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -191,6 +213,12 @@ export function PromotionForm(props: PromotionFormProps) {
             {switchBtn(enabled, () => setEnabled((v) => !v), 'Activer la promotion')}
             <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>Activer</span>
           </div>
+
+          {invalidHint && (
+            <div role="alert" style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.accentWarm }}>
+              {invalidHint}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
             <button type="button" disabled={submitDisabled} onClick={handleSubmit}
