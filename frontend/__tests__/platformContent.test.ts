@@ -3,7 +3,8 @@ import { PLATFORM_MENTIONS, PLATFORM_CGU, PLATFORM_CGV, PLATFORM_CONFIDENTIALITE
 describe('documents légaux plateforme', () => {
   it('sont édités par Tolaris Studio et datés', () => {
     for (const doc of [PLATFORM_MENTIONS, PLATFORM_CGU, PLATFORM_CGV, PLATFORM_CONFIDENTIALITE]) {
-      expect(doc).toContain('Version du 18 juillet 2026');
+      // Daté (peu importe la date exacte — CGV & Confidentialité bumpées au go-live GlitchTip).
+      expect(doc).toMatch(/Version du .+ 2026/);
     }
     expect(PLATFORM_MENTIONS).toContain('Tolaris Studio');
     expect(PLATFORM_MENTIONS).toContain("cours d'immatriculation");

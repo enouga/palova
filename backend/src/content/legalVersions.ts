@@ -8,6 +8,6 @@ import { LegalDocument } from '@prisma/client';
  */
 export const LEGAL_VERSIONS: Record<LegalDocument, string> = {
   CGU: '2026-07-18',
-  CGV_SAAS: '2026-07-18',
-  PRIVACY: '2026-07-18',
+  CGV_SAAS: '2026-07-20',
+  PRIVACY: '2026-07-20',
 };
