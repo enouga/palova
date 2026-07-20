@@ -1,5 +1,9 @@
 import 'dotenv/config';
-import express, { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/node';
+import { initSentry } from './observability/sentry';
+import { reportError } from './observability/reportError';
+import { errorHandler } from './observability/errorHandler';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth';
 import meRouter from './routes/me';
@@ -29,6 +33,9 @@ import { redis } from './redis/client';
 import { UPLOADS_DIR, ensureUploadDirs } from './utils/uploads';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
 import platformBillingWebhooksRouter from './routes/platform-billing-webhooks';
+
+// Observabilité : à initialiser AVANT toute construction d'app. No-op sans GLITCHTIP_DSN.
+initSentry();
 
 const app = express();
 
@@ -116,10 +123,7 @@ app.get('/internal/tls-check', (req: Request, res: Response) => {
   res.sendStatus(ok ? 200 : 403);
 });
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Error]', err.message);
-  res.status(500).json({ error: 'Erreur interne du serveur' });
-});
+app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -128,11 +132,13 @@ if (require.main === module) {
   // une promesse rejetée non gérée ne doit pas tuer le process en silence, et une
   // exception non capturée doit le faire sortir proprement (redémarrage Docker).
   process.on('unhandledRejection', (reason) => {
-    console.error('[unhandledRejection]', reason);
+    reportError(reason, { source: 'unhandledRejection' });
   });
   process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException]', err);
-    process.exit(1);
+    reportError(err, { source: 'uncaughtException' });
+    // Laisse à GlitchTip une chance de recevoir l'événement avant l'arrêt (best-effort ;
+    // Sentry.close résout immédiatement si le SDK n'est pas initialisé).
+    void Sentry.close(2000).finally(() => process.exit(1));
   });
 
   Promise.all([prisma.$connect(), redis.connect()])
