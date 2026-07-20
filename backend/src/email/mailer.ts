@@ -9,12 +9,18 @@ const FROM = process.env.SMTP_FROM || 'Palova <noreply@palova.fr>';
 const PALOVA_BRAND_EMAIL: Brand = { ...PALOVA_BRAND, logoUrl: platformAsset('/icon-192.png') };
 
 // Transport SMTP si configuré (prod), sinon null → fallback console (dev).
+// Timeouts explicites : sans eux, nodemailer attend jusqu'à 2 min (défaut connectionTimeout)
+// avant d'abandonner un hôte injoignable — un SMTP en panne/filtré bloquerait alors toute
+// notification best-effort qui l'attend pour un temps déraisonnable.
 const transporter = process.env.SMTP_HOST
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
       secure: Number(process.env.SMTP_PORT) === 465,
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     })
   : null;
 

@@ -66,30 +66,6 @@ export function ProfileInput({ label, value, onChange, type = 'text', placeholde
   );
 }
 
-export function ProfileSelect({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  const { th } = useTheme();
-  const [focused, setFocused] = useState(false);
-  const bare = useBareStyle();
-  return (
-    <FieldShell label={label} focused={focused}>
-      <select
-        value={value} aria-label={label}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-        onChange={(e) => onChange(e.target.value)}
-        // Fond opaque : sans lui, le popup d'options hérite du blanc UA et th.text (quasi blanc
-        // en floodlit) devient illisible dessus. La boîte est déjà th.surface2 fermée, donc ça
-        // ne change rien visuellement quand le select est fermé.
-        style={{ ...bare, cursor: 'pointer', background: th.surface2 }}
-      >
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </FieldShell>
-  );
-}
-
 /** Choix court (2-4 valeurs) en pills NUES sous le libellé — pas de boîte autour, les
  * pills portent déjà leur propre fond. `hideLabel` omet le libellé (ex. « Sport préféré »
  * quand la carte porte déjà ce titre via CardKicker juste au-dessus). */

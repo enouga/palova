@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { CardKicker } from '../components/profile/CardKicker';
-import { ProfileInput, ProfileSelect, PillChoice } from '../components/profile/ProfileFields';
+import { ProfileInput, PillChoice } from '../components/profile/ProfileFields';
 
 const wrap = (ui: React.ReactNode) => render(<ThemeProvider>{ui}</ThemeProvider>);
 
@@ -48,18 +48,6 @@ describe('ProfileInput', () => {
     // eslint-disable-next-line no-bitwise
     expect(label.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('[data-testid="field-box"] [aria-hidden]')).toBeNull();
-  });
-});
-
-describe('ProfileSelect', () => {
-  it('rend ses options et remonte le choix', () => {
-    const onChange = jest.fn();
-    wrap(<ProfileSelect label="Langue" value="fr" onChange={onChange}
-      options={[{ value: 'fr', label: 'Français' }, { value: 'es', label: 'Español' }]} />);
-    const select = screen.getByLabelText('Langue');
-    expect(select).toHaveValue('fr');
-    fireEvent.change(select, { target: { value: 'es' } });
-    expect(onChange).toHaveBeenCalledWith('es');
   });
 });
 
