@@ -1,4 +1,5 @@
 import { ClubEventKind, ClubEventStatus, Prisma } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import { serializableTx } from '../db/serializable';
 import * as notify from '../email/notifications';
@@ -142,7 +143,7 @@ export class EventService {
     try {
       await fn();
     } catch (err) {
-      console.error('[notifications] envoi email échoué (événement) :', err);
+      reportError(err, { source: 'safeNotify:event' });
     }
   }
 

@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
@@ -87,7 +88,7 @@ export class OpenMatchService {
   /** Envoi d'email best-effort : un échec est avalé, jamais propagé (ne casse pas le join). */
   private async safeNotify(fn: () => Promise<void>): Promise<void> {
     try { await fn(); }
-    catch (err) { console.error('[openMatch] notification échouée', err); }
+    catch (err) { reportError(err, { source: 'safeNotify:openMatch' }); }
   }
 
   /** Sérialise une réservation-partie en DTO. Partagé par listOpenMatches et getOpenMatch. */

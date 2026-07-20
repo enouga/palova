@@ -1,4 +1,5 @@
 import { Prisma, EnrollmentMode } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import {
   notifyLessonEnrollment,
@@ -151,7 +152,7 @@ class LessonService {
     try {
       await fn();
     } catch (err) {
-      console.error('[notifications] envoi email échoué (cours) :', err);
+      reportError(err, { source: 'safeNotify:lesson' });
     }
   }
 

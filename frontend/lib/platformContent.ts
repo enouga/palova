@@ -190,8 +190,8 @@ responsable de traitement** et **Tolaris Studio sous-traitant**.
 5. **Confidentialité et sécurité** : accès limité aux personnes habilitées, chiffrement en
    transit, sauvegardes, hébergement dans l'Union européenne (Hetzner, Allemagne).
 6. **Sous-traitants ultérieurs** : le Club autorise le recours à Hetzner (hébergement), Stripe
-   (paiements) et OVH (envoi d'e-mails). Tolaris Studio informera le Club de tout changement,
-   qui pourra s'y opposer pour motif légitime.
+   (paiements), OVH (envoi d'e-mails) et GlitchTip (supervision technique des erreurs). Tolaris
+   Studio informera le Club de tout changement, qui pourra s'y opposer pour motif légitime.
 7. **Assistance** : Tolaris Studio aide le Club à répondre aux demandes d'exercice de droits des
    personnes et lui notifie **toute violation de données** dans les meilleurs délais après en
    avoir eu connaissance.
@@ -234,8 +234,10 @@ Aucune donnée n'est vendue ni utilisée à des fins publicitaires.
 ## Destinataires et transferts
 Sous-traitants : **Hetzner** (hébergement, Allemagne), **Stripe** (paiements — des transferts
 hors UE peuvent intervenir, encadrés par des clauses contractuelles types), **OVH** (e-mails,
-France). Les membres d'un même club voient les informations que vous rendez visibles (nom,
-avatar, niveau, participation aux parties).
+France), **GlitchTip** (supervision technique — collecte de métadonnées d'erreur applicative :
+horodatage, message, identifiant interne de compte, adresse IP — aux seules fins de détection
+et de correction des dysfonctionnements). Les membres d'un même club voient les informations
+que vous rendez visibles (nom, avatar, niveau, participation aux parties).
 
 ## Vos droits
 Accès, rectification, effacement, limitation, opposition, portabilité : depuis votre profil
