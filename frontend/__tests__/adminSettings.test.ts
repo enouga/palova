@@ -1,6 +1,6 @@
 import {
   SETTINGS_TABS, parseTab, buildUpdateBody, isDirty, offPeakChipLabel,
-  DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER,
+  DAY_PRESETS_PUBLIC, DAY_PRESETS_MEMBER, BOOKING_RELEASE_MODE_HELP,
   toSportsDraft, addSportDraft, toggleDurationDraft, sportsDirty, buildSportsBatchBody,
 } from '@/lib/adminSettings';
 import type { ClubAdminDetail, AdminClubSport } from '@/lib/api';
@@ -32,6 +32,12 @@ describe('adminSettings helpers', () => {
   it('buildUpdateBody includes showOtherClubsReservations (fixes the persisted-toggle bug)', () => {
     const body = buildUpdateBody({ ...CLUB, showOtherClubsReservations: true });
     expect(body.showOtherClubsReservations).toBe(true);
+  });
+
+  it('BOOKING_RELEASE_MODE_HELP has one distinct explanation per mode', () => {
+    const modes: (keyof typeof BOOKING_RELEASE_MODE_HELP)[] = ['DAY_AT_HOUR', 'ROLLING_SLOT', 'WINDOW_SHIFT'];
+    for (const m of modes) expect(BOOKING_RELEASE_MODE_HELP[m].length).toBeGreaterThan(0);
+    expect(new Set(modes.map((m) => BOOKING_RELEASE_MODE_HELP[m])).size).toBe(3);
   });
 
   it('buildUpdateBody sends offPeakHours=null when the map is empty', () => {

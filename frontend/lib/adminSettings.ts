@@ -1,5 +1,5 @@
 // Helpers PURS de la page Réglages du club. Aucune horloge, aucun fetch, aucun JSX.
-import type { ClubAdminDetail, UpdateClubBody, OffPeakRange, AdminClubSport, SportsBatchItem } from '@/lib/api';
+import type { ClubAdminDetail, UpdateClubBody, OffPeakRange, AdminClubSport, SportsBatchItem, BookingReleaseMode } from '@/lib/api';
 import { effectiveDurations } from '@/lib/duration';
 
 export type SettingsTabKey = 'identite' | 'sports' | 'reservation' | 'tarifs' | 'caisse' | 'visibilite';
@@ -22,6 +22,16 @@ export function parseTab(search: string): SettingsTabKey {
 /** Presets de fenêtre de réservation (jours), indépendants public / abonnés. */
 export const DAY_PRESETS_PUBLIC = [7, 14, 30];
 export const DAY_PRESETS_MEMBER = [14, 28, 60];
+
+/** Explication affichée sous le sélecteur de mode d'ouverture, propre au mode sélectionné. */
+export const BOOKING_RELEASE_MODE_HELP: Record<BookingReleaseMode, string> = {
+  DAY_AT_HOUR:
+    "Chaque jour à l’heure indiquée (0 = minuit), une journée calendaire entière s’ouvre d’un coup — tous ses créneaux, du matin au soir. Avant cette heure, la fenêtre montre un jour de moins.",
+  ROLLING_SLOT:
+    "Aucune heure d’ouverture : la fenêtre est réservable en continu, jusqu’à exactement le nombre de jours choisi après l’instant présent (à la minute près). Les heures publique/abonnés ci-dessous sont ignorées.",
+  WINDOW_SHIFT:
+    "La fenêtre avance d’un jour chaque nuit à minuit, mais s’arrête toujours à l’heure indiquée (0 = minuit) sur le dernier jour visible — pas la journée entière.",
+};
 
 /**
  * Body du PATCH club depuis un brouillon. UNIQUE source de vérité des champs
