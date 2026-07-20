@@ -123,8 +123,9 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
 
 // Chip de facette (copie locale du FacetChip d'Events) : ✓ + encre pleine quand active,
 // compteur en suffixe `aria-hidden` (le nom accessible reste « Paris », pas « Paris 2 » —
-// contrat des tests), estompée mais cliquable à 0.
-function FacetChip({ th, label, count, active, onClick }: {
+// contrat des tests), estompée mais cliquable à 0. Exportée : DiscoverMatches (« Ça joue
+// bientôt ») partage le même tiroir.
+export function FacetChip({ th, label, count, active, onClick }: {
   th: Th; label: string; count?: number; active: boolean; onClick: () => void;
 }) {
   const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.text;
@@ -147,7 +148,7 @@ function FacetChip({ th, label, count, active, onClick }: {
   );
 }
 
-function FacetGroup({ th, label, children }: { th: Th; label: string; children: React.ReactNode }) {
+export function FacetGroup({ th, label, children }: { th: Th; label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
       <span style={{

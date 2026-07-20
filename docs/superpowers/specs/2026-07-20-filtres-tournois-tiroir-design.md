@@ -76,3 +76,13 @@ n'est plus utilisé par ce panneau.
 - Toute modification d'`EventsFilterBar`, du `DateRangeChip`, de l'état/URL/`applyFilters`.
 - Onglets « sources » façon Events (les ancres Parties/Tournois/Clubs de `/decouvrir` jouent
   déjà ce rôle).
+
+## Évolution (même jour, demande d'Eric) — « Ça joue bientôt » aligné
+
+Les filtres de la section Parties de `/decouvrir` (`DiscoverMatches` : `PillTabs` de période +
+`Pill` « À mon niveau » flottantes) adoptent **le même tiroir** : `FacetChip`/`FacetGroup` sont
+**exportées** de `FacetPanel.tsx` et réutilisées — groupes **QUAND** (Aujourd'hui / Week-end /
+14 jours) et **NIVEAU** (« À mon niveau », rendu seulement connecté+calibré, gating inchangé).
+Pas de pied « résultats » (une période est toujours active, rien à effacer). Noms accessibles
+conservés (contrats de tests). Test : « les filtres vivent dans le tiroir compact » dans
+`DiscoverMatches.test.tsx`.
