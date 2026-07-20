@@ -13,7 +13,9 @@ import { DiscoverAnchors } from '@/components/discover/DiscoverAnchors';
 import { DiscoverMatches } from '@/components/discover/DiscoverMatches';
 import { TournamentFinder } from '@/components/calendar/TournamentFinder';
 import { ClubDirectory } from '@/components/ClubDirectory';
-import { DiscoverMapBackground } from '@/components/discover/DiscoverMapBackground';
+import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
+import { FranceDotsMap } from '@/components/platform/FranceDotsMap';
+import { LocationSearchPill } from '@/components/discover/LocationSearchPill';
 
 const SECTION_IDS = ['parties', 'tournois', 'clubs'] as const;
 type SectionId = (typeof SECTION_IDS)[number];
@@ -66,6 +68,17 @@ export default function DiscoverPage() {
     api.listNationalTournaments().then(setTournaments).catch(() => setTournaments([]));
   }, [slug]);
 
+  // Deep-links posés par le hero de la vitrine : ?q= préremplit la recherche, ?pres=1 lance la
+  // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas).
+  useEffect(() => {
+    if (slug) return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) setLocInput(q);
+    if (params.get('pres') === '1') locateMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
   useEffect(() => {
     if (slug) return;
     const io = new IntersectionObserver((entries) => {
@@ -102,12 +115,14 @@ export default function DiscoverPage() {
 
   if (slug) return null; // hôte club : redirection vers la plateforme en cours
 
-  const sectionTitle: React.CSSProperties = { fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 22, color: th.text, letterSpacing: -0.3, scrollMarginTop: 72 };
+  // Sections au langage éditorial du site : tiret accent + kicker petites capitales + titre display.
+  const kickStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 800, letterSpacing: 1.8, textTransform: 'uppercase', color: th.textMute };
+  const tick = <span aria-hidden="true" style={{ width: 14, height: 3, borderRadius: 2, background: th.accent }} />;
+  const titleStyle: React.CSSProperties = { fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 24, color: th.text, letterSpacing: -0.5, margin: '7px 0 0', scrollMarginTop: 72 };
 
   return (
     <Screen>
-      <DiscoverMapBackground />
-      <div style={{ position: 'relative', zIndex: 1, paddingBottom: 40 }}>
+      <div style={{ paddingBottom: 40 }}>
         <div style={{ padding: '28px 20px 6px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Logotype size={22} />
@@ -117,34 +132,23 @@ export default function DiscoverPage() {
               <ProfileMenu />
             </div>
           </div>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, marginTop: 22, letterSpacing: -0.5 }}>
-            Découvrir
-          </div>
-          <p style={{ fontFamily: th.fontUI, fontSize: 14.5, color: th.textMute, marginTop: 8 }}>
-            Un club, une partie, un tournoi — partout autour de vous.
-          </p>
         </div>
 
-        {/* Barre de localisation unique : ville, code postal ou département + géoloc. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '14px 20px 0' }}>
-          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 0 }}>
-            <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 15, pointerEvents: 'none' }}>📍</span>
-            <input
-              value={locInput}
-              onChange={(e) => setLocInput(e.target.value)}
-              placeholder="Ville, code postal ou département"
-              style={{ width: '100%', height: 46, padding: '0 14px 0 38px', borderRadius: 12,
-                background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 2px ${th.accent}`,
-                fontFamily: th.fontUI, fontSize: 15 }}
-            />
+        {/* Mini-hero brume : l'établi ne re-séduit pas (pas de titre-promesse — le hero complet
+            vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité. */}
+        <div style={{ padding: '10px 18px 0' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '26px 24px 46px' }}>
+            <FranceDotsMap pins="few" style={{ height: '150%', right: -20, opacity: 0.55 }} />
+            <div style={{ position: 'relative', fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
+              Découvrir
+            </div>
           </div>
-          <button onClick={locateMe} style={locateBtnStyle(th, !!coords)}>
-            📍 {coords ? 'Autour de moi ✓' : geoState === 'locating' ? 'Localisation…' : 'Autour de moi'}
-          </button>
+          <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
+            nearActive={!!coords} locating={geoState === 'locating'} />
           {geoState === 'denied' && (
-            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+            <div style={{ textAlign: 'center', marginTop: 8, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
               Localisation indisponible — cherchez par ville ou département.
-            </span>
+            </div>
           )}
         </div>
 
@@ -160,7 +164,8 @@ export default function DiscoverPage() {
 
         <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10 }}>
           <div style={{ padding: '0 20px' }}>
-            <h2 style={sectionTitle}>Ça joue bientôt</h2>
+            <div style={kickStyle}>{tick}Parties ouvertes</div>
+            <h2 style={titleStyle}>Ça joue bientôt</h2>
             <DiscoverMatches matches={matches} location={location} coords={coords} now={now}
               onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
           </div>
@@ -168,7 +173,8 @@ export default function DiscoverPage() {
 
         <section id="tournois" data-section="tournois" ref={(el) => { sectionRefs.current.tournois = el; }} style={{ paddingTop: 26 }}>
           <div style={{ padding: '0 20px' }}>
-            <h2 style={sectionTitle}>Tournois</h2>
+            <div style={kickStyle}>{tick}Compétition</div>
+            <h2 style={titleStyle}>Tournois</h2>
           </div>
           <TournamentFinder hideTitle items={tournaments} coords={coords}
             city={location.city ?? ''} deptCodes={location.deptCodes} onCount={onCountTournois} />
@@ -176,20 +182,12 @@ export default function DiscoverPage() {
 
         <section id="clubs" data-section="clubs" ref={(el) => { sectionRefs.current.clubs = el; }} style={{ paddingTop: 26 }}>
           <div style={{ padding: '0 20px' }}>
-            <h2 style={sectionTitle}>Clubs</h2>
+            <div style={kickStyle}>{tick}Annuaire</div>
+            <h2 style={titleStyle}>Clubs</h2>
           </div>
           <ClubDirectory city={location.city ?? ''} coords={coords} deptCodes={location.deptCodes} onCount={onCountClubs} />
         </section>
       </div>
     </Screen>
   );
-}
-
-function locateBtnStyle(th: ReturnType<typeof useTheme>['th'], active: boolean): React.CSSProperties {
-  return {
-    flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 10, padding: '10px 16px',
-    fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap',
-    background: active ? th.ink : th.surface2,
-    color: active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute,
-  };
 }
