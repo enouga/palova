@@ -21,6 +21,10 @@ const mockDouble = () => prismaMock.resource.findUniqueOrThrow.mockResolvedValue
   club: { timezone: 'Europe/Paris', offPeakHours: null, publicBookingDays: 7, memberBookingDays: 14, bookingQuotas: null },
 } as any);
 
+// holdSlot lit désormais les promotions actives (loadActivePromotions → promotion.findMany).
+// Défaut sûr = aucune promo active → prix de base, ce qu'attendent ces tests (non liés au prix).
+beforeEach(() => { prismaMock.promotion.findMany.mockResolvedValue([] as any); });
+
 describe('POST /api/reservations/hold (multi-joueurs)', () => {
   beforeEach(() => {
     redisMock.set.mockResolvedValue('OK');
