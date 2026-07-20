@@ -368,19 +368,20 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                 maxKey={win.maxDayKey}
                 lockedKey={openingTarget?.dayKey}
                 onSelectLocked={() => setLockedSelected(true)}
+                lockedActive={lockedSelected}
               />
             </div>
 
             {bannerVisible && openingTarget && (
               <div style={{ padding: '10px 20px 0' }}>
-                <OpeningBanner dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock!} />
+                <OpeningBanner dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock!} tz={club.timezone} />
               </div>
             )}
             {justOpenedDay && !lockedSelected && date !== justOpenedDay && (
               <div style={{ padding: '10px 20px 0' }}>
                 <OpeningBanner
                   dayLabel={fmtDayLabel(justOpenedDay)}
-                  opensAtMs={0} nowMs={1}
+                  opensAtMs={0} nowMs={1} tz={club.timezone}
                   onGoToDay={() => { setDate(justOpenedDay); setJustOpenedDay(null); }}
                 />
               </div>
@@ -407,7 +408,7 @@ export function ClubReserve({ club }: { club: ClubDetail }) {
                 Remplacée par le compte à rebours plein cadre quand le joueur a choisi le jour verrouillé. */}
             {lockedSelected && openingTarget ? (
               <div style={{ padding: '8px 20px 0' }}>
-                <OpeningPanel dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock ?? Date.now()} />
+                <OpeningPanel dayLabel={fmtDayLabel(openingTarget.dayKey)} opensAtMs={openingTarget.opensAtMs} nowMs={clock ?? Date.now()} tz={club.timezone} />
               </div>
             ) : (
             <div style={{ padding: '8px 20px 0' }}>

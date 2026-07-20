@@ -3,11 +3,17 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { formatCountdown } from '@/lib/bookingWindow';
 import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 
+// Heure locale HH:MM (fuseau du club) d'un instant — pour afficher le rendez-vous
+// d'ouverture À CÔTÉ du compte à rebours (le compteur seul ne dit pas à quelle heure).
+function fmtOpeningTime(ms: number, tz: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(ms)).replace(':', 'h');
+}
+
 // Panneau plein cadre affiché À LA PLACE de la grille quand le joueur a sélectionné
 // le jour verrouillé 🔒 : le rendez-vous remplace l'attente anxieuse (brume bleue,
 // jamais de panneau sombre — préférence design du repo).
-export function OpeningPanel({ dayLabel, opensAtMs, nowMs }: {
-  dayLabel: string; opensAtMs: number; nowMs: number;
+export function OpeningPanel({ dayLabel, opensAtMs, nowMs, tz }: {
+  dayLabel: string; opensAtMs: number; nowMs: number; tz: string;
 }) {
   const { th } = useTheme();
   return (
@@ -16,7 +22,7 @@ export function OpeningPanel({ dayLabel, opensAtMs, nowMs }: {
       fontFamily: th.fontUI,
     }}>
       <div style={{ fontSize: 14, color: HERO_INK_MUTED, marginBottom: 6 }}>
-        Les créneaux du <strong style={{ color: HERO_INK }}>{dayLabel}</strong> ouvrent dans
+        Les créneaux du <strong style={{ color: HERO_INK }}>{dayLabel}</strong> ouvrent à <strong style={{ color: HERO_INK }}>{fmtOpeningTime(opensAtMs, tz)}</strong>, dans
       </div>
       <div aria-live="off" style={{ fontFamily: th.fontDisplay, fontSize: 44, fontWeight: 700, color: HERO_INK, letterSpacing: 1 }}>
         {formatCountdown(opensAtMs - nowMs)}
@@ -30,8 +36,8 @@ export function OpeningPanel({ dayLabel, opensAtMs, nowMs }: {
 
 // Bandeau discret au-dessus de la grille quand l'ouverture est < 1 h (ou vient d'avoir
 // lieu : variante « ouvert » avec bouton). `onGoToDay` absent = pas encore ouvert.
-export function OpeningBanner({ dayLabel, opensAtMs, nowMs, onGoToDay }: {
-  dayLabel: string; opensAtMs: number; nowMs: number; onGoToDay?: () => void;
+export function OpeningBanner({ dayLabel, opensAtMs, nowMs, tz, onGoToDay }: {
+  dayLabel: string; opensAtMs: number; nowMs: number; tz: string; onGoToDay?: () => void;
 }) {
   const { th } = useTheme();
   const opened = nowMs >= opensAtMs;
@@ -51,7 +57,7 @@ export function OpeningBanner({ dayLabel, opensAtMs, nowMs, onGoToDay }: {
       ) : (
         <>
           <span aria-hidden>⏱</span>
-          <span>Ouverture des créneaux du <strong style={{ color: th.text }}>{dayLabel}</strong> dans</span>
+          <span>Ouverture des créneaux du <strong style={{ color: th.text }}>{dayLabel}</strong> à <strong style={{ color: th.text }}>{fmtOpeningTime(opensAtMs, tz)}</strong>, dans</span>
           <span style={{ fontFamily: th.fontMono, fontWeight: 700, color: th.text }}>{formatCountdown(opensAtMs - nowMs)}</span>
         </>
       )}

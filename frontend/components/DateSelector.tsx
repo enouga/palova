@@ -16,6 +16,10 @@ interface DateSelectorProps {
   lockedKey?: string;
   /** Tap sur le jour verrouillé (affiche le compte à rebours côté parent). */
   onSelectLocked?: () => void;
+  /** Vrai quand le panneau compte à rebours du jour verrouillé est actuellement affiché
+   *  (le joueur vient de taper dessus) — donne un contour accent à la case, sans la remplir
+   *  en bleu (elle n'a pas de créneaux à montrer, ce n'est pas un vrai jour sélectionné). */
+  lockedActive?: boolean;
 }
 
 const WEEKDAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -44,7 +48,7 @@ function keyToDate(key: string): Date {
 /** Sélecteur de dates « bande défilante » : cellules à largeur fixe confortable,
  *  scroll-snap horizontal (swipe sur mobile, la semaine tient sur web), flèches pour
  *  défiler d'une page. Jour actif en pastille accent, point apricot = jour ouvert. */
-export default function DateSelector({ value, onChange, openDates, days = 7, maxKey, lockedKey, onSelectLocked }: DateSelectorProps) {
+export default function DateSelector({ value, onChange, openDates, days = 7, maxKey, lockedKey, onSelectLocked, lockedActive }: DateSelectorProps) {
   const { th } = useTheme();
 
   // Horloge posée en effet — hydration-safe : `today` reste null tant que le composant
@@ -133,6 +137,7 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
           const isPast = todayKey ? key < todayKey : false;
           const isSel = key === value;
           const isLocked = lockedKey === key;
+          const isActiveLocked = isLocked && !!lockedActive;
           const tooFar = maxKey ? key > maxKey : false;
           const disabled = isPast || (tooFar && !isLocked);
           const isOpen = !disabled && (openDates ? openDates.has(key) : true);
@@ -147,15 +152,15 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
               onMouseEnter={() => setHover(key)}
               onMouseLeave={() => setHover((h) => (h === key ? null : h))}
               disabled={disabled}
-              aria-pressed={isSel}
-              aria-label={isLocked ? `${WEEKDAYS[d.getDay()]} ${d.getDate()} (ouvre bientôt)` : `${WEEKDAYS[d.getDay()]} ${d.getDate()}`}
+              aria-pressed={isSel || isActiveLocked}
+              aria-label={isLocked ? `${WEEKDAYS[d.getDay()]} ${d.getDate()} (ouvre bientôt)${isActiveLocked ? ', sélectionné' : ''}` : `${WEEKDAYS[d.getDay()]} ${d.getDate()}`}
               style={{
                 flexShrink: 0, width: CELL_W, scrollSnapAlign: 'start', cursor: disabled ? 'not-allowed' : 'pointer',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                 padding: '10px 0 9px', borderRadius: 14,
-                border: `1px solid ${isSel ? th.accent : isHover ? th.lineStrong : th.line}`,
-                background: isSel ? th.accent : isHover ? th.surface2 : th.surface,
-                opacity: disabled ? 0.4 : isLocked ? 0.75 : 1,
+                border: `${isActiveLocked ? 2 : 1}px solid ${isSel ? th.accent : isActiveLocked ? th.accent : isHover ? th.lineStrong : th.line}`,
+                background: isSel ? th.accent : isActiveLocked ? `${th.accent}1f` : isHover ? th.surface2 : th.surface,
+                opacity: disabled ? 0.4 : isLocked && !isActiveLocked ? 0.75 : 1,
                 transition: 'background .16s, border-color .16s, box-shadow .18s, transform .14s, filter .15s',
                 boxShadow: isSel ? (th.neon ? `0 0 0 1px ${th.accent}, 0 5px 14px ${th.accent}55` : `0 4px 12px ${th.accent}40`) : 'none',
               }}
@@ -166,7 +171,7 @@ export default function DateSelector({ value, onChange, openDates, days = 7, max
               }}>{isToday ? 'AUJ' : WEEKDAYS[d.getDay()]}</span>
               <span style={{
                 fontFamily: th.fontDisplay, fontSize: 19, fontWeight: 600, lineHeight: 1,
-                color: isSel ? th.onAccent : disabled ? th.textFaint : th.text,
+                color: isSel ? th.onAccent : isActiveLocked ? th.accent : disabled ? th.textFaint : th.text,
               }}>{String(d.getDate()).padStart(2, '0')}</span>
               {isLocked
                 ? <span aria-hidden style={{ fontSize: 10, lineHeight: '5px' }}>🔒</span>
