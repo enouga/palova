@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import ClubPage from '@/app/club/page';
+import { ClubPresentationClient } from '@/app/club/ClubPresentationClient';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import { api } from '@/lib/api';
 
@@ -26,7 +26,7 @@ describe('/club', () => {
   beforeEach(() => { clubVal.club = { ...baseClub }; });
 
   it('affiche présentation, galerie, infos pratiques avec itinéraire', async () => {
-    render(<ThemeProvider><ClubPage /></ThemeProvider>);
+    render(<ThemeProvider><ClubPresentationClient /></ThemeProvider>);
     await waitFor(() => expect(screen.getByText('Notre histoire…')).toBeInTheDocument());
     expect(screen.getByText('Tous les jours 8h-22h')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Itinéraire/i })[0]).toHaveAttribute('href', expect.stringContaining('google.com/maps'));
@@ -34,7 +34,7 @@ describe('/club', () => {
   });
 
   it('hero + équipements + encart réserver', async () => {
-    render(<ThemeProvider><ClubPage /></ThemeProvider>);
+    render(<ThemeProvider><ClubPresentationClient /></ThemeProvider>);
     await waitFor(() => expect(screen.getByText('Notre histoire…')).toBeInTheDocument());
     expect(screen.getByText('Rodez · Depuis 2021')).toBeInTheDocument();
     expect(screen.getByText('Bar & cuisine')).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('/club', () => {
 
   it("n'affiche pas deux fois la ville quand l'adresse la contient", async () => {
     clubVal.club = { ...clubVal.club, address: '12 rue du Padel, 75011 Paris', city: 'Paris' };
-    render(<ThemeProvider><ClubPage /></ThemeProvider>);
+    render(<ThemeProvider><ClubPresentationClient /></ThemeProvider>);
     await waitFor(() => expect(screen.getByText('Notre histoire…')).toBeInTheDocument());
     expect(await screen.findByText(/12 rue du Padel, 75011 Paris —/)).toBeInTheDocument();
     expect(screen.queryByText(/Paris, Paris/)).not.toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('/club', () => {
       ...clubVal.club,
       clubSports: [{ sport: { name: 'Padel' }, resources: [{ openHour: 8, closeHour: 22 }] }],
     };
-    render(<ThemeProvider><ClubPage /></ThemeProvider>);
+    render(<ThemeProvider><ClubPresentationClient /></ThemeProvider>);
     await waitFor(() => expect(screen.getByText('Notre histoire…')).toBeInTheDocument());
     expect(screen.getByText('Tous les jours 8h-22h')).toBeInTheDocument();
     expect(screen.queryByText(/^Ouvert · jusqu'à/)).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('/club', () => {
       foundedYear: 2021, amenities: ['bar'],
       photos: [{ id: 'p1', url: '/uploads/club-photos/1.jpg', caption: 'Terrain central', sortOrder: 0 }],
     });
-    render(<ThemeProvider><ClubPage /></ThemeProvider>);
+    render(<ThemeProvider><ClubPresentationClient /></ThemeProvider>);
     await waitFor(() => expect(screen.getByText('Notre histoire…')).toBeInTheDocument());
     expect(await screen.findByText(/^Ouvert · jusqu'à/)).toBeInTheDocument();
   });
