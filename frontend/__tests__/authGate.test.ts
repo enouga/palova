@@ -26,7 +26,7 @@ describe('isPublicPath', () => {
   });
 
   it('autorise les pages de contenu public (légales, FAQ, offres, tarifs)', () => {
-    for (const p of ['/faq', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs']) {
+    for (const p of ['/faq', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/offres', '/tarifs']) {
       expect(isPublicPath(p)).toBe(true);
     }
   });

@@ -61,6 +61,7 @@ const matchAlertService = new MatchAlertService();
 
 const ERROR_STATUS: Record<string, number> = {
   VALIDATION_ERROR:      400,
+  CGV_NOT_ACCEPTED:      400,
   SIRET_INVALID:         400,
   SIRET_NOT_FOUND:       400,
   SIRET_INACTIVE:        400,
@@ -112,6 +113,7 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_A_REFEREE:         403,
   TOURNAMENT_NOT_YOURS:  403,
   TOURNAMENT_NOT_FOUND:  404,
+  INVALID_DATE:          400,
 };
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -138,8 +140,8 @@ router.get('/_resolve/:slug', async (req: Request, res: Response, next: NextFunc
 // Auto-inscription : crée un club, l'auteur devient OWNER.
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { name, slug, address, city, timezone, siret, ownerPhone } = req.body;
-    const club = await clubService.createClub({ ownerId: req.user!.id, name, slug, address, city, timezone, siret, ownerPhone });
+    const { name, slug, address, city, timezone, siret, ownerPhone, acceptSaasTerms } = req.body;
+    const club = await clubService.createClub({ ownerId: req.user!.id, name, slug, address, city, timezone, siret, ownerPhone, acceptSaasTerms });
     res.status(201).json(club);
   } catch (err) { handleError(err, res, next); }
 });
@@ -165,6 +167,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Disponibilités de tous les terrains du club pour une date+durée (vue planning).
+// Endpoint public le plus martelé du backend (rush de minuit) : servi par le
+// micro-cache TTL court + single-flight (availabilityCache) — la résolution
+// slug→club vit dans le calcul mis en cache, un hit ne touche pas la base.
 router.get('/:slug/availability', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const date = asString(req.query.date);
@@ -172,11 +177,18 @@ router.get('/:slug/availability', async (req: Request, res: Response, next: Next
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return void res.status(400).json({ error: 'date doit être YYYY-MM-DD' });
     if (isNaN(duration) || duration <= 0 || duration > 240) return void res.status(400).json({ error: 'duration invalide' });
 
+    const clubSportId = req.query.clubSportId ? asString(req.query.clubSportId) : undefined;
+    res.json(await availabilityService.getClubAvailabilityBySlug(asString(req.params.slug), date, duration, clubSportId));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Flux SSE des disponibilités du club (grille Réserver en direct). Public comme
+// la route availability ci-dessus et le flux par terrain /api/resources/:id/stream.
+router.get('/:slug/availability/stream', async (req: Request, res: Response, next: NextFunction) => {
+  try {
     const club = await prisma.club.findUnique({ where: { slug: asString(req.params.slug) }, select: { id: true, status: true } });
     if (!club || club.status !== 'ACTIVE') return void res.status(404).json({ error: 'CLUB_NOT_FOUND' });
-
-    const clubSportId = req.query.clubSportId ? asString(req.query.clubSportId) : undefined;
-    res.json(await availabilityService.getClubAvailability(club.id, date, duration, clubSportId));
+    SSEService.getInstance().addClubClient(club.id, res);
   } catch (err) { handleError(err, res, next); }
 });
 
@@ -236,7 +248,12 @@ router.post('/:slug/offers/plans/:id/intent', authMiddleware, async (req: AuthRe
     if (!plan || plan.clubId !== clubId || !plan.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
     const amountCents = entryFeeCents(plan.monthlyPrice);
     if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
-    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'plan', offerId: plan.id, amountCents });
+    // L'acceptation des CGV du club précède tout paiement CB (pattern confirmReservation).
+    if (req.body?.cgvAccepted !== true) return void res.status(400).json({ error: 'CGV_NOT_ACCEPTED' });
+    const r = await offerStripe.createOfferPaymentIntent({
+      clubId, userId: req.user!.id, kind: 'plan', offerId: plan.id, amountCents,
+      cgvAcceptedAtIso: new Date().toISOString(),
+    });
     res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
   } catch (err) { handleError(err, res, next); }
 });
@@ -251,7 +268,12 @@ router.post('/:slug/offers/packages/:id/intent', authMiddleware, async (req: Aut
     if (!tpl || tpl.clubId !== clubId || !tpl.isActive) return void res.status(404).json({ error: 'OFFER_NOT_FOUND' });
     const amountCents = entryFeeCents(tpl.price);
     if (amountCents < MIN_STRIPE_CENTS) return void res.status(400).json({ error: 'AMOUNT_TOO_SMALL' });
-    const r = await offerStripe.createOfferPaymentIntent({ clubId, userId: req.user!.id, kind: 'package', offerId: tpl.id, amountCents });
+    // L'acceptation des CGV du club précède tout paiement CB (pattern confirmReservation).
+    if (req.body?.cgvAccepted !== true) return void res.status(400).json({ error: 'CGV_NOT_ACCEPTED' });
+    const r = await offerStripe.createOfferPaymentIntent({
+      clubId, userId: req.user!.id, kind: 'package', offerId: tpl.id, amountCents,
+      cgvAcceptedAtIso: new Date().toISOString(),
+    });
     res.json({ ...r, type: 'payment', stripeAccountId: club.stripeAccountId });
   } catch (err) { handleError(err, res, next); }
 });

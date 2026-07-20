@@ -15,6 +15,7 @@ const CLUB: ClubAdminDetail = {
   stripeAccountId: null, stripeAccountStatus: 'ACTIVE', requireOnlinePayment: true, requireCardFingerprint: true,
   quickPaymentMethods: ['CARD'], payAtClubOnly: false,
   legalEntityName: '', legalForm: '', siret: '', vatNumber: '', legalRepresentative: '', legalEmail: '', legalPhone: '',
+  mediatorName: '', mediatorUrl: '',
 };
 
 describe('adminSettings helpers', () => {

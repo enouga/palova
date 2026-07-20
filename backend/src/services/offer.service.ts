@@ -10,6 +10,7 @@ export interface OfferIntentMeta {
   offerPackageTemplateId?: string;
   offerUserId?: string;
   clubId?: string;
+  offerCgvAcceptedAt?: string;
 }
 
 export class OfferService {
@@ -66,6 +67,7 @@ export class OfferService {
           data: {
             clubId, subscriptionId: sub.id, amount, method: 'ONLINE', status: 'CAPTURED',
             stripePaymentIntentId, receiptNo, note: `Vente abonnement ${plan.name} — 1re mensualité (en ligne)`,
+            ...(meta.offerCgvAcceptedAt ? { cgvAcceptedAt: new Date(meta.offerCgvAcceptedAt) } : {}),
           },
         });
         return { kind: 'plan' as const, id: sub.id };
@@ -89,6 +91,7 @@ export class OfferService {
         data: {
           clubId, memberPackageId: pkg.id, amount, method: 'ONLINE', status: 'CAPTURED',
           stripePaymentIntentId, receiptNo, note: `Vente ${tpl.name} (en ligne)`,
+          ...(meta.offerCgvAcceptedAt ? { cgvAcceptedAt: new Date(meta.offerCgvAcceptedAt) } : {}),
         },
       });
       return { kind: 'package' as const, id: pkg.id };

@@ -6,6 +6,8 @@ import { prisma } from '../db/prisma';
 import { generateCode } from '../utils/code';
 import { sendVerificationEmail, sendPasswordResetEmail, emailDevMode } from '../email/mailer';
 import { rateLimit } from '../middleware/rateLimit';
+import { invalidateAuthIdentity } from '../middleware/authCache';
+import { LEGAL_VERSIONS } from '../content/legalVersions';
 
 const router = Router();
 
@@ -88,13 +90,18 @@ router.post('/register', rateLimit(
   { bucket: 'register', by: 'email', max: 5, windowSec: MIN },
 ), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, firstName, lastName, phone, preferredSportId } = req.body;
+    const { email, password, firstName, lastName, phone, preferredSportId, acceptTerms } = req.body;
     if (!email || !password || !firstName || !lastName) {
       res.status(400).json({ error: 'email, password, firstName, lastName requis' });
       return;
     }
     if (typeof password !== 'string' || password.length < 8) {
       res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum)' });
+      return;
+    }
+    // Preuve d'acceptation obligatoire (spec conformité légale) — la case du formulaire.
+    if (acceptTerms !== true) {
+      res.status(400).json({ error: 'CGU_NOT_ACCEPTED' });
       return;
     }
 
@@ -112,10 +119,25 @@ router.post('/register', rateLimit(
     }
 
     const hashed = await bcrypt.hash(password, 10);
-    // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
-    const user = existing
-      ? await prisma.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
-      : await prisma.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
+    // Compte + preuve d'acceptation posés dans UNE transaction : si legalAcceptance.createMany
+    // échoue après l'écriture du compte (coupure DB…), il ne doit jamais rester un compte
+    // persisté sans trace de consentement — exactement ce que cette fonctionnalité garantit.
+    const user = await prisma.$transaction(async (tx) => {
+      // Compte non vérifié recréé/mis à jour : on autorise à reprendre l'inscription tant que l'email n'est pas validé.
+      const u = existing
+        ? await tx.user.update({ where: { id: existing.id }, data: { password: hashed, firstName, lastName, phone: phone || null } })
+        : await tx.user.create({ data: { email, password: hashed, firstName, lastName, phone: phone || null, preferredSportId: validPreferredSportId } });
+
+      // Trace d'acceptation insert-only (CGU + politique de confidentialité). Une reprise
+      // d'inscription (compte non vérifié) ré-écrit des lignes : historique, pas doublon.
+      await tx.legalAcceptance.createMany({
+        data: (['CGU', 'PRIVACY'] as const).map((document) => ({
+          userId: u.id, document, version: LEGAL_VERSIONS[document], context: 'register',
+        })),
+      });
+
+      return u;
+    });
 
     const code = await issueCode(user.id, email);
     res.status(201).json({ pendingVerification: true, email, ...(emailDevMode ? { devCode: code } : {}) });
@@ -270,6 +292,8 @@ router.post('/reset-password', rateLimit(
       prisma.user.update({ where: { id: user.id }, data: { password: hashed, tokenVersion: nextTokenVersion } }),
       prisma.passwordReset.delete({ where: { userId: user.id } }),
     ]);
+    // Sans cette purge, le NOUVEAU token serait refusé jusqu'à expiration du cache (TTL 30 s).
+    invalidateAuthIdentity(user.id);
     res.json({ token: signToken({ ...user, tokenVersion: nextTokenVersion }), user: publicUser(user) });
   } catch (err) {
     next(err);

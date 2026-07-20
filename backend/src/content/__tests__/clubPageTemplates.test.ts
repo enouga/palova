@@ -11,6 +11,8 @@ const full: TemplateClubContext = {
   legalPhone: '01 23 45 67 89',
   address: '12 rue du Padel',
   city: 'Lyon',
+  mediatorName: null,
+  mediatorUrl: null,
 };
 
 const empty: TemplateClubContext = {
@@ -24,6 +26,8 @@ const empty: TemplateClubContext = {
   legalPhone: null,
   address: '12 rue du Padel',
   city: null,
+  mediatorName: null,
+  mediatorUrl: null,
 };
 
 describe('renderClubPageTemplate — MENTIONS_LEGALES', () => {
@@ -73,5 +77,28 @@ describe('renderClubPageTemplate — autres types', () => {
       expect(md).not.toContain('undefined');
       expect(md.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('renderClubPageTemplate — CGV : médiateur de la consommation', () => {
+  const CLUB_COMPLET = full;
+  const CLUB_MEDIATEUR = { ...CLUB_COMPLET, mediatorName: 'CM2C', mediatorUrl: 'https://cm2c.net' };
+
+  it('CGV : nomme le médiateur de la consommation quand renseigné', () => {
+    const md = renderClubPageTemplate('CGV', CLUB_MEDIATEUR);
+    expect(md).toContain('CM2C');
+    expect(md).toContain('https://cm2c.net');
+  });
+
+  it('CGV : médiateur absent → [à compléter]', () => {
+    const md = renderClubPageTemplate('CGV', { ...CLUB_COMPLET, mediatorName: null, mediatorUrl: null });
+    expect(md).toContain('médiateur');
+    expect(md).toContain('[à compléter]');
+  });
+
+  it('CGV : renvoie aux CGU Palova et couvre les achats au comptoir', () => {
+    const md = renderClubPageTemplate('CGV', CLUB_COMPLET);
+    expect(md).toContain('conditions générales d\'utilisation de la plateforme Palova');
+    expect(md).toContain('y compris effectuée à l\'accueil du club');
   });
 });

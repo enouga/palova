@@ -130,7 +130,8 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/events/ev-1/registrations/ereg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe('cs_ev_payment');
@@ -153,7 +154,8 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/events/ev-1/registrations/ereg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.customerSessionClientSecret).toBe('cuss_ev');
@@ -170,7 +172,8 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/events/ev-1/registrations/ereg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('AMOUNT_TOO_SMALL');
@@ -188,7 +191,8 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
 
     const res = await request(app)
       .post('/api/events/ev-1/registrations/ereg-1/intent')
-      .set('Authorization', `Bearer ${token1}`);
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
 
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe('cs_ev_setup');
@@ -196,6 +200,48 @@ describe('POST /api/events/:id/registrations/:regId/intent', () => {
     expect(createRegistrationSetupIntent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'event' }),
     );
+  });
+
+  it('intent refuse sans cgvAccepted (400 CGV_NOT_ACCEPTED)', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('CGV_NOT_ACCEPTED');
+    expect(prismaMock.eventRegistration.updateMany).not.toHaveBeenCalled();
+    expect(createRegistrationPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it('intent horodate cgvAcceptedAt une seule fois (updateMany conditionnel)', async () => {
+    prismaMock.eventRegistration.findUnique.mockResolvedValue({
+      userId: 'user-1',
+      status: 'CONFIRMED',
+      paymentStatus: 'DUE',
+      paymentDeadline: new Date(Date.now() + 600_000),
+      event: { clubId: 'club-1', price: 12, club: { stripeAccountId: 'acct_1' } },
+    } as any);
+    prismaMock.eventRegistration.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(app)
+      .post('/api/events/ev-1/registrations/ereg-1/intent')
+      .set('Authorization', `Bearer ${token1}`)
+      .send({ cgvAccepted: true });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.eventRegistration.updateMany).toHaveBeenCalledWith({
+      where: { id: 'ereg-1', cgvAcceptedAt: null },
+      data: { cgvAcceptedAt: expect.any(Date) },
+    });
   });
 });
 

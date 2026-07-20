@@ -251,7 +251,7 @@ export function ClubNav({ club }: { club: ClubDetail }) {
               <Link href="/admin" target="_blank" rel="noopener noreferrer" aria-label="Espace club" title="Espace club"
                 style={{ width: 38, height: 38, borderRadius: '50%', background: th.surface2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0 }}>
-                <Icon name="settings" size={19} color={th.text} />
+                <Icon name="grid" size={19} color={th.text} />
               </Link>
             ) : (
               <OtherClubsIcon th={th} clubs={otherManaged} />
@@ -341,7 +341,7 @@ function OtherClubsIcon({ th, clubs }: { th: Theme; clubs: ManagedClub[] }) {
   if (clubs.length === 1) {
     return (
       <a href={clubUrl(clubs[0].slug, '/admin')} target="_blank" rel="noopener noreferrer" aria-label="Espace club" title="Espace club" style={{ ...iconBtnStyle, textDecoration: 'none' }}>
-        <Icon name="settings" size={19} color={th.text} />
+        <Icon name="grid" size={19} color={th.text} />
       </a>
     );
   }
@@ -349,7 +349,7 @@ function OtherClubsIcon({ th, clubs }: { th: Theme; clubs: ManagedClub[] }) {
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <button onClick={() => setOpen((o) => !o)} aria-label="Espace club" title="Espace club" aria-haspopup="menu" aria-expanded={open} style={iconBtnStyle}>
-        <Icon name="settings" size={19} color={th.text} />
+        <Icon name="grid" size={19} color={th.text} />
       </button>
       {open && (
         <div role="menu" aria-label="Espace club" style={{
@@ -361,7 +361,7 @@ function OtherClubsIcon({ th, clubs }: { th: Theme; clubs: ManagedClub[] }) {
               display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', textDecoration: 'none',
               fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text,
             }}>
-              <Icon name="settings" size={15} color={th.textMute} />Espace club — {c.name}
+              <Icon name="grid" size={15} color={th.textMute} />Espace club — {c.name}
             </a>
           ))}
         </div>

@@ -28,9 +28,9 @@ export function LevelHistoryChart({ points }: { points: RatingPoint[] }) {
   const down = delta <= -0.05;
   const arrow = up ? '▲' : down ? '▼' : '→';
   const deltaChip = up
-    ? chip('#dcf3e3', '#15803d', th.fontUI)
+    ? chip(`${th.success}22`, th.successInk, th.fontUI)
     : down
-      ? chip('#fde2e2', '#b91c1c', th.fontUI)
+      ? chip(`${th.danger}22`, th.danger, th.fontUI)
       : chip(th.surface2, th.textMute, th.fontUI);
 
   const W = 280, H = 48, padX = 6, padY = 6;
@@ -49,8 +49,8 @@ export function LevelHistoryChart({ points }: { points: RatingPoint[] }) {
         <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>{matchs}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Courbe de progression du niveau">
-        <path d={d} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={x(n - 1)} cy={y(last.level)} r="3" fill="#2563eb" />
+        <path d={d} fill="none" stroke={th.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(n - 1)} cy={y(last.level)} r="3" fill={th.accent} />
       </svg>
     </div>
   );

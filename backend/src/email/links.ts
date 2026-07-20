@@ -30,6 +30,12 @@ export function platformAsset(path: string): string {
   return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
+/** URL absolue de l'API publique (liens contenus dans les emails : désinscription…). */
+export function apiPublicUrl(path: string): string {
+  const base = process.env.API_PUBLIC_URL || 'http://localhost:3001';
+  return base.replace(/\/$/, '') + path;
+}
+
 /** Date lisible en français dans le fuseau du club. Ex. « samedi 12 juillet 2026 à 09h00 ». */
 export function formatDateFr(date: Date, timezone?: string | null): string {
   return DateTime.fromJSDate(date, { zone: timezone || 'Europe/Paris' })

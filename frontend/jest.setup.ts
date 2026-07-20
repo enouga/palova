@@ -41,3 +41,18 @@ Object.defineProperty(global.navigator, 'geolocation', {
   configurable: true,
   value: { getCurrentPosition: (_ok: PositionCallback, err?: PositionErrorCallback) => err?.({ code: 1 } as GeolocationPositionError) },
 });
+
+// jsdom n'implémente pas EventSource. Stub inerte pour les composants qui ouvrent
+// un flux SSE au montage (ClubReserve…) ; les suites qui testent le flux lui-même
+// (chat, live) définissent leur propre fake par-dessus.
+if (typeof (global as any).EventSource === 'undefined') {
+  class EventSourceStub {
+    onmessage: unknown = null;
+    onerror: unknown = null;
+    onopen: unknown = null;
+    close(): void { /* inerte */ }
+    addEventListener(): void { /* inerte */ }
+    removeEventListener(): void { /* inerte */ }
+  }
+  (global as any).EventSource = EventSourceStub;
+}

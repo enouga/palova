@@ -14,9 +14,12 @@ import { resolvePreferredSportKey } from '../services/rating/preferredSport';
 import { AVATARS_DIR, ensureUploadDirs, randomFileName } from '../utils/uploads';
 import { reencodeImage } from '../utils/imagePipeline';
 import { AccountService } from '../services/account.service';
+import { DataExportService } from '../services/dataExport.service';
+import { assertRateLimit } from '../services/rateLimit';
 import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
 import { MatchService } from '../services/match.service';
+import { legalService } from '../services/legal.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -24,6 +27,7 @@ const tournamentService = new TournamentService();
 const eventService = new EventService();
 const ratingService = new RatingService();
 const accountService = new AccountService();
+const dataExportService = new DataExportService();
 const followService = new FollowService();
 const friendshipService = new FriendshipService();
 const matchService = new MatchService();
@@ -106,7 +110,21 @@ router.get('/reservations', authMiddleware, async (req: AuthRequest, res: Respon
 router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: PROFILE_SELECT });
-    res.json(user);
+    if (!user) return void res.json(user);
+    const legal = await legalService.statusFor(req.user!.id);
+    res.json({ ...user, legal });
+  } catch (err) { next(err); }
+});
+
+// Acceptation d'une nouvelle version d'un document légal depuis le bandeau « conditions ont évolué ».
+router.post('/legal/accept', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const document = String(req.body?.document ?? '');
+    if (!['CGU', 'PRIVACY', 'CGV_SAAS'].includes(document)) {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    await legalService.record({ userId: req.user!.id, document: document as 'CGU' | 'PRIVACY' | 'CGV_SAAS', context: 'update_banner' });
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
@@ -350,6 +368,19 @@ router.post('/password', authMiddleware, async (req: AuthRequest, res: Response,
     await prisma.user.update({ where: { id: req.user!.id }, data: { password: hashed } });
     res.json({ ok: true });
   } catch (err) { next(err); }
+});
+
+// Export RGPD (portabilité) — JSON synchrone, 1 export / heure.
+router.get('/export', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await assertRateLimit('data-export', req.user!.id, 1, 3600);
+    const data = await dataExportService.buildExport(req.user!.id);
+    res.setHeader('Content-Disposition', 'attachment; filename="palova-mes-donnees.json"');
+    res.json(data);
+  } catch (err) {
+    if ((err as Error).message === 'RATE_LIMITED') return void res.status(429).json({ error: 'RATE_LIMITED' });
+    next(err);
+  }
 });
 
 // Résumé avant suppression : blocages (unique OWNER) + avertissements (résas/abos/soldes).

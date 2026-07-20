@@ -194,4 +194,46 @@ export class SSEService {
   getConversationUserIds(conversationId: string): Set<string> {
     return new Set(this.conversationClients.get(conversationId)?.values() ?? []);
   }
+
+  // ------------------------------------------------------------------ Canal club
+  // Disponibilités d'un club en direct (grille Réserver) : clubId -> Set<Response>.
+  // Émission jumelle des événements de créneau par terrain — le client de la page
+  // Réserver ouvre UNE connexion par onglet au lieu d'une par terrain.
+  private clubClients: Map<string, Set<Response>> = new Map();
+
+  /** Abonne un client au flux des disponibilités d'un club (page Réserver). */
+  addClubClient(clubId: string, res: Response): void {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const keepAlive = setInterval(() => {
+      // Garde : un write sur socket morte peut jeter en synchrone → sans ce try/catch,
+      // l'exception non capturée ferait sortir le process (cf. handler uncaughtException).
+      try { res.write(': ping\n\n'); } catch { /* socket morte : le handler 'close' nettoiera */ }
+    }, 30_000);
+
+    if (!this.clubClients.has(clubId)) this.clubClients.set(clubId, new Set());
+    this.clubClients.get(clubId)!.add(res);
+
+    res.on('close', () => {
+      clearInterval(keepAlive);
+      this.clubClients.get(clubId)?.delete(res);
+      if (this.clubClients.get(clubId)?.size === 0) this.clubClients.delete(clubId);
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'connected', clubId })}\n\n`);
+  }
+
+  /** Diffuse un événement de créneau à tous les clients Réserver d'un club (best-effort). */
+  broadcastClub(clubId: string, event: SSEEvent): void {
+    const clients = this.clubClients.get(clubId);
+    if (!clients?.size) return;
+    const payload = `data: ${JSON.stringify(event)}\n\n`;
+    const dead: Response[] = [];
+    clients.forEach((res) => { try { res.write(payload); } catch { dead.push(res); } });
+    dead.forEach((res) => clients.delete(res));
+  }
 }

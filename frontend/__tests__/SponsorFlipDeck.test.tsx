@@ -119,4 +119,17 @@ describe('SponsorFlipDeck', () => {
     const { container } = wrap([], now);
     expect(container.firstChild).toBeNull();
   });
+
+  it('filet de sécurité : révèle les cartes même si IntersectionObserver ne détecte jamais d’intersection', () => {
+    jest.useFakeTimers();
+    try {
+      const { container } = wrap([sponsor({})], now);
+      // jsdom stub (jest.setup.ts) n'appelle jamais le callback observe() → sans filet, `shown` resterait false indéfiniment.
+      expect(container.querySelector('.fd-grid')).not.toHaveClass('fd-in');
+      act(() => { jest.advanceTimersByTime(1500); });
+      expect(container.querySelector('.fd-grid')).toHaveClass('fd-in');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

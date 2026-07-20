@@ -128,7 +128,18 @@ describe('AvailabilityService.getAvailableSlots', () => {
 
 describe('AvailabilityService.getClubAvailability', () => {
   let service: AvailabilityService;
-  beforeEach(() => { service = new AvailabilityService(); });
+  beforeEach(() => {
+    service = new AvailabilityService();
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({
+      timezone: 'Europe/Paris', offPeakHours: null,
+    } as any);
+  });
+
+  const clubResource = (id: string) => ({
+    id, name: `Terrain ${id}`, attributes: null, price: 25, offPeakPrice: null,
+    openHour: 8, closeHour: 22,
+    clubSport: { id: 'cs-padel', sport: { key: 'padel', name: 'Padel' } },
+  });
 
   it('filtre les terrains par clubSportId quand fourni', async () => {
     prismaMock.resource.findMany.mockResolvedValue([] as any);
@@ -149,5 +160,58 @@ describe('AvailabilityService.getClubAvailability', () => {
 
     const arg = (prismaMock.resource.findMany as jest.Mock).mock.calls.pop()![0];
     expect(arg.where).not.toHaveProperty('clubSportId');
+  });
+
+  it('fini le N+1 : UNE requête réservations groupée, aucune relecture par terrain', async () => {
+    prismaMock.resource.findMany.mockResolvedValue([clubResource('r1'), clubResource('r2')] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([] as any);
+
+    await service.getClubAvailability('club-1', '2025-06-15', 60);
+
+    expect(prismaMock.reservation.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.reservation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ resourceId: { in: ['r1', 'r2'] } }),
+      }),
+    );
+    expect(prismaMock.resource.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("les réservations d'un terrain ne bloquent pas les créneaux d'un autre", async () => {
+    prismaMock.resource.findMany.mockResolvedValue([clubResource('r1'), clubResource('r2')] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([
+      { resourceId: 'r1',
+        startTime: new Date('2025-06-15T07:00:00.000Z'),  // 9h Paris
+        endTime:   new Date('2025-06-15T08:00:00.000Z') },
+    ] as any);
+
+    const result = await service.getClubAvailability('club-1', '2025-06-15', 60);
+
+    const r1Slot = result[0].slots.find((s) => s.startTime === '2025-06-15T07:00:00.000Z');
+    const r2Slot = result[1].slots.find((s) => s.startTime === '2025-06-15T07:00:00.000Z');
+    expect(r1Slot?.available).toBe(false);
+    expect(r2Slot?.available).toBe(true);
+  });
+
+  it('conserve la forme du payload (resource + slots)', async () => {
+    prismaMock.resource.findMany.mockResolvedValue([clubResource('r1')] as any);
+    prismaMock.reservation.findMany.mockResolvedValue([] as any);
+
+    const result = await service.getClubAvailability('club-1', '2025-06-15', 60);
+
+    expect(result[0].resource).toEqual({
+      id: 'r1', name: 'Terrain r1', attributes: null, price: 25, offPeakPrice: null,
+      sport: { key: 'padel', name: 'Padel' }, clubSportId: 'cs-padel',
+    });
+    expect(result[0].slots).toHaveLength(14); // 8h→22h en pas de 60 min
+  });
+
+  it('aucun terrain : renvoie [] sans requête de réservations', async () => {
+    prismaMock.resource.findMany.mockResolvedValue([] as any);
+
+    const result = await service.getClubAvailability('club-1', '2025-06-15', 60);
+
+    expect(result).toEqual([]);
+    expect(prismaMock.reservation.findMany).not.toHaveBeenCalled();
   });
 });

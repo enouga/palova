@@ -21,6 +21,7 @@ jest.mock('../components/BookingModal', () => ({
 }));
 jest.mock('../lib/api', () => ({
   assetUrl: (p: string | null) => p,
+  clubAvailabilityStreamUrl: (slug: string) => `http://test/api/clubs/${slug}/availability/stream`,
   notificationsStreamUrl: () => 'http://x/stream',
   api: {
     getMyMemberships: jest.fn().mockResolvedValue([]),
@@ -90,5 +91,14 @@ describe('ClubReserve — créneaux déjà commencés', () => {
     // Le chip est bidirectionnel : re-cliquer replie les créneaux passés.
     fireEvent.click(screen.getByLabelText('Masquer les créneaux passés'));
     expect(screen.queryByText(fmt(past))).toBeNull();
+  });
+
+  it("affiche « Plus de créneaux aujourd'hui » quand tout est passé", async () => {
+    mocked.getClubAvailability.mockResolvedValue([{
+      resource: availability[0].resource,
+      slots: [{ startTime: past, endTime: past, available: true, price: '25', offPeak: false }],
+    }] as never);
+    render(<ThemeProvider><ClubReserve club={club} /></ThemeProvider>);
+    expect(await screen.findAllByText(/Plus de créneaux aujourd'hui/)).not.toHaveLength(0);
   });
 });

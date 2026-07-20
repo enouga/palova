@@ -14,6 +14,16 @@ const PRESETS: { key: DatePreset; label: string }[] = [
 ];
 const DEPT_VISIBLE = 8; // nombre de départements montrés avant « + tous »
 
+// Le compte est visuellement distinct du libellé (sinon « Paris 2 » se lit comme un seul mot).
+function facetLabel(label: string, count: number): React.ReactNode {
+  return (
+    <>
+      {label}
+      <span aria-hidden style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, opacity: 0.55, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+    </>
+  );
+}
+
 export interface FacetPanelProps {
   facets: ReturnType<typeof calendarFacets>;
   state: CalendarFilterState;
@@ -78,7 +88,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       {facets.departments.length > 0 && (
         <Group label="Département">
           {depts.map((d) => (
-            <Pill key={d.code} size="sm" activeBg={th.text} label={`${d.name} ${d.count}`} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
+            <Pill key={d.code} size="sm" activeBg={th.text} label={facetLabel(d.name, d.count)} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
           ))}
           {facets.departments.length > DEPT_VISIBLE && (
             <button onClick={() => setShowAllDepts((v) => !v)} style={linkBtn(th)}>
@@ -92,7 +102,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       {facets.categories.length > 0 && (
         <Group label="Catégorie">
           {facets.categories.map((c) => (
-            <Pill key={c.value} size="sm" activeBg={th.text} label={`${c.value} ${c.count}`} active={state.categories.has(c.value)} onClick={() => onToggleCategory(c.value)} />
+            <Pill key={c.value} size="sm" activeBg={th.text} label={facetLabel(c.value, c.count)} active={state.categories.has(c.value)} onClick={() => onToggleCategory(c.value)} />
           ))}
         </Group>
       )}
@@ -101,7 +111,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       {facets.genders.length > 0 && (
         <Group label="Genre">
           {facets.genders.map((g) => (
-            <Pill key={g.value} size="sm" activeBg={th.text} label={`${GENDER_LABEL[g.value]} ${g.count}`} active={state.genders.has(g.value)} onClick={() => onToggleGender(g.value)} />
+            <Pill key={g.value} size="sm" activeBg={th.text} label={facetLabel(GENDER_LABEL[g.value], g.count)} active={state.genders.has(g.value)} onClick={() => onToggleGender(g.value)} />
           ))}
         </Group>
       )}

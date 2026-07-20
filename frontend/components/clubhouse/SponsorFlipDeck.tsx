@@ -23,7 +23,10 @@ export function SponsorFlipDeck({ sponsors, now = null }: { sponsors: Sponsor[];
   const [manual, setManual] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Révélation à l'entrée dans le viewport (section basse de page).
+  // Révélation à l'entrée dans le viewport (section basse de page). Filet de sécurité :
+  // si l'observer ne détecte jamais d'intersection (ex. capture pleine page sans scroll
+  // réel, timing de layout défavorable…), un délai de repli révèle quand même les cartes
+  // — jamais de section « titre sans cartes » indéfiniment invisible.
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') { setShown(true); return; }
@@ -31,7 +34,8 @@ export function SponsorFlipDeck({ sponsors, now = null }: { sponsors: Sponsor[];
       if (entries.some((e) => e.isIntersecting)) { setShown(true); io.disconnect(); }
     }, { threshold: 0.15 });
     io.observe(el);
-    return () => io.disconnect();
+    const fallback = setTimeout(() => setShown(true), 1500);
+    return () => { io.disconnect(); clearTimeout(fallback); };
   }, []);
 
   // Cascade automatique (désactivée en reduced-motion).

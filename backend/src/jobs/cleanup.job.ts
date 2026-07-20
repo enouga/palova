@@ -7,9 +7,55 @@ import { HOLD_EXPIRY_MINUTES } from '../services/holdWindow';
 import { TournamentService } from '../services/tournament.service';
 import { EventService } from '../services/event.service';
 import { MatchAlertService } from '../services/matchAlert.service';
+import { invalidateClubAvailability } from '../services/availabilityCache';
 
 const matchService = new MatchService();
 const matchAlertService = new MatchAlertService();
+
+/**
+ * Annule les holds PENDING expirés : passage CANCELLED, verrou Redis libéré,
+ * SSE slot_released, et purge du micro-cache de disponibilités des clubs touchés.
+ */
+export async function releaseExpiredHolds(now: Date): Promise<void> {
+  const expiredBefore = new Date(now.getTime() - HOLD_EXPIRY_MINUTES * 60 * 1000);
+
+  const expired = await prisma.reservation.findMany({
+    where: { status: 'PENDING', createdAt: { lt: expiredBefore } },
+    select: {
+      id: true, resourceId: true, startTime: true, endTime: true,
+      resource: { select: { clubId: true } },
+    },
+  });
+  if (expired.length === 0) return;
+
+  await prisma.reservation.updateMany({
+    where: { id: { in: expired.map((r) => r.id) } },
+    data:  { status: 'CANCELLED', cancelledAt: new Date() },
+  });
+
+  // Invalidation AVANT le broadcast (invariant `publishSlotChange`) : un client qui
+  // refetch en réaction à l'événement doit trouver le cache déjà purgé.
+  for (const clubId of new Set(expired.map((r) => r.resource.clubId))) {
+    invalidateClubAvailability(clubId);
+  }
+
+  await Promise.all(
+    expired.map(async (r) => {
+      await redis.del(`lock:resource:${r.resourceId}:${r.startTime.toISOString()}`);
+      const event = {
+        type:          'slot_released' as const,
+        resourceId:    r.resourceId,
+        reservationId: r.id,
+        startTime:     r.startTime.toISOString(),
+        endTime:       r.endTime.toISOString(),
+      };
+      SSEService.getInstance().broadcast(r.resourceId, event);
+      SSEService.getInstance().broadcastClub(r.resource.clubId, event);
+    }),
+  );
+
+  console.log(`[cleanup] ${expired.length} réservation(s) PENDING expirée(s) annulées`);
+}
 
 export async function releaseExpiredRegistrations(now: Date): Promise<void> {
   const tournamentSvc = new TournamentService();
@@ -25,35 +71,8 @@ export async function releaseExpiredRegistrations(now: Date): Promise<void> {
 
 export function startCleanupJob(): void {
   cron.schedule('* * * * *', async () => {
-    const expiredBefore = new Date(Date.now() - HOLD_EXPIRY_MINUTES * 60 * 1000);
-
     try {
-      const expired = await prisma.reservation.findMany({
-        where: { status: 'PENDING', createdAt: { lt: expiredBefore } },
-        select: { id: true, resourceId: true, startTime: true, endTime: true },
-      });
-
-      if (expired.length > 0) {
-        await prisma.reservation.updateMany({
-          where: { id: { in: expired.map((r) => r.id) } },
-          data:  { status: 'CANCELLED', cancelledAt: new Date() },
-        });
-
-        await Promise.all(
-          expired.map(async (r) => {
-            await redis.del(`lock:resource:${r.resourceId}:${r.startTime.toISOString()}`);
-            SSEService.getInstance().broadcast(r.resourceId, {
-              type:          'slot_released',
-              resourceId:    r.resourceId,
-              reservationId: r.id,
-              startTime:     r.startTime.toISOString(),
-              endTime:       r.endTime.toISOString(),
-            });
-          }),
-        );
-
-        console.log(`[cleanup] ${expired.length} réservation(s) PENDING expirée(s) annulées`);
-      }
+      await releaseExpiredHolds(new Date());
     } catch (err) {
       console.error('[cleanup] Erreur:', (err as Error).message);
     }

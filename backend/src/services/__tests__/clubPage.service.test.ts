@@ -26,19 +26,73 @@ describe('ClubPageService.getPublicPage', () => {
     await expect(svc.getPublicPage('arena', 'CGV')).rejects.toThrow('CLUB_NOT_FOUND');
   });
 
-  it('PAGE_NOT_FOUND si aucune page publiée de ce type', async () => {
+  it('PAGE_NOT_FOUND si aucune page OFFRES publiée (pas de repli commercial)', async () => {
     prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
     prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
-    await expect(svc.getPublicPage('arena', 'CGV')).rejects.toThrow('PAGE_NOT_FOUND');
+    await expect(svc.getPublicPage('arena', 'OFFRES')).rejects.toThrow('PAGE_NOT_FOUND');
     const arg = (prismaMock.clubPage.findFirst as jest.Mock).mock.calls[0][0];
-    expect(arg.where).toMatchObject({ clubId: 'club-1', kind: 'CGV', published: true });
+    expect(arg.where).toMatchObject({ clubId: 'club-1', kind: 'OFFRES', published: true });
   });
 
-  it('renvoie la page publiée (kind, markdown, updatedAt)', async () => {
+  it('renvoie la page publiée (kind, markdown, updatedAt, isFallback false)', async () => {
     const when = new Date('2026-06-16T00:00:00Z');
     prismaMock.club.findUnique.mockResolvedValue(activeClub as any);
     prismaMock.clubPage.findFirst.mockResolvedValue({ kind: 'CGV', bodyMarkdown: '# CGV', published: true, updatedAt: when } as any);
-    await expect(svc.getPublicPage('arena', 'CGV')).resolves.toEqual({ kind: 'CGV', bodyMarkdown: '# CGV', updatedAt: when });
+    await expect(svc.getPublicPage('arena', 'CGV')).resolves.toEqual({ kind: 'CGV', bodyMarkdown: '# CGV', updatedAt: when, isFallback: false });
+  });
+});
+
+describe('ClubPageService.getPublicPage — repli légal', () => {
+  const legalClubFields = {
+    id: 'c1', status: 'ACTIVE', name: 'Padel Arena',
+    legalEntityName: 'Arena SAS', legalForm: 'SAS', siret: '123', vatNumber: null,
+    legalRepresentative: null, legalEmail: null, legalPhone: null, address: '12 rue', city: 'Paris',
+    mediatorName: null, mediatorUrl: null,
+  };
+
+  it('page non publiée + kind légal → modèle rendu avec isFallback', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(legalClubFields as any);
+    prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
+    const p = await svc.getPublicPage('padel-arena', 'CGV');
+    expect(p.isFallback).toBe(true);
+    expect(p.updatedAt).toBeNull();
+    expect(p.bodyMarkdown).toContain('Arena SAS');
+  });
+
+  it.each(['CGV', 'MENTIONS_LEGALES', 'CONFIDENTIALITE'] as const)(
+    '%s non publiée → repli sur le modèle Palova (isFallback true, corps non vide)',
+    async (kind) => {
+      prismaMock.club.findUnique.mockResolvedValue(legalClubFields as any);
+      prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
+      const p = await svc.getPublicPage('padel-arena', kind);
+      expect(p.kind).toBe(kind);
+      expect(p.isFallback).toBe(true);
+      expect(p.updatedAt).toBeNull();
+      expect(p.bodyMarkdown).toContain('Arena SAS');
+      expect(p.bodyMarkdown.trim().length).toBeGreaterThan(0);
+    },
+  );
+
+  it('page publiée → contenu du club, isFallback false', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'c1', status: 'ACTIVE', name: 'X',
+      legalEntityName: null, legalForm: null, siret: null, vatNumber: null, legalRepresentative: null,
+      legalEmail: null, legalPhone: null, address: '', city: null, mediatorName: null, mediatorUrl: null,
+    } as any);
+    prismaMock.clubPage.findFirst.mockResolvedValue({ kind: 'CGV', bodyMarkdown: '# Mes CGV', updatedAt: new Date() } as any);
+    const p = await svc.getPublicPage('x', 'CGV');
+    expect(p.isFallback).toBe(false);
+    expect(p.bodyMarkdown).toBe('# Mes CGV');
+  });
+
+  it('OFFRES non publiée → PAGE_NOT_FOUND (pas de repli commercial)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({
+      id: 'c1', status: 'ACTIVE', name: 'X',
+      legalEntityName: null, legalForm: null, siret: null, vatNumber: null, legalRepresentative: null,
+      legalEmail: null, legalPhone: null, address: '', city: null, mediatorName: null, mediatorUrl: null,
+    } as any);
+    prismaMock.clubPage.findFirst.mockResolvedValue(null as any);
+    await expect(svc.getPublicPage('x', 'OFFRES')).rejects.toThrow('PAGE_NOT_FOUND');
   });
 });
 

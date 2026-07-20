@@ -31,7 +31,7 @@ export function SaveBar({ dirty, saving, error, saved, onSave, onCancel }: Props
           <span role="alert" style={{ fontFamily: th.fontUI, fontSize: 13, color: '#ffd1c9', fontWeight: 600 }}>{error}</span>
         ) : dirty ? (
           <>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fbbf24', flexShrink: 0 }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: th.warning, flexShrink: 0 }} />
             <span style={{ fontFamily: th.fontUI, fontSize: 13.5, color: '#fff' }}>Modifications non enregistrées</span>
           </>
         ) : (

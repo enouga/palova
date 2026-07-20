@@ -9,6 +9,7 @@ import { offerTint, sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersB
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
 import { inkOn } from '@/lib/theme';
+import { CgvGate } from '@/components/CgvGate';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -216,21 +217,23 @@ export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
                 <Btn onClick={() => { close(); onPurchased(); }}>Fermer</Btn>
               </div>
             ) : stage === 'payment' ? (
-              <StripePaymentStep
-                type="payment"
-                amountLabel={amountLabel}
-                createIntent={async () => {
-                  const r = target.kind === 'plan'
-                    ? await api.createOfferPlanIntent(slug ?? '', target.plan.id, token!)
-                    : await api.createOfferPackageIntent(slug ?? '', target.tpl.id, token!);
-                  return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
-                }}
-                confirm={async (ids) => {
-                  if (ids.stripePaymentIntentId) await api.confirmOfferPayment(slug ?? '', ids.stripePaymentIntentId, token!);
-                }}
-                onSuccess={() => setStage('done')}
-                onCancel={close}
-              />
+              <CgvGate>
+                <StripePaymentStep
+                  type="payment"
+                  amountLabel={amountLabel}
+                  createIntent={async () => {
+                    const r = target.kind === 'plan'
+                      ? await api.createOfferPlanIntent(slug ?? '', target.plan.id, token!)
+                      : await api.createOfferPackageIntent(slug ?? '', target.tpl.id, token!);
+                    return { clientSecret: r.clientSecret, stripeAccountId: r.stripeAccountId ?? null, customerSessionClientSecret: r.customerSessionClientSecret ?? null };
+                  }}
+                  confirm={async (ids) => {
+                    if (ids.stripePaymentIntentId) await api.confirmOfferPayment(slug ?? '', ids.stripePaymentIntentId, token!);
+                  }}
+                  onSuccess={() => setStage('done')}
+                  onCancel={close}
+                />
+              </CgvGate>
             ) : (
               <div>
                 {targetImageUrl && (

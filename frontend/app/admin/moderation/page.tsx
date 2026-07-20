@@ -193,9 +193,9 @@ export default function AdminModerationPage() {
           {open.length === 0 && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, fontFamily: th.fontUI,
-              fontSize: 13, fontWeight: 600, color: th.mode === 'floodlit' ? ACCENTS.emerald : '#1b7a4e',
+              fontSize: 13, fontWeight: 600, color: th.successInk,
             }}>
-              <Icon name="check" size={15} color={th.mode === 'floodlit' ? ACCENTS.emerald : '#1b7a4e'} />
+              <Icon name="check" size={15} color={th.successInk} />
               Aucun signalement en attente.
             </div>
           )}

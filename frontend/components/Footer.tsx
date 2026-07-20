@@ -22,12 +22,14 @@ export function Footer() {
         { href: '/offres', label: 'Nos offres' },
         { href: '/faq', label: 'FAQ' },
         { href: '/cgv', label: 'CGV' },
+        { href: `https://${CANONICAL_ROOT}/cgu`, label: 'CGU Palova' },
         { href: '/mentions-legales', label: 'Mentions légales' },
         { href: '/confidentialite', label: 'Confidentialité' },
       ]
     : [
         { href: '/tarifs', label: 'Tarifs' },
         { href: '/faq', label: 'FAQ' },
+        { href: '/cgu', label: 'CGU' },
         { href: '/cgv', label: 'CGV' },
         { href: '/mentions-legales', label: 'Mentions légales' },
         { href: '/confidentialite', label: 'Confidentialité' },
@@ -37,7 +39,11 @@ export function Footer() {
     <footer style={{ borderTop: `1px solid ${th.line}`, background: th.bg, color: th.textMute, fontFamily: th.fontUI }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '22px 18px 28px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
         <nav style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
-          {links.map((l) => (
+          {links.map((l) => l.href.startsWith('http') ? (
+            <a key={l.href} href={l.href} style={{ color: th.textMute, textDecoration: 'none', fontSize: 13.5, fontWeight: 500 }}>
+              {l.label}
+            </a>
+          ) : (
             <Link key={l.href} href={l.href} style={{ color: th.textMute, textDecoration: 'none', fontSize: 13.5, fontWeight: 500 }}>
               {l.label}
             </Link>

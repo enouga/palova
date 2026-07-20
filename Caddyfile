@@ -38,11 +38,31 @@
 	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https://api.palova.fr https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 }
 
+# Compression des réponses (ni Express ni Next côté backend API n'en font) : ~5× de
+# bande passante en moins sur le JSON de la grille Réserver, martelée au rush de minuit.
+# Liste de types EXPLICITE, sans text/event-stream : les 4 canaux SSE traversent le
+# proxy sans compresseur intermédiaire (zéro risque de buffering des événements).
+(compress) {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type application/json*
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type application/javascript*
+			header Content-Type image/svg+xml*
+		}
+	}
+}
+
 # Plateforme (apex des deux domaines) → frontend. Un apex ne matche PAS le wildcard
 # *.<domaine>, donc pas de chevauchement : certificat managé classique.
 palova.fr, palova.app {
 	import security_headers
 	import csp_frontend
+	import compress
 	reverse_proxy frontend:3000
 }
 
@@ -55,6 +75,7 @@ api.palova.fr {
 		on_demand
 	}
 	import security_headers
+	import compress
 	reverse_proxy backend:3001
 }
 
@@ -68,5 +89,6 @@ api.palova.fr {
 	}
 	import security_headers
 	import csp_frontend
+	import compress
 	reverse_proxy frontend:3000
 }

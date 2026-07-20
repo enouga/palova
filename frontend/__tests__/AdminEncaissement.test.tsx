@@ -30,7 +30,7 @@ Element.prototype.scrollIntoView = jest.fn();
 
 // Heure telle que le composant la rend (fuseau local de la machine) — assertions
 // indépendantes du fuseau : on compare au format effectivement affiché, pas à l'heure UTC.
-const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
 
 const mkResa = (id: string, start: string, over: Record<string, unknown> = {}) => ({
   id, resourceId: 'court-1', startTime: start, endTime: start.replace('T16', 'T17'),
