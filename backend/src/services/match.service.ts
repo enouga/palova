@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma';
+import { reportError } from '../observability/reportError';
 import { Prisma } from '@prisma/client';
 import { SetScore, winningTeam } from './rating/score';
 import { applyMatchRatings, decayForInactivity, TeamPlayer } from './rating/match-rating';
@@ -147,7 +148,7 @@ export class MatchService {
 
   /** Exécute un envoi d'email en best-effort : un échec est loggé, jamais propagé. */
   private safeNotify(fn: () => Promise<void>): void {
-    Promise.resolve(fn()).catch((err) => console.error('[notifications] envoi email échoué (match) :', err));
+    Promise.resolve(fn()).catch((err) => reportError(err, { source: 'safeNotify:match' }));
   }
 
   private async loadPending(matchId: string, userId: string) {
