@@ -97,7 +97,7 @@ describe('OpenMatches', () => {
     expect(await screen.findByRole('button', { name: /créer une alerte/i })).toBeInTheDocument();
   });
 
-  it('filtre les parties amicales via les chips Toutes/Compétitives/Amicales', async () => {
+  it('filtre les parties pour le fun via les chips Toutes/Pour de vrai/Pour le fun', async () => {
     mocked.getOpenMatches.mockResolvedValue([
       match({ id: 'm1', resourceName: 'Terrain 1', competitive: true }),
       match({ id: 'm2', resourceName: 'Terrain 2', competitive: false }),
@@ -106,7 +106,7 @@ describe('OpenMatches', () => {
     await screen.findByText('Terrain 2');
     expect(screen.getByText('Terrain 1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Amicales' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
     await waitFor(() => expect(screen.queryByText('Terrain 1')).not.toBeInTheDocument());
     expect(screen.getByText('Terrain 2')).toBeInTheDocument();
   });
@@ -229,7 +229,6 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
     const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur à l'équipe/ });
     fireEvent.click(addBtns[0]);
-    // `name: 'Ami'` (exact) et non `/Ami/` : le chip de filtre « Amicales » matcherait aussi la regex.
     fireEvent.click(await screen.findByRole('button', { name: 'Ami' }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-ami', 'abc'));
   });

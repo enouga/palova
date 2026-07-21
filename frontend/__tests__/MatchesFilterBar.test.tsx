@@ -32,9 +32,9 @@ describe('MatchesFilterBar', () => {
     const onKindChange = jest.fn();
     renderBar({ onKindChange });
     expect(screen.getByRole('button', { name: 'Toutes' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Compétitives' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour de vrai' }));
     expect(onKindChange).toHaveBeenCalledWith('competitive');
-    fireEvent.click(screen.getByRole('button', { name: 'Amicales' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
     expect(onKindChange).toHaveBeenCalledWith('friendly');
   });
 
