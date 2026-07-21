@@ -23,14 +23,15 @@ après un « Accepter » explicite.
 | **Audience** | Toi seul (propriétaire plateforme). **Une seule propriété GA4 globale**, un seul ID, couvrant `palova.fr` + tous les sous-domaines clubs. Aucun accès gérant, aucune fonctionnalité produit par club. |
 | **Outil** | **GA4 en direct** (`gtag.js`), pas de conteneur GTM. |
 | **Consentement** | **Opt-in strict** : GA ne se charge PAS tant que l'utilisateur n'a pas cliqué « Accepter ». Refus ou ignoré = zéro cookie GA, GA jamais chargé. |
-| **Périmètre pages** | **Partout** : vitrines publiques ET app connectée (`/reserver`, `/admin`, `/me`…), tous hôtes. Chaque utilisateur voit la bannière au moins une fois. |
+| **Périmètre pages** | **Partout SAUF les back-offices** `/admin/*` et `/superadmin/*` (pages authentifiées de gestion — se tracer soi-même en superadmin, ou coller une bannière cookie au gérant dans son outil de travail, n'a aucune valeur « audience »). Restent tracés, tous hôtes : vitrines publiques, app joueur (`/reserver`, `/me`, `/parties`, `/club`, `/events`…), ainsi que `/login` et `/register` (l'inscription est une conversion d'acquisition utile à mesurer). |
 
 ## Architecture
 
 ### Composant `AnalyticsConsent` (client)
 
-Nouveau composant client monté **une fois** dans `app/layout.tsx` (global — tous hôtes, toutes
-pages). Au montage, il lit le cookie de consentement et décide :
+Nouveau composant client monté **une fois** dans `app/layout.tsx` (global — tous hôtes). Il lit
+le chemin courant via `usePathname` : sur un **back-office** (`/admin/*`, `/superadmin/*`) il rend
+`null` — ni GA, ni bannière. Partout ailleurs, il lit le cookie de consentement et décide :
 
 - **`granted`** → injecte `gtag.js` (ID `NEXT_PUBLIC_GA_ID`) + init GA4, puis émet les `page_view`.
 - **`denied`** → ne charge rien.
@@ -82,9 +83,9 @@ CNIL plus nette, pas de catégorie de consentement supplémentaire à gérer.
 - **Pas de case pré-cochée.**
 - **Retrait aussi simple que l'octroi** : bouton **« Gérer les cookies »** ajouté au `Footer`
   (global). Il rouvre la bannière ; changer d'avis efface/repose le cookie et (dé)charge GA en
-  conséquence. (Le Footer est masqué sur `/admin`, `/superadmin`, `/login`, `/register` — le
-  point de retrait reste accessible depuis toute page publique et la plupart des pages app,
-  suffisant.)
+  conséquence. (Le Footer est masqué sur `/admin`/`/superadmin` — précisément les pages où GA
+  n'est de toute façon pas actif — et sur `/login`/`/register` ; le point de retrait reste
+  accessible depuis toute page publique et l'app joueur, ce qui suffit.)
 - **Style** : tokens du design system (`th.*`), thème club respecté sur sous-domaine. **Pas de
   panneau sombre** (préférence Eric).
 
@@ -123,7 +124,8 @@ Aucune migration, aucun nouvel endpoint. **Seule touche** : bump de la version P
   périmée), garde ID absent.
 - **Composant** (`AnalyticsConsent`) : bannière rendue si aucun choix ; « Accepter » → `gtag`
   chargé (mock) + cookie `granted` ; « Refuser » → aucun `gtag`, cookie `denied` ; `NEXT_PUBLIC_GA_ID`
-  absent → composant inerte (ni bannière ni script) ; « Gérer les cookies » du Footer rouvre la
+  absent → composant inerte (ni bannière ni script) ; sur `/admin` et `/superadmin` → rend `null`
+  (ni GA ni bannière) même consentement accordé ; « Gérer les cookies » du Footer rouvre la
   bannière.
 - **Aucun appel réseau réel à Google** — `gtag`/l'injection de script sont mockés.
 
