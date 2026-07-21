@@ -144,15 +144,15 @@ describe('OpenMatchQuickSwitch', () => {
     jest.useRealTimers();
   });
 
-  it('segmenté Amicale/Compétitive présent sur une partie ouverte, Compétitive actif par défaut', async () => {
+  it('segmenté Pour le fun/Pour de vrai présent sur une partie ouverte, Pour de vrai actif par défaut', async () => {
     wrap({ visibility: 'PUBLIC', competitive: true, targetLevelMin: 3, targetLevelMax: 5 });
-    expect(await screen.findByRole('button', { name: /Compétitive/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Amicale/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Pour de vrai/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Pour le fun/ })).toBeInTheDocument();
   });
 
-  it('cliquer « Amicale » republie avec competitive=false', async () => {
+  it('cliquer « Pour le fun » republie avec competitive=false', async () => {
     wrap({ visibility: 'PUBLIC', competitive: true, targetLevelMin: 3, targetLevelMax: 5 });
-    fireEvent.click(await screen.findByRole('button', { name: /Amicale/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Pour le fun/ }));
     await waitFor(() => {
       const last = mocked.setReservationVisibility.mock.calls.at(-1)!;
       expect(last[3]).toEqual(expect.objectContaining({ competitive: false }));

@@ -157,8 +157,8 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
             <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Ouverte à tous les niveaux.</div>
           )}
           <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
-            {([['competitive', 'Compétitive', 'Le résultat compte pour le niveau'],
-               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+            {([['competitive', 'Pour de vrai', 'Le résultat compte pour le niveau'],
+               ['friendly', 'Pour le fun', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
               const active = (key === 'competitive') === competitive;
               return (
                 <button key={key} type="button" disabled={busy}
