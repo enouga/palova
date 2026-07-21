@@ -478,6 +478,67 @@ describe('OpenMatchService', () => {
       expect(data.team).toBeUndefined();
       expect(data.slot).toBeUndefined();
     });
+
+    // --- Parties genrées ---
+    it('WOMEN : un homme est refusé (GENDER_NOT_FEMALE)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservation.findUnique.mockResolvedValue({ matchGender: 'WOMEN' } as any);
+      prismaMock.user.findUnique.mockResolvedValue({ sex: 'MALE' } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0, user: { sex: 'FEMALE' } },
+      ] as any);
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-male')).rejects.toThrow('GENDER_NOT_FEMALE');
+      expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
+    });
+
+    it('WOMEN : une femme rejoint', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservation.findUnique.mockResolvedValue({ matchGender: 'WOMEN' } as any);
+      prismaMock.user.findUnique.mockResolvedValue({ sex: 'FEMALE' } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0, user: { sex: 'FEMALE' } },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p3' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-female')).resolves.toEqual({ id: 'm1' });
+    });
+
+    it('MIXED : un 2e homme sur la même équipe est refusé (GENDER_TEAM_FULL)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservation.findUnique.mockResolvedValue({ matchGender: 'MIXED' } as any);
+      prismaMock.user.findUnique.mockResolvedValue({ sex: 'MALE' } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0, user: { sex: 'MALE' } },
+      ] as any);
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-male2', { team: 1 })).rejects.toThrow('GENDER_TEAM_FULL');
+      expect(prismaMock.reservationParticipant.create).not.toHaveBeenCalled();
+    });
+
+    it('MIXED sans cible : un homme est placé sur une équipe compatible (équipe 2)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservation.findUnique.mockResolvedValue({ matchGender: 'MIXED' } as any);
+      prismaMock.user.findUnique.mockResolvedValue({ sex: 'MALE' } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0, user: { sex: 'MALE' } },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p3' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      await service.joinOpenMatch('club-demo', 'm1', 'user-male2');
+      const data = (prismaMock.reservationParticipant.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.team).toBe(2);
+    });
+
+    it('matchGender null : comportement inchangé (aucune contrainte)', async () => {
+      happyTx(); lockRow(); resource();
+      prismaMock.reservation.findUnique.mockResolvedValue(null as any);
+      prismaMock.user.findUnique.mockResolvedValue({ sex: 'MALE' } as any);
+      prismaMock.reservationParticipant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'org', isOrganizer: true, team: 1, slot: 0, user: { sex: 'FEMALE' } },
+      ] as any);
+      prismaMock.reservationParticipant.create.mockResolvedValue({ id: 'p3' } as any);
+      prismaMock.reservationParticipant.update.mockResolvedValue({} as any);
+      await expect(service.joinOpenMatch('club-demo', 'm1', 'user-male')).resolves.toEqual({ id: 'm1' });
+    });
   });
 
   describe('leaveOpenMatch', () => {

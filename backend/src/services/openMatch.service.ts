@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
 import { RatingService, UserLevel } from './rating.service';
-import { effectiveTeams, applyTeams } from './matchTeams';
+import { effectiveTeams, applyTeams, assertOpenMatchGender } from './matchTeams';
 import { ensureActiveMembership } from './membership';
 import { matchCardStateHash } from './matchCardState';
 import { MatchAlertService } from './matchAlert.service';
@@ -291,16 +291,44 @@ export class OpenMatchService {
       const parts = await tx.reservationParticipant.findMany({
         where: { reservationId },
         orderBy: { joinedAt: 'asc' },
-        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true },
+        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true, user: { select: { sex: true } } },
       });
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
       if (parts.some((p) => p.userId === userId)) throw new Error('ALREADY_JOINED');
 
+      const half = Math.max(1, Math.floor(maxPlayers / 2));
+
+      // Genre : blocage dur (parties Féminine / Mixte). Pour un mixte sans cible explicite,
+      // on résout ici l'équipe compatible du joueur (place libre + pas de joueur du même sexe).
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      const matchGender = meta?.matchGender ?? null;
+      let genderPlacement: { team: number; slot: number | null } | undefined;
+      if (matchGender) {
+        const joiner = await tx.user.findUnique({ where: { id: userId }, select: { sex: true } });
+        const joinerSex = joiner?.sex ?? null;
+        const layout = effectiveTeams(parts, maxPlayers);
+        const sexOf = (uid: string) => parts.find((p) => p.userId === uid)?.user?.sex ?? null;
+        if (matchGender === 'WOMEN') {
+          assertOpenMatchGender('WOMEN', joinerSex, 0);
+        } else {
+          let team: 1 | 2 | null = (target?.team === 1 || target?.team === 2) ? target.team : null;
+          if (team == null) {
+            for (const t of [1, 2] as const) {
+              const onSide = layout.filter((p) => p.team === t);
+              if (onSide.length < half && !onSide.some((p) => sexOf(p.userId) === joinerSex)) { team = t; break; }
+            }
+            if (team == null) throw new Error('GENDER_TEAM_FULL');
+            genderPlacement = { team, slot: null };
+          }
+          const sameSex = layout.filter((p) => p.team === team && sexOf(p.userId) === joinerSex).length;
+          assertOpenMatchGender('MIXED', joinerSex, sameSex);
+        }
+      }
+
       // Place ciblée : validée contre le layout effectif (même dérivation que le DTO,
       // ordre joinedAt) — une place « libre » à l'écran l'est aussi ici, sinon course perdue.
-      let placement: { team: number; slot: number | null } | undefined;
+      let placement: { team: number; slot: number | null } | undefined = genderPlacement;
       if (target) {
-        const half = Math.max(1, Math.floor(maxPlayers / 2));
         if (target.team !== 1 && target.team !== 2) throw new Error('TEAM_INVALID');
         if (target.slot !== undefined && (!Number.isInteger(target.slot) || target.slot < 0 || target.slot >= half)) throw new Error('TEAM_INVALID');
         const layout = effectiveTeams(parts, maxPlayers);
