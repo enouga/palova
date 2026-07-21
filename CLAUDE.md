@@ -431,6 +431,10 @@ Admin **`/admin/promotions`** (nav « Promotions », icône `euro`, gating `isCl
 
 **Écarts connus, à trancher avant d'aller plus loin (non bloquants, documentés à la relecture)** : `rescheduleReservation`/`adminRescheduleReservation` **n'appliquent pas** les promos (seul `holdSlot` le fait — déplacer une résa dans/hors d'une fenêtre promo recalcule au prix de base) ; le cache de disponibilité **n'est pas invalidé** à la création/modification/suppression d'une promo (le prix *affiché* peut rester périmé jusqu'à expiration du TTL, le prix *facturé* est toujours correct). Migration additive uniquement. Tests : `pricing`/`availability.service`/`reservation.service`/`promotion.service`/`admin.promotions.routes` (backend) ; `adminPromotions`/`AdminPromotions`/`AdminLayout` (frontend). PR [#40](https://github.com/enouga/palova/pull/40).
 
+## Chips de filtres teintées par groupe (2026-07-21) ✅ implémenté
+
+Les chips de filtres des 4 surfaces qui en affichaient (`/parties`, `/events`, le calendrier national des tournois désormais fondu dans `/decouvrir`, `/decouvrir` lui-même) avaient dérivé en 3 copies locales légèrement différentes. Fusionnées en un composant unique **`components/ui/FacetChip.tsx`** (`FacetChip`/`FacetGroup` + constante **`FILTER_TINTS`**) : chaque **groupe** de filtres porte une teinte fixe de la palette `ACCENTS` (Quand·émeraude, Catégorie·violet, Genre·cyan, Niveau·bleu, Type de partie·corail, Source·apricot, Type d'animation·bleu, Accès·corail, Où·bleu — même libellé = même couleur partout), pastille sur le libellé du groupe + chip active = pill pleine de la teinte (encre via `inkOn`). `MatchesFilterBar`/`EventsFilterBar`/`calendar/FacetPanel` (+ `DateRangeChip`, teinte optionnelle) migrés dessus. **100 % frontend, aucune migration.** Spec & plan : `docs/superpowers/{specs,plans}/2026-07-21-chips-filtres-teintes*`.
+
 ## À implémenter (pas encore fait)
 
 - Authentification réelle (JWT login/register) — actuellement `DEMO_TOKEN = 'demo-token'` hardcodé dans courts/[id]/page.tsx
