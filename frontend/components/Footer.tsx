@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useClub } from '@/lib/ClubProvider';
 import { CANONICAL_ROOT } from '@/lib/roots';
+import { gaId } from '@/lib/gtag';
+import { CONSENT_EVENT } from '@/lib/consent';
 
 // Pages où le footer n'a pas sa place (espaces de travail plein écran, écrans d'auth).
 const HIDDEN_PREFIXES = ['/admin', '/superadmin', '/login', '/register'];
@@ -49,6 +51,15 @@ export function Footer() {
               {l.label}
             </Link>
           ))}
+          {gaId() && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event(CONSENT_EVENT))}
+              style={{ color: th.textMute, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13.5, fontWeight: 500, fontFamily: 'inherit' }}
+            >
+              Gérer les cookies
+            </button>
+          )}
         </nav>
         <div style={{ fontSize: 12.5, color: th.textFaint }}>
           {slug ? (
