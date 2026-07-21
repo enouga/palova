@@ -83,6 +83,17 @@ test('sur /superadmin : rend null', () => {
   expect(screen.queryByRole('button', { name: /accepter/i })).toBeNull();
 });
 
+test('navigation en session, public → /admin : la piste GA s\'arrête (plus de page vue)', () => {
+  document.cookie = `${CONSENT_COOKIE}=granted:${CONSENT_VERSION}; path=/`;
+  const { rerender } = render(<AnalyticsConsent />);
+  expect(gtag.pageview).toHaveBeenCalledWith('/');
+  jest.clearAllMocks();
+  mockPath.current = '/admin/planning';
+  rerender(<AnalyticsConsent />);
+  expect(gtag.pageview).not.toHaveBeenCalled();
+  expect(gtag.loadGtag).not.toHaveBeenCalled();
+});
+
 test('événement « Gérer les cookies » : rouvre la bannière même après un choix', () => {
   document.cookie = `${CONSENT_COOKIE}=denied:${CONSENT_VERSION}; path=/`;
   render(<AnalyticsConsent />);
