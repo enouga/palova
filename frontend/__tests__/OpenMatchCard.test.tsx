@@ -64,14 +64,14 @@ function makeProps(match: OpenMatch, overProps: Partial<OpenMatchCardProps> = {}
 }
 
 describe('OpenMatchCard', () => {
-  it('affiche le badge Amicale quand competitive=false', () => {
+  it('affiche le badge Pour le fun quand competitive=false', () => {
     render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ competitive: false }))} /></ThemeProvider>);
-    expect(screen.getByText('Amicale')).toBeInTheDocument();
+    expect(screen.getByText('Pour le fun')).toBeInTheDocument();
   });
 
-  it('affiche le badge Compétitive par défaut (competitive=true ou absent)', () => {
+  it('affiche le badge Pour de vrai par défaut (competitive=true ou absent)', () => {
     render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ competitive: true }))} /></ThemeProvider>);
-    expect(screen.getByText('Compétitive')).toBeInTheDocument();
+    expect(screen.getByText('Pour de vrai')).toBeInTheDocument();
   });
 
   it('« Discuter » est actif pour un utilisateur connecté et appelle onOpenChat', () => {
