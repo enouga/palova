@@ -1,4 +1,4 @@
-import { effectiveTeams, applyTeams } from '../matchTeams';
+import { effectiveTeams, applyTeams, assertOpenMatchGender, assertRosterGender } from '../matchTeams';
 
 const p = (team: number | null, slot: number | null = null) => ({ team, slot });
 
@@ -148,5 +148,43 @@ describe('applyTeams', () => {
 
     expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { team: 1, slot: 0 } });
     expect(tx.reservationParticipant.update).toHaveBeenCalledWith({ where: { id: 'p2' }, data: { team: 2, slot: 0 } });
+  });
+});
+
+describe('assertOpenMatchGender (join unitaire)', () => {
+  it('null = aucune contrainte', () => {
+    expect(() => assertOpenMatchGender(null, null, 3)).not.toThrow();
+  });
+  it('WOMEN : femme OK, homme refusé, sexe manquant refusé', () => {
+    expect(() => assertOpenMatchGender('WOMEN', 'FEMALE', 0)).not.toThrow();
+    expect(() => assertOpenMatchGender('WOMEN', 'MALE', 0)).toThrow('GENDER_NOT_FEMALE');
+    expect(() => assertOpenMatchGender('WOMEN', null, 0)).toThrow('SEX_REQUIRED');
+  });
+  it('MIXED : sexe requis ; côté saturé pour ce sexe refusé', () => {
+    expect(() => assertOpenMatchGender('MIXED', null, 0)).toThrow('SEX_REQUIRED');
+    expect(() => assertOpenMatchGender('MIXED', 'MALE', 0)).not.toThrow();
+    expect(() => assertOpenMatchGender('MIXED', 'MALE', 1)).toThrow('GENDER_TEAM_FULL');
+  });
+});
+
+describe('assertRosterGender (création / ouverture)', () => {
+  it('null = aucune contrainte', () => {
+    expect(() => assertRosterGender(null, [{ sex: 'MALE', team: 1 }])).not.toThrow();
+  });
+  it('WOMEN : roster 100% féminin OK, un homme refusé', () => {
+    expect(() => assertRosterGender('WOMEN', [{ sex: 'FEMALE', team: 1 }, { sex: 'FEMALE', team: 2 }])).not.toThrow();
+    expect(() => assertRosterGender('WOMEN', [{ sex: 'MALE', team: 1 }])).toThrow('GENDER_PARTICIPANTS_CONFLICT');
+  });
+  it('WOMEN : sexe manquant refusé', () => {
+    expect(() => assertRosterGender('WOMEN', [{ sex: null, team: 1 }])).toThrow('GENDER_PARTICIPANTS_CONFLICT');
+  });
+  it('MIXED : 1H+1F par équipe OK, 2H sur une équipe refusé', () => {
+    expect(() => assertRosterGender('MIXED', [
+      { sex: 'MALE', team: 1 }, { sex: 'FEMALE', team: 1 },
+      { sex: 'MALE', team: 2 }, { sex: 'FEMALE', team: 2 },
+    ])).not.toThrow();
+    expect(() => assertRosterGender('MIXED', [
+      { sex: 'MALE', team: 1 }, { sex: 'MALE', team: 1 },
+    ])).toThrow('GENDER_PARTICIPANTS_CONFLICT');
   });
 });
