@@ -111,6 +111,20 @@ describe('OpenMatches', () => {
     expect(screen.getByText('Terrain 2')).toBeInTheDocument();
   });
 
+  it('filtre par genre via les chips Tous/Féminine/Mixte', async () => {
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'm1', resourceName: 'Terrain 1', gender: null }),
+      match({ id: 'm2', resourceName: 'Terrain 2', gender: 'MIXED' }),
+    ] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await screen.findByText('Terrain 2');
+    expect(screen.getByText('Terrain 1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mixte' }));
+    await waitFor(() => expect(screen.queryByText('Terrain 1')).not.toBeInTheDocument());
+    expect(screen.getByText('Terrain 2')).toBeInTheDocument();
+  });
+
   it('niveau hors fourchette : avertissement, puis « Rejoindre quand même » rejoint à la place tapée', async () => {
     mocked.getMyRating.mockResolvedValue({ level: 3 } as never);
     mocked.getOpenMatches.mockResolvedValue([match({ targetLevelMin: 6, targetLevelMax: 8 })] as never);

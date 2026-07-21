@@ -46,6 +46,7 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const [fMin, setFMin] = useState(1);
   const [fMax, setFMax] = useState(8);
   const [kindFilter, setKindFilter] = useState<'all' | 'competitive' | 'friendly'>('all');
+  const [genderFilter, setGenderFilter] = useState<'all' | 'WOMEN' | 'MIXED'>('all');
   const [view, setView] = useState<'parties' | 'matchs' | 'classement'>('parties');
   // Mes matchs (résultats) : chargés à la 1re ouverture de la vue. null = pas encore chargé.
   const [myMatches, setMyMatches] = useState<MyMatch[] | null>(null);
@@ -168,9 +169,10 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
   const byLevel = levelFilterActive
     ? matches.filter((m) => rangesOverlap(m.targetLevelMin ?? null, m.targetLevelMax ?? null, fMin, fMax))
     : matches;
-  const filtered = kindFilter === 'all'
+  const filtered = (kindFilter === 'all'
     ? byLevel
-    : byLevel.filter((m) => (m.competitive === false) === (kindFilter === 'friendly'));
+    : byLevel.filter((m) => (m.competitive === false) === (kindFilter === 'friendly'))
+  ).filter((m) => genderFilter === 'all' || (m.gender ?? null) === genderFilter);
 
   // Section « Vos parties » : celles où je suis inscrit (organisateur compris), toujours en
   // tête et JAMAIS soumises aux filtres — une partie rejointe ne doit pas disparaître
@@ -248,6 +250,8 @@ export function OpenMatches({ club }: { club: ClubDetail }) {
             onLevelChange={setLevelFilter}
             kindFilter={kindFilter}
             onKindChange={setKindFilter}
+            genderFilter={genderFilter}
+            onGenderChange={setGenderFilter}
             resultCount={mine.length + discoverable.length}
             alerts={alerts}
             timezone={club.timezone}

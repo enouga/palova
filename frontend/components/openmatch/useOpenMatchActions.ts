@@ -25,6 +25,10 @@ export const JOIN_ERRORS: Record<string, string> = {
   TEAM_SLOT_TAKEN:       'Cette place est déjà prise.',
   TEAM_SIDE_FULL:        'Cette équipe est complète.',
   TEAM_INVALID:          'Place invalide.',
+  SEX_REQUIRED:          'Renseignez votre sexe dans votre profil pour les parties genrées.',
+  GENDER_NOT_FEMALE:     'Cette partie est réservée aux femmes.',
+  GENDER_TEAM_FULL:      'Cette partie mixte n’a plus de place pour votre catégorie.',
+  GENDER_PARTICIPANTS_CONFLICT: 'Les joueurs déjà présents ne correspondent pas à ce type de partie.',
 };
 
 // Logique d'actions d'une partie ouverte (rejoindre/quitter/équipes/chat/intérêt/résultat)

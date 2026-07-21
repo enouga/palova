@@ -27,6 +27,7 @@ export function NationalMatchCard({
   const urgent = m.spotsLeft === 1;
   const level = (m.targetLevelMin != null || m.targetLevelMax != null)
     ? rangeLabel(m.targetLevelMin, m.targetLevelMax) : null;
+  const genderLabel = m.gender === 'WOMEN' ? 'Féminine' : m.gender === 'MIXED' ? 'Mixte' : null;
   const when = formatDateShortTimeRange(m.startTime, m.endTime, m.club.timezone);
   return (
     <a
@@ -61,7 +62,7 @@ export function NationalMatchCard({
       <div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text }}>{when}</div>
         <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
-          {m.resourceName} · {level ?? 'Tous niveaux'}
+          {m.resourceName} · {level ?? 'Tous niveaux'}{genderLabel ? ` · ${genderLabel}` : ''}
         </div>
       </div>
 

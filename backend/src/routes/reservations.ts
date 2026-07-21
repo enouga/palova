@@ -129,9 +129,12 @@ router.post('/:id/confirm', authMiddleware, async (req: AuthRequest, res: Respon
 
 router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { partnerUserIds, visibility, targetLevelMin, targetLevelMax, teams, slots, competitive } = req.body ?? {};
+    const { partnerUserIds, visibility, targetLevelMin, targetLevelMax, teams, slots, competitive, matchGender } = req.body ?? {};
     // Validation alignée sur /hold : on rejette (400) au lieu de coercer silencieusement.
     if (visibility !== undefined && visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (matchGender !== undefined && matchGender !== null && matchGender !== 'WOMEN' && matchGender !== 'MIXED') {
       return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     }
     if (partnerUserIds !== undefined && (!Array.isArray(partnerUserIds) || partnerUserIds.some((id: unknown) => typeof id !== 'string'))) {
@@ -162,6 +165,7 @@ router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response
       teams: typeof teams === 'object' && teams !== null ? teams as Record<string, number> : undefined,
       slots: typeof slots === 'object' && slots !== null ? slots as Record<string, number> : undefined,
       competitive: typeof competitive === 'boolean' ? competitive : undefined,
+      matchGender: matchGender === undefined ? undefined : (matchGender === null ? null : matchGender),
     });
     res.json(updated);
   } catch (err) { handleError(err, res, next); }
@@ -171,8 +175,11 @@ router.post('/:id/setup', authMiddleware, async (req: AuthRequest, res: Response
 // Owner-only ; validation calquée sur /setup. Aucune mutation de participants.
 router.post('/:id/visibility', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { visibility, targetLevelMin, targetLevelMax, competitive } = req.body ?? {};
+    const { visibility, targetLevelMin, targetLevelMax, competitive, matchGender } = req.body ?? {};
     if (visibility !== 'PRIVATE' && visibility !== 'PUBLIC') {
+      return void res.status(400).json({ error: 'VALIDATION_ERROR' });
+    }
+    if (matchGender !== undefined && matchGender !== null && matchGender !== 'WOMEN' && matchGender !== 'MIXED') {
       return void res.status(400).json({ error: 'VALIDATION_ERROR' });
     }
     if (targetLevelMin !== undefined && targetLevelMin !== null) {
@@ -193,6 +200,7 @@ router.post('/:id/visibility', authMiddleware, async (req: AuthRequest, res: Res
       targetLevelMin: targetLevelMin === undefined ? undefined : (targetLevelMin === null ? null : Number(targetLevelMin)),
       targetLevelMax: targetLevelMax === undefined ? undefined : (targetLevelMax === null ? null : Number(targetLevelMax)),
       competitive: typeof competitive === 'boolean' ? competitive : undefined,
+      matchGender: matchGender === undefined ? undefined : (matchGender === null ? null : matchGender),
     });
     res.json(updated);
   } catch (err) { handleError(err, res, next); }

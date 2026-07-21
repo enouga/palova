@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma';
 import { playerCount } from '../utils/courtType';
 import { notifyOpenMatchJoin, notifyOpenMatchLeft, notifyOpenMatchRemoved, notifyOpenMatchAdded } from '../email/notifications';
 import { RatingService, UserLevel } from './rating.service';
-import { effectiveTeams, applyTeams } from './matchTeams';
+import { effectiveTeams, applyTeams, assertOpenMatchGender } from './matchTeams';
 import { ensureActiveMembership } from './membership';
 import { matchCardStateHash } from './matchCardState';
 import { MatchAlertService } from './matchAlert.service';
@@ -123,6 +123,7 @@ export class OpenMatchService {
       targetLevelMin: m.targetLevelMin ?? null,
       targetLevelMax: m.targetLevelMax ?? null,
       competitive: m.competitive,
+      gender: m.matchGender ?? null,
       players,
       lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
       messageCount: m._count.openMatchMessages,
@@ -224,6 +225,7 @@ export class OpenMatchService {
           targetLevelMin: m.targetLevelMin ?? null,
           targetLevelMax: m.targetLevelMax ?? null,
           competitive: m.competitive,
+          gender: m.matchGender ?? null,
           players: effectiveTeams(m.participants, maxPlayers).map((p) => ({
             userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
             isOrganizer: p.isOrganizer, level: levels[`${p.userId}:${sportKey}`] ?? null, team: p.team, slot: p.slot,
@@ -292,16 +294,44 @@ export class OpenMatchService {
       const parts = await tx.reservationParticipant.findMany({
         where: { reservationId },
         orderBy: { joinedAt: 'asc' },
-        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true },
+        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true, user: { select: { sex: true } } },
       });
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
       if (parts.some((p) => p.userId === userId)) throw new Error('ALREADY_JOINED');
 
+      const half = Math.max(1, Math.floor(maxPlayers / 2));
+
+      // Genre : blocage dur (parties Féminine / Mixte). Pour un mixte sans cible explicite,
+      // on résout ici l'équipe compatible du joueur (place libre + pas de joueur du même sexe).
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      const matchGender = meta?.matchGender ?? null;
+      let genderPlacement: { team: number; slot: number | null } | undefined;
+      if (matchGender) {
+        const joiner = await tx.user.findUnique({ where: { id: userId }, select: { sex: true } });
+        const joinerSex = joiner?.sex ?? null;
+        const layout = effectiveTeams(parts, maxPlayers);
+        const sexOf = (uid: string) => parts.find((p) => p.userId === uid)?.user?.sex ?? null;
+        if (matchGender === 'WOMEN') {
+          assertOpenMatchGender('WOMEN', joinerSex, 0);
+        } else {
+          let team: 1 | 2 | null = (target?.team === 1 || target?.team === 2) ? target.team : null;
+          if (team == null) {
+            for (const t of [1, 2] as const) {
+              const onSide = layout.filter((p) => p.team === t);
+              if (onSide.length < half && !onSide.some((p) => sexOf(p.userId) === joinerSex)) { team = t; break; }
+            }
+            if (team == null) throw new Error('GENDER_TEAM_FULL');
+            genderPlacement = { team, slot: null };
+          }
+          const sameSex = layout.filter((p) => p.team === team && sexOf(p.userId) === joinerSex).length;
+          assertOpenMatchGender('MIXED', joinerSex, sameSex);
+        }
+      }
+
       // Place ciblée : validée contre le layout effectif (même dérivation que le DTO,
       // ordre joinedAt) — une place « libre » à l'écran l'est aussi ici, sinon course perdue.
-      let placement: { team: number; slot: number | null } | undefined;
+      let placement: { team: number; slot: number | null } | undefined = genderPlacement;
       if (target) {
-        const half = Math.max(1, Math.floor(maxPlayers / 2));
         if (target.team !== 1 && target.team !== 2) throw new Error('TEAM_INVALID');
         if (target.slot !== undefined && (!Number.isInteger(target.slot) || target.slot < 0 || target.slot >= half)) throw new Error('TEAM_INVALID');
         const layout = effectiveTeams(parts, maxPlayers);
@@ -396,7 +426,7 @@ export class OpenMatchService {
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
       const parts = await tx.reservationParticipant.findMany({
         where: { reservationId },
-        select: { id: true, userId: true, isOrganizer: true },
+        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true, user: { select: { sex: true } } },
       });
       const actor = parts.find((p) => p.userId === organizerUserId);
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
@@ -412,8 +442,33 @@ export class OpenMatchService {
       if (parts.some((p) => p.userId === targetUserId)) throw new Error('ALREADY_JOINED');
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
 
+      // Genre : blocage dur, miroir du join. Pour un mixte, on place la cible sur une équipe
+      // compatible (place libre + pas de joueur du même sexe) ; aucune → GENDER_TEAM_FULL.
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      const matchGender = meta?.matchGender ?? null;
+      let genderPlacement: { team: number; slot: number | null } | undefined;
+      if (matchGender) {
+        const targetUser = await tx.user.findUnique({ where: { id: targetUserId }, select: { sex: true } });
+        const targetSex = targetUser?.sex ?? null;
+        const half = Math.max(1, Math.floor(maxPlayers / 2));
+        const layout = effectiveTeams(parts, maxPlayers);
+        const sexOf = (uid: string) => parts.find((p) => p.userId === uid)?.user?.sex ?? null;
+        if (matchGender === 'WOMEN') {
+          assertOpenMatchGender('WOMEN', targetSex, 0);
+        } else {
+          let team: 1 | 2 | null = null;
+          for (const t of [1, 2] as const) {
+            const onSide = layout.filter((p) => p.team === t);
+            if (onSide.length < half && !onSide.some((p) => sexOf(p.userId) === targetSex)) { team = t; break; }
+          }
+          if (team == null) throw new Error('GENDER_TEAM_FULL');
+          assertOpenMatchGender('MIXED', targetSex, 0);
+          genderPlacement = { team, slot: null };
+        }
+      }
+
       const created = await tx.reservationParticipant.create({
-        data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0) },
+        data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0), ...(genderPlacement ?? {}) },
       });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
@@ -435,10 +490,23 @@ export class OpenMatchService {
       if (!r) throw new Error('RESERVATION_NOT_FOUND');
       const resource = await tx.resource.findUnique({ where: { id: r.resource_id }, select: { clubId: true, attributes: true } });
       if (!resource || resource.clubId !== club.id) throw new Error('CLUB_MISMATCH');
-      const parts = await tx.reservationParticipant.findMany({ where: { reservationId }, select: { userId: true, isOrganizer: true } });
+      const parts = await tx.reservationParticipant.findMany({ where: { reservationId }, select: { userId: true, isOrganizer: true, user: { select: { sex: true } } } });
       const actor = parts.find((p) => p.userId === organizerUserId);
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
+
+      // Mixte : le nouveau layout doit rester ≤1 par sexe par équipe (1H+1F). WOMEN n'a pas
+      // de contrainte d'équipe (tous déjà femmes).
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      if (meta?.matchGender === 'MIXED') {
+        for (const t of [1, 2] as const) {
+          const side = parts.filter((p) => teams[p.userId] === t);
+          const males = side.filter((p) => p.user?.sex === 'MALE').length;
+          const females = side.filter((p) => p.user?.sex === 'FEMALE').length;
+          if (males > 1 || females > 1) throw new Error('GENDER_TEAM_FULL');
+        }
+      }
+
       await applyTeams(tx, reservationId, teams, maxPlayers, slots);
     }, { timeout: 10_000 });
     return { id: reservationId };

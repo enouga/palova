@@ -74,6 +74,22 @@ describe('OpenMatchCard', () => {
     expect(screen.getByText('Pour de vrai')).toBeInTheDocument();
   });
 
+  it('affiche le badge Féminine quand gender=WOMEN', () => {
+    render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ gender: 'WOMEN' }))} /></ThemeProvider>);
+    expect(screen.getByText('Féminine')).toBeInTheDocument();
+  });
+
+  it('affiche le badge Mixte quand gender=MIXED', () => {
+    render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ gender: 'MIXED' }))} /></ThemeProvider>);
+    expect(screen.getByText('Mixte')).toBeInTheDocument();
+  });
+
+  it('aucun badge de genre si gender null', () => {
+    render(<ThemeProvider><OpenMatchCard {...makeProps(makeMatch({ gender: null }))} /></ThemeProvider>);
+    expect(screen.queryByText('Féminine')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mixte')).not.toBeInTheDocument();
+  });
+
   it('« Discuter » est actif pour un utilisateur connecté et appelle onOpenChat', () => {
     const match = makeMatch({ viewerIsParticipant: false });
     const onOpenChat = jest.fn();
