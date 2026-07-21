@@ -17,17 +17,20 @@ export function GenderPicker({ value, onChange, disabled }: {
 }) {
   const { th } = useTheme();
   return (
-    <div style={{ display: 'flex', gap: 8 }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
       {OPTIONS.map((o) => {
         const active = o.value === value;
         return (
           <button key={o.label} type="button" aria-pressed={active} aria-label={o.label} disabled={disabled}
             onClick={() => onChange(o.value)}
-            style={{ flex: 1, textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer', borderRadius: 12,
+            style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, textAlign: 'left',
+              cursor: disabled ? 'not-allowed' : 'pointer', borderRadius: 12,
               padding: '9px 12px', border: `1.5px solid ${active ? th.accent : th.line}`,
               background: active ? `${th.accent}14` : 'transparent', opacity: disabled ? 0.6 : 1 }}>
-            <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: active ? th.accent : th.text }}>{o.label}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, marginTop: 2, lineHeight: 1.3 }}>{o.sub}</div>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, lineHeight: 1.25, color: active ? th.accent : th.text }}>{o.label}</div>
+            {/* 2 lignes réservées (minHeight 2.6em = 2 × lineHeight) : les 3 chips gardent la même
+                hauteur de sous-texte quel que soit le nombre de lignes réel → contenu aligné. */}
+            <div style={{ fontFamily: th.fontUI, fontSize: 10.5, color: th.textFaint, lineHeight: 1.3, minHeight: '2.6em' }}>{o.sub}</div>
           </button>
         );
       })}
