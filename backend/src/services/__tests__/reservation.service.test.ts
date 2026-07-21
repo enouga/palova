@@ -2369,7 +2369,7 @@ describe('ReservationService', () => {
       const out = await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 });
 
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 },
+        data: expect.objectContaining({ visibility: 'PUBLIC', targetLevelMin: 2, targetLevelMax: 5 }),
       }));
       expect(out.visibility).toBe('PUBLIC');
     });
@@ -2381,7 +2381,7 @@ describe('ReservationService', () => {
       await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PRIVATE' });
 
       expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null },
+        data: expect.objectContaining({ visibility: 'PRIVATE', targetLevelMin: null, targetLevelMax: null }),
       }));
     });
 
@@ -2432,6 +2432,48 @@ describe('ReservationService', () => {
       prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PUBLIC', targetLevelMin: null, targetLevelMax: null, competitive: true } as any);
       await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', competitive: true }))
         .resolves.toBeDefined();
+    });
+
+    it('écrit matchGender en PUBLIC quand les participants sont conformes (toutes femmes)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({
+        resource: { clubSport: { sport: { key: 'padel' } }, attributes: { format: 'double' } },
+        participants: [
+          { userId: 'user-1', team: 1, user: { sex: 'FEMALE' } },
+          { userId: 'user-2', team: 2, user: { sex: 'FEMALE' } },
+        ],
+      }) as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PUBLIC', matchGender: 'WOMEN' } as any);
+
+      const out = await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', matchGender: 'WOMEN' });
+
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ matchGender: 'WOMEN' }),
+      }));
+      expect(out.matchGender).toBe('WOMEN');
+    });
+
+    it('refuse si un participant présent ne correspond pas (GENDER_PARTICIPANTS_CONFLICT)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({
+        resource: { clubSport: { sport: { key: 'padel' } }, attributes: { format: 'double' } },
+        participants: [
+          { userId: 'user-1', team: 1, user: { sex: 'FEMALE' } },
+          { userId: 'user-2', team: 2, user: { sex: 'MALE' } },
+        ],
+      }) as any);
+      await expect(service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PUBLIC', matchGender: 'WOMEN' }))
+        .rejects.toThrow('GENDER_PARTICIPANTS_CONFLICT');
+    });
+
+    it('efface matchGender en repassant PRIVATE', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(row({ visibility: 'PUBLIC' }) as any);
+      prismaMock.reservation.update.mockResolvedValue({ id: reservationId, visibility: 'PRIVATE', matchGender: null } as any);
+
+      const out = await service.setReservationVisibility(reservationId, ownerUserId, { visibility: 'PRIVATE', matchGender: 'WOMEN' });
+
+      expect(out.matchGender).toBeNull();
+      expect(prismaMock.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ matchGender: null }),
+      }));
     });
   });
 

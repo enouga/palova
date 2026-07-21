@@ -1655,11 +1655,14 @@ export class ReservationService {
   async setReservationVisibility(
     reservationId: string,
     userId: string,
-    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
+    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean; matchGender?: OpenMatchGenderValue | null },
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubSport: { select: { sport: { select: { key: true } } } } } } },
+      include: {
+        resource: { select: { clubSport: { select: { sport: { select: { key: true } } } }, attributes: true } },
+        participants: { select: { userId: true, team: true, user: { select: { sex: true } } } },
+      },
     });
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)      throw new Error('UNAUTHORIZED');
@@ -1682,6 +1685,15 @@ export class ReservationService {
     // Fourchette de niveau conservée uniquement en PUBLIC + padel ; sinon effacée.
     const keepLevel = input.visibility === 'PUBLIC' && sportHasLevels(sportKey);
 
+    // Genre : conservé en PUBLIC + padel, effacé sinon. On valide les participants DÉJÀ
+    // présents contre le nouveau genre (GENDER_PARTICIPANTS_CONFLICT si conflit).
+    const matchGender: OpenMatchGenderValue | null = keepLevel ? (input.matchGender ?? null) : null;
+    if (matchGender) {
+      const maxPlayers = playerCount((reservation.resource.attributes as { format?: string } | null)?.format);
+      const layout = effectiveTeams(reservation.participants.map((p) => ({ team: p.team, slot: null as number | null, user: p.user })), maxPlayers);
+      assertRosterGender(matchGender, layout.map((p) => ({ sex: p.user?.sex ?? null, team: p.team })));
+    }
+
     const updated = await prisma.reservation.update({
       where: { id: reservationId },
       data: {
@@ -1689,8 +1701,9 @@ export class ReservationService {
         targetLevelMin: keepLevel ? (input.targetLevelMin ?? null) : null,
         targetLevelMax: keepLevel ? (input.targetLevelMax ?? null) : null,
         competitive: input.competitive ?? reservation.competitive,
+        matchGender,
       },
-      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true, competitive: true },
+      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true, competitive: true, matchGender: true },
     });
     // Publication après coup : une partie devient rejoignable → prévenir les alertes horaires.
     if (updated.visibility === 'PUBLIC') {
