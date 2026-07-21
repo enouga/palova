@@ -110,7 +110,7 @@ le consommateur peut saisir celui de son lieu de résidence.
 
 export const PLATFORM_CGV = `# Conditions générales de vente — abonnement Palova (clubs)
 
-*Version du 20 juillet 2026*
+*Version du 21 juillet 2026*
 
 Les présentes conditions générales de vente (CGV) régissent la fourniture de la plateforme
 **Palova** par **Tolaris Studio** (société en cours d'immatriculation — voir les
