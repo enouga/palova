@@ -107,6 +107,8 @@ export function OpenMatchCard({
         {(m.targetLevelMin != null || m.targetLevelMax != null) && (
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
         )}
+        {m.gender === 'WOMEN' && <Chip tone="line">Féminine</Chip>}
+        {m.gender === 'MIXED' && <Chip tone="line">Mixte</Chip>}
         {/* Preuve sociale « favoris » sur la rangée niveau/type : cette rangée est TOUJOURS rendue
             (pastille de type épinglée à droite), et l'icône+texte est plus bas que les pastilles,
             donc l'ajouter ne change jamais la hauteur de la rangée → aucun décalage entre cartes.
