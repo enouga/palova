@@ -21,8 +21,10 @@ describe('documents légaux plateforme', () => {
     expect(PLATFORM_CGV).toContain('article 28');
   });
 
-  it('confidentialité : cookies documentés sans bandeau', () => {
+  it('confidentialité : cookies fonctionnels + mesure d\'audience soumise au consentement', () => {
     expect(PLATFORM_CONFIDENTIALITE).toContain('token');
-    expect(PLATFORM_CONFIDENTIALITE).toContain('aucun bandeau');
+    expect(PLATFORM_CONFIDENTIALITE).toContain('Google Analytics');
+    expect(PLATFORM_CONFIDENTIALITE).toContain('consentement');
+    expect(PLATFORM_CONFIDENTIALITE).toContain('Gérer les cookies');
   });
 });

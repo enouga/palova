@@ -190,8 +190,9 @@ responsable de traitement** et **Tolaris Studio sous-traitant**.
 5. **Confidentialité et sécurité** : accès limité aux personnes habilitées, chiffrement en
    transit, sauvegardes, hébergement dans l'Union européenne (Hetzner, Allemagne).
 6. **Sous-traitants ultérieurs** : le Club autorise le recours à Hetzner (hébergement), Stripe
-   (paiements), OVH (envoi d'e-mails) et GlitchTip (supervision technique des erreurs). Tolaris
-   Studio informera le Club de tout changement, qui pourra s'y opposer pour motif légitime.
+   (paiements), OVH (envoi d'e-mails), GlitchTip (supervision technique des erreurs) et Google
+   (mesure d'audience du site, sur consentement des visiteurs). Tolaris Studio informera le Club
+   de tout changement, qui pourra s'y opposer pour motif légitime.
 7. **Assistance** : Tolaris Studio aide le Club à répondre aux demandes d'exercice de droits des
    personnes et lui notifie **toute violation de données** dans les meilleurs délais après en
    avoir eu connaissance.
@@ -203,7 +204,7 @@ responsable de traitement** et **Tolaris Studio sous-traitant**.
 
 export const PLATFORM_CONFIDENTIALITE = `# Politique de confidentialité
 
-*Version du 20 juillet 2026*
+*Version du 21 juillet 2026*
 
 **Tolaris Studio** (société en cours d'immatriculation — voir les
 [mentions légales](/mentions-legales)) traite vos données personnelles conformément au RGPD.
@@ -228,6 +229,7 @@ Contact : contact@palova.fr.
 | Notifications et e-mails | préférences, envois | contrat, intérêt légitime | durée de vie du compte |
 | Facturation SaaS des clubs | coordonnées de facturation | contrat, obligation légale | 10 ans |
 | Sécurité et journaux techniques | adresses IP, journaux | intérêt légitime | 12 mois |
+| Mesure d'audience du site | pages vues, provenance, identifiants Google Analytics | consentement | 13 mois (Google) |
 
 Aucune donnée n'est vendue ni utilisée à des fins publicitaires.
 
@@ -236,8 +238,10 @@ Sous-traitants : **Hetzner** (hébergement, Allemagne), **Stripe** (paiements �
 hors UE peuvent intervenir, encadrés par des clauses contractuelles types), **OVH** (e-mails,
 France), **GlitchTip** (supervision technique — collecte de métadonnées d'erreur applicative :
 horodatage, message, identifiant interne de compte, adresse IP — aux seules fins de détection
-et de correction des dysfonctionnements). Les membres d'un même club voient les informations
-que vous rendez visibles (nom, avatar, niveau, participation aux parties).
+et de correction des dysfonctionnements) et **Google** (mesure d'audience du site via Google
+Analytics, uniquement si vous y consentez ; des transferts hors UE peuvent intervenir, encadrés
+par le Data Privacy Framework auquel Google est certifié). Les membres d'un même club voient les
+informations que vous rendez visibles (nom, avatar, niveau, participation aux parties).
 
 ## Vos droits
 Accès, rectification, effacement, limitation, opposition, portabilité : depuis votre profil
@@ -245,15 +249,23 @@ Accès, rectification, effacement, limitation, opposition, portabilité : depuis
 Vous pouvez saisir la CNIL (cnil.fr) à tout moment.
 
 ## Cookies
-Le site n'utilise que des traceurs **strictement nécessaires**, exemptés de consentement :
+Cookies **strictement nécessaires** (exemptés de consentement) :
 
 - cookie \`token\` (session de connexion, 7 jours) ;
 - cookie \`clubId\` (contexte du club courant, 7 jours) ;
+- cookie \`palova_consent\` (mémorise votre choix sur les cookies de mesure d'audience, 6 mois) ;
 - stockage local du navigateur pour vos préférences d'affichage (thème, vues).
 
-**Aucun cookie publicitaire, aucun traceur de mesure d'audience.** C'est pourquoi aucun bandeau
-de consentement n'est affiché. Si cela changeait, un recueil de consentement serait mis en place
-au préalable.
+Cookies de **mesure d'audience**, soumis à votre **consentement préalable** :
+
+- **Google Analytics** (\`_ga\`, \`_ga_<id>\`, jusqu'à 13 mois) : statistiques de fréquentation
+  anonymisées (pages vues, provenance), sans publicité ni personnalisation. Ces cookies ne sont
+  déposés **que si vous cliquez « Accepter »** dans le bandeau affiché à votre première visite,
+  et **jamais** si vous refusez ou ignorez le bandeau. Vous pouvez revenir sur votre choix à tout
+  moment via **« Gérer les cookies »** en pied de page.
+
+**Aucun cookie publicitaire.** Les données de mesure d'audience sont traitées par Google (voir
+« Destinataires et transferts »).
 
 ## Suppression de compte
 La suppression (profil → Sécurité) anonymise vos données personnelles ; les traces comptables
