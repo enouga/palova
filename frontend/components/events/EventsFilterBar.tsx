@@ -1,7 +1,7 @@
 'use client';
-import { ReactNode } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Icon } from '@/components/ui/Icon';
+import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import {
   AgendaFilter, AgendaCounts, EventFilterState,
   GENDER_LABEL, KIND_LABEL, WHEN_LABEL, WHEN_ORDER, agendaFacets,
@@ -21,43 +21,6 @@ const SOURCES: { key: AgendaFilter; label: string }[] = [
   { key: 'animations', label: 'Animations' },
   { key: 'cours', label: 'Cours' },
 ];
-
-// Chip de filtre — actif = encre pleine + coche, inactif = pill fine contourée
-// (même recette que Chip de MatchesFilterBar).
-function FacetChip({ label, count, active, onClick }: {
-  label: string; count: number; active: boolean; onClick: () => void;
-}) {
-  const { th } = useTheme();
-  const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.text;
-  return (
-    <button onClick={onClick} aria-pressed={active} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
-      fontFamily: th.fontUI, fontSize: 13, fontWeight: active ? 700 : 600,
-      background: active ? th.ink : 'transparent', color: fg,
-      boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-      opacity: !active && count === 0 ? 0.45 : 1,
-      transition: 'all .15s', WebkitTapHighlightColor: 'transparent',
-    }}>
-      {active && <Icon name="check" size={12} color={fg} />}
-      {label}
-      <span style={{ fontSize: 11.5, fontWeight: 700, color: active ? fg : th.textFaint, opacity: active ? 0.75 : 1 }}>{count}</span>
-    </button>
-  );
-}
-
-function FacetGroup({ label, children }: { label: string; children: ReactNode }) {
-  const { th } = useTheme();
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <span style={{
-        fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6,
-        textTransform: 'uppercase', color: th.textFaint,
-      }}>{label}</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{children}</div>
-    </div>
-  );
-}
 
 export function EventsFilterBar({ state, onChange, facets, counts, resultCount }: {
   state: EventFilterState;
@@ -89,49 +52,49 @@ export function EventsFilterBar({ state, onChange, facets, counts, resultCount }
     <div style={{ marginTop: 14 }}>
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
-          <FacetGroup label="Source">
+          <FacetGroup label="Source" tint={FILTER_TINTS.source}>
             {SOURCES.map((s) => (
               <FacetChip key={s.key} label={s.label} count={counts.sources[s.key]} active={state.source === s.key}
-                onClick={() => setSource(s.key)} />
+                tint={FILTER_TINTS.source} onClick={() => setSource(s.key)} />
             ))}
           </FacetGroup>
           {/* Rejoué (sp-rise) au changement de source : les facettes qui suivent en dépendent */}
           <div key={state.source} style={{ display: 'contents' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', animation: 'sp-rise .22s ease both' }}>
-              <FacetGroup label="Quand">
+              <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
                 {WHEN_ORDER.map((w) => (
                   <FacetChip key={w} label={WHEN_LABEL[w]} count={counts.when[w]} active={state.when === w}
-                    onClick={() => onChange({ ...state, when: state.when === w ? null : w })} />
+                    tint={FILTER_TINTS.quand} onClick={() => onChange({ ...state, when: state.when === w ? null : w })} />
                 ))}
               </FacetGroup>
               {showCategories && (
-                <FacetGroup label="Catégorie">
+                <FacetGroup label="Catégorie" tint={FILTER_TINTS.categorie}>
                   {counts.categories.map(({ value, count }) => (
                     <FacetChip key={value} label={value} count={count} active={state.categories.has(value)}
-                      onClick={() => onChange({ ...state, categories: toggled(state.categories, value) })} />
+                      tint={FILTER_TINTS.categorie} onClick={() => onChange({ ...state, categories: toggled(state.categories, value) })} />
                   ))}
                 </FacetGroup>
               )}
               {showGenders && (
-                <FacetGroup label="Genre">
+                <FacetGroup label="Genre" tint={FILTER_TINTS.genre}>
                   {counts.genders.map(({ value, count }) => (
                     <FacetChip key={value} label={GENDER_LABEL[value]} count={count} active={state.genders.has(value)}
-                      onClick={() => onChange({ ...state, genders: toggled(state.genders, value) })} />
+                      tint={FILTER_TINTS.genre} onClick={() => onChange({ ...state, genders: toggled(state.genders, value) })} />
                   ))}
                 </FacetGroup>
               )}
               {showKinds && (
-                <FacetGroup label="Type">
+                <FacetGroup label="Type" tint={FILTER_TINTS.typeAnimation}>
                   {counts.kinds.map(({ value, count }) => (
                     <FacetChip key={value} label={KIND_LABEL[value]} count={count} active={state.kinds.has(value)}
-                      onClick={() => onChange({ ...state, kinds: toggled(state.kinds, value) })} />
+                      tint={FILTER_TINTS.typeAnimation} onClick={() => onChange({ ...state, kinds: toggled(state.kinds, value) })} />
                   ))}
                 </FacetGroup>
               )}
               {showMemberOnly && (
-                <FacetGroup label="Accès">
+                <FacetGroup label="Accès" tint={FILTER_TINTS.acces}>
                   <FacetChip label="Réservé membres" count={counts.memberOnly} active={state.memberOnly}
-                    onClick={() => onChange({ ...state, memberOnly: !state.memberOnly })} />
+                    tint={FILTER_TINTS.acces} onClick={() => onChange({ ...state, memberOnly: !state.memberOnly })} />
                 </FacetGroup>
               )}
             </div>
