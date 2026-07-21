@@ -183,6 +183,7 @@ export const api = {
       teams?: Record<string, 1 | 2>;
       slots?: Record<string, number>;
       competitive?: boolean;
+      matchGender?: OpenMatchGender | null;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {
@@ -280,9 +281,9 @@ export const api = {
     reservationId: string,
     visibility: 'PRIVATE' | 'PUBLIC',
     token: string,
-    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
+    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean; matchGender?: OpenMatchGender | null },
   ) =>
-    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null; competitive: boolean }>(
+    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null; competitive: boolean; matchGender: OpenMatchGender | null }>(
       `/api/reservations/${reservationId}/visibility`,
       { method: 'POST', body: JSON.stringify({ visibility, ...opts }) },
       token,
@@ -1662,6 +1663,8 @@ export interface OpenMatchPlayer {
   slot?: number | null; // place au sein de l'équipe (0=G, 1=D), concrète en padel
 }
 
+export type OpenMatchGender = 'WOMEN' | 'MIXED';
+
 export interface OpenMatch {
   id: string;
   resourceName: string;
@@ -1676,6 +1679,7 @@ export interface OpenMatch {
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
   competitive?: boolean; // Pour le fun (false) / Pour de vrai (true) ; défaut true si absent
+  gender?: OpenMatchGender | null; // Féminine / Mixte ; null = ouverte à tous
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
@@ -2407,6 +2411,7 @@ export interface NationalOpenMatch {
   targetLevelMin: number | null;
   targetLevelMax: number | null;
   competitive?: boolean;
+  gender?: OpenMatchGender | null;
   players: OpenMatchPlayer[];
   club: NationalOpenMatchClub;
 }
