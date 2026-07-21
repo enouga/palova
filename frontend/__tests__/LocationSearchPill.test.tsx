@@ -22,6 +22,14 @@ describe('LocationSearchPill', () => {
     fireEvent.keyDown(screen.getByPlaceholderText('Ville, code postal ou département'), { key: 'Enter' });
   });
 
+  it('extra rend un élément additionnel dans la pilule ; absent par défaut', () => {
+    const { rerender } = wrap(<LocationSearchPill value="" onChange={noop} onNearMe={noop} nearActive={false} locating={false} />);
+    expect(screen.queryByTestId('extra-slot')).not.toBeInTheDocument();
+    rerender(<ThemeProvider><LocationSearchPill value="" onChange={noop} onNearMe={noop} nearActive={false} locating={false}
+      extra={<span data-testid="extra-slot">x</span>} /></ThemeProvider>);
+    expect(screen.getByTestId('extra-slot')).toBeInTheDocument();
+  });
+
   it('« Autour de moi » → onNearMe, libellés selon l\'état', () => {
     const onNearMe = jest.fn();
     const { unmount } = wrap(<LocationSearchPill value="" onChange={noop} onNearMe={onNearMe} nearActive={false} locating={false} />);

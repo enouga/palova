@@ -15,7 +15,7 @@ import { TeamsGrid } from '@/components/tournament/TeamsGrid';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { MyRegistrationCard } from '@/components/tournament/MyRegistrationCard';
 import { ProfileCompletion } from '@/components/tournament/ProfileCompletion';
-import { PartnerSearch } from '@/components/tournament/PartnerSearch';
+import { PartnerField } from '@/components/tournament/PartnerField';
 import { waitlistPosition } from '@/lib/tournament';
 import StripePaymentStep from '@/components/StripePaymentStep';
 import { CgvGate } from '@/components/CgvGate';
@@ -201,7 +201,8 @@ export function TournamentDetailClient({ id }: { id: string }) {
           {/* Déjà inscrit */}
           {token && myReg && (
             <MyRegistrationCard
-              myReg={myReg} profileId={profile?.id} closed={closed} busy={busy}
+              myReg={myReg} myTeam={participants?.find((p) => p.id === myReg.id) ?? null}
+              profileId={profile?.id} closed={closed} busy={busy}
               contactInfo={t.contactInfo}
               waitlistPos={participants ? waitlistPosition(participants, myReg.id) : null}
               slug={club.slug} token={token}
@@ -249,8 +250,9 @@ export function TournamentDetailClient({ id }: { id: string }) {
               <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginBottom: 8, lineHeight: 1.5 }}>
                 Votre coéquipier doit être membre du club et avoir renseigné téléphone, licence et sexe.
               </div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>Coéquipier (recherche par nom)</div>
-              <PartnerSearch key="register-partner-search" slug={club.slug} token={token} selected={partner} onSelect={setPartner} onClear={() => setPartner(null)} disabled={busy} />
+              <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 6 }}>Coéquipier</div>
+              <PartnerField slug={club.slug} token={token} selected={partner} onSelect={setPartner} onClear={() => setPartner(null)} disabled={busy}
+                excludeIds={profile ? [profile.id] : []} />
               <button onClick={register} disabled={busy || !partner || profileIncomplete} style={{ ...primaryBtn, marginTop: 8 }}>S&apos;inscrire</button>
               {profileIncomplete && <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint, marginTop: 8 }}>Complétez votre profil ci-dessus pour pouvoir vous inscrire.</div>}
             </div>

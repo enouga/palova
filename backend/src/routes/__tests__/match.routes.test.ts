@@ -4,7 +4,9 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../../app';
 
-jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn(), notifyNewMatchComment: jest.fn() }));
+jest.mock('../../email/notifications', () => ({ __esModule: true, notifyMatchPendingConfirmation: jest.fn(), notifyNewMatchComment: jest.fn(), notifyMatchReminder: jest.fn() }));
+const assertRateLimitMock = jest.fn();
+jest.mock('../../services/rateLimit', () => ({ assertRateLimit: (...a: unknown[]) => assertRateLimitMock(...a) }));
 
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET manquant');
 const token = (id = 'u1') => jwt.sign({ id, email: 'x@x.fr' }, process.env.JWT_SECRET!);
@@ -100,5 +102,49 @@ describe('POST /api/matches/:id/dispute', () => {
       .set('Authorization', `Bearer ${token()}`).send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});
+
+describe('POST /api/matches/:id/remind', () => {
+  const pending = {
+    status: 'PENDING',
+    players: [
+      { userId: 'u1', confirmation: 'CONFIRMED' },
+      { userId: 'u2', confirmation: 'PENDING' },
+      { userId: 'u3', confirmation: 'CONFIRMED' },
+      { userId: 'u4', confirmation: 'PENDING' },
+    ],
+  };
+  beforeEach(() => assertRateLimitMock.mockReset().mockResolvedValue(undefined));
+
+  it('401 sans token', async () => {
+    const res = await request(app).post('/api/matches/m1/remind');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 { reminded } pour un joueur du match', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pending as any);
+    const res = await request(app).post('/api/matches/m1/remind').set('Authorization', `Bearer ${token('u1')}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ reminded: 2 });
+  });
+
+  it('403 si non-joueur', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pending as any);
+    const res = await request(app).post('/api/matches/m1/remind').set('Authorization', `Bearer ${token('intrus')}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('409 si match non PENDING', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ ...pending, status: 'CONFIRMED' } as any);
+    const res = await request(app).post('/api/matches/m1/remind').set('Authorization', `Bearer ${token('u1')}`);
+    expect(res.status).toBe(409);
+  });
+
+  it('429 si rate-limited', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pending as any);
+    assertRateLimitMock.mockRejectedValue(new Error('RATE_LIMITED'));
+    const res = await request(app).post('/api/matches/m1/remind').set('Authorization', `Bearer ${token('u1')}`);
+    expect(res.status).toBe(429);
   });
 });

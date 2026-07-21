@@ -16,6 +16,11 @@ import {
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
+// Plafond d'affichage quand le calendrier est embarqué (page /decouvrir, `hideTitle`) : ce
+// n'est pas un flux exhaustif là-bas, contrairement à la page /tournois autonome (filtres +
+// « Effacer » restent le bon outil pour aller plus loin). Nombre pair pour la grille 2 colonnes.
+const MAX_VISIBLE = 10;
+
 // Clés propres à writeUrl (préservées à la lecture, purgées puis réécrites — le reste de la
 // query string de la page hôte, ex. ?tab=, doit survivre intact).
 const OWN_URL_KEYS = ['quand', 'du', 'au', 'dept', 'cat', 'genre', 'near'] as const;
@@ -167,11 +172,18 @@ export function TournamentFinder({
       : null),
     [locItems, state, now],
   );
+  // Embarqué (Découvrir) : grille plafonnée à MAX_VISIBLE — la page /tournois autonome
+  // reste un flux complet (results non tronqué).
+  const visibleResults = useMemo(
+    () => (results && hideTitle ? results.slice(0, MAX_VISIBLE) : results),
+    [results, hideTitle],
+  );
+
   // Vue cross-club : chip sport seulement si l'ensemble affiché couvre plusieurs sports.
-  const showSport = setSpansMultipleSports((results ?? []).map((r) => r.tournament.sport?.key));
+  const showSport = setSpansMultipleSports((visibleResults ?? []).map((r) => r.tournament.sport?.key));
 
   // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
-  useEffect(() => { if (results) onCount?.(results.length); }, [results?.length, onCount]);
+  useEffect(() => { if (visibleResults) onCount?.(visibleResults.length); }, [visibleResults?.length, onCount]);
 
   const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
   const hasActiveFilters = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
@@ -203,10 +215,16 @@ export function TournamentFinder({
         />
       )}
 
-      <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {results === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-        {results?.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+      {hideTitle && (
+        <style>{`.discover-tournaments-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:640px){.discover-tournaments-grid{grid-template-columns:1fr 1fr}}`}</style>
+      )}
+      <div
+        className={hideTitle ? 'discover-tournaments-grid' : undefined}
+        style={hideTitle ? { padding: '18px 20px 0', alignItems: 'start' } : { padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
+        {visibleResults?.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '18px 0 6px', ...(hideTitle ? { gridColumn: '1 / -1' } : {}) }}>
             <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
               {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
             </div>
@@ -220,7 +238,7 @@ export function TournamentFinder({
             )}
           </div>
         )}
-        {results?.map(({ tournament: t, distanceKm }) => {
+        {visibleResults?.map(({ tournament: t, distanceKm }) => {
           const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
           return (
             <AgendaCard

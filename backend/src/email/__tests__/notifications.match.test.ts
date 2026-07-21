@@ -4,7 +4,7 @@ import { prismaMock } from '../../__mocks__/prisma';
 const dispatchMock = jest.fn();
 jest.mock('../../services/notification/dispatcher', () => ({ dispatch: (...a: unknown[]) => dispatchMock(...a) }));
 
-import { notifyMatchPendingConfirmation, notifyReservationRefunded, notifyMatchResultPrompt } from '../notifications';
+import { notifyMatchPendingConfirmation, notifyMatchReminder, notifyReservationRefunded, notifyMatchResultPrompt } from '../notifications';
 
 const club = { id: 'club-1', name: 'Padel Arena', slug: 'arena', logoUrl: null, accentColor: '#d6ff3f', timezone: 'Europe/Paris' };
 
@@ -142,6 +142,37 @@ describe('notifyMatchResultPrompt → dispatch', () => {
       matches: [],
     } as any);
     await notifyMatchResultPrompt('resa-1');
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyMatchReminder → dispatch ciblé', () => {
+  beforeEach(() => dispatchMock.mockReset());
+
+  it('ne dispatch qu aux destinataires fournis, réutilise le type match.pending_confirmation', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({
+      id: 'match-1', sets: [[6, 4], [6, 3]], club,
+      createdByUserId: 'author-uid',
+      creator: { firstName: 'Paul', lastName: 'Martin' },
+      players: [
+        { userId: 'author-uid', user: { email: 'paul@x.fr', firstName: 'Paul' } },
+        { userId: 'player2', user: { email: 'alice@x.fr', firstName: 'Alice' } },
+        { userId: 'player3', user: { email: 'bob@x.fr', firstName: 'Bob' } },
+        { userId: 'player4', user: { email: 'carol@x.fr', firstName: 'Carol' } },
+      ],
+    } as any);
+
+    await notifyMatchReminder('match-1', ['player3']);
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'player3', category: 'MY_MATCHES', type: 'match.pending_confirmation',
+      email: expect.objectContaining({ to: 'bob@x.fr' }),
+    }));
+  });
+
+  it('ne fait rien si la liste de destinataires est vide', async () => {
+    await notifyMatchReminder('match-1', []);
     expect(dispatchMock).not.toHaveBeenCalled();
   });
 });

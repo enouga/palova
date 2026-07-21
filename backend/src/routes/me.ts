@@ -289,7 +289,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
             club: { select: { name: true } },
             sport: { select: { name: true } },
             reservation: { select: { resource: { select: { name: true } } } },
-            players: { select: { userId: true, team: true, user: { select: { firstName: true, lastName: true } } } },
+            players: { select: { userId: true, team: true, confirmation: true, user: { select: { firstName: true, lastName: true } } } },
             _count: { select: { comments: true } },
           },
         },
@@ -297,6 +297,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
     });
     res.json(rows.map((r) => ({
       matchId: r.match.id, status: r.match.status, sets: r.match.sets, playedAt: r.match.playedAt,
+      confirmDeadline: r.match.confirmDeadline,
       winningTeam: r.match.winningTeam, competitive: r.match.competitive, myTeam: r.team, myConfirmation: r.confirmation,
       ratingAfter: r.ratingAfter,
       needsMyConfirmation: r.match.status === 'PENDING' && r.confirmation === 'PENDING',
@@ -306,7 +307,7 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
       resource: r.match.reservation?.resource ? { name: r.match.reservation.resource.name } : null,
       players: r.match.players.map((p) => ({
         userId: p.userId, team: p.team, firstName: p.user.firstName, lastName: p.user.lastName,
-        isMe: p.userId === meId,
+        isMe: p.userId === meId, confirmation: p.confirmation,
       })),
       commentCount: r.match._count.comments,
     })));

@@ -6,8 +6,10 @@ import { useTheme } from '@/lib/ThemeProvider';
 // Pastille niveau compacte : « 4.2 » + point orange si provisoire. null → rien.
 export function LevelChip({ level, size = 'sm' }: { level: UserLevel | null | undefined; size?: 'xs' | 'sm' }) {
   const enabled = useLevelSystemEnabled();
-  if (!enabled || !level) return null;
+  // Hooks toujours appelés avant le return conditionnel (le niveau peut arriver en
+  // asynchrone sur une même instance — l'ordre des hooks ne doit pas en dépendre).
   const { th } = useTheme();
+  if (!enabled || !level) return null;
   const pad = size === 'xs' ? '1px 5px' : '2px 7px';
   const fs = size === 'xs' ? 10 : 11;
   return (

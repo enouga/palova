@@ -46,6 +46,7 @@ export function buildUpdateBody(c: ClubAdminDetail): UpdateClubBody {
     accentColor: c.accentColor, defaultThemeMode: c.defaultThemeMode,
     listedInDirectory: c.listedInDirectory,
     listTournamentsNationally: c.listTournamentsNationally,
+    listOpenMatchesNationally: c.listOpenMatchesNationally ?? false,
     showOffersPublicly: c.showOffersPublicly,
     levelSystemEnabled: c.levelSystemEnabled,
     publicBookingDays: Number(c.publicBookingDays), memberBookingDays: Number(c.memberBookingDays),

@@ -13,6 +13,10 @@ const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
   { value: 'all', label: '14 jours' },
 ];
 
+// Grille de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
+// rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
+const MAX_VISIBLE = 9;
+
 // Onglet « Parties » de la future page /decouvrir : grille de parties ouvertes nationales
 // (GET /api/open-matches/national, chargées par le parent) filtrées par période/localisation/
 // niveau et triées par distance. Pur côté données — `matches`/`location`/`coords`/`now`
@@ -52,7 +56,7 @@ export function DiscoverMatches({
   // calculé AVANT l'early return de chargement pour respecter les règles des hooks (le
   // useEffect ci-dessous doit être appelé à chaque rendu, jamais conditionnellement).
   const ranked = matches != null && now != null
-    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords)
+    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
     : null;
 
   useEffect(() => {

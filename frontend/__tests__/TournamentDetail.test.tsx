@@ -23,8 +23,8 @@ jest.mock('../components/tournament/MyRegistrationCard', () => ({
 jest.mock('../components/tournament/ProfileCompletion', () => ({
   ProfileCompletion: () => null,
 }));
-jest.mock('../components/tournament/PartnerSearch', () => ({
-  PartnerSearch: ({ onSelect }: { onSelect: (p: { id: string; firstName: string; lastName: string }) => void }) => (
+jest.mock('../components/tournament/PartnerField', () => ({
+  PartnerField: ({ onSelect }: { onSelect: (p: { id: string; firstName: string; lastName: string }) => void }) => (
     <button
       data-testid="select-partner"
       onClick={() => onSelect({ id: 'u2', firstName: 'Partner', lastName: 'User' })}

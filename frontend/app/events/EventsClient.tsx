@@ -124,7 +124,7 @@ export function EventsClient() {
           </div>
         )}
 
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: '18px 20px 0' }}>
           {items === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
           {items?.length === 0 && (
             hasActive ? (
@@ -144,64 +144,72 @@ export function EventsClient() {
               <div style={{ fontFamily: th.fontUI, color: th.textMute }}>Rien de prévu pour le moment.</div>
             )
           )}
-          {items?.map((item) => {
-            if (item.source === 'tournament') {
-              return (
-                <AgendaCard
-                  key={`tournament-${item.tournament.id}`}
-                  icon="trophy"
-                  accent={ACCENTS.apricot}
-                  tag={`${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}`}
-                  title={item.tournament.name}
-                  dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
-                  deadline={item.tournament.registrationDeadline}
-                  now={now}
-                  ratio={fillRatio(item.tournament)}
-                  places={tournamentPlacesLabel(item.tournament)}
-                  extra={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
-                  sportLabel={multiSport ? (item.tournament.sport?.name ?? null) : null}
-                  onClick={() => router.push(`/tournois/${item.tournament.id}`)}
-                />
-              );
-            }
-            if (item.source === 'event') {
-              return (
-                <AgendaCard
-                  key={`event-${item.event.id}`}
-                  icon="bolt"
-                  accent={ACCENTS.violet}
-                  tag={KIND_LABEL[item.event.kind]}
-                  title={item.event.name}
-                  dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
-                  deadline={item.event.registrationDeadline}
-                  now={now}
-                  ratio={fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
-                  places={eventPlacesLabel(item.event)}
-                  extra={[item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
-                  sportLabel={multiSport ? (item.event.sport?.name ?? null) : null}
-                  onClick={() => router.push(`/events/${item.event.id}`)}
-                />
-              );
-            }
-            // source === 'lesson'
-            return (
-              <AgendaCard
-                key={`lesson-${item.lesson.id}`}
-                icon="user"
-                accent={ACCENTS.blue}
-                tag={lessonKindLabel(item.lesson.lessonKind)}
-                title={item.lesson.series?.title ?? 'Cours'}
-                dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
-                deadline={item.startTime}
-                now={now}
-                ratio={fillRatioLesson(item.lesson.confirmedCount, item.lesson.capacity)}
-                places={{ text: `${item.lesson.confirmedCount} / ${item.lesson.capacity} inscrits`, urgent: item.lesson.confirmedCount >= item.lesson.capacity }}
-                extra={`Coach : ${item.lesson.coach.name}`}
-                sportLabel={multiSport ? (item.lesson.sport?.name ?? null) : null}
-                onClick={() => router.push(`/cours/${item.lesson.id}`)}
-              />
-            );
-          })}
+          {items && items.length > 0 && (
+            <>
+              {/* Grille CSS pure : 1 colonne en mobile, 2 colonnes ≥ 700px (pattern .ch-grid du Club-house). */}
+              <style>{`.ev-grid{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}@media(min-width:700px){.ev-grid{grid-template-columns:1fr 1fr}}`}</style>
+              <div className="ev-grid">
+                {items.map((item) => {
+                  if (item.source === 'tournament') {
+                    return (
+                      <AgendaCard
+                        key={`tournament-${item.tournament.id}`}
+                        icon="trophy"
+                        accent={ACCENTS.apricot}
+                        tag={`${item.tournament.category} · ${GENDER_LABEL[item.tournament.gender]}`}
+                        title={item.tournament.name}
+                        dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
+                        deadline={item.tournament.registrationDeadline}
+                        now={now}
+                        ratio={fillRatio(item.tournament)}
+                        places={tournamentPlacesLabel(item.tournament)}
+                        extra={item.tournament.entryFee ? `${item.tournament.entryFee} €` : null}
+                        sportLabel={multiSport ? (item.tournament.sport?.name ?? null) : null}
+                        onClick={() => router.push(`/tournois/${item.tournament.id}`)}
+                      />
+                    );
+                  }
+                  if (item.source === 'event') {
+                    return (
+                      <AgendaCard
+                        key={`event-${item.event.id}`}
+                        icon="bolt"
+                        accent={ACCENTS.violet}
+                        tag={KIND_LABEL[item.event.kind]}
+                        title={item.event.name}
+                        dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
+                        deadline={item.event.registrationDeadline}
+                        now={now}
+                        ratio={fillRatio({ confirmedCount: item.event.confirmedCount, maxTeams: item.event.capacity })}
+                        places={eventPlacesLabel(item.event)}
+                        extra={[item.event.price != null && Number(item.event.price) > 0 ? `${Number(item.event.price)} €` : null, item.event.memberOnly ? 'Membres' : null].filter(Boolean).join(' · ') || null}
+                        sportLabel={multiSport ? (item.event.sport?.name ?? null) : null}
+                        onClick={() => router.push(`/events/${item.event.id}`)}
+                      />
+                    );
+                  }
+                  // source === 'lesson'
+                  return (
+                    <AgendaCard
+                      key={`lesson-${item.lesson.id}`}
+                      icon="user"
+                      accent={ACCENTS.blue}
+                      tag={lessonKindLabel(item.lesson.lessonKind)}
+                      title={item.lesson.series?.title ?? 'Cours'}
+                      dateLabel={formatDateTimeRange(item.startTime, item.endTime, club.timezone)}
+                      deadline={item.startTime}
+                      now={now}
+                      ratio={fillRatioLesson(item.lesson.confirmedCount, item.lesson.capacity)}
+                      places={{ text: `${item.lesson.confirmedCount} / ${item.lesson.capacity} inscrits`, urgent: item.lesson.confirmedCount >= item.lesson.capacity }}
+                      extra={`Coach : ${item.lesson.coach.name}`}
+                      sportLabel={multiSport ? (item.lesson.sport?.name ?? null) : null}
+                      onClick={() => router.push(`/cours/${item.lesson.id}`)}
+                    />
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Screen>

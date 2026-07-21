@@ -182,7 +182,8 @@ export class OpenMatchService {
 
   /**
    * Agrégat public de la vitrine palova.fr : parties ouvertes padel à venir (14 jours)
-   * des clubs ACTIVE listés dans l'annuaire, jamais pleines (la vitrine vend des places
+   * des clubs ACTIVE ayant opté pour la publication nationale de leurs parties
+   * (`listOpenMatchesNationally`), jamais pleines (la vitrine vend des places
    * à prendre). Miroir du calendrier national des tournois — la projection `club`
    * (slug/timezone/couleur/lat/lng) permet le lien cross-sous-domaine, la date au bon
    * fuseau et le tri/filtre par distance côté page /decouvrir.
@@ -195,7 +196,7 @@ export class OpenMatchService {
         visibility: 'PUBLIC',
         status: 'CONFIRMED',
         startTime: { gt: now, lte: horizon },
-        resource: { club: { status: 'ACTIVE', listedInDirectory: true }, clubSport: { sport: { key: 'padel' } } },
+        resource: { club: { status: 'ACTIVE', listOpenMatchesNationally: true }, clubSport: { sport: { key: 'padel' } } },
       },
       orderBy: { startTime: 'asc' },
       take: 120,

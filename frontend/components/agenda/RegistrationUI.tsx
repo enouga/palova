@@ -41,8 +41,8 @@ export function RegistrationStatus({ confirmed, waitlistPos, subtitle }: { confi
         <Icon name={confirmed ? 'check' : 'clock'} size={21} color={tint} />
       </span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: th.fontUI, fontSize: 15, fontWeight: 700, color: th.text, lineHeight: 1.25 }}>{title}</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 1 }}>{sub}</div>
+        <div style={{ fontFamily: th.fontDisplay, fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: th.text, lineHeight: 1.25 }}>{title}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{sub}</div>
       </div>
     </div>
   );

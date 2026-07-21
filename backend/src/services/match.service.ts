@@ -7,11 +7,12 @@ import {
   DEFAULT_RD, DEFAULT_VOLATILITY, SKIP_DEFAULT_LEVEL,
   isProvisional, levelToRating, ratingToLevel,
 } from './rating/level';
-import { notifyMatchPendingConfirmation, notifyNewMatchComment } from '../email/notifications';
+import { notifyMatchPendingConfirmation, notifyNewMatchComment, notifyMatchReminder } from '../email/notifications';
 import { recomputeSportRatings } from './rating/recompute';
 import { effectiveTeams } from './matchTeams';
 import { playerCount } from '../utils/courtType';
 import { serializableTx } from '../db/serializable';
+import { assertRateLimit } from './rateLimit';
 
 const CONFIRM_WINDOW_HOURS = 72;
 
@@ -257,6 +258,30 @@ export class MatchService {
       catch (err) { console.error(`[match] auto-validation ${m.id} échouée:`, (err as Error).message); }
     }
     return done;
+  }
+
+  /**
+   * Relance MANUELLE des joueurs qui n'ont pas encore validé un match PENDING. Ouvert à tout
+   * joueur du match ; ne notifie que les joueurs encore en attente, hors l'émetteur ; anti-spam
+   * 1 relance / 12 h PAR MATCH (fail-open si Redis KO).
+   */
+  async remind(matchId: string, byUserId: string): Promise<{ reminded: number }> {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: { status: true, players: { select: { userId: true, confirmation: true } } },
+    });
+    if (!match) throw new Error('MATCH_NOT_FOUND');
+    if (!match.players.some((p) => p.userId === byUserId)) throw new Error('NOT_A_MATCH_PLAYER');
+    if (match.status !== 'PENDING') throw new Error('MATCH_NOT_PENDING');
+
+    const recipients = match.players
+      .filter((p) => p.confirmation === 'PENDING' && p.userId !== byUserId)
+      .map((p) => p.userId);
+    if (recipients.length === 0) return { reminded: 0 };
+
+    await assertRateLimit('match:remind', matchId, 1, 12 * 3600);
+    this.safeNotify(() => notifyMatchReminder(matchId, recipients));
+    return { reminded: recipients.length };
   }
 
   /** Résolution staff d'un litige (scopée au club). VALIDATE (avec sets corrigés optionnels) ou CANCEL. */

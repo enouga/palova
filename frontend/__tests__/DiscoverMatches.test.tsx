@@ -190,6 +190,16 @@ describe('DiscoverMatches', () => {
     expect(onSeeClubs).toHaveBeenCalledTimes(1);
   });
 
+  it('plafonne l’affichage à 9 cartes même avec plus de parties disponibles', async () => {
+    const onCount = jest.fn();
+    const many = Array.from({ length: 15 }, (_, i) =>
+      makeMatch({ id: `m${i}`, club: { ...makeMatch().club, name: `Club ${i}` } }),
+    );
+    wrap({ matches: many, onCount });
+    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(9));
+    expect(screen.getAllByRole('link')).toHaveLength(9);
+  });
+
   it('matches null → Chargement…', () => {
     wrap({ matches: null });
     expect(screen.getByText('Chargement…')).toBeInTheDocument();

@@ -13,6 +13,7 @@ jest.mock('@/lib/api', () => ({
     getMyClubs: jest.fn().mockResolvedValue([]),
     updateNotificationPreferences: jest.fn().mockResolvedValue({ ok: true }),
     getMyProfile: jest.fn().mockResolvedValue({ id: 'u1', firstName: 'Test', lastName: 'User', email: 't@x.fr', avatarUrl: null }),
+    getMyMemberships: jest.fn().mockResolvedValue([]),
   },
   assetUrl: (u: string | null) => u,
 }));

@@ -14,7 +14,7 @@ import { Icon } from '@/components/ui/Icon';
 export const FILTER_TINTS = {
   quand: ACCENTS.emerald,        // « Quand » (Events, calendrier national, Découvrir)
   categorie: ACCENTS.violet,     // « Catégorie » (Events, calendrier national)
-  genre: ACCENTS.cyan,           // « Genre » (Events, calendrier national)
+  genre: '#9aa8c2',              // « Genre » (Events, calendrier national) — ardoise, choisie par Eric parmi 6 pistes comparées (cyan trop flashy, rose trop proche du violet, or mat trop sombre, miel/terracotta écartés)
   niveau: ACCENTS.blue,          // « Niveau » (Parties, Découvrir)
   typePartie: ACCENTS.coral,     // « Type de partie » (Parties)
   source: ACCENTS.apricot,       // « Source » (Events)

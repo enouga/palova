@@ -1,13 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, assetUrl, MemberPackage, MyClubMembership, MyProfile, Subscription } from '@/lib/api';
+import { api, assetUrl, MemberPackage, MyClubMembership, MyProfile, PlayerMembership, Subscription } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { Theme } from '@/lib/theme';
 import { useAuth, logout } from '@/lib/useAuth';
 import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { useClub } from '@/lib/ClubProvider';
-import { platformUrl } from '@/lib/clubUrl';
+import { clubUrl, platformUrl } from '@/lib/clubUrl';
+import { hardNavigate } from '@/lib/nav';
 import { packageLabel, isUsable } from '@/lib/packages';
 import { sportTag } from '@/lib/sportBadge';
 import { Icon, IconName } from '@/components/ui/Icon';
@@ -36,6 +37,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [isCoach, setIsCoach] = useState(false);
   const [isReferee, setIsReferee] = useState(false);
+  const [myClubs, setMyClubs] = useState<PlayerMembership[]>([]);
   const { state: installState, promptInstall } = useInstallPrompt();
   const [installHelp, setInstallHelp] = useState(false);
 
@@ -60,6 +62,9 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
       } else {
         setMembership(null);
       }
+      // Clubs dont je suis membre joueur (tous hôtes confondus) — pour naviguer vers un club
+      // depuis n'importe où, y compris l'hôte plateforme où aucun autre lien ne le permet.
+      api.getMyMemberships(token).then(setMyClubs).catch(() => {});
     }
     setOpen(!open);
   };
@@ -77,6 +82,8 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
   if (!ready || !token) return null;
 
   const isMember = membership !== undefined && membership !== null;
+  // Exclut le club courant (déjà « ici ») et les adhésions BLOCKED (rien à y faire).
+  const otherClubs = myClubs.filter((m) => m.status === 'ACTIVE' && m.slug !== slug);
   const incomplete = profile != null && (!profile.phone || !profile.sex || (isMember && !membership.membershipNo));
   const soldes = packages.filter((p) => isUsable(p));
   const avatarSrc = assetUrl(profile?.avatarUrl ?? null);
@@ -131,6 +138,28 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
             </div>
             {isMember && membership.isSubscriber && <Chip tone="accent" icon="check">Abonné</Chip>}
           </div>
+
+          {/* Clubs dont je suis membre — navigation directe vers leur sous-domaine, y compris
+              depuis l'hôte plateforme (/decouvrir) où aucun autre lien n'y ramène. */}
+          {otherClubs.length > 0 && (
+            <div style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 4 }}>
+              <div style={sectionTitle}>Mes clubs</div>
+              {otherClubs.map((m) => (
+                <button key={m.clubId} role="menuitem"
+                  onClick={() => { setOpen(false); hardNavigate(clubUrl(m.slug)); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = th.surface2)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%', boxSizing: 'border-box',
+                    border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left',
+                    padding: '8px 16px', fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text,
+                  }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: m.club.accentColor, flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.club.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Soldes prépayés du club courant */}
           {soldes.length > 0 && (

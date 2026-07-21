@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, ClubSummary, Sport } from '@/lib/api';
 import { COVER_PHOTOS } from '@/lib/clubCover';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -12,7 +12,7 @@ import { ClubCard } from '@/components/ClubCard';
 // Mode contrôlé (props city/coords, ex. future page /decouvrir) : la page porte une barre de
 // localisation PARTAGÉE (ville + géoloc) au-dessus — le composant masque alors ses propres
 // contrôles de localisation et se contente d'appliquer city/coords reçus comme filtre.
-export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, onCount }: { city?: string; coords?: { lat: number; lng: number } | null; deptCodes?: string[]; onCount?: (n: number) => void } = {}) {
+export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, onlySlugs, onCount }: { city?: string; coords?: { lat: number; lng: number } | null; deptCodes?: string[]; onlySlugs?: Set<string> | null; onCount?: (n: number) => void } = {}) {
   const { th } = useTheme();
   const { token } = useAuth();
   const [sports, setSports] = useState<Sport[]>([]);
@@ -53,10 +53,18 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
     finally { setLoading(false); }
   }, [q, effCity, effCoords, sport, deptCodes?.join(',')]);
 
+  // Rétrécit les clubs déjà chargés par slug (filtre « Mes clubs » posé par /decouvrir) —
+  // purement côté client, `onlySlugs` reste hors des deps de `load()` : basculer le filtre ne
+  // redéclenche jamais `listClubs`.
+  const visibleClubs = useMemo(
+    () => (onlySlugs ? clubs.filter((c) => onlySlugs.has(c.slug)) : clubs),
+    [clubs, onlySlugs],
+  );
+
   // Notifie le parent du nombre de clubs affichés — effet DÉDIÉ, découplé de `load` (dont
   // l'identité pilote le debounce de fetch) pour qu'un changement d'identité de `onCount`
-  // ne relance jamais le fetch. `clubs` reflète déjà le résultat (y compris `[]` sur erreur).
-  useEffect(() => { onCount?.(clubs.length); }, [clubs.length, onCount]);
+  // ne relance jamais le fetch. `visibleClubs` reflète déjà le résultat (y compris `[]` sur erreur).
+  useEffect(() => { onCount?.(visibleClubs.length); }, [visibleClubs.length, onCount]);
 
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
@@ -105,20 +113,21 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
       </div>
 
       {/* résultats */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px 20px 0' }}>
+      <style>{`.discover-clubs-grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:640px){.discover-clubs-grid{grid-template-columns:1fr 1fr}}`}</style>
+      <div className="discover-clubs-grid" style={{ padding: '20px 20px 0', alignItems: 'start' }}>
         {loading ? (
-          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : error ? (
-          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
             Impossible de charger les clubs pour le moment.
             <div style={{ marginTop: 10 }}>
               <button onClick={load} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '8px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>Réessayer</button>
             </div>
           </div>
-        ) : clubs.length === 0 ? (
-          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
+        ) : visibleClubs.length === 0 ? (
+          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
-          clubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)
+          visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)
         )}
       </div>
     </>

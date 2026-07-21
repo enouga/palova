@@ -7,49 +7,69 @@ import { ACCENTS } from '@/lib/theme';
 // fixes (elle vit sur la brume — identique clair/sombre), épingle accent, bouton « Autour de
 // moi » en encre. Posée à cheval sur le bord bas du hero (margin-top négatif). Contrôlée par le
 // parent : la vitrine navigue au submit, /decouvrir filtre en direct (onSubmit omis).
-const PILL_INK = '#1b2a3f';
+export const PILL_INK = '#1b2a3f';
 
-export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearActive, locating }: {
+export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearActive, locating, extra }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit?: () => void;
   onNearMe: () => void;
   nearActive: boolean;
   locating: boolean;
+  /** Bouton additionnel inséré dans la pilule, avant « Autour de moi » (ex. toggle « Mes clubs »
+   * sur /decouvrir) — absent ailleurs (vitrine), la pilule reste inchangée. */
+  extra?: React.ReactNode;
 }) {
   const { th } = useTheme();
   const [focused, setFocused] = useState(false);
   return (
     <div style={{ display: 'flex', justifyContent: 'center', margin: '-29px 20px 0', position: 'relative', zIndex: 3 }}>
+      {/* En dessous de 480px, la pilule passe en 2 lignes (recherche puis actions) — sans ça,
+          un `extra` (ex. toggle « Mes clubs ») réduit l'input à ~40px, illisible. */}
+      <style>{`
+        .loc-pill { flex-wrap: nowrap; }
+        .loc-pill-actions { flex-shrink: 0; }
+        @media (max-width: 480px) {
+          .loc-pill { flex-wrap: wrap; height: auto !important; padding: 14px 14px 12px !important; border-radius: 22px !important; }
+          .loc-pill-main { flex-basis: 100%; }
+          .loc-pill-actions { flex-basis: 100%; justify-content: flex-end; margin-top: 8px; }
+        }
+      `}</style>
       <div
+        className="loc-pill"
         style={{
           display: 'flex', alignItems: 'center', gap: 10, width: 'min(640px, 100%)', height: 58,
           background: '#ffffff', borderRadius: 999, padding: '8px 8px 8px 18px',
           boxShadow: `0 2px 6px rgba(27,42,63,.08), 0 18px 44px rgba(27,42,63,.22)${focused ? `, 0 0 0 3px ${ACCENTS.blue}55` : ''}`,
         }}
       >
-        <svg aria-hidden="true" width="18" height="22" viewBox="0 0 16 22" style={{ flexShrink: 0 }}>
-          <path fill={ACCENTS.blue} d="M8 0C3.6 0 0 3.6 0 8c0 5.2 8 14 8 14s8-8.8 8-14c0-4.4-3.6-8-8-8z" />
-          <circle fill="#fff" cx="8" cy="8" r="3" />
-        </svg>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onSubmit?.(); }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder="Ville, code postal ou département"
-          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
-            fontFamily: th.fontUI, fontSize: 15, color: PILL_INK }}
-        />
-        <button
-          onClick={onNearMe}
-          style={{ flexShrink: 0, border: 'none', cursor: 'pointer', height: 42, borderRadius: 999,
-            background: PILL_INK, color: '#f4f6fa', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
-            padding: '0 18px', whiteSpace: 'nowrap' }}
-        >
-          {locating ? 'Localisation…' : nearActive ? 'Autour de moi ✓' : 'Autour de moi'}
-        </button>
+        <div className="loc-pill-main" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+          <svg aria-hidden="true" width="18" height="22" viewBox="0 0 16 22" style={{ flexShrink: 0 }}>
+            <path fill={ACCENTS.blue} d="M8 0C3.6 0 0 3.6 0 8c0 5.2 8 14 8 14s8-8.8 8-14c0-4.4-3.6-8-8-8z" />
+            <circle fill="#fff" cx="8" cy="8" r="3" />
+          </svg>
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onSubmit?.(); }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Ville, code postal ou département"
+            style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
+              fontFamily: th.fontUI, fontSize: 15, color: PILL_INK }}
+          />
+        </div>
+        <div className="loc-pill-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {extra}
+          <button
+            onClick={onNearMe}
+            style={{ flexShrink: 0, border: 'none', cursor: 'pointer', height: 42, borderRadius: 999,
+              background: PILL_INK, color: '#f4f6fa', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
+              padding: '0 18px', whiteSpace: 'nowrap' }}
+          >
+            {locating ? 'Localisation…' : nearActive ? 'Autour de moi ✓' : 'Autour de moi'}
+          </button>
+        </div>
       </div>
     </div>
   );

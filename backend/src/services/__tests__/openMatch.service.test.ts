@@ -865,7 +865,7 @@ describe('OpenMatchService', () => {
     });
     const player = (userId: string) => ({ userId, isOrganizer: userId === 'org', team: null, slot: null, user: { firstName: 'P', lastName: userId, avatarUrl: null } });
 
-    it('filtre PUBLIC/CONFIRMED/padel + club ACTIVE listé dans l\'annuaire, fenêtre 14 jours', async () => {
+    it('filtre PUBLIC/CONFIRMED/padel + club ACTIVE opt-in parties nationales, fenêtre 14 jours', async () => {
       prismaMock.reservation.findMany.mockResolvedValue([row('m1', [player('org')])] as any);
 
       const out = await service.listNationalOpenMatches();
@@ -873,7 +873,7 @@ describe('OpenMatchService', () => {
       const args = (prismaMock.reservation.findMany as jest.Mock).mock.calls[0][0];
       expect(args.where).toEqual(expect.objectContaining({
         visibility: 'PUBLIC', status: 'CONFIRMED',
-        resource: { club: { status: 'ACTIVE', listedInDirectory: true }, clubSport: { sport: { key: 'padel' } } },
+        resource: { club: { status: 'ACTIVE', listOpenMatchesNationally: true }, clubSport: { sport: { key: 'padel' } } },
       }));
       expect(args.where.startTime.gt).toBeInstanceOf(Date);
       expect(args.where.startTime.lte).toBeInstanceOf(Date);

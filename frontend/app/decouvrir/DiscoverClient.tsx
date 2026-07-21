@@ -1,21 +1,24 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, NationalOpenMatch, NationalTournament } from '@/lib/api';
+import { api, NationalOpenMatch, NationalTournament, PlayerMembership } from '@/lib/api';
 import { useClub } from '@/lib/ClubProvider';
+import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { hardNavigate } from '@/lib/nav';
 import { platformUrl } from '@/lib/clubUrl';
 import { parseLocationQuery } from '@/lib/discover';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, MyBookingsButton, ThemeToggle } from '@/components/ui/atoms';
+import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
+import { Icon } from '@/components/ui/Icon';
+import { ACCENTS } from '@/lib/theme';
 import { DiscoverAnchors } from '@/components/discover/DiscoverAnchors';
 import { DiscoverMatches } from '@/components/discover/DiscoverMatches';
 import { TournamentFinder } from '@/components/calendar/TournamentFinder';
 import { ClubDirectory } from '@/components/ClubDirectory';
 import { HERO_GRADIENT, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
 import { FranceDotsMap } from '@/components/platform/FranceDotsMap';
-import { LocationSearchPill } from '@/components/discover/LocationSearchPill';
+import { LocationSearchPill, PILL_INK } from '@/components/discover/LocationSearchPill';
 
 const SECTION_IDS = ['parties', 'tournois', 'clubs'] as const;
 type SectionId = (typeof SECTION_IDS)[number];
@@ -27,6 +30,7 @@ type SectionId = (typeof SECTION_IDS)[number];
 export function DiscoverClient() {
   const { th } = useTheme();
   const { slug } = useClub();
+  const { token } = useAuth();
 
   const [locInput, setLocInput] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -36,6 +40,8 @@ export function DiscoverClient() {
   const [matches, setMatches] = useState<NationalOpenMatch[] | null>(null);
   const [tournaments, setTournaments] = useState<NationalTournament[] | null>(null);
   const [now, setNow] = useState<Date | null>(null);
+  const [memberships, setMemberships] = useState<PlayerMembership[] | null>(null);
+  const [mineOnly, setMineOnly] = useState(false);
 
   // Compteurs remontés par chaque section (items actuellement affichés).
   const [counts, setCounts] = useState<Record<SectionId, number | null>>({ parties: null, tournois: null, clubs: null });
@@ -67,6 +73,32 @@ export function DiscoverClient() {
     api.listNationalOpenMatches().then(setMatches).catch(() => setMatches([]));
     api.listNationalTournaments().then(setTournaments).catch(() => setTournaments([]));
   }, [slug]);
+
+  useEffect(() => {
+    if (slug) return;
+    if (!token) { setMemberships(null); return; }
+    api.getMyMemberships(token).then(setMemberships).catch(() => setMemberships([]));
+  }, [slug, token]);
+
+  // Adhésions ACTIVE seulement — le backend renvoie aussi les BLOCKED sans les filtrer, un
+  // membre bloqué ne compte pas comme « son » club pour ce filtre.
+  const myClubSlugs = useMemo(
+    () => new Set((memberships ?? []).filter((m) => m.status === 'ACTIVE').map((m) => m.club.slug)),
+    [memberships],
+  );
+  // Mirroir du chip « À mon niveau » de DiscoverMatches : pas de toggle mort pour un joueur
+  // non connecté ou sans adhésion active.
+  const myClubsChipVisible = Boolean(token) && myClubSlugs.size > 0;
+  const myClubsActive = myClubsChipVisible && mineOnly;
+
+  const filteredMatches = useMemo(
+    () => (myClubsActive && matches ? matches.filter((m) => myClubSlugs.has(m.club.slug)) : matches),
+    [matches, myClubsActive, myClubSlugs],
+  );
+  const filteredTournaments = useMemo(
+    () => (myClubsActive && tournaments ? tournaments.filter((t) => myClubSlugs.has(t.club.slug)) : tournaments),
+    [tournaments, myClubsActive, myClubSlugs],
+  );
 
   // Deep-links posés par le hero de la vitrine : ?q= préremplit la recherche, ?pres=1 lance la
   // géoloc à l'arrivée. Lus une fois au montage (même idiome que le hash plus bas).
@@ -127,7 +159,6 @@ export function DiscoverClient() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Logotype size={22} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <MyBookingsButton />
               <ThemeToggle />
               <ProfileMenu />
             </div>
@@ -144,7 +175,17 @@ export function DiscoverClient() {
             </div>
           </div>
           <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
-            nearActive={!!coords} locating={geoState === 'locating'} />
+            nearActive={!!coords} locating={geoState === 'locating'}
+            extra={myClubsChipVisible && (
+              <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
+                aria-label="Mes clubs" title="Mes clubs" style={{
+                  flexShrink: 0, border: 'none', cursor: 'pointer', width: 42, height: 42, borderRadius: 999,
+                  background: mineOnly ? ACCENTS.blue : '#eef1f6',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                <Icon name="home" size={18} color={mineOnly ? '#ffffff' : PILL_INK} />
+              </button>
+            )} />
           {geoState === 'denied' && (
             <div style={{ textAlign: 'center', marginTop: 8, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
               Localisation indisponible — cherchez par ville ou département.
@@ -166,7 +207,7 @@ export function DiscoverClient() {
           <div style={{ padding: '0 20px' }}>
             <div style={kickStyle}>{tick}Parties ouvertes</div>
             <h2 style={titleStyle}>Ça joue bientôt</h2>
-            <DiscoverMatches matches={matches} location={location} coords={coords} now={now}
+            <DiscoverMatches matches={filteredMatches} location={location} coords={coords} now={now}
               onSeeClubs={() => jumpTo('clubs')} onCount={onCountParties} />
           </div>
         </section>
@@ -176,7 +217,7 @@ export function DiscoverClient() {
             <div style={kickStyle}>{tick}Compétition</div>
             <h2 style={titleStyle}>Tournois</h2>
           </div>
-          <TournamentFinder hideTitle items={tournaments} coords={coords}
+          <TournamentFinder hideTitle items={filteredTournaments} coords={coords}
             city={location.city ?? ''} deptCodes={location.deptCodes} onCount={onCountTournois} />
         </section>
 
@@ -185,7 +226,8 @@ export function DiscoverClient() {
             <div style={kickStyle}>{tick}Annuaire</div>
             <h2 style={titleStyle}>Clubs</h2>
           </div>
-          <ClubDirectory city={location.city ?? ''} coords={coords} deptCodes={location.deptCodes} onCount={onCountClubs} />
+          <ClubDirectory city={location.city ?? ''} coords={coords} deptCodes={location.deptCodes}
+            onlySlugs={myClubsActive ? myClubSlugs : null} onCount={onCountClubs} />
         </section>
       </div>
     </Screen>

@@ -1753,6 +1753,7 @@ export interface ClubAdminDetail {
   status: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  listOpenMatchesNationally?: boolean; // additif (parties ouvertes sur la vitrine palova.fr)
   showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
@@ -1865,6 +1866,7 @@ export type UpdateClubBody = Partial<{
   defaultThemeMode: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  listOpenMatchesNationally: boolean;
   showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;

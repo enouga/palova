@@ -1325,6 +1325,50 @@ export async function notifyMatchPendingConfirmation(matchId: string): Promise<v
 }
 
 /**
+ * Relance MANUELLE : renvoie aux destinataires fournis (joueurs encore en attente, hors
+ * l'émetteur) la demande de confirmation du résultat. Réutilise l'email `match.pending_confirmation`
+ * (pas de nouveau type). PAS de coalescing : une relance doit toujours repartir.
+ * Peut lever (DB/SMTP) ; l'appelant (match.service) enveloppe en best-effort.
+ */
+export async function notifyMatchReminder(matchId: string, recipientUserIds: string[]): Promise<void> {
+  if (recipientUserIds.length === 0) return;
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      club: { select: EMAIL_CLUB_SELECT },
+      creator: { select: { firstName: true, lastName: true } },
+      players: { select: { userId: true, user: { select: { email: true, firstName: true } } } },
+    },
+  });
+  if (!match) return;
+
+  const targets = new Set(recipientUserIds);
+  const scoreLine = setsToScoreLine(match.sets);
+  const brand = brandFromClub(match.club);
+  const matchUrl = clubAppUrl(match.club.slug, '/me/matches');
+  const authorName = fullName(match.creator);
+  const override = await emailTemplates.getOverride(match.club.id, 'match.pending_confirmation');
+
+  for (const mp of match.players) {
+    if (!targets.has(mp.userId)) continue;
+    if (!mp.user.email) continue;
+    const mail = renderClubEmail('match.pending_confirmation', {
+      prenom: mp.user.firstName, auteur: authorName, score: scoreLine, lien: matchUrl,
+    }, brand, override);
+    await dispatch({
+      userId: mp.userId,
+      clubId: match.club.id,
+      category: 'MY_MATCHES',
+      type: 'match.pending_confirmation',
+      title: 'Rappel : confirme le résultat',
+      body: `Rappel — ${authorName} attend ta validation du score (${scoreLine}).`,
+      url: matchUrl,
+      email: { to: mp.user.email, subject: mail.subject, html: mail.html, text: mail.text },
+    });
+  }
+}
+
+/**
  * Invite chacun des 4 joueurs à saisir le résultat après un match padel joué.
  * Cloche + push seulement (pas d'email → pas de type dans le registre).
  * Re-vérifie les gardes ; ne fait rien si un Match non annulé existe déjà pour la résa
