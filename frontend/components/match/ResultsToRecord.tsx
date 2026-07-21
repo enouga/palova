@@ -87,7 +87,7 @@ export function ResultsToRecord({ token, clubSlug, onRecorded }: {
                 </div>
               </div>
 
-              {m.competitive === false && <Chip tone="line">Amicale</Chip>}
+              {m.competitive === false && <Chip tone="line">Pour le fun</Chip>}
 
               <button type="button" onClick={() => setRecordingFor(m)} style={{
                 flexShrink: 0, border: 'none', cursor: 'pointer', borderRadius: 99,
