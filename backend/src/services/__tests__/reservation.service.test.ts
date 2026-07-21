@@ -3132,6 +3132,45 @@ describe('ReservationService', () => {
         service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE' }),
       ).resolves.toMatchObject({ id: 'res-1' });
     });
+
+    it('écrit matchGender quand PUBLIC + padel (organisatrice femme)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.user.findMany.mockResolvedValue([{ id: 'user-1', sex: 'FEMALE' }] as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', { visibility: 'PUBLIC', matchGender: 'WOMEN' });
+
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ matchGender: 'WOMEN' }),
+      }));
+    });
+
+    it('Féminine : organisateur homme refusé (GENDER_PARTICIPANTS_CONFLICT)', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      prismaMock.user.findMany.mockResolvedValue([{ id: 'user-1', sex: 'MALE' }] as any);
+
+      await expect(service.applyHoldSetup('res-1', 'user-1', { visibility: 'PUBLIC', matchGender: 'WOMEN' }))
+        .rejects.toThrow('GENDER_PARTICIPANTS_CONFLICT');
+    });
+
+    it('PRIVATE : matchGender forcé à null', async () => {
+      prismaMock.reservation.findUnique.mockResolvedValue(baseReservation as any);
+      const tx = {
+        reservationParticipant: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        reservation: { update: jest.fn().mockResolvedValue({ id: 'res-1' }) },
+      };
+      (prismaMock.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+      await service.applyHoldSetup('res-1', 'user-1', { visibility: 'PRIVATE', matchGender: 'WOMEN' });
+
+      expect(tx.reservation.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ matchGender: null }),
+      }));
+    });
   });
 });
 

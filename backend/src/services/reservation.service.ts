@@ -20,7 +20,7 @@ import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { invalidateClubAvailability } from './availabilityCache';
 import { sportHasLevels } from './rating/level';
-import { effectiveTeams, applyTeams } from './matchTeams';
+import { effectiveTeams, applyTeams, assertRosterGender, type OpenMatchGenderValue } from './matchTeams';
 import { serializableTx } from '../db/serializable';
 
 interface HoldSlotParams {
@@ -344,6 +344,7 @@ export class ReservationService {
       teams?: Record<string, number>;
       slots?: Record<string, number>;
       competitive?: boolean;
+      matchGender?: OpenMatchGenderValue | null;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -376,6 +377,20 @@ export class ReservationService {
     // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel :
     // hors padel, on ignore toute fourchette demandée.
     const levelOk = sportHasLevels(reservation.resource.clubSport?.sport?.key);
+
+    // Genre : conservé uniquement en PUBLIC + padel (comme la fourchette de niveau).
+    // À la création on valide que le roster (organisateur + partenaires) satisfait la
+    // contrainte (Féminine ⇒ tous FEMALE ; Mixte ⇒ sexes renseignés).
+    const genderOk = setup.visibility === 'PUBLIC' && levelOk;
+    const matchGender: OpenMatchGenderValue | null = genderOk ? (setup.matchGender ?? null) : null;
+    if (matchGender) {
+      const rosterIds = [userId, ...partners];
+      const rosterUsers = await prisma.user.findMany({ where: { id: { in: rosterIds } }, select: { id: true, sex: true } });
+      const sexById = new Map(rosterUsers.map((u) => [u.id, u.sex]));
+      // À la création tous les participants tiennent sur l'équipe 1 (les partenaires seront
+      // revalidés à la réorg d'équipes) ; pour WOMEN c'est sans effet.
+      assertRosterGender(matchGender, rosterIds.map((id) => ({ sex: sexById.get(id) ?? null, team: 1 as 1 | 2 })));
+    }
 
     return serializableTx(async (tx) => {
       await tx.reservationParticipant.deleteMany({ where: { reservationId } });
@@ -410,6 +425,7 @@ export class ReservationService {
           targetLevelMin: levelOk ? (setup.targetLevelMin ?? null) : null,
           targetLevelMax: levelOk ? (setup.targetLevelMax ?? null) : null,
           competitive: setup.competitive ?? undefined,
+          matchGender,
         },
       });
     });
