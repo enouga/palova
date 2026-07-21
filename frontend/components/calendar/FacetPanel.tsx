@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { inkOn } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
+import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { DateRangeChip } from '@/components/calendar/DateRangeChip';
 import { CalendarFilterState, DatePreset, calendarFacets } from '@/lib/tournamentCalendar';
 import { TournamentGender } from '@/lib/api';
@@ -34,10 +36,9 @@ export interface FacetPanelProps {
 
 // Panneau de filtres des tournois (partagé /decouvrir + /tournois) : UN tiroir compact au
 // langage d'EventsFilterBar — groupes labellisés côte à côte (flex-wrap), chips ✓/compteurs,
-// pied « N résultats · Effacer les filtres ». Les briques FacetChip/FacetGroup sont des copies
-// LOCALES de celles d'Events (APIs différentes, et pas d'import croisé events↔calendar — même
-// précédent que whenWindow) ; toujours module-scope, jamais définies dans le rendu (leçon du
-// bug Group : un composant défini dans un autre est remonté à chaque rendu).
+// pied « N résultats · Effacer les filtres ». Les briques FacetChip/FacetGroup viennent
+// désormais du module partagé `@/components/ui/FacetChip` (teintes fixes par groupe,
+// FILTER_TINTS) — ce ne sont plus des copies locales.
 export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onToggleGender, onSetPreset, onSetRange, onToggleNearMe, onClear, nearMeBusy, resultCount }: FacetPanelProps) {
   const { th } = useTheme();
   const [showAllDepts, setShowAllDepts] = useState(false);
@@ -50,15 +51,15 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
     <div style={{ padding: '4px 20px 0' }}>
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
-          <FacetGroup th={th} label="Quand">
+          <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
             {PRESETS.map((p) => (
-              <FacetChip key={p.key} th={th} label={p.label} active={state.datePreset === p.key && !state.from && !state.to}
+              <FacetChip key={p.key} label={p.label} tint={FILTER_TINTS.quand} active={state.datePreset === p.key && !state.from && !state.to}
                 onClick={() => onSetPreset(state.datePreset === p.key ? null : p.key)} />
             ))}
-            <DateRangeChip from={state.from} to={state.to} onChange={onSetRange} />
+            <DateRangeChip from={state.from} to={state.to} onChange={onSetRange} tint={FILTER_TINTS.quand} />
           </FacetGroup>
 
-          <FacetGroup th={th} label="Où">
+          <FacetGroup label="Où" tint={FILTER_TINTS.ou}>
             {/* Autour de moi = un TRI (accent, pas encre) — même sujet que les départements. */}
             <button onClick={onToggleNearMe} aria-pressed={state.nearMe}
               aria-label={nearMeBusy ? 'Localisation…' : state.nearMe ? 'Autour de moi ✓' : 'Autour de moi'}
@@ -66,15 +67,15 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
                 display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer',
                 borderRadius: 999, padding: '5px 11px', fontFamily: th.fontUI, fontSize: 13,
                 fontWeight: state.nearMe ? 700 : 600,
-                background: state.nearMe ? th.accent : th.surface,
-                color: state.nearMe ? th.onAccent : th.text,
+                background: state.nearMe ? FILTER_TINTS.ou : 'transparent',
+                color: state.nearMe ? inkOn(FILTER_TINTS.ou) : th.text,
                 boxShadow: state.nearMe ? 'none' : `inset 0 0 0 1px ${th.line}`,
                 WebkitTapHighlightColor: 'transparent',
               }}>
               📍 {nearMeBusy ? 'Localisation…' : state.nearMe ? 'Autour de moi ✓' : 'Autour de moi'}
             </button>
             {depts.map((d) => (
-              <FacetChip key={d.code} th={th} label={d.name} count={d.count} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
+              <FacetChip key={d.code} label={d.name} tint={FILTER_TINTS.ou} count={d.count} active={state.deptCodes.has(d.code)} onClick={() => onToggleDept(d.code)} />
             ))}
             {facets.departments.length > DEPT_VISIBLE && (
               <button onClick={() => setShowAllDepts((v) => !v)} style={linkBtn(th)}>
@@ -84,17 +85,17 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
           </FacetGroup>
 
           {facets.categories.length > 0 && (
-            <FacetGroup th={th} label="Catégorie">
+            <FacetGroup label="Catégorie" tint={FILTER_TINTS.categorie}>
               {facets.categories.map((c) => (
-                <FacetChip key={c.value} th={th} label={c.value} count={c.count} active={state.categories.has(c.value)} onClick={() => onToggleCategory(c.value)} />
+                <FacetChip key={c.value} label={c.value} tint={FILTER_TINTS.categorie} count={c.count} active={state.categories.has(c.value)} onClick={() => onToggleCategory(c.value)} />
               ))}
             </FacetGroup>
           )}
 
           {facets.genders.length > 0 && (
-            <FacetGroup th={th} label="Genre">
+            <FacetGroup label="Genre" tint={FILTER_TINTS.genre}>
               {facets.genders.map((g) => (
-                <FacetChip key={g.value} th={th} label={GENDER_LABEL[g.value]} count={g.count} active={state.genders.has(g.value)} onClick={() => onToggleGender(g.value)} />
+                <FacetChip key={g.value} label={GENDER_LABEL[g.value]} tint={FILTER_TINTS.genre} count={g.count} active={state.genders.has(g.value)} onClick={() => onToggleGender(g.value)} />
               ))}
             </FacetGroup>
           )}
@@ -117,45 +118,6 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// Chip de facette (copie locale du FacetChip d'Events) : ✓ + encre pleine quand active,
-// compteur en suffixe `aria-hidden` (le nom accessible reste « Paris », pas « Paris 2 » —
-// contrat des tests), estompée mais cliquable à 0. Exportée : DiscoverMatches (« Ça joue
-// bientôt ») partage le même tiroir.
-export function FacetChip({ th, label, count, active, onClick }: {
-  th: Th; label: string; count?: number; active: boolean; onClick: () => void;
-}) {
-  const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.text;
-  return (
-    <button onClick={onClick} aria-pressed={active} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
-      fontFamily: th.fontUI, fontSize: 13, fontWeight: active ? 700 : 600,
-      background: active ? th.ink : th.surface, color: fg,
-      boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-      opacity: !active && count === 0 ? 0.45 : 1,
-      WebkitTapHighlightColor: 'transparent',
-    }}>
-      {active && <Icon name="check" size={12} color={fg} />}
-      {label}
-      {count != null && (
-        <span aria-hidden style={{ fontSize: 11.5, fontWeight: 700, color: active ? fg : th.textFaint, opacity: active ? 0.75 : 1, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
-      )}
-    </button>
-  );
-}
-
-export function FacetGroup({ th, label, children }: { th: Th; label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <span style={{
-        fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6,
-        textTransform: 'uppercase', color: th.textFaint,
-      }}>{label}</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>{children}</div>
     </div>
   );
 }

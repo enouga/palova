@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
+import { inkOn } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 import { addMonths, monthGrid, monthLabel, todayKey } from '@/lib/calendar';
 import { rangeChipLabel } from '@/lib/tournamentCalendar';
@@ -18,10 +19,12 @@ function frLabel(key: string): string {
 // repart sur un nouveau début. Autonome : mêmes helpers purs que DateField (monthGrid/monthLabel/
 // addMonths/todayKey) mais SANS toucher DateField (mono-date, consommé partout — la grille
 // dupliquée est le prix de sa stabilité). Valeurs YYYY-MM-DD, le format de CalendarFilterState.
-export function DateRangeChip({ from, to, onChange }: {
+export function DateRangeChip({ from, to, onChange, tint }: {
   from: string | null;
   to: string | null;
   onChange: (from: string | null, to: string | null) => void;
+  /** Teinte du groupe hôte (défaut th.accent — rétro-compatible). */
+  tint?: string;
 }) {
   const { th } = useTheme();
   const [open, setOpen] = useState(false);
@@ -67,12 +70,14 @@ export function DateRangeChip({ from, to, onChange }: {
   const active = label != null;
   const today = todayKey();
   const inkText = th.mode === 'floodlit' ? th.text : '#f7f5ee';
+  const pill = tint ?? th.accent;
+  const pillInk = inkOn(pill);
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}>
       <span style={{
         display: 'inline-flex', alignItems: 'center', borderRadius: 999,
-        background: active ? th.accent : th.surface,
+        background: active ? pill : th.surface,
         boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
       }}>
         <button type="button" onClick={openPicker} aria-haspopup="dialog" aria-expanded={open}
@@ -80,14 +85,14 @@ export function DateRangeChip({ from, to, onChange }: {
             display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer',
             background: 'transparent', borderRadius: 999, padding: active ? '7px 4px 7px 13px' : '7px 13px',
             fontFamily: th.fontUI, fontSize: 13, fontWeight: 700,
-            color: active ? th.onAccent : th.text,
+            color: active ? pillInk : th.text,
           }}>
-          <Icon name="calendar" size={14} color={active ? th.onAccent : th.textMute} />
+          <Icon name="calendar" size={14} color={active ? pillInk : th.textMute} />
           {label ?? 'Dates'}
         </button>
         {active && (
           <button type="button" onClick={clear} aria-label="Effacer les dates"
-            style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: th.onAccent,
+            style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: pillInk,
               fontFamily: th.fontUI, fontSize: 13, fontWeight: 800, padding: '7px 11px 7px 4px' }}>
             ✕
           </button>
