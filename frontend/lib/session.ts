@@ -17,7 +17,7 @@ function secureAttr(): string {
   return typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
 }
 
-function writeCookie(name: string, value: string, maxAge: number) {
+export function writeCookie(name: string, value: string, maxAge: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}${cookieDomainAttr()}; path=/; SameSite=Lax${secureAttr()}; max-age=${maxAge}`;
 }
 
