@@ -1,4 +1,5 @@
-import { Brand, escapeHtml, renderLayout } from './layout';
+import { Brand, renderLayout, PALOVA_BRAND } from './layout';
+import { sanitizeBodyHtml, decorateBodyHtml, htmlToText } from '../registry';
 
 export interface BuiltEmail {
   subject: string;
@@ -8,16 +9,23 @@ export interface BuiltEmail {
 
 export interface BroadcastEmailInput {
   title: string;
-  body: string;
+  /** Corps HTML riche (éditeur admin) — assaini puis décoré par le builder. */
+  bodyHtml: string;
   /** URL explicite (deep link) ; si absent, on utilise l'app du club. */
   url?: string | null;
   brand: Brand;
 }
 
-/** Email de diffusion envoyé par un club à tous ses membres actifs. */
+/**
+ * Email de diffusion envoyé par un club à tous ses membres actifs.
+ * Le corps riche est assaini (allowlist serrée) puis décoré, comme les emails
+ * personnalisables (`renderClubEmail`) — jamais inséré brut dans le layout.
+ */
 export function buildBroadcastEmail(i: BroadcastEmailInput): BuiltEmail {
   const subject = `${i.title} — ${i.brand.name}`;
-  const introHtml = `<p style="margin:0;">${escapeHtml(i.body)}</p>`;
+  const accent = i.brand.accentColor || PALOVA_BRAND.accentColor;
+  const safe = sanitizeBodyHtml(i.bodyHtml);
+  const introHtml = decorateBodyHtml(safe, accent);
   const html = renderLayout({
     brand: i.brand,
     preheader: i.title,
@@ -26,7 +34,7 @@ export function buildBroadcastEmail(i: BroadcastEmailInput): BuiltEmail {
     ctaLabel: 'Voir',
     ctaUrl: i.url ?? undefined,
   });
-  const text = [i.title, '', i.body, '', i.url ? `Lien : ${i.url}` : ''].filter(Boolean).join('\n');
+  const text = [i.title, '', htmlToText(safe), '', i.url ? `Lien : ${i.url}` : ''].filter(Boolean).join('\n');
   return { subject, html, text };
 }
 

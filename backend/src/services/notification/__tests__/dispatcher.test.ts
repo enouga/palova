@@ -116,4 +116,28 @@ describe('dispatch', () => {
 
     expect(deliverPush).not.toHaveBeenCalled();
   });
+
+  // Plafond appelant (ex. diffusion club : le club choisit les canaux).
+  it('allowChannels.inapp=false coupe la cloche (plafond appelant)', async () => {
+    await dispatch({ ...base, allowChannels: { inapp: false } });
+    expect(prismaMock.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('allowChannels.email=false coupe l email même avec un payload', async () => {
+    await dispatch({ ...base, email: { to: 'u@x.fr', subject: 'S', html: '', text: 'S' }, allowChannels: { email: false } });
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('allowChannels.push=false coupe le push (abonnement présent)', async () => {
+    prismaMock.pushSubscription.findMany.mockResolvedValue([{ endpoint: 'https://p/1', p256dh: 'k', auth: 'a' }] as any);
+    await dispatch({ ...base, allowChannels: { push: false } });
+    expect(deliverPush).not.toHaveBeenCalled();
+  });
+
+  it('allowChannels tous true : comportement inchangé (cloche + push)', async () => {
+    prismaMock.pushSubscription.findMany.mockResolvedValue([{ endpoint: 'https://p/1', p256dh: 'k', auth: 'a' }] as any);
+    await dispatch({ ...base, allowChannels: { inapp: true, email: true, push: true } });
+    expect(prismaMock.notification.create).toHaveBeenCalled();
+    expect(deliverPush).toHaveBeenCalled();
+  });
 });

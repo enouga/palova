@@ -1190,8 +1190,10 @@ export const api = {
   // --- Broadcasts (admin) ---
   getClubBroadcasts: (clubId: string, token: string) =>
     request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
-  sendClubBroadcast: (clubId: string, body: { title: string; body: string; url?: string }, token: string) =>
+  sendClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string; channels?: { email: boolean; inApp: boolean; push: boolean } }, token: string) =>
     request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
+  previewClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string }, token: string) =>
+    request<{ html: string }>(`/api/clubs/${clubId}/admin/broadcast/preview`, { method: 'POST', body: JSON.stringify(body) }, token),
 
   // --- Emails automatiques personnalisables (admin) ---
   adminListEmails: (clubId: string, token: string) =>

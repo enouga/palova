@@ -1519,13 +1519,32 @@ router.get('/members/:userId/level', requireClubMember('ADMIN'), async (req: Clu
 // communication du club au quotidien. Action à fort impact (notifie tous les membres).
 router.post('/broadcast', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, body, url } = req.body;
+    const { title, bodyHtml, url, channels } = req.body;
     const result = await broadcastService.send(
       req.membership!.clubId,
       req.user!.id,
-      { title, body, url: typeof url === 'string' ? url : null },
+      {
+        title,
+        bodyHtml,
+        url: typeof url === 'string' ? url : null,
+        channels: channels && typeof channels === 'object'
+          ? { email: !!channels.email, inApp: !!channels.inApp, push: !!channels.push }
+          : undefined,
+      },
     );
     res.json(result);
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Aperçu de l'email de diffusion (rendu serveur, sans envoi) → { html }.
+router.post('/broadcast/preview', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { title, bodyHtml, url } = req.body;
+    res.json(await broadcastService.preview(req.membership!.clubId, {
+      title: typeof title === 'string' ? title : '',
+      bodyHtml: typeof bodyHtml === 'string' ? bodyHtml : '',
+      url: typeof url === 'string' ? url : null,
+    }));
   } catch (err) { handleError(err, res, next); }
 });
 

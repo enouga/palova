@@ -32,6 +32,12 @@ describe('RichEmailEditor', () => {
     expect(onChange.mock.calls.at(-1)![0]).toContain('{{prenom}}');
   });
 
+  it('ne montre PAS le menu « Insérer une info » sans variables', async () => {
+    render(<RichEmailEditor value="<p>Bonjour</p>" vars={[]} onChange={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Bonjour')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Insérer une info/ })).toBeNull();
+  });
+
   it('une ligne : sérialise en texte brut sans balises', async () => {
     const onChange = jest.fn();
     render(<RichEmailEditor singleLine value="Objet {{prenom}}" vars={vars} onChange={onChange} />);

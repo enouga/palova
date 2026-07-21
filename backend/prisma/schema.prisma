@@ -1537,6 +1537,7 @@ model ClubBroadcast {
   sentByUserId   String   @map("sent_by_user_id")
   title          String
   body           String
+  bodyHtml       String?  @map("body_html")
   url            String?
   recipientCount Int      @map("recipient_count")
   createdAt      DateTime @default(now()) @map("created_at")

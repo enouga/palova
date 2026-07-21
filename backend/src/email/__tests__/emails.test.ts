@@ -1,4 +1,4 @@
-import { buildVerificationEmail, buildPasswordResetEmail } from '../templates/emails';
+import { buildVerificationEmail, buildPasswordResetEmail, buildBroadcastEmail } from '../templates/emails';
 import { escapeHtml, readableTextOn, darken, PALOVA_BRAND } from '../templates/layout';
 import { absoluteAsset, clubAppUrl, formatDateFr, formatDateRangeFr } from '../links';
 import { Brand } from '../templates/layout';
@@ -43,6 +43,34 @@ describe('buildPasswordResetEmail', () => {
   it('intègre le logo Palova (URL absolue) dans l en-tête', () => {
     const mail = buildPasswordResetEmail('000000', palova);
     expect(mail.html).toContain('https://palova.fr/icon-192.png');
+  });
+});
+
+describe('buildBroadcastEmail — corps HTML riche', () => {
+  const brand: Brand = { name: 'Padel Arena', logoUrl: null, accentColor: '#5e93da' };
+
+  it('rend le corps riche (gras, liste) et un sujet « titre — club »', () => {
+    const mail = buildBroadcastEmail({
+      title: 'News',
+      bodyHtml: '<p>Bonjour <strong>tous</strong></p><ul><li>Point</li></ul>',
+      url: null,
+      brand,
+    });
+    expect(mail.subject).toBe('News — Padel Arena');
+    expect(mail.html).toContain('<strong>tous</strong>');
+    expect(mail.html).toContain('<li>Point</li>');
+    expect(mail.text).toContain('Bonjour tous'); // repli texte dérivé du HTML
+  });
+
+  it('assainit : retire les balises interdites (script), garde les images /uploads', () => {
+    const mail = buildBroadcastEmail({
+      title: 'X',
+      bodyHtml: '<p>ok</p><script>alert(1)</script><img src="/uploads/a.png">',
+      url: null,
+      brand,
+    });
+    expect(mail.html).not.toContain('<script');
+    expect(mail.html).toContain('/uploads/a.png');
   });
 });
 
