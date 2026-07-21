@@ -8,7 +8,7 @@ import { Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RichEmailEditor } from '@/components/admin/email/RichEmailEditor';
 import { EmailPreview } from '@/components/admin/email/EmailPreview';
-import { broadcastHasContent, hasAnyChannel, BroadcastChannels } from '@/lib/broadcast';
+import { broadcastHasContent, hasAnyChannel, BroadcastChannels, EMAIL_BROADCAST_ENABLED } from '@/lib/broadcast';
 import { SwitchRow } from '@/components/ui/SwitchRow';
 
 // `body` porte le HTML riche émis par l'éditeur (format stocké, sans variables).
@@ -36,7 +36,7 @@ export default function AdminBroadcastPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
-  const [channels, setChannels] = useState<BroadcastChannels>({ email: true, inApp: true, push: true });
+  const [channels, setChannels] = useState<BroadcastChannels>({ email: EMAIL_BROADCAST_ENABLED, inApp: true, push: true });
 
   const labelStyle: CSSProperties = {
     fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600,
@@ -181,12 +181,16 @@ export default function AdminBroadcastPage() {
               <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute, marginBottom: 6 }}>
                 Comment l&apos;envoyer
               </span>
-              <SwitchRow
-                checked={channels.email}
-                onChange={(v) => setChannels((c) => ({ ...c, email: v }))}
-                title="Email"
-                description="L'email HTML mis en forme ci-dessus."
-              />
+              <div style={{ opacity: EMAIL_BROADCAST_ENABLED ? 1 : 0.45, pointerEvents: EMAIL_BROADCAST_ENABLED ? 'auto' : 'none' }}>
+                <SwitchRow
+                  checked={channels.email}
+                  onChange={(v) => { if (EMAIL_BROADCAST_ENABLED) setChannels((c) => ({ ...c, email: v })); }}
+                  title="Email"
+                  description={EMAIL_BROADCAST_ENABLED
+                    ? "L'email HTML mis en forme ci-dessus."
+                    : 'Temporairement indisponible — envoi par email en cours de configuration.'}
+                />
+              </div>
               <SwitchRow
                 checked={channels.inApp}
                 onChange={(v) => setChannels((c) => ({ ...c, inApp: v, push: v ? c.push : false }))}
@@ -238,10 +242,16 @@ export default function AdminBroadcastPage() {
             <EmailPreview html={previewHtml} />
           ) : (
             <div style={{ background: th.bgElev, border: `1px solid ${th.line}`, borderRadius: 12, padding: '18px 16px', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, lineHeight: 1.5 }}>
-              L&apos;email est désactivé pour cet envoi.
-              {channels.inApp
-                ? ` Les membres recevront la notification${channels.push ? ' (cloche + push)' : ' (cloche)'} avec le texte du message.`
-                : ''}
+              {!EMAIL_BROADCAST_ENABLED
+                ? "L'envoi par email est temporairement désactivé. Les membres recevront la notification (cloche / push) avec le texte du message."
+                : (
+                  <>
+                    L&apos;email est désactivé pour cet envoi.
+                    {channels.inApp
+                      ? ` Les membres recevront la notification${channels.push ? ' (cloche + push)' : ' (cloche)'} avec le texte du message.`
+                      : ''}
+                  </>
+                )}
             </div>
           )}
         </div>

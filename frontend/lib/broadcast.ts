@@ -13,6 +13,14 @@ export function broadcastHasContent(html: string): boolean {
   return text.length > 0;
 }
 
+/**
+ * Temporaire : l'envoi par email d'une diffusion est **grisé/désactivé** tant que le SMTP /
+ * provider transactionnel n'est pas dimensionné pour le volume (cf. limites OVH ~200 mails/h).
+ * Repasser à `true` pour réactiver l'option Email dans la page Messages (le backend, lui, sait
+ * déjà l'envoyer — rien d'autre à changer côté serveur).
+ */
+export const EMAIL_BROADCAST_ENABLED = false;
+
 /** Canaux d'un envoi de diffusion. `push` est couplé à `inApp` (jamais de push sans cloche). */
 export interface BroadcastChannels {
   email: boolean;

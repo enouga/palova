@@ -91,7 +91,7 @@ describe('AdminBroadcastPage', () => {
     await waitFor(() =>
       expect(api.sendClubBroadcast).toHaveBeenCalledWith(
         'club-demo',
-        { title: 'Mon titre', bodyHtml: '<p>Mon message</p>', channels: { email: true, inApp: true, push: true } },
+        { title: 'Mon titre', bodyHtml: '<p>Mon message</p>', channels: { email: false, inApp: true, push: true } },
         't',
       ),
     );
@@ -99,16 +99,17 @@ describe('AdminBroadcastPage', () => {
 
   const switchFor = (label: string) => screen.getByText(label).closest('[role="switch"]') as HTMLElement;
 
-  it('inclut les canaux choisis et couple le push à la cloche', async () => {
+  it('Email est grisé/désactivé et non activable ; envoie cloche + push par défaut', async () => {
     const { api } = require('@/lib/api');
     renderPage();
     await waitFor(() => screen.getByText(/membres actifs/i));
     fireEvent.change(screen.getByPlaceholderText(/titre du message/i), { target: { value: 'T' } });
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: '<p>Corps</p>' } });
 
-    // Couper la cloche → le push suit (couplage).
-    fireEvent.click(switchFor("Notification dans l'appli"));
-    expect(switchFor('Notification push')).toHaveAttribute('aria-checked', 'false');
+    // Email désactivé : off par défaut, cliquer ne l'active pas.
+    expect(switchFor('Email')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(switchFor('Email'));
+    expect(switchFor('Email')).toHaveAttribute('aria-checked', 'false');
 
     fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
     await waitFor(() => screen.getByRole('dialog'));
@@ -118,33 +119,37 @@ describe('AdminBroadcastPage', () => {
     await waitFor(() =>
       expect(api.sendClubBroadcast).toHaveBeenCalledWith(
         'club-demo',
-        expect.objectContaining({ channels: { email: true, inApp: false, push: false } }),
+        expect.objectContaining({ channels: { email: false, inApp: true, push: true } }),
         't',
       ),
     );
   });
 
-  it('désactive Envoyer si aucun canal choisi', async () => {
+  it('couple le push à la cloche (décocher la cloche coupe le push)', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText(/membres actifs/i));
+    fireEvent.click(switchFor("Notification dans l'appli"));
+    expect(switchFor('Notification push')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('désactive Envoyer si aucun canal actif (email déjà désactivé + cloche coupée)', async () => {
     renderPage();
     await waitFor(() => screen.getByText(/membres actifs/i));
     fireEvent.change(screen.getByPlaceholderText(/titre du message/i), { target: { value: 'T' } });
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: '<p>Corps</p>' } });
 
     const btn = screen.getByRole('button', { name: /envoyer/i });
-    expect(btn).not.toBeDisabled();
+    expect(btn).not.toBeDisabled();                            // email off mais cloche on
 
-    fireEvent.click(switchFor('Email'));                       // email off
-    fireEvent.click(switchFor("Notification dans l'appli"));   // cloche off (push suit)
+    fireEvent.click(switchFor("Notification dans l'appli"));   // cloche off → push off → aucun canal
     expect(btn).toBeDisabled();
   });
 
-  it("masque l'aperçu email quand Email est décoché", async () => {
+  it("masque l'aperçu email et affiche la note (envoi email désactivé)", async () => {
     renderPage();
     await waitFor(() => screen.getByText(/membres actifs/i));
-    expect(screen.getByTestId('preview')).toBeInTheDocument();
-    fireEvent.click(switchFor('Email'));
     expect(screen.queryByTestId('preview')).toBeNull();
-    expect(screen.getByText(/email est désactivé/i)).toBeInTheDocument();
+    expect(screen.getByText(/email est temporairement désactivé/i)).toBeInTheDocument();
   });
 
   it('désactive le bouton Envoyer tant que le titre ou le corps est vide', async () => {
