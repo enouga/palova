@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useTheme } from '@/lib/ThemeProvider';
 import type { MatchAlert } from '@/lib/api';
-import { Icon } from '@/components/ui/Icon';
+import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
 import { fmtLevel } from '@/lib/levelMatch';
 import { alertChipLabel } from '@/lib/matchAlerts';
@@ -11,38 +11,6 @@ export type KindFilter = 'all' | 'competitive' | 'friendly';
 
 const LEVEL_MIN = 1;
 const LEVEL_MAX = 8;
-
-// Chip de filtre — actif = encre pleine + coche, inactif = pill fine contourée
-// (même langage que FacetChip d'EventsFilterBar).
-function Chip({ label, active, onClick, ariaExpanded }: {
-  label: string; active: boolean; onClick: () => void; ariaExpanded?: boolean;
-}) {
-  const { th } = useTheme();
-  const fg = active ? (th.mode === 'floodlit' ? th.text : '#f7f5ee') : th.textMute;
-  return (
-    <button type="button" aria-pressed={active} aria-expanded={ariaExpanded} onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      border: 'none', cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
-      fontFamily: th.fontUI, fontSize: 12, fontWeight: active ? 700 : 600,
-      background: active ? th.ink : 'transparent', color: fg,
-      boxShadow: active ? 'none' : `inset 0 0 0 1px ${th.line}`,
-      transition: 'all .15s', WebkitTapHighlightColor: 'transparent',
-    }}>
-      {active && <Icon name="check" size={11} color={fg} />}
-      {label}
-    </button>
-  );
-}
-
-function GroupLabel({ children }: { children: React.ReactNode }) {
-  const { th } = useTheme();
-  return (
-    <span style={{
-      fontFamily: th.fontUI, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6,
-      textTransform: 'uppercase', color: th.textFaint,
-    }}>{children}</span>
-  );
-}
 
 export interface MatchesFilterBarProps {
   levelEnabled: boolean;
@@ -89,16 +57,15 @@ export function MatchesFilterBar({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
           {showLevelGroup && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <GroupLabel>Niveau</GroupLabel>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <FacetGroup label="Niveau" tint={FILTER_TINTS.niveau}>
                 {myLevel != null && myLevelMin != null && myLevelMax != null && (
-                  <Chip label={`À mon niveau · ${fmtLevel(myLevelMin)}–${fmtLevel(myLevelMax)}`}
+                  <FacetChip label={`À mon niveau · ${fmtLevel(myLevelMin)}–${fmtLevel(myLevelMax)}`} tint={FILTER_TINTS.niveau}
                     active={isMyLevel} onClick={() => onLevelChange(myLevelMin, myLevelMax)} />
                 )}
-                <Chip label="Tous" active={isDefaultAll} onClick={() => onLevelChange(LEVEL_MIN, LEVEL_MAX)} />
-                <Chip label={adjustLabel} active={isCustom} ariaExpanded={sliderOpen}
+                <FacetChip label="Tous" tint={FILTER_TINTS.niveau} active={isDefaultAll} onClick={() => onLevelChange(LEVEL_MIN, LEVEL_MAX)} />
+                <FacetChip label={adjustLabel} tint={FILTER_TINTS.niveau} active={isCustom} ariaExpanded={sliderOpen}
                   onClick={() => setSliderOpen((v) => !v)} />
-              </div>
+              </FacetGroup>
               {sliderOpen && (
                 <div style={{ maxWidth: 430, marginTop: 4 }}>
                   <LevelRangeSlider compact min={fMin} max={fMax} onChange={onLevelChange} />
@@ -106,14 +73,11 @@ export function MatchesFilterBar({
               )}
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <GroupLabel>Type de partie</GroupLabel>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              <Chip label="Toutes" active={kindFilter === 'all'} onClick={() => onKindChange('all')} />
-              <Chip label="Pour de vrai" active={kindFilter === 'competitive'} onClick={() => onKindChange('competitive')} />
-              <Chip label="Pour le fun" active={kindFilter === 'friendly'} onClick={() => onKindChange('friendly')} />
-            </div>
-          </div>
+          <FacetGroup label="Type de partie" tint={FILTER_TINTS.typePartie}>
+            <FacetChip label="Toutes" tint={FILTER_TINTS.typePartie} active={kindFilter === 'all'} onClick={() => onKindChange('all')} />
+            <FacetChip label="Pour de vrai" tint={FILTER_TINTS.typePartie} active={kindFilter === 'competitive'} onClick={() => onKindChange('competitive')} />
+            <FacetChip label="Pour le fun" tint={FILTER_TINTS.typePartie} active={kindFilter === 'friendly'} onClick={() => onKindChange('friendly')} />
+          </FacetGroup>
         </div>
 
         {showFooter && (
