@@ -72,10 +72,10 @@ describe('OpenMatchToggle', () => {
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, targetLevelMin: 3, targetLevelMax: 6 }));
   });
 
-  it('publie une partie AMICALE (competitive=false) quand « Amicale » est choisi', async () => {
+  it('publie une partie POUR LE FUN (competitive=false) quand « Pour le fun » est choisi', async () => {
     wrap();
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Amicale/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Pour le fun/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc',
       expect.objectContaining({ competitive: false })));

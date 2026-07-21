@@ -90,7 +90,7 @@ export function OpenMatchCard({
       {/* Rangée 1 : heure + sport (Padel) côte à côte, à l'identique de la page Réserver
           (ReservationAgendaCard) — showSport est un réglage de club, donc uniforme sur
           toutes les cartes de la grille, jamais de variation d'une carte à l'autre ici.
-          Rangée 2 : niveau à gauche (optionnel, par match) / type Compétitive-Amicale
+          Rangée 2 : niveau à gauche (optionnel, par match) / type Pour de vrai-Pour le fun
           épinglé à droite (`marginLeft:auto`, TOUJOURS rendu) — sa position ne dépend jamais
           du niveau, donc les deux rangées gardent une hauteur fixe quel que soit le match :
           sinon les cartes voisines d'une même grille avaient des hauteurs différentes et tout
@@ -108,10 +108,10 @@ export function OpenMatchCard({
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
         )}
         {/* Preuve sociale « favoris » sur la rangée niveau/type : cette rangée est TOUJOURS rendue
-            (pastille Compétitive épinglée à droite), et l'icône+texte est plus bas que les pastilles,
+            (pastille de type épinglée à droite), et l'icône+texte est plus bas que les pastilles,
             donc l'ajouter ne change jamais la hauteur de la rangée → aucun décalage entre cartes.
             minWidth:0 + ellipsis : sur une carte étroite la ligne se tronque au lieu de pousser
-            la pastille Compétitive ou de faire wrapper la rangée. */}
+            la pastille de type ou de faire wrapper la rangée. */}
         {friendCount > 0 && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>
             <Icon name="users" size={14} color={th.accent} />
@@ -122,8 +122,8 @@ export function OpenMatchCard({
         )}
         <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
           {m.competitive === false
-            ? <Chip tone="line">Amicale</Chip>
-            : <Chip tone="accent">Compétitive</Chip>}
+            ? <Chip tone="line">Pour le fun</Chip>
+            : <Chip tone="accent">Pour de vrai</Chip>}
         </span>
       </div>
       <MatchTeams

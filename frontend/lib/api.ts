@@ -1675,7 +1675,7 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
-  competitive?: boolean; // Amicale (false) / Compétitive (true) ; défaut true si absent
+  competitive?: boolean; // Pour le fun (false) / Pour de vrai (true) ; défaut true si absent
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;

@@ -98,10 +98,10 @@ describe('affectation des équipes', () => {
   });
 });
 
-describe('Amicale / Compétitive', () => {
-  it('résa privée : segmented Compétitive par défaut, envoie competitive=false si Amicale', async () => {
+describe('Pour le fun / Pour de vrai', () => {
+  it('résa privée : segmented Pour de vrai par défaut, envoie competitive=false si Pour le fun', async () => {
     renderModal({ initialTeams: fullTeams });
-    fireEvent.click(screen.getByRole('button', { name: /Amicale/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Pour le fun/ }));
     type([6, 4]);
     fireEvent.click(screen.getByRole('button', { name: /Enregistrer/ }));
     await waitFor(() => expect(api.recordMatchResult).toHaveBeenCalled());
@@ -110,7 +110,7 @@ describe('Amicale / Compétitive', () => {
 
   it('partie ouverte (locked) : badge statique, pas de bouton de bascule', () => {
     renderModal({ initialTeams: fullTeams, locked: true, competitive: false });
-    expect(screen.getByText(/Partie amicale/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Compétitive/ })).toBeNull();
+    expect(screen.getByText(/Pour le fun — le niveau ne bouge pas/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pour de vrai/ })).toBeNull();
   });
 });

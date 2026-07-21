@@ -137,7 +137,7 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
               <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {formatDateTime(m.playedAt)} · {m.sport.name}
                 {m.competitive === false && (
-                  <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.textMute, background: th.surface2, borderRadius: 8, padding: '2px 8px' }}>Amicale</span>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, color: th.textMute, background: th.surface2, borderRadius: 8, padding: '2px 8px' }}>Pour le fun</span>
                 )}
               </span>
               <span style={{

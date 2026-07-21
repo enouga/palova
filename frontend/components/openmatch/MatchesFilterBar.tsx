@@ -110,8 +110,8 @@ export function MatchesFilterBar({
             <GroupLabel>Type de partie</GroupLabel>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               <Chip label="Toutes" active={kindFilter === 'all'} onClick={() => onKindChange('all')} />
-              <Chip label="Compétitives" active={kindFilter === 'competitive'} onClick={() => onKindChange('competitive')} />
-              <Chip label="Amicales" active={kindFilter === 'friendly'} onClick={() => onKindChange('friendly')} />
+              <Chip label="Pour de vrai" active={kindFilter === 'competitive'} onClick={() => onKindChange('competitive')} />
+              <Chip label="Pour le fun" active={kindFilter === 'friendly'} onClick={() => onKindChange('friendly')} />
             </div>
           </div>
         </div>

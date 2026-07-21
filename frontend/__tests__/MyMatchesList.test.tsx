@@ -55,14 +55,14 @@ it('un match sans confirmation requise ne montre pas les boutons', () => {
   expect(screen.queryByText('Confirmer')).toBeNull();
 });
 
-it('marque un résultat amical (competitive=false)', () => {
+it('marque un résultat pour le fun (competitive=false)', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: false }] as any} token="t" onChanged={() => {}} />);
-  expect(screen.getByText('Amicale')).toBeInTheDocument();
+  expect(screen.getByText('Pour le fun')).toBeInTheDocument();
 });
 
-it('un match compétitif ne montre pas « Amicale »', () => {
+it('un match pour de vrai ne montre pas « Pour le fun »', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: true }] as any} token="t" onChanged={() => {}} />);
-  expect(screen.queryByText('Amicale')).toBeNull();
+  expect(screen.queryByText('Pour le fun')).toBeNull();
 });
 
 it('affiche Victoire quand mon équipe gagne', () => {

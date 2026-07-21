@@ -96,11 +96,11 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
               background: competitiveState ? `${th.accent}22` : 'transparent', color: competitiveState ? th.accent : th.textMute,
               border: competitiveState ? 'none' : `1px solid ${th.line}`,
             }}>
-              {competitiveState ? 'Compétitive' : 'Amicale'}
+              {competitiveState ? 'Pour de vrai' : 'Pour le fun'}
             </span>
           ) : (
             <span style={{ display: 'inline-flex', flexShrink: 0, borderRadius: 99, overflow: 'hidden', border: `1px solid ${th.line}` }}>
-              {([['competitive', 'Compétitive'], ['friendly', 'Amicale']] as const).map(([key, label]) => {
+              {([['competitive', 'Pour de vrai'], ['friendly', 'Pour le fun']] as const).map(([key, label]) => {
                 const active = (key === 'competitive') === competitiveState;
                 return (
                   <button key={key} type="button" onClick={() => setCompetitiveState(key === 'competitive')} disabled={busy}
@@ -118,7 +118,7 @@ export function MatchResultModal({ reservationId, players, token, onClose, onSav
 
         <p className="mb-3 text-xs" style={{ color: th.textFaint }}>
           {locked
-            ? (competitiveState ? 'Partie compétitive — le résultat compte pour le niveau.' : 'Partie amicale — le niveau ne bouge pas.')
+            ? (competitiveState ? 'Pour de vrai — le résultat compte pour le niveau.' : 'Pour le fun — le niveau ne bouge pas.')
             : (competitiveState ? 'Compte pour le niveau.' : 'Le niveau ne bouge pas.')}
         </p>
 
