@@ -34,7 +34,7 @@ export function OpenMatchModals({ club, token, viewerUserId, canModerate, action
       {a.joinWarning && (
         <ConfirmDialog
           title="Niveau hors fourchette"
-          message="Cette partie est hors de ta fourchette de niveau. Rejoindre quand même ?"
+          message="Cette partie est hors de ta fourchette de niveau."
           confirmLabel="Rejoindre quand même"
           cancelLabel="Annuler"
           busy={a.busyId === a.joinWarning.match.id}
