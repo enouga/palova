@@ -110,8 +110,8 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
             </div>
           )}
           <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
-            {([['competitive', 'Compétitive', 'Compte pour le niveau'],
-               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+            {([['competitive', 'Pour de vrai', 'Compte pour le niveau'],
+               ['friendly', 'Pour le fun', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
               const active = (key === 'competitive') === competitive;
               return (
                 <button key={key} type="button" onClick={() => setCompetitive(key === 'competitive')} disabled={busy}
