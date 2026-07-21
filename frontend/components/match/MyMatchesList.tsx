@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api, MyMatch, MyMatchPlayer } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS, Theme } from '@/lib/theme';
@@ -9,16 +9,24 @@ import { colorForSeed } from '@/lib/playerColors';
 import { MatchDiscussion } from '@/components/match/MatchDiscussion';
 
 /** Une ligne du tableau de score : avatars + noms de l'équipe, puis ses jeux par set (gras = set gagné). */
-function ScoreboardRow({ players, side, sets, th }: {
-  players: MyMatchPlayer[]; side: number; sets: [number, number][]; th: Theme;
+function ScoreboardRow({ players, side, sets, th, showConfirmations }: {
+  players: MyMatchPlayer[]; side: number; sets: [number, number][]; th: Theme; showConfirmations?: boolean;
 }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <span style={{ display: 'inline-flex', flexShrink: 0 }}>
           {players.map((p, i) => (
-            <span key={p.userId} style={{ marginLeft: i > 0 ? -7 : 0, borderRadius: '50%', boxShadow: `0 0 0 2px ${th.surface}`, lineHeight: 0 }}>
+            <span key={p.userId} style={{ position: 'relative', marginLeft: i > 0 ? -7 : 0, borderRadius: '50%', boxShadow: `0 0 0 2px ${th.surface}`, lineHeight: 0 }}>
               <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={null} size={26} color={colorForSeed(p.userId)} />
+              {showConfirmations && p.confirmation && (
+                <span aria-hidden style={{
+                  position: 'absolute', right: -2, bottom: -2, width: 12, height: 12, borderRadius: '50%',
+                  border: `2px solid ${th.surface}`, fontSize: 8, lineHeight: '8px', textAlign: 'center',
+                  background: p.confirmation === 'CONFIRMED' ? ACCENTS.emerald : p.confirmation === 'DISPUTED' ? ACCENTS.coral : th.line,
+                  color: '#fff',
+                }}>{p.confirmation === 'CONFIRMED' ? '✓' : p.confirmation === 'DISPUTED' ? '!' : ''}</span>
+              )}
             </span>
           ))}
         </span>
@@ -70,6 +78,24 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
   const [disputingId, setDisputingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [openThread, setOpenThread] = useState<string | null>(null);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
+  const [remindBusy, setRemindBusy] = useState<string | null>(null);
+  const [remindMsg, setRemindMsg] = useState<{ id: string; text: string } | null>(null);
+
+  const remind = async (id: string) => {
+    setRemindBusy(id);
+    setRemindMsg(null);
+    try {
+      await api.remindMatch(id, token);
+      setRemindMsg({ id, text: 'Relance envoyée ✓' });
+    } catch (e) {
+      const msg = (e as Error).message || '';
+      setRemindMsg({ id, text: msg.includes('RATE_LIMITED') ? 'Déjà relancé, réessaie plus tard.' : 'Échec de la relance.' });
+    } finally {
+      setRemindBusy(null);
+    }
+  };
 
   const confirm = async (id: string) => {
     setBusy(id);
@@ -97,6 +123,14 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
         const result = resultLabel(m);
         const resultColor = result.tone === 'win' ? ACCENTS.emerald : result.tone === 'loss' ? ACCENTS.coral : th.textMute;
         const hasThread = m.status === 'DISPUTED' || m.commentCount > 0;
+        const confirmedCount = (m.players ?? []).filter((p) => p.confirmation === 'CONFIRMED').length;
+        const pendingOthers = (m.players ?? []).filter((p) => !p.isMe && p.confirmation === 'PENDING');
+        const showValidation = m.status === 'PENDING';
+        const autoValidateText = showValidation && m.confirmDeadline
+          ? (now != null && new Date(m.confirmDeadline).getTime() <= now
+              ? 'Validation en cours…'
+              : `Se valide automatiquement le ${formatDateTime(m.confirmDeadline)}`)
+          : null;
         return (
           <li key={m.matchId} style={{ border: `1px solid ${th.line}`, background: th.surface, borderRadius: 14, padding: 14 }}>
             <div className="flex items-center justify-between gap-2">
@@ -117,14 +151,26 @@ export function MyMatchesList({ matches, token, onChanged }: { matches: MyMatch[
               display: 'grid', gridTemplateColumns: `minmax(0, 1fr) repeat(${m.sets.length}, 32px)`,
               alignItems: 'center', rowGap: 10, marginTop: 12,
             }}>
-              <ScoreboardRow players={myRow} side={m.myTeam} sets={m.sets} th={th} />
+              <ScoreboardRow players={myRow} side={m.myTeam} sets={m.sets} th={th} showConfirmations={showValidation} />
               <span aria-hidden="true" style={{ gridColumn: '1 / -1', height: 1, background: th.line }} />
-              <ScoreboardRow players={opponents} side={otherTeam} sets={m.sets} th={th} />
+              <ScoreboardRow players={opponents} side={otherTeam} sets={m.sets} th={th} showConfirmations={showValidation} />
             </div>
 
             <div className="mt-3" style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>
               {m.club.name}{m.resource ? ` · ${m.resource.name}` : ''}
             </div>
+
+            {showValidation && (
+              <div className="mt-2" style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 700, color: th.text }}>{confirmedCount}/4 validé</span>
+                {autoValidateText && <span>✅ {autoValidateText}</span>}
+                {pendingOthers.length > 0 && (
+                  <button type="button" disabled={remindBusy === m.matchId} onClick={() => remind(m.matchId)}
+                    className="rounded-lg bg-black/10 px-3 py-1.5 text-sm disabled:opacity-40">🔔 Relancer</button>
+                )}
+                {remindMsg?.id === m.matchId && <span style={{ color: th.textMute }}>{remindMsg.text}</span>}
+              </div>
+            )}
 
             {m.needsMyConfirmation && disputingId !== m.matchId && (
               <div className="mt-2 flex gap-2">

@@ -130,6 +130,8 @@ export const api = {
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
   disputeMatch: (matchId: string, message: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/dispute`, { method: 'POST', body: JSON.stringify({ message }) }, token),
+  remindMatch: (matchId: string, token: string) =>
+    request<{ reminded: number }>(`/api/matches/${matchId}/remind`, { method: 'POST' }, token),
   getMatchComments: (matchId: string, token: string) =>
     request<MatchThread>(`/api/matches/${matchId}/comments`, {}, token),
   postMatchComment: (matchId: string, body: string, token: string) =>
@@ -1302,6 +1304,7 @@ export interface MyMatchPlayer {
   firstName: string;
   lastName: string;
   isMe: boolean;
+  confirmation?: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
 }
 
 export interface MatchComment {
@@ -1322,6 +1325,7 @@ export interface MyMatch {
   status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
   sets: [number, number][];
   playedAt: string;
+  confirmDeadline?: string;
   winningTeam: number | null;
   competitive?: boolean;
   myTeam: number;
