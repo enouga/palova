@@ -23,6 +23,11 @@ describe('OpenMatchesShowcase', () => {
     expect(screen.getByRole('link', { name: /Toutes les parties/i })).toHaveAttribute('href', '/parties');
   });
 
+  it('affiche le genre (Féminine) dans la méta de la carte', () => {
+    wrap([match({ gender: 'WOMEN' })]);
+    expect(screen.getByText(/Féminine/)).toBeInTheDocument();
+  });
+
   it('1 place restante → chip singulier (urgence)', () => {
     wrap([match({ spotsLeft: 1, players: [
       { userId: 'u1', firstName: 'A', lastName: 'A', avatarUrl: null, isOrganizer: true },

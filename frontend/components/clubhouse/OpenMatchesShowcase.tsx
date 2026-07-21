@@ -26,6 +26,7 @@ export function OpenMatchesShowcase({ matches, timezone }: { matches: OpenMatch[
           const urgent = !m.full && m.spotsLeft === 1;
           const level = (m.targetLevelMin != null || m.targetLevelMax != null)
             ? rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null) : null;
+          const genderLabel = m.gender === 'WOMEN' ? 'Féminine' : m.gender === 'MIXED' ? 'Mixte' : null;
           const when = formatDateShortTimeRange(m.startTime, m.endTime, timezone);
           const dateLabel = formatDateShort(m.startTime, timezone);
           const timeLabel = formatHourRange(m.startTime, m.endTime, timezone);
@@ -37,7 +38,7 @@ export function OpenMatchesShowcase({ matches, timezone }: { matches: OpenMatch[
                 <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{dateLabel}</div>
                 <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{timeLabel}</div>
                 <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
-                  {m.resourceName}{level ? ` · ${level}` : ''}
+                  {m.resourceName}{level ? ` · ${level}` : ''}{genderLabel ? ` · ${genderLabel}` : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }} aria-label={m.full ? 'Complet' : `${m.spotsLeft} place${m.spotsLeft > 1 ? 's' : ''} à prendre`}>
