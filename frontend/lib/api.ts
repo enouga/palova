@@ -1294,6 +1294,7 @@ export interface MyReservation {
   capacity: number;
   visibility?: 'PRIVATE' | 'PUBLIC';
   competitive?: boolean;
+  gender?: OpenMatchGender | null;
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null; slot?: number | null }[];

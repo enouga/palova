@@ -1737,7 +1737,7 @@ export class ReservationService {
     const pairs = rows.flatMap((r) => r.participants.map((p) => ({ userId: p.userId, sportKey: r.resource.clubSport.sport.key })));
     const levels = await this.ratingService.getLevelsBySport(pairs);
 
-    return rows.map(({ participants, resource, ...rest }) => {
+    return rows.map(({ participants, resource, matchGender, ...rest }) => {
       const { attributes, clubSport, ...resourcePublic } = resource;
       const sportKey = clubSport.sport.key;
       const capacity = playerCount((attributes as { format?: string } | null)?.format);
@@ -1746,6 +1746,7 @@ export class ReservationService {
         : participants.map((p) => ({ ...p, team: null as 1 | 2 | null, slot: null as number | null }));
       return {
         ...rest,
+        gender: matchGender ?? null,
         resource: { ...resourcePublic, sport: { key: clubSport.sport.key, name: clubSport.sport.name } },
         capacity,
         participants: teamed.map((p) => ({

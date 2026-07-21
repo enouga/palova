@@ -54,7 +54,7 @@ describe('OpenMatchQuickSwitch', () => {
     wrap({}, onChanged);
     fireEvent.click(await screen.findByRole('switch', { name: /Partie ouverte aux membres/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
-      'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6 },
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6, matchGender: null },
     ));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
@@ -69,7 +69,7 @@ describe('OpenMatchQuickSwitch', () => {
     await act(async () => { await Promise.resolve(); });
     fireEvent.click(await screen.findByRole('switch', { name: /Partie ouverte aux membres/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
-      'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6 },
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: 4, targetLevelMax: 6, matchGender: null },
     ));
   });
 
@@ -78,7 +78,7 @@ describe('OpenMatchQuickSwitch', () => {
     wrap();
     fireEvent.click(await screen.findByRole('switch', { name: /Partie ouverte aux membres/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
-      'r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null },
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null, matchGender: null },
     ));
   });
 
@@ -119,7 +119,7 @@ describe('OpenMatchQuickSwitch', () => {
     expect(mocked.setReservationVisibility).not.toHaveBeenCalled();
     act(() => { jest.advanceTimersByTime(400); });
     expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
-      'r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 7 },
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: 3, targetLevelMax: 7, matchGender: null },
     );
     expect(JSON.parse(localStorage.getItem('palova:open-match-level')!)).toEqual({ enabled: true, min: 3, max: 7 });
     jest.useRealTimers();
@@ -131,7 +131,7 @@ describe('OpenMatchQuickSwitch', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Limiter le niveau' }));
     act(() => { jest.advanceTimersByTime(400); });
     expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
-      'r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null },
+      'r1', 'PUBLIC', 'abc', { targetLevelMin: null, targetLevelMax: null, matchGender: null },
     );
     jest.useRealTimers();
   });
@@ -157,5 +157,13 @@ describe('OpenMatchQuickSwitch', () => {
       const last = mocked.setReservationVisibility.mock.calls.at(-1)!;
       expect(last[3]).toEqual(expect.objectContaining({ competitive: false }));
     });
+  });
+
+  it('ouvre avec le genre choisi (Mixte → matchGender MIXED)', async () => {
+    wrap();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mixte' }));
+    fireEvent.click(screen.getByRole('switch', { name: /Partie ouverte aux membres/ }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith(
+      'r1', 'PUBLIC', 'abc', expect.objectContaining({ matchGender: 'MIXED' })));
   });
 });
