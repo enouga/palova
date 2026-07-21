@@ -123,6 +123,7 @@ export class OpenMatchService {
       targetLevelMin: m.targetLevelMin ?? null,
       targetLevelMax: m.targetLevelMax ?? null,
       competitive: m.competitive,
+      gender: m.matchGender ?? null,
       players,
       lastMessageAt: m.openMatchMessages[0]?.createdAt.toISOString() ?? null,
       messageCount: m._count.openMatchMessages,
@@ -223,6 +224,7 @@ export class OpenMatchService {
           targetLevelMin: m.targetLevelMin ?? null,
           targetLevelMax: m.targetLevelMax ?? null,
           competitive: m.competitive,
+          gender: m.matchGender ?? null,
           players: effectiveTeams(m.participants, maxPlayers).map((p) => ({
             userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, avatarUrl: p.user.avatarUrl,
             isOrganizer: p.isOrganizer, level: levels[`${p.userId}:${sportKey}`] ?? null, team: p.team, slot: p.slot,
