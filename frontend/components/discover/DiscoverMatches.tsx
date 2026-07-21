@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, NationalOpenMatch, MyRating } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
-import { FacetChip, FacetGroup } from '@/components/calendar/FacetPanel';
+import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
 import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
 
@@ -74,14 +74,14 @@ export function DiscoverMatches({
       {/* Même tiroir compact que les filtres Tournois (FacetPanel) — langage partagé. */}
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
-          <FacetGroup th={th} label="Quand">
+          <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
             {PERIOD_OPTIONS.map((o) => (
-              <FacetChip key={o.value} th={th} label={o.label} active={period === o.value} onClick={() => setPeriod(o.value)} />
+              <FacetChip key={o.value} label={o.label} tint={FILTER_TINTS.quand} active={period === o.value} onClick={() => setPeriod(o.value)} />
             ))}
           </FacetGroup>
           {levelChipVisible && (
-            <FacetGroup th={th} label="Niveau">
-              <FacetChip th={th} label="À mon niveau" active={levelOn} onClick={() => setLevelOn((v) => !v)} />
+            <FacetGroup label="Niveau" tint={FILTER_TINTS.niveau}>
+              <FacetChip label="À mon niveau" tint={FILTER_TINTS.niveau} active={levelOn} onClick={() => setLevelOn((v) => !v)} />
             </FacetGroup>
           )}
         </div>
