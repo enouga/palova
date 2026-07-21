@@ -8,6 +8,7 @@ import { fmtLevel } from '@/lib/levelMatch';
 import { alertChipLabel } from '@/lib/matchAlerts';
 
 export type KindFilter = 'all' | 'competitive' | 'friendly';
+export type GenderFilter = 'all' | 'WOMEN' | 'MIXED';
 
 const LEVEL_MIN = 1;
 const LEVEL_MAX = 8;
@@ -23,6 +24,8 @@ export interface MatchesFilterBarProps {
   onLevelChange: (min: number, max: number) => void;
   kindFilter: KindFilter;
   onKindChange: (k: KindFilter) => void;
+  genderFilter: GenderFilter;
+  onGenderChange: (g: GenderFilter) => void;
   resultCount: number;
   alerts: MatchAlert[];
   timezone: string;
@@ -34,7 +37,7 @@ export interface MatchesFilterBarProps {
 // groupes labellisés, chips encre pleine, pied avec compteur + alertes.
 export function MatchesFilterBar({
   levelEnabled, authenticated, myLevel, myLevelMin, myLevelMax, fMin, fMax, onLevelChange,
-  kindFilter, onKindChange, resultCount, alerts, timezone, onDeleteAlert, onCreateAlert,
+  kindFilter, onKindChange, genderFilter, onGenderChange, resultCount, alerts, timezone, onDeleteAlert, onCreateAlert,
 }: MatchesFilterBarProps) {
   const { th } = useTheme();
   const [sliderOpen, setSliderOpen] = useState(false);
@@ -48,7 +51,7 @@ export function MatchesFilterBar({
 
   // Le pied s'affiche pour tout connecté (showFooter ci-dessous) ; ce flag ne sert
   // qu'à un anonyme, dont le seul filtre disponible est le type de partie.
-  const hasActiveFilter = kindFilter !== 'all';
+  const hasActiveFilter = kindFilter !== 'all' || genderFilter !== 'all';
   const showFooter = authenticated || hasActiveFilter;
 
   return (
@@ -77,6 +80,11 @@ export function MatchesFilterBar({
             <FacetChip label="Toutes" tint={FILTER_TINTS.typePartie} active={kindFilter === 'all'} onClick={() => onKindChange('all')} />
             <FacetChip label="Pour de vrai" tint={FILTER_TINTS.typePartie} active={kindFilter === 'competitive'} onClick={() => onKindChange('competitive')} />
             <FacetChip label="Pour le fun" tint={FILTER_TINTS.typePartie} active={kindFilter === 'friendly'} onClick={() => onKindChange('friendly')} />
+          </FacetGroup>
+          <FacetGroup label="Genre" tint={FILTER_TINTS.genre}>
+            <FacetChip label="Tous" tint={FILTER_TINTS.genre} active={genderFilter === 'all'} onClick={() => onGenderChange('all')} />
+            <FacetChip label="Féminine" tint={FILTER_TINTS.genre} active={genderFilter === 'WOMEN'} onClick={() => onGenderChange('WOMEN')} />
+            <FacetChip label="Mixte" tint={FILTER_TINTS.genre} active={genderFilter === 'MIXED'} onClick={() => onGenderChange('MIXED')} />
           </FacetGroup>
         </div>
 
