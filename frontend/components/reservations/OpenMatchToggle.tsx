@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { api, MyReservation } from '@/lib/api';
+import { api, MyReservation, type OpenMatchGender } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { dangerBanner } from '@/lib/theme';
 import { Chip } from '@/components/ui/atoms';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
+import { GenderPicker } from '@/components/reservations/GenderPicker';
 import { sportHasLevels } from '@/lib/level';
 import { saveLevelPref } from '@/lib/levelPrefs';
 
@@ -13,6 +14,10 @@ const ERR: Record<string, string> = {
   RESERVATION_NOT_ACTIVE: "Cette réservation n'est pas ouvrable.",
   RESERVATION_IN_PAST: 'Trop tard pour ouvrir cette partie.',
   OPEN_MATCH_PADEL_ONLY: 'Seules les parties de padel peuvent être ouvertes.',
+  SEX_REQUIRED: 'Renseignez votre sexe dans votre profil pour les parties genrées.',
+  GENDER_NOT_FEMALE: 'Cette partie est réservée aux femmes.',
+  GENDER_TEAM_FULL: 'Cette partie mixte n’a plus de place pour votre catégorie.',
+  GENDER_PARTICIPANTS_CONFLICT: 'Les joueurs déjà présents ne correspondent pas à ce type de partie.',
 };
 const msg = (e: string) => ERR[e] ?? e;
 
@@ -31,6 +36,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
   const [lmin, setLmin] = useState(3);
   const [lmax, setLmax] = useState(6);
   const [competitive, setCompetitive] = useState(reservation.competitive ?? true);
+  const [gender, setGender] = useState<OpenMatchGender | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +72,7 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
     saveLevelPref({ enabled: limit, min: lmin, max: lmax });
     return api.setReservationVisibility(
       reservation.id, 'PUBLIC', token,
-      { competitive, ...(limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null }) },
+      { competitive, matchGender: gender, ...(limit ? { targetLevelMin: lmin, targetLevelMax: lmax } : { targetLevelMin: null, targetLevelMax: null }) },
     );
   });
   const close = () => run(() => api.setReservationVisibility(reservation.id, 'PRIVATE', token));
@@ -109,6 +115,10 @@ export function OpenMatchToggle({ reservation, token, now, onChanged }: {
               <LevelRangeSlider min={lmin} max={lmax} onChange={(a, b) => { setLmin(a); setLmax(b); }} disabled={busy} />
             </div>
           )}
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600, marginBottom: 8 }}>Genre de la partie</div>
+            <GenderPicker value={gender} onChange={setGender} disabled={busy} />
+          </div>
           <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
             {([['competitive', 'Pour de vrai', 'Compte pour le niveau'],
                ['friendly', 'Pour le fun', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
