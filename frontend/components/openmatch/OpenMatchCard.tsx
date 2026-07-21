@@ -75,7 +75,7 @@ export function OpenMatchCard({
   return (
     // id ciblable : après avoir rejoint, la liste (OpenMatches) fait défiler vers cette carte
     // — qui a migré dans « Vos parties » — et la fait pulser, pour qu'on voie OÙ elle est repartie.
-    <div id={`open-match-${m.id}`} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+    <div id={`open-match-${m.id}`} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, minWidth: 0 }}>
       {/* En-tête : titre pleine largeur (ellipsis, jamais écrasé) + chip place(s) épinglée à droite.
           Les chips secondaires vivent sur la rangée méta en dessous, qui peut wrapper (mobile). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
