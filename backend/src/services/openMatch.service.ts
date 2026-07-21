@@ -487,10 +487,23 @@ export class OpenMatchService {
       if (!r) throw new Error('RESERVATION_NOT_FOUND');
       const resource = await tx.resource.findUnique({ where: { id: r.resource_id }, select: { clubId: true, attributes: true } });
       if (!resource || resource.clubId !== club.id) throw new Error('CLUB_MISMATCH');
-      const parts = await tx.reservationParticipant.findMany({ where: { reservationId }, select: { userId: true, isOrganizer: true } });
+      const parts = await tx.reservationParticipant.findMany({ where: { reservationId }, select: { userId: true, isOrganizer: true, user: { select: { sex: true } } } });
       const actor = parts.find((p) => p.userId === organizerUserId);
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
+
+      // Mixte : le nouveau layout doit rester ≤1 par sexe par équipe (1H+1F). WOMEN n'a pas
+      // de contrainte d'équipe (tous déjà femmes).
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      if (meta?.matchGender === 'MIXED') {
+        for (const t of [1, 2] as const) {
+          const side = parts.filter((p) => teams[p.userId] === t);
+          const males = side.filter((p) => p.user?.sex === 'MALE').length;
+          const females = side.filter((p) => p.user?.sex === 'FEMALE').length;
+          if (males > 1 || females > 1) throw new Error('GENDER_TEAM_FULL');
+        }
+      }
+
       await applyTeams(tx, reservationId, teams, maxPlayers, slots);
     }, { timeout: 10_000 });
     return { id: reservationId };
