@@ -30,10 +30,11 @@ const wrap = (state: EventFilterState) => {
 
 it('affiche les 4 sources avec leurs compteurs', () => {
   wrap(emptyFilterState());
-  expect(screen.getByRole('button', { name: /Compétitions\s*3/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Animations\s*2/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Cours\s*1/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Tout\s*6/ })).toBeInTheDocument();
+  const counts: Record<string, string> = { Compétitions: '3', Animations: '2', Cours: '1', Tout: '6' };
+  for (const [label, count] of Object.entries(counts)) {
+    const btn = screen.getByRole('button', { name: label });
+    expect(btn.querySelector('span[aria-hidden]')).toHaveTextContent(count);
+  }
 });
 
 it('changer de source réinitialise les facettes mais garde « quand »', () => {
