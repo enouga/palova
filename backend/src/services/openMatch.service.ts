@@ -423,7 +423,7 @@ export class OpenMatchService {
       const maxPlayers = playerCount((resource.attributes as { format?: string } | null)?.format);
       const parts = await tx.reservationParticipant.findMany({
         where: { reservationId },
-        select: { id: true, userId: true, isOrganizer: true },
+        select: { id: true, userId: true, isOrganizer: true, team: true, slot: true, user: { select: { sex: true } } },
       });
       const actor = parts.find((p) => p.userId === organizerUserId);
       if (!actor || !actor.isOrganizer) throw new Error('NOT_ORGANIZER');
@@ -439,8 +439,33 @@ export class OpenMatchService {
       if (parts.some((p) => p.userId === targetUserId)) throw new Error('ALREADY_JOINED');
       if (parts.length >= maxPlayers) throw new Error('MATCH_FULL');
 
+      // Genre : blocage dur, miroir du join. Pour un mixte, on place la cible sur une équipe
+      // compatible (place libre + pas de joueur du même sexe) ; aucune → GENDER_TEAM_FULL.
+      const meta = await tx.reservation.findUnique({ where: { id: reservationId }, select: { matchGender: true } });
+      const matchGender = meta?.matchGender ?? null;
+      let genderPlacement: { team: number; slot: number | null } | undefined;
+      if (matchGender) {
+        const targetUser = await tx.user.findUnique({ where: { id: targetUserId }, select: { sex: true } });
+        const targetSex = targetUser?.sex ?? null;
+        const half = Math.max(1, Math.floor(maxPlayers / 2));
+        const layout = effectiveTeams(parts, maxPlayers);
+        const sexOf = (uid: string) => parts.find((p) => p.userId === uid)?.user?.sex ?? null;
+        if (matchGender === 'WOMEN') {
+          assertOpenMatchGender('WOMEN', targetSex, 0);
+        } else {
+          let team: 1 | 2 | null = null;
+          for (const t of [1, 2] as const) {
+            const onSide = layout.filter((p) => p.team === t);
+            if (onSide.length < half && !onSide.some((p) => sexOf(p.userId) === targetSex)) { team = t; break; }
+          }
+          if (team == null) throw new Error('GENDER_TEAM_FULL');
+          assertOpenMatchGender('MIXED', targetSex, 0);
+          genderPlacement = { team, slot: null };
+        }
+      }
+
       const created = await tx.reservationParticipant.create({
-        data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0) },
+        data: { reservationId, userId: targetUserId, isOrganizer: false, share: new Prisma.Decimal(0), ...(genderPlacement ?? {}) },
       });
       const priceCents = Math.round(Number(r.total_price) * 100);
       await this.applyShares(tx, [...parts.map((p) => ({ id: p.id, isOrganizer: p.isOrganizer })), { id: created.id, isOrganizer: false }], priceCents);
