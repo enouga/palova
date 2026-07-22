@@ -747,21 +747,29 @@ model PasswordReset {
   @@map("password_resets")
 }
 
+/// Disponibilité au contact du J/A par les inscrits de ses tournois (réglage personnel, par club).
+enum RefereeContactPolicy {
+  ALWAYS
+  AFTER_DEADLINE
+  NEVER
+}
+
 /// Adhésion d'un joueur à un club : la base du fichier-membres géré par le club.
 /// Être membre (non BLOCKED) conditionne la réservation dans ce club.
 /// NB: table physique historiquement nommée `club_subscribers` (conservée via @@map
 /// pour une migration purement additive — l'ancien « abonné » devient isSubscriber).
 model ClubMembership {
-  id           String           @id @default(cuid())
-  userId       String           @map("user_id")
-  clubId       String           @map("club_id")
-  isSubscriber Boolean          @default(false) @map("is_subscriber") // fenêtre de résa élargie
-  membershipNo String?          @map("membership_no")                 // n° adhérent / licence
-  status       MembershipStatus @default(ACTIVE)
-  note         String?
-  watch        Boolean          @default(false)                       // drapeau « à surveiller » (staff)
-  isReferee    Boolean          @default(false) @map("is_referee")    // facette juge-arbitre
-  createdAt    DateTime         @default(now()) @map("created_at")    // = date d'adhésion
+  id                   String                @id @default(cuid())
+  userId               String                @map("user_id")
+  clubId               String                @map("club_id")
+  isSubscriber         Boolean               @default(false) @map("is_subscriber") // fenêtre de résa élargie
+  membershipNo         String?               @map("membership_no")                 // n° adhérent / licence
+  status               MembershipStatus      @default(ACTIVE)
+  note                 String?
+  watch                Boolean               @default(false)                       // drapeau « à surveiller » (staff)
+  isReferee            Boolean               @default(false) @map("is_referee")    // facette juge-arbitre
+  refereeContactPolicy RefereeContactPolicy  @default(AFTER_DEADLINE) @map("referee_contact_policy") // dispo au contact (facette J/A)
+  createdAt            DateTime              @default(now()) @map("created_at")    // = date d'adhésion
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
