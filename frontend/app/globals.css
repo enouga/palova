@@ -246,6 +246,19 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .pl-create-recap { margin-top: 0; }
 }
 
+/* ── Mon Palova (accueil joueur) : grilles denses, bascule 100 % CSS (pas de useIsDesktop). ──
+   .mp-grid    : « À venir » — cartes à tuile-date, auto-fill pour qu'UNE carte ne s'étire pas.
+   .mp-duo     : Mon niveau | Mes clubs côte à côte ≥ 640px, auto-fit → si l'un manque, l'autre remplit.
+   .mp-wallet  : lignes du portefeuille sur 2 colonnes ≥ 640px. */
+.mp-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.mp-duo { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.mp-wallet { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 640px) {
+  .mp-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .mp-duo { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .mp-wallet { grid-template-columns: 1fr 1fr; }
+}
+
 /* ── France en pointillés (FranceDotsMap) — heros brume de la vitrine et de /decouvrir ── */
 @keyframes pl-pinpop { from { transform: translate(-50%, -50%) scale(0); } to { transform: translate(-50%, -50%) scale(1); } }
 .pl-pinpop { transform: translate(-50%, -50%) scale(0); animation: pl-pinpop .5s cubic-bezier(.2, 1.4, .4, 1) forwards; }

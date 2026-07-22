@@ -75,9 +75,12 @@ export function MonPalova() {
           <ResultsToRecord token={token} />
           <HomeAgenda items={next} />
           <HomeMatchesRail myClubSlugs={myClubSlugs} />
-          <MyClubsRow memberships={memberships} />
+          {/* Carte joueur : niveau + clubs côte à côte sur desktop (auto-fit → l'un remplit si l'autre manque). */}
+          <div className="mp-duo">
+            <LevelCard token={token} />
+            <MyClubsRow memberships={memberships} />
+          </div>
           <WalletCard token={token} />
-          <LevelCard token={token} />
           <DiscoverPill />
         </div>
       </div>

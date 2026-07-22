@@ -1,32 +1,46 @@
 'use client';
 import { useTheme } from '@/lib/ThemeProvider';
 import { CardStripe, Chip } from '@/components/ui/atoms';
+import { Icon } from '@/components/ui/Icon';
 import { AgendaListItem, agendaItemClub, clubMarker } from '@/lib/calendar';
-import { agendaItemHeading, agendaWhenLabel } from '@/lib/monPalova';
+import { agendaItemHeading, agendaDateParts, agendaKindIcon } from '@/lib/monPalova';
 import { SectionHeader } from '@/components/platform/home/SectionHeader';
 
-// « À venir · tous clubs » : les entrées APRÈS celle du hero (jamais de doublon), en
-// cartes-liens read-only — les actions (annuler, joueurs, chat) vivent sur Mes réservations.
-// Marqueur club systématique (plateforme = localSlug null → clubMarker partout).
+// « À venir · tous clubs » : les entrées APRÈS celle du hero (jamais de doublon), en grille
+// dense de cartes à tuile-date (read-only — les actions vivent sur Mes réservations). Marqueur
+// club systématique (plateforme = localSlug null → clubMarker partout).
 export function HomeAgenda({ items }: { items: AgendaListItem[] }) {
   const { th } = useTheme();
   if (items.length === 0) return null;
   return (
     <section>
       <SectionHeader kicker="À venir · tous clubs" moreLabel="Tout voir →" moreHref="/me/reservations" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="mp-grid">
         {items.map((item) => {
           const marker = clubMarker(agendaItemClub(item), null);
+          const accent = marker?.accent ?? th.accent;
           const heading = agendaItemHeading(item);
+          const { day, month, weekdayTime } = agendaDateParts(item);
           return (
-            <a key={`${item.kind}-${item.id}`} href={heading.href}
-              style={{ position: 'relative', overflow: 'hidden', display: 'block', textDecoration: 'none', background: th.surface, borderRadius: 16, padding: '12px 14px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-              {marker && <CardStripe color={marker.accent} />}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text }}>{heading.title}</span>
-                {marker && <Chip color={marker.accent}>{marker.name}</Chip>}
+            <a key={`${item.kind}-${item.id}`} href={heading.href} className="pl-lift"
+              style={{ position: 'relative', overflow: 'hidden', display: 'flex', gap: 12, textDecoration: 'none', background: th.surface, borderRadius: 16, padding: '13px 14px 13px 16px', boxShadow: th.shadow }}>
+              {marker && <CardStripe color={accent} />}
+              {/* Tuile date teintée à la couleur du club — ancre visuelle gauche. */}
+              <div style={{ flexShrink: 0, width: 48, height: 48, borderRadius: 13, background: `${accent}22`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 18, color: th.text }}>{day}</span>
+                <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute, marginTop: 2 }}>{month}</span>
               </div>
-              <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>{agendaWhenLabel(item)}</div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name={agendaKindIcon(item.kind)} size={13} color={th.textMute} />
+                  <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{heading.title}</span>
+                  <Icon name="chevR" size={15} color={th.textFaint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 5 }}>
+                  <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>{weekdayTime}</span>
+                  {marker && <Chip color={accent}>{marker.name}</Chip>}
+                </div>
+              </div>
             </a>
           );
         })}

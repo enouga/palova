@@ -1,5 +1,6 @@
 import { AgendaListItem, agendaItemClub } from '@/lib/calendar';
 import { MyRating, NationalOpenMatch, UserLevel } from '@/lib/api';
+import { IconName } from '@/components/ui/Icon';
 import { clubUrl } from '@/lib/clubUrl';
 
 const MIN = 60_000, HOUR = 3_600_000, DAY = 86_400_000;
@@ -43,14 +44,35 @@ export function agendaItemHeading(item: AgendaListItem): { title: string; href: 
   return { title: `Cours · ${item.enrollment.lesson.coach.name}`, href: `/cours/${item.enrollment.lesson.id}` };
 }
 
-/** « jeu. 23 juil. · 18h00 » au fuseau du club de CHAQUE entrée (multi-clubs = multi-fuseaux). */
-export function agendaWhenLabel(item: AgendaListItem): string {
-  const tz = item.kind === 'reservation' ? item.r.resource.club.timezone
+/** Fuseau du club de CHAQUE entrée (multi-clubs = multi-fuseaux). */
+function agendaItemTz(item: AgendaListItem): string {
+  return item.kind === 'reservation' ? item.r.resource.club.timezone
     : item.kind === 'tournament' ? item.reg.tournament.club.timezone
     : item.kind === 'lesson' ? item.enrollment.lesson.club.timezone
     : item.ev.event.club.timezone;
+}
+
+/** « jeu. 23 juil. · 18h00 » au fuseau du club de l'entrée. */
+export function agendaWhenLabel(item: AgendaListItem): string {
+  const tz = agendaItemTz(item);
   const d = new Date(item.start);
   const date = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(d);
   const hour = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(d).replace(':', 'h');
   return `${date} · ${hour}`;
+}
+
+/** Éléments d'une carte à tuile-date : jour, mois (sans point), et « jour · heure ». */
+export function agendaDateParts(item: AgendaListItem): { day: string; month: string; weekdayTime: string } {
+  const tz = agendaItemTz(item);
+  const d = new Date(item.start);
+  const day = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', timeZone: tz }).format(d);
+  const month = new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: tz }).format(d).replace('.', '');
+  const weekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', timeZone: tz }).format(d);
+  const hour = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(d).replace(':', 'h');
+  return { day, month, weekdayTime: `${weekday} · ${hour}` };
+}
+
+/** Icône (design system) par type d'entrée d'agenda — tuile du hero et des cartes « À venir ». */
+export function agendaKindIcon(kind: AgendaListItem['kind']): IconName {
+  return kind === 'tournament' ? 'trophy' : kind === 'event' ? 'bolt' : kind === 'lesson' ? 'racket' : 'calendar';
 }

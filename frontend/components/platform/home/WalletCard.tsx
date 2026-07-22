@@ -19,13 +19,13 @@ export function WalletCard({ token }: { token: string }) {
     api.getMyWallet(token).then(setEntries).catch(() => setEntries([]));
   }, [token]);
   if (!entries || entries.length === 0) return null;
-  const line = { background: th.surface, borderRadius: 14, padding: '10px 13px', boxShadow: `inset 0 0 0 1px ${th.line}`, display: 'flex', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 };
+  const line = { background: th.surface, borderRadius: 14, padding: '11px 13px', boxShadow: th.shadow, display: 'flex', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 };
   const label = { fontFamily: th.fontUI, fontWeight: 700, fontSize: 13.5, color: th.text } as const;
   const sub = { fontFamily: th.fontUI, fontSize: 12, color: th.textMute } as const;
   return (
     <section>
       <SectionHeader kicker="Mon portefeuille" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className="mp-wallet">
         {entries.flatMap((e) => [
           ...e.subscriptions.map((s) => (
             <div key={`s-${s.id}`} style={line}>

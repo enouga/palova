@@ -1,4 +1,4 @@
-import { splitHomeAgenda, startsInLabel, sortMatchesForHome, ratingToLevel, agendaItemHeading, agendaWhenLabel } from '@/lib/monPalova';
+import { splitHomeAgenda, startsInLabel, sortMatchesForHome, ratingToLevel, agendaItemHeading, agendaWhenLabel, agendaDateParts, agendaKindIcon } from '@/lib/monPalova';
 import { buildAgendaList } from '@/lib/calendar';
 import { MyReservation, NationalOpenMatch } from '@/lib/api';
 
@@ -66,5 +66,21 @@ describe('agendaItemHeading / agendaWhenLabel', () => {
     const [item] = buildAgendaList([res('1', '2026-07-23T16:00:00.000Z')], [], [], [], NOW);
     expect(agendaItemHeading(item).title).toBe('Court 1');
     expect(agendaWhenLabel(item)).toMatch(/jeu\. 23 juil\. · 18h00/); // 16h UTC = 18h Paris
+  });
+});
+
+describe('agendaDateParts', () => {
+  it('jour / mois (sans point) / jour+heure, au fuseau du club (16h UTC = 18h Paris)', () => {
+    const [item] = buildAgendaList([res('1', '2026-07-23T16:00:00.000Z')], [], [], [], NOW);
+    expect(agendaDateParts(item)).toEqual({ day: '23', month: 'juil', weekdayTime: 'jeu. · 18h00' });
+  });
+});
+
+describe('agendaKindIcon', () => {
+  it('mappe chaque kind sur une icône', () => {
+    expect(agendaKindIcon('reservation')).toBe('calendar');
+    expect(agendaKindIcon('tournament')).toBe('trophy');
+    expect(agendaKindIcon('event')).toBe('bolt');
+    expect(agendaKindIcon('lesson')).toBe('racket');
   });
 });
