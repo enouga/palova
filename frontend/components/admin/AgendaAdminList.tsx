@@ -10,10 +10,12 @@ interface Props<T> {
   itemKey: (item: T) => string;
   emptyLabel: string;
   ready: boolean; // l'horloge `now` est connue → on peut classer/afficher
+  /** 2 = grille 2 colonnes ≥ 900px (page Tournois) ; défaut 1 = liste empilée (Events). */
+  columns?: 1 | 2;
 }
 
 // Rend les sections de statut (point coloré + label + compteur) puis les cartes.
-export function AgendaAdminList<T>({ groups, renderCard, itemKey, emptyLabel, ready }: Props<T>) {
+export function AgendaAdminList<T>({ groups, renderCard, itemKey, emptyLabel, ready, columns = 1 }: Props<T>) {
   const { th } = useTheme();
   if (!ready) return null;
   if (groups.length === 0) return <div style={{ fontFamily: th.fontUI, color: th.textMute }}>{emptyLabel}</div>;
@@ -27,9 +29,15 @@ export function AgendaAdminList<T>({ groups, renderCard, itemKey, emptyLabel, re
             <b style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: th.text }}>{g.label}</b>
             <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textFaint }}>· {g.items.length}</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {g.items.map((it) => <div key={itemKey(it)}>{renderCard(it)}</div>)}
-          </div>
+          {columns === 2 ? (
+            <div className="admin-cards-2col">
+              {g.items.map((it) => <div key={itemKey(it)}>{renderCard(it)}</div>)}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {g.items.map((it) => <div key={itemKey(it)}>{renderCard(it)}</div>)}
+            </div>
+          )}
         </section>
       ))}
     </div>

@@ -184,6 +184,7 @@ export default function AdminEventsPage() {
         waitlist={e.waitlistCount}
         chips={[e.sport?.name ?? null, e.price != null ? `${Number(e.price)} €` : null, e.memberOnly ? 'Membres' : null, e.requirePrepayment ? 'CB en ligne' : null, e.seriesId ? 'Série' : null]}
         actions={actions}
+        stackActions
       />
     );
   };
@@ -294,6 +295,7 @@ export default function AdminEventsPage() {
         renderCard={renderCard}
         itemKey={(e) => e.id}
         emptyLabel="Aucun event."
+        columns={2}
       />
 
       {/* Panneau inscrits */}

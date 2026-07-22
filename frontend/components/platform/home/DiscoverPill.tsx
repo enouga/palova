@@ -7,7 +7,7 @@ import { PILL_INK } from '@/components/discover/LocationSearchPill';
 // Porte vers /decouvrir — pastille encre compacte qui flotte sur le bord bas du hero (marge
 // haute négative, même geste que la pilule blanche de /decouvrir, silhouette opposée). La
 // grande pilule de recherche (LocationSearchPill) est la signature EXCLUSIVE de la page
-// Découvrir : depuis l'accueil on ne tape rien, on passe la porte et on cherche là-bas.
+// Où jouer : depuis l'accueil on ne tape rien, on passe la porte et on cherche là-bas.
 export function DiscoverPill() {
   const router = useRouter();
   const { th } = useTheme();
@@ -25,7 +25,7 @@ export function DiscoverPill() {
         }}
       >
         <FranceDotsIcon />
-        Découvrir · clubs, parties, tournois
+        Où jouer · clubs, parties, tournois
         <span aria-hidden="true" style={{ opacity: 0.7, fontWeight: 400 }}>→</span>
       </button>
     </div>

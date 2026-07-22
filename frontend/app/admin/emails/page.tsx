@@ -38,7 +38,7 @@ export default function AdminEmailsPage() {
   useEffect(() => { if (ready && token && clubId) load(); }, [ready, token, clubId, load]);
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 1160 }}>
       <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 34, letterSpacing: -0.5, margin: '0 0 6px', color: th.text }}>Emails</h1>
       <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: '0 0 28px' }}>
         Personnalisez le contenu de chaque email automatique — texte, mise en forme et photos, sans aucune technique.
@@ -57,11 +57,11 @@ export default function AdminEmailsPage() {
               </span>
               <h2 style={{ fontFamily: th.fontUI, fontSize: 16, fontWeight: 700, color: th.text, margin: 0 }}>{meta.label}</h2>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="admin-cards-2col">
               {groupItems.map((it) => (
                 <Link key={it.type} href={`/admin/emails/${it.type}`} style={{ textDecoration: 'none' }}>
                   <div style={{ background: th.bgElev, borderRadius: 14, padding: '14px 18px', border: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={{ fontFamily: th.fontUI, fontSize: 14.5, fontWeight: 700, color: th.text }}>{it.title}</div>
                       <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{it.description}</div>
                     </div>

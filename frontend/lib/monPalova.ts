@@ -38,7 +38,7 @@ export function ratingToLevel(r: MyRating | null): UserLevel | null {
 /** Titre + lien profond d'une entrée d'agenda (cartes du hero et de « À venir »). */
 export function agendaItemHeading(item: AgendaListItem): { title: string; href: string } {
   const slug = agendaItemClub(item).slug;
-  if (item.kind === 'reservation') return { title: item.r.resource.name, href: '/me/reservations' };
+  if (item.kind === 'reservation') return { title: item.r.resource.name, href: clubUrl(slug, '/me/reservations') };
   if (item.kind === 'tournament') return { title: item.reg.tournament.name, href: clubUrl(slug, `/tournois/${item.reg.tournament.id}`) };
   if (item.kind === 'event') return { title: item.ev.event.name, href: clubUrl(slug, `/events/${item.ev.event.id}`) };
   return { title: `Cours · ${item.enrollment.lesson.coach.name}`, href: `/cours/${item.enrollment.lesson.id}` };

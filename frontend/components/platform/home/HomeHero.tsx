@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/Icon';
 // Hero « accueil » de Mon Palova — brume bleue (jamais de panneau sombre) : salutation +
 // en-tête du tableau de bord. Il ne rejoue PLUS la prochaine réservation (elle vit dans
 // « À venir ») et ne porte plus la promesse de recherche : celle-ci vit dans la porte
-// Découvrir (DiscoverPill), rendue en frère JUSTE après ce hero (cf. MonPalova) et qui
+// Où jouer (DiscoverPill), rendue en frère JUSTE après ce hero (cf. MonPalova) et qui
 // flotte sur son bord bas via sa marge négative propre — d'où le padding bas généreux.
 export function HomeHero({ firstName }: { firstName: string | null }) {
   const { th } = useTheme();

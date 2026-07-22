@@ -140,7 +140,7 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
           </div>
 
           {/* Clubs dont je suis membre — navigation directe vers leur sous-domaine, y compris
-              depuis l'hôte plateforme (/decouvrir) où aucun autre lien n'y ramène. */}
+              depuis l'hôte plateforme (accueil Mon Palova) où aucun autre lien n'y ramène. */}
           {otherClubs.length > 0 && (
             <div style={{ borderBottom: `1px solid ${th.line}`, paddingBottom: 4 }}>
               <div style={sectionTitle}>Mes clubs</div>
@@ -197,13 +197,14 @@ export function ProfileMenu({ direction = 'down', align = 'right' }: { direction
                 où JE SUIS INSCRIT comme joueur — deux « mes tournois » de sens opposés piégeraient. */}
             {slug && isReferee && <MenuItem th={th} icon="trophy" label="Arbitrage" onClick={() => go('/me/refereeing')} />}
             <MenuItem th={th} icon="bell" label="Notifications" onClick={() => go('/me/notifications/settings')} />
-            <MenuItem th={th} icon="ball" label="Palova" onClick={() => { setOpen(false); window.location.assign(platformUrl('/decouvrir')); }} />
+            <MenuItem th={th} icon="ball" label="Palova" onClick={() => { setOpen(false); window.location.assign(platformUrl('/')); }} />
             {profile?.isSuperAdmin && !slug && <MenuItem th={th} icon="grid" label="Superadmin" onClick={() => go('/superadmin')} />}
-            {installState !== 'hidden' && (
+            <MenuItem th={th} icon="info" label="Aide" onClick={() => go(slug ? '/aide' : '/faq')} />
+                        {installState !== 'hidden' && (
               <MenuItem th={th} icon="home" label="Installer l'application"
                 onClick={() => { setOpen(false); if (installState === 'native') promptInstall(); else setInstallHelp(true); }} />
             )}
-            <MenuItem th={th} icon="info" label="Aide" onClick={() => go(slug ? '/aide' : '/faq')} />
+
             <MenuItem th={th} icon="logout" label="Se déconnecter" onClick={() => { setOpen(false); logout(); }} />
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { splitHomeAgenda, startsInLabel, sortMatchesForHome, ratingToLevel, agendaItemHeading, agendaWhenLabel, agendaDateParts, agendaKindIcon } from '@/lib/monPalova';
 import { buildAgendaList } from '@/lib/calendar';
 import { MyReservation, NationalOpenMatch } from '@/lib/api';
+import { clubUrl } from '@/lib/clubUrl';
 
 const NOW = new Date('2026-07-22T12:00:00.000Z');
 
@@ -65,6 +66,7 @@ describe('agendaItemHeading / agendaWhenLabel', () => {
   it('titre par kind + horaire au fuseau du club de l\'entrée', () => {
     const [item] = buildAgendaList([res('1', '2026-07-23T16:00:00.000Z')], [], [], [], NOW);
     expect(agendaItemHeading(item).title).toBe('Court 1');
+    expect(agendaItemHeading(item).href).toBe(clubUrl('padel-arena', '/me/reservations'));
     expect(agendaWhenLabel(item)).toMatch(/jeu\. 23 juil\. · 18h00/); // 16h UTC = 18h Paris
   });
 });

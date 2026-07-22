@@ -172,7 +172,7 @@ export function TournamentFinder({
       : null),
     [locItems, state, now],
   );
-  // Embarqué (Découvrir) : grille plafonnée à MAX_VISIBLE — la page /tournois autonome
+  // Embarqué (Où jouer) : grille plafonnée à MAX_VISIBLE — la page /tournois autonome
   // reste un flux complet (results non tronqué).
   const visibleResults = useMemo(
     () => (results && hideTitle ? results.slice(0, MAX_VISIBLE) : results),

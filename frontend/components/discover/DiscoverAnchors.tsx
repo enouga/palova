@@ -3,8 +3,9 @@ import { useTheme } from '@/lib/ThemeProvider';
 
 export interface DiscoverAnchorItem { id: string; label: string; count: number | null }
 
-// Rangée d'ancres collante de /decouvrir : navigation dans le scroll (PAS des onglets —
-// les sections restent toutes rendues). Le parent fournit la section active (scroll-spy).
+// Rangée d'ancres de /decouvrir : navigation dans le scroll (PAS des onglets — les sections
+// restent toutes rendues). Le parent fournit la section active (scroll-spy) ET la collante
+// (DiscoverClient l'empile avec la barre de recherche dans un seul conteneur sticky).
 export function DiscoverAnchors({ items, active, onJump }: {
   items: DiscoverAnchorItem[];
   active: string;
@@ -12,7 +13,7 @@ export function DiscoverAnchors({ items, active, onJump }: {
 }) {
   const { th } = useTheme();
   return (
-    <div style={{ position: 'sticky', top: 0, zIndex: 30, background: th.bg, padding: '8px 20px' }}>
+    <div style={{ padding: '6px 20px 8px' }}>
       <div style={{ display: 'flex', gap: 4, background: th.surface2, borderRadius: 999, padding: 4, maxWidth: 430, margin: '0 auto' }}>
         {items.map((it) => {
           const isActive = it.id === active;

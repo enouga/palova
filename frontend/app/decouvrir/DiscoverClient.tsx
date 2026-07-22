@@ -8,7 +8,7 @@ import { hardNavigate } from '@/lib/nav';
 import { platformUrl } from '@/lib/clubUrl';
 import { parseLocationQuery } from '@/lib/discover';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, ThemeToggle } from '@/components/ui/atoms';
+import { Logotype, ThemeToggle, BackButton } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon } from '@/components/ui/Icon';
 import { ACCENTS } from '@/lib/theme';
@@ -23,7 +23,7 @@ import { LocationSearchPill, PILL_INK } from '@/components/discover/LocationSear
 const SECTION_IDS = ['parties', 'tournois', 'clubs'] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
-// Page « Découvrir » v2 : UNE page, trois sections empilées (Parties → Tournois → Clubs),
+// Page « Où jouer » v2 : UNE page, trois sections empilées (Parties → Tournois → Clubs),
 // rangée d'ancres collante (navigation dans le scroll, pas des onglets), barre de
 // localisation unique (ville / code postal / département + géoloc) qui filtre tout.
 // Deep-links : #parties / #tournois / #clubs (les redirections /clubs et /tournois les posent).
@@ -165,43 +165,54 @@ export function DiscoverClient() {
           </div>
         </div>
 
+        <div style={{ padding: '4px 20px 0' }}>
+          <BackButton href="/" label="Accueil" />
+        </div>
+
         {/* Mini-hero brume : l'établi ne re-séduit pas (pas de titre-promesse — le hero complet
             vit sur la vitrine anonyme) ; petite France en filigrane pour la continuité. */}
         <div style={{ padding: '10px 18px 0' }}>
           <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 22, background: HERO_GRADIENT, padding: '26px 24px 46px' }}>
             <FranceDotsMap pins="few" style={{ height: '150%', right: -20, opacity: 0.55 }} />
             <div style={{ position: 'relative', fontFamily: th.fontBrand, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: HERO_INK_MUTED }}>
-              Découvrir
+              Où jouer
             </div>
           </div>
-          <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
-            nearActive={!!coords} locating={geoState === 'locating'}
-            extra={myClubsChipVisible && (
-              <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
-                aria-label="Mes clubs" title="Mes clubs" style={{
-                  flexShrink: 0, border: 'none', cursor: 'pointer', width: 42, height: 42, borderRadius: 999,
-                  background: mineOnly ? ACCENTS.blue : '#eef1f6',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                <Icon name="home" size={18} color={mineOnly ? '#ffffff' : PILL_INK} />
-              </button>
-            )} />
-          {geoState === 'denied' && (
-            <div style={{ textAlign: 'center', marginTop: 8, fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
-              Localisation indisponible — cherchez par ville ou département.
-            </div>
-          )}
         </div>
 
-        <DiscoverAnchors
-          items={[
-            { id: 'parties', label: 'Parties', count: counts.parties },
-            { id: 'tournois', label: 'Tournois', count: counts.tournois },
-            { id: 'clubs', label: 'Clubs', count: counts.clubs },
-          ]}
-          active={active}
-          onJump={jumpTo}
-        />
+        {/* Recherche par lieu + ancres : collantes ENSEMBLE (un seul conteneur sticky) pour
+            garder le filtre lieu actionnable en scrollant les listes, sans dupliquer la pilule. */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 30, background: th.bg }}>
+          <div style={{ padding: '0 18px' }}>
+            <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
+              nearActive={!!coords} locating={geoState === 'locating'}
+              extra={myClubsChipVisible && (
+                <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
+                  aria-label="Mes clubs" title="Mes clubs" style={{
+                    flexShrink: 0, border: 'none', cursor: 'pointer', width: 42, height: 42, borderRadius: 999,
+                    background: mineOnly ? ACCENTS.blue : '#eef1f6',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                  <Icon name="home" size={18} color={mineOnly ? '#ffffff' : PILL_INK} />
+                </button>
+              )} />
+            {geoState === 'denied' && (
+              <div style={{ textAlign: 'center', margin: '8px 0 0', fontFamily: th.fontUI, fontSize: 12.5, color: th.textFaint }}>
+                Localisation indisponible — cherchez par ville ou département.
+              </div>
+            )}
+          </div>
+
+          <DiscoverAnchors
+            items={[
+              { id: 'parties', label: 'Parties', count: counts.parties },
+              { id: 'tournois', label: 'Tournois', count: counts.tournois },
+              { id: 'clubs', label: 'Clubs', count: counts.clubs },
+            ]}
+            active={active}
+            onJump={jumpTo}
+          />
+        </div>
 
         <section id="parties" data-section="parties" ref={(el) => { sectionRefs.current.parties = el; }} style={{ paddingTop: 10 }}>
           <div style={{ padding: '0 20px' }}>

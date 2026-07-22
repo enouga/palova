@@ -10,7 +10,7 @@ import { useClub } from '@/lib/ClubProvider';
 import { Icon, IconName } from './Icon';
 
 // ── LogoBall : la balle monoligne seule (mark Palova sans wordmark), réutilisée
-//    partout où l'icône seule suffit (ex. icône « Découvrir » du ClubNav).
+//    partout où l'icône seule suffit (ex. icône « Où jouer » du ClubNav).
 //    Couleur par défaut = accent du thème ; halo neon conservé.
 export function LogoBall({ size = 20, color }: { size?: number; color?: string }) {
   const { th } = useTheme();

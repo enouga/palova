@@ -65,7 +65,7 @@ export function FranceDotsMap({ pins = 'full', style }: { pins?: 'full' | 'few' 
 }
 
 /** Icône compacte « France en pointillés » — trame claire pour les fonds encre (porte
- *  Découvrir de l'accueil). Purement décorative : aria-hidden, pas d'épingles. */
+ *  Où jouer de l'accueil). Purement décorative : aria-hidden, pas d'épingles. */
 export function FranceDotsIcon({ size = 18, dotColor = 'rgba(244,246,250,0.95)' }: { size?: number; dotColor?: string }) {
   return (
     <span

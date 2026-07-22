@@ -62,7 +62,7 @@ export const SECTION_DEFS: { key: ClubHouseSectionKey; label: string; hint?: str
   { key: 'matches', label: 'Ça joue bientôt', hint: 'Parties ouvertes qui cherchent des joueurs' },
   { key: 'agenda', label: 'Prochains events & vos réservations' },
   { key: 'top', label: 'Top du mois', hint: 'Podium des victoires du mois' },
-  { key: 'offers', label: 'Offres du club', hint: 'Dépend aussi de « Vendre les offres en ligne » (Réglages)' },
+  { key: 'offers', label: 'Offres du club' },
   { key: 'clubCard', label: 'Le club', hint: 'Présentation et photos' },
   { key: 'sponsors', label: 'Partenaires', hint: 'Rivière de logos' },
 ];
@@ -74,7 +74,10 @@ const VISITOR_ORDER: ClubHouseSectionKey[] = ['kiosk', 'matches', 'clubCard', 'a
  *  sinon la config s'applique à tous. Clé inconnue ignorée, clé connue absente ajoutée en
  *  fin visible (une section livrée après la sauvegarde de la config s'affiche quand même) —
  *  SAUF `kiosk`, ajouté EN TÊTE quand il manque (config antérieure à la clé : le kiosque
- *  restait en haut). Miroir : backend normalizeClubHouseSections. */
+ *  restait en haut). `offers` reste TOUJOURS dans l'ordre quel que soit son `visible` stocké :
+ *  son affichage réel dépend de `Club.showOffersPublicly` (la case « Vendre en ligne » de cette
+ *  même carte), pas d'un 2e drapeau — seule sa position se règle ici. Miroir : backend
+ *  normalizeClubHouseSections. */
 export function resolveSections(
   config: ClubHouseSectionSetting[] | null | undefined,
   isMember: boolean,
@@ -88,7 +91,7 @@ export function resolveSections(
     const key = e?.key as ClubHouseSectionKey | undefined;
     if (!key || seen.has(key) || !SECTION_KEYS.includes(key)) continue;
     seen.add(key);
-    if (e.visible !== false) order.push(key);
+    if (key === 'offers' || e.visible !== false) order.push(key);
   }
   // Kiosque absent de la config → en tête (et visible) ; s'il y figure, sa position/visibilité gagnent.
   if (!seen.has('kiosk')) { seen.add('kiosk'); order.unshift('kiosk'); }
@@ -106,7 +109,9 @@ export function hiddenSectionKeys(config: ClubHouseSectionSetting[] | null | und
   return hidden;
 }
 
-/** Liste complète (7 entrées) pour l'éditeur admin : config complétée ; null → défaut membre. */
+/** Liste complète (7 entrées) pour l'éditeur admin : config complétée ; null → défaut membre.
+ *  `offers` est toujours rendu visible ici (son propre drapeau JSON est inerte, cf. resolveSections) —
+ *  l'éditeur affiche l'état réel via `Club.showOffersPublicly`, pas ce champ. */
 export function fullSectionSettings(config: ClubHouseSectionSetting[] | null | undefined): ClubHouseSectionSetting[] {
   if (!Array.isArray(config) || config.length === 0) {
     return MEMBER_ORDER.map((key) => ({ key, visible: true }));
@@ -117,7 +122,7 @@ export function fullSectionSettings(config: ClubHouseSectionSetting[] | null | u
     const key = e?.key as ClubHouseSectionKey | undefined;
     if (!key || seen.has(key) || !SECTION_KEYS.includes(key)) continue;
     seen.add(key);
-    out.push({ key, visible: e.visible !== false });
+    out.push({ key, visible: key === 'offers' ? true : e.visible !== false });
   }
   // Kiosque absent de la config → en tête, visible (miroir de resolveSections / backend).
   if (!seen.has('kiosk')) { seen.add('kiosk'); out.unshift({ key: 'kiosk', visible: true }); }

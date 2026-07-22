@@ -9,12 +9,12 @@ import { DiscoverPill } from '@/components/platform/home/DiscoverPill';
 
 const wrap = () => render(<ThemeProvider><DiscoverPill /></ThemeProvider>);
 
-describe('DiscoverPill (porte Découvrir)', () => {
+describe('DiscoverPill (porte Où jouer)', () => {
   beforeEach(() => { push.mockClear(); });
 
   it('clic sur la porte → /decouvrir', () => {
     wrap();
-    fireEvent.click(screen.getByRole('button', { name: /Découvrir · clubs, parties, tournois/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Où jouer · clubs, parties, tournois/ }));
     expect(push).toHaveBeenCalledWith('/decouvrir');
   });
 

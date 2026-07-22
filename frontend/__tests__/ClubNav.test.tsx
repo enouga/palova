@@ -325,7 +325,7 @@ describe('ClubNav', () => {
 
   it("affiche l'icône Palova → /decouvrir même sans session (visiteur anonyme), hors sous-domaine club", () => {
     wrap();
-    const link = screen.getByLabelText('Palova — découvrir clubs, parties et tournois');
+    const link = screen.getByLabelText('Palova — où jouer : clubs, parties et tournois');
     expect(link).toHaveAttribute('href', expect.stringContaining('/decouvrir'));
     expect(link.getAttribute('href')).not.toContain('demo.');
   });
@@ -333,7 +333,7 @@ describe('ClubNav', () => {
   it("affiche l'icône Palova → /decouvrir aussi connecté", () => {
     document.cookie = 'token=abc; path=/';
     wrap();
-    expect(screen.getByLabelText('Palova — découvrir clubs, parties et tournois')).toBeInTheDocument();
+    expect(screen.getByLabelText('Palova — où jouer : clubs, parties et tournois')).toBeInTheDocument();
   });
 
   it('expose un libellé court (.cn-lbl-short) pour les onglets longs — affiché à la place du long sur mobile actif', async () => {

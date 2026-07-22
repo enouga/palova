@@ -260,6 +260,12 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .mp-wallet { grid-template-columns: 1fr 1fr; }
 }
 
+/* ── Admin : listes de cartes en 2 colonnes ≥ 900px (Tournois, Events, Emails), bascule CSS pure. ── */
+.admin-cards-2col { display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 900px) {
+  .admin-cards-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+
 /* ── France en pointillés (FranceDotsMap) — heros brume de la vitrine et de /decouvrir ── */
 @keyframes pl-pinpop { from { transform: translate(-50%, -50%) scale(0); } to { transform: translate(-50%, -50%) scale(1); } }
 .pl-pinpop { transform: translate(-50%, -50%) scale(0); animation: pl-pinpop .5s cubic-bezier(.2, 1.4, .4, 1) forwards; }

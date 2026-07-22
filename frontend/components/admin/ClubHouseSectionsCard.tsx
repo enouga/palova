@@ -18,6 +18,10 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
   const [dragKey, setDragKey] = useState<ClubHouseSectionKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  // Case « Vendre en ligne » de la rangée Offres : pilote directement Club.showOffersPublicly
+  // (le verrou réel côté API/paiement), pas le drapeau `visible` JSON de cette section — qui ne
+  // sert plus qu'à sa position (cf. lib/clubhouse.ts).
+  const [offersOn, setOffersOn] = useState(false);
   // Vitesse d'auto-défilement du kiosque « À la une » : `speed` = secondes (3..20) mémorisées,
   // `manual` = true → pas de défilement auto (stocké 0). Persistance débouncée pour le curseur.
   const [speed, setSpeed] = useState(6);
@@ -31,6 +35,7 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
       const club = await api.adminGetClub(clubId, token);
       setItems(fullSectionSettings(club.clubHouseSections));
       setCustomized(club.clubHouseSections != null);
+      setOffersOn(!!club.showOffersPublicly);
       const s = club.clubHouseKioskSeconds ?? 6;
       setManual(s <= 0);
       setSpeed(s > 0 ? s : 6);
@@ -89,6 +94,13 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
     persist(items.map((r) => (r.key === key ? { ...r, visible: !r.visible } : r)));
   };
 
+  // Case « Vendre en ligne » de la rangée Offres — optimiste, recharge l'état serveur si échec.
+  const toggleOffers = (v: boolean) => {
+    setOffersOn(v);
+    api.adminUpdateClub(clubId, { showOffersPublicly: v }, token)
+      .catch((e) => { setError((e as Error).message); load(); });
+  };
+
   const reset = async () => {
     setConfirmReset(false);
     try {
@@ -123,12 +135,14 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
         {items.map((s, idx) => {
           const def = defs.get(s.key);
           const isKiosk = s.key === 'kiosk';
+          const isOffers = s.key === 'offers';
+          const rowOn = isOffers ? offersOn : s.visible;
           return (
             <div key={s.key}>
               <div onDragOver={(e) => e.preventDefault()} onDrop={() => onDropRow(s.key)}
                 style={{
                   ...rowStyle,
-                  opacity: dragKey === s.key ? 0.4 : (s.visible ? 1 : 0.55),
+                  opacity: dragKey === s.key ? 0.4 : (rowOn ? 1 : 0.55),
                   ...(isKiosk ? { border: `1px solid ${th.accentWarm}` } : {}),
                 }}>
                 <span draggable onDragStart={() => setDragKey(s.key)} onDragEnd={() => setDragKey(null)}
@@ -145,13 +159,19 @@ export function ClubHouseSectionsCard({ clubId, token }: { clubId: string; token
                       style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, color: th.accent }}>
                       Défilement : {manual ? 'manuel' : `${speed} s`} {kioskOpen ? '▴' : '▾'}
                     </button>
+                  ) : isOffers ? (
+                    <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>Rend vos abonnements et carnets visibles et achetables en ligne</div>
                   ) : def?.hint && <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{def.hint}</div>}
                 </div>
                 <button onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Monter ${def?.label}`} style={arrowStyle(idx === 0)}>↑</button>
                 <button onClick={() => move(idx, 1)} disabled={idx === items.length - 1} aria-label={`Descendre ${def?.label}`} style={arrowStyle(idx === items.length - 1)}>↓</button>
                 <label style={toggleLabel}>
-                  <input type="checkbox" checked={s.visible} onChange={() => toggle(s.key)} aria-label={`Afficher ${def?.label}`} />
-                  Afficher
+                  {isOffers ? (
+                    <input type="checkbox" checked={offersOn} onChange={() => toggleOffers(!offersOn)} aria-label="Vendre en ligne" />
+                  ) : (
+                    <input type="checkbox" checked={s.visible} onChange={() => toggle(s.key)} aria-label={`Afficher ${def?.label}`} />
+                  )}
+                  {isOffers ? 'Vendre en ligne' : 'Afficher'}
                 </label>
               </div>
 
