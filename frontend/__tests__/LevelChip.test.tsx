@@ -15,12 +15,12 @@ it('LevelChip affiche le niveau quand activé', () => {
 });
 it('LevelChip ne rend rien quand désactivé', () => {
   clubVal.club = { levelSystemEnabled: false };
-  const { container } = render(<LevelChip level={lvl as any} />);
+  const { container } = render(<ThemeProvider><LevelChip level={lvl as any} /></ThemeProvider>);
   expect(container).toBeEmptyDOMElement();
 });
 it('LevelBadge ne rend rien quand désactivé', () => {
   clubVal.club = { levelSystemEnabled: false };
-  const { container } = render(<LevelBadge rating={{ level: 4.2, tier: 'Intermédiaire', isProvisional: false } as any} />);
+  const { container } = render(<ThemeProvider><LevelBadge rating={{ level: 4.2, tier: 'Intermédiaire', isProvisional: false } as any} /></ThemeProvider>);
   expect(container).toBeEmptyDOMElement();
 });
 it('LevelBadge affiche la fiabilité en %', () => {

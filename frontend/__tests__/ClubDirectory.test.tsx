@@ -117,6 +117,18 @@ it('fait tourner la banque de couvertures → cartes voisines distinctes', async
   expect(new Set(covers).size).toBe(3); // 3 cartes → 3 couvertures distinctes (rotation)
 });
 
+it('les résultats sont rendus dans une grille 2 colonnes', async () => {
+  authToken = null;
+  const club = (id: string) => ({
+    id, slug: id, name: id.toUpperCase(), city: null, description: null,
+    accentColor: '#123456', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1,
+  });
+  listClubs.mockResolvedValue([club('a'), club('b')]);
+  const { container } = wrap();
+  await waitFor(() => expect(screen.getAllByTestId('club-card')).toHaveLength(2));
+  expect(container.querySelector('.discover-clubs-grid')).not.toBeNull();
+});
+
 it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et masque ville + géoloc', async () => {
   authToken = null; // simplifie : pas de filtre sport asynchrone en plus
   render(
@@ -169,6 +181,44 @@ it('onCount reçoit le nombre de clubs affichés', async () => {
   listClubs.mockResolvedValue([clubFixture]);
   const onCount = jest.fn();
   render(<ThemeProvider><ClubDirectory onCount={onCount} /></ThemeProvider>);
+  await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
+});
+
+const clubFixture2 = { ...clubFixture, id: 'c2', slug: 'club-2', name: 'Padel Club 2' };
+
+it('onlySlugs rétrécit les cartes rendues après le fetch', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture, clubFixture2]);
+  render(<ThemeProvider><ClubDirectory onlySlugs={new Set(['club-1'])} /></ThemeProvider>);
+  expect(await screen.findByText('Padel Club 1')).toBeInTheDocument();
+  expect(screen.queryByText('Padel Club 2')).not.toBeInTheDocument();
+});
+
+it('onlySlugs vide (aucune correspondance) → « Aucun club ne correspond. »', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture]);
+  render(<ThemeProvider><ClubDirectory onlySlugs={new Set(['not-a-member'])} /></ThemeProvider>);
+  expect(await screen.findByText('Aucun club ne correspond.')).toBeInTheDocument();
+});
+
+it('changer onlySlugs ne redéclenche jamais listClubs (filtre 100% client)', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture, clubFixture2]);
+  const { rerender } = render(<ThemeProvider><ClubDirectory /></ThemeProvider>);
+  await waitFor(() => expect(screen.getByText('Padel Club 1')).toBeInTheDocument());
+  const callsBefore = listClubs.mock.calls.length;
+
+  rerender(<ThemeProvider><ClubDirectory onlySlugs={new Set(['club-1'])} /></ThemeProvider>);
+  expect(await screen.findByText('Padel Club 1')).toBeInTheDocument();
+  expect(screen.queryByText('Padel Club 2')).not.toBeInTheDocument();
+  expect(listClubs.mock.calls.length).toBe(callsBefore);
+});
+
+it('onCount reflète le compte post-onlySlugs, pas le compte brut du fetch', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([clubFixture, clubFixture2]);
+  const onCount = jest.fn();
+  render(<ThemeProvider><ClubDirectory onlySlugs={new Set(['club-1'])} onCount={onCount} /></ThemeProvider>);
   await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
 });
 

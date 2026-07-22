@@ -2,9 +2,8 @@
  * Tests — TournamentDetailPage — parcours d'inscription payante (Task 17)
  * Scope : StripePaymentStep rendu après register({ payment }), mode setup, flux libre inchangé.
  */
-import { Suspense } from 'react';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
-import TournamentDetailPage from '../app/tournois/[id]/page';
+import { TournamentDetailClient } from '../app/tournois/[id]/TournamentDetailClient';
 import { ThemeProvider } from '../lib/ThemeProvider';
 
 // --- Mocks composants lourds ------------------------------------------------
@@ -24,8 +23,8 @@ jest.mock('../components/tournament/MyRegistrationCard', () => ({
 jest.mock('../components/tournament/ProfileCompletion', () => ({
   ProfileCompletion: () => null,
 }));
-jest.mock('../components/tournament/PartnerSearch', () => ({
-  PartnerSearch: ({ onSelect }: { onSelect: (p: { id: string; firstName: string; lastName: string }) => void }) => (
+jest.mock('../components/tournament/PartnerField', () => ({
+  PartnerField: ({ onSelect }: { onSelect: (p: { id: string; firstName: string; lastName: string }) => void }) => (
     <button
       data-testid="select-partner"
       onClick={() => onSelect({ id: 'u2', firstName: 'Partner', lastName: 'User' })}
@@ -136,14 +135,12 @@ const baseReg = {
 };
 
 async function renderPage(id = 't1') {
-  // Render inside act(async) so React resolves the use(params) Suspense boundary AND the
-  // chained data-load promises (getTournament/getMyProfile/…) flush within a single act pass.
+  // Render inside act(async) so React flushe les promesses de chargement chaînées
+  // (getTournament/getMyProfile/…) en un seul passage act.
   await act(async () => {
     render(
       <ThemeProvider>
-        <Suspense fallback={null}>
-          <TournamentDetailPage params={Promise.resolve({ id })} />
-        </Suspense>
+        <TournamentDetailClient id={id} />
       </ThemeProvider>,
     );
   });

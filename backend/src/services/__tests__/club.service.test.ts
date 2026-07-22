@@ -870,6 +870,21 @@ describe('ClubService — moyens d\'encaissement rapides', () => {
     await svc.getClubForAdmin('club-1');
     expect((prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0].select.payAtClubOnly).toBe(true);
   });
+
+  it('updateClub écrit listOpenMatchesNationally (booléen) et l\'ignore si absent', async () => {
+    prismaMock.club.update.mockResolvedValue({} as any);
+    await svc.updateClub('club-1', { listOpenMatchesNationally: true });
+    expect((prismaMock.club.update as jest.Mock).mock.calls[0][0].data.listOpenMatchesNationally).toBe(true);
+    (prismaMock.club.update as jest.Mock).mockClear();
+    await svc.updateClub('club-1', { name: 'X' });
+    expect((prismaMock.club.update as jest.Mock).mock.calls[0][0].data.listOpenMatchesNationally).toBeUndefined();
+  });
+
+  it('getClubForAdmin sélectionne listOpenMatchesNationally', async () => {
+    prismaMock.club.findUniqueOrThrow.mockResolvedValue({} as any);
+    await svc.getClubForAdmin('club-1');
+    expect((prismaMock.club.findUniqueOrThrow as jest.Mock).mock.calls[0][0].select.listOpenMatchesNationally).toBe(true);
+  });
 });
 
 describe('club.service — persistance du département', () => {

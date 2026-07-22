@@ -18,6 +18,11 @@ export interface DispatchInput {
   data?: Prisma.InputJsonValue;
   /** Payload email optionnel : si fourni ET canal EMAIL actif, on l'envoie. */
   email?: DispatchEmail | null;
+  /**
+   * Plafond de canaux imposé par l'appelant (ex. diffusion : le club choisit email/cloche/push).
+   * Intersecté avec les préférences du destinataire. Absent = aucun plafond (comportement historique).
+   */
+  allowChannels?: { inapp?: boolean; email?: boolean; push?: boolean };
 }
 
 /**
@@ -46,6 +51,17 @@ export async function dispatch(input: DispatchInput): Promise<void> {
   } catch (e) {
     console.error('[notif:prefs]', (e as Error).message);
     return;
+  }
+
+  // Plafond appelant (ex. diffusion club) : un canal ne part que s'il est autorisé
+  // À LA FOIS par les préférences du membre ET par l'appelant.
+  if (input.allowChannels) {
+    const a = input.allowChannels;
+    channels = {
+      inapp: channels.inapp && a.inapp !== false,
+      email: channels.email && a.email !== false,
+      push: channels.push && a.push !== false,
+    };
   }
 
   if (channels.inapp) {

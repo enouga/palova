@@ -98,6 +98,11 @@ enum Sex {
   FEMALE
 }
 
+enum OpenMatchGender {
+  WOMEN
+  MIXED
+}
+
 enum TournamentGender {
   MEN     // Messieurs
   WOMEN   // Dames
@@ -247,6 +252,8 @@ model Club {
   department                String?  @map("department")
   departmentCode            String?  @map("department_code")
   listTournamentsNationally Boolean  @default(false) @map("list_tournaments_nationally")
+  // Parties ouvertes sur la vitrine palova.fr / Découvrir : opt-in club, miroir du calendrier national
+  listOpenMatchesNationally Boolean  @default(false) @map("list_open_matches_nationally")
   description      String?
   presentationText String?  @map("presentation_text")   // présentation longue (page « Le club »)
   contactPhone     String?  @map("contact_phone")
@@ -812,6 +819,8 @@ model Reservation {
   // Fourchette de niveau cible (0–8) d'une partie ouverte (visibility PUBLIC). null = pas de cible.
   targetLevelMin Float? @map("target_level_min")
   targetLevelMax Float? @map("target_level_max")
+  // Genre d'une partie ouverte (visibility PUBLIC, padel). null = ouverte à tous.
+  matchGender    OpenMatchGender? @map("match_gender")
   seriesId    String?           @map("series_id") // occurrence d'une série (récurrence admin)
   title       String?
   totalPrice  Decimal           @map("total_price") @db.Decimal(10, 2)
@@ -1537,6 +1546,7 @@ model ClubBroadcast {
   sentByUserId   String   @map("sent_by_user_id")
   title          String
   body           String
+  bodyHtml       String?  @map("body_html")
   url            String?
   recipientCount Int      @map("recipient_count")
   createdAt      DateTime @default(now()) @map("created_at")

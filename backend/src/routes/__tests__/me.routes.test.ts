@@ -240,6 +240,35 @@ describe('GET /api/me/matches', () => {
     ]));
   });
 
+  it('expose confirmDeadline + confirmation par joueur', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([
+      {
+        confirmation: 'PENDING', team: 2, ratingAfter: null,
+        match: {
+          id: 'm3', status: 'PENDING', sets: [[6, 4], [6, 3]],
+          playedAt: new Date('2026-06-20T16:30:00Z'), winningTeam: 1, competitive: true,
+          confirmDeadline: new Date('2026-06-23T16:30:00Z'), reservationId: 'r1',
+          club: { name: 'Padel Arena Paris' }, sport: { name: 'Padel' },
+          reservation: { resource: { name: 'Court 2' } },
+          players: [
+            { userId: 'u1', team: 2, confirmation: 'PENDING', user: { firstName: 'Eric', lastName: 'N' } },
+            { userId: 'u2', team: 2, confirmation: 'CONFIRMED', user: { firstName: 'Marie', lastName: 'D' } },
+            { userId: 'u3', team: 1, confirmation: 'PENDING', user: { firstName: 'Paul', lastName: 'R' } },
+            { userId: 'u4', team: 1, confirmation: 'CONFIRMED', user: { firstName: 'Lea', lastName: 'M' } },
+          ],
+          _count: { comments: 0 },
+        },
+      },
+    ] as any);
+    const res = await request(app).get('/api/me/matches').set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body[0].confirmDeadline).toBe('2026-06-23T16:30:00.000Z');
+    expect(res.body[0].players).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: 'u2', confirmation: 'CONFIRMED' }),
+      expect.objectContaining({ userId: 'u3', confirmation: 'PENDING' }),
+    ]));
+  });
+
   it('resource = null si le match n a pas de réservation', async () => {
     prismaMock.matchPlayer.findMany.mockResolvedValue([
       {

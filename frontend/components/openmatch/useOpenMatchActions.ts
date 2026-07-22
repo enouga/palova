@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api, ClubDetail, OpenMatch, JoinTarget } from '@/lib/api';
 import { MatchPlayerData } from '@/components/match/MatchTeams';
 import type { PlayerPillData } from '@/components/player/PlayerPills';
@@ -25,6 +25,10 @@ export const JOIN_ERRORS: Record<string, string> = {
   TEAM_SLOT_TAKEN:       'Cette place est déjà prise.',
   TEAM_SIDE_FULL:        'Cette équipe est complète.',
   TEAM_INVALID:          'Place invalide.',
+  SEX_REQUIRED:          'Renseignez votre sexe dans votre profil pour les parties genrées.',
+  GENDER_NOT_FEMALE:     'Cette partie est réservée aux femmes.',
+  GENDER_TEAM_FULL:      'Cette partie mixte n’a plus de place pour votre catégorie.',
+  GENDER_PARTICIPANTS_CONFLICT: 'Les joueurs déjà présents ne correspondent pas à ce type de partie.',
 };
 
 // Logique d'actions d'une partie ouverte (rejoindre/quitter/équipes/chat/intérêt/résultat)
@@ -39,11 +43,20 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
   const [joinWarning, setJoinWarning] = useState<{ match: OpenMatch; target?: JoinTarget } | null>(null);
   const [chatting, setChatting] = useState<OpenMatch | null>(null);
   const [authPrompt, setAuthPrompt] = useState<OpenMatch | null>(null);
+  // Toast d'action « Vous avez rejoint / quitté la partie » (posé UNIQUEMENT au join et au leave,
+  // pas au retrait d'un autre joueur), auto-effacé après 4 s. Rendu par OpenMatchModals (partagé
+  // liste + page détail) ; la liste l'utilise aussi pour faire défiler+pulser la carte déplacée.
+  const [flash, setFlash] = useState<{ match: OpenMatch; kind: 'joined' | 'left' } | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
 
-  const act = async (m: OpenMatch, fn: () => Promise<unknown>) => {
+  const act = async (m: OpenMatch, fn: () => Promise<unknown>, onDone?: () => void) => {
     if (!token) return;
     setBusyId(m.id); setError('');
-    try { await fn(); await reload(); }
+    try { await fn(); await reload(); onDone?.(); }
     catch (e) {
       const code = (e as Error).message;
       setError(JOIN_ERRORS[code] ?? code);
@@ -86,13 +99,13 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
 
   const join = (m: OpenMatch, target?: JoinTarget) => {
     if (!inRange(myLevel, m.targetLevelMin ?? null, m.targetLevelMax ?? null)) setJoinWarning({ match: m, target });
-    else act(m, () => api.joinOpenMatch(club.slug, m.id, token!, target));
+    else act(m, () => api.joinOpenMatch(club.slug, m.id, token!, target), () => setFlash({ match: m, kind: 'joined' }));
   };
   const confirmJoin = (w: { match: OpenMatch; target?: JoinTarget }) => {
     setJoinWarning(null);
-    act(w.match, () => api.joinOpenMatch(club.slug, w.match.id, token!, w.target));
+    act(w.match, () => api.joinOpenMatch(club.slug, w.match.id, token!, w.target), () => setFlash({ match: w.match, kind: 'joined' }));
   };
-  const leave = (m: OpenMatch) => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!));
+  const leave = (m: OpenMatch) => act(m, () => api.leaveOpenMatch(club.slug, m.id, token!), () => setFlash({ match: m, kind: 'left' }));
   const removePlayer = (m: OpenMatch, p: PlayerPillData) => act(m, () => api.removeOpenMatchPlayer(club.slug, m.id, p.userId, token!));
   const setTeams = (m: OpenMatch, teams: Record<string, 1 | 2>, slots?: Record<string, number>) =>
     act(m, () => api.setOpenMatchTeams(club.slug, m.id, teams, token!, slots));
@@ -100,8 +113,8 @@ export function useOpenMatchActions({ club, token, myLevel, reload }: {
   const onCancelAdd = () => setAddingId(null);
 
   return {
-    busyId, error, addingId, recordingFor, joinWarning, chatting, authPrompt,
-    setError, setAddingId, setRecordingFor, setJoinWarning, setChatting, setAuthPrompt,
+    busyId, error, addingId, recordingFor, joinWarning, chatting, authPrompt, flash,
+    setError, setAddingId, setRecordingFor, setJoinWarning, setChatting, setAuthPrompt, setFlash,
     join, confirmJoin, leave, removePlayer, setTeams, addPlayerToTeam, replacePlayer,
     openChat, onToggleAdd, onCancelAdd,
   };

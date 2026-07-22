@@ -12,6 +12,17 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
+/** Query string à accoler à `/login` pour revenir à la page demandée après connexion
+ *  (`?next=<chemin encodé>`) — posée par le proxy quand il verrouille un chemin privé, pour
+ *  qu'un lien de mail (ex. `/me/matches`) ouvert sans session ne se perde pas au login.
+ *  Le chemin est same-origin par construction (pathname+search de la requête) et `safeNext`
+ *  (postAuth) le revalide côté client (anti open-redirect). Vide pour la racine `/` (rien
+ *  d'utile à restaurer — et la racine ne déclenche de toute façon jamais ce verrou). */
+export function loginRedirectQuery(pathname: string, search = ''): string {
+  if (pathname === '/') return '';
+  return `?next=${encodeURIComponent(pathname + search)}`;
+}
+
 /** true si le chemin est accessible sans login sur l'HÔTE PLATEFORME (la racine `/` = vitrine
  * marketing, en plus des pages publiques communes). N'affecte PAS les sous-domaines club. */
 export function isPlatformPublicPath(pathname: string): boolean {

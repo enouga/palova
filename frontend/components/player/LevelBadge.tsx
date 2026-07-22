@@ -7,8 +7,10 @@ import { ReliabilityMeter } from './ReliabilityMeter';
 
 // Pastille niveau réutilisable (profil v1 ; pastilles joueurs au Lot 3).
 export function LevelBadge({ rating }: { rating: MyRating }) {
-  if (!useLevelSystemEnabled()) return null;
+  const enabled = useLevelSystemEnabled();
+  // Hooks toujours appelés avant le return conditionnel (même règle que LevelChip).
   const { th } = useTheme();
+  if (!enabled) return null;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '4px 12px', fontSize: 14, fontWeight: 600, background: th.surface2 }}>
       {rating.level != null ? (

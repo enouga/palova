@@ -172,6 +172,7 @@ export function RichEmailEditor({ value, vars, onChange, singleLine = false, onU
             )}
           </>
         )}
+        {vars.length > 0 && (
         <div style={{ position: 'relative', marginLeft: singleLine ? 0 : 'auto' }}>
           <button type="button" style={{ ...tbtn(varsOpen, 'dashed'), color: th.accent }} onClick={() => setVarsOpen((o) => !o)}>
             ＠ Insérer une info ▾
@@ -187,6 +188,7 @@ export function RichEmailEditor({ value, vars, onChange, singleLine = false, onU
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="pl-rte" style={{ border: `1px solid ${th.line}`, borderRadius: 12, background: th.bg, color: th.text, padding: singleLine ? '10px 14px' : '12px 14px', fontFamily: th.fontUI }}>

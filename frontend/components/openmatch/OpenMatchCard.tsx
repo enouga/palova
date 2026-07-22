@@ -45,7 +45,7 @@ export interface OpenMatchCardProps {
 }
 
 // Carte d'une partie ouverte (terrain, créneau, fourchette, joueurs, actions).
-// Extraite d'OpenMatches pour être réutilisée dans la section « Pour toi ».
+// Extraite d'OpenMatches pour être réutilisée dans les sections (« Vos parties », « À votre niveau »…).
 export function OpenMatchCard({
   match: m, timezone, slug, token, busy, addingOpen,
   onJoin, onLeave, onRemovePlayer, onSetTeams, onAddPlayer, onReplacePlayer, onToggleAdd, onCancelAdd, onRecordResult, canRecordResult,
@@ -73,7 +73,9 @@ export function OpenMatchCard({
   const joinable = !m.viewerIsOrganizer && !m.viewerIsParticipant && !m.full
     && new Date(m.startTime).getTime() > Date.now();
   return (
-    <div style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+    // id ciblable : après avoir rejoint, la liste (OpenMatches) fait défiler vers cette carte
+    // — qui a migré dans « Vos parties » — et la fait pulser, pour qu'on voie OÙ elle est repartie.
+    <div id={`open-match-${m.id}`} style={{ background: th.surface, borderRadius: 16, padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${th.line}`, minWidth: 0 }}>
       {/* En-tête : titre pleine largeur (ellipsis, jamais écrasé) + chip place(s) épinglée à droite.
           Les chips secondaires vivent sur la rangée méta en dessous, qui peut wrapper (mobile). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -88,7 +90,7 @@ export function OpenMatchCard({
       {/* Rangée 1 : heure + sport (Padel) côte à côte, à l'identique de la page Réserver
           (ReservationAgendaCard) — showSport est un réglage de club, donc uniforme sur
           toutes les cartes de la grille, jamais de variation d'une carte à l'autre ici.
-          Rangée 2 : niveau à gauche (optionnel, par match) / type Compétitive-Amicale
+          Rangée 2 : niveau à gauche (optionnel, par match) / type Pour de vrai-Pour le fun
           épinglé à droite (`marginLeft:auto`, TOUJOURS rendu) — sa position ne dépend jamais
           du niveau, donc les deux rangées gardent une hauteur fixe quel que soit le match :
           sinon les cartes voisines d'une même grille avaient des hauteurs différentes et tout
@@ -105,18 +107,27 @@ export function OpenMatchCard({
         {(m.targetLevelMin != null || m.targetLevelMax != null) && (
           <Chip tone="line">{rangeLabel(m.targetLevelMin ?? null, m.targetLevelMax ?? null)}</Chip>
         )}
+        {m.gender === 'WOMEN' && <Chip tone="line">Féminine</Chip>}
+        {m.gender === 'MIXED' && <Chip tone="line">Mixte</Chip>}
+        {/* Preuve sociale « favoris » sur la rangée niveau/type : cette rangée est TOUJOURS rendue
+            (pastille de type épinglée à droite), et l'icône+texte est plus bas que les pastilles,
+            donc l'ajouter ne change jamais la hauteur de la rangée → aucun décalage entre cartes.
+            minWidth:0 + ellipsis : sur une carte étroite la ligne se tronque au lieu de pousser
+            la pastille de type ou de faire wrapper la rangée. */}
+        {friendCount > 0 && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.accent }}>
+            <Icon name="users" size={14} color={th.accent} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {friendCount === 1 ? '1 de vos favoris joue ici' : `${friendCount} de vos favoris jouent ici`}
+            </span>
+          </span>
+        )}
         <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
           {m.competitive === false
-            ? <Chip tone="line">Amicale</Chip>
-            : <Chip tone="accent">Compétitive</Chip>}
+            ? <Chip tone="line">Pour le fun</Chip>
+            : <Chip tone="accent">Pour de vrai</Chip>}
         </span>
       </div>
-      {friendCount > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 12.5, color: th.accent, fontWeight: 600, marginBottom: 8 }}>
-          <Icon name="users" size={14} color={th.accent} />
-          {friendCount === 1 ? '1 de vos favoris joue ici' : `${friendCount} de vos favoris jouent ici`}
-        </div>
-      )}
       <MatchTeams
         players={m.players.map((p) => ({
           userId: p.userId, firstName: p.firstName, lastName: p.lastName,

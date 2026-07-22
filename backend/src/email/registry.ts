@@ -632,7 +632,7 @@ export interface EmailOverride {
 export interface BuiltEmail { subject: string; html: string; text: string; }
 
 /** Convertit du HTML en texte brut : balises de bloc → saut de ligne, autres balises retirées. */
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<\s*br\s*\/?\s*>/gi, '\n')
     .replace(/<\/\s*(p|li|h2|h3|blockquote|ul|ol)\s*>/gi, '\n')

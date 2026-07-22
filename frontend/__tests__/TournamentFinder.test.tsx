@@ -124,6 +124,23 @@ describe('TournamentFinder', () => {
     expect((container.firstChild as HTMLElement).style.minHeight).toBe('');
   });
 
+  it('hideTitle : grille 2 colonnes et plafonnée à 10, la page /tournois autonome reste complète', async () => {
+    const many: NationalTournament[] = Array.from({ length: 15 }, (_, i) => ({
+      ...NAT[0], id: `t${i}`, name: `Tournoi ${i}`,
+    }));
+    const onCount = jest.fn();
+    const { container, rerender } = render(
+      <ThemeProvider><TournamentFinder hideTitle items={many} onCount={onCount} /></ThemeProvider>,
+    );
+    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(10));
+    expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(10);
+    expect(container.querySelector('.discover-tournaments-grid')).not.toBeNull();
+
+    // La page autonome (pas de hideTitle) ne tronque rien.
+    rerender(<ThemeProvider><TournamentFinder items={many} /></ThemeProvider>);
+    expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(15);
+  });
+
   it('0 résultat avec filtres actifs : bouton « Effacer les filtres » qui relance la liste', async () => {
     // Les facettes ne proposent jamais de combo à 0 résultat (design) → seul le filtre DATES
     // peut vider la liste. Posé de façon déterministe via le deep-link ?du=&au= (lu au montage).

@@ -2,13 +2,19 @@ jest.mock('../../email/notifications', () => ({
   __esModule: true,
   notifyMatchPendingConfirmation: jest.fn(),
   notifyNewMatchComment: jest.fn(),
+  notifyMatchReminder: jest.fn(),
 }));
+jest.mock('../rateLimit', () => ({ assertRateLimit: jest.fn() }));
 
 import '../../__mocks__/prisma';
 import { prismaMock } from '../../__mocks__/prisma';
 import { Prisma } from '@prisma/client';
 import { MatchService } from '../match.service';
 import { recomputeSportRatings } from '../rating/recompute';
+import { assertRateLimit } from '../rateLimit';
+import { notifyMatchReminder } from '../../email/notifications';
+const assertRateLimitMock = assertRateLimit as jest.Mock;
+const notifyMatchReminderMock = notifyMatchReminder as jest.Mock;
 
 const service = new MatchService();
 
@@ -535,5 +541,62 @@ describe('listToRecord', () => {
     expect(arg.where.participants.some.userId).toBe('u1');
     expect(arg.where.resource.club.levelSystemEnabled).toBe(true);
     expect(arg.where.resource.clubSport.sport.key).toBe('padel');
+  });
+});
+
+describe('remind', () => {
+  const pendingMatch = {
+    status: 'PENDING',
+    players: [
+      { userId: 'u1', confirmation: 'CONFIRMED' }, // auteur
+      { userId: 'u2', confirmation: 'PENDING' },
+      { userId: 'u3', confirmation: 'CONFIRMED' },
+      { userId: 'u4', confirmation: 'PENDING' },
+    ],
+  };
+
+  beforeEach(() => {
+    assertRateLimitMock.mockReset().mockResolvedValue(undefined);
+    notifyMatchReminderMock.mockReset();
+  });
+
+  it('cible uniquement les PENDING hors l émetteur', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pendingMatch as any);
+    const out = await service.remind('m1', 'u1');
+    expect(out).toEqual({ reminded: 2 });
+    expect(assertRateLimitMock).toHaveBeenCalledWith('match:remind', 'm1', 1, 12 * 3600);
+    expect(notifyMatchReminderMock).toHaveBeenCalledWith('m1', ['u2', 'u4']);
+  });
+
+  it('403 si l émetteur n est pas joueur du match', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pendingMatch as any);
+    await expect(service.remind('m1', 'intrus')).rejects.toThrow('NOT_A_MATCH_PLAYER');
+  });
+
+  it('409 si le match n est pas PENDING', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({ ...pendingMatch, status: 'CONFIRMED' } as any);
+    await expect(service.remind('m1', 'u1')).rejects.toThrow('MATCH_NOT_PENDING');
+  });
+
+  it('reminded:0 sans consommer le quota si personne d autre n est en attente', async () => {
+    prismaMock.match.findUnique.mockResolvedValue({
+      status: 'PENDING',
+      players: [
+        { userId: 'u1', confirmation: 'PENDING' }, // le viewer
+        { userId: 'u2', confirmation: 'CONFIRMED' },
+        { userId: 'u3', confirmation: 'CONFIRMED' },
+        { userId: 'u4', confirmation: 'CONFIRMED' },
+      ],
+    } as any);
+    const out = await service.remind('m1', 'u1');
+    expect(out).toEqual({ reminded: 0 });
+    expect(assertRateLimitMock).not.toHaveBeenCalled();
+    expect(notifyMatchReminderMock).not.toHaveBeenCalled();
+  });
+
+  it('propage RATE_LIMITED', async () => {
+    prismaMock.match.findUnique.mockResolvedValue(pendingMatch as any);
+    assertRateLimitMock.mockRejectedValue(new Error('RATE_LIMITED'));
+    await expect(service.remind('m1', 'u1')).rejects.toThrow('RATE_LIMITED');
   });
 });

@@ -4,6 +4,7 @@ import { sendMail } from '../email/mailer';
 import { buildClubSetupReminderEmail, buildClubAutoSuspendedEmail, buildClubAutoSuspendedAdminEmail } from '../email/templates/clubLifecycle';
 import { PALOVA_BRAND } from '../email/templates/layout';
 import { clubAppUrl, platformAsset } from '../email/links';
+import { reportError } from '../observability/reportError';
 
 export const REMINDER_DAYS = 15; // relance : club sans terrain depuis 15 j
 export const SUSPEND_DAYS = 30;  // suspension : depuis 30 j ET relancé il y a ≥ 7 j
@@ -51,7 +52,7 @@ export async function runClubJanitor(now: Date): Promise<void> {
           admins.map((a) => a.email)
             .filter((e): e is string => !!e)
             .map((to) => sendMail({ to, subject: adminMail.subject, html: adminMail.html, text: adminMail.text })
-              .catch((err) => console.error('[janitor] email superadmin échoué pour', to, (err as Error).message))),
+              .catch((err) => reportError(err, { source: 'janitor:superadminEmail' }))),
         );
         continue;
       }
@@ -64,7 +65,7 @@ export async function runClubJanitor(now: Date): Promise<void> {
         }
       }
     } catch (err) {
-      console.error(`[janitor] club ${club.id} :`, (err as Error).message);
+      reportError(err, { source: 'janitor:club' });
     }
   }
 }
@@ -72,7 +73,7 @@ export async function runClubJanitor(now: Date): Promise<void> {
 export function startClubJanitorJob(): void {
   // 04:15 Europe/Paris chaque nuit (après les autres jobs nocturnes).
   cron.schedule('15 4 * * *', () => {
-    runClubJanitor(new Date()).catch((err) => console.error('[janitor] échec:', (err as Error).message));
+    runClubJanitor(new Date()).catch((err) => reportError(err, { source: 'janitor:run' }));
   }, { timezone: 'Europe/Paris' });
   console.log('[janitor] Job de ménage des clubs démarré (04:15 chaque nuit)');
 }

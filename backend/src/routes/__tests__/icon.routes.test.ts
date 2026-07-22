@@ -158,3 +158,50 @@ describe('GET /api/clubs/:slug/icon/:file', () => {
     expect(Buffer.compare(wide, square)).toBe(0); // les deux → repli identique, aucun rendu blanc
   });
 });
+
+describe('GET /api/clubs/:slug/icon/og.png', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    for (const f of fs.readdirSync(ICONS_DIR)) fs.unlinkSync(`${ICONS_DIR}/${f}`);
+  });
+
+  it('404 si club inconnu', async () => {
+    prismaMock.club.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/api/clubs/nope/icon/og.png');
+    expect(res.status).toBe(404);
+  });
+
+  it('club sans logo → PNG de repli partagé avec les cartes de partie (1200x630), 200', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', name: 'Padel Arena', logoUrl: null, accentColor: '#1d3557' } as any);
+    const res = await request(app).get('/api/clubs/demo/icon/og.png');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('image/png');
+    const meta = await sharp(res.body as Buffer).metadata();
+    expect([meta.width, meta.height]).toEqual([1200, 630]);
+  });
+
+  it('club avec logo → carte 1200x630 générée + cache disque ; 2e appel sans re-téléchargement', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', name: 'Padel Arena', logoUrl: 'https://logos.example/x.png', accentColor: '#1d3557' } as any);
+    const logo = await sharp({ create: { width: 60, height: 40, channels: 4, background: '#ff0000' } }).png().toBuffer();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(new Uint8Array(logo), { status: 200 }) as any);
+
+    const res = await request(app).get('/api/clubs/demo/icon/og.png');
+    expect(res.status).toBe(200);
+    const meta = await sharp(res.body as Buffer).metadata();
+    expect([meta.width, meta.height]).toEqual([1200, 630]);
+    expect(fs.readdirSync(ICONS_DIR).filter((f) => f.includes('-og-'))).toHaveLength(1);
+
+    await request(app).get('/api/clubs/demo/icon/og.png');
+    expect(fetchMock).toHaveBeenCalledTimes(1); // servi depuis le cache disque
+    fetchMock.mockRestore();
+  });
+
+  it('logo injoignable → repli silencieux (200)', async () => {
+    prismaMock.club.findUnique.mockResolvedValue({ id: 'c1', name: 'Padel Arena', logoUrl: 'https://logos.example/dead.png', accentColor: '#1d3557' } as any);
+    const fetchMock = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('boom'));
+    const res = await request(app).get('/api/clubs/demo/icon/og.png');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('image/png');
+    fetchMock.mockRestore();
+  });
+});

@@ -56,6 +56,8 @@ services:
         value: palova.fr
       - key: NEXT_PUBLIC_COOKIE_DOMAIN
         value: .palova.fr
+      - key: NEXT_PUBLIC_GA_ID
+        sync: false
       # Accès privé (Basic Auth) — Render demande ces valeurs au déploiement (non versionnées).
       - key: SITE_USER
         sync: false

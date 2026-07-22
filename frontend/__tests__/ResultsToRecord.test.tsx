@@ -67,11 +67,11 @@ it('affiche les deux équipes en prénoms avec le séparateur vs', async () => {
   expect(screen.getByText('vs')).toBeInTheDocument();
 });
 
-it('pas de chip Compétitive sur la carte (défaut), chip Amicale si competitive=false', async () => {
+it('pas de chip Pour de vrai sur la carte (défaut), chip Pour le fun si competitive=false', async () => {
   (api.getMatchesToRecord as jest.Mock).mockResolvedValue([row, { ...row, reservationId: 'r2', competitive: false }]);
   wrap();
-  await waitFor(() => expect(screen.getByText('Amicale')).toBeInTheDocument());
-  expect(screen.queryByText('Compétitive')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Pour le fun')).toBeInTheDocument());
+  expect(screen.queryByText('Pour de vrai')).not.toBeInTheDocument();
 });
 
 it('ouvre la modale au clic sur Saisir et se rafraîchit après enregistrement', async () => {

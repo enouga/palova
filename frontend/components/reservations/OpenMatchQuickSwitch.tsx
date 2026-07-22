@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { api, MyReservation } from '@/lib/api';
+import { api, MyReservation, type OpenMatchGender } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
 import { dangerBanner } from '@/lib/theme';
 import { sportHasLevels } from '@/lib/level';
@@ -9,12 +9,17 @@ import { useLevelSystemEnabled } from '@/lib/useLevelSystem';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { Icon } from '@/components/ui/Icon';
 import { LevelRangeSlider } from '@/components/player/LevelRangeSlider';
+import { GenderPicker } from '@/components/reservations/GenderPicker';
 
 const ERR: Record<string, string> = {
   UNAUTHORIZED: "Seul l'organisateur peut ouvrir cette partie.",
   RESERVATION_NOT_ACTIVE: "Cette réservation n'est pas ouvrable.",
   RESERVATION_IN_PAST: 'Trop tard pour ouvrir cette partie.',
   OPEN_MATCH_PADEL_ONLY: 'Seules les parties de padel peuvent être ouvertes.',
+  SEX_REQUIRED: 'Renseignez votre sexe dans votre profil pour les parties genrées.',
+  GENDER_NOT_FEMALE: 'Cette partie est réservée aux femmes.',
+  GENDER_TEAM_FULL: 'Cette partie mixte n’a plus de place pour votre catégorie.',
+  GENDER_PARTICIPANTS_CONFLICT: 'Les joueurs déjà présents ne correspondent pas à ce type de partie.',
 };
 const msg = (e: string) => ERR[e] ?? e;
 
@@ -42,6 +47,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
   const [levelMin, setLevelMin] = useState(3);
   const [levelMax, setLevelMax] = useState(5);
   const [competitive, setCompetitive] = useState(reservation.competitive ?? true);
+  const [gender, setGender] = useState<OpenMatchGender | null>(reservation.gender ?? null);
   // Passe à `true` seulement sur une interaction manuelle du switch « Limiter » / du curseur —
   // jamais depuis le préchargement — pour que l'effet de republication ci-dessous ne se
   // déclenche jamais tout seul (préférence rechargée, résa déjà publique au montage…).
@@ -58,6 +64,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
       const hasRange = reservation.targetLevelMin != null && reservation.targetLevelMax != null;
       setLevelLimited(hasRange);
       if (hasRange) { setLevelMin(reservation.targetLevelMin as number); setLevelMax(reservation.targetLevelMax as number); }
+      setGender(reservation.gender ?? null);
       return;
     }
     const clamp = (v: number) => Math.max(1, Math.min(8, Math.round(v * 10) / 10));
@@ -82,6 +89,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
     api.setReservationVisibility(reservation.id, 'PUBLIC', token, {
       targetLevelMin: debLimited ? debMin : null,
       targetLevelMax: debLimited ? debMax : null,
+      matchGender: gender,
     }).then(() => onChanged())
       .catch((e) => setError(msg((e as Error).message)))
       .finally(() => setBusy(false));
@@ -103,6 +111,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
         await api.setReservationVisibility(reservation.id, 'PUBLIC', token, {
           targetLevelMin: limiting ? levelMin : null,
           targetLevelMax: limiting ? levelMax : null,
+          matchGender: gender,
         });
       }
       onChanged();
@@ -126,6 +135,12 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
         <Icon name="users" size={13} color={th.textMute} />
         <span style={{ fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: th.textMute }}>Votre partie</span>
       </div>
+      {!openMatch && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, fontWeight: 600, marginBottom: 8 }}>Genre de la partie</div>
+          <GenderPicker value={gender} onChange={setGender} disabled={busy} />
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600, color: th.text }}>Partie ouverte aux membres</span>
         <button type="button" role="switch" aria-checked={openMatch} aria-label="Partie ouverte aux membres"
@@ -157,8 +172,8 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
             <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 6, lineHeight: 1.4 }}>Ouverte à tous les niveaux.</div>
           )}
           <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
-            {([['competitive', 'Compétitive', 'Le résultat compte pour le niveau'],
-               ['friendly', 'Amicale', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
+            {([['competitive', 'Pour de vrai', 'Le résultat compte pour le niveau'],
+               ['friendly', 'Pour le fun', 'Le niveau ne bouge pas']] as const).map(([key, label, sub]) => {
               const active = (key === 'competitive') === competitive;
               return (
                 <button key={key} type="button" disabled={busy}
@@ -170,6 +185,7 @@ export function OpenMatchQuickSwitch({ reservation, token, onChanged }: {
                       targetLevelMin: levelLimited ? levelMin : null,
                       targetLevelMax: levelLimited ? levelMax : null,
                       competitive: next,
+                      matchGender: gender,
                     }).then(() => onChanged()).catch((e) => setError(msg((e as Error).message))).finally(() => setBusy(false));
                   }}
                   style={{ flex: 1, textAlign: 'left', cursor: busy ? 'not-allowed' : 'pointer', borderRadius: 12,

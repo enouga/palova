@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isClubPublicPath, isPlatformPublicPath } from './lib/authGate';
+import { isClubPublicPath, isPlatformPublicPath, loginRedirectQuery } from './lib/authGate';
 import { clubSlugFromHost } from './lib/host';
 import { ROOT_DOMAINS, rootForHost, CANONICAL_ROOT } from './lib/roots';
 
@@ -37,9 +37,12 @@ export function proxy(request: NextRequest) {
   // Verrou de connexion : sans cookie `token` et hors page publique → /login (même hôte).
   const token = request.cookies.get('token')?.value;
   const redirectToLogin = () => {
+    // Mémorise la page demandée en `?next=` pour y revenir après connexion (lien de mail
+    // ouvert sans session). `to = url.clone()` n'est pas muté par le helper, qui lit l'URL
+    // d'origine ; `finishAuth`/`safeNext` revalident le `next` côté client (même hôte).
     const to = url.clone();
     to.pathname = '/login';
-    to.search = '';
+    to.search = loginRedirectQuery(url.pathname, url.search);
     return NextResponse.redirect(to);
   };
 

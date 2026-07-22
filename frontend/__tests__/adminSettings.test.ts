@@ -35,6 +35,12 @@ describe('adminSettings helpers', () => {
     expect(body.showOtherClubsReservations).toBe(true);
   });
 
+  it('buildUpdateBody includes listOpenMatchesNationally (défaut false si absent) et isDirty le détecte', () => {
+    expect(buildUpdateBody(CLUB).listOpenMatchesNationally).toBe(false);
+    expect(buildUpdateBody({ ...CLUB, listOpenMatchesNationally: true }).listOpenMatchesNationally).toBe(true);
+    expect(isDirty(CLUB, { ...CLUB, listOpenMatchesNationally: true })).toBe(true);
+  });
+
   it('BOOKING_RELEASE_MODE_HELP has one distinct explanation per mode', () => {
     const modes: (keyof typeof BOOKING_RELEASE_MODE_HELP)[] = ['DAY_AT_HOUR', 'ROLLING_SLOT', 'WINDOW_SHIFT'];
     for (const m of modes) expect(BOOKING_RELEASE_MODE_HELP[m].length).toBeGreaterThan(0);

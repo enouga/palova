@@ -60,7 +60,7 @@ describe('OpenMatchToggle', () => {
     wrap({}, onChanged);
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
-    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, targetLevelMin: null, targetLevelMax: null }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, matchGender: null, targetLevelMin: null, targetLevelMax: null }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
@@ -69,13 +69,13 @@ describe('OpenMatchToggle', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
     fireEvent.click(screen.getByRole('switch', { name: /Limiter le niveau/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
-    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, targetLevelMin: 3, targetLevelMax: 6 }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc', { competitive: true, matchGender: null, targetLevelMin: 3, targetLevelMax: 6 }));
   });
 
-  it('publie une partie AMICALE (competitive=false) quand « Amicale » est choisi', async () => {
+  it('publie une partie POUR LE FUN (competitive=false) quand « Pour le fun » est choisi', async () => {
     wrap();
     fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Amicale/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Pour le fun/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc',
       expect.objectContaining({ competitive: false })));
@@ -99,5 +99,14 @@ describe('OpenMatchToggle', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Fermer$/ }));
     await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PRIVATE', 'abc'));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it('publie avec le genre choisi (Féminine → matchGender WOMEN)', async () => {
+    wrap();
+    fireEvent.click(screen.getByRole('button', { name: /Ouvrir la partie/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Féminine' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publier$/ }));
+    await waitFor(() => expect(mocked.setReservationVisibility).toHaveBeenCalledWith('r1', 'PUBLIC', 'abc',
+      expect.objectContaining({ matchGender: 'WOMEN' })));
   });
 });

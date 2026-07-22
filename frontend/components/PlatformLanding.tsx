@@ -1,22 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { api, ManagedClub, PlayerMembership } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, ManagedClub } from '@/lib/api';
 import { clubUrl } from '@/lib/clubUrl';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import AnonymousView from '@/components/platform/AnonymousView';
 import { Screen } from '@/components/ui/Screen';
-import { Logotype, Btn, ThemeToggle, MyBookingsButton } from '@/components/ui/atoms';
+import { Logotype, Btn, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
-import { ClubDirectory } from '@/components/ClubDirectory';
-import { ClubCard } from '@/components/ClubCard';
 
 // Accueil plateforme (palova.fr) selon le rôle — réservé aux connectés (verrou proxy.ts) :
-//  - joueur connecté : ses clubs + annuaire
+//  - joueur connecté sans club géré : redirigé vers /decouvrir (même contenu enrichi que le
+//    visiteur anonyme — parties/tournois/annuaire — plutôt qu'un accueil dédié pauvre ; ses
+//    propres clubs restent à un tap via « Mes clubs » du menu profil)
 //  - gérant connecté : écran de redirection vers l'admin de ses clubs
 export default function PlatformLanding() {
   const { token, ready } = useAuth();
+  const router = useRouter();
   const [managed, setManaged] = useState<ManagedClub[] | null>(null); // null = non résolu
 
   useEffect(() => {
@@ -24,11 +26,15 @@ export default function PlatformLanding() {
     api.getMyClubs(token).then(setManaged).catch(() => setManaged([]));
   }, [ready, token]);
 
+  useEffect(() => {
+    if (managed !== null && managed.length === 0) router.replace('/decouvrir');
+  }, [managed, router]);
+
   if (!ready) return <PlatformSkeleton />;
   if (!token) return <AnonymousView />;
   if (managed === null) return <PlatformSkeleton />; // rôle en cours de résolution
   if (managed.length > 0) return <ManagerView clubs={managed} />;
-  return <PlayerView token={token} />;
+  return <PlatformSkeleton />; // joueur sans club géré : redirection /decouvrir en cours
 }
 
 function Header({ children }: { children?: React.ReactNode }) {
@@ -40,60 +46,12 @@ function Header({ children }: { children?: React.ReactNode }) {
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  const { th } = useTheme();
-  return (
-    <div style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: th.textMute, padding: '0 20px', marginTop: 8 }}>
-      {children}
-    </div>
-  );
-}
-
 function PlatformSkeleton() {
   const { th } = useTheme();
   return (
     <Screen>
       <div style={{ padding: '0 24px' }}><Header /></div>
       <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-    </Screen>
-  );
-}
-
-function PlayerView({ token }: { token: string }) {
-  const { th } = useTheme();
-  const [mine, setMine] = useState<PlayerMembership[] | null>(null);
-
-  useEffect(() => { api.getMyMemberships(token).then(setMine).catch(() => setMine([])); }, [token]);
-
-  return (
-    <Screen>
-      <div style={{ paddingBottom: 40 }}>
-        <div style={{ padding: '0 24px' }}>
-          <Header><MyBookingsButton /><ProfileMenu /></Header>
-          <div style={{ fontFamily: th.fontDisplay, fontWeight: 500, fontSize: 38, lineHeight: 1.05, color: th.text, marginTop: 22, letterSpacing: -0.5 }}>
-            Vos clubs.
-          </div>
-        </div>
-
-        {/* mes clubs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px 20px 0' }}>
-          {mine === null ? (
-            <div style={{ padding: '20px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
-          ) : mine.length === 0 ? (
-            <div style={{ padding: '14px 16px', borderRadius: 14, background: th.surface2, fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
-              Vous n&apos;avez pas encore rejoint de club. Trouvez-en un ci-dessous.
-            </div>
-          ) : (
-            mine.map((m) => <ClubCard key={m.clubId} club={m.club} />)
-          )}
-        </div>
-
-        {/* annuaire */}
-        <div style={{ marginTop: 30 }}>
-          <SectionTitle>Trouver un autre club</SectionTitle>
-          <ClubDirectory />
-        </div>
-      </div>
     </Screen>
   );
 }

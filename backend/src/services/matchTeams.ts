@@ -98,3 +98,47 @@ export async function applyTeams(
     await tx.reservationParticipant.update({ where: { id: p.id }, data });
   }
 }
+
+export type OpenMatchGenderValue = 'WOMEN' | 'MIXED';
+type Sx = 'MALE' | 'FEMALE' | null | undefined;
+
+// Validation d'UN joueur qui rejoint une partie ouverte genrée.
+// `sameSexOnTargetTeam` = nb de joueurs déjà présents du MÊME sexe, sur l'équipe visée
+// (mixte seulement ; passer 0 pour WOMEN). Pur.
+export function assertOpenMatchGender(
+  matchGender: OpenMatchGenderValue | null,
+  newSex: Sx,
+  sameSexOnTargetTeam: number,
+): void {
+  if (matchGender == null) return;
+  if (!newSex) throw new Error('SEX_REQUIRED');
+  if (matchGender === 'WOMEN') {
+    if (newSex !== 'FEMALE') throw new Error('GENDER_NOT_FEMALE');
+    return;
+  }
+  // MIXED : au plus 1 joueur de chaque sexe par équipe.
+  if (sameSexOnTargetTeam >= 1) throw new Error('GENDER_TEAM_FULL');
+}
+
+// Validation d'un ENSEMBLE de participants (avec leur équipe effective) contre un genre —
+// à la création (applyHoldSetup) et à l'ouverture (setReservationVisibility). Toute
+// violation (sexe manquant, sexe interdit, 2 mêmes sexes sur une équipe mixte) →
+// GENDER_PARTICIPANTS_CONFLICT. Pur.
+export function assertRosterGender(
+  matchGender: OpenMatchGenderValue | null,
+  roster: Array<{ sex: Sx; team: 1 | 2 }>,
+): void {
+  if (matchGender == null) return;
+  for (const p of roster) {
+    if (!p.sex) throw new Error('GENDER_PARTICIPANTS_CONFLICT');
+    if (matchGender === 'WOMEN' && p.sex !== 'FEMALE') throw new Error('GENDER_PARTICIPANTS_CONFLICT');
+  }
+  if (matchGender === 'MIXED') {
+    for (const team of [1, 2] as const) {
+      const side = roster.filter((p) => p.team === team);
+      const males = side.filter((p) => p.sex === 'MALE').length;
+      const females = side.filter((p) => p.sex === 'FEMALE').length;
+      if (males > 1 || females > 1) throw new Error('GENDER_PARTICIPANTS_CONFLICT');
+    }
+  }
+}

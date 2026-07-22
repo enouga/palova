@@ -69,7 +69,7 @@ describe('BookingSuccess', () => {
     // Pas de préférence mémorisée ni de niveau connu (getMyRating → null) : OpenMatchQuickSwitch
     // garde ses valeurs par défaut (limiter le niveau ON, fourchette 3–5).
     await waitFor(() => expect(api.setReservationVisibility).toHaveBeenCalledWith(
-      'res-1', 'PUBLIC', 'jwt', { targetLevelMin: 3, targetLevelMax: 5 },
+      'res-1', 'PUBLIC', 'jwt', { targetLevelMin: 3, targetLevelMax: 5, matchGender: null },
     ));
   });
 

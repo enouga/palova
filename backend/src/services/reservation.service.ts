@@ -1,4 +1,5 @@
 import { Prisma, ReservationType } from '@prisma/client';
+import { reportError } from '../observability/reportError';
 import { DateTime } from 'luxon';
 import { weeklyOccurrences } from './recurrence';
 import { prisma } from '../db/prisma';
@@ -19,7 +20,7 @@ import { MatchAlertService } from './matchAlert.service';
 import { HOLD_TTL_SECONDS } from './holdWindow';
 import { invalidateClubAvailability } from './availabilityCache';
 import { sportHasLevels } from './rating/level';
-import { effectiveTeams, applyTeams } from './matchTeams';
+import { effectiveTeams, applyTeams, assertRosterGender, type OpenMatchGenderValue } from './matchTeams';
 import { serializableTx } from '../db/serializable';
 
 interface HoldSlotParams {
@@ -47,7 +48,7 @@ export class ReservationService {
   /** Envoi d'email best-effort : un échec est loggé, jamais propagé (ne casse pas l'action). */
   private async safeNotify(fn: () => Promise<void>): Promise<void> {
     try { await fn(); }
-    catch (err) { console.error('[reservation] notification échouée', err); }
+    catch (err) { reportError(err, { source: 'safeNotify:reservation' }); }
   }
 
   /**
@@ -343,6 +344,7 @@ export class ReservationService {
       teams?: Record<string, number>;
       slots?: Record<string, number>;
       competitive?: boolean;
+      matchGender?: OpenMatchGenderValue | null;
     },
   ) {
     const reservation = await prisma.reservation.findUnique({
@@ -375,6 +377,20 @@ export class ReservationService {
     // Le système de niveau (grille Padel Magazine) ne vaut que pour le padel :
     // hors padel, on ignore toute fourchette demandée.
     const levelOk = sportHasLevels(reservation.resource.clubSport?.sport?.key);
+
+    // Genre : conservé uniquement en PUBLIC + padel (comme la fourchette de niveau).
+    // À la création on valide que le roster (organisateur + partenaires) satisfait la
+    // contrainte (Féminine ⇒ tous FEMALE ; Mixte ⇒ sexes renseignés).
+    const genderOk = setup.visibility === 'PUBLIC' && levelOk;
+    const matchGender: OpenMatchGenderValue | null = genderOk ? (setup.matchGender ?? null) : null;
+    if (matchGender) {
+      const rosterIds = [userId, ...partners];
+      const rosterUsers = await prisma.user.findMany({ where: { id: { in: rosterIds } }, select: { id: true, sex: true } });
+      const sexById = new Map(rosterUsers.map((u) => [u.id, u.sex]));
+      // À la création tous les participants tiennent sur l'équipe 1 (les partenaires seront
+      // revalidés à la réorg d'équipes) ; pour WOMEN c'est sans effet.
+      assertRosterGender(matchGender, rosterIds.map((id) => ({ sex: sexById.get(id) ?? null, team: 1 as 1 | 2 })));
+    }
 
     return serializableTx(async (tx) => {
       await tx.reservationParticipant.deleteMany({ where: { reservationId } });
@@ -409,6 +425,7 @@ export class ReservationService {
           targetLevelMin: levelOk ? (setup.targetLevelMin ?? null) : null,
           targetLevelMax: levelOk ? (setup.targetLevelMax ?? null) : null,
           competitive: setup.competitive ?? undefined,
+          matchGender,
         },
       });
     });
@@ -1638,11 +1655,14 @@ export class ReservationService {
   async setReservationVisibility(
     reservationId: string,
     userId: string,
-    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
+    input: { visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean; matchGender?: OpenMatchGenderValue | null },
   ) {
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: { select: { clubSport: { select: { sport: { select: { key: true } } } } } } },
+      include: {
+        resource: { select: { clubSport: { select: { sport: { select: { key: true } } } }, attributes: true } },
+        participants: { select: { userId: true, team: true, user: { select: { sex: true } } } },
+      },
     });
     if (!reservation)                       throw new Error('RESERVATION_NOT_FOUND');
     if (reservation.userId !== userId)      throw new Error('UNAUTHORIZED');
@@ -1665,6 +1685,15 @@ export class ReservationService {
     // Fourchette de niveau conservée uniquement en PUBLIC + padel ; sinon effacée.
     const keepLevel = input.visibility === 'PUBLIC' && sportHasLevels(sportKey);
 
+    // Genre : conservé en PUBLIC + padel, effacé sinon. On valide les participants DÉJÀ
+    // présents contre le nouveau genre (GENDER_PARTICIPANTS_CONFLICT si conflit).
+    const matchGender: OpenMatchGenderValue | null = keepLevel ? (input.matchGender ?? null) : null;
+    if (matchGender) {
+      const maxPlayers = playerCount((reservation.resource.attributes as { format?: string } | null)?.format);
+      const layout = effectiveTeams(reservation.participants.map((p) => ({ team: p.team, slot: null as number | null, user: p.user })), maxPlayers);
+      assertRosterGender(matchGender, layout.map((p) => ({ sex: p.user?.sex ?? null, team: p.team })));
+    }
+
     const updated = await prisma.reservation.update({
       where: { id: reservationId },
       data: {
@@ -1672,8 +1701,9 @@ export class ReservationService {
         targetLevelMin: keepLevel ? (input.targetLevelMin ?? null) : null,
         targetLevelMax: keepLevel ? (input.targetLevelMax ?? null) : null,
         competitive: input.competitive ?? reservation.competitive,
+        matchGender,
       },
-      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true, competitive: true },
+      select: { id: true, visibility: true, targetLevelMin: true, targetLevelMax: true, competitive: true, matchGender: true },
     });
     // Publication après coup : une partie devient rejoignable → prévenir les alertes horaires.
     if (updated.visibility === 'PUBLIC') {
@@ -1707,7 +1737,7 @@ export class ReservationService {
     const pairs = rows.flatMap((r) => r.participants.map((p) => ({ userId: p.userId, sportKey: r.resource.clubSport.sport.key })));
     const levels = await this.ratingService.getLevelsBySport(pairs);
 
-    return rows.map(({ participants, resource, ...rest }) => {
+    return rows.map(({ participants, resource, matchGender, ...rest }) => {
       const { attributes, clubSport, ...resourcePublic } = resource;
       const sportKey = clubSport.sport.key;
       const capacity = playerCount((attributes as { format?: string } | null)?.format);
@@ -1716,6 +1746,7 @@ export class ReservationService {
         : participants.map((p) => ({ ...p, team: null as 1 | 2 | null, slot: null as number | null }));
       return {
         ...rest,
+        gender: matchGender ?? null,
         resource: { ...resourcePublic, sport: { key: clubSport.sport.key, name: clubSport.sport.name } },
         capacity,
         participants: teamed.map((p) => ({

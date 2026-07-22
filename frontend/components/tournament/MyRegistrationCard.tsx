@@ -1,13 +1,22 @@
 'use client';
-import { MyTournamentRegistration } from '@/lib/api';
+import { MyTournamentRegistration, TournamentParticipant } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
+import { ACCENTS } from '@/lib/theme';
 import { RegistrationStatus, LeaveButton } from '@/components/agenda/RegistrationUI';
-import { PartnerSearch } from './PartnerSearch';
+import { cardStyle } from '@/components/clubhouse/SectionHeader';
+import { Avatar } from '@/components/ui/Avatar';
+import { colorForSeed } from '@/lib/playerColors';
+import { LevelChip } from '@/components/player/LevelChip';
+import { PartnerField } from './PartnerField';
 
-// Carte « mon inscription » : binôme, statut (+ position en liste d'attente),
-// changement de coéquipier et désinscription tant que les inscriptions sont ouvertes.
-export function MyRegistrationCard({ myReg, profileId, closed, busy, contactInfo, waitlistPos, slug, token, partner, onSelectPartner, onClearPartner, onChangePartner, onCancel }: {
+// Carte « mon inscription », en trois zones : bandeau de statut en lavis teinté
+// (accent confirmé / apricot liste d'attente), binôme en lignes avatar + licence
+// (avatars à la couleur d'équipe — la même que la carte du binôme dans la grille
+// « Inscrits »), puis actions (changement de coéquipier, désinscription) tant que
+// les inscriptions sont ouvertes. `myTeam` (additif) apporte photos et niveaux.
+export function MyRegistrationCard({ myReg, myTeam, profileId, closed, busy, contactInfo, waitlistPos, slug, token, partner, onSelectPartner, onClearPartner, onChangePartner, onCancel }: {
   myReg: MyTournamentRegistration;
+  myTeam?: TournamentParticipant | null;
   profileId: string | undefined;
   closed: boolean;
   busy: boolean;
@@ -22,37 +31,80 @@ export function MyRegistrationCard({ myReg, profileId, closed, busy, contactInfo
   onCancel: () => void;
 }) {
   const { th } = useTheme();
-  const primaryBtn: React.CSSProperties = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
+  const confirmed = myReg.status === 'CONFIRMED';
+  const tint = confirmed ? th.accent : ACCENTS.apricot;
+  // Même teinte que la carte de ce binôme dans la grille « Inscrits » (seed = id d'inscription).
+  const teamColor = colorForSeed(myReg.id);
+  const changeDisabled = busy || !partner;
+  const primaryBtn: React.CSSProperties = {
+    width: '100%', height: 46, border: 'none', cursor: changeDisabled ? 'default' : 'pointer',
+    background: th.accent, color: th.onAccent, borderRadius: 12,
+    fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: changeDisabled ? 0.55 : 1,
+  };
+
+  const rows = [
+    { p: myReg.captain, lic: myReg.captainLicense, role: 'Capitaine', avatarUrl: myTeam?.captain.avatarUrl ?? null, level: myTeam?.captainLevel },
+    { p: myReg.partner, lic: myReg.partnerLicense, role: 'Coéquipier', avatarUrl: myTeam?.partner.avatarUrl ?? null, level: myTeam?.partnerLevel },
+  ];
+  // Grappe d'avatars chevauchés, même langage que TeamCard (grille « Inscrits »).
+  const ring = { borderRadius: '50%', boxShadow: `0 0 0 2px ${th.surface}` } as const;
 
   return (
-    <div style={{ background: th.surface, borderRadius: 16, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
-      <RegistrationStatus confirmed={myReg.status === 'CONFIRMED'} waitlistPos={waitlistPos} />
-      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {[
-          { p: myReg.captain, lic: myReg.captainLicense, role: 'Capitaine' },
-          { p: myReg.partner, lic: myReg.partnerLicense, role: 'Coéquipier' },
-        ].map(({ p, lic, role }) => (
-          <div key={p.id} style={{ background: th.surface2, borderRadius: 11, padding: '10px 13px' }}>
-            <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, color: th.text }}>
-              {p.firstName} {p.lastName}
-              <span style={{ color: th.textMute, fontWeight: 400, fontSize: 12 }}> · {role}</span>
+    <div style={{ ...cardStyle(th), overflow: 'hidden', borderLeft: `4px solid ${teamColor}` }}>
+      {/* Bandeau de statut compact (une ligne) : lavis de la teinte d'état. */}
+      <div style={{ padding: '8px 16px', background: th.mode === 'floodlit' ? `${tint}1f` : `${tint}12` }}>
+        <RegistrationStatus confirmed={confirmed} waitlistPos={waitlistPos} compact />
+      </div>
+
+      {/* Binôme (même anatomie que sa carte dans la grille « Inscrits ») + actions
+          à droite sur la même rangée — elles passent dessous sur écran étroit. */}
+      <div style={{ padding: '10px 16px 12px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{ display: 'flex', flexShrink: 0 }}>
+            {rows.map(({ p, avatarUrl }, i) => (
+              <div key={p.id} style={{ ...ring, marginLeft: i > 0 ? -11 : 0 }}>
+                <Avatar firstName={p.firstName} lastName={p.lastName} avatarUrl={avatarUrl} color={teamColor} />
+              </div>
+            ))}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text, lineHeight: 1.35 }}>
+              {rows.map(({ p, level }, i) => (
+                <span key={p.id}>
+                  {i > 0 && <span style={{ color: th.textFaint, fontWeight: 400 }}> &amp; </span>}
+                  {p.firstName} {p.lastName}
+                  <LevelChip level={level} size="xs" />
+                </span>
+              ))}
             </div>
-            <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textMute, marginTop: 3 }}>
-              Licence {lic ?? '—'}{p.id === profileId ? ` · ${p.phone ?? '—'}` : ''}
+            <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 14, rowGap: 1, marginTop: 2, fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint }}>
+              {rows.map(({ p, lic, role }) => (
+                <span key={p.id} style={{ whiteSpace: 'nowrap' }}>
+                  {role} · Lic. <span style={{ fontFamily: th.fontMono, color: th.textMute }}>{lic ?? '—'}</span>
+                  {p.id === profileId && p.phone ? <> · <span style={{ fontFamily: th.fontMono, color: th.textMute }}>{p.phone}</span></> : null}
+                </span>
+              ))}
             </div>
           </div>
-        ))}
+        </div>
+
+        {!closed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+            <PartnerField slug={slug} token={token} selected={partner} onSelect={onSelectPartner} onClear={onClearPartner} disabled={busy}
+              excludeIds={[myReg.captain.id, myReg.partner.id]} triggerLabel="Changer de coéquipier" sheetTitle="Changer de coéquipier" />
+            <LeaveButton onClick={onCancel} disabled={busy} full={false} small />
+          </div>
+        )}
       </div>
-      {!closed ? (
-        <>
-          <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 16, marginBottom: 6 }}>Changer de coéquipier</div>
-          <PartnerSearch key="change-partner-search" slug={slug} token={token} selected={partner} onSelect={onSelectPartner} onClear={onClearPartner} disabled={busy} />
-          <button onClick={onChangePartner} disabled={busy || !partner} style={{ ...primaryBtn, marginTop: 8 }}>Changer de coéquipier</button>
-          <div style={{ height: 1, background: th.line, margin: '16px 0 14px' }} />
-          <LeaveButton onClick={onCancel} disabled={busy} />
-        </>
-      ) : (
-        <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 12 }}>
+
+      {!closed && partner && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <button onClick={onChangePartner} disabled={changeDisabled} style={{ ...primaryBtn, height: 40 }}>Confirmer le changement</button>
+        </div>
+      )}
+
+      {closed && (
+        <div style={{ padding: '9px 16px 12px', borderTop: `1px solid ${th.line}`, fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, lineHeight: 1.5 }}>
           Inscriptions closes : modification et annulation ne sont plus possibles.
           {contactInfo && <div style={{ marginTop: 6, color: th.textMute, whiteSpace: 'pre-wrap' }}>{contactInfo}</div>}
         </div>

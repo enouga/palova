@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, NationalOpenMatch, MyRating } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
-import { FacetChip, FacetGroup } from '@/components/calendar/FacetPanel';
+import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
 import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
 
@@ -12,6 +12,10 @@ const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
   { value: 'weekend', label: 'Week-end' },
   { value: 'all', label: '14 jours' },
 ];
+
+// Grille de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
+// rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
+const MAX_VISIBLE = 9;
 
 // Onglet « Parties » de la future page /decouvrir : grille de parties ouvertes nationales
 // (GET /api/open-matches/national, chargées par le parent) filtrées par période/localisation/
@@ -52,7 +56,7 @@ export function DiscoverMatches({
   // calculé AVANT l'early return de chargement pour respecter les règles des hooks (le
   // useEffect ci-dessous doit être appelé à chaque rendu, jamais conditionnellement).
   const ranked = matches != null && now != null
-    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords)
+    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
     : null;
 
   useEffect(() => {
@@ -74,14 +78,14 @@ export function DiscoverMatches({
       {/* Même tiroir compact que les filtres Tournois (FacetPanel) — langage partagé. */}
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
-          <FacetGroup th={th} label="Quand">
+          <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
             {PERIOD_OPTIONS.map((o) => (
-              <FacetChip key={o.value} th={th} label={o.label} active={period === o.value} onClick={() => setPeriod(o.value)} />
+              <FacetChip key={o.value} label={o.label} tint={FILTER_TINTS.quand} active={period === o.value} onClick={() => setPeriod(o.value)} />
             ))}
           </FacetGroup>
           {levelChipVisible && (
-            <FacetGroup th={th} label="Niveau">
-              <FacetChip th={th} label="À mon niveau" active={levelOn} onClick={() => setLevelOn((v) => !v)} />
+            <FacetGroup label="Niveau" tint={FILTER_TINTS.niveau}>
+              <FacetChip label="À mon niveau" tint={FILTER_TINTS.niveau} active={levelOn} onClick={() => setLevelOn((v) => !v)} />
             </FacetGroup>
           )}
         </div>

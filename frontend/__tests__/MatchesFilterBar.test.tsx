@@ -16,6 +16,8 @@ const baseProps = {
   onLevelChange: noop,
   kindFilter: 'all' as KindFilter,
   onKindChange: noop,
+  genderFilter: 'all' as 'all' | 'WOMEN' | 'MIXED',
+  onGenderChange: noop,
   resultCount: 0,
   alerts: [] as MatchAlert[],
   timezone: 'Europe/Paris',
@@ -32,10 +34,19 @@ describe('MatchesFilterBar', () => {
     const onKindChange = jest.fn();
     renderBar({ onKindChange });
     expect(screen.getByRole('button', { name: 'Toutes' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Compétitives' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour de vrai' }));
     expect(onKindChange).toHaveBeenCalledWith('competitive');
-    fireEvent.click(screen.getByRole('button', { name: 'Amicales' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
     expect(onKindChange).toHaveBeenCalledWith('friendly');
+  });
+
+  it('affiche le groupe Genre et notifie au clic', () => {
+    const onGenderChange = jest.fn();
+    renderBar({ onGenderChange });
+    fireEvent.click(screen.getByRole('button', { name: 'Féminine' }));
+    expect(onGenderChange).toHaveBeenCalledWith('WOMEN');
+    fireEvent.click(screen.getByRole('button', { name: 'Mixte' }));
+    expect(onGenderChange).toHaveBeenCalledWith('MIXED');
   });
 
   it('affiche le compteur de parties au singulier et au pluriel', () => {
@@ -59,13 +70,14 @@ describe('MatchesFilterBar', () => {
 
   it('masque le groupe Niveau si le club n\'a pas le système de niveau', () => {
     renderBar({ levelEnabled: false, myLevel: 5, myLevelMin: 4, myLevelMax: 6 });
-    expect(screen.queryByRole('button', { name: 'Tous' })).not.toBeInTheDocument();
+    // Le chip « Régler » est propre au groupe Niveau (le groupe Genre a aussi un « Tous »).
+    expect(screen.queryByRole('button', { name: /Régler/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Toutes' })).toBeInTheDocument();
   });
 
   it('masque le groupe Niveau pour un visiteur anonyme', () => {
     renderBar({ authenticated: false, myLevel: 5, myLevelMin: 4, myLevelMax: 6 });
-    expect(screen.queryByRole('button', { name: 'Tous' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Régler/ })).not.toBeInTheDocument();
   });
 
   it('chip « À mon niveau » actif quand la fourchette correspond au préset', () => {
@@ -110,7 +122,8 @@ describe('MatchesFilterBar', () => {
   it('« Tous » et « À mon niveau » ne sont jamais actifs en même temps (fourchette « mon niveau » qui couvre toute l\'échelle)', () => {
     renderBar({ myLevel: 4.5, myLevelMin: 1, myLevelMax: 8, fMin: 1, fMax: 8 });
     expect(screen.getByRole('button', { name: /À mon niveau/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Tous' })).toHaveAttribute('aria-pressed', 'false');
+    // Deux chips « Tous » (Niveau puis Genre) : le 1er dans le DOM est celui du Niveau.
+    expect(screen.getAllByRole('button', { name: 'Tous' })[0]).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('affiche « 0 partie » quand le compteur est nul', () => {

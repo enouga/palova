@@ -130,6 +130,8 @@ export const api = {
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
   disputeMatch: (matchId: string, message: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/dispute`, { method: 'POST', body: JSON.stringify({ message }) }, token),
+  remindMatch: (matchId: string, token: string) =>
+    request<{ reminded: number }>(`/api/matches/${matchId}/remind`, { method: 'POST' }, token),
   getMatchComments: (matchId: string, token: string) =>
     request<MatchThread>(`/api/matches/${matchId}/comments`, {}, token),
   postMatchComment: (matchId: string, body: string, token: string) =>
@@ -181,6 +183,7 @@ export const api = {
       teams?: Record<string, 1 | 2>;
       slots?: Record<string, number>;
       competitive?: boolean;
+      matchGender?: OpenMatchGender | null;
     },
   ) =>
     request<Reservation>(`/api/reservations/${reservationId}/setup`, {
@@ -278,9 +281,9 @@ export const api = {
     reservationId: string,
     visibility: 'PRIVATE' | 'PUBLIC',
     token: string,
-    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean },
+    opts?: { targetLevelMin?: number | null; targetLevelMax?: number | null; competitive?: boolean; matchGender?: OpenMatchGender | null },
   ) =>
-    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null; competitive: boolean }>(
+    request<{ id: string; visibility: 'PRIVATE' | 'PUBLIC'; targetLevelMin: number | null; targetLevelMax: number | null; competitive: boolean; matchGender: OpenMatchGender | null }>(
       `/api/reservations/${reservationId}/visibility`,
       { method: 'POST', body: JSON.stringify({ visibility, ...opts }) },
       token,
@@ -1188,8 +1191,10 @@ export const api = {
   // --- Broadcasts (admin) ---
   getClubBroadcasts: (clubId: string, token: string) =>
     request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
-  sendClubBroadcast: (clubId: string, body: { title: string; body: string; url?: string }, token: string) =>
+  sendClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string; channels?: { email: boolean; inApp: boolean; push: boolean } }, token: string) =>
     request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
+  previewClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string }, token: string) =>
+    request<{ html: string }>(`/api/clubs/${clubId}/admin/broadcast/preview`, { method: 'POST', body: JSON.stringify(body) }, token),
 
   // --- Emails automatiques personnalisables (admin) ---
   adminListEmails: (clubId: string, token: string) =>
@@ -1291,6 +1296,7 @@ export interface MyReservation {
   capacity: number;
   visibility?: 'PRIVATE' | 'PUBLIC';
   competitive?: boolean;
+  gender?: OpenMatchGender | null;
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
   participants: { id: string; userId: string; isOrganizer: boolean; firstName: string; lastName: string; avatarUrl: string | null; level?: UserLevel | null; team?: 1 | 2 | null; slot?: number | null }[];
@@ -1302,6 +1308,7 @@ export interface MyMatchPlayer {
   firstName: string;
   lastName: string;
   isMe: boolean;
+  confirmation?: 'PENDING' | 'CONFIRMED' | 'DISPUTED';
 }
 
 export interface MatchComment {
@@ -1322,6 +1329,7 @@ export interface MyMatch {
   status: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
   sets: [number, number][];
   playedAt: string;
+  confirmDeadline?: string;
   winningTeam: number | null;
   competitive?: boolean;
   myTeam: number;
@@ -1658,6 +1666,8 @@ export interface OpenMatchPlayer {
   slot?: number | null; // place au sein de l'équipe (0=G, 1=D), concrète en padel
 }
 
+export type OpenMatchGender = 'WOMEN' | 'MIXED';
+
 export interface OpenMatch {
   id: string;
   resourceName: string;
@@ -1671,7 +1681,8 @@ export interface OpenMatch {
   players: OpenMatchPlayer[];
   targetLevelMin?: number | null;
   targetLevelMax?: number | null;
-  competitive?: boolean; // Amicale (false) / Compétitive (true) ; défaut true si absent
+  competitive?: boolean; // Pour le fun (false) / Pour de vrai (true) ; défaut true si absent
+  gender?: OpenMatchGender | null; // Féminine / Mixte ; null = ouverte à tous
   lastMessageAt: string | null;
   sport?: { key: string; name: string }; // toujours peuplé par le backend (parties padel)
   unreadCount: number;
@@ -1747,6 +1758,7 @@ export interface ClubAdminDetail {
   status: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  listOpenMatchesNationally?: boolean; // additif (parties ouvertes sur la vitrine palova.fr)
   showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
@@ -1859,6 +1871,7 @@ export type UpdateClubBody = Partial<{
   defaultThemeMode: string;
   listedInDirectory: boolean;
   listTournamentsNationally: boolean;
+  listOpenMatchesNationally: boolean;
   showOffersPublicly: boolean;
   publicBookingDays: number;
   memberBookingDays: number;
@@ -2403,6 +2416,7 @@ export interface NationalOpenMatch {
   targetLevelMin: number | null;
   targetLevelMax: number | null;
   competitive?: boolean;
+  gender?: OpenMatchGender | null;
   players: OpenMatchPlayer[];
   club: NationalOpenMatchClub;
 }

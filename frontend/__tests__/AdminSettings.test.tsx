@@ -296,4 +296,16 @@ describe('AdminSettingsPage (onglets + SaveBar)', () => {
     const body = (mocked.adminUpdateClub as jest.Mock).mock.calls[0][1];
     expect(body.showOtherClubsReservations).toBe(true);
   });
+
+  it('interrupteur « Publier mes parties ouvertes sur palova.fr » persisté via la barre Enregistrer', async () => {
+    wrap();
+    await screen.findByText('Profil');
+    fireEvent.click(screen.getByRole('button', { name: 'Visibilité & joueurs' }));
+    const toggle = await screen.findByText('Publier mes parties ouvertes sur palova.fr');
+    fireEvent.click(toggle);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(mocked.adminUpdateClub).toHaveBeenCalled());
+    const body = (mocked.adminUpdateClub as jest.Mock).mock.calls[0][1];
+    expect(body.listOpenMatchesNationally).toBe(true);
+  });
 });

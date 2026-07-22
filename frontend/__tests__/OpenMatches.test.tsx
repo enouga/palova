@@ -87,6 +87,8 @@ describe('OpenMatches', () => {
     // org occupe (éq.1, G) → la 1re cellule libre rendue est (éq.1, D).
     fireEvent.click(screen.getAllByRole('button', { name: /Rejoindre l'équipe/ })[0]);
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
+    // Toast de succès après l'inscription.
+    expect(await screen.findByText(/vous avez rejoint la partie · Terrain 1/i)).toBeInTheDocument();
   });
 
   it('affiche le bouton « Créer une alerte » pour un connecté', async () => {
@@ -95,7 +97,7 @@ describe('OpenMatches', () => {
     expect(await screen.findByRole('button', { name: /créer une alerte/i })).toBeInTheDocument();
   });
 
-  it('filtre les parties amicales via les chips Toutes/Compétitives/Amicales', async () => {
+  it('filtre les parties pour le fun via les chips Toutes/Pour de vrai/Pour le fun', async () => {
     mocked.getOpenMatches.mockResolvedValue([
       match({ id: 'm1', resourceName: 'Terrain 1', competitive: true }),
       match({ id: 'm2', resourceName: 'Terrain 2', competitive: false }),
@@ -104,7 +106,21 @@ describe('OpenMatches', () => {
     await screen.findByText('Terrain 2');
     expect(screen.getByText('Terrain 1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Amicales' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    await waitFor(() => expect(screen.queryByText('Terrain 1')).not.toBeInTheDocument());
+    expect(screen.getByText('Terrain 2')).toBeInTheDocument();
+  });
+
+  it('filtre par genre via les chips Tous/Féminine/Mixte', async () => {
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'm1', resourceName: 'Terrain 1', gender: null }),
+      match({ id: 'm2', resourceName: 'Terrain 2', gender: 'MIXED' }),
+    ] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+    await screen.findByText('Terrain 2');
+    expect(screen.getByText('Terrain 1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mixte' }));
     await waitFor(() => expect(screen.queryByText('Terrain 1')).not.toBeInTheDocument());
     expect(screen.getByText('Terrain 2')).toBeInTheDocument();
   });
@@ -120,6 +136,8 @@ describe('OpenMatches', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Rejoindre quand même/ }));
     await waitFor(() => expect(mocked.joinOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc', { team: 1, slot: 1 }));
+    // Le toast de succès s'affiche aussi après la confirmation « Rejoindre quand même ».
+    expect(await screen.findByText(/vous avez rejoint la partie/i)).toBeInTheDocument();
   });
 
   it('mobile : les cartes restent en 1 colonne ; desktop : grille 2 colonnes', async () => {
@@ -157,6 +175,8 @@ describe('OpenMatches', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Quitter/ }));
     await waitFor(() => expect(mocked.leaveOpenMatch).toHaveBeenCalledWith('demo', 'm1', 'abc'));
+    // Toast de confirmation aussi au départ d'une partie.
+    expect(await screen.findByText(/vous avez quitté la partie/i)).toBeInTheDocument();
   });
 
   it('masque les actions et affiche « Vous organisez » pour l organisateur', async () => {
@@ -223,7 +243,6 @@ describe('OpenMatches', () => {
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
     const addBtns = await screen.findAllByRole('button', { name: /Ajouter un joueur à l'équipe/ });
     fireEvent.click(addBtns[0]);
-    // `name: 'Ami'` (exact) et non `/Ami/` : le chip de filtre « Amicales » matcherait aussi la regex.
     fireEvent.click(await screen.findByRole('button', { name: 'Ami' }));
     await waitFor(() => expect(mocked.addOpenMatchPlayer).toHaveBeenCalledWith('demo', 'm1', 'u-ami', 'abc'));
   });
@@ -235,27 +254,56 @@ describe('OpenMatches', () => {
     expect(screen.queryByRole('button', { name: /Ajouter un joueur/ })).not.toBeInTheDocument();
   });
 
-  it('met les parties à mon niveau dans « Pour toi » et les retire des « Autres »', async () => {
+  it('met les parties à mon niveau dans « À votre niveau » et les retire de « Toutes les parties »', async () => {
     const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
-    // myLevel = 5 ; une partie ciblée niveau 5 (recommandée) + une hors fourchette (niveau 1-2)
+    // myLevel = 5 ; une partie ciblée niveau 5 (recommandée) + une non recommandée mais
+    // dans la jauge par défaut 4-6 (niveau 6-8 : chevauche, sans inclure 5).
     mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
     mocked.getOpenMatches.mockResolvedValue([
       match({ id: 'reco', resourceName: 'Court A', startTime: at(2), endTime: at(3), players: [], targetLevelMin: 5, targetLevelMax: 5 }),
-      match({ id: 'other', resourceName: 'Court B', startTime: at(4), endTime: at(5), players: [], targetLevelMin: 1, targetLevelMax: 2 }),
+      match({ id: 'other', resourceName: 'Court B', startTime: at(4), endTime: at(5), players: [], targetLevelMin: 6, targetLevelMax: 8 }),
     ] as never);
     render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
 
-    // « Pour toi » présent et contient Court A ; la section « Autres parties » ne re-liste pas 'reco'.
-    await screen.findByText('Pour toi');
+    // « À votre niveau » présent et contient Court A ; « Toutes les parties » ne re-liste pas 'reco'.
+    await screen.findByText('À votre niveau');
     expect(screen.getByText('Court A')).toBeInTheDocument();
     // Court A n'apparaît qu'une fois (dé-dup) :
     expect(screen.getAllByText('Court A')).toHaveLength(1);
-    // Court B (hors fourchette) reste dans « Autres parties ».
-    expect(screen.getByText('Autres parties')).toBeInTheDocument();
+    // Court B (pas à mon niveau) reste dans « Toutes les parties ».
+    expect(screen.getByText('Toutes les parties')).toBeInTheDocument();
     expect(screen.getByText('Court B')).toBeInTheDocument();
+    // Anciens libellés disparus ; pas de section « Vos parties » sans partie rejointe.
+    expect(screen.queryByText('Pour toi')).not.toBeInTheDocument();
+    expect(screen.queryByText('Autres parties')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vos parties')).not.toBeInTheDocument();
   });
 
-  it('club OFF : pas d onglet « Stats » ni reco « Pour toi »', async () => {
+  it('une partie rejointe monte dans « Vos parties », même hors du filtre de niveau', async () => {
+    const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+    // myLevel = 5 → filtre par défaut 4-6. La partie rejointe (niveau 1-2) doit rester
+    // visible dans « Vos parties » alors qu'une partie identique non rejointe est masquée.
+    mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
+    mocked.getOpenMatches.mockResolvedValue([
+      match({ id: 'mine', resourceName: 'Court Mien', startTime: at(1), endTime: at(2), players: [], viewerIsParticipant: true, targetLevelMin: 1, targetLevelMax: 2 }),
+      match({ id: 'ctrl', resourceName: 'Court Controle', startTime: at(2), endTime: at(3), players: [], targetLevelMin: 1, targetLevelMax: 2 }),
+      match({ id: 'reco', resourceName: 'Court Reco', startTime: at(4), endTime: at(5), players: [], targetLevelMin: 5, targetLevelMax: 5 }),
+    ] as never);
+    render(<ThemeProvider><OpenMatches club={club} /></ThemeProvider>);
+
+    await screen.findByText('Vos parties');
+    // Le filtre par défaut (±1 autour de 5) finit par masquer le contrôle non rejoint…
+    await waitFor(() => expect(screen.queryByText('Court Controle')).not.toBeInTheDocument());
+    // …mais la partie rejointe reste là, une seule fois (pas re-listée ailleurs).
+    expect(screen.getAllByText('Court Mien')).toHaveLength(1);
+    // La reco reste dans sa section, et « Vos parties » vient AVANT « À votre niveau ».
+    const mineHeader = screen.getByText('Vos parties');
+    const recoHeader = screen.getByText('À votre niveau');
+    expect(screen.getByText('Court Reco')).toBeInTheDocument();
+    expect(mineHeader.compareDocumentPosition(recoHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('club OFF : pas d onglet « Stats » ni reco « À votre niveau »', async () => {
     const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
     mocked.getMyRating.mockResolvedValue({ level: 5, tier: 'Confirmé', isProvisional: false, matchesPlayed: 10, calibrated: true } as never);
     mocked.getOpenMatches.mockResolvedValue([
@@ -266,7 +314,7 @@ describe('OpenMatches', () => {
 
     expect(await screen.findByText('Court A')).toBeInTheDocument();
     expect(screen.queryByText('Stats')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Pour toi/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/À votre niveau/i)).not.toBeInTheDocument();
   });
 
   it('cliquer « Discuter » (connecté) ouvre la feuille de chat', async () => {

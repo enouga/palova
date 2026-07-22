@@ -16,6 +16,11 @@ jest.mock('@/lib/nav', () => ({
   currentHost: () => 'localhost:3000',
 }));
 
+// ProfileMenu appelle getMyProfile dès qu'un token est présent et attend un profil complet
+// (firstName/lastName) — hors sujet ici (on ne teste que le filtre « Mes clubs »), donc mocké
+// pour ne pas avoir à maintenir un fixture de profil complet dans ce fichier.
+jest.mock('@/components/ProfileMenu', () => ({ ProfileMenu: () => <div data-testid="profile-menu" /> }));
+
 let authToken: string | null = null;
 jest.mock('@/lib/useAuth', () => ({
   useAuth: () => ({ token: authToken, clubId: null, ready: true }),
@@ -28,6 +33,7 @@ const getSports = jest.fn();
 const listClubs = jest.fn();
 const getMyRating = jest.fn();
 const getMyProfile = jest.fn();
+const getMyMemberships = jest.fn();
 
 jest.mock('@/lib/api', () => ({
   api: {
@@ -37,12 +43,14 @@ jest.mock('@/lib/api', () => ({
     listClubs: (...a: unknown[]) => listClubs(...a),
     getMyRating: (...a: unknown[]) => getMyRating(...a),
     getMyProfile: (...a: unknown[]) => getMyProfile(...a),
+    getMyMemberships: (...a: unknown[]) => getMyMemberships(...a),
   },
   assetUrl: (p: string | null) => p,
 }));
 
 // Import après les mocks (le module lit `api`/`useClub`/`useAuth`/`hardNavigate` au montage).
-import DiscoverPage from '@/app/decouvrir/page';
+import { DiscoverClient } from '@/app/decouvrir/DiscoverClient';
+import type { NationalTournament, PlayerMembership } from '@/lib/api';
 
 function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
   return {
@@ -71,7 +79,30 @@ const MATCH_LYON = makeMatch({
   club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.7640, longitude: 4.8357, department: 'Rhône', departmentCode: '69' },
 });
 
-const wrap = () => render(<ThemeProvider><DiscoverPage /></ThemeProvider>);
+function makeTournament(over: Partial<NationalTournament> = {}): NationalTournament {
+  return {
+    id: 't1', clubId: 'c', clubSportId: 'cs', name: 'Tournoi', category: 'P500', gender: 'MEN', openToWomen: true,
+    description: null, contactInfo: null, startTime: '2026-07-02T12:00:00Z', endTime: null, registrationDeadline: '2026-07-01T12:00:00Z',
+    maxTeams: 16, entryFee: null, status: 'PUBLISHED', confirmedCount: 0, waitlistCount: 0,
+    club: { slug: 'paris', name: 'Padel Paris', city: 'Paris', department: 'Paris', departmentCode: '75', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 48.85, longitude: 2.35 },
+    ...over,
+  } as NationalTournament;
+}
+
+const TOURNAMENT_PARIS = makeTournament({ id: 'tparis', name: 'Tournoi Paris' });
+const TOURNAMENT_LYON = makeTournament({
+  id: 'tlyon', name: 'Tournoi Lyon',
+  club: { slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', department: 'Rhône', departmentCode: '69', timezone: 'Europe/Paris', accentColor: '#5e93da', logoUrl: null, latitude: 45.76, longitude: 4.83 },
+});
+
+const CLUB_PARIS_SUMMARY = { id: 'c-paris', slug: 'paris', name: 'Padel Paris', city: 'Paris', region: null, latitude: 48.8566, longitude: 2.3522, description: null, accentColor: '#5e93da', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1 };
+const CLUB_LYON_SUMMARY = { id: 'c-lyon', slug: 'lyon', name: 'Padel Lyon', city: 'Lyon', region: null, latitude: 45.7640, longitude: 4.8357, description: null, accentColor: '#5e93da', logoUrl: null, coverImageUrl: null, sports: [], resourceCount: 1 };
+
+function membership(slug: string, status: PlayerMembership['status'] = 'ACTIVE'): PlayerMembership {
+  return { clubId: `c-${slug}`, slug, isSubscriber: false, status, club: { ...CLUB_PARIS_SUMMARY, slug, name: `Padel ${slug}` } };
+}
+
+const wrap = () => render(<ThemeProvider><DiscoverClient /></ThemeProvider>);
 
 // jsdom n'implémente pas scrollIntoView : stub commun à tous les tests (les ancres/deep-links
 // l'appellent pour naviguer entre les sections empilées).
@@ -90,6 +121,7 @@ beforeEach(() => {
   listClubs.mockResolvedValue([]);
   getMyRating.mockResolvedValue(null);
   getMyProfile.mockResolvedValue({ preferredSport: null } as never);
+  getMyMemberships.mockResolvedValue([]);
 });
 
 describe('DiscoverPage', () => {
@@ -149,6 +181,44 @@ describe('DiscoverPage', () => {
     await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
     expect(screen.queryByRole('button', { name: 'À mon niveau' })).not.toBeInTheDocument();
     expect(getMyRating).not.toHaveBeenCalled();
+  });
+
+  it('anonyme : pas de chip « Mes clubs », getMyMemberships jamais appelé', async () => {
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    expect(screen.queryByRole('button', { name: 'Mes clubs' })).not.toBeInTheDocument();
+    expect(getMyMemberships).not.toHaveBeenCalled();
+  });
+
+  it('connecté sans adhésion active (0, ou seulement BLOCKED) : pas de chip « Mes clubs »', async () => {
+    authToken = 'tok';
+    getMyMemberships.mockResolvedValue([membership('lyon', 'BLOCKED')]);
+    wrap();
+    await screen.findAllByRole('link', { name: /Rejoindre la partie/ });
+    await waitFor(() => expect(getMyMemberships).toHaveBeenCalledWith('tok'));
+    expect(screen.queryByRole('button', { name: 'Mes clubs' })).not.toBeInTheDocument();
+  });
+
+  it('connecté avec une adhésion ACTIVE (Lyon) : « Mes clubs » rétrécit les 3 sections, re-clic restaure', async () => {
+    authToken = 'tok';
+    getMyMemberships.mockResolvedValue([membership('lyon')]);
+    listNationalTournaments.mockResolvedValue([TOURNAMENT_PARIS, TOURNAMENT_LYON]);
+    listClubs.mockResolvedValue([CLUB_PARIS_SUMMARY, CLUB_LYON_SUMMARY]);
+    wrap();
+
+    await screen.findByText('Tournoi Paris');
+    await waitFor(() => expect(listClubs).toHaveBeenCalled());
+    expect(screen.getAllByText(/^Padel (Paris|Lyon)$/).length).toBeGreaterThan(0);
+
+    const chip = await screen.findByRole('button', { name: 'Mes clubs' });
+    fireEvent.click(chip);
+
+    await waitFor(() => expect(screen.queryByText('Tournoi Paris')).not.toBeInTheDocument());
+    expect(screen.getByText('Tournoi Lyon')).toBeInTheDocument();
+    expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument();
+
+    fireEvent.click(chip);
+    await waitFor(() => expect(screen.getByText('Tournoi Paris')).toBeInTheDocument());
   });
 
   it('état vide parties : « Voir les clubs » scrolle vers la section clubs', async () => {

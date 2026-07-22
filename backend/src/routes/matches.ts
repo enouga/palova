@@ -16,7 +16,7 @@ export function matchError(err: unknown, res: Response, next: NextFunction): voi
     VALIDATION_ERROR: 400, RESERVATION_NOT_FOUND: 404, NOT_A_COURT_RESERVATION: 400,
     NOT_A_PARTICIPANT: 403, NEEDS_FOUR_PLAYERS: 400, MATCH_NOT_PLAYED_YET: 400,
     MATCH_ALREADY_EXISTS: 409, MATCH_NOT_FOUND: 404, NOT_A_MATCH_PLAYER: 403, MATCH_NOT_PENDING: 409,
-    LEVEL_SYSTEM_DISABLED: 403, FORBIDDEN: 403, MATCH_NOT_DISPUTED: 409,
+    LEVEL_SYSTEM_DISABLED: 403, FORBIDDEN: 403, MATCH_NOT_DISPUTED: 409, RATE_LIMITED: 429,
   };
   if (err instanceof Error && map[err.message]) { res.status(map[err.message]).json({ error: err.message }); return; }
   next(err as Error);
@@ -34,6 +34,11 @@ router.post('/:id/dispute', authMiddleware, async (req: AuthRequest, res: Respon
     await matchService.dispute(asString(req.params.id), req.user!.id, message);
     res.json({ ok: true });
   } catch (err) { matchError(err, res, next); }
+});
+
+router.post('/:id/remind', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try { res.json(await matchService.remind(asString(req.params.id), req.user!.id)); }
+  catch (err) { matchError(err, res, next); }
 });
 
 router.get('/:id/comments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {

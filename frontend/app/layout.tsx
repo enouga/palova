@@ -7,6 +7,7 @@ import { ClubProvider } from '@/lib/ClubProvider';
 import { Footer } from '@/components/Footer';
 import { DmWidgetHost } from '@/components/messages/DmWidgetHost';
 import { LegalUpdateBanner } from '@/components/LegalUpdateBanner';
+import { AnalyticsConsent } from '@/components/AnalyticsConsent';
 import { api, API_BASE_URL } from '@/lib/api';
 import { CANONICAL_ROOT } from '@/lib/roots';
 
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {children}
             </div>
             <DmWidgetHost />
+            <AnalyticsConsent />
             <Footer />
           </div>
         </ClubProvider>

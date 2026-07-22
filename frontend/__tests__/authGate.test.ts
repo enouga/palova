@@ -1,4 +1,4 @@
-import { isPublicPath, isPlatformPublicPath, isClubPublicPath } from '../lib/authGate';
+import { isPublicPath, isPlatformPublicPath, isClubPublicPath, loginRedirectQuery } from '../lib/authGate';
 
 describe('isPublicPath', () => {
   it('autorise les portes d\'entrée', () => {
@@ -108,5 +108,25 @@ describe('isClubPublicPath', () => {
 
   it('/decouvrir est public sur un hôte club (la page s\'y renvoie elle-même vers la plateforme)', () => {
     expect(isClubPublicPath('/decouvrir')).toBe(true);
+  });
+});
+
+describe('loginRedirectQuery', () => {
+  it('mémorise le chemin demandé en ?next= (encodé)', () => {
+    expect(loginRedirectQuery('/me/matches')).toBe('?next=%2Fme%2Fmatches');
+  });
+
+  it('conserve la query string du chemin d\'origine', () => {
+    expect(loginRedirectQuery('/parties', '?vue=matchs')).toBe('?next=%2Fparties%3Fvue%3Dmatchs');
+  });
+
+  it('round-trip : /login lit le next décodé via URLSearchParams (comme nextPath)', () => {
+    const q = loginRedirectQuery('/me/matches', '?vue=matchs');
+    expect(new URLSearchParams(q).get('next')).toBe('/me/matches?vue=matchs');
+  });
+
+  it('ne mémorise rien pour la racine (aucune cible utile à restaurer)', () => {
+    expect(loginRedirectQuery('/')).toBe('');
+    expect(loginRedirectQuery('/', '')).toBe('');
   });
 });

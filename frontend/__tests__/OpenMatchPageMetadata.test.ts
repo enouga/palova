@@ -45,4 +45,13 @@ describe('generateMetadata /parties/[id]', () => {
     const meta = await generateMetadata({ params: Promise.resolve({ id: 'm1' }) });
     expect(meta.title).toBe('Partie ouverte · Palova');
   });
+
+  it('noindex dans les deux branches (contenu éphémère, mais reste crawlable pour l\'unfurling social)', async () => {
+    const meta = await generateMetadata({ params: Promise.resolve({ id: 'm1' }) });
+    expect(meta.robots).toEqual({ index: false, follow: true });
+
+    getOpenMatch.mockRejectedValue(new Error('boom'));
+    const metaFallback = await generateMetadata({ params: Promise.resolve({ id: 'm1' }) });
+    expect(metaFallback.robots).toEqual({ index: false, follow: true });
+  });
 });

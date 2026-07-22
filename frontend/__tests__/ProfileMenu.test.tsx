@@ -7,6 +7,12 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: jest.fn(), back: jest.fn() }),
 }));
 
+const hardNavigate = jest.fn();
+jest.mock('../lib/nav', () => ({
+  hardNavigate: (...a: unknown[]) => hardNavigate(...a),
+  currentHost: () => 'localhost',
+}));
+
 // Contexte club contrôlable : slug null = hôte plateforme, sinon hôte club.
 let clubCtx: { slug: string | null; club: { id: string; slug: string; name: string; clubSports?: { id: string; sport: { key: string; name: string } }[] } | null; loading: boolean } =
   { slug: null, club: null, loading: false };
@@ -20,6 +26,7 @@ jest.mock('../lib/api', () => ({
     getMyClubPackages: jest.fn(),
     getMyClubSubscriptions: jest.fn(),
     getMyFacets: jest.fn(),
+    getMyMemberships: jest.fn(),
   },
   assetUrl: (p: string | null) => (p ? `http://localhost:3001${p}` : null),
 }));
@@ -57,6 +64,7 @@ describe('ProfileMenu', () => {
     api.getMyClubPackages.mockResolvedValue([]);
     api.getMyClubSubscriptions.mockResolvedValue([]);
     api.getMyFacets.mockResolvedValue({ isCoach: false, isReferee: false });
+    api.getMyMemberships.mockResolvedValue([]);
     installCtx.state = 'hidden';
     installCtx.promptInstall = jest.fn();
   });
@@ -113,6 +121,34 @@ describe('ProfileMenu', () => {
     expect(screen.queryByText('Mes réservations')).not.toBeInTheDocument();
     expect(screen.getByText('Palova')).toBeInTheDocument();
     expect(screen.queryByText('Mes clubs')).not.toBeInTheDocument();
+  });
+
+  it('liste « Mes clubs » (adhésions ACTIVE, club courant exclu) → clic navigue via hardNavigate', async () => {
+    document.cookie = 'token=abc; path=/';
+    clubCtx = { slug: 'paris', club: { id: 'c1', slug: 'paris', name: 'Padel Paris' }, loading: false };
+    api.getMyMemberships.mockResolvedValue([
+      { clubId: 'c1', slug: 'paris', isSubscriber: false, status: 'ACTIVE', club: { id: 'c1', slug: 'paris', name: 'Padel Paris', accentColor: '#5e93da' } },
+      { clubId: 'c2', slug: 'lyon', isSubscriber: false, status: 'ACTIVE', club: { id: 'c2', slug: 'lyon', name: 'Padel Lyon', accentColor: '#ff6b6b' } },
+      { clubId: 'c3', slug: 'nice', isSubscriber: false, status: 'BLOCKED', club: { id: 'c3', slug: 'nice', name: 'Padel Nice', accentColor: '#29c7ac' } },
+    ]);
+    wrap();
+    openMenu();
+    expect(await screen.findByText('Padel Lyon')).toBeInTheDocument();
+    expect(screen.queryByText('Padel Paris')).not.toBeInTheDocument(); // club courant, pas listé
+    expect(screen.queryByText('Padel Nice')).not.toBeInTheDocument(); // adhésion BLOCKED
+    fireEvent.click(screen.getByText('Padel Lyon'));
+    expect(hardNavigate).toHaveBeenCalledWith(expect.stringContaining('lyon.'));
+  });
+
+  it('hôte plateforme (slug null) : « Mes clubs » liste le club sans l\'exclure (aucun club « courant »)', async () => {
+    document.cookie = 'token=abc; path=/';
+    api.getMyMemberships.mockResolvedValue([
+      { clubId: 'c1', slug: 'paris', isSubscriber: false, status: 'ACTIVE', club: { id: 'c1', slug: 'paris', name: 'Padel Paris', accentColor: '#5e93da' } },
+    ]);
+    wrap();
+    openMenu();
+    await screen.findByText('Marc Bidaut');
+    expect(screen.getByText('Padel Paris')).toBeInTheDocument();
   });
 
   it('hôte club : chip Abonné et soldes utilisables', async () => {

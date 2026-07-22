@@ -8,6 +8,7 @@ jest.mock('@/lib/api', () => ({
   api: {
     confirmMatch: jest.fn().mockResolvedValue({ ok: true }),
     disputeMatch: jest.fn().mockResolvedValue({ ok: true }),
+    remindMatch: jest.fn().mockResolvedValue({ reminded: 1 }),
     getMatchComments: jest.fn().mockResolvedValue({ status: 'DISPUTED', comments: [] }),
   },
 }));
@@ -18,15 +19,15 @@ const renderWithTheme = (ui: React.ReactNode) => render(<ThemeProvider>{ui}</The
 const base = {
   matchId: 'm1', reservationId: 'r1', status: 'PENDING',
   sets: [[6, 4], [6, 3]] as [number, number][],
-  playedAt: '2026-06-20T16:30:00Z', winningTeam: 1, myTeam: 2,
+  playedAt: '2026-06-20T16:30:00Z', confirmDeadline: new Date(Date.now() + 3 * 86400000).toISOString(), winningTeam: 1, myTeam: 2,
   myConfirmation: 'PENDING', ratingAfter: null, needsMyConfirmation: true,
   club: { name: 'Padel Arena Paris' }, sport: { name: 'Padel' },
   resource: { name: 'Court 2' },
   players: [
-    { userId: 'u1', team: 2, firstName: 'Eric', lastName: 'Nougayrede', isMe: true },
-    { userId: 'u2', team: 2, firstName: 'Marie', lastName: 'Durand', isMe: false },
-    { userId: 'u3', team: 1, firstName: 'Paul', lastName: 'Roy', isMe: false },
-    { userId: 'u4', team: 1, firstName: 'Lea', lastName: 'Martin', isMe: false },
+    { userId: 'u1', team: 2, firstName: 'Eric', lastName: 'Nougayrede', isMe: true, confirmation: 'CONFIRMED' },
+    { userId: 'u2', team: 2, firstName: 'Marie', lastName: 'Durand', isMe: false, confirmation: 'CONFIRMED' },
+    { userId: 'u3', team: 1, firstName: 'Paul', lastName: 'Roy', isMe: false, confirmation: 'PENDING' },
+    { userId: 'u4', team: 1, firstName: 'Lea', lastName: 'Martin', isMe: false, confirmation: 'PENDING' },
   ],
 };
 const matches = [base];
@@ -54,14 +55,14 @@ it('un match sans confirmation requise ne montre pas les boutons', () => {
   expect(screen.queryByText('Confirmer')).toBeNull();
 });
 
-it('marque un résultat amical (competitive=false)', () => {
+it('marque un résultat pour le fun (competitive=false)', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: false }] as any} token="t" onChanged={() => {}} />);
-  expect(screen.getByText('Amicale')).toBeInTheDocument();
+  expect(screen.getByText('Pour le fun')).toBeInTheDocument();
 });
 
-it('un match compétitif ne montre pas « Amicale »', () => {
+it('un match pour de vrai ne montre pas « Pour le fun »', () => {
   renderWithTheme(<MyMatchesList matches={[{ ...base, competitive: true }] as any} token="t" onChanged={() => {}} />);
-  expect(screen.queryByText('Amicale')).toBeNull();
+  expect(screen.queryByText('Pour le fun')).toBeNull();
 });
 
 it('affiche Victoire quand mon équipe gagne', () => {
@@ -84,4 +85,36 @@ it('un match en litige propose la discussion', () => {
   const disputed = { ...base, status: 'DISPUTED', needsMyConfirmation: false, commentCount: 2 };
   renderWithTheme(<MyMatchesList matches={[disputed] as any} token="t" onChanged={() => {}} />);
   expect(screen.getByText(/Discussion/)).toBeInTheDocument();
+});
+
+it('affiche le compteur de validations et le compte à rebours d auto-validation', () => {
+  renderWithTheme(<MyMatchesList matches={matches as any} token="t" onChanged={jest.fn()} />);
+  expect(screen.getByText('2/4 validé')).toBeInTheDocument();
+  expect(screen.getByText(/Se valide automatiquement/i)).toBeInTheDocument();
+});
+
+it('affiche « Validation en cours » quand le délai est déjà passé', () => {
+  const late = [{ ...base, confirmDeadline: '2020-01-01T00:00:00Z' }];
+  renderWithTheme(<MyMatchesList matches={late as any} token="t" onChanged={jest.fn()} />);
+  expect(screen.getByText(/Validation en cours/i)).toBeInTheDocument();
+});
+
+it('relance les joueurs en attente au clic', async () => {
+  renderWithTheme(<MyMatchesList matches={matches as any} token="t" onChanged={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Relancer/i }));
+  await waitFor(() => expect(api.remindMatch).toHaveBeenCalledWith('m1', 't'));
+  expect(await screen.findByText(/Relance envoyée/i)).toBeInTheDocument();
+});
+
+it('affiche « déjà relancé » sur 429', async () => {
+  (api.remindMatch as jest.Mock).mockRejectedValueOnce(new Error('RATE_LIMITED'));
+  renderWithTheme(<MyMatchesList matches={matches as any} token="t" onChanged={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Relancer/i }));
+  expect(await screen.findByText(/Déjà relancé/i)).toBeInTheDocument();
+});
+
+it('pas de bouton Relancer si tous les autres ont validé', () => {
+  const done = [{ ...base, players: base.players.map((p) => ({ ...p, confirmation: 'CONFIRMED' })) }];
+  renderWithTheme(<MyMatchesList matches={done as any} token="t" onChanged={jest.fn()} />);
+  expect(screen.queryByRole('button', { name: /Relancer/i })).toBeNull();
 });
