@@ -5,6 +5,7 @@ import { ACCENTS } from '@/lib/theme';
 import { Btn, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { MyReservation } from '@/lib/api';
+import { ClubMarker } from '@/lib/calendar';
 import { isCancellationOpen } from '@/lib/reservations';
 import { rangeLabel } from '@/lib/levelMatch';
 import { MatchShareButton } from '@/components/openmatch/MatchShareButton';
@@ -36,6 +37,9 @@ export interface ReservationAgendaCardProps {
   onRecordResult?: (r: MyReservation) => void;
   canRecord?: (r: MyReservation) => boolean;
   existingMatchStatus?: 'PENDING' | 'CONFIRMED' | 'DISPUTED' | 'CANCELLED';
+  /** Marqueur « autre club » : le nom du club devient une chip teintée à son accentColor.
+   *  Pas de liseré ici — le composant rend un fragment, le chrome carte vient de l'appelant. */
+  clubMarker?: ClubMarker | null;
 }
 
 // Carte d'une réservation padel dans « Mes réservations » (Calendrier + À venir/Passées),
@@ -45,7 +49,7 @@ export interface ReservationAgendaCardProps {
 // userId) : jamais de chip « Vous organisez »/« Quitter », Annuler est l'action utile.
 export function ReservationAgendaCard({
   reservation: r, past, showSport, showDate = false, token, now,
-  onCancel, onPlayersChanged, onOpenChat, onRecordResult, canRecord, existingMatchStatus,
+  onCancel, onPlayersChanged, onOpenChat, onRecordResult, canRecord, existingMatchStatus, clubMarker,
 }: ReservationAgendaCardProps) {
   const { th } = useTheme();
 
@@ -77,7 +81,13 @@ export function ReservationAgendaCard({
         <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 16, color: th.text }}>{r.resource.name}</span>
         {!past && <Chip tone={full ? 'mute' : 'accent'}>{full ? 'Complet' : `${spotsLeft} place${spotsLeft > 1 ? 's' : ''}`}</Chip>}
       </div>
-      <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{r.resource.club.name}</div>
+      {clubMarker ? (
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+          <Chip color={clubMarker.accent}>{clubMarker.name}</Chip>
+        </div>
+      ) : (
+        <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{r.resource.club.name}</div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <Icon name="clock" size={14} color={th.textMute} />

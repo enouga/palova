@@ -150,6 +150,12 @@ export function Chip({ children, tone = 'mute', icon, color }: { children: React
   );
 }
 
+/** Liseré latéral coloré d'une carte (marqueur « autre club », pattern AgendaAdminCard).
+ *  Le parent doit être en position:relative + overflow:hidden (le liseré épouse le borderRadius). */
+export function CardStripe({ color }: { color: string }) {
+  return <span aria-hidden data-club-stripe style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: color }} />;
+}
+
 export function LiveDot({ size = 8 }: { size?: number }) {
   const { th } = useTheme();
   return (

@@ -116,4 +116,16 @@ describe('ReservationAgendaCard', () => {
     renderCard({ showDate: true });
     expect(screen.getByText(/· \d{2}h\d{2}–\d{2}h\d{2}/)).toBeInTheDocument();
   });
+
+  it('avec clubMarker : le nom du club devient une chip (span), une seule occurrence', () => {
+    renderCard({ clubMarker: { name: 'Padel Arena', accent: '#34b27b' } });
+    const els = screen.getAllByText('Padel Arena');
+    expect(els).toHaveLength(1);
+    expect(els[0].tagName).toBe('SPAN'); // pastille Chip, plus le <div> sous-titre texte
+  });
+
+  it('sans clubMarker : sous-titre texte inchangé (non-régression)', () => {
+    renderCard();
+    expect(screen.getByText('Padel Arena').tagName).toBe('DIV');
+  });
 });
