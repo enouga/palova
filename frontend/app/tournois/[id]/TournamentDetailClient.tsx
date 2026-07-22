@@ -10,7 +10,6 @@ import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
 import { TournamentHero, MetaCards } from '@/components/tournament/TournamentHero';
 import { clubIsMultiSport } from '@/lib/sportBadge';
-import { AboutCard } from '@/components/agenda/RegistrationUI';
 import { TeamsGrid } from '@/components/tournament/TeamsGrid';
 import { ShareActions } from '@/components/tournament/ShareActions';
 import { MyRegistrationCard } from '@/components/tournament/MyRegistrationCard';
@@ -171,26 +170,32 @@ export function TournamentDetailClient({ id }: { id: string }) {
       <div style={{ paddingBottom: 48 }}>
         <ClubNav club={club} />
 
-        <div style={{ padding: '14px 20px 0' }}>
+        {/* Fil d'Ariane + partage sur une seule rangée (gain d'une rangée dédiée). */}
+        <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => router.push('/tournois')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute, padding: 0 }}>
             <Icon name="chevL" size={16} color={th.textMute} />Tous les tournois
           </button>
+          <span style={{ flex: 1 }} />
+          <ShareActions item={t} uidPrefix="tournament" bare />
         </div>
 
         <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)} />
         <MetaCards t={t} />
-        <ShareActions item={t} uidPrefix="tournament" />
 
-        {t.description && <AboutCard text={t.description} />}
+        {/* Description en paragraphe léger — la carte « À propos » pesait une rangée
+            entière de chrome pour une ou deux phrases. */}
+        {t.description && (
+          <p style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute, margin: 0, padding: '14px 20px 0', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{t.description}</p>
+        )}
 
         {t.contactInfo && (
-          <div style={{ display: 'flex', gap: 8, padding: '14px 20px 0', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, lineHeight: 1.55 }}>
+          <div style={{ display: 'flex', gap: 8, padding: '12px 20px 0', fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, lineHeight: 1.55 }}>
             <Icon name="info" size={15} color={th.textMute} style={{ flexShrink: 0, marginTop: 2 }} />
             <span><b style={{ color: th.text }}>Contact</b> · <span style={{ whiteSpace: 'pre-wrap' }}>{t.contactInfo}</span></span>
           </div>
         )}
 
-        <div style={{ padding: '24px 20px 0' }}>
+        <div style={{ padding: '18px 20px 0' }}>
           {error && <div style={{ ...dangerBanner(th), marginBottom: 14 }}>{error}</div>}
 
           {/* Non connecté */}
