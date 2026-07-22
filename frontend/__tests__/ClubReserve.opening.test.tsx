@@ -6,8 +6,12 @@ import { nextOpening } from '../lib/bookingWindow';
 const runnerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const start = new Date(Date.now() + 3 * 3600e3).toISOString();
 const end = new Date(Date.now() + 4 * 3600e3).toISOString();
+// Le club de test porte timezone: runnerTz (cf. baseClub ci-dessous) — le composant
+// formate donc les heures dans le fuseau de la machine qui exécute les tests, jamais
+// Europe/Paris en dur (qui ne matchait que par coïncidence sur un poste dev FR ;
+// sur les runners CI ubuntu-latest, UTC, ça divergeait de 2h en été).
 const fmt = (iso: string) =>
-  new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+  new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: runnerTz })
     .format(new Date(iso)).replace(':', 'h');
 
 jest.mock('next/navigation', () => ({
