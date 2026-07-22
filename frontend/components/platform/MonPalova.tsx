@@ -68,7 +68,8 @@ export function MonPalova() {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 26, padding: '10px 20px 0', maxWidth: 760, margin: '0 auto' }}>
+        {/* Pas de maxWidth ici : Screen clampe déjà tout à 1080px (largeur unique des pages joueur). */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 26, padding: '10px 20px 0' }}>
           <ManagedClubsCard token={token} />
           <HomeHero firstName={firstName} entry={hero} now={now} />
           <ResultsToRecord token={token} />
