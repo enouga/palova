@@ -1,13 +1,23 @@
 'use client';
 import { TournamentDetail } from '@/lib/api';
 import { fillRatio, formatDateShortTimeRange, formatDateTimeShort, heroPlacesLabel } from '@/lib/tournament';
-import { AgendaHero, MetaCardsRow, MetaCard } from '@/components/agenda/AgendaHero';
+import { AgendaHero, MetaCard } from '@/components/agenda/AgendaHero';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
 
 // Hero de la fiche tournoi : habillage tournoi au-dessus du AgendaHero partagé.
-// `multiSport` (club à ≥2 sports) → pill sport en tête.
+// `multiSport` (club à ≥2 sports) → pill sport en tête. Les faits (horaire,
+// clôture, prix, juge-arbitre) sont intégrés en pied de hero (`meta`) — la
+// rangée de cartes séparée a été fondue dans le bloc.
 export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDetail; now: Date | null; multiSport?: boolean }) {
+  const tz = t.club.timezone;
+  const meta: MetaCard[] = [
+    { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(t.startTime, t.endTime, tz) },
+    { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(t.registrationDeadline, tz) },
+    ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € / binôme` } as MetaCard] : []),
+    // Nom seul : le J/A répond du tournoi, mais ses coordonnées restent l'affaire de `contactInfo`.
+    ...(t.referee ? [{ icon: 'whistle', label: 'Juge-arbitre', value: t.referee.name } as MetaCard] : []),
+  ];
   return (
     <AgendaHero
       pills={[
@@ -26,19 +36,7 @@ export function TournamentHero({ t, now, multiSport = false }: { t: TournamentDe
         + (t.waitlistCount > 0 ? ` · ${t.waitlistCount} en attente` : '')
       }
       places={heroPlacesLabel(t.confirmedCount, t.maxTeams)}
+      meta={meta}
     />
   );
-}
-
-// Cartes méta de la fiche tournoi : début, clôture, prix par binôme, juge-arbitre.
-export function MetaCards({ t }: { t: TournamentDetail }) {
-  const tz = t.club.timezone;
-  const cards: MetaCard[] = [
-    { icon: 'calendar', label: t.endTime ? 'Horaire' : 'Début', value: formatDateShortTimeRange(t.startTime, t.endTime, tz) },
-    { icon: 'clock', label: 'Clôture', value: formatDateTimeShort(t.registrationDeadline, tz) },
-    ...(t.entryFee ? [{ icon: 'euro', label: 'Inscription', value: `${t.entryFee} € / binôme` } as MetaCard] : []),
-    // Nom seul : le J/A répond du tournoi, mais ses coordonnées restent l'affaire de `contactInfo`.
-    ...(t.referee ? [{ icon: 'whistle', label: 'Juge-arbitre', value: t.referee.name } as MetaCard] : []),
-  ];
-  return <MetaCardsRow cards={cards} />;
 }

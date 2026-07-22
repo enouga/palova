@@ -41,45 +41,68 @@ export interface AgendaHeroProps {
   ratio: number | null;        // remplissage 0..1, null = pas de jauge
   counter: string;             // « 7/12 binômes » / « 9/16 inscrits »
   places: { text: string; urgent: boolean } | null;  // null = badge masqué
+  meta?: MetaCard[];           // bande de faits intégrée en pied de hero (remplace MetaCardsRow)
+}
+
+/** Le countdown brut (« Plus que 6 h », « J-24 ») ne dit pas avant QUOI —
+ *  dans le hero on explicite : « Clôture dans 6 h » / « Clôture J-24 ». */
+function heroCountdownLabel(text: string): string {
+  return text.startsWith('J-') ? `Clôture ${text}` : text.replace(/^Plus que\b/, 'Clôture dans');
 }
 
 // Hero immersif : dégradé « brume bleue » clair (texte encre), compte à
-// rebours, jauge de remplissage animée, badge places restantes — l'urgence
-// est portée par les badges coral, pas par le fond. `now` null au premier
+// rebours, jauge de remplissage animée, places restantes — l'urgence est
+// portée par les touches coral, pas par le fond. `now` null au premier
 // rendu : pas de countdown, jauge à 0 — le remplissage s'anime au mount via
-// la transition CSS.
-export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, counter, places }: AgendaHeroProps) {
+// la transition CSS. `meta` intègre les faits (horaire, clôture, prix…) en
+// pied de hero, derrière un filet — un seul bloc au lieu de deux.
+export function AgendaHero({ pills, title, subtitle, deadline, now, ratio, counter, places, meta }: AgendaHeroProps) {
   const { th } = useTheme();
   const countdown = now ? deadlineCountdown(deadline, now) : null;
 
   return (
     <div style={{ padding: '12px 20px 0' }}>
-      <div data-testid="agenda-hero" style={{ background: HERO_GRADIENT, borderRadius: 18, padding: '24px 22px', color: HERO_INK }}>
+      <div data-testid="agenda-hero" style={{ background: HERO_GRADIENT, borderRadius: 18, padding: '20px 22px 18px', color: HERO_INK }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {pills.map((p) => <HeroPill key={p.label} strong={p.strong}>{p.label}</HeroPill>)}
           <span style={{ flex: 1 }} />
-          {countdown && <HeroPill urgent={countdown.urgent}><Icon name="clock" size={13} color={countdown.urgent ? '#fff' : HERO_INK} />{countdown.text}</HeroPill>}
+          {countdown && <HeroPill urgent={countdown.urgent}><Icon name="clock" size={13} color={countdown.urgent ? '#fff' : HERO_INK} />{heroCountdownLabel(countdown.text)}</HeroPill>}
         </div>
-        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -0.6, marginTop: 14, lineHeight: 1.1 }}>{title}</div>
-        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, opacity: 0.65, marginTop: 5 }}>{subtitle}</div>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -0.6, marginTop: 10, lineHeight: 1.1 }}>{title}</div>
+        <div style={{ fontFamily: th.fontUI, fontSize: 13.5, opacity: 0.65, marginTop: 4 }}>{subtitle}</div>
 
-        <div style={{ marginTop: 18 }}>
+        <div style={{ marginTop: 14 }}>
           {ratio != null && (
             <div style={{ height: 6, borderRadius: 999, background: 'rgba(24,21,14,0.14)', boxShadow: 'inset 0 0 0 1px rgba(24,21,14,0.22)', overflow: 'hidden' }}>
               <div data-testid="hero-fill" style={{ height: '100%', borderRadius: 999, background: ACCENTS.blue, width: now ? `${Math.round(ratio * 100)}%` : 0, transition: 'width .8s ease' }} />
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: ratio != null ? 9 : 0, flexWrap: 'wrap' }}>
+          {/* Compteur et places restantes fusionnés sur une seule ligne (fini le badge à droite). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: ratio != null ? 8 : 0, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600 }}>{counter}</span>
-            <span style={{ flex: 1 }} />
             {places && (
-              <span style={{
-                fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
-                ...(places.urgent ? { background: ACCENTS.coral, borderRadius: 999, padding: '4px 10px', color: '#fff' } : { opacity: 0.7 }),
-              }}>{places.text}</span>
+              <>
+                <span aria-hidden="true" style={{ opacity: 0.45 }}>·</span>
+                <span style={{
+                  fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
+                  ...(places.urgent ? { color: ACCENTS.coral } : { opacity: 0.7 }),
+                }}>{places.text}</span>
+              </>
             )}
           </div>
         </div>
+
+        {meta && meta.length > 0 && (
+          <div style={{ marginTop: 13, paddingTop: 12, borderTop: '1px solid rgba(24,21,14,0.16)', display: 'flex', flexWrap: 'wrap', columnGap: 22, rowGap: 8 }}>
+            {meta.map((m) => (
+              <span key={m.label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap' }}>
+                <Icon name={m.icon} size={12} color={HERO_INK_MUTED} style={{ alignSelf: 'center', flexShrink: 0 }} />
+                <span style={{ fontFamily: th.fontUI, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: HERO_INK_MUTED }}>{m.label}</span>
+                <span style={{ fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: HERO_INK }}>{m.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

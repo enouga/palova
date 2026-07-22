@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { TournamentHero, MetaCards } from '../components/tournament/TournamentHero';
+import { TournamentHero } from '../components/tournament/TournamentHero';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { TournamentDetail } from '../lib/api';
 
@@ -18,18 +18,18 @@ const tournament = (over: Partial<TournamentDetail> = {}): TournamentDetail => (
 const wrap = (ui: React.ReactElement) => render(<ThemeProvider>{ui}</ThemeProvider>);
 
 describe('TournamentHero', () => {
-  it('affiche titre, club, compteur et countdown J-x', () => {
+  it('affiche titre, club, compteur et countdown explicite « Clôture J-x »', () => {
     wrap(<TournamentHero t={tournament()} now={NOW} />);
     expect(screen.getByText('Grand Prix Messieurs')).toBeInTheDocument();
     expect(screen.getByText('Toulouse Padel Indoor')).toBeInTheDocument();
     expect(screen.getByText('7/12 binômes')).toBeInTheDocument();
-    expect(screen.getByText('J-24')).toBeInTheDocument();
+    expect(screen.getByText('Clôture J-24')).toBeInTheDocument();
     expect(screen.getByText('Plus que 5 places')).toBeInTheDocument();
   });
 
   it('now=null (avant mount) → pas de countdown, jauge à 0', () => {
     wrap(<TournamentHero t={tournament()} now={null} />);
-    expect(screen.queryByText('J-24')).not.toBeInTheDocument();
+    expect(screen.queryByText('Clôture J-24')).not.toBeInTheDocument();
     expect(screen.getByTestId('hero-fill').style.width).toBe('0px');
   });
 
@@ -43,9 +43,9 @@ describe('TournamentHero', () => {
     expect(screen.getByText('Plus que 2 places')).toBeInTheDocument();
   });
 
-  it('deadline < 48 h → countdown en heures', () => {
+  it('deadline < 48 h → countdown en heures « Clôture dans X h »', () => {
     wrap(<TournamentHero t={tournament({ registrationDeadline: '2026-06-10T18:00:00Z' })} now={NOW} />);
-    expect(screen.getByText('Plus que 6 h')).toBeInTheDocument();
+    expect(screen.getByText('Clôture dans 6 h')).toBeInTheDocument();
   });
 
   it('sans capacité → pas de jauge, compteur simple, pas de badge places', () => {
@@ -79,9 +79,10 @@ describe('TournamentHero', () => {
   });
 });
 
-describe('MetaCards', () => {
+// La bande méta (horaire, clôture, prix, J/A) est désormais intégrée en pied de hero.
+describe('TournamentHero — bande méta intégrée', () => {
   it('début, clôture (formats courts) et prix dans le fuseau du club', () => {
-    wrap(<MetaCards t={tournament()} />);
+    wrap(<TournamentHero t={tournament()} now={NOW} />);
     expect(screen.getByText('jeu. 9 juil. · 14h01')).toBeInTheDocument();
     expect(screen.getByText('Clôture')).toBeInTheDocument();
     expect(screen.queryByText('Clôture des inscriptions')).not.toBeInTheDocument();
@@ -90,30 +91,30 @@ describe('MetaCards', () => {
   });
 
   it('avec heure de fin → plage compacte sur un jour', () => {
-    wrap(<MetaCards t={tournament({ endTime: '2026-07-09T16:00:00Z' })} />);
+    wrap(<TournamentHero t={tournament({ endTime: '2026-07-09T16:00:00Z' })} now={NOW} />);
     expect(screen.getByText('jeu. 9 juil. · 14h01 → 18h00')).toBeInTheDocument();
   });
 
-  it('pas de carte prix sans entryFee', () => {
-    wrap(<MetaCards t={tournament({ entryFee: null })} />);
+  it('pas d\'entrée prix sans entryFee', () => {
+    wrap(<TournamentHero t={tournament({ entryFee: null })} now={NOW} />);
     expect(screen.queryByText(/€ \/ binôme/)).not.toBeInTheDocument();
   });
 
   // Le J/A est public : c'est lui qui répond du tournoi. Nom seul (spec §7) — le canal de
   // contact reste `contactInfo`, affiché ailleurs sur la fiche.
-  it('J/A désigné → carte « Juge-arbitre » avec son nom', () => {
-    wrap(<MetaCards t={tournament({ referee: { name: 'Julien Martin' } })} />);
+  it('J/A désigné → entrée « Juge-arbitre » avec son nom', () => {
+    wrap(<TournamentHero t={tournament({ referee: { name: 'Julien Martin' } })} now={NOW} />);
     expect(screen.getByText('Juge-arbitre')).toBeInTheDocument();
     expect(screen.getByText('Julien Martin')).toBeInTheDocument();
   });
 
-  it('aucun J/A désigné → pas de carte « Juge-arbitre »', () => {
-    wrap(<MetaCards t={tournament({ referee: null })} />);
+  it('aucun J/A désigné → pas d\'entrée « Juge-arbitre »', () => {
+    wrap(<TournamentHero t={tournament({ referee: null })} now={NOW} />);
     expect(screen.queryByText('Juge-arbitre')).not.toBeInTheDocument();
   });
 
-  it('champ referee absent du payload (listes) → pas de carte', () => {
-    wrap(<MetaCards t={tournament()} />);
+  it('champ referee absent du payload (listes) → pas d\'entrée', () => {
+    wrap(<TournamentHero t={tournament()} now={NOW} />);
     expect(screen.queryByText('Juge-arbitre')).not.toBeInTheDocument();
   });
 });
