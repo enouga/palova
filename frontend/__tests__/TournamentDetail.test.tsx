@@ -257,6 +257,22 @@ describe('contact du J/A', () => {
       expect.objectContaining({ draft: expect.stringContaining('Tournoi Test P100') })));
   });
 
+  it('double-clic pendant la requête en vol → un seul appel (garde busy)', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
+    getMyTournaments.mockResolvedValue([myReg]);
+    let resolveContact: (v: { id: string; other: { userId: string } }) => void = () => {};
+    contactTournamentReferee.mockReturnValue(new Promise((resolve) => { resolveContact = resolve; }));
+
+    await renderPage();
+    const btn = await screen.findByRole('button', { name: 'Contacter' });
+    fireEvent.click(btn);
+    fireEvent.click(btn); // la requête précédente n'a pas encore résolu
+
+    expect(contactTournamentReferee).toHaveBeenCalledTimes(1);
+    await act(async () => { resolveContact({ id: 'conv-1', other: { userId: 'u-ref' } }); });
+    await waitFor(() => expect(openDm).toHaveBeenCalledTimes(1));
+  });
+
   it('non inscrit → pas de bouton Contacter', async () => {
     getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
     getMyTournaments.mockResolvedValue([]);

@@ -171,12 +171,13 @@ export function TournamentDetailClient({ id }: { id: string }) {
   // Contact du J/A : la porte (inscrit + politique) est re-vérifiée serveur ; la conversation
   // renvoyée porte le userId du J/A (révélé seulement contact autorisé) → openDm + brouillon.
   const contactReferee = async () => {
-    if (!token) return;
-    setError(null);
+    if (!token || busy) return;
+    setBusy(true); setError(null);
     try {
       const conv = await api.contactTournamentReferee(id, token);
       openDm(conv.other.userId, { isDesktop, navigate: (h) => router.push(h), draft: `Bonjour, à propos du tournoi ${t.name}…` });
     } catch (e) { setError(messageFor(e)); }
+    finally { setBusy(false); }
   };
 
   const primaryBtn = { border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 11, padding: '12px 16px', fontFamily: th.fontUI, fontWeight: 700, fontSize: 14.5, opacity: busy ? 0.6 : 1 };
