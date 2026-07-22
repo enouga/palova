@@ -20,6 +20,7 @@ import { FollowService } from '../services/follow.service';
 import { FriendshipService } from '../services/friendship.service';
 import { MatchService } from '../services/match.service';
 import { legalService } from '../services/legal.service';
+import { walletService } from '../services/wallet.service';
 
 const router = Router();
 const reservationService = new ReservationService();
@@ -318,6 +319,13 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
 router.get('/matches/to-record', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     res.json(await matchService.listToRecord(req.user!.id, new Date()));
+  } catch (err) { next(err); }
+});
+
+// Portefeuille cross-club (Mon Palova) : abonnements + carnets utilisables, groupés par club.
+router.get('/wallet', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await walletService.listMyWallet(req.user!.id));
   } catch (err) { next(err); }
 });
 

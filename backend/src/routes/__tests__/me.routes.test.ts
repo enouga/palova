@@ -506,3 +506,25 @@ describe('GET /api/me/export', () => {
     expect(res.status).toBe(429);
   });
 });
+
+describe('GET /api/me/wallet', () => {
+  it('401 sans token', async () => {
+    const res = await request(app).get('/api/me/wallet');
+    expect(res.status).toBe(401);
+  });
+
+  it("renvoie l'agrégat cross-club du service", async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([
+      { id: 's1', status: 'ACTIVE', expiresAt: new Date('2027-01-01'), plan: { name: 'Illimité' },
+        club: { slug: 'padel-arena-paris', name: 'Padel Arena Paris', accentColor: '#5e93da' } },
+    ] as any);
+    prismaMock.memberPackage.findMany.mockResolvedValue([] as any);
+
+    const res = await request(app).get('/api/me/wallet').set('Authorization', `Bearer ${token()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].club.slug).toBe('padel-arena-paris');
+    expect(res.body[0].subscriptions).toHaveLength(1);
+  });
+});
