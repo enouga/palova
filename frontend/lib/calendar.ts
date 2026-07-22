@@ -271,10 +271,42 @@ export function buildAgendaList(
 
 /** Slug du club auquel appartient un item d'agenda (pour cloisonner/relier par club). */
 export function agendaItemClubSlug(item: AgendaListItem): string {
-  if (item.kind === 'reservation') return item.r.resource.club.slug;
-  if (item.kind === 'tournament') return item.reg.tournament.club.slug;
-  if (item.kind === 'lesson') return item.enrollment.lesson.club.slug;
-  return item.ev.event.club.slug;
+  return agendaItemClub(item).slug;
+}
+
+/** Club d'un item d'agenda — union structurelle : accepte un AgendaListItem OU une CalendarEntry
+ *  (elles diffèrent par `start` vs `dayKey` mais partagent kind + objet source). */
+type AgendaClubSource =
+  | { kind: 'reservation'; r: MyReservation }
+  | { kind: 'tournament'; reg: MyTournamentRegistration }
+  | { kind: 'event'; ev: MyEventRegistration }
+  | { kind: 'lesson'; enrollment: MyLessonEnrollment };
+
+export function agendaItemClub(item: AgendaClubSource): { slug: string; name: string; accentColor?: string } {
+  if (item.kind === 'reservation') return item.r.resource.club;
+  if (item.kind === 'tournament') return item.reg.tournament.club;
+  if (item.kind === 'lesson') return item.enrollment.lesson.club;
+  return item.ev.event.club;
+}
+
+// --- Marqueur « autre club » (liseré + chip teintés à l'accentColor du club) ---
+
+export interface ClubMarker { name: string; accent: string }
+
+/**
+ * Marqueur visuel d'une entrée d'agenda selon le club courant.
+ * - Hôte club (`localSlug` non null) : null pour une entrée du club courant (carte inchangée),
+ *   marqueur pour une entrée d'un autre club.
+ * - Plateforme (`localSlug` null) : marqueur pour TOUTE entrée (aucun club n'est « le vôtre »).
+ * Présentation seule — la logique `isForeign` (carte-lien, actions) ne passe pas par ici.
+ * Fallback ACCENTS.blue si le payload n'expose pas encore accentColor (cache, fixtures).
+ */
+export function clubMarker(
+  club: { slug: string; name: string; accentColor?: string | null },
+  localSlug: string | null,
+): ClubMarker | null {
+  if (localSlug != null && club.slug === localSlug) return null;
+  return { name: club.name, accent: club.accentColor ?? ACCENTS.blue };
 }
 
 /** "YYYY-MM-DD" + delta jours, arithmétique UTC pure (aucun décalage de fuseau/DST). */

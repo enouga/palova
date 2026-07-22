@@ -1292,7 +1292,7 @@ export interface MyReservation {
   endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
   totalPrice: string;
-  resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
+  resource: { id: string; name: string; sport?: { key: string; name: string } | null; club: { name: string; slug: string; timezone: string; accentColor?: string; playerChangeCutoffHours?: number; cancellationCutoffHours?: number } };
   capacity: number;
   visibility?: 'PRIVATE' | 'PUBLIC';
   competitive?: boolean;
@@ -2457,7 +2457,7 @@ export interface MyTournamentRegistration {
   partner: { id: string; firstName: string; lastName: string; email: string; phone: string | null };
   captainLicense: string | null;
   partnerLicense: string | null;
-  tournament: Tournament & { club: { slug: string; name: string; timezone: string } };
+  tournament: Tournament & { club: { slug: string; name: string; timezone: string; accentColor?: string } };
 }
 
 export interface MyProfile {
@@ -2729,7 +2729,7 @@ export interface EventParticipant {
 export interface MyEventRegistration {
   id: string;
   status: RegistrationStatus;
-  event: ClubEvent & { club: { slug: string; name: string; timezone: string } };
+  event: ClubEvent & { club: { slug: string; name: string; timezone: string; accentColor?: string } };
 }
 
 export interface AdminEventRegistration {
@@ -3010,7 +3010,7 @@ export interface LessonEnrollmentRecord {
 
 /** Shape retournée par /api/me/lessons : LessonSummary enrichie du club (pour dayKey tz-aware). */
 export type MyLessonSummary = LessonSummary & {
-  club: { slug: string; name: string; timezone: string };
+  club: { slug: string; name: string; timezone: string; accentColor?: string };
 };
 
 export interface MyLessonEnrollment {
