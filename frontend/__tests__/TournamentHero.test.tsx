@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TournamentHero } from '../components/tournament/TournamentHero';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { TournamentDetail } from '../lib/api';
@@ -116,5 +116,27 @@ describe('TournamentHero — bande méta intégrée', () => {
   it('champ referee absent du payload (listes) → pas d\'entrée', () => {
     wrap(<TournamentHero t={tournament()} now={NOW} />);
     expect(screen.queryByText('Juge-arbitre')).not.toBeInTheDocument();
+  });
+});
+
+// Le bouton « Contacter » n'est qu'un relais : le GATING (contactable + inscrit) vit dans
+// la page — le hero rend le bouton ssi la page lui passe onContactReferee.
+describe('TournamentHero — contact du J/A', () => {
+  it('onContactReferee fourni → bouton « Contacter » sur la carte J/A', () => {
+    const onContact = jest.fn();
+    wrap(<TournamentHero t={tournament({ referee: { name: 'Julien Martin', contactable: true } })} now={NOW} onContactReferee={onContact} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Contacter' }));
+    expect(onContact).toHaveBeenCalled();
+  });
+
+  it('sans onContactReferee → nom seul, pas de bouton', () => {
+    wrap(<TournamentHero t={tournament({ referee: { name: 'Julien Martin', contactable: true } })} now={NOW} />);
+    expect(screen.getByText('Julien Martin')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Contacter' })).not.toBeInTheDocument();
+  });
+
+  it('sans J/A → pas de bouton même avec le callback', () => {
+    wrap(<TournamentHero t={tournament({ referee: null })} now={NOW} onContactReferee={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Contacter' })).not.toBeInTheDocument();
   });
 });

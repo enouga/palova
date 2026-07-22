@@ -1162,6 +1162,14 @@ export const api = {
   refereeRemoveRegistration: (slug: string, tournamentId: string, regId: string, token: string) =>
     request<{ id: string }>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/registrations/${regId}`, { method: 'DELETE' }, token),
 
+  // Réglage de contactabilité du J/A (par club) + porte de contact depuis la fiche tournoi.
+  getRefereeContactPolicy: (slug: string, token: string) =>
+    request<{ policy: RefereeContactPolicy }>(`/api/clubs/${slug}/me/referee/contact-policy`, {}, token),
+  setRefereeContactPolicy: (slug: string, policy: RefereeContactPolicy, token: string) =>
+    request<{ policy: RefereeContactPolicy }>(`/api/clubs/${slug}/me/referee/contact-policy`, { method: 'PATCH', body: JSON.stringify({ policy }) }, token),
+  contactTournamentReferee: (tournamentId: string, token: string) =>
+    request<ConversationSummary>(`/api/tournaments/${tournamentId}/contact-referee`, { method: 'POST' }, token),
+
   // --- Table de marque du J/A ---
   getRefereeMarkTable: (slug: string, tournamentId: string, token: string) =>
     request<MarkTableView>(`/api/clubs/${slug}/me/referee/tournaments/${tournamentId}/mark-table`, {}, token),
@@ -2389,7 +2397,7 @@ export interface Tournament {
   description: string | null;
   contactInfo: string | null;
   refereeUserId?: string | null; // J/A désigné (facette, pas un rôle) ; ADMIN uniquement — les lectures publiques ne l'exposent pas
-  referee?: { name: string } | null; // J/A public : nom seul, jamais le userId ; peuplé par le détail (getTournament)
+  referee?: { name: string; contactable?: boolean } | null; // J/A public : nom seul + contactabilité calculée serveur, jamais le userId
   startTime: string;
   endTime: string | null;
   registrationDeadline: string;
@@ -3077,6 +3085,8 @@ export interface CoachLessonRow {
 }
 
 // --- Espace juge-arbitre (Arbitrage) ---
+
+export type RefereeContactPolicy = 'ALWAYS' | 'AFTER_DEADLINE' | 'NEVER';
 
 /** Un joueur vu par le J/A à la table de marque. `userId` volontairement absent côté serveur. */
 export interface RefereePlayerRow {
