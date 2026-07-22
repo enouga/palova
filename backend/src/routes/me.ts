@@ -45,17 +45,18 @@ const LOCALES = ['fr', 'en', 'es'] as const;
 const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 // Clubs gérés par l'utilisateur connecté (pour le gating UX du back-office).
+// accentColor : la carte Gestion de Mon Palova en teinte la tuile à la marque du club.
 router.get('/clubs', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const memberships = await prisma.clubMember.findMany({
       where: { userId: req.user!.id },
       select: {
         role: true,
-        club: { select: { id: true, slug: true, name: true } },
+        club: { select: { id: true, slug: true, name: true, accentColor: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
-    res.json(memberships.map((m) => ({ clubId: m.club.id, slug: m.club.slug, name: m.club.name, role: m.role })));
+    res.json(memberships.map((m) => ({ clubId: m.club.id, slug: m.club.slug, name: m.club.name, role: m.role, accentColor: m.club.accentColor })));
   } catch (err) { next(err); }
 });
 
@@ -319,6 +320,13 @@ router.get('/matches', authMiddleware, async (req: AuthRequest, res: Response, n
 router.get('/matches/to-record', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     res.json(await matchService.listToRecord(req.user!.id, new Date()));
+  } catch (err) { next(err); }
+});
+
+// Matchs en attente de MA confirmation (alerte, DTO léger — historique complet sur /matches).
+router.get('/matches/to-confirm', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json(await matchService.listToConfirm(req.user!.id));
   } catch (err) { next(err); }
 });
 
