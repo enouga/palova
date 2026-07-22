@@ -126,6 +126,7 @@ export const api = {
     request<{ id: string; status: string }>(`/api/reservations/${reservationId}/match`, { method: 'POST', body: JSON.stringify(body) }, token),
   getMyMatches: (token: string) => request<MyMatch[]>('/api/me/matches', {}, token),
   getMatchesToRecord: (token: string) => request<MatchToRecord[]>('/api/me/matches/to-record', {}, token),
+  getMatchesToConfirm: (token: string) => request<MatchToConfirm[]>('/api/me/matches/to-confirm', {}, token),
   confirmMatch: (matchId: string, token: string) =>
     request<{ ok: true }>(`/api/matches/${matchId}/confirm`, { method: 'POST' }, token),
   disputeMatch: (matchId: string, message: string, token: string) =>
@@ -1287,6 +1288,7 @@ export interface ManagedClub {
   slug: string;
   name: string;
   role: 'OWNER' | 'ADMIN' | 'STAFF';
+  accentColor: string;
 }
 
 export interface MyReservation {
@@ -1366,6 +1368,25 @@ export interface MatchToRecord {
   resourceName: string;
   sport: { key: string; name: string };
   players: MatchToRecordPlayer[];
+}
+
+export interface MatchToConfirmPlayer {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  team: 1 | 2;
+}
+
+export interface MatchToConfirm {
+  matchId: string;
+  playedAt: string;
+  sets: [number, number][];
+  competitive: boolean;
+  confirmDeadline: string;
+  club: { slug: string; name: string; timezone: string };
+  resourceName: string | null;
+  players: MatchToConfirmPlayer[];
 }
 
 export interface ClubMatchPlayer {
