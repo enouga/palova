@@ -36,7 +36,8 @@ jest.mock('../../services/moderation.service', () => ({
 
 // --- Mock ciblé : TournamentService (classe instanciée au chargement de clubs.ts) ---
 const resolveReferee = jest.fn(), listRefereeTournaments = jest.fn(), refereeListRegistrations = jest.fn(),
-  refereePromoteRegistration = jest.fn(), refereeRemoveRegistration = jest.fn();
+  refereePromoteRegistration = jest.fn(), refereeRemoveRegistration = jest.fn(),
+  getRefereeContactPolicy = jest.fn(), setRefereeContactPolicy = jest.fn();
 // Table de marque — cœur partagé, appelé par les nouvelles routes J/A de cette Task 8.
 // assertRefereeOwnsTournament (étage 2) est posée à la porte J/A depuis le fix de la faille
 // d'autorisation : sans elle, n'importe quel J/A actif du club pouvait agir sur la table de
@@ -49,6 +50,7 @@ jest.mock('../../services/tournament.service', () => ({
   TournamentService: jest.fn().mockImplementation(() => ({
     resolveReferee, listRefereeTournaments, refereeListRegistrations,
     refereePromoteRegistration, refereeRemoveRegistration,
+    getRefereeContactPolicy, setRefereeContactPolicy,
     listMarkTable, listMarkTableLog, setPresence, markTablePromote, markTableRemove,
     declareForfeit, replacePlayer, addToBench, removeFromBench, pairFromBench, addLateRegistration,
     assertRefereeOwnsTournament,
@@ -471,5 +473,49 @@ describe('table de marque — routes J/A', () => {
   it('sans token → 401 (mark-table)', async () => {
     const res = await request(app).get(`${base}/tournaments/t1/mark-table`);
     expect(res.status).toBe(401);
+  });
+});
+
+// Réglage de contactabilité : famille /me/referee/*, gate resolveReferee (étage 1 seul —
+// pas de tournoi en jeu, donc pas d'étage 2).
+describe('GET/PATCH /me/referee/contact-policy', () => {
+  it('GET renvoie le réglage du J/A', async () => {
+    resolveReferee.mockResolvedValue(true);
+    getRefereeContactPolicy.mockResolvedValue({ policy: 'AFTER_DEADLINE' });
+    const res = await request(app).get(`${base}/contact-policy`).set(auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ policy: 'AFTER_DEADLINE' });
+    expect(getRefereeContactPolicy).toHaveBeenCalledWith('club-1', 'u-ref');
+  });
+
+  it('GET sans facette → 403 NOT_A_REFEREE', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).get(`${base}/contact-policy`).set(auth);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('NOT_A_REFEREE');
+    expect(getRefereeContactPolicy).not.toHaveBeenCalled();
+  });
+
+  it('PATCH relaie la nouvelle valeur', async () => {
+    resolveReferee.mockResolvedValue(true);
+    setRefereeContactPolicy.mockResolvedValue({ policy: 'NEVER' });
+    const res = await request(app).patch(`${base}/contact-policy`).set(auth).send({ policy: 'NEVER' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ policy: 'NEVER' });
+    expect(setRefereeContactPolicy).toHaveBeenCalledWith('club-1', 'u-ref', 'NEVER');
+  });
+
+  it('PATCH sans facette → 403, service jamais appelé', async () => {
+    resolveReferee.mockResolvedValue(false);
+    const res = await request(app).patch(`${base}/contact-policy`).set(auth).send({ policy: 'NEVER' });
+    expect(res.status).toBe(403);
+    expect(setRefereeContactPolicy).not.toHaveBeenCalled();
+  });
+
+  it('PATCH valeur invalide → 400 (VALIDATION_ERROR du service)', async () => {
+    resolveReferee.mockResolvedValue(true);
+    setRefereeContactPolicy.mockRejectedValue(new Error('VALIDATION_ERROR'));
+    const res = await request(app).patch(`${base}/contact-policy`).set(auth).send({ policy: 'XX' });
+    expect(res.status).toBe(400);
   });
 });

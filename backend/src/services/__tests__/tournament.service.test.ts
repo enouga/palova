@@ -1763,3 +1763,34 @@ describe('table de marque — appariement & tardif', () => {
     await expect(svc.pairFromBench('club-1', 't1', 'ua', 'ub', 'staff-1')).rejects.toThrow('GENDER_MISMATCH');
   });
 });
+
+// Réglage de contactabilité du J/A (par club, sur ClubMembership — miroir de isReferee).
+describe('réglage de contactabilité du J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  it('getRefereeContactPolicy lit la colonne du membre', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ refereeContactPolicy: 'NEVER' } as any);
+    await expect(svc.getRefereeContactPolicy('club-1', 'u1')).resolves.toEqual({ policy: 'NEVER' });
+    const arg = (prismaMock.clubMembership.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u1', clubId: 'club-1' } });
+  });
+
+  it('getRefereeContactPolicy sans adhésion → défaut AFTER_DEADLINE (jamais un crash)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue(null as any);
+    await expect(svc.getRefereeContactPolicy('club-1', 'u1')).resolves.toEqual({ policy: 'AFTER_DEADLINE' });
+  });
+
+  it('setRefereeContactPolicy écrit la valeur sur la bonne adhésion', async () => {
+    prismaMock.clubMembership.update.mockResolvedValue({ refereeContactPolicy: 'ALWAYS' } as any);
+    await expect(svc.setRefereeContactPolicy('club-1', 'u1', 'ALWAYS')).resolves.toEqual({ policy: 'ALWAYS' });
+    const arg = (prismaMock.clubMembership.update as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u1', clubId: 'club-1' } });
+    expect(arg.data).toEqual({ refereeContactPolicy: 'ALWAYS' });
+  });
+
+  it('setRefereeContactPolicy refuse une valeur hors enum', async () => {
+    await expect(svc.setRefereeContactPolicy('club-1', 'u1', 'SOMETIMES')).rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.clubMembership.update).not.toHaveBeenCalled();
+  });
+});

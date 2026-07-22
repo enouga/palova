@@ -1,4 +1,4 @@
-import { Prisma, TournamentGender, TournamentStatus } from '@prisma/client';
+import { Prisma, RefereeContactPolicy, TournamentGender, TournamentStatus } from '@prisma/client';
 import { reportError } from '../observability/reportError';
 import { prisma } from '../db/prisma';
 import { serializableTx } from '../db/serializable';
@@ -48,6 +48,9 @@ const PUBLIC_TOURNAMENT_SELECT = {
   registrationDeadline: true, maxTeams: true, entryFee: true, requirePrepayment: true,
   status: true, createdAt: true, updatedAt: true,
 } satisfies Prisma.TournamentSelect;
+
+/** Valeurs admises du réglage de contactabilité du J/A (validation du PATCH). */
+const REFEREE_CONTACT_POLICIES: readonly RefereeContactPolicy[] = ['ALWAYS', 'AFTER_DEADLINE', 'NEVER'];
 
 /** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
 export interface RefereePlayerRow {
@@ -812,6 +815,25 @@ export class TournamentService {
       select: { status: true, isReferee: true },
     });
     return !!m && m.status === 'ACTIVE' && m.isReferee;
+  }
+
+  /** Réglage de contactabilité du J/A (par club). Gate resolveReferee posé par la route. */
+  async getRefereeContactPolicy(clubId: string, userId: string) {
+    const m = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId, clubId } },
+      select: { refereeContactPolicy: true },
+    });
+    return { policy: m?.refereeContactPolicy ?? 'AFTER_DEADLINE' };
+  }
+
+  async setRefereeContactPolicy(clubId: string, userId: string, policy: string) {
+    if (!REFEREE_CONTACT_POLICIES.includes(policy as RefereeContactPolicy)) throw new Error('VALIDATION_ERROR');
+    const m = await prisma.clubMembership.update({
+      where: { userId_clubId: { userId, clubId } },
+      data: { refereeContactPolicy: policy as RefereeContactPolicy },
+      select: { refereeContactPolicy: true },
+    });
+    return { policy: m.refereeContactPolicy };
   }
 
   /**

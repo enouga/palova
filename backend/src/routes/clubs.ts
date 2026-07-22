@@ -369,6 +369,24 @@ router.delete('/:slug/me/coach/lessons/:lessonId/students/:enrollId', authMiddle
 
 // --- Espace juge-arbitre : le J/A voit et gère SES tournois (gate = facette + propriété, PAS un rôle) ---
 
+// Réglage de contactabilité du J/A (par club) — lu/écrit depuis l'espace Arbitrage.
+// Étage 1 seul (facette) : pas de tournoi en jeu, donc pas d'assertRefereeOwnsTournament.
+router.get('/:slug/me/referee/contact-policy', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.getRefereeContactPolicy(clubId, req.user!.id));
+  } catch (err) { handleError(err, res, next); }
+});
+
+router.patch('/:slug/me/referee/contact-policy', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id: clubId } = await ensureActiveMembership(asString(req.params.slug), req.user!.id);
+    if (!(await tournamentService.resolveReferee(clubId, req.user!.id))) throw new Error('NOT_A_REFEREE');
+    res.json(await tournamentService.setRefereeContactPolicy(clubId, req.user!.id, asString(req.body?.policy)));
+  } catch (err) { handleError(err, res, next); }
+});
+
 // Tournois du J/A (?scope=upcoming|past). 403 NOT_A_REFEREE sans la facette.
 // ensureActiveMembership : le J/A devient membre actif (idempotent), comme côté coach.
 router.get('/:slug/me/referee/tournaments', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
