@@ -39,6 +39,8 @@ const ERROR_FR: Record<string, string> = {
   REFEREE_NOT_CONTACTABLE: "Le juge-arbitre n'est pas joignable pour le moment.",
   TOURNAMENT_NO_REFEREE: "Ce tournoi n'a pas de juge-arbitre désigné.",
   RATE_LIMITED: 'Trop de nouvelles conversations, réessayez plus tard.',
+  CANNOT_MESSAGE_SELF: 'Vous ne pouvez pas vous écrire à vous-même.',
+  CONVERSATION_NOT_FOUND: "Impossible d'ouvrir cette conversation.",
   ...DM_ERRORS,
 };
 

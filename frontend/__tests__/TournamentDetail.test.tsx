@@ -300,4 +300,19 @@ describe('contact du J/A', () => {
     expect(await screen.findByText(/n'est pas joignable/)).toBeInTheDocument();
     expect(openDm).not.toHaveBeenCalled();
   });
+
+  // Relayé par MessagingService.getOrCreateConversation (ex. le J/A a supprimé son compte
+  // RGPD entre le chargement de la fiche et le clic) — ne doit jamais fuiter le code brut.
+  it('conversation introuvable (relayé par la messagerie) → message lisible, jamais le code brut', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
+    getMyTournaments.mockResolvedValue([myReg]);
+    contactTournamentReferee.mockRejectedValue(new Error('CONVERSATION_NOT_FOUND'));
+
+    await renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Contacter' }));
+
+    expect(await screen.findByText("Impossible d'ouvrir cette conversation.")).toBeInTheDocument();
+    expect(screen.queryByText('CONVERSATION_NOT_FOUND')).not.toBeInTheDocument();
+    expect(openDm).not.toHaveBeenCalled();
+  });
 });
