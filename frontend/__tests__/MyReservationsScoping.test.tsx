@@ -106,7 +106,8 @@ describe('Mes réservations — cloisonnement par club', () => {
     render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
     expect(await screen.findByText(/Vous avez aussi 1 réservation à venir dans un autre club/)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /Tout voir sur Palova/ });
-    expect(link.getAttribute('href')).toContain('/me/reservations');
+    // Mon Palova vit à la racine plateforme (plus /me/reservations).
+    expect(link.getAttribute('href')).toMatch(/^https?:\/\/[^/]+\/$/);
   });
 
   it('réglage ON : pas de ligne d\'info (les entrées sont déjà visibles)', async () => {

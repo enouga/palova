@@ -223,7 +223,7 @@ export default function MyReservationsPage() {
           // respecté) — l'agenda complet vit sur l'hôte plateforme.
           <div style={{ margin: '12px 20px 0', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
             {otherClubsHintLabel(otherUpcoming)}{' · '}
-            <a href={platformUrl('/me/reservations')} style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            <a href={platformUrl('/')} style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
               Tout voir sur Palova →
             </a>
           </div>
