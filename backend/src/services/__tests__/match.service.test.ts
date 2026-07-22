@@ -600,3 +600,47 @@ describe('remind', () => {
     await expect(service.remind('m1', 'u1')).rejects.toThrow('RATE_LIMITED');
   });
 });
+
+describe('listToConfirm', () => {
+  const matchRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    match: {
+      id: 'm1', playedAt: new Date('2026-07-20T18:00:00Z'), sets: [[6, 4], [6, 2]],
+      competitive: true, confirmDeadline: new Date('2026-07-23T18:00:00Z'),
+      club: { slug: 'arena', name: 'Padel Arena', timezone: 'Europe/Paris' },
+      reservation: { resource: { name: 'Court 1' } },
+      players: [
+        { userId: 'u1', team: 1, user: { firstName: 'Lucas', lastName: 'Moreau', avatarUrl: null } },
+        { userId: 'u2', team: 1, user: { firstName: 'Jean', lastName: 'Dupont', avatarUrl: null } },
+        { userId: 'u3', team: 2, user: { firstName: 'Celine', lastName: 'Barbier', avatarUrl: null } },
+        { userId: 'u4', team: 2, user: { firstName: 'Melanie', lastName: 'Bernard', avatarUrl: null } },
+      ],
+      ...overrides,
+    },
+  });
+
+  it('renvoie un match en attente de ma confirmation avec club/terrain/joueurs', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([matchRow()] as any);
+    const rows = await service.listToConfirm('u4');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matchId).toBe('m1');
+    expect(rows[0].club.slug).toBe('arena');
+    expect(rows[0].resourceName).toBe('Court 1');
+    expect(rows[0].competitive).toBe(true);
+    expect(rows[0].players).toHaveLength(4);
+    expect(rows[0].players.find((p) => p.userId === 'u3')!.team).toBe(2);
+  });
+
+  it('resourceName null si la réservation source a été supprimée', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([matchRow({ reservation: null })] as any);
+    const rows = await service.listToConfirm('u4');
+    expect(rows[0].resourceName).toBeNull();
+  });
+
+  it('filtre sur ma confirmation PENDING et le match PENDING, trié par échéance croissante', async () => {
+    prismaMock.matchPlayer.findMany.mockResolvedValue([] as any);
+    await service.listToConfirm('u4');
+    const arg = (prismaMock.matchPlayer.findMany as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId: 'u4', confirmation: 'PENDING', match: { status: 'PENDING' } });
+    expect(arg.orderBy).toEqual({ match: { confirmDeadline: 'asc' } });
+  });
+});
