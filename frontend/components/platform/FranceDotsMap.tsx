@@ -63,3 +63,21 @@ export function FranceDotsMap({ pins = 'full', style }: { pins?: 'full' | 'few' 
     </div>
   );
 }
+
+/** Icône compacte « France en pointillés » — trame claire pour les fonds encre (porte
+ *  Découvrir de l'accueil). Purement décorative : aria-hidden, pas d'épingles. */
+export function FranceDotsIcon({ size = 18, dotColor = 'rgba(244,246,250,0.95)' }: { size?: number; dotColor?: string }) {
+  return (
+    <span
+      data-testid="france-icon"
+      aria-hidden="true"
+      style={{
+        display: 'inline-block', width: size, height: size, flexShrink: 0,
+        backgroundImage: `radial-gradient(circle, ${dotColor} 1px, transparent 1.3px)`,
+        backgroundSize: '3.5px 3.5px',
+        WebkitMaskImage: FRANCE_MASK, WebkitMaskRepeat: 'no-repeat', WebkitMaskPosition: 'center', WebkitMaskSize: 'contain',
+        maskImage: FRANCE_MASK, maskRepeat: 'no-repeat', maskPosition: 'center', maskSize: 'contain',
+      }}
+    />
+  );
+}
