@@ -4,10 +4,10 @@ import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/Age
 import { Icon } from '@/components/ui/Icon';
 
 // Hero « accueil » de Mon Palova — brume bleue (jamais de panneau sombre) : salutation +
-// accroche recherche, comme les heros de la vitrine et de /decouvrir. Il ne rejoue PLUS la
-// prochaine réservation (celle-ci vit dans « À venir » → plus de doublon). La pilule de
-// recherche (LocationSearchPill) flotte sur le bord bas via sa marge négative propre : elle
-// est rendue en frère JUSTE après ce hero (cf. MonPalova) — d'où le padding bas généreux.
+// en-tête du tableau de bord. Il ne rejoue PLUS la prochaine réservation (elle vit dans
+// « À venir ») et ne porte plus la promesse de recherche : celle-ci vit dans la porte
+// Découvrir (DiscoverPill), rendue en frère JUSTE après ce hero (cf. MonPalova) et qui
+// flotte sur son bord bas via sa marge négative propre — d'où le padding bas généreux.
 export function HomeHero({ firstName }: { firstName: string | null }) {
   const { th } = useTheme();
   return (
@@ -23,10 +23,10 @@ export function HomeHero({ firstName }: { firstName: string | null }) {
           {firstName ? `Bonjour ${firstName}` : 'Bonjour'}
         </div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 'clamp(21px, 5.4vw, 28px)', letterSpacing: -0.5, marginTop: 7, lineHeight: 1.12 }}>
-          Où veux-tu jouer&nbsp;?
+          Prêt à jouer&nbsp;?
         </div>
         <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: HERO_INK_MUTED, marginTop: 4 }}>
-          Un club, un créneau, une partie ouverte — près de chez toi.
+          Ton agenda, tes clubs et tes parties — d'un coup d'œil.
         </div>
       </div>
     </div>

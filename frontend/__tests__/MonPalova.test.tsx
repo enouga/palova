@@ -59,14 +59,14 @@ describe('MonPalova', () => {
   it('une brique agenda en échec n\'éteint pas la page (hero + autres sections vivantes)', async () => {
     mocked.getMyReservations.mockRejectedValue(new Error('boom'));
     wrap();
-    expect(await screen.findByText(/Où veux-tu jouer/)).toBeInTheDocument();
+    expect(await screen.findByText(/Prêt à jouer/)).toBeInTheDocument();
     expect(screen.getByTestId('rail')).toBeInTheDocument();
   });
 
   it('agenda vide → hero accueil + recherche, pas de section « À venir »', async () => {
     mocked.getMyReservations.mockResolvedValue([] as never);
     wrap();
-    expect(await screen.findByText(/Où veux-tu jouer/)).toBeInTheDocument();
+    expect(await screen.findByText(/Prêt à jouer/)).toBeInTheDocument();
     expect(screen.getByTestId('discover')).toBeInTheDocument();
     expect(screen.queryByText(/À venir · tous clubs/i)).toBeNull();
   });
