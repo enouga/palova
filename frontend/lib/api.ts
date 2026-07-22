@@ -146,6 +146,9 @@ export const api = {
   // Adhésions du joueur (clubs dont il est membre + statut abonné).
   getMyMemberships: (token: string) => request<PlayerMembership[]>('/api/me/memberships', {}, token),
 
+  // Portefeuille cross-club (Mon Palova) : abonnements + carnets utilisables, groupés par club.
+  getMyWallet: (token: string) => request<MyWalletEntry[]>('/api/me/wallet', {}, token),
+
   // Auto-inscription du joueur connecté à un club (adhésion automatique, idempotente).
   joinClub: (slug: string, token: string) =>
     request<{ ok: boolean }>(`/api/clubs/${slug}/join`, { method: 'POST' }, token),
@@ -2140,6 +2143,14 @@ export interface MemberPackage {
 
 /** Solde actif renvoyé par l'endpoint de masse — porte en plus le userId du joueur. */
 export type ActiveMemberPackage = MemberPackage & { userId: string };
+
+// --- Mon Palova : portefeuille cross-club ---
+export interface MyWalletClub { slug: string; name: string; accentColor: string }
+export interface MyWalletEntry {
+  club: MyWalletClub;
+  subscriptions: Subscription[];
+  packages: MemberPackage[];
+}
 
 export interface MyPaymentMethod {
   brand: string | null;
