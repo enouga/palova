@@ -1933,4 +1933,13 @@ describe('assertRefereeContactable — porte du contact J/A', () => {
     await expect(svc.assertRefereeContactable('t1', 'me'))
       .resolves.toEqual({ refereeUserId: 'u-ref', clubSlug: 'demo' });
   });
+
+  // La membership consultée doit être celle du J/A (refereeUserId), jamais celle de
+  // l'appelant (meId) — un swap silencieux vérifierait la facette du mauvais joueur.
+  it('interroge la membership du J/A (refereeUserId+clubId), jamais celle de l\'appelant', async () => {
+    mockT(); mockReg(true); membership();
+    await svc.assertRefereeContactable('t1', 'me');
+    const arg = (prismaMock.clubMembership.findUnique as jest.Mock).mock.calls[0][0];
+    expect(arg.where).toEqual({ userId_clubId: { userId: 'u-ref', clubId: 'club-1' } });
+  });
 });
