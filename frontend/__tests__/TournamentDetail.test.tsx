@@ -8,7 +8,11 @@ import { ThemeProvider } from '../lib/ThemeProvider';
 
 // --- Mocks composants lourds ------------------------------------------------
 jest.mock('../components/tournament/TournamentHero', () => ({
-  TournamentHero: () => <div data-testid="tournament-hero" />,
+  TournamentHero: ({ onContactReferee }: { onContactReferee?: () => void }) => (
+    <div data-testid="tournament-hero">
+      {onContactReferee && <button onClick={onContactReferee}>Contacter</button>}
+    </div>
+  ),
   MetaCards: () => null,
 }));
 jest.mock('../components/tournament/TeamsGrid', () => ({
@@ -59,6 +63,13 @@ jest.mock('../lib/tournament', () => ({
   waitlistPosition: () => null,
 }));
 
+// lib/messages — openDm réel remplacé par un espion (comportement testé côté lib/messages.test.ts)
+const openDm = jest.fn();
+jest.mock('../lib/messages', () => ({
+  openDm: (...a: unknown[]) => openDm(...a),
+  DM_ERRORS: { DM_DISABLED: "Ce joueur n'accepte pas les messages privés." },
+}));
+
 // --- Mocks API ---------------------------------------------------------------
 const registerTournament = jest.fn();
 const getTournament = jest.fn();
@@ -66,6 +77,7 @@ const getTournamentParticipants = jest.fn();
 const getMyTournaments = jest.fn();
 const getMyProfile = jest.fn();
 const getMyClubMembership = jest.fn();
+const contactTournamentReferee = jest.fn();
 
 jest.mock('../lib/api', () => ({
   api: {
@@ -77,6 +89,7 @@ jest.mock('../lib/api', () => ({
     getMyTournaments: (...a: unknown[]) => getMyTournaments(...a),
     getMyProfile: (...a: unknown[]) => getMyProfile(...a),
     getMyClubMembership: (...a: unknown[]) => getMyClubMembership(...a),
+    contactTournamentReferee: (...a: unknown[]) => contactTournamentReferee(...a),
     createRegistrationIntent: jest.fn().mockResolvedValue({
       clientSecret: 'cs_test_xxx',
       type: 'payment',
@@ -221,5 +234,54 @@ describe('TournamentDetailPage — inscription payante (requirePrepayment)', () 
     });
     // Le flux actuel recharge le tournoi (load() appelé 2× : montage + après register)
     await waitFor(() => expect(getTournament).toHaveBeenCalledTimes(2));
+  });
+});
+
+// ============================================================================
+// Gating du bouton : token + referee.contactable + inscription active. Le clic passe par la
+// porte serveur (contactTournamentReferee) puis ouvre le DM avec un brouillon pré-rempli.
+describe('contact du J/A', () => {
+  const withReferee = { referee: { name: 'Julien Martin', contactable: true } };
+  const myReg = { id: 'reg-1', status: 'CONFIRMED' as const, tournament: { id: 't1' } };
+
+  it('inscrit + contactable → Contacter → porte serveur puis openDm (brouillon pré-rempli)', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
+    getMyTournaments.mockResolvedValue([myReg]);
+    contactTournamentReferee.mockResolvedValue({ id: 'conv-1', other: { userId: 'u-ref' } });
+
+    await renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Contacter' }));
+
+    await waitFor(() => expect(contactTournamentReferee).toHaveBeenCalledWith('t1', 'tok'));
+    await waitFor(() => expect(openDm).toHaveBeenCalledWith('u-ref',
+      expect.objectContaining({ draft: expect.stringContaining('Tournoi Test P100') })));
+  });
+
+  it('non inscrit → pas de bouton Contacter', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
+    getMyTournaments.mockResolvedValue([]);
+    await renderPage();
+    await screen.findByTestId('tournament-hero');
+    expect(screen.queryByRole('button', { name: 'Contacter' })).not.toBeInTheDocument();
+  });
+
+  it('J/A non contactable → pas de bouton, même inscrit', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, referee: { name: 'Julien Martin', contactable: false } });
+    getMyTournaments.mockResolvedValue([myReg]);
+    await renderPage();
+    await screen.findByTestId('tournament-hero');
+    expect(screen.queryByRole('button', { name: 'Contacter' })).not.toBeInTheDocument();
+  });
+
+  it('porte refusée → message lisible, jamais le code brut', async () => {
+    getTournament.mockResolvedValue({ ...baseTournament, ...withReferee });
+    getMyTournaments.mockResolvedValue([myReg]);
+    contactTournamentReferee.mockRejectedValue(new Error('REFEREE_NOT_CONTACTABLE'));
+
+    await renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Contacter' }));
+
+    expect(await screen.findByText(/n'est pas joignable/)).toBeInTheDocument();
+    expect(openDm).not.toHaveBeenCalled();
   });
 });
