@@ -52,6 +52,23 @@ const PUBLIC_TOURNAMENT_SELECT = {
 /** Valeurs admises du réglage de contactabilité du J/A (validation du PATCH). */
 const REFEREE_CONTACT_POLICIES: readonly RefereeContactPolicy[] = ['ALWAYS', 'AFTER_DEADLINE', 'NEVER'];
 
+/**
+ * Contactabilité du J/A d'un tournoi par ses inscrits.
+ * Kill-switch d'abord (adhésion ACTIVE + facette, miroir de resolveReferee) : décocher la
+ * facette coupe le contact même si la mission refereeUserId reste posée. Puis la politique
+ * personnelle — AFTER_DEADLINE ne s'ouvre qu'une fois les inscriptions closes.
+ */
+function refereeContactable(
+  m: { status: string; isReferee: boolean; refereeContactPolicy: RefereeContactPolicy } | null | undefined,
+  registrationDeadline: Date,
+  now: Date,
+): boolean {
+  if (!m || m.status !== 'ACTIVE' || !m.isReferee) return false;
+  if (m.refereeContactPolicy === 'NEVER') return false;
+  if (m.refereeContactPolicy === 'AFTER_DEADLINE') return now >= registrationDeadline;
+  return true;
+}
+
 /** Un joueur vu par le juge-arbitre à la table de marque. `userId` volontairement absent. */
 export interface RefereePlayerRow {
   firstName: string;
@@ -437,6 +454,8 @@ export class TournamentService {
    * Détail public d'un tournoi (DRAFT masqué) + compteurs.
    * Le J/A désigné y est exposé **par son nom seul** (spec §7) : c'est lui qui répond du
    * tournoi, mais son userId reste interne — d'où la projection `{ name }` plutôt que l'objet.
+   * `contactable` est un booléen CALCULÉ (politique perso + clôture + kill-switch facette,
+   * cf. `refereeContactable`) — jamais `refereeUserId`, jamais la relation brute.
    */
   async getById(tournamentId: string) {
     const t = await prisma.tournament.findUnique({
@@ -445,15 +464,21 @@ export class TournamentService {
         ...PUBLIC_TOURNAMENT_SELECT,
         club: { select: { slug: true, name: true, timezone: true } },
         clubSport: { select: { sport: { select: { key: true, name: true } } } },
-        referee: { select: { firstName: true, lastName: true } },
+        // La contactabilité se calcule via la relation (clubMemberships du J/A, filtrée sur
+        // t.clubId en JS) : refereeUserId n'est jamais lu sur ce chemin public.
+        referee: { select: { firstName: true, lastName: true, clubMemberships: { select: { clubId: true, status: true, isReferee: true, refereeContactPolicy: true } } } },
       },
     });
     if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
     const { referee, ...rest } = t;
     const [withCount] = await this.withCounts([rest]);
+    const membership = referee?.clubMemberships.find((m) => m.clubId === t.clubId) ?? null;
     return {
       ...withCount,
-      referee: referee ? { name: `${referee.firstName} ${referee.lastName}`.trim() } : null,
+      referee: referee ? {
+        name: `${referee.firstName} ${referee.lastName}`.trim(),
+        contactable: refereeContactable(membership, t.registrationDeadline, new Date()),
+      } : null,
     };
   }
 

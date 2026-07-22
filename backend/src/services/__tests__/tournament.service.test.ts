@@ -1229,7 +1229,8 @@ describe('getById — J/A public (nom seul)', () => {
 
   const mockTournament = (referee: unknown) => {
     prismaMock.tournament.findUnique.mockResolvedValue({
-      id: 't1', name: 'Open', status: 'PUBLISHED', referee,
+      id: 't1', clubId: 'club-1', name: 'Open', status: 'PUBLISHED', referee,
+      registrationDeadline: new Date('2099-01-01T00:00:00Z'),
       club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
       clubSport: { sport: { key: 'padel', name: 'Padel' } },
     } as any);
@@ -1239,11 +1240,11 @@ describe('getById — J/A public (nom seul)', () => {
   it('expose le nom du J/A désigné, et aucun userId', async () => {
     // `id` volontairement présent dans le mock : si quelqu'un ajoute `id: true` au select du
     // J/A et étale l'objet tel quel, le userId partirait en clair. La projection { name } l'interdit.
-    mockTournament({ id: 'u-referee', firstName: 'Julien', lastName: 'Martin' });
+    mockTournament({ id: 'u-referee', firstName: 'Julien', lastName: 'Martin', clubMemberships: [] });
 
     const dto = await svc.getById('t1');
 
-    expect(dto.referee).toEqual({ name: 'Julien Martin' });
+    expect(dto.referee).toEqual({ name: 'Julien Martin', contactable: false });
     expect(JSON.stringify(dto)).not.toContain('u-referee');
   });
 
@@ -1251,6 +1252,74 @@ describe('getById — J/A public (nom seul)', () => {
     mockTournament(null);
     const dto = await svc.getById('t1');
     expect(dto.referee).toBeNull();
+  });
+});
+
+// La contactabilité est un booléen CALCULÉ serveur : politique du membre + clôture +
+// kill-switch facette (miroir de resolveReferee). La membership du J/A est lue via la
+// relation referee.clubMemberships — refereeUserId n'est jamais lu sur ce chemin public.
+describe('getById — contactabilité du J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const FUTURE = '2099-01-01T00:00:00Z', PAST = '2000-01-01T00:00:00Z';
+  const referee = (policy: string, over: Record<string, unknown> = {}) => ({
+    firstName: 'Julien', lastName: 'Martin',
+    clubMemberships: [{ clubId: 'club-1', status: 'ACTIVE', isReferee: true, refereeContactPolicy: policy, ...over }],
+  });
+  const mockT = (ref: unknown, deadline: string) => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      id: 't1', clubId: 'club-1', name: 'Open', status: 'PUBLISHED',
+      registrationDeadline: new Date(deadline), referee: ref,
+      club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris' },
+      clubSport: { sport: { key: 'padel', name: 'Padel' } },
+    } as any);
+    (prismaMock.tournamentRegistration.groupBy as jest.Mock).mockResolvedValue([] as any);
+  };
+
+  it('ALWAYS → contactable même avant la clôture', async () => {
+    mockT(referee('ALWAYS'), FUTURE);
+    const dto = await svc.getById('t1');
+    expect(dto.referee).toEqual({ name: 'Julien Martin', contactable: true });
+  });
+
+  it('AFTER_DEADLINE avant clôture → non contactable', async () => {
+    mockT(referee('AFTER_DEADLINE'), FUTURE);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('AFTER_DEADLINE après clôture → contactable', async () => {
+    mockT(referee('AFTER_DEADLINE'), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(true);
+  });
+
+  it('NEVER → jamais contactable, même clôturé', async () => {
+    mockT(referee('NEVER'), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('facette retirée → non contactable (kill-switch, comme resolveReferee)', async () => {
+    mockT(referee('ALWAYS', { isReferee: false }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('adhésion non-ACTIVE → non contactable', async () => {
+    mockT(referee('ALWAYS', { status: 'BLOCKED' }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it("la membership d'un AUTRE club ne compte pas", async () => {
+    mockT(referee('ALWAYS', { clubId: 'club-2' }), PAST);
+    expect((await svc.getById('t1')).referee?.contactable).toBe(false);
+  });
+
+  it('ni userId ni memberships ne fuitent dans le payload', async () => {
+    mockT({ id: 'u-referee', ...referee('ALWAYS') }, PAST);
+    const dto = await svc.getById('t1');
+    const json = JSON.stringify(dto);
+    expect(json).not.toContain('u-referee');
+    expect(json).not.toContain('clubMemberships');
+    expect(json).not.toContain('refereeContactPolicy');
   });
 });
 
