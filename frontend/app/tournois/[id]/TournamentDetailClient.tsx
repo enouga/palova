@@ -8,7 +8,7 @@ import { api, TournamentDetail, MyProfile, MyTournamentRegistration, MyClubMembe
 import { Screen } from '@/components/ui/Screen';
 import { Icon } from '@/components/ui/Icon';
 import { ClubNav } from '@/components/ClubNav';
-import { TournamentHero, MetaCards } from '@/components/tournament/TournamentHero';
+import { TournamentHero } from '@/components/tournament/TournamentHero';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { TeamsGrid } from '@/components/tournament/TeamsGrid';
 import { ShareActions } from '@/components/tournament/ShareActions';
@@ -180,7 +180,6 @@ export function TournamentDetailClient({ id }: { id: string }) {
         </div>
 
         <TournamentHero t={t} now={now} multiSport={clubIsMultiSport(club)} />
-        <MetaCards t={t} />
 
         {/* Description en paragraphe léger — la carte « À propos » pesait une rangée
             entière de chrome pour une ou deux phrases. */}
