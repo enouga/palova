@@ -43,28 +43,31 @@ beforeEach(() => {
 const wrap = () => render(<ThemeProvider><MonPalova /></ThemeProvider>);
 
 describe('MonPalova', () => {
-  it('rend le hero (1re entrée), l\'agenda « À venir » (les suivantes) et toutes les sections', async () => {
+  it('rend le hero (accueil + recherche), l\'agenda « À venir » (TOUT) et toutes les sections', async () => {
     wrap();
     expect(await screen.findByText(/Bonjour Eric/)).toBeInTheDocument();
-    expect(screen.getByText(/Court 1/)).toBeInTheDocument();   // hero
-    expect(screen.getByText('Court 2')).toBeInTheDocument();   // À venir (pas de doublon du hero)
+    // Le hero ne rejoue plus de réservation : les deux résas vivent dans « À venir » (plus de doublon).
+    expect(screen.getByText(/Court 1/)).toBeInTheDocument();
+    expect(screen.getByText('Court 2')).toBeInTheDocument();
+    // La recherche (DiscoverPill) est rendue dans le hero, plus enterrée en bas.
     for (const id of ['managed', 'results', 'rail', 'wallet', 'level', 'discover']) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
     expect(screen.getByRole('link', { name: /Trouver un club/ })).toBeInTheDocument(); // MyClubsRow
   });
 
-  it('une brique agenda en échec n\'éteint pas la page (hero fallback + autres sections vivantes)', async () => {
+  it('une brique agenda en échec n\'éteint pas la page (hero + autres sections vivantes)', async () => {
     mocked.getMyReservations.mockRejectedValue(new Error('boom'));
     wrap();
-    expect(await screen.findByText(/Trouve ta prochaine partie/)).toBeInTheDocument();
+    expect(await screen.findByText(/Où veux-tu jouer/)).toBeInTheDocument();
     expect(screen.getByTestId('rail')).toBeInTheDocument();
   });
 
-  it('agenda vide → hero invitation, pas de section « À venir »', async () => {
+  it('agenda vide → hero accueil + recherche, pas de section « À venir »', async () => {
     mocked.getMyReservations.mockResolvedValue([] as never);
     wrap();
-    expect(await screen.findByText(/Trouve ta prochaine partie/)).toBeInTheDocument();
+    expect(await screen.findByText(/Où veux-tu jouer/)).toBeInTheDocument();
+    expect(screen.getByTestId('discover')).toBeInTheDocument();
     expect(screen.queryByText(/À venir · tous clubs/i)).toBeNull();
   });
 });

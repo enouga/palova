@@ -3,24 +3,26 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { CardStripe, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
 import { AgendaListItem, agendaItemClub, clubMarker } from '@/lib/calendar';
-import { agendaItemHeading, agendaDateParts, agendaKindIcon } from '@/lib/monPalova';
+import { agendaItemHeading, agendaDateParts, agendaKindIcon, startsInLabel } from '@/lib/monPalova';
 import { SectionHeader } from '@/components/platform/home/SectionHeader';
 
-// « À venir · tous clubs » : les entrées APRÈS celle du hero (jamais de doublon), en grille
-// dense de cartes à tuile-date (read-only — les actions vivent sur Mes réservations). Marqueur
-// club systématique (plateforme = localSlug null → clubMarker partout).
-export function HomeAgenda({ items }: { items: AgendaListItem[] }) {
+// « À venir · tous clubs » : TOUTES les entrées à venir (le hero ne rejoue plus la prochaine
+// → plus de doublon), en grille dense de cartes à tuile-date (read-only — les actions vivent
+// sur Mes réservations). Marqueur club systématique (plateforme = localSlug null → clubMarker
+// partout). `now` (optionnel) → chip compte à rebours sur la 1ʳᵉ carte (la prochaine sortie).
+export function HomeAgenda({ items, now }: { items: AgendaListItem[]; now?: number | null }) {
   const { th } = useTheme();
   if (items.length === 0) return null;
   return (
     <section>
       <SectionHeader kicker="À venir · tous clubs" moreLabel="Tout voir →" moreHref="/me/reservations" />
       <div className="mp-grid">
-        {items.map((item) => {
+        {items.map((item, i) => {
           const marker = clubMarker(agendaItemClub(item), null);
           const accent = marker?.accent ?? th.accent;
           const heading = agendaItemHeading(item);
           const { day, month, weekdayTime } = agendaDateParts(item);
+          const countdown = i === 0 && now != null ? startsInLabel(item.start, new Date(now)) : null;
           return (
             <a key={`${item.kind}-${item.id}`} href={heading.href} className="pl-lift"
               style={{ position: 'relative', overflow: 'hidden', display: 'flex', gap: 12, textDecoration: 'none', background: th.surface, borderRadius: 16, padding: '13px 14px 13px 16px', boxShadow: th.shadow }}>
@@ -38,6 +40,11 @@ export function HomeAgenda({ items }: { items: AgendaListItem[] }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 5 }}>
                   <span style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>{weekdayTime}</span>
+                  {countdown && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: `${accent}22`, borderRadius: 999, padding: '2px 8px', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 700, color: th.text }}>
+                      <Icon name="clock" size={11} color={th.text} />{countdown}
+                    </span>
+                  )}
                   {marker && <Chip color={accent}>{marker.name}</Chip>}
                 </div>
               </div>

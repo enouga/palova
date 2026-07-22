@@ -6,7 +6,6 @@ import { Screen } from '@/components/ui/Screen';
 import { Logotype, ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { buildAgendaList } from '@/lib/calendar';
-import { splitHomeAgenda } from '@/lib/monPalova';
 import { HomeHero } from '@/components/platform/home/HomeHero';
 import { HomeAgenda } from '@/components/platform/home/HomeAgenda';
 import { HomeMatchesRail } from '@/components/platform/home/HomeMatchesRail';
@@ -51,7 +50,8 @@ export function MonPalova() {
 
   const nowDate = useMemo(() => new Date(now ?? 0), [now]);
   const agenda = useMemo(() => buildAgendaList(reservations, tournaments, events, lessons, nowDate), [reservations, tournaments, events, lessons, nowDate]);
-  const { hero, next } = useMemo(() => splitHomeAgenda(agenda), [agenda]);
+  // « À venir » possède désormais TOUT l'agenda à venir (le hero ne rejoue plus la prochaine → plus de doublon).
+  const upcoming = useMemo(() => agenda.filter((i) => !i.past).slice(0, 6), [agenda]);
   const myClubSlugs = useMemo(() => new Set(memberships.filter((m) => m.status === 'ACTIVE').map((m) => m.slug)), [memberships]);
 
   if (!token) return null; // gardé par PlatformLanding — jamais atteint en pratique
@@ -71,9 +71,15 @@ export function MonPalova() {
         {/* Pas de maxWidth ici : Screen clampe déjà tout à 1080px (largeur unique des pages joueur). */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 26, padding: '10px 20px 0' }}>
           <ManagedClubsCard token={token} />
-          <HomeHero firstName={firstName} entry={hero} now={now} />
+          {/* Hero = accueil, puis la pilule de recherche qui flotte sur son bord (marge négative
+              propre à LocationSearchPill) — groupés dans un bloc pour éviter le gap flex entre eux.
+              La recherche n'est ainsi plus enterrée en bas de page. */}
+          <div>
+            <HomeHero firstName={firstName} />
+            <DiscoverPill />
+          </div>
           <ResultsToRecord token={token} />
-          <HomeAgenda items={next} />
+          <HomeAgenda items={upcoming} now={now} />
           <HomeMatchesRail myClubSlugs={myClubSlugs} />
           {/* Carte joueur : niveau + clubs côte à côte sur desktop (auto-fit → l'un remplit si l'autre manque). */}
           <div className="mp-duo">
@@ -81,7 +87,6 @@ export function MonPalova() {
             <MyClubsRow memberships={memberships} />
           </div>
           <WalletCard token={token} />
-          <DiscoverPill />
         </div>
       </div>
     </Screen>
