@@ -21,7 +21,10 @@ export function ManagedClubsCard({ token }: { token: string }) {
     api.getMyClubs(token).then(setClubs).catch(() => setClubs([]));
   }, [token]);
   if (!clubs || clubs.length === 0) return null;
-  const washAlpha = th.mode === 'floodlit' ? ['26', '08'] : ['2e', '0a'];
+  // Lavis composé sur th.surface (pas directement sur le fond de page) + alpha marqué :
+  // à faible alpha, un bleu pâle sur crème/quasi-noir rend une teinte trop proche du bleu
+  // pâle du hero juste en dessous (confusion signalée). Un vrai bleu visible s'en détache.
+  const washAlpha = th.mode === 'floodlit' ? ['40', '0d'] : ['52', '12'];
   return (
     <section>
       <SectionHeader kicker="Gestion" />
@@ -32,7 +35,7 @@ export function ManagedClubsCard({ token }: { token: string }) {
               position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12,
               width: '100%', border: 'none', cursor: 'pointer', borderRadius: 14, textAlign: 'left',
               padding: '13px 15px 13px 19px', boxShadow: th.shadow,
-              background: `linear-gradient(120deg, ${c.accentColor}${washAlpha[0]}, ${c.accentColor}${washAlpha[1]})`,
+              background: `linear-gradient(120deg, ${c.accentColor}${washAlpha[0]}, ${c.accentColor}${washAlpha[1]}), ${th.surface}`,
             }}>
             <CardStripe color={c.accentColor} />
             <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 10, background: c.accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
