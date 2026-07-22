@@ -23,20 +23,21 @@ describe('ManagedClubsCard', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('un club géré : kicker « Gestion », nom du club, rôle en badge, liseré + CTA teintés à la couleur du club, clic → goToClubAdmin', async () => {
+  it('un club géré : kicker « Gestion », nom du club, rôle en badge, liseré + CTA en apricot FIXE (pas la couleur de marque du club), clic → goToClubAdmin', async () => {
     mocked.getMyClubs.mockResolvedValue([club()] as never);
     const { container } = render(<ThemeProvider><ManagedClubsCard token="tok" /></ThemeProvider>);
     expect(await screen.findByText('Gestion')).toBeInTheDocument();
     const row = screen.getByRole('button', { name: /Padel Arena/ });
     expect(screen.getByText('Gérant')).toBeInTheDocument();
-    // Liseré latéral teinté à la couleur du club (langage des cartes d'offres admin) —
-    // remplace la ligne plate d'origine (jugée « trop générique »).
-    expect(container.querySelector('[data-club-stripe]')).toHaveStyle({ background: 'rgb(94, 147, 218)' });
-    // Tuile en couleur pleine de la marque du club (pas un lavis pâle) — miroir MyClubsRow.
-    expect(row.querySelector('span')).toHaveStyle({ background: 'rgb(94, 147, 218)' });
-    // Le rôle est un badge Chip distinctif (teinté à la couleur du club), pas du texte gris plat.
+    // Couleur signature de « Gestion » = apricot fixe (ACCENTS.apricot), indépendante de
+    // l'accentColor du club (#5e93da bleu dans la fixture) — la marque du club reste lisible
+    // via « Mes clubs » plus bas ; ce bloc a sa propre identité, pastel léger, qui ne se
+    // fond ni avec le bleu du hero ni avec la marque de chaque club géré.
+    expect(container.querySelector('[data-club-stripe]')).toHaveStyle({ background: 'rgb(239, 159, 106)' });
+    expect(row.querySelector('span')).toHaveStyle({ background: 'rgb(239, 159, 106)' });
+    // Le rôle est un badge Chip distinctif, pas du texte gris plat.
     expect(screen.getByText('Gérant')).toHaveStyle({ borderRadius: '8px', padding: '5px 10px' });
-    // CTA plein (accent du club) remplace le simple chevron.
+    // CTA plein remplace le simple chevron.
     expect(within(row).getByText('Gérer →')).toBeInTheDocument();
     fireEvent.click(row);
     expect(goToClubAdmin).toHaveBeenCalledWith('padel-arena', 'tok', 'c1');
