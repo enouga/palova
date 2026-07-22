@@ -20,6 +20,7 @@ import { showShowcase } from '@/lib/clubShowcase';
 import { SponsorFlipDeck } from '@/components/clubhouse/SponsorFlipDeck';
 import { AuthPromptDialog } from '@/components/openmatch/AuthPromptDialog';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
+import { ResultsToConfirm } from '@/components/match/ResultsToConfirm';
 
 function formatDateTime(iso: string, tz: string): string {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(iso)).replace(':', 'h');
@@ -171,7 +172,10 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
           choix produit assumé (une invite d'action se voit mieux en tête). Ne pas « corriger »
           vers l'ancien ordre (kiosque puis bannière). */}
       {club.levelSystemEnabled !== false && (
-        <ResultsToRecord token={token} clubSlug={club.slug} />
+        <>
+          <ResultsToConfirm token={token} clubSlug={club.slug} />
+          <ResultsToRecord token={token} clubSlug={club.slug} />
+        </>
       )}
 
       {/* Kiosque et partenaires portent leur propre bord → jamais passés à wrap().
