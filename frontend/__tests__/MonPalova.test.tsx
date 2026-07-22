@@ -6,6 +6,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), repla
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true, clubId: null }) }));
 // Sections lourdes déjà testées isolément → stubs (le test vérifie l'ORCHESTRATION).
 jest.mock('../components/match/ResultsToRecord', () => ({ ResultsToRecord: () => <div data-testid="results" /> }));
+jest.mock('../components/match/ResultsToConfirm', () => ({ ResultsToConfirm: () => <div data-testid="results-confirm" /> }));
 jest.mock('../components/platform/home/HomeMatchesRail', () => ({ HomeMatchesRail: () => <div data-testid="rail" /> }));
 jest.mock('../components/platform/home/WalletCard', () => ({ WalletCard: () => <div data-testid="wallet" /> }));
 jest.mock('../components/platform/home/LevelCard', () => ({ LevelCard: () => <div data-testid="level" /> }));
@@ -50,7 +51,7 @@ describe('MonPalova', () => {
     expect(screen.getByText(/Court 1/)).toBeInTheDocument();
     expect(screen.getByText('Court 2')).toBeInTheDocument();
     // La recherche (DiscoverPill) est rendue dans le hero, plus enterrée en bas.
-    for (const id of ['managed', 'results', 'rail', 'wallet', 'level', 'discover']) {
+    for (const id of ['managed', 'results-confirm', 'results', 'rail', 'wallet', 'level', 'discover']) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
     expect(screen.getByRole('link', { name: /Trouver un club/ })).toBeInTheDocument(); // MyClubsRow

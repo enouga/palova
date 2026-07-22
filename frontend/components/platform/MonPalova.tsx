@@ -15,6 +15,7 @@ import { LevelCard } from '@/components/platform/home/LevelCard';
 import { ManagedClubsCard } from '@/components/platform/home/ManagedClubsCard';
 import { DiscoverPill } from '@/components/platform/home/DiscoverPill';
 import { ResultsToRecord } from '@/components/match/ResultsToRecord';
+import { ResultsToConfirm } from '@/components/match/ResultsToConfirm';
 
 // « Mon Palova » — accueil plateforme du joueur connecté (spec 2026-07-22). Orchestrateur :
 // charge l'agenda (4 payloads, allSettled — une brique en échec n'éteint rien) + le profil
@@ -78,12 +79,13 @@ export function MonPalova() {
             <HomeHero firstName={firstName} />
             <DiscoverPill />
           </div>
+          <ResultsToConfirm token={token} />
           <ResultsToRecord token={token} />
           <HomeAgenda items={upcoming} now={now} />
           <HomeMatchesRail myClubSlugs={myClubSlugs} />
           {/* Carte joueur : niveau + clubs côte à côte sur desktop (auto-fit → l'un remplit si l'autre manque). */}
           <div className="mp-duo">
-            <LevelCard token={token} />
+            <LevelCard token={token} memberships={memberships} />
             <MyClubsRow memberships={memberships} />
           </div>
           <WalletCard token={token} />
