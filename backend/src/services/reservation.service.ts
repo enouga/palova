@@ -1723,7 +1723,7 @@ export class ReservationService {
           select: {
             id: true, name: true, attributes: true,
             clubSport: { select: { sport: { select: { key: true, name: true } } } },
-            club: { select: { name: true, slug: true, timezone: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } },
+            club: { select: { name: true, slug: true, timezone: true, accentColor: true, playerChangeCutoffHours: true, cancellationCutoffHours: true } },
           },
         },
         participants: {

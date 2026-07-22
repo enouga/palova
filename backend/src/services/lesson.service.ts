@@ -26,7 +26,7 @@ export interface PublicLessonRow {
   };
   sport: { key: string; name: string } | null;
   series: { enrollmentMode: EnrollmentMode | null; title: string | null } | null;
-  club: { slug: string; name: string; timezone: string };
+  club: { slug: string; name: string; timezone: string; accentColor?: string };
   confirmedCount: number;
   waitlistCount: number;
   capacity: number;
@@ -399,7 +399,7 @@ class LessonService {
       coach: { name: string; photoUrl: string | null; user?: { firstName: string; lastName: string; avatarUrl: string | null } | null };
       reservation: { startTime: Date; endTime: Date; resource: { name: string; clubSport: { sport: { key: string; name: string } } | null } };
       series: { id: string; capacity: number | null; enrollmentMode: EnrollmentMode | null; title: string | null } | null;
-      club: { slug: string; name: string; timezone: string };
+      club: { slug: string; name: string; timezone: string; accentColor?: string };
     },
     confirmedCount: number,
     waitlistCount: number,
@@ -650,7 +650,7 @@ class LessonService {
           },
         },
         series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
-        club: { select: { slug: true, name: true, timezone: true } },
+        club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
       },
     });
     if (!lesson) throw new Error('LESSON_NOT_FOUND');
@@ -693,7 +693,7 @@ class LessonService {
           },
         },
         series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
-        club: { select: { slug: true, name: true, timezone: true } },
+        club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
       },
       orderBy: { reservation: { startTime: 'asc' } },
     });
@@ -756,7 +756,7 @@ class LessonService {
               },
             },
             series: { select: { id: true, capacity: true, enrollmentMode: true, title: true } },
-            club: { select: { slug: true, name: true, timezone: true } },
+            club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
           },
           orderBy: { reservation: { startTime: 'asc' } },
         });

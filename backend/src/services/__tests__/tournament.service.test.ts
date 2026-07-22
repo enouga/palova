@@ -413,6 +413,23 @@ describe('TournamentService — admin & lectures', () => {
     expect(reg.tournament.sport).toEqual({ key: 'padel', name: 'Padel' });
   });
 
+  it('listUserRegistrations demande accentColor du club (marqueur multi-clubs)', async () => {
+    prismaMock.tournamentRegistration.findMany.mockResolvedValue([
+      { id: 'r1', captainUserId: 'cap', partnerUserId: 'par',
+        tournament: { clubId: 'club-demo', club: { slug: 'demo', name: 'Demo', timezone: 'Europe/Paris', accentColor: '#5e93da' }, clubSport: null },
+        captain: { id: 'cap', firstName: 'A', lastName: 'A', email: 'a@x', phone: '0600' },
+        partner: { id: 'par', firstName: 'B', lastName: 'B', email: 'b@x', phone: '0601' } },
+    ] as any);
+    prismaMock.clubMembership.findMany.mockResolvedValue([] as any);
+
+    const [reg] = await service.listUserRegistrations('cap');
+
+    expect((reg.tournament.club as any).accentColor).toBe('#5e93da');
+    const calls = (prismaMock.tournamentRegistration.findMany as jest.Mock).mock.calls;
+    const args = calls[calls.length - 1][0] as any;
+    expect(args.include.tournament.select.club.select.accentColor).toBe(true);
+  });
+
   it('listParticipants masque un tournoi DRAFT', async () => {
     prismaMock.tournament.findUnique.mockResolvedValue({ status: 'DRAFT' } as any);
     await expect(service.listParticipants('t1')).rejects.toThrow('TOURNAMENT_NOT_FOUND');

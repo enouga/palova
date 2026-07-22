@@ -495,7 +495,7 @@ export class TournamentService {
         tournament: {
           select: {
             ...PUBLIC_TOURNAMENT_SELECT,
-            club: { select: { slug: true, name: true, timezone: true } },
+            club: { select: { slug: true, name: true, timezone: true, accentColor: true } },
             clubSport: { select: { sport: { select: { key: true, name: true } } } },
           },
         },
