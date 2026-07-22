@@ -15,6 +15,7 @@ import { RefereeTournamentCard } from '@/components/referee/RefereeTournamentCar
 const ERRORS: Record<string, string> = {
   TOURNAMENT_NOT_YOURS: "Vous n'êtes plus juge-arbitre de ce tournoi.",
   TOURNAMENT_NOT_FOUND: 'Ce tournoi est introuvable.',
+  VALIDATION_ERROR: "Ce réglage n'a pas pu être enregistré.",
 };
 const errorLabel = (e: unknown) => ERRORS[(e as Error).message] ?? (e as Error).message;
 
@@ -49,15 +50,19 @@ export default function MeRefereeingPage() {
   const [policy, setPolicy] = useState<RefereeContactPolicy | null>(null);
   useEffect(() => {
     if (!ready || !token || !slug) return;
-    api.getRefereeContactPolicy(slug, token).then((r) => setPolicy(r.policy)).catch(() => {});
+    api.getRefereeContactPolicy(slug, token).then((r) => setPolicy(r.policy))
+      .catch((e) => { if ((e as Error).message !== 'NOT_A_REFEREE') setError(errorLabel(e)); });
   }, [ready, token, slug]);
 
   const changePolicy = async (next: RefereeContactPolicy) => {
     if (!token || !slug || policy === null || next === policy) return;
-    const prev = policy;
-    setPolicy(next); // optimiste — revert si le PATCH échoue
+    setPolicy(next); // optimiste — en cas d'échec on reconverge sur la vérité serveur (pas un
+    // instantané local capturé avant le clic : deux clics rapides en vol se doubleraient sinon).
     try { await api.setRefereeContactPolicy(slug, next, token); }
-    catch (e) { setPolicy(prev); setError(errorLabel(e)); }
+    catch (e) {
+      setError(errorLabel(e));
+      api.getRefereeContactPolicy(slug, token).then((r) => setPolicy(r.policy)).catch(() => {});
+    }
   };
 
   const load = useCallback(async () => {

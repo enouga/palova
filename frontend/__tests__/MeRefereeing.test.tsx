@@ -163,12 +163,18 @@ describe('réglage de contactabilité', () => {
     await waitFor(() => expect(api.setRefereeContactPolicy).toHaveBeenCalledWith('demo', 'NEVER', 't'));
   });
 
-  it('échec du PATCH → erreur affichée (et pas de crash)', async () => {
+  it('échec du PATCH → revert au réglage serveur + erreur affichée (pas de crash)', async () => {
     (api.setRefereeContactPolicy as jest.Mock).mockRejectedValue(new Error('VALIDATION_ERROR'));
     mount();
     await screen.findByText('Open de Paris');
     fireEvent.click(await screen.findByRole('button', { name: 'Jamais' }));
-    expect(await screen.findByText(/VALIDATION_ERROR/)).toBeInTheDocument();
+    // Le message ne doit plus exposer le code brut.
+    expect(await screen.findByText(/n'a pas pu être enregistré/i)).toBeInTheDocument();
+    expect(screen.queryByText('VALIDATION_ERROR')).not.toBeInTheDocument();
+    // Le réglage revient à la valeur serveur (le mock getRefereeContactPolicy du beforeEach
+    // continue de résoudre AFTER_DEADLINE) : « Jamais » n'est plus la sélection active.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Après clôture' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByRole('button', { name: 'Jamais' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('pas J/A → pas de bloc Contact', async () => {
