@@ -2,9 +2,9 @@
 
 import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
-import { Chip } from '@/components/ui/atoms';
+import { CardStripe, Chip } from '@/components/ui/atoms';
 import { Icon } from '@/components/ui/Icon';
-import { CalendarEntry, agendaKindMeta, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
+import { CalendarEntry, ClubMarker, agendaKindMeta, agendaItemClub, clubMarker, STATUS_LABEL, REG_LABEL, GENDER_LABEL } from '@/lib/calendar';
 import { MyReservation } from '@/lib/api';
 import { isCancellationOpen } from '@/lib/reservations';
 import { clubUrl } from '@/lib/clubUrl';
@@ -50,16 +50,22 @@ export function DayPanel({
   const isDesktop = useIsDesktop(700);
   const linkStyle = { marginLeft: 'auto', textDecoration: 'none', borderRadius: 9, padding: '6px 12px', background: th.ink, color: th.mode === 'floodlit' ? th.text : '#f7f5ee', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' } as const;
 
-  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale,
-  // carte pleine (inset 1px de contour) — la pleine largeur étirait le mini-terrain pour rien.
-  const card = (children: React.ReactNode, key: string, past: boolean) => (
+  // Même chrome que les cartes de Parties (OpenMatchCard) : pas de barre de couleur latérale
+  // (sauf le liseré du marqueur « autre club »), carte pleine (inset 1px de contour).
+  const card = (children: React.ReactNode, key: string, past: boolean, marker?: ClubMarker | null) => (
     <div key={key} style={{
       background: th.surface, borderRadius: 16, padding: '13px 14px', boxShadow: `inset 0 0 0 1px ${th.line}`,
       opacity: past ? 0.6 : 1,
+      ...(marker ? { position: 'relative' as const, overflow: 'hidden' as const } : null),
     }}>
+      {marker && <CardStripe color={marker.accent} />}
       {children}
     </div>
   );
+
+  // Sous-titres : texte simple (entrée du club courant) ou rangée flex avec la chip club (marqueur).
+  const subtitlePlain = { fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 } as const;
+  const subtitleRow = { ...subtitlePlain, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 } as const;
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -79,6 +85,10 @@ export function DayPanel({
           </div>
         ) : (
           entries.map((e) => {
+            // Marqueur « autre club » : liseré + chip à l'accentColor du club de l'entrée
+            // (toutes les entrées sur la plateforme, seules les étrangères sur un hôte club).
+            const marker = clubMarker(agendaItemClub(e), localSlug);
+            const clubChip = marker ? <Chip color={marker.accent}>{marker.name}</Chip> : null;
             if (e.kind === 'reservation') {
               const r = e.r;
               const tz = r.resource.club.timezone;
@@ -91,8 +101,9 @@ export function DayPanel({
                     onCancel={onCancel} onPlayersChanged={onPlayersChanged} onOpenChat={onOpenChat}
                     onRecordResult={onRecordResult} canRecord={canRecord}
                     existingMatchStatus={matchStatusFor?.(r.id)}
+                    clubMarker={marker}
                   />,
-                  `res-${r.id}`, e.past,
+                  `res-${r.id}`, e.past, marker,
                 );
               }
               return card(
@@ -101,7 +112,9 @@ export function DayPanel({
                     <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{r.resource.name}</span>
                     <Chip tone={r.status === 'CONFIRMED' ? 'accent' : 'line'}>{STATUS_LABEL[r.status]}</Chip>
                   </div>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>{showSport && r.resource.sport ? `${r.resource.sport.name} · ` : ''}{r.resource.club.name}</div>
+                  {marker
+                    ? <div style={subtitleRow}>{showSport && r.resource.sport && <span>{r.resource.sport.name} ·</span>}{clubChip}</div>
+                    : <div style={subtitlePlain}>{showSport && r.resource.sport ? `${r.resource.sport.name} · ` : ''}{r.resource.club.name}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <Icon name="clock" size={14} color={th.textMute} />{fmtHour(r.startTime, tz)}–{fmtHour(r.endTime, tz)}
@@ -148,7 +161,7 @@ export function DayPanel({
                     </div>
                   )}
                 </>,
-                `res-${r.id}`, e.past,
+                `res-${r.id}`, e.past, marker,
               );
             }
 
@@ -162,9 +175,16 @@ export function DayPanel({
                     <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{t.name}</span>
                     <Chip color={agendaKindMeta('tournament').color}>{REG_LABEL[e.reg.status] ?? e.reg.status}</Chip>
                   </div>
-                  <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
-                    {showSport && t.sport ? `${t.sport.name} · ` : ''}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}
-                  </div>
+                  {marker ? (
+                    <div style={subtitleRow}>
+                      <span>{showSport && t.sport ? `${t.sport.name} · ` : ''}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender}</span>
+                      {clubChip}
+                    </div>
+                  ) : (
+                    <div style={subtitlePlain}>
+                      {showSport && t.sport ? `${t.sport.name} · ` : ''}{t.category} · {GENDER_LABEL[t.gender] ?? t.gender} · {t.club.name}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <Icon name="calendar" size={14} color={th.textMute} />
@@ -176,7 +196,7 @@ export function DayPanel({
                     Équipe : {team}
                   </div>
                 </>,
-                `reg-${e.reg.id}`, e.past,
+                `reg-${e.reg.id}`, e.past, marker,
               );
             }
 
@@ -194,6 +214,7 @@ export function DayPanel({
                     </span>
                     <Chip color={agendaKindMeta('lesson').color}>{e.enrollment.status === 'CONFIRMED' ? 'Inscrit' : e.enrollment.status}</Chip>
                   </div>
+                  {marker && <div style={subtitleRow}>{clubChip}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <Icon name="clock" size={14} color={th.textMute} />{fmtHour(startTime, lessonTz)}–{fmtHour(endTime, lessonTz)}
@@ -201,7 +222,7 @@ export function DayPanel({
                     <a href={`/cours/${lesson.id}`} style={linkStyle}>Voir</a>
                   </div>
                 </>,
-                `lesson-${e.enrollment.enrollmentId}`, e.past,
+                `lesson-${e.enrollment.enrollmentId}`, e.past, marker,
               );
             }
 
@@ -213,9 +234,16 @@ export function DayPanel({
                   <span style={{ fontFamily: th.fontUI, fontWeight: 700, fontSize: 15.5, color: th.text }}>{ev.name}</span>
                   <Chip color={agendaKindMeta('event').color}>{REG_LABEL[e.ev.status] ?? e.ev.status}</Chip>
                 </div>
-                <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 2 }}>
-                  {showSport && ev.sport ? `${ev.sport.name} · ` : ''}{KIND_LABEL[ev.kind]} · {ev.club.name}
-                </div>
+                {marker ? (
+                  <div style={subtitleRow}>
+                    <span>{showSport && ev.sport ? `${ev.sport.name} · ` : ''}{KIND_LABEL[ev.kind]}</span>
+                    {clubChip}
+                  </div>
+                ) : (
+                  <div style={subtitlePlain}>
+                    {showSport && ev.sport ? `${ev.sport.name} · ` : ''}{KIND_LABEL[ev.kind]} · {ev.club.name}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Icon name="calendar" size={14} color={th.textMute} />
@@ -224,7 +252,7 @@ export function DayPanel({
                   <a href={clubUrl(ev.club.slug, `/events/${ev.id}`)} style={linkStyle}>Voir</a>
                 </div>
               </>,
-              `evt-${e.ev.id}`, e.past,
+              `evt-${e.ev.id}`, e.past, marker,
             );
           })
         )}

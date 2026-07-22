@@ -94,9 +94,11 @@ describe('DayPanel', () => {
   });
 
   it('affiche la carte event avec un lien Voir vers la fiche event (sous-domaine club)', () => {
+    // rendu par défaut = plateforme (localSlug null) → le nom du club vit dans la chip du marqueur
     renderPanel({ entries: buildCalendarEntries([], [], [eventReg], [], NOW), dayKey: '2026-06-12' });
     expect(screen.getByText('Mêlée du vendredi')).toBeInTheDocument();
-    expect(screen.getByText(/Mêlée · Padel Arena/)).toBeInTheDocument();
+    expect(screen.getByText('Mêlée')).toBeInTheDocument(); // sous-titre kind, sans le nom du club
+    expect(screen.getByText('Padel Arena').tagName).toBe('SPAN'); // chip club
     expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/events/ev-1'));
   });
 
@@ -113,6 +115,48 @@ describe('DayPanel', () => {
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Joueurs' })).toBeNull();
     expect(screen.getByRole('link', { name: /Voir/ })).toHaveAttribute('href', expect.stringContaining('/me/reservations'));
+  });
+
+  it('marqueur club : liseré + chip sur les entrées d\'un autre club (fallback blue sans accentColor)', () => {
+    const { container } = renderPanel({
+      entries: buildCalendarEntries([reservation], [registration], [], [], NOW),
+      localSlug: 'un-autre-club',
+    });
+    const stripes = container.querySelectorAll('[data-club-stripe]');
+    expect(stripes).toHaveLength(2); // résa + tournoi
+    expect(stripes[0]).toHaveStyle('background: #5e93da');
+    // le nom du club vit dans les chips, plus dans le texte des sous-titres
+    for (const chip of screen.getAllByText('Padel Arena')) expect(chip.tagName).toBe('SPAN');
+    // comportement inchangé : le bouton Annuler reste absent, le lien Voir présent
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
+  });
+
+  it('marqueur club absent pour les entrées du club courant (sous-titres texte intacts)', () => {
+    const { container } = renderPanel({
+      entries: buildCalendarEntries([reservation], [registration], [], [], NOW),
+      localSlug: 'padel-arena',
+    });
+    expect(container.querySelectorAll('[data-club-stripe]')).toHaveLength(0);
+    expect(screen.getByText(/P100 · Messieurs · Padel Arena/)).toBeInTheDocument();
+  });
+
+  it('marqueur club sur un cours d\'un autre club (chip ajoutée — il n\'y avait pas de nom de club)', () => {
+    const lessonEnrollment = {
+      enrollmentId: 'l1', status: 'CONFIRMED',
+      lesson: {
+        id: 'lesson-1', clubId: 'c2', lessonKind: 'COLLECTIVE', allowSelfEnroll: true, capacity: 4,
+        confirmedCount: 1, waitlistCount: 0, seriesId: null,
+        coach: { name: 'Coach X', photoUrl: null },
+        reservation: { startTime: futureStart, endTime: futureEnd, resource: { name: 'Court 2' } },
+        club: { slug: 'club-cours', name: 'Bordeaux Pala', timezone: 'Europe/Paris', accentColor: '#bda6ff' },
+      },
+    };
+    const { container } = renderPanel({
+      entries: buildCalendarEntries([], [], [], [lessonEnrollment as any], NOW),
+      localSlug: 'un-autre-club',
+    });
+    expect(container.querySelector('[data-club-stripe]')).toHaveStyle('background: #bda6ff');
+    expect(screen.getByText('Bordeaux Pala').tagName).toBe('SPAN');
   });
 
   it('ne propose pas d actions sur une réservation passée', () => {
