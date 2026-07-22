@@ -15,7 +15,8 @@ import { ClubNav } from '@/components/ClubNav';
 import { MonthCalendar } from '@/components/calendar/MonthCalendar';
 import { DayPanel } from '@/components/calendar/DayPanel';
 import { MyAgendaListItem } from '@/components/calendar/MyAgendaListItem';
-import { buildCalendarEntries, entriesByDay, buildAgendaList, agendaEntrySportKey, todayKey, addMonths } from '@/lib/calendar';
+import { buildCalendarEntries, entriesByDay, buildAgendaList, agendaEntrySportKey, todayKey, addMonths, foreignUpcomingCount, otherClubsHintLabel } from '@/lib/calendar';
+import { platformUrl } from '@/lib/clubUrl';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { toCents, fmtEuros } from '@/lib/caisse';
 import { MatchResultModal } from '@/components/match/MatchResultModal';
@@ -129,6 +130,13 @@ export default function MyReservationsPage() {
   const visiblePast = useMemo(() => past.slice(0, pastVisible), [past, pastVisible]);
   const list = tab === 'past' ? visiblePast : upcoming;
 
+  // Cloisonnement actif : combien d'entrées à venir sont masquées parce qu'elles vivent dans
+  // d'autres clubs ? (compté sur les données NON filtrées — alimente la ligne d'info).
+  const otherUpcoming = useMemo(
+    () => (showAll || !slug ? 0 : foreignUpcomingCount(items, regs, evts, lessons, slug, nowDate)),
+    [showAll, slug, items, regs, evts, lessons, nowDate],
+  );
+
   const entries = useMemo(
     () => buildCalendarEntries(fItems, fRegs, fEvts, fLessons, nowDate),
     [fItems, fRegs, fEvts, fLessons, nowDate],
@@ -209,6 +217,17 @@ export default function MyReservationsPage() {
               { value: 'past', label: 'Passées', icon: 'check', count: past.length },
             ]} />
         </div>
+
+        {otherUpcoming > 0 && (
+          // Cloisonnement actif : informe sans nommer les autres clubs (choix du club hôte
+          // respecté) — l'agenda complet vit sur l'hôte plateforme.
+          <div style={{ margin: '12px 20px 0', fontFamily: th.fontUI, fontSize: 13, color: th.textMute }}>
+            {otherClubsHintLabel(otherUpcoming)}{' · '}
+            <a href={platformUrl('/me/reservations')} style={{ color: th.textMute, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+              Tout voir sur Palova →
+            </a>
+          </div>
+        )}
 
         {error && <div style={{ ...dangerBanner(th), margin: '14px 20px 0' }}>{error}</div>}
         {refundMsg && <div style={{ margin: '14px 20px 0', background: th.surface, color: th.text, border: `1px solid ${th.line}`, borderRadius: 12, padding: '11px 14px', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 600 }}>{refundMsg}</div>}

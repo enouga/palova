@@ -12,6 +12,8 @@ import {
   agendaItemClubSlug,
   agendaItemClub,
   clubMarker,
+  foreignUpcomingCount,
+  otherClubsHintLabel,
   CalendarEntry,
   addDaysKey,
   frLongLabel,
@@ -491,6 +493,43 @@ describe('clubMarker (distinction des entrées d\'autres clubs)', () => {
   it('accentColor absent du payload (cache, fixtures) → fallback ACCENTS.blue', () => {
     expect(clubMarker({ slug: 'x', name: 'X Club' }, null)).toEqual({ name: 'X Club', accent: ACCENTS.blue });
     expect(clubMarker({ slug: 'x', name: 'X Club', accentColor: null }, 'autre')).toEqual({ name: 'X Club', accent: ACCENTS.blue });
+  });
+});
+
+describe('foreignUpcomingCount (ligne « aussi N réservations dans d\'autres clubs »)', () => {
+  const foreignRes = (id: string, over: Partial<MyReservation> = {}) => {
+    const r = makeReservation({ id, ...over });
+    r.resource = { ...r.resource, club: { name: 'Bordeaux Pala', slug: 'bordeaux-pala', timezone: 'Europe/Paris' } };
+    return r;
+  };
+
+  it('compte les entrées À VENIR d\'un autre club, tous types confondus (cours compris)', () => {
+    const count = foreignUpcomingCount(
+      [makeReservation({ id: 'local', startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' }), foreignRes('f1', { startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' })],
+      [makeRegistration()], [makeEventReg()],
+      [makeLessonEnrollment({ clubSlug: 'club-cours', startTime: '2026-06-15T17:00:00.000Z', endTime: '2026-06-15T18:00:00.000Z' })],
+      'padel-arena', NOW,
+    );
+    // f1 (résa Bordeaux) + cours club-cours ; tournoi/event/résa locale = padel-arena → exclus
+    expect(count).toBe(2);
+  });
+
+  it('exclut les entrées passées et annulées d\'un autre club', () => {
+    const count = foreignUpcomingCount(
+      [
+        foreignRes('past', { startTime: '2026-06-01T10:00:00.000Z', endTime: '2026-06-01T11:00:00.000Z' }),
+        foreignRes('cancelled', { status: 'CANCELLED', startTime: '2026-06-12T16:00:00.000Z', endTime: '2026-06-12T17:00:00.000Z' }),
+      ],
+      [], [], [], 'padel-arena', NOW,
+    );
+    expect(count).toBe(0);
+  });
+});
+
+describe('otherClubsHintLabel', () => {
+  it('accorde singulier / pluriel', () => {
+    expect(otherClubsHintLabel(1)).toBe('Vous avez aussi 1 réservation à venir dans un autre club');
+    expect(otherClubsHintLabel(3)).toBe('Vous avez aussi 3 réservations à venir dans d\'autres clubs');
   });
 });
 

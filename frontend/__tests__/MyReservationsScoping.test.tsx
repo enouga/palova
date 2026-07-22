@@ -101,6 +101,28 @@ describe('Mes réservations — cloisonnement par club', () => {
     expect(container.querySelectorAll('[data-club-stripe]')).toHaveLength(2);
   });
 
+  it('réglage OFF : ligne « Vous avez aussi 1 réservation à venir dans un autre club » + lien plateforme', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', showOtherClubsReservations: false } };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    expect(await screen.findByText(/Vous avez aussi 1 réservation à venir dans un autre club/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Tout voir sur Palova/ });
+    expect(link.getAttribute('href')).toContain('/me/reservations');
+  });
+
+  it('réglage ON : pas de ligne d\'info (les entrées sont déjà visibles)', async () => {
+    mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', showOtherClubsReservations: true } };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    await screen.findByText(/À venir/);
+    expect(screen.queryByText(/Vous avez aussi/)).toBeNull();
+  });
+
+  it('plateforme : pas de ligne d\'info (vue globale)', async () => {
+    mockClubState = { slug: null, club: null };
+    render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);
+    await screen.findByText(/À venir/);
+    expect(screen.queryByText(/Vous avez aussi/)).toBeNull();
+  });
+
   it('club OFF : pas d onglet « Matchs »', async () => {
     mockClubState = { slug: 'padel-arena', club: { name: 'Padel Arena', levelSystemEnabled: false } };
     render(<ThemeProvider><MyReservationsPage /></ThemeProvider>);

@@ -309,6 +309,30 @@ export function clubMarker(
   return { name: club.name, accent: club.accentColor ?? ACCENTS.blue };
 }
 
+/**
+ * Nombre d'entrées À VENIR appartenant à un AUTRE club que `localSlug`, tous types confondus.
+ * Calculé sur les données NON filtrées — alimente la ligne d'info affichée quand le
+ * cloisonnement par club masque les entrées des autres clubs (réglage OFF sur un hôte club).
+ */
+export function foreignUpcomingCount(
+  reservations: MyReservation[],
+  regs: MyTournamentRegistration[],
+  events: MyEventRegistration[],
+  lessons: MyLessonEnrollment[],
+  localSlug: string,
+  now: Date,
+): number {
+  return buildAgendaList(reservations, regs, events, lessons, now)
+    .filter((i) => !i.past && agendaItemClubSlug(i) !== localSlug).length;
+}
+
+/** Libellé de la ligne d'info, sans jamais nommer les autres clubs (choix du club hôte respecté). */
+export function otherClubsHintLabel(count: number): string {
+  return count === 1
+    ? 'Vous avez aussi 1 réservation à venir dans un autre club'
+    : `Vous avez aussi ${count} réservations à venir dans d'autres clubs`;
+}
+
 /** "YYYY-MM-DD" + delta jours, arithmétique UTC pure (aucun décalage de fuseau/DST). */
 export function addDaysKey(key: string, delta: number): string {
   const [y, m, d] = key.split('-').map(Number);

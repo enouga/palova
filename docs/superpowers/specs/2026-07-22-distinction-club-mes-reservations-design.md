@@ -61,6 +61,25 @@ Chaque entrée d'un autre club porte un **marqueur à la couleur d'accent de SON
 - Sous-titres porteurs de chip en `flex; flexWrap` (la chip est `nowrap` → pas de débordement
   mobile 390).
 
+## Ligne d'info quand le cloisonnement est actif (ajout du 2026-07-22)
+
+Sur un hôte club avec `showOtherClubsReservations` **OFF**, un joueur multi-clubs peut croire
+qu'une réservation a « disparu » (elle est juste sur l'autre club). Une **ligne discrète sous
+la barre d'onglets** (visible quel que soit l'onglet actif — la confusion naît autant dans la
+liste À venir que sur un jour du calendrier qui a l'air vide) :
+
+> Vous avez aussi N réservation(s) à venir dans d'autres clubs · **Tout voir sur Palova →**
+
+- Conditions : hôte club + réglage OFF + **≥ 1 entrée étrangère à venir** (les passées ne
+  perturbent personne). Réglage ON ou hôte plateforme → jamais affichée.
+- **Ne nomme jamais les autres clubs** (le compromis qui respecte le choix du club hôte de ne
+  pas afficher les concurrents, tout en dépannant le joueur) ; le lien va vers
+  `/me/reservations` de l'hôte plateforme (`platformUrl`), où l'agenda complet vit toujours.
+- Helpers purs `foreignUpcomingCount` (compté sur les données NON filtrées, via
+  `buildAgendaList` — exclut annulées et passées) et `otherClubsHintLabel`
+  (singulier/pluriel) dans `lib/calendar.ts` ; zéro backend (les données étaient déjà
+  chargées puis filtrées côté client).
+
 ## Hors périmètre
 
 - Couleur club dans la grille mensuelle `MonthCalendar`.
