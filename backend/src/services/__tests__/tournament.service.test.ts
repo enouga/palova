@@ -1863,3 +1863,74 @@ describe('réglage de contactabilité du J/A', () => {
     expect(prismaMock.clubMembership.update).not.toHaveBeenCalled();
   });
 });
+
+// La porte du bouton « Contacter le J/A » : inscrit non-annulé + J/A désigné + politique
+// re-vérifiée serveur. Le userId du J/A ne sort de cette méthode que contact autorisé.
+describe('assertRefereeContactable — porte du contact J/A', () => {
+  let svc: TournamentService;
+  beforeEach(() => { jest.clearAllMocks(); svc = new TournamentService(); });
+
+  const PAST = new Date('2000-01-01T00:00:00Z'), FUTURE = new Date('2099-01-01T00:00:00Z');
+  const mockT = (over: Record<string, unknown> = {}) => {
+    prismaMock.tournament.findUnique.mockResolvedValue({
+      status: 'PUBLISHED', clubId: 'club-1', refereeUserId: 'u-ref',
+      registrationDeadline: PAST, club: { slug: 'demo' }, ...over,
+    } as any);
+  };
+  const mockReg = (found: boolean) =>
+    prismaMock.tournamentRegistration.findFirst.mockResolvedValue(found ? ({ id: 'r1' } as any) : null);
+  const membership = (over: Record<string, unknown> = {}) =>
+    prismaMock.clubMembership.findUnique.mockResolvedValue({
+      status: 'ACTIVE', isReferee: true, refereeContactPolicy: 'AFTER_DEADLINE', ...over,
+    } as any);
+
+  it('tournoi introuvable → TOURNAMENT_NOT_FOUND', async () => {
+    prismaMock.tournament.findUnique.mockResolvedValue(null as any);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('tournoi DRAFT → TOURNAMENT_NOT_FOUND (pas de fuite d\'existence)', async () => {
+    mockT({ status: 'DRAFT' });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NOT_FOUND');
+  });
+
+  it('viewer non inscrit → NOT_REGISTERED, la membership n\'est jamais lue', async () => {
+    mockT(); mockReg(false);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('NOT_REGISTERED');
+    expect(prismaMock.clubMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('le comptage d\'inscription exclut les annulées et couvre capitaine OU partenaire', async () => {
+    mockT(); mockReg(true); membership();
+    await svc.assertRefereeContactable('t1', 'me');
+    const arg = (prismaMock.tournamentRegistration.findFirst as jest.Mock).mock.calls[0][0];
+    expect(arg.where.status).toEqual({ not: 'CANCELLED' });
+    expect(arg.where.OR).toEqual([{ captainUserId: 'me' }, { partnerUserId: 'me' }]);
+  });
+
+  it('pas de J/A désigné → TOURNAMENT_NO_REFEREE', async () => {
+    mockT({ refereeUserId: null }); mockReg(true);
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('TOURNAMENT_NO_REFEREE');
+  });
+
+  it('politique NEVER → REFEREE_NOT_CONTACTABLE', async () => {
+    mockT(); mockReg(true); membership({ refereeContactPolicy: 'NEVER' });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('AFTER_DEADLINE avant clôture → REFEREE_NOT_CONTACTABLE', async () => {
+    mockT({ registrationDeadline: FUTURE }); mockReg(true); membership();
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('facette retirée → REFEREE_NOT_CONTACTABLE (kill-switch)', async () => {
+    mockT(); mockReg(true); membership({ isReferee: false });
+    await expect(svc.assertRefereeContactable('t1', 'me')).rejects.toThrow('REFEREE_NOT_CONTACTABLE');
+  });
+
+  it('contact autorisé → renvoie refereeUserId + clubSlug (pour la messagerie)', async () => {
+    mockT(); mockReg(true); membership();
+    await expect(svc.assertRefereeContactable('t1', 'me'))
+      .resolves.toEqual({ refereeUserId: 'u-ref', clubSlug: 'demo' });
+  });
+});

@@ -1,12 +1,14 @@
 import { Router, Response, NextFunction } from 'express';
 import { TournamentService } from '../services/tournament.service';
 import { StripeService } from '../services/stripe.service';
+import { MessagingService } from '../services/messaging.service';
 import { prisma } from '../db/prisma';
 import { entryFeeCents } from '../services/registrationPayment';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const service = new TournamentService();
+const messaging = new MessagingService();
 
 const ERROR_STATUS: Record<string, number> = {
   TOURNAMENT_NOT_FOUND:         404,
@@ -30,6 +32,15 @@ const ERROR_STATUS: Record<string, number> = {
   NOT_PAYABLE:                  409,
   VALIDATION_ERROR:             400,
   CGV_NOT_ACCEPTED:             400,
+  NOT_REGISTERED:               403,
+  TOURNAMENT_NO_REFEREE:        404,
+  REFEREE_NOT_CONTACTABLE:      409,
+  NOT_CO_MEMBERS:               403,
+  USER_BLOCKED:                 409,
+  DM_DISABLED:                  409,
+  CANNOT_MESSAGE_SELF:          400,
+  CONVERSATION_NOT_FOUND:       404,
+  RATE_LIMITED:                 429,
 };
 
 function asString(v: unknown): string {
@@ -86,6 +97,16 @@ router.patch('/:id/registration', authMiddleware, async (req: AuthRequest, res: 
 router.delete('/:id/registration', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try { res.json(await service.cancelRegistration(asString(req.params.id), req.user!.id)); }
   catch (err) { handleError(err, res, next); }
+});
+
+// Contacter le J/A : réservé aux inscrits, politique du J/A re-vérifiée serveur, puis
+// délégation intégrale à la messagerie (gardes DM souveraines : blocage, opt-out, rate-limit).
+// Le userId du J/A n'est jamais dans le payload public — il ne sort que via la conversation.
+router.post('/:id/contact-referee', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { refereeUserId, clubSlug } = await service.assertRefereeContactable(asString(req.params.id), req.user!.id);
+    res.json(await messaging.getOrCreateConversation(req.user!.id, refereeUserId, clubSlug));
+  } catch (err) { handleError(err, res, next); }
 });
 
 // Créer l'intent (paiement ou empreinte) pour une inscription DUE de l'appelant.

@@ -862,6 +862,34 @@ export class TournamentService {
   }
 
   /**
+   * Porte du bouton « Contacter le J/A » : inscrit non-annulé (capitaine ou partenaire) +
+   * J/A désigné + politique re-calculée serveur (jamais confiée au client). Renvoie
+   * l'identité à passer à la messagerie — le userId du J/A ne sort d'ici que contact autorisé.
+   */
+  async assertRefereeContactable(tournamentId: string, meId: string): Promise<{ refereeUserId: string; clubSlug: string }> {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: {
+        status: true, clubId: true, refereeUserId: true, registrationDeadline: true,
+        club: { select: { slug: true } },
+      },
+    });
+    if (!t || t.status === 'DRAFT') throw new Error('TOURNAMENT_NOT_FOUND');
+    const reg = await prisma.tournamentRegistration.findFirst({
+      where: { tournamentId, status: { not: 'CANCELLED' }, OR: [{ captainUserId: meId }, { partnerUserId: meId }] },
+      select: { id: true },
+    });
+    if (!reg) throw new Error('NOT_REGISTERED');
+    if (!t.refereeUserId) throw new Error('TOURNAMENT_NO_REFEREE');
+    const membership = await prisma.clubMembership.findUnique({
+      where: { userId_clubId: { userId: t.refereeUserId, clubId: t.clubId } },
+      select: { status: true, isReferee: true, refereeContactPolicy: true },
+    });
+    if (!refereeContactable(membership, t.registrationDeadline, new Date())) throw new Error('REFEREE_NOT_CONTACTABLE');
+    return { refereeUserId: t.refereeUserId, clubSlug: t.club.slug };
+  }
+
+  /**
    * Étage 2 — « ce tournoi est-il le tien ? ».
    * TOURNAMENT_NOT_FOUND (inexistant / autre club) | TOURNAMENT_NOT_YOURS (autre J/A).
    * Publique : appelée aussi bien depuis les méthodes ci-dessous que directement par les
