@@ -52,4 +52,13 @@ it('cliquer le nom (lien distinct) navigue aussi vers la même fiche', async () 
 
 // Les cas rôle / coach / juge-arbitre / bloquer / supprimer testaient le panneau latéral
 // MemberPanel, supprimé en Task 6 (fiche membre 360 : la liste navigue, le panneau disparaît).
-// déplacé dans MemberHistory.test.tsx (fiche 360)
+// Migrés dans frontend/__tests__/MemberHistory.test.tsx, section « Carte « Rôle & accès » » :
+// 'rôle & accès : changer le rôle appelle adminSetMemberStaffRole'
+// 'rôle & accès : re-sélectionner le rôle courant = no-op (pas de PATCH)'
+// 'rôle & accès : cocher « Coach » appelle adminSetMemberCoach puis recharge la fiche'
+// 'rôle & accès : cocher « Juge-arbitre » appelle adminSetMemberReferee, indépendant de Coach'
+// 'rôle & accès : viewer STAFF → aucun bloc Rôle/Coach/Juge-arbitre visible (canManageStaff=false)'
+// 'rôle & accès : bloquer un membre appelle adminSetMemberBlocked(true)'
+// 'rôle & accès : bloquer un membre staff → 409 MEMBER_IS_STAFF affiché en français'
+// 'rôle & accès : supprimer un membre → confirmation puis adminRemoveMember + navigation vers la liste'
+// 'rôle & accès : supprimer un membre staff → 409 MEMBER_IS_STAFF affiché en français'

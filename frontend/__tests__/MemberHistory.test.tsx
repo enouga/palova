@@ -5,9 +5,14 @@ import { AdminRoleContext } from '../lib/adminRole';
 import { api } from '../lib/api';
 import type { MemberHistory } from '../lib/api';
 
+// `push` doit être STABLE à travers tous les rendus (le composant appelle useRouter() à
+// chaque render — un `jest.fn()` frais par appel empêcherait toute assertion fiable sur
+// la navigation post-suppression). Nom préfixé `mock` : seule échappatoire de
+// babel-plugin-jest-hoist pour référencer une variable hors-scope dans la factory.
+const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   useParams: () => ({ userId: 'u1' }),
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
 }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
 
@@ -426,12 +431,112 @@ it('dernières réservations : ligne annulée estompée avec mention tardive', a
 });
 
 // ───────────────────────── Carte « Rôle & accès » ─────────────────────────
+// Ces cas viennent de l'ex-AdminMembersStaff.test.tsx (panneau MemberPanel, supprimé en
+// Task 6) — c'est la promesse « déplacé dans MemberHistory.test.tsx (fiche 360) » de son
+// commentaire orphelin. Coach/Juge-arbitre/Bloquer/Supprimer + leur garde MEMBER_IS_STAFF
+// et le gating viewer STAFF n'avaient, avant cette passe, aucune assertion réelle malgré
+// des mocks déjà présents dans le fichier.
 
 it('rôle & accès : changer le rôle appelle adminSetMemberStaffRole', async () => {
   renderPage('ADMIN');
   await screen.findByText('Jean Dupont');
   fireEvent.click(await screen.findByRole('button', { name: 'Staff' }));
   await waitFor(() => expect(api.adminSetMemberStaffRole).toHaveBeenCalledWith('club-1', 'u1', 'STAFF', 'tok'));
+});
+
+it('rôle & accès : re-sélectionner le rôle courant = no-op (pas de PATCH)', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({ ...HISTORY, member: { ...HISTORY.member, staffRole: 'STAFF' } });
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(await screen.findByRole('button', { name: 'Staff' }));
+  expect(api.adminSetMemberStaffRole).not.toHaveBeenCalled();
+});
+
+it('rôle & accès : cocher « Coach » appelle adminSetMemberCoach puis recharge la fiche', async () => {
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Coach/ }));
+  await waitFor(() => expect(api.adminSetMemberCoach).toHaveBeenCalledWith('club-1', 'u1', true, 'tok'));
+  // le rechargement post-mutation repasse par la fiche (2e appel adminGetMemberHistory)
+  await waitFor(() => expect(api.adminGetMemberHistory).toHaveBeenCalledTimes(2));
+});
+
+it('rôle & accès : cocher « Juge-arbitre » appelle adminSetMemberReferee, indépendant de Coach', async () => {
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Juge-arbitre/ }));
+  await waitFor(() => expect(api.adminSetMemberReferee).toHaveBeenCalledWith('club-1', 'u1', true, 'tok'));
+  expect(api.adminSetMemberCoach).not.toHaveBeenCalled();
+});
+
+it('rôle & accès : viewer STAFF → aucun bloc Rôle/Coach/Juge-arbitre visible (canManageStaff=false)', async () => {
+  renderPage('STAFF');
+  await screen.findByText('Jean Dupont');
+  expect(screen.queryByRole('checkbox', { name: /Coach/ })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: /Juge-arbitre/ })).toBeNull();
+  expect(screen.queryByRole('group', { name: /Rôle de/ })).toBeNull();
+  // l'interrupteur Abonné, lui, n'est pas gated par canManageStaff : il reste visible
+  expect(screen.getByRole('checkbox', { name: /Abonné/ })).toBeInTheDocument();
+});
+
+it('rôle & accès : bloquer un membre appelle adminSetMemberBlocked(true)', async () => {
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Bloquer' }));
+  await waitFor(() => expect(api.adminSetMemberBlocked).toHaveBeenCalledWith('club-1', 'mb1', true, 'tok'));
+});
+
+it('rôle & accès : bloquer un membre staff → 409 MEMBER_IS_STAFF affiché en français', async () => {
+  (api.adminSetMemberBlocked as jest.Mock).mockRejectedValue(new Error('MEMBER_IS_STAFF'));
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Bloquer' }));
+  expect(await screen.findByText(/retirez d'abord son rôle/i)).toBeInTheDocument();
+});
+
+it('rôle & accès : supprimer un membre → confirmation puis adminRemoveMember + navigation vers la liste', async () => {
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer le membre' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' })); // confirmation
+  await waitFor(() => expect(api.adminRemoveMember).toHaveBeenCalledWith('club-1', 'mb1', 'tok'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/members'));
+});
+
+it('rôle & accès : supprimer un membre staff → 409 MEMBER_IS_STAFF affiché en français', async () => {
+  (api.adminRemoveMember as jest.Mock).mockRejectedValue(new Error('MEMBER_IS_STAFF'));
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer le membre' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+  expect(await screen.findByText(/retirez d'abord son rôle/i)).toBeInTheDocument();
+  expect(mockPush).not.toHaveBeenCalledWith('/admin/members');
+});
+
+// ───────────────────────── Carte « Abonnement & soldes » (MemberWalletCard) ─────────────────────────
+
+it('wallet : abonnement affiché, « Renouveler » ouvre SubscriptionActions avec les données du membre', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  expect(screen.getByText('Padel illimité')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Renouveler' }));
+  // texte fixe de la phrase d'explication du dialog (évite le souci d'apostrophe typographique
+  // du titre « Renouveler l’abonnement ») — preuve que SubscriptionActions s'est bien ouvert
+  // avec le bon abonnement/forfait, pas juste que le bouton existe.
+  expect(await screen.findByText(/Prolonge la période sans perte de jours/)).toBeInTheDocument();
+  expect(api.adminGetSubscriptionPlans).toHaveBeenCalledWith('club-1', 'tok');
+});
+
+// ───────────────────────── Carte « Contact » ─────────────────────────
+
+it('contact : lien mailto affiché, repli « pas de téléphone » si absent', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  // le hero porte aussi un lien mailto identique — on scope à la carte Contact pour éviter
+  // un match ambigu sur le même libellé "j@d.fr".
+  const contact = screen.getByRole('region', { name: 'Contact' });
+  expect(within(contact).getByRole('link', { name: 'j@d.fr' })).toHaveAttribute('href', 'mailto:j@d.fr');
+  expect(within(contact).getByText('Pas de téléphone renseigné.')).toBeInTheDocument();
 });
 
 // ───────────────────────── Erreur de chargement ─────────────────────────
