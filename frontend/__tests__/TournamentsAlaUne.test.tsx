@@ -70,4 +70,9 @@ describe('TournamentsAlaUne', () => {
     const { container } = wrap(items([t({}), t({ id: 't2', name: 'P200' })]));
     expect(container.querySelector('.ta-grid')).toBeInTheDocument();
   });
+
+  it('affiche le compteur de résultats à côté du titre', () => {
+    wrap(items([t({}), t({ id: 't2', name: 'P200' })]));
+    expect(screen.getByText('2 résultats')).toBeInTheDocument();
+  });
 });
