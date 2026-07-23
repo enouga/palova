@@ -16,7 +16,7 @@ export function HomeMatchesRail({ myClubSlugs }: { myClubSlugs: Set<string> }) {
   if (sorted.length === 0) return null;
   return (
     <section>
-      <SectionHeader kicker="Parties à rejoindre" moreLabel="Toutes →" moreHref="/decouvrir#parties" />
+      <SectionHeader kicker="Parties à rejoindre" />
       <NationalOpenMatches matches={sorted} />
     </section>
   );

@@ -22,7 +22,7 @@ export function OpenMatchesShowcase({ matches, timezone }: { matches: OpenMatch[
   const count = `${shown.length} partie${shown.length > 1 ? 's' : ''}`;
   return (
     <section id="ch-matches">
-      <SectionHeader title="Ça joue bientôt" action={{ label: 'Toutes les parties →', href: '/parties' }} count={count} />
+      <SectionHeader title="Ça joue bientôt" count={count} />
       <div style={{ position: 'relative', margin: '0 -20px' }}>
         {/* scrollPaddingLeft = padding-left : sans lui, le snap `mandatory` cale la 1re carte sur le
             bord du snapport dès le montage (scrollLeft 20) et mange le padding → rail désaligné du titre. */}

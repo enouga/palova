@@ -20,7 +20,11 @@ describe('OpenMatchesShowcase', () => {
     expect(screen.getByText(/Niveau 4 à 6/)).toBeInTheDocument();
     expect(screen.getByText(/3 places/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Rejoindre la partie/ })).toHaveAttribute('href', '/parties/m1');
-    expect(screen.getByRole('link', { name: /Toutes les parties/i })).toHaveAttribute('href', '/parties');
+  });
+
+  it('pas de lien « Toutes les parties » (retiré, doublon avec la nav)', () => {
+    wrap([match({})]);
+    expect(screen.queryByRole('link', { name: /Toutes/i })).toBeNull();
   });
 
   it('affiche le genre (Féminine) dans la méta de la carte', () => {
