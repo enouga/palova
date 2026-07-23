@@ -69,4 +69,14 @@ describe('NationalOpenMatches', () => {
     const { container } = wrap([]);
     expect(container.firstChild).toBeNull();
   });
+
+  it('affiche le compteur au singulier pour 1 résultat', () => {
+    wrap([makeMatch()]);
+    expect(screen.getByText('1 partie')).toBeInTheDocument();
+  });
+
+  it('affiche le compteur au pluriel pour plusieurs résultats', () => {
+    wrap([makeMatch(), makeMatch({ id: 'm2' })]);
+    expect(screen.getByText('2 parties')).toBeInTheDocument();
+  });
 });
