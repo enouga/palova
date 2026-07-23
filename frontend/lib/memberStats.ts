@@ -131,3 +131,47 @@ export function donutSegments(byMethod: Record<string, string>, radius = 52): Do
 export function euros(cents: number): string {
   return fmtEuros(cents);
 }
+
+/** Montant en centimes → "12,00 €" (toujours 2 décimales, pour les libellés d'alerte/badge ci-dessous). */
+const fmtCents = (c: number): string => `${(c / 100).toFixed(2).replace('.', ',')} €`;
+
+export interface MemberAlert { key: 'outstanding' | 'lowPackage' | 'subExpiring'; label: string }
+
+/** Alertes du bandeau de la fiche 360 (occasions de relance) — pur, testé. */
+export function memberAlerts(
+  input: {
+    outstandingCents: number;
+    balances: Array<{ kind: 'ENTRIES' | 'WALLET'; name: string; creditsRemaining: number | null; amountRemaining: string | null; expiresAt: string | null }>;
+    subscriptionExpiresAt: string | null;
+  },
+  now: Date,
+): MemberAlert[] {
+  const out: MemberAlert[] = [];
+  if (input.outstandingCents > 0) out.push({ key: 'outstanding', label: `${fmtCents(input.outstandingCents)} dus` });
+  const low = input.balances.some((b) =>
+    (b.expiresAt == null || new Date(b.expiresAt).getTime() > now.getTime())
+    && b.kind === 'ENTRIES' && b.creditsRemaining != null && b.creditsRemaining > 0 && b.creditsRemaining <= 2);
+  if (low) out.push({ key: 'lowPackage', label: 'Carnet presque vide' });
+  if (input.subscriptionExpiresAt) {
+    const days = Math.ceil((new Date(input.subscriptionExpiresAt).getTime() - now.getTime()) / 86_400_000);
+    if (days > 0 && days <= 30) out.push({ key: 'subExpiring', label: `Abonnement expire dans ${days} j` });
+  }
+  return out;
+}
+
+/** Badge paiement d'une ligne de réservation de la fiche. */
+export function reservationPaymentBadge(
+  r: { status: string; attributedCents: number; dueCents: number },
+): { label: string; tone: 'ok' | 'due' | 'off' } {
+  if (r.status === 'CANCELLED') return { label: 'Annulée', tone: 'off' };
+  if (r.dueCents > 0 && r.attributedCents < r.dueCents) return { label: `Reste ${fmtCents(r.dueCents - r.attributedCents)}`, tone: 'due' };
+  return { label: r.attributedCents > 0 ? `Payé ${fmtCents(r.attributedCents)} ✓` : 'Payé ✓', tone: 'ok' };
+}
+
+/** Résultat V/D du joueur sur une ligne de résa (null si aucun match saisi). */
+export function matchOutcome(
+  m: { winningTeam: number | null; myTeam: number | null; sets: [number, number][]; competitive: boolean } | null,
+): { won: boolean; score: string } | null {
+  if (!m || m.winningTeam == null || m.myTeam == null) return null;
+  return { won: m.winningTeam === m.myTeam, score: m.sets.map(([a, b]) => `${a}-${b}`).join(' ') };
+}

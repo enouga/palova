@@ -1,6 +1,7 @@
 import {
   methodLabel, monthShort, weekdayLabel, winRate, lastVisitLabel, cancellationLabel, tenureLabel,
   revenueChartModel, heatmapModel, donutSegments,
+  memberAlerts, reservationPaymentBadge, matchOutcome,
 } from '@/lib/memberStats';
 
 describe('libellés', () => {
@@ -83,5 +84,35 @@ describe('donutSegments', () => {
   it('ignore les méthodes à 0 et le vide', () => {
     expect(donutSegments({}, 52).segments).toHaveLength(0);
     expect(donutSegments({ CASH: '0.00' }, 52).segments).toHaveLength(0);
+  });
+});
+
+describe('memberAlerts', () => {
+  const base = { outstandingCents: 0, balances: [], subscriptionExpiresAt: null as string | null };
+  const now = new Date('2026-07-23T10:00:00Z');
+  it('reste dû → alerte coral', () => {
+    expect(memberAlerts({ ...base, outstandingCents: 1200 }, now)).toContainEqual(
+      expect.objectContaining({ key: 'outstanding', label: '12,00 € dus' }));
+  });
+  it('carnet presque vide (≤ 2 entrées)', () => {
+    const balances = [{ kind: 'ENTRIES' as const, name: 'Carnet 10', creditsRemaining: 2, amountRemaining: null, expiresAt: null }];
+    expect(memberAlerts({ ...base, balances }, now).map((a) => a.key)).toContain('lowPackage');
+  });
+  it('abonnement qui expire sous 30 jours', () => {
+    expect(memberAlerts({ ...base, subscriptionExpiresAt: '2026-08-10T00:00:00Z' }, now).map((a) => a.key)).toContain('subExpiring');
+    expect(memberAlerts({ ...base, subscriptionExpiresAt: '2026-12-01T00:00:00Z' }, now)).toEqual([]);
+  });
+});
+
+describe('reservationPaymentBadge / matchOutcome', () => {
+  it('payé / reste dû / annulée', () => {
+    expect(reservationPaymentBadge({ status: 'CONFIRMED', attributedCents: 2500, dueCents: 2500 })).toEqual({ label: 'Payé 25,00 € ✓', tone: 'ok' });
+    expect(reservationPaymentBadge({ status: 'CONFIRMED', attributedCents: 1300, dueCents: 2500 })).toEqual({ label: 'Reste 12,00 €', tone: 'due' });
+    expect(reservationPaymentBadge({ status: 'CANCELLED', attributedCents: 0, dueCents: 2500 })).toEqual({ label: 'Annulée', tone: 'off' });
+  });
+  it('résultat V/D depuis le match', () => {
+    expect(matchOutcome({ winningTeam: 1, myTeam: 1, sets: [[6, 3], [6, 4]], competitive: true })).toEqual({ won: true, score: '6-3 6-4' });
+    expect(matchOutcome({ winningTeam: 2, myTeam: 1, sets: [[4, 6]], competitive: true })).toEqual({ won: false, score: '4-6' });
+    expect(matchOutcome(null)).toBeNull();
   });
 });
