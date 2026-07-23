@@ -1547,6 +1547,26 @@ describe('ClubService — updateMembership (profil élargi)', () => {
     await expect(svc.updateMembership('club-demo', 'mb1', { sex: 'X' as never } as any)).rejects.toThrow('VALIDATION_ERROR');
   });
 
+  it('un firstName explicitement null lève VALIDATION_ERROR (pas un TypeError brut)', async () => {
+    const svc = new ClubService();
+    await expect(svc.updateMembership('club-demo', 'mb1', { firstName: null } as any)).rejects.toThrow('VALIDATION_ERROR');
+    await expect(svc.updateMembership('club-demo', 'mb1', { lastName: null } as any)).rejects.toThrow('VALIDATION_ERROR');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('sex:null et birthDate:null effacent le champ (chemin déjà couvert par le code, verrouillé ici)', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', { sex: null, birthDate: null } as any);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sex: null, birthDate: null }),
+    }));
+  });
+
+  it('refuse la modification si la membership n\'appartient pas au club (MEMBER_NOT_FOUND)', async () => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'autre-club', userId: 'u1' } as any);
+    await expect(new ClubService().updateMembership('club-demo', 'mb1', { firstName: 'Jean' } as any)).rejects.toThrow('MEMBER_NOT_FOUND');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
   it('chaîne vide → null (adresse effacée), et ne touche pas le User sans champ User', async () => {
     await new ClubService().updateMembership('club-demo', 'mb1', { address: '  ', note: 'x' } as any);
     expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({

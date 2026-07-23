@@ -768,8 +768,8 @@ export class ClubService {
     optional('phone'); optional('address'); optional('postalCode'); optional('city');
     for (const key of ['firstName', 'lastName'] as const) {
       if (params[key] === undefined) continue;
-      const v = params[key]!.toString().trim();
-      if (!v) throw new Error('VALIDATION_ERROR'); // un compte garde toujours un nom
+      const v = params[key]?.toString().trim() ?? '';
+      if (!v) throw new Error('VALIDATION_ERROR'); // un compte garde toujours un nom (jamais null/vide)
       userData[key] = v; touched.push(key);
     }
     if (params.birthDate !== undefined) {
