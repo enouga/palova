@@ -112,7 +112,7 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
   // Kiosque « À la une » : toutes les annonces actives (avec ou sans image), dans l'ordre
   // manuel choisi par l'admin (page Annonces) — « épinglée » n'est plus qu'un badge.
   const slides = kiosqueSlides(ann, now);
-  const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 3);
+  const nextEvents = mergeAgenda(tournaments, events, [], now).slice(0, 8);
   const upcomingMatches = openMatches.filter((m) => new Date(m.startTime) > now);
   const showClubCard = showShowcase(presentation);
   const showOffers = !!offers && (offers.plans.length > 0 || offers.packages.length > 0);
@@ -138,17 +138,16 @@ export function ClubHouse({ club }: { club: ClubDetail }) {
         <ClubShowcase presentation={presentation} club={club} now={clock} />
       </div>
     ),
-    // Prochains events + Vos réservations côte à côte (≥ 700px) — cartes sœurs, même langage.
+    // Prochains events (pleine largeur, grille 4×2) puis Vos réservations juste après —
+    // chacun pleine largeur : une vraie grille 4 colonnes a besoin de plus de place que la
+    // moitié de page qu'offrait l'ancien côte-à-côte (.ch-grid, retiré).
     agenda: (nextEvents.length > 0 || next.length > 0) && (
-      <>
-        <style>{`.ch-grid{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}@media(min-width:700px){.ch-grid{grid-template-columns:1fr 1fr}}`}</style>
-        <div className={nextEvents.length > 0 && next.length > 0 ? 'ch-grid' : undefined}>
-          {nextEvents.length > 0 && (
-            <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
-          )}
-          {next.length > 0 && <MyReservationsCard reservations={next} onManage={setConfirmCancel} />}
-        </div>
-      </>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {nextEvents.length > 0 && (
+          <TournamentsAlaUne items={nextEvents} timezone={club.timezone} now={clock} multiSport={clubIsMultiSport(club)} />
+        )}
+        {next.length > 0 && <MyReservationsCard reservations={next} onManage={setConfirmCancel} />}
+      </div>
     ),
     matches: upcomingMatches.length > 0 && <OpenMatchesShowcase matches={upcomingMatches.slice(0, 6)} timezone={club.timezone} />,
     offers: showOffers && offers && (

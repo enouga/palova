@@ -78,6 +78,7 @@ describe('AccountService.deleteAccount', () => {
       data: expect.objectContaining({
         firstName: 'Joueur', lastName: 'supprimé', email: 'deleted-u1@deleted.palova.invalid',
         phone: null, avatarUrl: null, birthDate: null, sex: null, locale: null, isSuperAdmin: false,
+        address: null, postalCode: null, city: null,
       }),
     }));
     expect(prismaMock.user.update.mock.calls[0][0].data.deletedAt).toBeInstanceOf(Date);

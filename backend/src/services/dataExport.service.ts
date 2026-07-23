@@ -12,6 +12,7 @@ export class DataExportService {
       prisma.user.findUnique({ where: { id: userId }, select: {
         id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
         birthDate: true, avatarUrl: true, locale: true, createdAt: true,
+        address: true, postalCode: true, city: true,
         showInLeaderboard: true, autoMatchProposals: true, acceptsFriendRequests: true, acceptsDirectMessages: true,
       } }),
       prisma.clubMembership.findMany({ where: { userId }, select: { clubId: true, status: true, membershipNo: true, createdAt: true } }),

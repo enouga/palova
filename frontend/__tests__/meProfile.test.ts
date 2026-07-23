@@ -8,6 +8,7 @@ const base: MyProfile = {
   showInLeaderboard: false, autoMatchProposals: false,
   acceptsFriendRequests: true, acceptsDirectMessages: true,
   preferredSport: { id: 'sport-padel', key: 'padel', name: 'Padel' },
+  address: null, postalCode: null, city: null,
 };
 
 describe('meProfile helpers', () => {
@@ -26,10 +27,10 @@ describe('meProfile helpers', () => {
     expect(parseProfileTab('?tab=nimportequoi')).toBe('identite');
   });
 
-  it('buildProfileBody expose les 9 champs enregistrés', () => {
+  it('buildProfileBody expose les 12 champs enregistrés', () => {
     expect(Object.keys(buildProfileBody(base)).sort()).toEqual([
-      'acceptsDirectMessages', 'acceptsFriendRequests', 'autoMatchProposals',
-      'birthDate', 'locale', 'phone', 'preferredSportId', 'sex', 'showInLeaderboard',
+      'acceptsDirectMessages', 'acceptsFriendRequests', 'address', 'autoMatchProposals',
+      'birthDate', 'city', 'locale', 'phone', 'postalCode', 'preferredSportId', 'sex', 'showInLeaderboard',
     ]);
   });
 
@@ -46,6 +47,11 @@ describe('meProfile helpers', () => {
   it('buildProfileBody trim le téléphone, vide → null', () => {
     expect(buildProfileBody({ ...base, phone: '  06 09  ' }).phone).toBe('06 09');
     expect(buildProfileBody({ ...base, phone: '   ' }).phone).toBeNull();
+  });
+
+  it('buildProfileBody porte adresse/CP/ville (trim, vide → null)', () => {
+    const body = buildProfileBody({ ...base, address: ' 12 rue des Sports ', postalCode: '31000', city: '' });
+    expect(body).toMatchObject({ address: '12 rue des Sports', postalCode: '31000', city: null });
   });
 
   it('buildProfileBody normalise une locale absente en « fr » (miroir du <select>)', () => {
@@ -68,6 +74,9 @@ describe('meProfile helpers', () => {
     expect(isDirty(base, { ...base, acceptsDirectMessages: false })).toBe(true);
     expect(isDirty(base, { ...base, preferredSport: null })).toBe(true);
     expect(isDirty(base, { ...base, birthDate: '1980-01-01' })).toBe(true);
+    expect(isDirty(base, { ...base, address: '1 av. du Club' })).toBe(true);
+    expect(isDirty(base, { ...base, postalCode: '31000' })).toBe(true);
+    expect(isDirty(base, { ...base, city: 'Toulouse' })).toBe(true);
   });
 
   it('isDirty ignore les champs NON enregistrés (avatar)', () => {

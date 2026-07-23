@@ -5,6 +5,9 @@ import { COVER_PHOTOS } from '@/lib/clubCover';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
+import { useScrollRail } from '@/lib/useScrollRail';
+import { RailArrows } from '@/components/ui/RailArrows';
+import { Icon } from '@/components/ui/Icon';
 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
 // Bloc embeddable : ne rend QUE la recherche + les résultats (pas de Screen ni de titre de page),
@@ -66,6 +69,8 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
   // ne relance jamais le fetch. `visibleClubs` reflète déjà le résultat (y compris `[]` sur erreur).
   useEffect(() => { onCount?.(visibleClubs.length); }, [visibleClubs.length, onCount]);
 
+  const { railRef, edges, scrollByPage } = useScrollRail([visibleClubs.length]);
+
   const locateMe = () => {
     if (!navigator.geolocation) { setGeoState('denied'); return; }
     setGeoState('locating');
@@ -80,6 +85,14 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   const inputStyle = { flex: 1, minWidth: 0, height: 46, padding: '0 14px', borderRadius: 12, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 15 } as const;
 
+  // Filtres propres à l'annuaire (la localisation en mode contrôlé vient de la barre partagée,
+  // réinitialisée à part) : nom + sport, plus ville/géoloc en mode autonome (/clubs).
+  const clubFiltersActive = !!q || !!sport || (!controlled && (!!cityInput || !!coordsInput));
+  const resetClubFilters = () => {
+    setQ(''); setSport('');
+    if (!controlled) { setCityInput(''); setCoordsInput(null); setGeoState('idle'); }
+  };
+
   return (
     <>
       {/* recherche */}
@@ -90,13 +103,22 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
             <input value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
           )}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
           {sports.map((s) => (
             <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>
               {s.icon ? `${s.icon} ` : ''}{s.name}
             </button>
           ))}
+          {clubFiltersActive && (
+            <button onClick={resetClubFilters} style={{
+              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+              borderRadius: 999, padding: '6px 12px', background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
+              fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute,
+            }}>
+              <Icon name="x" size={12} color={th.textMute} />Effacer les filtres
+            </button>
+          )}
         </div>
         {!controlled && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -112,22 +134,38 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
         )}
       </div>
 
-      {/* résultats */}
-      <style>{`.discover-clubs-grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:640px){.discover-clubs-grid{grid-template-columns:1fr 1fr}}`}</style>
-      <div className="discover-clubs-grid" style={{ padding: '20px 20px 0', alignItems: 'start' }}>
+      {/* résultats — étagère qui défile horizontalement sur 2 lignes (grid-auto-flow:
+          column), pas une grille qui wrap : c'est un vrai annuaire (recherche + filtres),
+          aucun plafond — tout résultat filtré doit rester atteignable via le défilement. */}
+      <div style={{ padding: '20px 20px 0' }}>
         {loading ? (
-          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
+          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>
         ) : error ? (
-          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
+          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>
             Impossible de charger les clubs pour le moment.
             <div style={{ marginTop: 10 }}>
               <button onClick={load} style={{ border: 'none', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '8px 16px', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700 }}>Réessayer</button>
             </div>
           </div>
         ) : visibleClubs.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
+          <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
-          visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)
+          <>
+            {/* grid-auto-columns en calc((100% - 2*gap) / 3) — pas un px fixe : toujours 3
+                vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
+                (mobile compris), la 4e colonne démarre juste après et se révèle au défilement. */}
+            {/* UNE ligne jusqu'à 4 clubs, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
+            <style>{`.discover-clubs-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}`}</style>
+            <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
+              {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
+            </div>
+            <div style={{ position: 'relative', margin: '0 -20px' }}>
+              <div ref={railRef} className="sp-scroll-x discover-clubs-grid" style={{ gridTemplateRows: `repeat(${visibleClubs.length <= 4 ? 1 : 2}, auto)`, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+                {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
+              </div>
+              <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Clubs précédents" nextLabel="Clubs suivants" fadeBottom={8} />
+            </div>
+          </>
         )}
       </div>
     </>

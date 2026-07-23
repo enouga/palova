@@ -20,7 +20,11 @@ describe('OpenMatchesShowcase', () => {
     expect(screen.getByText(/Niveau 4 à 6/)).toBeInTheDocument();
     expect(screen.getByText(/3 places/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Rejoindre la partie/ })).toHaveAttribute('href', '/parties/m1');
-    expect(screen.getByRole('link', { name: /Toutes les parties/i })).toHaveAttribute('href', '/parties');
+  });
+
+  it('pas de lien « Toutes les parties » (retiré, doublon avec la nav)', () => {
+    wrap([match({})]);
+    expect(screen.queryByRole('link', { name: /Toutes/i })).toBeNull();
   });
 
   it('affiche le genre (Féminine) dans la méta de la carte', () => {
@@ -60,5 +64,15 @@ describe('OpenMatchesShowcase', () => {
   it('sans fourchette de niveau, pas de mention Niveau', () => {
     wrap([match({ targetLevelMin: null, targetLevelMax: null })]);
     expect(screen.queryByText(/Niveau/)).not.toBeInTheDocument();
+  });
+
+  it('affiche le compteur de résultats', () => {
+    wrap([match({})]);
+    expect(screen.getByText('1 partie')).toBeInTheDocument();
+  });
+
+  it('le compteur reflète le plafond de 6 cartes, pas le total réel', () => {
+    wrap(Array.from({ length: 8 }, (_, i) => match({ id: `m${i}` })));
+    expect(screen.getByText('6 parties')).toBeInTheDocument();
   });
 });

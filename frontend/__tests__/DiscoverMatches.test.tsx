@@ -63,7 +63,7 @@ beforeEach(() => {
 });
 
 describe('DiscoverMatches', () => {
-  it('rend 1 carte par partie, défaut « 14 jours » = période all', () => {
+  it('rend 1 carte par partie, aucun filtre de date par défaut', () => {
     wrap({ matches: [makeMatch({ id: 'm1' }), makeMatch({ id: 'm2', club: { ...makeMatch().club, name: 'Autre club' } })] });
     expect(screen.getByText('Padel Arena Paris')).toBeInTheDocument();
     expect(screen.getByText('Autre club')).toBeInTheDocument();
@@ -74,6 +74,47 @@ describe('DiscoverMatches', () => {
     wrap();
     expect(screen.getByText('Quand')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "Aujourd'hui" })).toBeInTheDocument();
+  });
+
+  it('filtre par type de partie (Pour le fun)', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'c', competitive: true }),
+        makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
+      ],
+    });
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByText('Fun Club')).toBeInTheDocument();
+  });
+
+  it('filtre par genre (Féminine)', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'w', gender: 'WOMEN' }),
+        makeMatch({ id: 'm', gender: 'MIXED', club: { ...makeMatch().club, name: 'Mixte Club' } }),
+      ],
+    });
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Féminine' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.queryByText('Mixte Club')).not.toBeInTheDocument();
+  });
+
+  it('« Effacer les filtres » réapparaît sur un filtre actif et le réinitialise', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'c', competitive: true }),
+        makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
+      ],
+    });
+    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Effacer les filtres/ }));
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
   });
 
   it('chip Aujourd\'hui filtre les parties hors de la journée', () => {
@@ -198,6 +239,11 @@ describe('DiscoverMatches', () => {
     wrap({ matches: many, onCount });
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(9));
     expect(screen.getAllByRole('link')).toHaveLength(9);
+  });
+
+  it('affiche le compteur de résultats', async () => {
+    wrap({ matches: [makeMatch({ id: 'm1' }), makeMatch({ id: 'm2', club: { ...makeMatch().club, name: 'Autre club' } })] });
+    expect(await screen.findByText('2 parties')).toBeInTheDocument();
   });
 
   it('matches null → Chargement…', () => {

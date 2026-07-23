@@ -1,4 +1,4 @@
-import { discoverWindow, filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
+import { filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
 import type { DiscoverMatchFilter } from '@/lib/discover';
 import type { NationalOpenMatch, NationalOpenMatchClub } from '@/lib/api';
 
@@ -41,33 +41,8 @@ function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
 
 const DAY = 86_400_000;
 
-describe('discoverWindow', () => {
-  it("'all' → pas de fenêtre", () => {
-    expect(discoverWindow('all', NOW)).toBeNull();
-  });
-
-  it("'today' → from=now, to=fin de journée locale", () => {
-    const win = discoverWindow('today', NOW)!;
-    expect(win.from).toEqual(NOW);
-    expect(win.to).toEqual(new Date(2026, 6, 8, 23, 59, 59, 999));
-  });
-
-  it("'weekend' un mercredi → samedi 11 00:00 → dimanche 12 23:59:59.999", () => {
-    const win = discoverWindow('weekend', NOW)!;
-    expect(win.from).toEqual(new Date(2026, 6, 11, 0, 0, 0, 0));
-    expect(win.to).toEqual(new Date(2026, 6, 12, 23, 59, 59, 999));
-  });
-
-  it("'weekend' un dimanche en cours → ce jour seul", () => {
-    const sunday = new Date(2026, 6, 12, 10, 0, 0);
-    const win = discoverWindow('weekend', sunday)!;
-    expect(win.from).toEqual(new Date(2026, 6, 12, 0, 0, 0, 0));
-    expect(win.to).toEqual(new Date(2026, 6, 12, 23, 59, 59, 999));
-  });
-});
-
-describe('filterNationalMatches — période', () => {
-  const base: DiscoverMatchFilter = { period: 'today', location: { city: null, deptCodes: [] }, myLevel: null };
+describe('filterNationalMatches — date', () => {
+  const base: DiscoverMatchFilter = { datePreset: 'today', dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it('match dans 2 h → gardé en today', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 2 * 3_600_000).toISOString() });
@@ -79,19 +54,28 @@ describe('filterNationalMatches — période', () => {
     expect(filterNationalMatches([m], base, NOW)).toEqual([]);
   });
 
-  it('match dans 5 jours → exclu en weekend', () => {
+  it('match dans 5 jours (lundi suivant) → exclu en thisWeek (au-delà de dimanche)', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 5 * DAY).toISOString() });
-    expect(filterNationalMatches([m], { ...base, period: 'weekend' }, NOW)).toEqual([]);
+    expect(filterNationalMatches([m], { ...base, datePreset: 'thisWeek' }, NOW)).toEqual([]);
   });
 
-  it('match dans 5 jours → gardé en all', () => {
+  it('match dans 5 jours → gardé sans filtre de date (datePreset null)', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 5 * DAY).toISOString() });
-    expect(filterNationalMatches([m], { ...base, period: 'all' }, NOW)).toEqual([m]);
+    expect(filterNationalMatches([m], { ...base, datePreset: null }, NOW)).toEqual([m]);
+  });
+
+  it('plage custom from/to prime sur le preset', () => {
+    const m = makeMatch({ startTime: new Date(NOW.getTime() + 20 * DAY).toISOString() });
+    // datePreset 'today' exclurait ce match, mais une plage custom couvrant le jour prime.
+    const from = new Date(NOW.getTime() + 20 * DAY);
+    const to = new Date(NOW.getTime() + 21 * DAY);
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(filterNationalMatches([m], { ...base, dateFrom: ymd(from), dateTo: ymd(to) }, NOW)).toEqual([m]);
   });
 });
 
 describe('filterNationalMatches — ville', () => {
-  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it("insensible accents/casse : 'sete' trouve « Sète »", () => {
     const match = makeMatch({ club: makeClub({ city: 'Sète' }) });
@@ -123,20 +107,20 @@ describe('filterNationalMatches — ville', () => {
     const inDept  = m({ id: 'a', departmentCode: '31' });
     const outDept = m({ id: 'b', departmentCode: '75' });
     const noDept  = m({ id: 'c' }); // departmentCode null → exclu quand filtre actif
-    const out = filterNationalMatches([inDept, outDept, noDept], { period: 'all', location: { city: null, deptCodes: ['31'] }, myLevel: null }, NOW);
+    const out = filterNationalMatches([inDept, outDept, noDept], { ...base, location: { city: null, deptCodes: ['31'] } }, NOW);
     expect(out.map((x) => x.id)).toEqual(['a']);
   });
 
   it('city texte matche aussi le nom du département', () => {
     const byDeptName = m({ id: 'a', city: 'Muret', department: 'Haute-Garonne' });
     const other      = m({ id: 'b', city: 'Paris', department: 'Paris' });
-    const out = filterNationalMatches([byDeptName, other], { period: 'all', location: { city: 'haute-garonne', deptCodes: [] }, myLevel: null }, NOW);
+    const out = filterNationalMatches([byDeptName, other], { ...base, location: { city: 'haute-garonne', deptCodes: [] } }, NOW);
     expect(out.map((x) => x.id)).toEqual(['a']);
   });
 });
 
 describe('filterNationalMatches — niveau', () => {
-  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: 6.2 };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: 6.2 };
 
   it('myLevel 6.2 → fourchette [5,7] : garde une partie 4–6 (chevauchement)', () => {
     const m = makeMatch({ targetLevelMin: 4, targetLevelMax: 6 });
@@ -161,6 +145,46 @@ describe('filterNationalMatches — niveau', () => {
   it('myLevel 8 → fourchette clampée [7,8] (pas [7,9], niveau max = 8) : exclut une partie 9–9', () => {
     const m = makeMatch({ targetLevelMin: 9, targetLevelMax: 9 });
     expect(filterNationalMatches([m], { ...base, myLevel: 8 }, NOW)).toEqual([]);
+  });
+});
+
+describe('filterNationalMatches — type (competitive) et genre', () => {
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
+
+  it("kind 'competitive' garde les parties compétitives (competitive true ou absent)", () => {
+    const comp = makeMatch({ id: 'c', competitive: true });
+    const undef = makeMatch({ id: 'u' }); // competitive absent → traité compétitif (défaut)
+    const fun = makeMatch({ id: 'f', competitive: false });
+    const out = filterNationalMatches([comp, undef, fun], { ...base, kind: 'competitive' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['c', 'u']);
+  });
+
+  it("kind 'friendly' ne garde que les parties pour le fun (competitive === false)", () => {
+    const comp = makeMatch({ id: 'c', competitive: true });
+    const undef = makeMatch({ id: 'u' });
+    const fun = makeMatch({ id: 'f', competitive: false });
+    const out = filterNationalMatches([comp, undef, fun], { ...base, kind: 'friendly' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['f']);
+  });
+
+  it("genre 'WOMEN' ne garde que les parties féminines", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN' });
+    const mx = makeMatch({ id: 'x', gender: 'MIXED' });
+    const open = makeMatch({ id: 'o', gender: null });
+    const out = filterNationalMatches([w, mx, open], { ...base, gender: 'WOMEN' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['w']);
+  });
+
+  it("genre 'MIXED' ne garde que les parties mixtes", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN' });
+    const mx = makeMatch({ id: 'x', gender: 'MIXED' });
+    const out = filterNationalMatches([w, mx], { ...base, gender: 'MIXED' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['x']);
+  });
+
+  it("kind/genre 'all' → aucun filtre (une partie féminine + pour le fun passe)", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN', competitive: false });
+    expect(filterNationalMatches([w], base, NOW)).toEqual([w]);
   });
 });
 

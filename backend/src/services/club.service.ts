@@ -736,16 +736,67 @@ export class ClubService {
     if (staff) throw new Error('MEMBER_IS_STAFF');
   }
 
+  // Champs du COMPTE joueur (globaux, partagés entre clubs) éditables par le staff — l'email,
+  // identifiant de connexion, n'en fait jamais partie. Libellés pour la note de traçage.
+  private static readonly USER_FIELD_LABELS: Record<string, string> = {
+    firstName: 'prénom', lastName: 'nom', phone: 'téléphone', birthDate: 'date de naissance',
+    sex: 'sexe', address: 'adresse', postalCode: 'code postal', city: 'ville',
+  };
+
   async updateMembership(
     clubId: string, membershipId: string,
-    params: { isSubscriber?: boolean; membershipNo?: string | null; status?: 'ACTIVE' | 'BLOCKED'; note?: string | null; phone?: string | null },
+    params: {
+      isSubscriber?: boolean; membershipNo?: string | null; status?: 'ACTIVE' | 'BLOCKED'; note?: string | null;
+      phone?: string | null; firstName?: string; lastName?: string;
+      birthDate?: string | null; sex?: 'MALE' | 'FEMALE' | null;
+      address?: string | null; postalCode?: string | null; city?: string | null;
+    },
+    actorUserId?: string,
   ) {
     const m = await prisma.clubMembership.findUnique({ where: { id: membershipId }, select: { clubId: true, userId: true } });
     if (!m || m.clubId !== clubId) throw new Error('MEMBER_NOT_FOUND');
     if (params.status === 'BLOCKED') await this.assertNotStaff(clubId, m.userId);
-    if (params.phone !== undefined) {
-      await prisma.user.update({ where: { id: m.userId }, data: { phone: params.phone?.toString().trim() || null } });
+
+    // --- Champs du compte joueur (User global — même mouvement que phone historiquement) ---
+    const userData: Record<string, unknown> = {};
+    const touched: string[] = [];
+    const optional = (key: 'phone' | 'address' | 'postalCode' | 'city') => {
+      if (params[key] === undefined) return;
+      userData[key] = params[key]?.toString().trim() || null;
+      touched.push(key);
+    };
+    optional('phone'); optional('address'); optional('postalCode'); optional('city');
+    for (const key of ['firstName', 'lastName'] as const) {
+      if (params[key] === undefined) continue;
+      const v = params[key]?.toString().trim() ?? '';
+      if (!v) throw new Error('VALIDATION_ERROR'); // un compte garde toujours un nom (jamais null/vide)
+      userData[key] = v; touched.push(key);
     }
+    if (params.birthDate !== undefined) {
+      if (params.birthDate === null) userData.birthDate = null;
+      else {
+        const s = String(params.birthDate);
+        const parsed = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s) : null;
+        if (!parsed || isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== s) throw new Error('VALIDATION_ERROR');
+        userData.birthDate = parsed;
+      }
+      touched.push('birthDate');
+    }
+    if (params.sex !== undefined) {
+      if (params.sex !== null && params.sex !== 'MALE' && params.sex !== 'FEMALE') throw new Error('VALIDATION_ERROR');
+      userData.sex = params.sex; touched.push('sex');
+    }
+    if (touched.length > 0) {
+      await prisma.user.update({ where: { id: m.userId }, data: userData });
+      // Traçage : le journal de notes sert d'audit (best-effort, jamais bloquant).
+      if (actorUserId) {
+        const labels = touched.map((k) => ClubService.USER_FIELD_LABELS[k]).join(', ');
+        await prisma.memberNote.create({
+          data: { clubId, userId: m.userId, authorId: actorUserId, body: `✎ Profil modifié : ${labels}` },
+        }).catch((e) => console.error('[members] note de traçage échouée:', e));
+      }
+    }
+
     return prisma.clubMembership.update({
       where: { id: membershipId },
       data: {

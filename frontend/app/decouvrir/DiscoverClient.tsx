@@ -186,6 +186,7 @@ export function DiscoverClient() {
           <div style={{ padding: '0 18px' }}>
             <LocationSearchPill value={locInput} onChange={setLocInput} onNearMe={locateMe}
               nearActive={!!coords} locating={geoState === 'locating'}
+              onClear={() => { setLocInput(''); setCoords(null); setGeoState('idle'); }}
               extra={myClubsChipVisible && (
                 <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
                   aria-label="Mes clubs" title="Mes clubs" style={{

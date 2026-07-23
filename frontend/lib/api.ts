@@ -1558,6 +1558,18 @@ export interface MemberHistoryReservation {
   sportKey: string | null;
   isOrganizer: boolean;
   attributedAmount: string;
+  dueAmount: string;
+  participants: Array<{ userId: string; firstName: string; lastName: string; isOrganizer: boolean }>;
+  match: { winningTeam: number | null; myTeam: number | null; sets: [number, number][]; competitive: boolean } | null;
+}
+
+// Entrée fusionnée de l'agenda à venir (résa/tournoi/event/cours), tri asc, cap 5.
+export interface MemberUpcomingEntry {
+  kind: 'reservation' | 'tournament' | 'event' | 'lesson';
+  id: string;
+  title: string;
+  startTime: string;
+  status: string | null;
 }
 
 export interface MemberHistory {
@@ -1566,6 +1578,12 @@ export interface MemberHistory {
     phone: string | null; avatarUrl: string | null;
     isSubscriber: boolean; membershipNo: string | null;
     status: 'ACTIVE' | 'BLOCKED'; watch: boolean; hasActivePackage: boolean; since: string;
+    membershipId: string;
+    birthDate: string | null; sex: Sex | null;
+    address: string | null; postalCode: string | null; city: string | null;
+    staffRole: 'OWNER' | 'ADMIN' | 'STAFF' | null;
+    isCoach: boolean; isReferee: boolean;
+    note: string | null;
   };
   reservations: MemberHistoryReservation[];
   counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number; noShowCharged: number };
@@ -1596,6 +1614,11 @@ export interface MemberHistory {
     firstVisitAt: string | null; lastVisitAt: string | null; daysSinceLastVisit: number | null;
     tenureDays: number; playsPerMonth: number; cancellationRate: number; atRisk: boolean;
   };
+  upcoming: MemberUpcomingEntry[];
+  subscription: {
+    id: string; planId: string; planName: string; expiresAt: string;
+    monthlyPriceSnapshot: string; sportKeys: string[];
+  } | null;
 }
 
 export interface PlayerMembership {
@@ -1607,7 +1630,12 @@ export interface PlayerMembership {
 }
 
 export type CreateMemberBody = { firstName: string; lastName: string; email: string; phone?: string; membershipNo?: string };
-export type UpdateMemberBody = Partial<{ isSubscriber: boolean; membershipNo: string | null; status: 'ACTIVE' | 'BLOCKED'; note: string | null; phone: string | null }>;
+export type UpdateMemberBody = Partial<{
+  isSubscriber: boolean; membershipNo: string | null; status: 'ACTIVE' | 'BLOCKED'; note: string | null;
+  phone: string | null; firstName: string; lastName: string;
+  birthDate: string | null; sex: Sex | null;
+  address: string | null; postalCode: string | null; city: string | null;
+}>;
 
 // Plages d'heures creuses par jour (weekday Luxon 1=lundi..7=dimanche), plusieurs
 // plages possibles par jour, précision à la minute. Hors plage (ou jour absent) = heures pleines.
@@ -2517,6 +2545,9 @@ export interface MyProfile {
   acceptsDirectMessages: boolean;
   preferredSport: { id: string; key: string; name: string } | null;
   legal?: { cgu: LegalDocStatus; privacy: LegalDocStatus; cgvSaas?: LegalDocStatus };
+  address: string | null;
+  postalCode: string | null;
+  city: string | null;
 }
 
 export interface LegalDocStatus { accepted: string | null; current: string }

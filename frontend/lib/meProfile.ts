@@ -25,6 +25,9 @@ export interface UpdateProfileBody {
   birthDate: string | null;
   preferredSportId: string | null;
   locale: string | null;
+  address: string | null;
+  postalCode: string | null;
+  city: string | null;
   showInLeaderboard: boolean;
   autoMatchProposals: boolean;
   acceptsFriendRequests: boolean;
@@ -50,6 +53,9 @@ export function buildProfileBody(p: MyProfile): UpdateProfileBody {
     birthDate: p.birthDate ? p.birthDate.slice(0, 10) : null,
     preferredSportId: p.preferredSport?.id ?? null,
     locale: p.locale ?? 'fr',
+    address: p.address?.trim() || null,
+    postalCode: p.postalCode?.trim() || null,
+    city: p.city?.trim() || null,
     showInLeaderboard: p.showInLeaderboard,
     autoMatchProposals: p.autoMatchProposals,
     acceptsFriendRequests: p.acceptsFriendRequests,

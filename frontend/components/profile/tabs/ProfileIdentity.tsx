@@ -38,6 +38,15 @@ export function ProfileIdentity({ profile, set, sports, licence, clubName, onLic
       <section style={card} aria-label="Informations">
         <CardKicker>Informations</CardKicker>
         <ProfileInput label="Téléphone" value={profile.phone ?? ''} onChange={(v) => set('phone', v)} placeholder="06 09 03 26 35" />
+        <ProfileInput label="Adresse" value={profile.address ?? ''} onChange={(v) => set('address', v)} placeholder="12 rue des Sports" />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: '0 0 34%', minWidth: 0 }}>
+            <ProfileInput label="Code postal" value={profile.postalCode ?? ''} onChange={(v) => set('postalCode', v)} placeholder="31000" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ProfileInput label="Ville" value={profile.city ?? ''} onChange={(v) => set('city', v)} placeholder="Toulouse" />
+          </div>
+        </div>
         <FieldShell label="Date de naissance">
           <DateField
             value={profile.birthDate ? profile.birthDate.slice(0, 10) : ''}

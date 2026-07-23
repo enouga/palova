@@ -312,6 +312,17 @@ describe('Page Mon profil — onglets + SaveBar', () => {
     expect(screen.getByLabelText('Téléphone')).toHaveValue('0609032635');
   });
 
+  it("l'onglet Identité expose Adresse / Code postal / Ville et les enregistre", async () => {
+    wrap();
+    fireEvent.change(await screen.findByLabelText('Adresse'), { target: { value: '1 av. du Club' } });
+    fireEvent.change(screen.getByLabelText('Code postal'), { target: { value: '31000' } });
+    fireEvent.change(screen.getByLabelText('Ville'), { target: { value: 'Toulouse' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(api.updateMyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '1 av. du Club', postalCode: '31000', city: 'Toulouse' }), 'abc',
+    ));
+  });
+
   it('l’onglet Niveau affiche le bilan V/D du club', async () => {
     onClub();
     api.getMyRating.mockResolvedValue({ calibrated: true, level: 5.2, tier: 'Intermédiaire', isProvisional: false, reliability: 80 });

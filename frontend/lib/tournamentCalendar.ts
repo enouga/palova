@@ -2,7 +2,21 @@ import { NationalTournament, TournamentGender } from './api';
 import { CATEGORY_ORDER } from './events';
 
 // ── État de filtre ────────────────────────────────────────────────────────────
-export type DatePreset = 'weekend' | 'thisMonth' | 'days30' | 'months3';
+export type DatePreset = 'today' | 'thisWeek' | 'thisMonth';
+
+/** Sous-ensemble de `CalendarFilterState` utile au calcul de fenêtre — permet à
+ *  `lib/discover.ts` (Parties) de réutiliser `resolveDateWindow` sans porter les champs
+ *  propres aux tournois (deptCodes/categories/genders/nearMe). `CalendarFilterState` est
+ *  un sur-ensemble structurel : tous les appels existants restent valides tels quels. */
+export type DateFilterState = { datePreset: DatePreset | null; from: string | null; to: string | null };
+
+/** Puces de préréglage partagées par le sélecteur « Quand » de Tournois (FacetPanel) et
+ *  de Parties (DiscoverMatches) — un seul jeu de libellés, jamais deux copies. */
+export const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: 'today', label: "Aujourd'hui" },
+  { key: 'thisWeek', label: 'Cette semaine' },
+  { key: 'thisMonth', label: 'Ce mois-ci' },
+];
 
 export interface CalendarFilterState {
   deptCodes: Set<string>;
@@ -32,7 +46,7 @@ function endOfLocalDay(ymd: string): Date {
 }
 
 /** Fenêtre [from, to] (to nullable = pas de borne haute). Plage custom prime sur le preset. */
-export function resolveDateWindow(state: CalendarFilterState, now: Date): { from: Date; to: Date | null } | null {
+export function resolveDateWindow(state: DateFilterState, now: Date): { from: Date; to: Date | null } | null {
   if (state.from || state.to) {
     return {
       from: state.from ? startOfLocalDay(state.from) : now,
@@ -40,27 +54,18 @@ export function resolveDateWindow(state: CalendarFilterState, now: Date): { from
     };
   }
   if (!state.datePreset) return null;
-  const day = 86_400_000;
   switch (state.datePreset) {
-    case 'days30':
-      return { from: now, to: new Date(now.getTime() + 30 * day) };
-    case 'months3': {
-      const to = new Date(now); to.setMonth(to.getMonth() + 3);
-      return { from: now, to };
+    case 'today':
+      return { from: now, to: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999) };
+    case 'thisWeek': {
+      const dow = now.getDay(); // 0=dim … 6=sam
+      const daysToSunday = dow === 0 ? 0 : 7 - dow;
+      const sun = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToSunday, 23, 59, 59, 999);
+      return { from: now, to: sun };
     }
     case 'thisMonth': {
       const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); // dernier jour du mois
       return { from: now, to };
-    }
-    case 'weekend': {
-      const dow = now.getDay(); // 0=dim … 6=sam
-      if (dow === 0) { // dimanche en cours
-        return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0), to: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999) };
-      }
-      const daysToSat = 6 - dow; // sam=0 … lun=5
-      const sat = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToSat, 0, 0, 0, 0);
-      const sun = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() + 1, 23, 59, 59, 999);
-      return { from: sat, to: sun };
     }
   }
 }

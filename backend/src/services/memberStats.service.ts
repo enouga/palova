@@ -28,6 +28,18 @@ export interface MemberHistoryReservation {
   sportKey: string | null;
   isOrganizer: boolean;
   attributedAmount: string;      // argent net (string décimale) attribué à ce joueur sur cette résa
+  dueAmount: string;             // part due par ce joueur sur cette résa (string décimale)
+  participants: Array<{ userId: string; firstName: string; lastName: string; isOrganizer: boolean }>;
+  match: { winningTeam: number | null; myTeam: number | null; sets: [number, number][]; competitive: boolean } | null;
+}
+
+/** Entrée fusionnée de l'agenda à venir (résa/tournoi/event/cours), tri asc, cap 5. */
+export interface MemberUpcomingEntry {
+  kind: 'reservation' | 'tournament' | 'event' | 'lesson';
+  id: string;
+  title: string;
+  startTime: string;
+  status: string | null; // CONFIRMED / WAITLISTED pour tournoi/event, null sinon
 }
 
 export interface MemberHistory {
@@ -39,6 +51,12 @@ export interface MemberHistory {
     watch: boolean;              // drapeau « à surveiller »
     hasActivePackage: boolean;   // a un carnet/porte-monnaie encore utilisable → chip « Carnet actif »
     since: string;               // ClubMembership.createdAt = date d'adhésion
+    membershipId: string;
+    birthDate: string | null; sex: 'MALE' | 'FEMALE' | null;
+    address: string | null; postalCode: string | null; city: string | null;
+    staffRole: 'OWNER' | 'ADMIN' | 'STAFF' | null;
+    isCoach: boolean; isReferee: boolean;
+    note: string | null;
   };
   reservations: MemberHistoryReservation[];
   counts: { total: number; confirmed: number; cancelled: number; lateCancelled: number; noShow: number; upcoming: number; noShowCharged: number };
@@ -76,6 +94,11 @@ export interface MemberHistory {
     cancellationRate: number;    // 0..1
     atRisk: boolean;
   };
+  upcoming: MemberUpcomingEntry[];
+  subscription: {
+    id: string; planId: string; planName: string; expiresAt: string;
+    monthlyPriceSnapshot: string; sportKeys: string[];
+  } | null;
 }
 
 export class MemberStatsService {
@@ -94,8 +117,14 @@ export class MemberStatsService {
     const membership = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId, clubId } },
       select: {
-        createdAt: true, isSubscriber: true, membershipNo: true, status: true, watch: true,
-        user: { select: { firstName: true, lastName: true, email: true, phone: true, avatarUrl: true, isSuperAdmin: true } },
+        id: true, createdAt: true, isSubscriber: true, membershipNo: true, status: true, watch: true,
+        isReferee: true, note: true,
+        user: {
+          select: {
+            firstName: true, lastName: true, email: true, phone: true, avatarUrl: true, isSuperAdmin: true,
+            birthDate: true, sex: true, address: true, postalCode: true, city: true,
+          },
+        },
       },
     });
     // Le compte super-admin plateforme n'a pas de fiche joueur côté club, même par accès direct.
@@ -116,11 +145,27 @@ export class MemberStatsService {
             clubSport: { select: { sport: { select: { key: true } } } },
           },
         },
-        participants: { select: { id: true, userId: true, share: true, isOrganizer: true } },
+        participants: {
+          select: {
+            id: true, userId: true, share: true, isOrganizer: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
         payments: {
           select: {
             amount: true, method: true, participantId: true, createdAt: true, noShow: true,
             refunds: { select: { amount: true, createdAt: true } },
+          },
+        },
+        matches: {
+          // Un résultat définitif seulement (comme le calcul win/loss/niveau plus bas, ~ligne 351) :
+          // PENDING = score auto-déclaré non encore confirmé par les 4 joueurs, DISPUTED = contesté.
+          where: { status: 'CONFIRMED' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            winningTeam: true, sets: true, competitive: true,
+            players: { select: { userId: true, team: true } },
           },
         },
       },
@@ -206,21 +251,84 @@ export class MemberStatsService {
         if (lateCancel) lateCancelled++;
       }
 
+      const matchRow = r.matches[0] ?? null;
+      const match = matchRow ? {
+        winningTeam: matchRow.winningTeam,
+        myTeam: matchRow.players.find((pl) => pl.userId === userId)?.team ?? null,
+        sets: matchRow.sets as unknown as [number, number][],
+        competitive: matchRow.competitive,
+      } : null;
+
       return {
         id: r.id, status: r.status, type: r.type,
         startTime: r.startTime.toISOString(), endTime: r.endTime.toISOString(),
         cancelledAt: r.cancelledAt ? r.cancelledAt.toISOString() : null, lateCancel,
         resourceName: r.resource.name, sportKey, isOrganizer,
         attributedAmount: euros(attrCents),
+        dueAmount: euros(myDue),
+        participants: r.participants.map((p) => ({
+          userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, isOrganizer: p.isOrganizer,
+        })),
+        match,
       };
     });
 
-    // --- Prépayé (carnets / porte-monnaie) ---
-    const packages = await prisma.memberPackage.findMany({
-      where: { clubId, userId },
-      orderBy: { purchasedAt: 'desc' },
-      include: { template: { select: { name: true } } },
-    });
+    // --- Prépayé + à venir (résas futures + tournois + events + cours) + abonnement + rôle/facettes
+    // (fiche 360) : aucune de ces requêtes ne dépend d'une autre → un seul aller-retour DB parallèle.
+    const [packages, tRegs, eRegs, lessonsByLesson, seriesEnrollments, subscription, staff, coachRow] = await Promise.all([
+      prisma.memberPackage.findMany({
+        where: { clubId, userId },
+        orderBy: { purchasedAt: 'desc' },
+        include: { template: { select: { name: true } } },
+      }),
+      prisma.tournamentRegistration.findMany({
+        where: {
+          OR: [{ captainUserId: userId }, { partnerUserId: userId }],
+          status: { not: 'CANCELLED' },
+          tournament: { clubId, startTime: { gt: now } },
+        },
+        select: { status: true, tournament: { select: { id: true, name: true, startTime: true } } },
+      }),
+      prisma.eventRegistration.findMany({
+        where: { userId, status: { not: 'CANCELLED' }, event: { clubId, startTime: { gt: now } } },
+        select: { status: true, event: { select: { id: true, name: true, startTime: true } } },
+      }),
+      // Inscription à une séance unique (cas simple, lessonId non-null — explicite pour documenter
+      // que la branche « série » ci-dessous est traitée séparément, cf. commentaire suivant).
+      prisma.lessonEnrollment.findMany({
+        where: {
+          userId, status: { not: 'CANCELLED' }, lessonId: { not: null },
+          lesson: { clubId, reservation: { startTime: { gt: now } } },
+        },
+        select: {
+          lesson: {
+            select: { id: true, reservation: { select: { startTime: true, resource: { select: { name: true } } } } },
+          },
+        },
+      }),
+      // Inscription à une SÉRIE de cours récurrente : LessonEnrollment.lessonId est nullable
+      // (lessonId: null, seriesId renseigné) — filtrer via la relation `lesson` (nullable) ferait un
+      // inner join implicite et ferait disparaître ces lignes SANS erreur (cf. lesson.service.ts
+      // ::listUserEnrollments, qui gère déjà ce cas pour un besoin différent : lister TOUTES les
+      // occurrences futures). Ici on ne veut que les seriesId concernés ; la prochaine occurrence de
+      // chacun est résolue après ce Promise.all (dépend de son résultat).
+      prisma.lessonEnrollment.findMany({
+        where: { userId, status: { not: 'CANCELLED' }, seriesId: { not: null } },
+        select: { seriesId: true },
+      }),
+      prisma.subscription.findFirst({
+        where: { clubId, userId, status: 'ACTIVE', expiresAt: { gt: now } },
+        orderBy: { expiresAt: 'desc' },
+        select: {
+          id: true, planId: true, expiresAt: true, monthlyPriceSnapshot: true, sportKeys: true,
+          plan: { select: { name: true } },
+        },
+      }),
+      prisma.clubMember.findUnique({ where: { userId_clubId: { userId, clubId } }, select: { role: true } }),
+      // isActive: true — un profil coach désactivé (soft delete) ne doit plus valoir la facette « coach ».
+      prisma.coach.findFirst({ where: { clubId, userId, isActive: true }, select: { id: true } }),
+    ]);
+
     const pkgName = new Map(packages.map((p) => [p.id, p.template.name]));
     const isUsable = (p: { creditsRemaining: number | null; amountRemaining: unknown; expiresAt: Date | null }) =>
       (p.expiresAt == null || p.expiresAt.getTime() > now.getTime())
@@ -233,6 +341,49 @@ export class MemberStatsService {
           select: { createdAt: true, method: true, amount: true, sourcePackageId: true },
         })
       : [];
+
+    // Prochaine occurrence (une seule, pas tout le futur de la série) par seriesId distinct trouvé
+    // ci-dessus — requêtes en parallèle, mais seulement s'il y a au moins un élève inscrit à une série
+    // (garde-fou : pas d'aller-retour DB supplémentaire pour le cas le plus fréquent, aucune série).
+    const seriesIds = [...new Set(
+      seriesEnrollments.map((e) => e.seriesId).filter((id): id is string => id != null),
+    )];
+    const seriesNextLessons = seriesIds.length > 0
+      ? (await Promise.all(seriesIds.map((seriesId) =>
+          prisma.lesson.findMany({
+            where: { seriesId, clubId, reservation: { status: { not: 'CANCELLED' }, startTime: { gt: now } } },
+            select: { id: true, reservation: { select: { startTime: true, resource: { select: { name: true } } } } },
+            orderBy: { reservation: { startTime: 'asc' } },
+            take: 1,
+          }),
+        ))).flat()
+      : [];
+
+    const upcomingEntries: MemberUpcomingEntry[] = [
+      ...rows
+        .filter((r) => r.status === 'CONFIRMED' && new Date(r.startTime).getTime() > now.getTime())
+        .map((r) => ({ kind: 'reservation' as const, id: r.id, title: r.resourceName, startTime: r.startTime, status: null })),
+      ...tRegs.map((t) => ({
+        kind: 'tournament' as const, id: t.tournament.id, title: t.tournament.name,
+        startTime: t.tournament.startTime.toISOString(), status: t.status,
+      })),
+      ...eRegs.map((e) => ({
+        kind: 'event' as const, id: e.event.id, title: e.event.name,
+        startTime: e.event.startTime.toISOString(), status: e.status,
+      })),
+      ...lessonsByLesson
+        .filter((l) => l.lesson?.reservation)
+        .map((l) => ({
+          kind: 'lesson' as const, id: l.lesson!.id,
+          title: `Cours · ${l.lesson!.reservation.resource.name}`,
+          startTime: l.lesson!.reservation.startTime.toISOString(), status: null,
+        })),
+      ...seriesNextLessons.map((l) => ({
+        kind: 'lesson' as const, id: l.id,
+        title: `Cours · ${l.reservation.resource.name}`,
+        startTime: l.reservation.startTime.toISOString(), status: null,
+      })),
+    ].sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 5);
 
     // --- Niveau & matchs (au club, confirmés) ---
     const sportKey = await resolvePreferredSportKey(userId);
@@ -300,6 +451,12 @@ export class MemberStatsService {
         isSubscriber: membership.isSubscriber, membershipNo: membership.membershipNo,
         status: membership.status, watch: membership.watch, hasActivePackage,
         since: membership.createdAt.toISOString(),
+        membershipId: membership.id,
+        birthDate: membership.user.birthDate ? membership.user.birthDate.toISOString().slice(0, 10) : null,
+        sex: membership.user.sex,
+        address: membership.user.address, postalCode: membership.user.postalCode, city: membership.user.city,
+        staffRole: staff?.role ?? null, isCoach: coachRow != null, isReferee: membership.isReferee,
+        note: membership.note,
       },
       reservations: rows,
       counts: { total: reservations.length, confirmed, cancelled, lateCancelled, noShow, upcoming, noShowCharged },
@@ -342,6 +499,13 @@ export class MemberStatsService {
         lastVisitAt: lastVisitMs == null ? null : new Date(lastVisitMs).toISOString(),
         daysSinceLastVisit, tenureDays, playsPerMonth, cancellationRate, atRisk,
       },
+      upcoming: upcomingEntries,
+      subscription: subscription ? {
+        id: subscription.id, planId: subscription.planId, planName: subscription.plan?.name ?? '',
+        expiresAt: subscription.expiresAt.toISOString(),
+        monthlyPriceSnapshot: subscription.monthlyPriceSnapshot.toString(),
+        sportKeys: subscription.sportKeys,
+      } : null,
     };
   }
 }

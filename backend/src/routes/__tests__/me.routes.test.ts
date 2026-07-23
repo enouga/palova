@@ -135,6 +135,17 @@ describe('PATCH /api/me', () => {
     const res = await request(app).patch('/api/me').send({ acceptsDirectMessages: 'non' }).set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(400);
   });
+
+  it('PATCH /api/me accepte adresse/CP/ville (trim, vide → null)', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...PROFILE, address: '12 rue des Sports', postalCode: '31000', city: null } as any);
+    const res = await request(app).patch('/api/me')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ address: ' 12 rue des Sports ', postalCode: '31000', city: '' });
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ address: '12 rue des Sports', postalCode: '31000', city: null }),
+    }));
+  });
 });
 
 describe('POST /api/me/avatar', () => {

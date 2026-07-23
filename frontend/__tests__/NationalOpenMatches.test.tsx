@@ -69,4 +69,26 @@ describe('NationalOpenMatches', () => {
     const { container } = wrap([]);
     expect(container.firstChild).toBeNull();
   });
+
+  it('affiche le type sur la carte : « Pour de vrai » par défaut, « Pour le fun » si competitive=false', () => {
+    wrap([makeMatch({ competitive: true })]);
+    expect(screen.getByText('Pour de vrai')).toBeInTheDocument();
+    wrap([makeMatch({ id: 'm2', competitive: false })]);
+    expect(screen.getByText('Pour le fun')).toBeInTheDocument();
+  });
+
+  it('affiche le genre sur la carte (Mixte / Féminine)', () => {
+    wrap([makeMatch({ gender: 'MIXED' })]);
+    expect(screen.getByText('Mixte')).toBeInTheDocument();
+  });
+
+  it('affiche le compteur au singulier pour 1 résultat', () => {
+    wrap([makeMatch()]);
+    expect(screen.getByText('1 partie')).toBeInTheDocument();
+  });
+
+  it('affiche le compteur au pluriel pour plusieurs résultats', () => {
+    wrap([makeMatch(), makeMatch({ id: 'm2' })]);
+    expect(screen.getByText('2 parties')).toBeInTheDocument();
+  });
 });

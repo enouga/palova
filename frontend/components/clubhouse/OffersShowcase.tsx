@@ -1,5 +1,5 @@
 'use client';
-import { CSSProperties, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { api, assetUrl, ClubDetail, PublicOffers, PublicPlan, PublicPackageTemplate } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -8,8 +8,9 @@ import { sportTag, clubIsMultiSport } from '@/lib/sportBadge';
 import { offerTint, sportOfferTint, sportKeyColor, sportGroupLabel, groupOffersBySport } from '@/lib/adminOffers';
 import { Btn } from '@/components/ui/atoms';
 import { SectionHeader, cardStyle } from '@/components/clubhouse/SectionHeader';
-import { inkOn } from '@/lib/theme';
 import { CgvGate } from '@/components/CgvGate';
+import { useScrollRail } from '@/lib/useScrollRail';
+import { RailArrows } from '@/components/ui/RailArrows';
 
 const StripePaymentStep = dynamic(() => import('@/components/StripePaymentStep'), { ssr: false });
 
@@ -66,22 +67,7 @@ export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
   const [target, setTarget] = useState<Target | null>(null);
   const [stage, setStage] = useState<Stage>('details');
 
-  // Affordance de défilement : on affiche un dégradé + un chevron à gauche/droite seulement
-  // quand il reste des cartes cachées de ce côté (signale clairement « il y a plus à voir »).
-  const railRef = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    const update = () => {
-      const max = el.scrollWidth - el.clientWidth;
-      setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft < max - 4 });
-    };
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => { el.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
-  }, [offers.plans.length, offers.packages.length]);
+  const { railRef, edges, scrollByPage } = useScrollRail([offers.plans.length, offers.packages.length]);
 
   // Les abonnements sont TOUJOURS affichés, même si le joueur est déjà abonné (choix produit :
   // sur un club multi-sport, un abonné padel doit pouvoir voir/souscrire l'abonnement squash).
@@ -110,17 +96,7 @@ export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
     ? groupOffersBySport(cardEntries, club?.clubSports ?? [])
     : [{ key: null as string | null, items: cardEntries }];
 
-  const scrollByPage = (dir: number) => railRef.current?.scrollBy({ left: dir * railRef.current.clientWidth * 0.8, behavior: 'smooth' });
-  const navBtn = (side: 'left' | 'right'): CSSProperties => ({
-    position: 'absolute', [side]: 8, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38,
-    borderRadius: 99, border: `2px solid ${th.surface}`, background: th.accent, color: inkOn(th.accent),
-    boxShadow: '0 3px 12px rgba(0,0,0,0.28)', fontSize: 20, fontWeight: 800, lineHeight: 1, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, fontFamily: th.fontUI,
-  });
-  const fade = (side: 'left' | 'right'): CSSProperties => ({
-    position: 'absolute', [side]: 0, top: 0, bottom: 14, width: 48, pointerEvents: 'none',
-    background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${th.bg}, transparent)`,
-  });
+  const count = `${cardEntries.length} offre${cardEntries.length > 1 ? 's' : ''}`;
 
   // Carte compacte du rail : prix en chiffre vedette, bénéfices en 2 lignes, CTA fin.
   // sportTint colore le bandeau du haut (couleur de sport ; couleur de type si le club n'a qu'un
@@ -169,7 +145,7 @@ export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
 
   return (
     <section>
-      <SectionHeader title="Abonnements & offres" />
+      <SectionHeader title="Abonnements & offres" count={count} />
       <style>{`.of-card{transition:transform .18s ease}.of-card:hover{transform:translateY(-3px)}`}</style>
       {/* Un seul rail horizontal : chaque sport est un bloc vertical — étiquette EN HAUT + sa
           rangée de cartes dessous —, les blocs posés côte à côte dans le rail qui défile. Le sport
@@ -199,10 +175,7 @@ export function OffersShowcase({ offers, token, onAuthPrompt, onPurchased }: {
             </div>
           ))}
         </div>
-        {edges.left && <span aria-hidden style={fade('left')} />}
-        {edges.right && <span aria-hidden style={fade('right')} />}
-        {edges.left && <button type="button" aria-label="Offres précédentes" onClick={() => scrollByPage(-1)} style={navBtn('left')}>‹</button>}
-        {edges.right && <button type="button" aria-label="Voir plus d’offres" onClick={() => scrollByPage(1)} style={navBtn('right')}>›</button>}
+        <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Offres précédentes" nextLabel="Voir plus d’offres" fadeBottom={14} />
       </div>
 
       {target && (
