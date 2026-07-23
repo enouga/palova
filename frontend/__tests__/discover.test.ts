@@ -1,4 +1,4 @@
-import { discoverWindow, filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
+import { filterNationalMatches, parseLocationQuery, sortMatchesByDistance, distanceLabel } from '@/lib/discover';
 import type { DiscoverMatchFilter } from '@/lib/discover';
 import type { NationalOpenMatch, NationalOpenMatchClub } from '@/lib/api';
 
@@ -41,33 +41,8 @@ function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
 
 const DAY = 86_400_000;
 
-describe('discoverWindow', () => {
-  it("'all' → pas de fenêtre", () => {
-    expect(discoverWindow('all', NOW)).toBeNull();
-  });
-
-  it("'today' → from=now, to=fin de journée locale", () => {
-    const win = discoverWindow('today', NOW)!;
-    expect(win.from).toEqual(NOW);
-    expect(win.to).toEqual(new Date(2026, 6, 8, 23, 59, 59, 999));
-  });
-
-  it("'weekend' un mercredi → samedi 11 00:00 → dimanche 12 23:59:59.999", () => {
-    const win = discoverWindow('weekend', NOW)!;
-    expect(win.from).toEqual(new Date(2026, 6, 11, 0, 0, 0, 0));
-    expect(win.to).toEqual(new Date(2026, 6, 12, 23, 59, 59, 999));
-  });
-
-  it("'weekend' un dimanche en cours → ce jour seul", () => {
-    const sunday = new Date(2026, 6, 12, 10, 0, 0);
-    const win = discoverWindow('weekend', sunday)!;
-    expect(win.from).toEqual(new Date(2026, 6, 12, 0, 0, 0, 0));
-    expect(win.to).toEqual(new Date(2026, 6, 12, 23, 59, 59, 999));
-  });
-});
-
-describe('filterNationalMatches — période', () => {
-  const base: DiscoverMatchFilter = { period: 'today', location: { city: null, deptCodes: [] }, myLevel: null };
+describe('filterNationalMatches — date', () => {
+  const base: DiscoverMatchFilter = { datePreset: 'today', dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: null };
 
   it('match dans 2 h → gardé en today', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 2 * 3_600_000).toISOString() });
@@ -79,19 +54,28 @@ describe('filterNationalMatches — période', () => {
     expect(filterNationalMatches([m], base, NOW)).toEqual([]);
   });
 
-  it('match dans 5 jours → exclu en weekend', () => {
+  it('match dans 5 jours (lundi suivant) → exclu en thisWeek (au-delà de dimanche)', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 5 * DAY).toISOString() });
-    expect(filterNationalMatches([m], { ...base, period: 'weekend' }, NOW)).toEqual([]);
+    expect(filterNationalMatches([m], { ...base, datePreset: 'thisWeek' }, NOW)).toEqual([]);
   });
 
-  it('match dans 5 jours → gardé en all', () => {
+  it('match dans 5 jours → gardé sans filtre de date (datePreset null)', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 5 * DAY).toISOString() });
-    expect(filterNationalMatches([m], { ...base, period: 'all' }, NOW)).toEqual([m]);
+    expect(filterNationalMatches([m], { ...base, datePreset: null }, NOW)).toEqual([m]);
+  });
+
+  it('plage custom from/to prime sur le preset', () => {
+    const m = makeMatch({ startTime: new Date(NOW.getTime() + 20 * DAY).toISOString() });
+    // datePreset 'today' exclurait ce match, mais une plage custom couvrant le jour prime.
+    const from = new Date(NOW.getTime() + 20 * DAY);
+    const to = new Date(NOW.getTime() + 21 * DAY);
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(filterNationalMatches([m], { ...base, dateFrom: ymd(from), dateTo: ymd(to) }, NOW)).toEqual([m]);
   });
 });
 
 describe('filterNationalMatches — ville', () => {
-  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: null };
 
   it("insensible accents/casse : 'sete' trouve « Sète »", () => {
     const match = makeMatch({ club: makeClub({ city: 'Sète' }) });
@@ -123,20 +107,20 @@ describe('filterNationalMatches — ville', () => {
     const inDept  = m({ id: 'a', departmentCode: '31' });
     const outDept = m({ id: 'b', departmentCode: '75' });
     const noDept  = m({ id: 'c' }); // departmentCode null → exclu quand filtre actif
-    const out = filterNationalMatches([inDept, outDept, noDept], { period: 'all', location: { city: null, deptCodes: ['31'] }, myLevel: null }, NOW);
+    const out = filterNationalMatches([inDept, outDept, noDept], { ...base, location: { city: null, deptCodes: ['31'] } }, NOW);
     expect(out.map((x) => x.id)).toEqual(['a']);
   });
 
   it('city texte matche aussi le nom du département', () => {
     const byDeptName = m({ id: 'a', city: 'Muret', department: 'Haute-Garonne' });
     const other      = m({ id: 'b', city: 'Paris', department: 'Paris' });
-    const out = filterNationalMatches([byDeptName, other], { period: 'all', location: { city: 'haute-garonne', deptCodes: [] }, myLevel: null }, NOW);
+    const out = filterNationalMatches([byDeptName, other], { ...base, location: { city: 'haute-garonne', deptCodes: [] } }, NOW);
     expect(out.map((x) => x.id)).toEqual(['a']);
   });
 });
 
 describe('filterNationalMatches — niveau', () => {
-  const base: DiscoverMatchFilter = { period: 'all', location: { city: null, deptCodes: [] }, myLevel: 6.2 };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: 6.2 };
 
   it('myLevel 6.2 → fourchette [5,7] : garde une partie 4–6 (chevauchement)', () => {
     const m = makeMatch({ targetLevelMin: 4, targetLevelMax: 6 });

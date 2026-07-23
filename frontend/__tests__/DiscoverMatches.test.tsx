@@ -63,7 +63,7 @@ beforeEach(() => {
 });
 
 describe('DiscoverMatches', () => {
-  it('rend 1 carte par partie, défaut « 14 jours » = période all', () => {
+  it('rend 1 carte par partie, aucun filtre de date par défaut', () => {
     wrap({ matches: [makeMatch({ id: 'm1' }), makeMatch({ id: 'm2', club: { ...makeMatch().club, name: 'Autre club' } })] });
     expect(screen.getByText('Padel Arena Paris')).toBeInTheDocument();
     expect(screen.getByText('Autre club')).toBeInTheDocument();
@@ -198,6 +198,11 @@ describe('DiscoverMatches', () => {
     wrap({ matches: many, onCount });
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(9));
     expect(screen.getAllByRole('link')).toHaveLength(9);
+  });
+
+  it('affiche le compteur de résultats', async () => {
+    wrap({ matches: [makeMatch({ id: 'm1' }), makeMatch({ id: 'm2', club: { ...makeMatch().club, name: 'Autre club' } })] });
+    expect(await screen.findByText('2 parties')).toBeInTheDocument();
   });
 
   it('matches null → Chargement…', () => {

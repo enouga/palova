@@ -22,14 +22,17 @@ export function listRowStyle(th: Theme): React.CSSProperties {
   };
 }
 
-/** Titre de section éditorial : display 21px + action optionnelle à droite. */
-export function SectionHeader({ title, action }: { title: string; action?: { label: string; href: string } }) {
+/** Titre de section éditorial : display 21px + compteur optionnel + action optionnelle à droite. */
+export function SectionHeader({ title, action, count }: { title: string; action?: { label: string; href: string }; count?: string }) {
   const { th } = useTheme();
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 13 }}>
       <h2 style={{ margin: 0, fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 21, letterSpacing: -0.3, color: th.text }}>{title}</h2>
+      {count && (
+        <span style={{ marginLeft: 'auto', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, whiteSpace: 'nowrap' }}>{count}</span>
+      )}
       {action && (
-        <Link href={action.href} style={{ marginLeft: 'auto', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.accent, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+        <Link href={action.href} style={{ marginLeft: count ? 0 : 'auto', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.accent, textDecoration: 'none', whiteSpace: 'nowrap' }}>
           {action.label}
         </Link>
       )}

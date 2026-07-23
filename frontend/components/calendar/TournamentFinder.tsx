@@ -6,6 +6,8 @@ import { clubUrl } from '@/lib/clubUrl';
 import { ACCENTS } from '@/lib/theme';
 import { AgendaCard } from '@/components/agenda/AgendaCard';
 import { FacetPanel } from '@/components/calendar/FacetPanel';
+import { useScrollRail } from '@/lib/useScrollRail';
+import { RailArrows } from '@/components/ui/RailArrows';
 import { tournamentPlacesLabel } from '@/lib/clubhouse';
 import { setSpansMultipleSports } from '@/lib/sportBadge';
 import { fillRatio, formatDateTimeRange } from '@/lib/tournament';
@@ -18,8 +20,9 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 
 // Plafond d'affichage quand le calendrier est embarqué (page /decouvrir, `hideTitle`) : ce
 // n'est pas un flux exhaustif là-bas, contrairement à la page /tournois autonome (filtres +
-// « Effacer » restent le bon outil pour aller plus loin). Nombre pair pour la grille 2 colonnes.
-const MAX_VISIBLE = 10;
+// « Effacer » restent le bon outil pour aller plus loin). Étagère 2 lignes : ce plafond ne
+// limite plus le nombre de colonnes visibles, juste le total chargé dans l'étagère.
+const MAX_VISIBLE = 8;
 
 // Clés propres à writeUrl (préservées à la lecture, purgées puis réécrites — le reste de la
 // query string de la page hôte, ex. ?tab=, doit survivre intact).
@@ -185,13 +188,15 @@ export function TournamentFinder({
   // Notifie la page hôte du nombre de résultats affichés (ex. compteur d'onglet).
   useEffect(() => { if (visibleResults) onCount?.(visibleResults.length); }, [visibleResults?.length, onCount]);
 
+  const { railRef, edges, scrollByPage } = useScrollRail([visibleResults?.length ?? 0]);
+
   const clearFilters = () => setState((s) => ({ ...emptyCalendarState(), nearMe: s.nearMe }));
   const hasActiveFilters = state.deptCodes.size > 0 || state.categories.size > 0 || state.genders.size > 0 || state.datePreset != null || !!state.from || !!state.to;
 
   return (
     // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
     // (hideTitle), la section reprend sa hauteur naturelle (fini l'écran vide sans tournoi).
-    <div style={{ paddingBottom: 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
+    <div style={{ paddingBottom: hideTitle ? 0 : 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
       {!hideTitle && (
         <div style={{ padding: '22px 20px 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
@@ -215,51 +220,104 @@ export function TournamentFinder({
         />
       )}
 
-      {hideTitle && (
-        <style>{`.discover-tournaments-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:640px){.discover-tournaments-grid{grid-template-columns:1fr 1fr}}`}</style>
-      )}
-      <div
-        className={hideTitle ? 'discover-tournaments-grid' : undefined}
-        style={hideTitle ? { padding: '18px 20px 0', alignItems: 'start' } : { padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
-        {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
-        {visibleResults?.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '18px 0 6px', ...(hideTitle ? { gridColumn: '1 / -1' } : {}) }}>
-            <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
-              {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
+      {hideTitle ? (
+        <div style={{ padding: '18px 20px 0' }}>
+          {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
+          {visibleResults?.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+                {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
+              </div>
+              {hasActiveFilters && (
+                <button onClick={clearFilters} style={{
+                  marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
+                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
+                }}>
+                  Effacer les filtres
+                </button>
+              )}
             </div>
-            {hasActiveFilters && (
-              <button onClick={clearFilters} style={{
-                marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
-                fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
-              }}>
-                Effacer les filtres
-              </button>
-            )}
-          </div>
-        )}
-        {visibleResults?.map(({ tournament: t, distanceKm }) => {
-          const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
-          return (
-            <AgendaCard
-              key={t.id}
-              icon="trophy"
-              accent={ACCENTS.apricot}
-              tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
-              title={t.name}
-              subtitle={subtitle}
-              dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
-              deadline={t.registrationDeadline}
-              now={now}
-              ratio={fillRatio(t)}
-              places={tournamentPlacesLabel(t)}
-              extra={t.entryFee ? `${t.entryFee} €` : null}
-              sportLabel={showSport ? (t.sport?.name ?? null) : null}
-              onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
-            />
-          );
-        })}
-      </div>
+          )}
+          {visibleResults != null && visibleResults.length > 0 && (
+            <>
+              {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2
+                  vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
+                  (mobile compris), la 3e colonne démarre juste après et se révèle au
+                  défilement (même traitement que Prochains events / Clubs). */}
+              <style>{`.discover-tournaments-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
+              <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
+                {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
+              </div>
+              <div style={{ position: 'relative', margin: '0 -20px' }}>
+                <div ref={railRef} className="sp-scroll-x discover-tournaments-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+                  {visibleResults.map(({ tournament: t, distanceKm }) => {
+                    const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+                    return (
+                      <AgendaCard
+                        key={t.id}
+                        icon="trophy"
+                        accent={ACCENTS.apricot}
+                        tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+                        title={t.name}
+                        subtitle={subtitle}
+                        dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+                        deadline={t.registrationDeadline}
+                        now={now}
+                        ratio={fillRatio(t)}
+                        places={tournamentPlacesLabel(t)}
+                        extra={t.entryFee ? `${t.entryFee} €` : null}
+                        sportLabel={showSport ? (t.sport?.name ?? null) : null}
+                        onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+                      />
+                    );
+                  })}
+                </div>
+                <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Tournois précédents" nextLabel="Tournois suivants" fadeBottom={8} />
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {visibleResults === null && <div style={{ fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>}
+          {visibleResults?.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '18px 0 6px' }}>
+              <div style={{ fontFamily: th.fontUI, fontSize: 14, color: th.textMute }}>
+                {hasActiveFilters ? 'Aucun tournoi ne correspond à votre recherche.' : 'Aucun tournoi à venir pour le moment.'}
+              </div>
+              {hasActiveFilters && (
+                <button onClick={clearFilters} style={{
+                  marginTop: 12, border: 'none', cursor: 'pointer', borderRadius: 999, padding: '9px 18px',
+                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, background: th.accent, color: th.onAccent,
+                }}>
+                  Effacer les filtres
+                </button>
+              )}
+            </div>
+          )}
+          {visibleResults?.map(({ tournament: t, distanceKm }) => {
+            const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
+            return (
+              <AgendaCard
+                key={t.id}
+                icon="trophy"
+                accent={ACCENTS.apricot}
+                tag={`${t.category} · ${GENDER_LABEL[t.gender]}`}
+                title={t.name}
+                subtitle={subtitle}
+                dateLabel={formatDateTimeRange(t.startTime, t.endTime, t.club.timezone)}
+                deadline={t.registrationDeadline}
+                now={now}
+                ratio={fillRatio(t)}
+                places={tournamentPlacesLabel(t)}
+                extra={t.entryFee ? `${t.entryFee} €` : null}
+                sportLabel={showSport ? (t.sport?.name ?? null) : null}
+                onClick={() => { window.location.href = clubUrl(t.club.slug, `/tournois/${t.id}`); }}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

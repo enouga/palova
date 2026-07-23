@@ -17,10 +17,11 @@ const match = (id: string, slug: string) => ({
 });
 
 describe('HomeMatchesRail', () => {
-  it('affiche le rail (mes clubs d\'abord) + lien « Toutes »', async () => {
+  it('affiche le rail (mes clubs d\'abord), pas de lien « Toutes »', async () => {
     mocked.listNationalOpenMatches.mockResolvedValue([match('m1', 'autre'), match('m2', 'mien')] as never);
     render(<ThemeProvider><HomeMatchesRail myClubSlugs={new Set(['mien'])} /></ThemeProvider>);
-    await waitFor(() => expect(screen.getByRole('link', { name: /Toutes/ })).toHaveAttribute('href', '/decouvrir#parties'));
+    await waitFor(() => expect(document.querySelectorAll('a[href*="/parties/"]').length).toBe(2));
+    expect(screen.queryByRole('link', { name: /Toutes/ })).toBeNull();
     // tri : la carte de MON club sort en premier dans le DOM
     const links = Array.from(document.querySelectorAll('a[href*="/parties/"]')).map((a) => a.getAttribute('href'));
     expect(links[0]).toContain('/parties/m2');

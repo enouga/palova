@@ -1,15 +1,18 @@
 import type { NationalOpenMatch } from '@/lib/api';
-import { distanceKm } from '@/lib/tournamentCalendar';
+import { distanceKm, DatePreset, resolveDateWindow } from '@/lib/tournamentCalendar';
 import { norm } from '@/lib/members';
 import { rangesOverlap } from '@/lib/levelMatch';
 
-// Helpers purs de l'onglet « Parties » de /decouvrir : filtre période/ville/niveau
-// + tri par distance sur les parties ouvertes nationales (GET /api/open-matches/national).
-
-export type DiscoverPeriod = 'today' | 'weekend' | 'all';
+// Helpers purs de l'onglet « Parties » de /decouvrir : filtre date/ville/niveau + tri par
+// distance sur les parties ouvertes nationales (GET /api/open-matches/national). Le filtre de
+// date réutilise DatePreset/resolveDateWindow de tournamentCalendar.ts — même sélecteur
+// « Aujourd'hui / Cette semaine / Ce mois-ci / Dates » que la section Tournois, pas une
+// logique de fenêtre dupliquée.
 
 export interface DiscoverMatchFilter {
-  period: DiscoverPeriod;
+  datePreset: DatePreset | null;
+  dateFrom: string | null; // 'YYYY-MM-DD'
+  dateTo: string | null;   // 'YYYY-MM-DD'
   location: LocationQuery;
   myLevel: number | null;
 }
@@ -39,25 +42,6 @@ export interface RankedMatch {
 }
 
 /**
- * Fenêtre [from, to] d'un preset de période, ancrée sur `now` (heure locale du visiteur).
- * `'all'` = pas de fenêtre (null). Weekend : samedi 00:00 → dimanche 23:59:59.999, un
- * dimanche en cours = ce jour seul (même logique que `whenWindow` de lib/events.ts —
- * dupliquée ici pour éviter un cycle events ↔ tournamentCalendar ↔ discover).
- */
-export function discoverWindow(period: DiscoverPeriod, now: Date): { from: Date; to: Date } | null {
-  if (period === 'all') return null;
-  if (period === 'today') {
-    return { from: now, to: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999) };
-  }
-  const dow = now.getDay(); // 0=dim … 6=sam
-  const sat = dow === 0
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    : new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - dow));
-  const end = dow === 0 ? sat : new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() + 1);
-  return { from: sat, to: new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999) };
-}
-
-/**
  * Fourchette de niveau autour du niveau du joueur (arrondi ±1), clampée [1,8] (bornes du
  * système de niveau — miroir du clamp de `OpenMatches.tsx`), pour le filtre « à mon niveau ».
  */
@@ -67,7 +51,7 @@ function myLevelWindow(myLevel: number): [number, number] {
 }
 
 /**
- * Filtre les parties nationales par période + localisation + niveau (ET entre dimensions).
+ * Filtre les parties nationales par date + localisation + niveau (ET entre dimensions).
  * Localisation : soit une liste de codes département (`club.departmentCode`, comparaison
  * insensible casse, club sans code exclu), soit une recherche texte insensible accents/casse
  * (`norm`, substring) sur la ville OU le nom du département — les deux formes sont exclusives
@@ -81,7 +65,7 @@ export function filterNationalMatches(
   f: DiscoverMatchFilter,
   now: Date,
 ): NationalOpenMatch[] {
-  const win = discoverWindow(f.period, now);
+  const win = resolveDateWindow({ datePreset: f.datePreset, from: f.dateFrom, to: f.dateTo }, now);
   const { city, deptCodes } = f.location;
   const needle = city ? norm(city) : null;
   const levelWin = f.myLevel != null ? myLevelWindow(f.myLevel) : null;
@@ -96,7 +80,8 @@ export function filterNationalMatches(
   return matches.filter((m) => {
     if (win) {
       const t = new Date(m.startTime).getTime();
-      if (t < win.from.getTime() || t > win.to.getTime()) return false;
+      if (t < win.from.getTime()) return false;
+      if (win.to && t > win.to.getTime()) return false;
     }
     if (!locOk(m)) return false;
     if (levelWin && !rangesOverlap(m.targetLevelMin, m.targetLevelMax, levelWin[0], levelWin[1])) return false;

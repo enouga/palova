@@ -174,4 +174,9 @@ describe('OffersShowcase', () => {
     const multiStripe = screen.getByText('Carnet Multi').closest('.of-card')!.querySelector('[data-testid="offer-stripe"]')!;
     expect(multiStripe).toHaveStyle({ background: '#B9B3A8' });
   });
+
+  it('affiche le compteur de résultats (total des cartes, tous groupes confondus)', () => {
+    wrap({});
+    expect(screen.getByText('2 offres')).toBeInTheDocument();
+  });
 });
