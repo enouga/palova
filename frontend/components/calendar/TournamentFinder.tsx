@@ -240,7 +240,11 @@ export function TournamentFinder({
           )}
           {visibleResults != null && visibleResults.length > 0 && (
             <>
-              <style>{`.discover-tournaments-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:320px;gap:12px;align-items:start}`}</style>
+              {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2
+                  vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
+                  (mobile compris), la 3e colonne démarre juste après et se révèle au
+                  défilement (même traitement que Prochains events / Clubs). */}
+              <style>{`.discover-tournaments-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
               <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>
                 {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
               </div>
