@@ -307,4 +307,59 @@ describe('getMemberHistory — enrichissements fiche 360', () => {
     const h = await service.getMemberHistory('club-demo', 'u1');
     expect(h.subscription).toMatchObject({ id: 's1', planName: 'Padel illimité', monthlyPriceSnapshot: '39' });
   });
+
+  it("un match PENDING ou DISPUTED n'apparaît pas dans reservations[].match (résultat non définitif)", async () => {
+    // Simule le comportement réel de Postgres/Prisma pour le `where.status` passé par le service —
+    // un mock naïf (retour fixe indépendant des arguments) ne pourrait pas distinguer un filtre
+    // strict `'CONFIRMED'` d'un filtre large `{ not: 'CANCELLED' }` (qui laisserait PENDING/DISPUTED
+    // passer) : c'est exactement la régression que ce test doit verrouiller.
+    const matchesStatusWhere = (status: string, where: unknown): boolean => {
+      if (where == null) return true;
+      if (typeof where === 'string') return status === where;
+      const w = where as { not?: string; equals?: string };
+      if (w.not != null) return status !== w.not;
+      if (w.equals != null) return status === w.equals;
+      return true;
+    };
+    const allMatches = [
+      { status: 'DISPUTED', winningTeam: 2, sets: [[6, 2]], competitive: true, players: [{ userId: 'u1', team: 1 }] },
+      { status: 'PENDING', winningTeam: 1, sets: [[6, 3]], competitive: true, players: [{ userId: 'u1', team: 1 }] },
+    ];
+    prismaMock.reservation.findMany.mockImplementation((args: any) => {
+      const where = args?.select?.matches?.where?.status;
+      const filtered = allMatches.filter((m) => matchesStatusWhere(m.status, where));
+      return Promise.resolve([{
+        id: 'r1', status: 'CONFIRMED', type: 'COURT', startTime: D('2026-06-15T18:00:00Z'), endTime: D('2026-06-15T19:00:00Z'),
+        totalPrice: 20, cancelledAt: null, userId: 'u1',
+        resource: { name: 'Court 1', price: 20, offPeakPrice: null, clubSport: { sport: { key: 'padel' } } },
+        participants: [{ id: 'p1', userId: 'u1', share: 20, isOrganizer: true, user: { firstName: 'Jean', lastName: 'Dupont' } }],
+        payments: [], matches: filtered,
+      }] as any) as any;
+    });
+
+    const h = await service.getMemberHistory('club-demo', 'u1');
+    expect(h.reservations[0].match).toBeNull();
+  });
+
+  it("une inscription à une série de cours (lessonId null, seriesId renseigné) apparaît dans upcoming avec la prochaine occurrence", async () => {
+    // LessonEnrollment.lessonId est nullable — une série récurrente n'a pas de `lessonId` unique.
+    // Le service fait deux appels à lessonEnrollment.findMany (branche lesson / branche série) ;
+    // on distingue les deux ici via le `where` reçu, comme pour la simulation ci-dessus.
+    prismaMock.lessonEnrollment.findMany.mockImplementation((args: any) => {
+      if (args?.where?.seriesId) return Promise.resolve([{ seriesId: 'serie-1' }] as any) as any;
+      return Promise.resolve([] as any) as any; // pas d'inscription lessonId non-null dans ce test
+    });
+    prismaMock.lesson.findMany.mockResolvedValue([
+      { id: 'lnext', reservation: { startTime: D('2099-09-01T09:00:00Z'), resource: { name: 'Terrain 3' } } },
+    ] as any);
+
+    const h = await service.getMemberHistory('club-demo', 'u1');
+    expect(h.upcoming).toEqual([
+      { kind: 'lesson', id: 'lnext', title: 'Cours · Terrain 3', startTime: '2099-09-01T09:00:00.000Z', status: null },
+    ]);
+    expect(prismaMock.lesson.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ seriesId: 'serie-1' }),
+      take: 1,
+    }));
+  });
 });

@@ -157,7 +157,9 @@ export class MemberStatsService {
           },
         },
         matches: {
-          where: { status: { not: 'CANCELLED' } },
+          // Un résultat définitif seulement (comme le calcul win/loss/niveau plus bas, ~ligne 351) :
+          // PENDING = score auto-déclaré non encore confirmé par les 4 joueurs, DISPUTED = contesté.
+          where: { status: 'CONFIRMED' },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: {
@@ -269,12 +271,62 @@ export class MemberStatsService {
       };
     });
 
-    // --- Prépayé (carnets / porte-monnaie) ---
-    const packages = await prisma.memberPackage.findMany({
-      where: { clubId, userId },
-      orderBy: { purchasedAt: 'desc' },
-      include: { template: { select: { name: true } } },
-    });
+    // --- Prépayé + à venir (résas futures + tournois + events + cours) + abonnement + rôle/facettes
+    // (fiche 360) : aucune de ces requêtes ne dépend d'une autre → un seul aller-retour DB parallèle.
+    const [packages, tRegs, eRegs, lessonsByLesson, seriesEnrollments, subscription, staff, coachRow] = await Promise.all([
+      prisma.memberPackage.findMany({
+        where: { clubId, userId },
+        orderBy: { purchasedAt: 'desc' },
+        include: { template: { select: { name: true } } },
+      }),
+      prisma.tournamentRegistration.findMany({
+        where: {
+          OR: [{ captainUserId: userId }, { partnerUserId: userId }],
+          status: { not: 'CANCELLED' },
+          tournament: { clubId, startTime: { gt: now } },
+        },
+        select: { status: true, tournament: { select: { id: true, name: true, startTime: true } } },
+      }),
+      prisma.eventRegistration.findMany({
+        where: { userId, status: { not: 'CANCELLED' }, event: { clubId, startTime: { gt: now } } },
+        select: { status: true, event: { select: { id: true, name: true, startTime: true } } },
+      }),
+      // Inscription à une séance unique (cas simple, lessonId non-null — explicite pour documenter
+      // que la branche « série » ci-dessous est traitée séparément, cf. commentaire suivant).
+      prisma.lessonEnrollment.findMany({
+        where: {
+          userId, status: { not: 'CANCELLED' }, lessonId: { not: null },
+          lesson: { clubId, reservation: { startTime: { gt: now } } },
+        },
+        select: {
+          lesson: {
+            select: { id: true, reservation: { select: { startTime: true, resource: { select: { name: true } } } } },
+          },
+        },
+      }),
+      // Inscription à une SÉRIE de cours récurrente : LessonEnrollment.lessonId est nullable
+      // (lessonId: null, seriesId renseigné) — filtrer via la relation `lesson` (nullable) ferait un
+      // inner join implicite et ferait disparaître ces lignes SANS erreur (cf. lesson.service.ts
+      // ::listUserEnrollments, qui gère déjà ce cas pour un besoin différent : lister TOUTES les
+      // occurrences futures). Ici on ne veut que les seriesId concernés ; la prochaine occurrence de
+      // chacun est résolue après ce Promise.all (dépend de son résultat).
+      prisma.lessonEnrollment.findMany({
+        where: { userId, status: { not: 'CANCELLED' }, seriesId: { not: null } },
+        select: { seriesId: true },
+      }),
+      prisma.subscription.findFirst({
+        where: { clubId, userId, status: 'ACTIVE', expiresAt: { gt: now } },
+        orderBy: { expiresAt: 'desc' },
+        select: {
+          id: true, planId: true, expiresAt: true, monthlyPriceSnapshot: true, sportKeys: true,
+          plan: { select: { name: true } },
+        },
+      }),
+      prisma.clubMember.findUnique({ where: { userId_clubId: { userId, clubId } }, select: { role: true } }),
+      // isActive: true — un profil coach désactivé (soft delete) ne doit plus valoir la facette « coach ».
+      prisma.coach.findFirst({ where: { clubId, userId, isActive: true }, select: { id: true } }),
+    ]);
+
     const pkgName = new Map(packages.map((p) => [p.id, p.template.name]));
     const isUsable = (p: { creditsRemaining: number | null; amountRemaining: unknown; expiresAt: Date | null }) =>
       (p.expiresAt == null || p.expiresAt.getTime() > now.getTime())
@@ -288,39 +340,22 @@ export class MemberStatsService {
         })
       : [];
 
-    // --- À venir (résas futures + tournois + events + cours) + abonnement + rôle/facettes (fiche 360) ---
-    const [tRegs, eRegs, lessons, subscription, staff, coachRow] = await Promise.all([
-      prisma.tournamentRegistration.findMany({
-        where: {
-          OR: [{ captainUserId: userId }, { partnerUserId: userId }],
-          status: { not: 'CANCELLED' },
-          tournament: { clubId, startTime: { gt: now } },
-        },
-        select: { status: true, tournament: { select: { id: true, name: true, startTime: true } } },
-      }),
-      prisma.eventRegistration.findMany({
-        where: { userId, status: { not: 'CANCELLED' }, event: { clubId, startTime: { gt: now } } },
-        select: { status: true, event: { select: { id: true, name: true, startTime: true } } },
-      }),
-      prisma.lessonEnrollment.findMany({
-        where: { userId, status: { not: 'CANCELLED' }, lesson: { clubId, reservation: { startTime: { gt: now } } } },
-        select: {
-          lesson: {
+    // Prochaine occurrence (une seule, pas tout le futur de la série) par seriesId distinct trouvé
+    // ci-dessus — requêtes en parallèle, mais seulement s'il y a au moins un élève inscrit à une série
+    // (garde-fou : pas d'aller-retour DB supplémentaire pour le cas le plus fréquent, aucune série).
+    const seriesIds = [...new Set(
+      seriesEnrollments.map((e) => e.seriesId).filter((id): id is string => id != null),
+    )];
+    const seriesNextLessons = seriesIds.length > 0
+      ? (await Promise.all(seriesIds.map((seriesId) =>
+          prisma.lesson.findMany({
+            where: { seriesId, clubId, reservation: { status: { not: 'CANCELLED' }, startTime: { gt: now } } },
             select: { id: true, reservation: { select: { startTime: true, resource: { select: { name: true } } } } },
-          },
-        },
-      }),
-      prisma.subscription.findFirst({
-        where: { clubId, userId, status: 'ACTIVE', expiresAt: { gt: now } },
-        orderBy: { expiresAt: 'desc' },
-        select: {
-          id: true, planId: true, expiresAt: true, monthlyPriceSnapshot: true, sportKeys: true,
-          plan: { select: { name: true } },
-        },
-      }),
-      prisma.clubMember.findUnique({ where: { userId_clubId: { userId, clubId } }, select: { role: true } }),
-      prisma.coach.findFirst({ where: { clubId, userId }, select: { id: true } }),
-    ]);
+            orderBy: { reservation: { startTime: 'asc' } },
+            take: 1,
+          }),
+        ))).flat()
+      : [];
 
     const upcomingEntries: MemberUpcomingEntry[] = [
       ...rows
@@ -334,13 +369,18 @@ export class MemberStatsService {
         kind: 'event' as const, id: e.event.id, title: e.event.name,
         startTime: e.event.startTime.toISOString(), status: e.status,
       })),
-      ...lessons
+      ...lessonsByLesson
         .filter((l) => l.lesson?.reservation)
         .map((l) => ({
           kind: 'lesson' as const, id: l.lesson!.id,
           title: `Cours · ${l.lesson!.reservation.resource.name}`,
           startTime: l.lesson!.reservation.startTime.toISOString(), status: null,
         })),
+      ...seriesNextLessons.map((l) => ({
+        kind: 'lesson' as const, id: l.id,
+        title: `Cours · ${l.reservation.resource.name}`,
+        startTime: l.reservation.startTime.toISOString(), status: null,
+      })),
     ].sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 5);
 
     // --- Niveau & matchs (au club, confirmés) ---
