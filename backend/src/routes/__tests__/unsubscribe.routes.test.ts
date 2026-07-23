@@ -31,4 +31,22 @@ describe('GET /api/unsubscribe', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.notificationPreference.upsert).not.toHaveBeenCalled();
   });
+
+  it('cat=offers → coupe CLUB_OFFERS (email), pas CLUB_MESSAGES', async () => {
+    prismaMock.notificationPreference.upsert.mockResolvedValue({} as never);
+    const res = await request(app).get(`/api/unsubscribe?token=${unsubscribeToken('u1')}&cat=offers`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.notificationPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId_category_channel: { userId: 'u1', category: 'CLUB_OFFERS', channel: 'EMAIL' } },
+    }));
+  });
+
+  it('cat=offers + action=resubscribe → réactive CLUB_OFFERS', async () => {
+    prismaMock.notificationPreference.upsert.mockResolvedValue({} as never);
+    const res = await request(app).get(`/api/unsubscribe?token=${unsubscribeToken('u1')}&cat=offers&action=resubscribe`);
+    expect(res.status).toBe(200);
+    expect(prismaMock.notificationPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: { enabled: true },
+    }));
+  });
 });
