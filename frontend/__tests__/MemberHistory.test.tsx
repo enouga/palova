@@ -184,6 +184,39 @@ it('activité : compteur d\'annulations tardives', async () => {
   expect(screen.getByText('Annulations tardives')).toBeInTheDocument();
 });
 
+// ── Historique des réservations : barre de filtres Type/Statut/Paiement (remplace la case tardives) ──
+// Les montants du tableau (fmtEuros sans décimales : « 36 € », « 10 € », « 0 € ») n'apparaissent
+// QUE dans le tableau — la carte « Dernières réservations » et « Paiements » les formatent
+// autrement (« Payé 36,00 € ✓ », « Total dépensé : 36 € » composé) → matchs sans ambiguïté.
+
+it('historique : filtrer par statut « Annulée » ne garde que les résas annulées', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
+  // avant filtre : les 3 lignes de la fixture (r1 36 €, r3 10 €, r2 annulée 0 €)
+  expect(screen.getByText('36 €')).toBeInTheDocument();
+  expect(screen.getByText('10 €')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Annulée' })); // chip Statut (bouton, ≠ span du tableau)
+  expect(screen.queryByText('36 €')).toBeNull();
+  expect(screen.queryByText('10 €')).toBeNull();
+  expect(screen.getByText('0 €')).toBeInTheDocument(); // r2 (annulée + tardive) subsiste
+});
+
+it('historique : filtrer par paiement « Reste dû » isole la résa partiellement réglée', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reste dû' }));
+  // r3 (payé 10 sur 25) reste ; r1 (réglée) et r2 (annulée → ni réglée ni due) partent.
+  expect(screen.getByText('10 €')).toBeInTheDocument();
+  expect(screen.queryByText('36 €')).toBeNull();
+  expect(screen.queryByText('0 €')).toBeNull();
+  // pied « N réservation affichée sur M » + Effacer réinitialise
+  expect(screen.getByText(/1 réservation affichée sur 3/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Effacer' }));
+  expect(screen.getByText('36 €')).toBeInTheDocument();
+});
+
 it('activité : No-show facturés à 0 → hint "aucun", ton neutre', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
@@ -201,8 +234,10 @@ it('activité : No-show facturés > 0 → récidive visible, ton coral', async (
   renderPage();
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
-  expect(screen.getByText('No-show facturés')).toBeInTheDocument();
-  const value = screen.getByText('3');
+  // Scopé à la StatCard : depuis la refonte, un compteur de chip « Terrain » peut aussi
+  // valoir « 3 » (3 résas COURT) → getByText('3') global serait ambigu.
+  const card = screen.getByText('No-show facturés').closest('div') as HTMLElement;
+  const value = within(card).getByText('3');
   expect(value).toHaveStyle({ color: '#b23c17' }); // th.danger (thème clair, AA sur fond blanc)
   expect(screen.getByText(/dernier le/i)).toBeInTheDocument();
 });
