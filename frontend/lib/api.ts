@@ -1203,10 +1203,18 @@ export const api = {
   // --- Broadcasts (admin) ---
   getClubBroadcasts: (clubId: string, token: string) =>
     request<{ recipientCount: number; items: ClubBroadcastItem[] }>(`/api/clubs/${clubId}/admin/broadcasts`, {}, token),
-  sendClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string; channels?: { email: boolean; inApp: boolean; push: boolean } }, token: string) =>
+  sendClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string;
+    channels?: { email: boolean; inApp: boolean; push: boolean };
+    recipientUserIds?: string[]; kind?: 'INFO' | 'COMMERCIAL' }, token: string) =>
     request<{ recipientCount: number; broadcastId: string }>(`/api/clubs/${clubId}/admin/broadcast`, { method: 'POST', body: JSON.stringify(body) }, token),
   previewClubBroadcast: (clubId: string, body: { title: string; bodyHtml: string; url?: string }, token: string) =>
     request<{ html: string }>(`/api/clubs/${clubId}/admin/broadcast/preview`, { method: 'POST', body: JSON.stringify(body) }, token),
+  broadcastAudience: (clubId: string, body: { recipientUserIds?: string[]; kind: 'INFO' | 'COMMERCIAL' }, token: string) =>
+    request<{ total: number; email: number; inApp: number; excluded: number }>(
+      `/api/clubs/${clubId}/admin/broadcast/audience`, { method: 'POST', body: JSON.stringify(body) }, token),
+  adminGetMemberBroadcasts: (clubId: string, userId: string, token: string) =>
+    request<Array<{ id: string; title: string; kind: 'INFO' | 'COMMERCIAL'; createdAt: string }>>(
+      `/api/clubs/${clubId}/admin/members/${userId}/broadcasts`, {}, token),
 
   // --- Emails automatiques personnalisables (admin) ---
   adminListEmails: (clubId: string, token: string) =>
@@ -1244,6 +1252,7 @@ export interface ClubBroadcastItem {
   title: string;
   body: string;
   url: string | null;
+  kind: 'INFO' | 'COMMERCIAL';
   recipientCount: number;
   createdAt: string;
 }

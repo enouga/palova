@@ -1,4 +1,7 @@
-import { broadcastHasContent, coupleChannels, hasAnyChannel } from '@/lib/broadcast';
+import {
+  broadcastHasContent, coupleChannels, hasAnyChannel,
+  storePendingRecipients, readPendingRecipients, BROADCAST_RECIPIENTS_KEY,
+} from '@/lib/broadcast';
 
 describe('broadcastHasContent', () => {
   it('est faux pour un corps vide ou uniquement du markup blanc', () => {
@@ -34,5 +37,19 @@ describe('hasAnyChannel', () => {
   });
   it('faux si email et cloche off', () => {
     expect(hasAnyChannel({ email: false, inApp: false, push: false })).toBe(false);
+  });
+});
+
+describe('destinataires en attente (sessionStorage)', () => {
+  beforeEach(() => sessionStorage.clear());
+  it('aller-retour + consommation (la lecture vide la clé)', () => {
+    storePendingRecipients([{ userId: 'u1', name: 'Ines A.' }]);
+    expect(readPendingRecipients()).toEqual([{ userId: 'u1', name: 'Ines A.' }]);
+    expect(sessionStorage.getItem(BROADCAST_RECIPIENTS_KEY)).toBeNull();
+  });
+  it('clé absente ou corrompue → null', () => {
+    expect(readPendingRecipients()).toBeNull();
+    sessionStorage.setItem(BROADCAST_RECIPIENTS_KEY, '{oops');
+    expect(readPendingRecipients()).toBeNull();
   });
 });
