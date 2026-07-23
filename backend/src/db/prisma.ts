@@ -2,8 +2,15 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
+// Taille du pool pg.Pool sous-jacent (défaut node-postgres = 10, insuffisant sous une
+// pointe de centaines de holds concurrents — mesuré : latence ~1.2s p50 sur 150 requêtes
+// concurrentes avec le défaut). ⚠️ Avec le driver adapter, `?connection_limit=` dans
+// DATABASE_URL est ignoré (c'est une convention du moteur natif Prisma, pas de pg.Pool) —
+// la taille se règle ICI via `max`.
+const DB_POOL_MAX = 20;
+
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL!, max: DB_POOL_MAX });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
