@@ -9,6 +9,7 @@ import { ACCENTS, dangerBanner } from '@/lib/theme';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { computeVirtualRange } from '@/lib/virtualList';
+import { storePendingRecipients } from '@/lib/broadcast';
 import { daysUntil } from '@/lib/subscriptionAdmin';
 import { clubIsMultiSport } from '@/lib/sportBadge';
 import { Pill } from '@/components/ui/atoms';
@@ -104,6 +105,22 @@ export default function AdminMembersPage() {
     return rows;
   }, [members, debouncedQuery, seg, sort, planFilter, sportFilter, expiringOnly, nowMs]);
   const kpis = useMemo(() => memberKpis(members, nowMs), [members, nowMs]);
+
+  // Sélection multiple (diffusion ciblée) : opère sur les userId, pas sur ce qui est monté à
+  // l'écran — « Tout sélectionner » couvre TOUT `visible` (filtre/segment/recherche courant),
+  // même la portion hors de la fenêtre virtualisée.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const toggleSel = (userId: string) => setSel((s) => {
+    const n = new Set(s); if (n.has(userId)) n.delete(userId); else n.add(userId); return n;
+  });
+  const allVisibleSelected = visible.length > 0 && visible.every((m) => sel.has(m.userId));
+  const toggleAll = () => setSel(allVisibleSelected ? new Set() : new Set(visible.map((m) => m.userId)));
+  const openComposer = () => {
+    const list = visible.filter((m) => sel.has(m.userId))
+      .map((m) => ({ userId: m.userId, name: `${m.firstName} ${m.lastName.charAt(0)}.` }));
+    storePendingRecipients(list);
+    router.push('/admin/broadcast');
+  };
 
   // Virtualisation de la liste : seule la fenêtre visible (+ overscan) est montée dans le DOM.
   const listRef = useRef<HTMLDivElement>(null);
@@ -224,6 +241,11 @@ export default function AdminMembersPage() {
             ))}
           </div>
 
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: th.fontUI, fontSize: 13, color: th.textMute, cursor: 'pointer', margin: '0 0 12px' }}>
+            <input type="checkbox" aria-label="Tout sélectionner" checked={allVisibleSelected} onChange={toggleAll} style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
+            Tout sélectionner ({visible.length})
+          </label>
+
           {/* Bandeau de pilotage abonnés (contexte « Abonnés » uniquement) */}
           {seg === 'subs' && (
             <SubscriberInsights th={th} subscribers={subsBase} plans={plans} nowMs={nowMs} multiSport={multiSport} sportName={sportName}
@@ -247,7 +269,8 @@ export default function AdminMembersPage() {
                         onOpen={() => router.push(`/admin/members/${m.userId}`)}
                         onNavigate={() => router.push(`/admin/members/${m.userId}`)}
                         subscriptionContext={seg === 'subs'}
-                        onSubAction={(kind, mm) => setSubAction({ kind, m: mm })} />
+                        onSubAction={(kind, mm) => setSubAction({ kind, m: mm })}
+                        checked={sel.has(m.userId)} onToggleCheck={() => toggleSel(m.userId)} />
                     ))}
                   </div>
                 ))}
@@ -278,6 +301,17 @@ export default function AdminMembersPage() {
           }))}
           clubId={clubId} token={token}
           onClose={() => setSubAction(null)} onDone={() => { setSubAction(null); load(); }} />
+      )}
+
+      {sel.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 40,
+          background: '#1d2433', color: '#fff', borderRadius: 999, padding: '10px 18px',
+          display: 'flex', alignItems: 'center', gap: 14, fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
+          boxShadow: '0 6px 20px rgba(0,0,0,.3)' }}>
+          {sel.size} sélectionné{sel.size > 1 ? 's' : ''}
+          <button onClick={openComposer} style={{ border: 'none', cursor: 'pointer', background: th.accent, color: th.onAccent, borderRadius: 999, padding: '7px 14px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700 }}>✉ Envoyer un message</button>
+          <button onClick={() => setSel(new Set())} aria-label="Annuler la sélection" style={{ border: 'none', background: 'transparent', color: '#fff', opacity: 0.7, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </div>
       )}
     </div>
   );
