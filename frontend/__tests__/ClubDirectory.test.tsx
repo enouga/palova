@@ -130,6 +130,20 @@ it('les résultats sont rendus dans une étagère 2 lignes, avec un compteur', a
   expect(screen.getByText('2 clubs')).toBeInTheDocument();
 });
 
+it('« Effacer les filtres » apparaît sur un filtre actif (nom) et le vide', async () => {
+  authToken = null;
+  listClubs.mockResolvedValue([]);
+  wrap();
+  await waitFor(() => expect(listClubs).toHaveBeenCalled());
+  expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+  const input = screen.getByPlaceholderText('Nom du club');
+  fireEvent.change(input, { target: { value: 'Padel' } });
+  expect(screen.getByRole('button', { name: /Effacer les filtres/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Effacer les filtres/ }));
+  expect((input as HTMLInputElement).value).toBe('');
+  expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+});
+
 it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et masque ville + géoloc', async () => {
   authToken = null; // simplifie : pas de filtre sport asynchrone en plus
   render(

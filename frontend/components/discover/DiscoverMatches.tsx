@@ -10,6 +10,7 @@ import { DatePreset, DATE_PRESETS } from '@/lib/tournamentCalendar';
 import { DateRangeChip } from '@/components/calendar/DateRangeChip';
 import { useScrollRail } from '@/lib/useScrollRail';
 import { RailArrows } from '@/components/ui/RailArrows';
+import { Icon } from '@/components/ui/Icon';
 
 // Rail de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
 // rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
@@ -80,6 +81,10 @@ export function DiscoverMatches({
 
   const list = ranked ?? [];
   const count = `${list.length} partie${list.length > 1 ? 's' : ''}`;
+  const filtersActive = datePreset != null || !!dateFrom || !!dateTo || kind !== 'all' || gender !== 'all' || levelOn;
+  const resetFilters = () => {
+    setDatePreset(null); setDateFrom(null); setDateTo(null); setKind('all'); setGender('all'); setLevelOn(false);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -110,6 +115,18 @@ export function DiscoverMatches({
             </FacetGroup>
           )}
         </div>
+        {filtersActive && (
+          <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderTop: `1px solid ${th.line}` }}>
+            <span style={{ flex: 1 }} />
+            <button onClick={resetFilters} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+              borderRadius: 999, padding: '4px 11px', background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
+              fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute,
+            }}>
+              <Icon name="x" size={12} color={th.textMute} />Effacer les filtres
+            </button>
+          </div>
+        )}
       </div>
 
       {list.length === 0 ? (

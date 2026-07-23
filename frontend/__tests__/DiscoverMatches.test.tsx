@@ -102,6 +102,21 @@ describe('DiscoverMatches', () => {
     expect(screen.queryByText('Mixte Club')).not.toBeInTheDocument();
   });
 
+  it('« Effacer les filtres » réapparaît sur un filtre actif et le réinitialise', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'c', competitive: true }),
+        makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
+      ],
+    });
+    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Effacer les filtres/ }));
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Effacer les filtres/ })).not.toBeInTheDocument();
+  });
+
   it('chip Aujourd\'hui filtre les parties hors de la journée', () => {
     wrap({
       now: NOW,

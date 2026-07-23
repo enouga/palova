@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/useAuth';
 import { ClubCard } from '@/components/ClubCard';
 import { useScrollRail } from '@/lib/useScrollRail';
 import { RailArrows } from '@/components/ui/RailArrows';
+import { Icon } from '@/components/ui/Icon';
 
 // Moteur de recherche d'annuaire (nom / ville / sport) + grille de résultats.
 // Bloc embeddable : ne rend QUE la recherche + les résultats (pas de Screen ni de titre de page),
@@ -84,6 +85,14 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
 
   const inputStyle = { flex: 1, minWidth: 0, height: 46, padding: '0 14px', borderRadius: 12, background: th.surface, color: th.text, border: 'none', boxShadow: `inset 0 0 0 1.5px ${th.line}`, fontFamily: th.fontUI, fontSize: 15 } as const;
 
+  // Filtres propres à l'annuaire (la localisation en mode contrôlé vient de la barre partagée,
+  // réinitialisée à part) : nom + sport, plus ville/géoloc en mode autonome (/clubs).
+  const clubFiltersActive = !!q || !!sport || (!controlled && (!!cityInput || !!coordsInput));
+  const resetClubFilters = () => {
+    setQ(''); setSport('');
+    if (!controlled) { setCityInput(''); setCoordsInput(null); setGeoState('idle'); }
+  };
+
   return (
     <>
       {/* recherche */}
@@ -94,13 +103,22 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
             <input value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Ville ou région" style={inputStyle} />
           )}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <button onClick={() => setSport('')} style={chipBtn(th, sport === '')}>Tous</button>
           {sports.map((s) => (
             <button key={s.key} onClick={() => setSport(sport === s.key ? '' : s.key)} style={chipBtn(th, sport === s.key)}>
               {s.icon ? `${s.icon} ` : ''}{s.name}
             </button>
           ))}
+          {clubFiltersActive && (
+            <button onClick={resetClubFilters} style={{
+              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+              borderRadius: 999, padding: '6px 12px', background: 'transparent', boxShadow: `inset 0 0 0 1px ${th.lineStrong}`,
+              fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 600, color: th.textMute,
+            }}>
+              <Icon name="x" size={12} color={th.textMute} />Effacer les filtres
+            </button>
+          )}
         </div>
         {!controlled && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

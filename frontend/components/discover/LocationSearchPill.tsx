@@ -9,7 +9,7 @@ import { ACCENTS } from '@/lib/theme';
 // parent : la vitrine navigue au submit, /decouvrir filtre en direct (onSubmit omis).
 export const PILL_INK = '#1b2a3f';
 
-export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearActive, locating, extra }: {
+export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearActive, locating, extra, onClear }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit?: () => void;
@@ -19,6 +19,9 @@ export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearAc
   /** Bouton additionnel inséré dans la pilule, avant « Autour de moi » (ex. toggle « Mes clubs »
    * sur /decouvrir) — absent ailleurs (vitrine), la pilule reste inchangée. */
   extra?: React.ReactNode;
+  /** Réinitialise la localisation (texte + « autour de moi »). Le ✕ n'apparaît que s'il y a
+   * quelque chose à effacer (texte saisi ou géoloc active). */
+  onClear?: () => void;
 }) {
   const { th } = useTheme();
   const [focused, setFocused] = useState(false);
@@ -58,6 +61,13 @@ export function LocationSearchPill({ value, onChange, onSubmit, onNearMe, nearAc
             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
               fontFamily: th.fontUI, fontSize: 15, color: PILL_INK }}
           />
+          {(value || nearActive) && (
+            <button type="button" aria-label="Effacer la localisation"
+              onClick={() => { onChange(''); onClear?.(); }}
+              style={{ flexShrink: 0, border: 'none', cursor: 'pointer', background: '#eef1f6', color: PILL_INK,
+                width: 26, height: 26, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✕</button>
+          )}
         </div>
         <div className="loc-pill-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {extra}
