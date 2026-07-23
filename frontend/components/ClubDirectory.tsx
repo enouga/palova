@@ -133,7 +133,10 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
           <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: th.fontUI, color: th.textMute }}>Aucun club ne correspond.</div>
         ) : (
           <>
-            <style>{`.discover-clubs-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:270px;gap:16px;align-items:start}`}</style>
+            {/* grid-auto-columns en calc(50% - gap/2) — pas un px fixe : toujours 2 vignettes
+                pleinement visibles dans la largeur du conteneur, sur tout écran (mobile
+                compris), la 3e colonne démarre juste après et se révèle au défilement. */}
+            <style>{`.discover-clubs-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 8px);gap:16px;align-items:start}`}</style>
             <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>
               {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
             </div>
