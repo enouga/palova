@@ -6,6 +6,8 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
 import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
+import { useScrollRail } from '@/lib/useScrollRail';
+import { RailArrows } from '@/components/ui/RailArrows';
 
 const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
   { value: 'today', label: "Aujourd'hui" },
@@ -13,16 +15,18 @@ const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
   { value: 'all', label: '14 jours' },
 ];
 
-// Grille de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
+// Rail de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
 // rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
 const MAX_VISIBLE = 9;
 
-// Onglet « Parties » de la future page /decouvrir : grille de parties ouvertes nationales
+// Onglet « Parties » de la page /decouvrir : rail de parties ouvertes nationales
 // (GET /api/open-matches/national, chargées par le parent) filtrées par période/localisation/
-// niveau et triées par distance. Pur côté données — `matches`/`location`/`coords`/`now`
-// arrivent en props, seuls `period`/`levelOn`/`rating` sont un état local à ce composant.
-// `onCount` (optionnel) reporte au parent le nombre de cartes affichées après filtrage —
-// pas appelé tant que `matches`/`now` ne sont pas chargés (compteur inconnu).
+// niveau et triées par distance. Même traitement compteur+flèches que le rail de l'accueil
+// (NationalOpenMatches) — cette page EST déjà la vue complète, pas de lien "voir tout".
+// Pur côté données — `matches`/`location`/`coords`/`now` arrivent en props, seuls
+// `period`/`levelOn`/`rating` sont un état local à ce composant. `onCount` (optionnel)
+// reporte au parent le nombre de cartes affichées après filtrage — pas appelé tant que
+// `matches`/`now` ne sont pas chargés (compteur inconnu).
 export function DiscoverMatches({
   matches,
   location,
@@ -53,8 +57,8 @@ export function DiscoverMatches({
   const myLevel = levelChipVisible && levelOn ? rating!.level : null;
 
   // `ranked` reste `null` tant que `matches`/`now` ne sont pas chargés (compteur inconnu) —
-  // calculé AVANT l'early return de chargement pour respecter les règles des hooks (le
-  // useEffect ci-dessous doit être appelé à chaque rendu, jamais conditionnellement).
+  // calculé AVANT les hooks ci-dessous pour respecter les règles des hooks (ils doivent être
+  // appelés à chaque rendu, jamais conditionnellement, donc avant l'early return plus bas).
   const ranked = matches != null && now != null
     ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
     : null;
@@ -62,6 +66,8 @@ export function DiscoverMatches({
   useEffect(() => {
     if (ranked) onCount?.(ranked.length);
   }, [ranked?.length, onCount]);
+
+  const { railRef, edges, scrollByPage } = useScrollRail([ranked?.length ?? 0]);
 
   if (matches == null || now == null) {
     return (
@@ -72,6 +78,7 @@ export function DiscoverMatches({
   }
 
   const list = ranked ?? [];
+  const count = `${list.length} partie${list.length > 1 ? 's' : ''}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -105,10 +112,16 @@ export function DiscoverMatches({
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
-          {list.map((r) => (
-            <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} />
-          ))}
+        <div>
+          <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>{count}</div>
+          <div style={{ position: 'relative', margin: '0 -20px' }}>
+            <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 14, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+              {list.map((r) => (
+                <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} style={{ flex: '0 0 270px', scrollSnapAlign: 'start' }} />
+              ))}
+            </div>
+            <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Parties précédentes" nextLabel="Parties suivantes" fadeBottom={8} />
+          </div>
         </div>
       )}
     </div>

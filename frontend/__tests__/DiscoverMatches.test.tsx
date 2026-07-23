@@ -200,6 +200,11 @@ describe('DiscoverMatches', () => {
     expect(screen.getAllByRole('link')).toHaveLength(9);
   });
 
+  it('affiche le compteur de résultats', async () => {
+    wrap({ matches: [makeMatch({ id: 'm1' }), makeMatch({ id: 'm2', club: { ...makeMatch().club, name: 'Autre club' } })] });
+    expect(await screen.findByText('2 parties')).toBeInTheDocument();
+  });
+
   it('matches null → Chargement…', () => {
     wrap({ matches: null });
     expect(screen.getByText('Chargement…')).toBeInTheDocument();
