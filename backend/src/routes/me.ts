@@ -36,7 +36,8 @@ const matchService = new MatchService();
 // Champs du profil exposés au joueur (GET /profile, PATCH /, POST /avatar).
 const PROFILE_SELECT = {
   id: true, email: true, firstName: true, lastName: true, phone: true, sex: true,
-  birthDate: true, avatarUrl: true, locale: true, isSuperAdmin: true, showInLeaderboard: true,
+  birthDate: true, avatarUrl: true, address: true, postalCode: true, city: true,
+  locale: true, isSuperAdmin: true, showInLeaderboard: true,
   autoMatchProposals: true, acceptsFriendRequests: true, acceptsDirectMessages: true,
   preferredSport: { select: { id: true, key: true, name: true } },
 } as const;
@@ -133,9 +134,12 @@ router.post('/legal/accept', authMiddleware, async (req: AuthRequest, res: Respo
 // Mise à jour du profil : téléphone, sexe, date de naissance, langue.
 router.patch('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, acceptsDirectMessages, preferredSportId } = req.body;
-    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null } = {};
+    const { phone, sex, birthDate, locale, showInLeaderboard, autoMatchProposals, acceptsFriendRequests, acceptsDirectMessages, preferredSportId, address, postalCode, city } = req.body;
+    const data: { phone?: string | null; sex?: 'MALE' | 'FEMALE' | null; birthDate?: Date | null; locale?: string | null; showInLeaderboard?: boolean; autoMatchProposals?: boolean; acceptsFriendRequests?: boolean; acceptsDirectMessages?: boolean; preferredSportId?: string | null; address?: string | null; postalCode?: string | null; city?: string | null } = {};
     if (phone !== undefined) data.phone = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
+    if (address !== undefined) data.address = typeof address === 'string' && address.trim() ? address.trim() : null;
+    if (postalCode !== undefined) data.postalCode = typeof postalCode === 'string' && postalCode.trim() ? postalCode.trim() : null;
+    if (city !== undefined) data.city = typeof city === 'string' && city.trim() ? city.trim() : null;
     if (sex !== undefined) {
       if (sex !== null && sex !== 'MALE' && sex !== 'FEMALE') return void res.status(400).json({ error: 'sex invalide' });
       data.sex = sex;
