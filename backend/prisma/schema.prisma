@@ -601,6 +601,7 @@ model User {
   messageReportsFiled         MessageReport[]           @relation("MessageReportsFiled")
   messageReportsResolved      MessageReport[]           @relation("MessageReportsResolved")
   legalAcceptances            LegalAcceptance[]
+  broadcastReceipts           ClubBroadcastRecipient[]
 
   @@map("users")
 }
@@ -1463,6 +1464,7 @@ enum NotificationCategory {
   SOCIAL
   DIRECT_MESSAGES
   MODERATION
+  CLUB_OFFERS
 }
 
 /// Documents légaux plateforme dont l'acceptation est tracée (versions dans src/content/legalVersions.ts).
@@ -1561,14 +1563,31 @@ model ClubBroadcast {
   title          String
   body           String
   bodyHtml       String?  @map("body_html")
+  kind           String   @default("INFO") // INFO | COMMERCIAL (catégorie de consentement)
   url            String?
   recipientCount Int      @map("recipient_count")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club       Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  recipients ClubBroadcastRecipient[]
 
   @@index([clubId, createdAt])
   @@map("club_broadcasts")
+}
+
+/// Destinataire d'une diffusion club — trace « à qui le club a adressé le message »
+/// (avant filtrage par préférences). Sert l'historique par membre de la fiche 360.
+model ClubBroadcastRecipient {
+  id          String @id @default(cuid())
+  broadcastId String @map("broadcast_id")
+  userId      String @map("user_id")
+
+  broadcast ClubBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, userId])
+  @@index([userId])
+  @@map("club_broadcast_recipients")
 }
 
 /// Surcharge d'un email automatique pour un club (repli = défaut codé si absent).
