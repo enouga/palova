@@ -61,4 +61,14 @@ describe('OpenMatchesShowcase', () => {
     wrap([match({ targetLevelMin: null, targetLevelMax: null })]);
     expect(screen.queryByText(/Niveau/)).not.toBeInTheDocument();
   });
+
+  it('affiche le compteur de résultats', () => {
+    wrap([match({})]);
+    expect(screen.getByText('1 partie')).toBeInTheDocument();
+  });
+
+  it('le compteur reflète le plafond de 6 cartes, pas le total réel', () => {
+    wrap(Array.from({ length: 8 }, (_, i) => match({ id: `m${i}` })));
+    expect(screen.getByText('6 parties')).toBeInTheDocument();
+  });
 });
