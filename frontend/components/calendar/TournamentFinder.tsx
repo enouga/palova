@@ -196,7 +196,7 @@ export function TournamentFinder({
   return (
     // Le 100vh ne vaut que pour la page /tournois autonome — embarquée dans /decouvrir
     // (hideTitle), la section reprend sa hauteur naturelle (fini l'écran vide sans tournoi).
-    <div style={{ paddingBottom: 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
+    <div style={{ paddingBottom: hideTitle ? 0 : 48, background: th.bg, minHeight: hideTitle ? undefined : '100vh' }}>
       {!hideTitle && (
         <div style={{ padding: '22px 20px 0' }}>
           <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, color: th.text, letterSpacing: -0.5 }}>Calendrier des tournois</div>
@@ -245,7 +245,7 @@ export function TournamentFinder({
                   (mobile compris), la 3e colonne démarre juste après et se révèle au
                   défilement (même traitement que Prochains events / Clubs). */}
               <style>{`.discover-tournaments-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
-              <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>
+              <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
                 {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
               </div>
               <div style={{ position: 'relative', margin: '0 -20px' }}>

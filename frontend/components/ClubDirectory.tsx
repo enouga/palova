@@ -137,7 +137,7 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
                 vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
                 (mobile compris), la 4e colonne démarre juste après et se révèle au défilement. */}
             <style>{`.discover-clubs-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}`}</style>
-            <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>
+            <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
               {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
             </div>
             <div style={{ position: 'relative', margin: '0 -20px' }}>

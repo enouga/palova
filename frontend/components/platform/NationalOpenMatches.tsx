@@ -19,7 +19,7 @@ export function NationalOpenMatches({ matches }: { matches: NationalOpenMatch[] 
   const count = `${matches.length} partie${matches.length > 1 ? 's' : ''}`;
   return (
     <div>
-      <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>{count}</div>
+      <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text }}>{count}</div>
       <div style={{ position: 'relative', margin: '0 -20px' }}>
         {/* scrollPaddingLeft = padding-left : sans lui le snap `mandatory` mange le padding au montage. */}
         <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 14, padding: '16px 20px 18px', scrollSnapType: 'x mandatory', scrollPaddingLeft: 20 }}>
