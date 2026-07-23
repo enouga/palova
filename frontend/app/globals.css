@@ -278,3 +278,16 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
 @media (prefers-reduced-motion: reduce) {
   .pl-pinpop { animation: none; transform: translate(-50%, -50%) scale(1); }
 }
+
+/* ── Fiche membre 360 (admin) : cockpit 2 colonnes ≥ 900px, empilé avant
+   (bascule 100 % CSS, pas de useIsDesktop → aucun flash). Colonne de gauche
+   (identité/accès) collante en desktop ; colonne de droite = cartes cœur
+   (résas, portefeuille, aperçus) en grille 2 col ≥ 640px. ── */
+.mb-cols { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+@media (min-width: 900px) {
+  .mb-cols { flex-direction: row; align-items: flex-start; }
+  .mb-left { flex: 0 0 340px; position: sticky; top: 12px; }
+  .mb-right { flex: 1; min-width: 0; }
+}
+.mb-grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) { .mb-grid2 { grid-template-columns: 1fr 1fr; } }
