@@ -204,7 +204,7 @@ responsable de traitement** et **Tolaris Studio sous-traitant**.
 
 export const PLATFORM_CONFIDENTIALITE = `# Politique de confidentialité
 
-*Version du 21 juillet 2026*
+*Version du 23 juillet 2026*
 
 **Tolaris Studio** (société en cours d'immatriculation — voir les
 [mentions légales](/mentions-legales)) traite vos données personnelles conformément au RGPD.
@@ -222,7 +222,7 @@ Contact : contact@palova.fr.
 
 | Traitement | Données | Base légale | Conservation |
 |---|---|---|---|
-| Compte et connexion | identité, e-mail, mot de passe haché, téléphone | contrat | jusqu'à suppression du compte, puis anonymisation |
+| Compte et connexion | identité, e-mail, mot de passe haché, téléphone, adresse postale | contrat | jusqu'à suppression du compte, puis anonymisation |
 | Réservations et inscriptions | créneaux, participations, niveau | contrat | durée de vie du compte |
 | Paiements en ligne | montants, 4 derniers chiffres de carte (via Stripe) | contrat, obligation légale | 10 ans (pièces comptables, côté club) |
 | Messagerie et chats | messages envoyés | contrat | jusqu'à suppression du message ou du compte |
