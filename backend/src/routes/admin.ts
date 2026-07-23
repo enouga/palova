@@ -1523,7 +1523,7 @@ router.get('/members/:userId/level', requireClubMember('ADMIN'), async (req: Clu
 // communication du club au quotidien. Action à fort impact (notifie tous les membres).
 router.post('/broadcast', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, bodyHtml, url, channels } = req.body;
+    const { title, bodyHtml, url, channels, recipientUserIds, kind } = req.body;
     const result = await broadcastService.send(
       req.membership!.clubId,
       req.user!.id,
@@ -1531,6 +1531,8 @@ router.post('/broadcast', requireClubMember('STAFF'), async (req: ClubScopedRequ
         title,
         bodyHtml,
         url: typeof url === 'string' ? url : null,
+        recipientUserIds: Array.isArray(recipientUserIds) ? recipientUserIds.map(String) : null,
+        kind: kind === 'COMMERCIAL' ? 'COMMERCIAL' : 'INFO',
         channels: channels && typeof channels === 'object'
           ? { email: !!channels.email, inApp: !!channels.inApp, push: !!channels.push }
           : undefined,
