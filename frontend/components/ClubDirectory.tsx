@@ -136,12 +136,13 @@ export function ClubDirectory({ city: cityProp, coords: coordsProp, deptCodes, o
             {/* grid-auto-columns en calc((100% - 2*gap) / 3) — pas un px fixe : toujours 3
                 vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
                 (mobile compris), la 4e colonne démarre juste après et se révèle au défilement. */}
-            <style>{`.discover-clubs-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}`}</style>
+            {/* UNE ligne jusqu'à 4 clubs, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
+            <style>{`.discover-clubs-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 32px) / 3);gap:16px;align-items:start}`}</style>
             <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
               {visibleClubs.length} club{visibleClubs.length > 1 ? 's' : ''}
             </div>
             <div style={{ position: 'relative', margin: '0 -20px' }}>
-              <div ref={railRef} className="sp-scroll-x discover-clubs-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+              <div ref={railRef} className="sp-scroll-x discover-clubs-grid" style={{ gridTemplateRows: `repeat(${visibleClubs.length <= 4 ? 1 : 2}, auto)`, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
                 {visibleClubs.map((c, i) => <ClubCard key={c.id} club={c} defaultCover={COVER_PHOTOS[i % COVER_PHOTOS.length]} />)}
               </div>
               <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Clubs précédents" nextLabel="Clubs suivants" fadeBottom={8} />

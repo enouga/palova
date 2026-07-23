@@ -244,12 +244,13 @@ export function TournamentFinder({
                   vignettes pleinement visibles dans la largeur du conteneur, sur tout écran
                   (mobile compris), la 3e colonne démarre juste après et se révèle au
                   défilement (même traitement que Prochains events / Clubs). */}
-              <style>{`.discover-tournaments-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
+              {/* UNE ligne jusqu'à 4 tournois, 2 rangées au-delà (gridTemplateRows inline, dynamique). */}
+              <style>{`.discover-tournaments-grid{display:grid;grid-auto-flow:column;grid-auto-columns:calc(50% - 6px);gap:12px;align-items:start}`}</style>
               <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>
                 {visibleResults.length} tournoi{visibleResults.length > 1 ? 's' : ''}
               </div>
               <div style={{ position: 'relative', margin: '0 -20px' }}>
-                <div ref={railRef} className="sp-scroll-x discover-tournaments-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+                <div ref={railRef} className="sp-scroll-x discover-tournaments-grid" style={{ gridTemplateRows: `repeat(${visibleResults.length <= 4 ? 1 : 2}, auto)`, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
                   {visibleResults.map(({ tournament: t, distanceKm }) => {
                     const subtitle = [t.club.name, t.club.city, distanceKm != null ? `${Math.round(distanceKm)} km` : null].filter(Boolean).join(' · ');
                     return (
