@@ -216,9 +216,21 @@ describe('AdminBroadcastPage', () => {
   it('retirer le dernier destinataire désactive l\'envoi (jamais de bascule silencieuse vers tous)', async () => {
     sessionStorage.setItem('palova:broadcast-recipients', JSON.stringify([{ userId: 'u1', name: 'Ines A.' }]));
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: /Retirer Ines A./ }));
+    await screen.findByText('Ines A.');
+
+    fireEvent.change(screen.getByPlaceholderText(/titre du message/i), { target: { value: 'T' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: '<p>Corps</p>' } });
+
+    // Formulaire valide + destinataire présent => Envoyer est activable.
+    expect(screen.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Retirer Ines A./ }));
     expect(screen.getByText(/Aucun destinataire/)).toBeInTheDocument();
+    // Plus aucun destinataire => Envoyer doit être désactivé, pas de bascule silencieuse.
+    expect(screen.getByRole('button', { name: /envoyer/i })).toBeDisabled();
+
     fireEvent.click(screen.getByRole('button', { name: /Revenir à tous les membres/ }));
     expect(screen.getByText(/Tous les membres actifs/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
   });
 });
