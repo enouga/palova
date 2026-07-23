@@ -117,7 +117,7 @@ it('fait tourner la banque de couvertures → cartes voisines distinctes', async
   expect(new Set(covers).size).toBe(3); // 3 cartes → 3 couvertures distinctes (rotation)
 });
 
-it('les résultats sont rendus dans une grille 2 colonnes', async () => {
+it('les résultats sont rendus dans une étagère 2 lignes, avec un compteur', async () => {
   authToken = null;
   const club = (id: string) => ({
     id, slug: id, name: id.toUpperCase(), city: null, description: null,
@@ -127,6 +127,7 @@ it('les résultats sont rendus dans une grille 2 colonnes', async () => {
   const { container } = wrap();
   await waitFor(() => expect(screen.getAllByTestId('club-card')).toHaveLength(2));
   expect(container.querySelector('.discover-clubs-grid')).not.toBeNull();
+  expect(screen.getByText('2 clubs')).toBeInTheDocument();
 });
 
 it('mode contrôlé (props city/coords) : transmet les valeurs à listClubs et masque ville + géoloc', async () => {
