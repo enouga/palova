@@ -411,6 +411,24 @@ it('notes : ajouter un commentaire appelle l\'API et l\'affiche', async () => {
   expect(await screen.findByText('Joueur sympa')).toBeInTheDocument();
 });
 
+it('notes : seules les 3 dernières sont affichées, « Voir les N précédentes » déplie', async () => {
+  (api.adminGetMemberNotes as jest.Mock).mockResolvedValue(
+    Array.from({ length: 5 }, (_, i) => ({
+      id: `n${i}`, body: `Note ${i}`, createdAt: '2026-07-01T10:00:00.000Z',
+      author: { firstName: 'Sarah', lastName: 'P' },
+    })),
+  );
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  expect(await screen.findByText('Note 0')).toBeInTheDocument();
+  expect(screen.getByText('Note 2')).toBeInTheDocument();
+  expect(screen.queryByText('Note 3')).toBeNull(); // au-delà de l'aperçu : replié
+  fireEvent.click(screen.getByRole('button', { name: 'Voir les 2 précédentes →' }));
+  expect(screen.getByText('Note 4')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Réduire' }));
+  expect(screen.queryByText('Note 4')).toBeNull();
+});
+
 // ───────────────────────── Hero : « à surveiller » ─────────────────────────
 
 it('toggle « à surveiller » appelle l\'API', async () => {
@@ -605,6 +623,33 @@ it('wallet : abonnement affiché, « Renouveler » ouvre SubscriptionActions ave
   // avec le bon abonnement/forfait, pas juste que le bouton existe.
   expect(await screen.findByText(/Prolonge la période sans perte de jours/)).toBeInTheDocument();
   expect(api.adminGetSubscriptionPlans).toHaveBeenCalledWith('club-1', 'tok');
+});
+
+it('wallet : les soldes épuisés/expirés sont masqués derrière « tout voir » (→ porte Finances)', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY,
+    finance: {
+      ...HISTORY.finance,
+      prepaid: {
+        balances: [
+          balEntries, // utilisable (3 entrées, pas d'expiration)
+          { ...balEntries, id: 'pk-dead', name: 'Vieux carnet', creditsRemaining: 0 }, // épuisé
+          { ...balEntries, id: 'pk-exp', name: 'Carnet expiré', expiresAt: '2020-01-01T00:00:00.000Z' }, // expiré
+        ],
+        consumption: [],
+      },
+    },
+  });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  const wallet = screen.getByRole('region', { name: 'Abonnement et soldes' });
+  expect(within(wallet).getByText('Carnet 10')).toBeInTheDocument();
+  expect(within(wallet).queryByText('Vieux carnet')).toBeNull();
+  expect(within(wallet).queryByText('Carnet expiré')).toBeNull();
+  // Le lien « tout voir » ouvre la porte Finances, où TOUS les soldes restent gérés.
+  fireEvent.click(within(wallet).getByRole('button', { name: /2 autres soldes .* tout voir/ }));
+  expect(await screen.findByText('Prépayé (carnets / porte-monnaie)')).toBeInTheDocument();
+  expect(screen.getByText('Vieux carnet')).toBeInTheDocument();
 });
 
 // ───────────────────────── Contact (dans le hero) ─────────────────────────

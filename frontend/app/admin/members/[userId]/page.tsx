@@ -38,6 +38,9 @@ import {
 
 type DetailTab = 'activite' | 'finances' | 'niveau' | 'fidelite';
 
+// Nombre de notes affichées quand le fil est replié (les plus récentes d'abord).
+const NOTES_PREVIEW = 3;
+
 // Les quatre « portes » du bloc détails complets (repliées par défaut — c'est ce bloc
 // qui faisait les deux tiers de la hauteur de page ; on n'en paie le scroll que sur demande).
 const DETAIL_DOORS: { key: DetailTab; label: string; icon: IconName; tint: string }[] = [
@@ -123,6 +126,9 @@ export default function MemberHistoryPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   // null = bloc détails replié (défaut) : on n'affiche les tableaux/graphes qu'à la demande.
   const [detail, setDetail] = useState<DetailTab | null>(null);
+  // Le fil de notes ne montre que les dernières entrées par défaut (un membre suivi de près
+  // accumule des dizaines de notes — la carte ne doit pas s'allonger avec lui).
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [watch, setWatch] = useState(false);
   const [onlyLate, setOnlyLate] = useState(false);
   const [noteBody, setNoteBody] = useState('');
@@ -267,7 +273,8 @@ export default function MemberHistoryPage() {
   // « Tout l'historique → » : bascule sur l'onglet Activité du bloc « Le plus » et y défile.
   const openDetail = (t: DetailTab) => {
     setDetail(t);
-    requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    // `?.()` sur l'appel : jsdom n'implémente pas scrollIntoView (les tests passent par ici).
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
   };
 
   const row: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 12 };
@@ -401,7 +408,7 @@ export default function MemberHistoryPage() {
               <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, margin: 0 }}>Aucun commentaire pour l&apos;instant.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {notes.map((n) => (
+                {(notesExpanded ? notes : notes.slice(0, NOTES_PREVIEW)).map((n) => (
                   <div key={n.id} style={{ borderLeft: `3px solid ${th.line}`, paddingLeft: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.text }}>
@@ -420,6 +427,14 @@ export default function MemberHistoryPage() {
                     <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.text, marginTop: 3, whiteSpace: 'pre-wrap' }}>{n.body}</div>
                   </div>
                 ))}
+                {notes.length > NOTES_PREVIEW && (
+                  <button
+                    onClick={() => setNotesExpanded((v) => !v)}
+                    style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}
+                  >
+                    {notesExpanded ? 'Réduire' : `Voir les ${notes.length - NOTES_PREVIEW} précédente${notes.length - NOTES_PREVIEW > 1 ? 's' : ''} →`}
+                  </button>
+                )}
               </div>
             )}
           </section>
@@ -428,7 +443,12 @@ export default function MemberHistoryPage() {
         {/* ───────── Colonne 3 : à venir + portefeuille ───────── */}
         <div className="mb-col">
           <MemberUpcomingCard data={data} />
-          <MemberWalletCard data={data} onSubAction={openSubAction} onPkgAction={(mode, bal) => setPkgAction({ mode, bal })} />
+          <MemberWalletCard
+            data={data}
+            onSubAction={openSubAction}
+            onPkgAction={(mode, bal) => setPkgAction({ mode, bal })}
+            onSeeAllBalances={() => openDetail('finances')}
+          />
         </div>
 
         {/* ───────── Rangée 2 : réservations (large) + argent/fidélité ───────── */}
