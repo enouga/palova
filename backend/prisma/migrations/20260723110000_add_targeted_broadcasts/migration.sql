@@ -11,9 +11,13 @@ CREATE TABLE IF NOT EXISTS "club_broadcast_recipients" (
 CREATE UNIQUE INDEX IF NOT EXISTS "club_broadcast_recipients_broadcast_id_user_id_key"
     ON "club_broadcast_recipients"("broadcast_id", "user_id");
 CREATE INDEX IF NOT EXISTS "club_broadcast_recipients_user_id_idx" ON "club_broadcast_recipients"("user_id");
-ALTER TABLE "club_broadcast_recipients"
+DO $$ BEGIN
+  ALTER TABLE "club_broadcast_recipients"
     ADD CONSTRAINT "club_broadcast_recipients_broadcast_id_fkey"
     FOREIGN KEY ("broadcast_id") REFERENCES "club_broadcasts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "club_broadcast_recipients"
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN
+  ALTER TABLE "club_broadcast_recipients"
     ADD CONSTRAINT "club_broadcast_recipients_user_id_fkey"
     FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
