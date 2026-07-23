@@ -184,3 +184,18 @@ it('« Tout sélectionner » coche les membres visibles du filtre courant', asyn
   fireEvent.click(await screen.findByRole('checkbox', { name: /Tout sélectionner/ }));
   expect(screen.getByText(/sélectionnés/)).toBeInTheDocument();
 });
+
+it('changer de segment retire de la sélection les membres qui ne sont plus visibles', async () => {
+  mount();
+  await screen.findByText('Ana Bernard');
+  const boxes = await screen.findAllByRole('checkbox', { name: /Sélectionner/ });
+  // sélectionne Ana (abonnée) ET Zoé (bloquée) — 2 membres de segments différents
+  const anaBox = boxes.find((b) => b.getAttribute('aria-label')?.includes('Ana'))!;
+  const zoeBox = boxes.find((b) => b.getAttribute('aria-label')?.includes('Zoé'))!;
+  fireEvent.click(anaBox);
+  fireEvent.click(zoeBox);
+  expect(screen.getByText('2 sélectionnés')).toBeInTheDocument();
+  // bascule sur le segment « Abonnés » → Zoé (non abonnée) disparaît de `visible`
+  fireEvent.click(screen.getByRole('button', { name: 'Abonnés · 1' }));
+  await waitFor(() => expect(screen.getByText('1 sélectionné')).toBeInTheDocument());
+});

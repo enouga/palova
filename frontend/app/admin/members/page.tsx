@@ -122,6 +122,20 @@ export default function AdminMembersPage() {
     router.push('/admin/broadcast');
   };
 
+  // Réconciliation : un changement de recherche/segment/tri peut faire sortir un membre
+  // sélectionné de `visible` (ex. on coche un abonné ET un bloqué, puis on bascule sur le
+  // segment « Abonnés » — le bloqué doit disparaître de la sélection, sinon la barre flottante
+  // annoncerait un compte périmé et la diffusion cibleuse enverrait moins de destinataires que
+  // ce qui est affiché, silencieusement).
+  useEffect(() => {
+    setSel((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(visible.map((m) => m.userId));
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visible]);
+
   // Virtualisation de la liste : seule la fenêtre visible (+ overscan) est montée dans le DOM.
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);

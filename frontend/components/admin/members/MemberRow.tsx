@@ -59,7 +59,7 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscription
     >
       {onToggleCheck && (
         <input type="checkbox" checked={!!checked} aria-label={`Sélectionner ${m.firstName} ${m.lastName}`}
-          onClick={(e) => e.stopPropagation()} onChange={onToggleCheck}
+          onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} onChange={onToggleCheck}
           style={{ width: 17, height: 17, accentColor: th.accent, cursor: 'pointer', flex: 'none' }} />
       )}
       <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl ?? null} size={42} color={colorForSeed(m.userId)} />
