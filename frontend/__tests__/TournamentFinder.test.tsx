@@ -124,7 +124,7 @@ describe('TournamentFinder', () => {
     expect((container.firstChild as HTMLElement).style.minHeight).toBe('');
   });
 
-  it('hideTitle : grille 2 colonnes et plafonnée à 10, la page /tournois autonome reste complète', async () => {
+  it('hideTitle : grille 4 colonnes et plafonnée à 8, la page /tournois autonome reste complète', async () => {
     const many: NationalTournament[] = Array.from({ length: 15 }, (_, i) => ({
       ...NAT[0], id: `t${i}`, name: `Tournoi ${i}`,
     }));
@@ -132,8 +132,8 @@ describe('TournamentFinder', () => {
     const { container, rerender } = render(
       <ThemeProvider><TournamentFinder hideTitle items={many} onCount={onCount} /></ThemeProvider>,
     );
-    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(10));
-    expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(10);
+    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(8));
+    expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(8);
     expect(container.querySelector('.discover-tournaments-grid')).not.toBeNull();
 
     // La page autonome (pas de hideTitle) ne tronque rien.

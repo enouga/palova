@@ -18,8 +18,8 @@ const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames',
 
 // Plafond d'affichage quand le calendrier est embarqué (page /decouvrir, `hideTitle`) : ce
 // n'est pas un flux exhaustif là-bas, contrairement à la page /tournois autonome (filtres +
-// « Effacer » restent le bon outil pour aller plus loin). Nombre pair pour la grille 2 colonnes.
-const MAX_VISIBLE = 10;
+// « Effacer » restent le bon outil pour aller plus loin). 2 lignes de 4 sur la grille large écran.
+const MAX_VISIBLE = 8;
 
 // Clés propres à writeUrl (préservées à la lecture, purgées puis réécrites — le reste de la
 // query string de la page hôte, ex. ?tab=, doit survivre intact).
@@ -216,7 +216,7 @@ export function TournamentFinder({
       )}
 
       {hideTitle && (
-        <style>{`.discover-tournaments-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:640px){.discover-tournaments-grid{grid-template-columns:1fr 1fr}}`}</style>
+        <style>{`.discover-tournaments-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:640px){.discover-tournaments-grid{grid-template-columns:1fr 1fr}}@media(min-width:960px){.discover-tournaments-grid{grid-template-columns:1fr 1fr 1fr 1fr}}`}</style>
       )}
       <div
         className={hideTitle ? 'discover-tournaments-grid' : undefined}
