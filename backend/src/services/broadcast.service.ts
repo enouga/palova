@@ -42,6 +42,11 @@ interface PreviewInput {
   url?: string | null;
 }
 
+/** Normalise le ciblage : tableau non-vide → tel quel, sinon `null` (= tous les membres actifs). */
+function resolveTargeting(recipientUserIds?: string[] | null): string[] | null {
+  return Array.isArray(recipientUserIds) && recipientUserIds.length > 0 ? recipientUserIds : null;
+}
+
 export class BroadcastService {
   async countActiveMembers(clubId: string): Promise<number> {
     return prisma.clubMembership.count({ where: { clubId, status: 'ACTIVE' } });
@@ -80,9 +85,7 @@ export class BroadcastService {
     const kind: 'INFO' | 'COMMERCIAL' = input.kind === 'COMMERCIAL' ? 'COMMERCIAL' : 'INFO';
     const category = kind === 'COMMERCIAL' ? ('CLUB_OFFERS' as const) : ('CLUB_MESSAGES' as const);
     // Ciblage : liste non vide = sous-ensemble ; sinon comportement historique (tous les actifs).
-    const targeted = Array.isArray(input.recipientUserIds) && input.recipientUserIds.length > 0
-      ? input.recipientUserIds
-      : null;
+    const targeted = resolveTargeting(input.recipientUserIds);
 
     const [{ brand, slug }, members] = await Promise.all([
       this.loadBrand(clubId),
@@ -188,7 +191,7 @@ export class BroadcastService {
    *  sans le canal push (dépend des subscriptions appareil). */
   async audience(clubId: string, input: { recipientUserIds?: string[] | null; kind?: 'INFO' | 'COMMERCIAL' }) {
     const category = input.kind === 'COMMERCIAL' ? 'CLUB_OFFERS' : 'CLUB_MESSAGES';
-    const targeted = Array.isArray(input.recipientUserIds) && input.recipientUserIds.length > 0 ? input.recipientUserIds : null;
+    const targeted = resolveTargeting(input.recipientUserIds);
     const members = await prisma.clubMembership.findMany({
       where: { clubId, status: 'ACTIVE', ...(targeted ? { userId: { in: targeted } } : {}) },
       select: { userId: true },
