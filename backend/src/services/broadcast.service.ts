@@ -183,4 +183,38 @@ export class BroadcastService {
       take: 50,
     });
   }
+
+  /** Aperçu d'audience : qui recevra quoi, selon la catégorie de l'envoi. Approximation
+   *  sans le canal push (dépend des subscriptions appareil). */
+  async audience(clubId: string, input: { recipientUserIds?: string[] | null; kind?: 'INFO' | 'COMMERCIAL' }) {
+    const category = input.kind === 'COMMERCIAL' ? 'CLUB_OFFERS' : 'CLUB_MESSAGES';
+    const targeted = Array.isArray(input.recipientUserIds) && input.recipientUserIds.length > 0 ? input.recipientUserIds : null;
+    const members = await prisma.clubMembership.findMany({
+      where: { clubId, status: 'ACTIVE', ...(targeted ? { userId: { in: targeted } } : {}) },
+      select: { userId: true },
+    });
+    const ids = members.map((m) => m.userId);
+    const offRows = ids.length ? await prisma.notificationPreference.findMany({
+      where: { userId: { in: ids }, category, enabled: false, channel: { in: ['EMAIL', 'INAPP'] } },
+      select: { userId: true, channel: true },
+    }) : [];
+    const emailOff = new Set(offRows.filter((r) => r.channel === 'EMAIL').map((r) => r.userId));
+    // La cloche CLUB_MESSAGES est verrouillée ON (cf. preferences.ts) — seul CLUB_OFFERS peut la couper.
+    const inAppOff = category === 'CLUB_OFFERS'
+      ? new Set(offRows.filter((r) => r.channel === 'INAPP').map((r) => r.userId))
+      : new Set<string>();
+    const excluded = ids.filter((id) => emailOff.has(id) && inAppOff.has(id)).length;
+    return { total: ids.length, email: ids.length - emailOff.size, inApp: ids.length - inAppOff.size, excluded };
+  }
+
+  /** Les derniers envois adressés à un membre du club (historique fiche 360). */
+  async receivedBy(clubId: string, userId: string, take = 10) {
+    const rows = await prisma.clubBroadcastRecipient.findMany({
+      where: { userId, broadcast: { clubId } },
+      orderBy: { broadcast: { createdAt: 'desc' } },
+      take,
+      select: { broadcast: { select: { id: true, title: true, kind: true, createdAt: true } } },
+    });
+    return rows.map((r) => r.broadcast);
+  }
 }

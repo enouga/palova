@@ -1196,6 +1196,11 @@ router.get('/members/:userId/history', async (req: ClubScopedRequest, res: Respo
   try { res.json(await memberStatsService.getMemberHistory(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
 });
 
+// Derniers messages de diffusion adressés à ce membre (fiche 360).
+router.get('/members/:userId/broadcasts', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try { res.json(await broadcastService.receivedBy(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
+});
+
 // Commentaires staff sur un membre (journal client).
 router.get('/members/:userId/notes', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try { res.json(await memberNotesService.list(req.membership!.clubId, asString(req.params.userId))); } catch (e) { handleError(e, res, next); }
@@ -1550,6 +1555,17 @@ router.post('/broadcast/preview', requireClubMember('STAFF'), async (req: ClubSc
       title: typeof title === 'string' ? title : '',
       bodyHtml: typeof bodyHtml === 'string' ? bodyHtml : '',
       url: typeof url === 'string' ? url : null,
+    }));
+  } catch (err) { handleError(err, res, next); }
+});
+
+// Aperçu d'audience avant envoi : qui recevra quoi (email/cloche) selon la catégorie et le ciblage.
+router.post('/broadcast/audience', requireClubMember('STAFF'), async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { recipientUserIds, kind } = req.body;
+    res.json(await broadcastService.audience(req.membership!.clubId, {
+      recipientUserIds: Array.isArray(recipientUserIds) ? recipientUserIds.map(String) : null,
+      kind: kind === 'COMMERCIAL' ? 'COMMERCIAL' : 'INFO',
     }));
   } catch (err) { handleError(err, res, next); }
 });

@@ -236,3 +236,101 @@ describe('BroadcastService — envoi ciblé', () => {
     });
   });
 });
+
+describe('BroadcastService — audience', () => {
+  let service: BroadcastService;
+
+  beforeEach(() => {
+    service = new BroadcastService();
+  });
+
+  it('compte email/cloche/exclus pour un envoi COMMERCIAL', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' },
+    ]);
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u2', channel: 'EMAIL' },
+      { userId: 'u3', channel: 'EMAIL' },
+      { userId: 'u3', channel: 'INAPP' },
+    ]);
+
+    const result = await service.audience('club-demo', { kind: 'COMMERCIAL' });
+
+    expect(result).toEqual({ total: 3, email: 1, inApp: 2, excluded: 1 });
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-demo', status: 'ACTIVE' },
+      select: { userId: true },
+    });
+    expect(prismaMock.notificationPreference.findMany).toHaveBeenCalledWith({
+      where: { userId: { in: ['u1', 'u2', 'u3'] }, category: 'CLUB_OFFERS', enabled: false, channel: { in: ['EMAIL', 'INAPP'] } },
+      select: { userId: true, channel: true },
+    });
+  });
+
+  it('INFO (défaut) : la cloche CLUB_MESSAGES est verrouillée ON, jamais comptée comme coupée', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u1' }, { userId: 'u2' },
+    ]);
+    // Même si un opt-out INAPP existait en base pour CLUB_MESSAGES (ne devrait jamais arriver
+    // pour ce canal verrouillé), audience() ne doit jamais le compter comme "off".
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([
+      { userId: 'u2', channel: 'INAPP' },
+    ]);
+
+    const result = await service.audience('club-demo', { kind: 'INFO' });
+
+    expect(result).toEqual({ total: 2, email: 2, inApp: 2, excluded: 0 });
+    expect(prismaMock.notificationPreference.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ category: 'CLUB_MESSAGES' }),
+    }));
+  });
+
+  it('ciblage recipientUserIds : intersecté avec les adhésions ACTIVES du club', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([{ userId: 'u1' }]);
+    (prismaMock.notificationPreference.findMany as jest.Mock).mockResolvedValue([]);
+
+    await service.audience('club-demo', { recipientUserIds: ['u1', 'u-hors-club'], kind: 'INFO' });
+
+    expect(prismaMock.clubMembership.findMany).toHaveBeenCalledWith({
+      where: { clubId: 'club-demo', status: 'ACTIVE', userId: { in: ['u1', 'u-hors-club'] } },
+      select: { userId: true },
+    });
+  });
+
+  it('aucun membre actif → { total:0, email:0, inApp:0, excluded:0 } sans appeler notificationPreference', async () => {
+    (prismaMock.clubMembership.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await service.audience('club-demo', {});
+
+    expect(result).toEqual({ total: 0, email: 0, inApp: 0, excluded: 0 });
+    expect(prismaMock.notificationPreference.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('BroadcastService — receivedBy', () => {
+  let service: BroadcastService;
+
+  beforeEach(() => {
+    service = new BroadcastService();
+  });
+
+  it('renvoie les diffusions reçues par le membre, du club, triées par date décroissante', async () => {
+    (prismaMock.clubBroadcastRecipient.findMany as jest.Mock).mockResolvedValue([
+      { broadcast: { id: 'b2', title: 'Récent', kind: 'INFO', createdAt: new Date('2026-07-21') } },
+      { broadcast: { id: 'b1', title: 'Ancien', kind: 'COMMERCIAL', createdAt: new Date('2026-07-01') } },
+    ]);
+
+    const result = await service.receivedBy('club-demo', 'u1');
+
+    expect(result).toEqual([
+      { id: 'b2', title: 'Récent', kind: 'INFO', createdAt: new Date('2026-07-21') },
+      { id: 'b1', title: 'Ancien', kind: 'COMMERCIAL', createdAt: new Date('2026-07-01') },
+    ]);
+    expect(prismaMock.clubBroadcastRecipient.findMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', broadcast: { clubId: 'club-demo' } },
+      orderBy: { broadcast: { createdAt: 'desc' } },
+      take: 10,
+      select: { broadcast: { select: { id: true, title: true, kind: true, createdAt: true } } },
+    });
+  });
+});
