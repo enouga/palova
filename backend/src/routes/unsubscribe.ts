@@ -14,8 +14,9 @@ const page = (title: string, body: string, extra = '') =>
   `<h1 style="font-size:20px;">${title}</h1><p style="line-height:1.6;color:#5d6675;">${body}</p>${extra}</body></html>`;
 
 // Désinscription en un clic depuis un email de diffusion — publique, sans login, idempotente.
-// L'opt-out est GLOBAL (catégorie CLUB_MESSAGES, canal EMAIL) : se désinscrire coupe les
-// emails d'annonces de tous les clubs (choix v1, la préférence n'est pas par club).
+// L'opt-out est GLOBAL (canal EMAIL, tous les clubs — choix v1, la préférence n'est pas par club).
+// Catégorie ciblée par `cat` : `cat=offers` coupe CLUB_OFFERS (annonces commerciales), sinon
+// (défaut historique) CLUB_MESSAGES (diffusions club).
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = verifyUnsubscribeToken(String(req.query.token ?? ''));
@@ -24,10 +25,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       return;
     }
     const resub = req.query.action === 'resubscribe';
+    const isOffers = String(req.query.cat ?? '') === 'offers';
+    const category = isOffers ? ('CLUB_OFFERS' as const) : ('CLUB_MESSAGES' as const);
+    const topicLabel = isOffers ? 'les offres des clubs' : "les emails d'annonces des clubs";
     try {
       await prisma.notificationPreference.upsert({
-        where: { userId_category_channel: { userId, category: 'CLUB_MESSAGES', channel: 'EMAIL' } },
-        create: { userId, category: 'CLUB_MESSAGES', channel: 'EMAIL', enabled: resub },
+        where: { userId_category_channel: { userId, category, channel: 'EMAIL' } },
+        create: { userId, category, channel: 'EMAIL', enabled: resub },
         update: { enabled: resub },
       });
     } catch (e) {
@@ -36,13 +40,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003')) throw e;
     }
     if (resub) {
-      res.send(page('Réinscription confirmée', "Vous recevrez de nouveau les emails d'annonces des clubs."));
+      res.send(page('Réinscription confirmée', `Vous recevrez de nouveau ${topicLabel}.`));
       return;
     }
-    const resubUrl = `/api/unsubscribe?token=${encodeURIComponent(String(req.query.token))}&action=resubscribe`;
+    const resubUrl = `/api/unsubscribe?token=${encodeURIComponent(String(req.query.token))}&action=resubscribe${isOffers ? '&cat=offers' : ''}`;
     res.send(page(
       'Vous êtes désinscrit',
-      'Vous ne recevrez plus les emails d\'annonces des clubs. Les emails liés à vos réservations et paiements continuent d\'arriver.',
+      `Vous ne recevrez plus ${topicLabel}. Les emails liés à vos réservations et paiements continuent d'arriver.`,
       `<p><a href="${resubUrl}" style="color:#3866b0;">Se réinscrire</a></p>`,
     ));
   } catch (err) {

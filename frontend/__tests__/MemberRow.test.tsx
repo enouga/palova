@@ -57,3 +57,11 @@ it('pas de chip Coach sinon', () => {
   wrap();
   expect(screen.queryByText('Coach')).toBeNull();
 });
+
+it('case à cocher : un keydown (ex. Espace) ne remonte pas au parent (n\'ouvre pas la fiche)', () => {
+  const onOpen = jest.fn();
+  wrap({ onOpen, onToggleCheck: jest.fn(), checked: false });
+  const box = screen.getByRole('checkbox', { name: /Sélectionner/ });
+  fireEvent.keyDown(box, { key: ' ' });
+  expect(onOpen).not.toHaveBeenCalled();
+});

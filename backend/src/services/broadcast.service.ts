@@ -3,7 +3,7 @@ import { dispatch } from './notification/dispatcher';
 import { buildBroadcastEmail } from '../email/templates/emails';
 import { clubAppUrl, absoluteAsset, apiPublicUrl } from '../email/links';
 import { Brand } from '../email/templates/layout';
-import { sanitizeBodyHtml, htmlToText } from '../email/registry';
+import { sanitizeBodyHtml, htmlToText, substituteText, substituteHtml } from '../email/registry';
 import { unsubscribeToken } from './unsubscribeToken';
 
 export interface BroadcastChannels {
@@ -30,12 +30,21 @@ interface SendInput {
   url?: string | null;
   /** Canaux choisis par le club (email / cloche / push). Absent = tous. */
   channels?: Partial<BroadcastChannels> | null;
+  /** Ciblage : null/absent = tous les membres actifs (comportement historique). */
+  recipientUserIds?: string[] | null;
+  /** COMMERCIAL = catégorie de consentement CLUB_OFFERS (offres) ; défaut INFO. */
+  kind?: 'INFO' | 'COMMERCIAL';
 }
 
 interface PreviewInput {
   title: string;
   bodyHtml: string;
   url?: string | null;
+}
+
+/** Normalise le ciblage : tableau non-vide → tel quel, sinon `null` (= tous les membres actifs). */
+function resolveTargeting(recipientUserIds?: string[] | null): string[] | null {
+  return Array.isArray(recipientUserIds) && recipientUserIds.length > 0 ? recipientUserIds : null;
 }
 
 export class BroadcastService {
@@ -71,13 +80,22 @@ export class BroadcastService {
     const ch = normalizeBroadcastChannels(input.channels);
     if (!ch.email && !ch.inApp) throw new Error('VALIDATION_ERROR');
 
+    // Type de diffusion : COMMERCIAL route vers la catégorie de consentement CLUB_OFFERS
+    // (opt-out séparé des messages ordinaires) ; INFO (défaut) garde CLUB_MESSAGES.
+    const kind: 'INFO' | 'COMMERCIAL' = input.kind === 'COMMERCIAL' ? 'COMMERCIAL' : 'INFO';
+    const category = kind === 'COMMERCIAL' ? ('CLUB_OFFERS' as const) : ('CLUB_MESSAGES' as const);
+    // Ciblage : liste non vide = sous-ensemble ; sinon comportement historique (tous les actifs).
+    const targeted = resolveTargeting(input.recipientUserIds);
+
     const [{ brand, slug }, members] = await Promise.all([
       this.loadBrand(clubId),
       prisma.clubMembership.findMany({
-        where: { clubId, status: 'ACTIVE' },
-        select: { user: { select: { id: true, email: true, firstName: true } } },
+        where: { clubId, status: 'ACTIVE', ...(targeted ? { userId: { in: targeted } } : {}) },
+        select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
       }),
     ]);
+    // Un ciblage qui ne résout aucun membre actif du club = erreur (jamais d'envoi hors club).
+    if (targeted && members.length === 0) throw new Error('VALIDATION_ERROR');
 
     // Ligne d'audit : body = texte brut (historique/in-app), bodyHtml = corps riche assaini.
     const broadcast = await prisma.clubBroadcast.create({
@@ -87,9 +105,15 @@ export class BroadcastService {
         title,
         body: plainBody,
         bodyHtml: safeHtml,
+        kind,
         url: input.url ?? null,
         recipientCount: members.length,
       },
+    });
+    // Trace « à qui le club a adressé le message » (avant filtrage par préférences membre).
+    await prisma.clubBroadcastRecipient.createMany({
+      data: members.map((m) => ({ broadcastId: broadcast.id, userId: m.user.id })),
+      skipDuplicates: true,
     });
 
     const targetUrl = input.url ?? clubAppUrl(slug, '/');
@@ -98,7 +122,7 @@ export class BroadcastService {
     // par préférence (cf. dispatcher.ts) — ce compte ne change pas qui reçoit quoi.
     const optOuts = await prisma.notificationPreference.count({
       where: {
-        category: 'CLUB_MESSAGES',
+        category,
         channel: 'EMAIL',
         enabled: false,
         userId: { in: members.map((m) => m.user.id) },
@@ -109,14 +133,21 @@ export class BroadcastService {
     // A queue-based approach is explicitly out of scope for V1.
     const allowChannels = { inapp: ch.inApp, email: ch.email, push: ch.push };
     for (const m of members) {
+      // Substitution par destinataire — le gabarit stocké (audit) garde les {{placeholders}}.
+      const vars = { prenom: m.user.firstName, nom: m.user.lastName };
+      const perTitle = substituteText(title, vars);
+      const perHtml = substituteHtml(safeHtml, vars);
+      const perPlain = substituteText(plainBody, vars);
       // On ne construit l'email (assaini + décoré, lien de désinscription signé par membre)
       // QUE si le canal email est demandé ET que le membre a une adresse.
       let email = null as { to: string; subject: string; html: string; text: string } | null;
       if (ch.email && m.user.email) {
-        const unsubscribeUrl = apiPublicUrl(`/api/unsubscribe?token=${unsubscribeToken(m.user.id)}`);
+        const unsubscribeUrl = apiPublicUrl(
+          `/api/unsubscribe?token=${unsubscribeToken(m.user.id)}${kind === 'COMMERCIAL' ? '&cat=offers' : ''}`,
+        );
         const built = buildBroadcastEmail({
-          title,
-          bodyHtml: safeHtml,
+          title: perTitle,
+          bodyHtml: perHtml,
           url: targetUrl,
           brand: { ...brand, unsubscribeUrl },
         });
@@ -125,11 +156,11 @@ export class BroadcastService {
       await dispatch({
         userId: m.user.id,
         clubId,
-        category: 'CLUB_MESSAGES',
+        category,
         type: 'club.broadcast',
-        title,
+        title: perTitle,
         // La notif in-app / push ne rend pas de HTML → texte brut dérivé du corps riche.
-        body: plainBody,
+        body: perPlain,
         url: targetUrl,
         email,
         allowChannels,
@@ -154,5 +185,39 @@ export class BroadcastService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  /** Aperçu d'audience : qui recevra quoi, selon la catégorie de l'envoi. Approximation
+   *  sans le canal push (dépend des subscriptions appareil). */
+  async audience(clubId: string, input: { recipientUserIds?: string[] | null; kind?: 'INFO' | 'COMMERCIAL' }) {
+    const category = input.kind === 'COMMERCIAL' ? 'CLUB_OFFERS' : 'CLUB_MESSAGES';
+    const targeted = resolveTargeting(input.recipientUserIds);
+    const members = await prisma.clubMembership.findMany({
+      where: { clubId, status: 'ACTIVE', ...(targeted ? { userId: { in: targeted } } : {}) },
+      select: { userId: true },
+    });
+    const ids = members.map((m) => m.userId);
+    const offRows = ids.length ? await prisma.notificationPreference.findMany({
+      where: { userId: { in: ids }, category, enabled: false, channel: { in: ['EMAIL', 'INAPP'] } },
+      select: { userId: true, channel: true },
+    }) : [];
+    const emailOff = new Set(offRows.filter((r) => r.channel === 'EMAIL').map((r) => r.userId));
+    // La cloche CLUB_MESSAGES est verrouillée ON (cf. preferences.ts) — seul CLUB_OFFERS peut la couper.
+    const inAppOff = category === 'CLUB_OFFERS'
+      ? new Set(offRows.filter((r) => r.channel === 'INAPP').map((r) => r.userId))
+      : new Set<string>();
+    const excluded = ids.filter((id) => emailOff.has(id) && inAppOff.has(id)).length;
+    return { total: ids.length, email: ids.length - emailOff.size, inApp: ids.length - inAppOff.size, excluded };
+  }
+
+  /** Les derniers envois adressés à un membre du club (historique fiche 360). */
+  async receivedBy(clubId: string, userId: string, take = 10) {
+    const rows = await prisma.clubBroadcastRecipient.findMany({
+      where: { userId, broadcast: { clubId } },
+      orderBy: { broadcast: { createdAt: 'desc' } },
+      take,
+      select: { broadcast: { select: { id: true, title: true, kind: true, createdAt: true } } },
+    });
+    return rows.map((r) => r.broadcast);
   }
 }

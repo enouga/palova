@@ -21,7 +21,7 @@ const subActionBtn = (th: Theme, danger: boolean): React.CSSProperties => ({
 
 // Une rangée-carte de la liste des membres. Un clic (n'importe où) ouvre le panneau d'édition ;
 // le nom reste un lien distinct vers la fiche « passif » (stopPropagation).
-export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscriptionContext, onSubAction }: {
+export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscriptionContext, onSubAction, checked, onToggleCheck }: {
   m: Member;
   selected: boolean;
   nowMs: number;
@@ -30,6 +30,9 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscription
   /** En contexte abonnés : la ligne porte échéance + Renouveler/Changer/Résilier. */
   subscriptionContext?: boolean;
   onSubAction?: (kind: SubActionKind, m: Member) => void;
+  /** Sélection multiple (diffusion ciblée) : case à cocher rendue seulement si `onToggleCheck` est fourni. */
+  checked?: boolean;
+  onToggleCheck?: () => void;
 }) {
   const { th } = useTheme();
   const blocked = m.status === 'BLOCKED';
@@ -54,6 +57,11 @@ export function MemberRow({ m, selected, nowMs, onOpen, onNavigate, subscription
         fontFamily: th.fontUI, flexWrap: subscriptionContext ? 'wrap' : undefined,
       }}
     >
+      {onToggleCheck && (
+        <input type="checkbox" checked={!!checked} aria-label={`Sélectionner ${m.firstName} ${m.lastName}`}
+          onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} onChange={onToggleCheck}
+          style={{ width: 17, height: 17, accentColor: th.accent, cursor: 'pointer', flex: 'none' }} />
+      )}
       <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl ?? null} size={42} color={colorForSeed(m.userId)} />
 
       <div style={{ flex: 1, minWidth: 0 }}>

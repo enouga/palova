@@ -22,6 +22,7 @@ jest.mock('@/lib/api', () => ({
     sendClubBroadcast: jest.fn(),
     previewClubBroadcast: jest.fn().mockResolvedValue({ html: '<html>preview</html>' }),
     adminUploadEmailImage: jest.fn().mockResolvedValue({ url: '/uploads/email-images/x.png' }),
+    broadcastAudience: jest.fn().mockResolvedValue({ total: 12, email: 10, inApp: 12, excluded: 2 }),
   },
 }));
 
@@ -36,6 +37,7 @@ function renderPage() {
 describe('AdminBroadcastPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     const { api } = require('@/lib/api');
     api.getClubBroadcasts.mockResolvedValue({
       recipientCount: 42,
@@ -52,6 +54,7 @@ describe('AdminBroadcastPage', () => {
     });
     api.sendClubBroadcast.mockResolvedValue({ recipientCount: 42, broadcastId: 'b2' });
     api.previewClubBroadcast.mockResolvedValue({ html: '<html>preview</html>' });
+    api.broadcastAudience.mockResolvedValue({ total: 12, email: 10, inApp: 12, excluded: 2 });
   });
 
   it('affiche le nombre de membres actifs après chargement', async () => {
@@ -91,7 +94,7 @@ describe('AdminBroadcastPage', () => {
     await waitFor(() =>
       expect(api.sendClubBroadcast).toHaveBeenCalledWith(
         'club-demo',
-        { title: 'Mon titre', bodyHtml: '<p>Mon message</p>', channels: { email: false, inApp: true, push: true } },
+        { title: 'Mon titre', bodyHtml: '<p>Mon message</p>', channels: { email: false, inApp: true, push: true }, kind: 'INFO' },
         't',
       ),
     );
@@ -170,5 +173,64 @@ describe('AdminBroadcastPage', () => {
       target: { value: '<p>Du contenu</p>' },
     });
     expect(btn).not.toBeDisabled();
+  });
+
+  it('sans sélection : « Tous les membres actifs », envoi sans recipientUserIds', async () => {
+    const { api } = require('@/lib/api');
+    renderPage();
+    expect(await screen.findByText(/Tous les membres actifs/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/titre du message/i), { target: { value: 'T' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: '<p>Corps</p>' } });
+    fireEvent.click(screen.getByRole('button', { name: /envoyer/i }));
+    await waitFor(() => screen.getByRole('dialog'));
+    const btns = screen.getAllByRole('button', { name: /envoyer/i });
+    fireEvent.click(btns[btns.length - 1]);
+
+    await waitFor(() => expect(api.sendClubBroadcast).toHaveBeenCalledWith(
+      'club-demo', expect.objectContaining({ kind: 'INFO', recipientUserIds: undefined }), 't'));
+  });
+
+  it('sélection en attente : chips destinataires + envoi ciblé', async () => {
+    sessionStorage.setItem('palova:broadcast-recipients', JSON.stringify([{ userId: 'u1', name: 'Ines A.' }]));
+    renderPage();
+    expect(await screen.findByText('1 destinataire')).toBeInTheDocument();
+    expect(screen.getByText('Ines A.')).toBeInTheDocument();
+  });
+
+  it('type Commercial : bandeau d\'audience avec exclus', async () => {
+    const { api } = require('@/lib/api');
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Commercial' }));
+    expect(await screen.findByText(/2 ne recevront rien/)).toBeInTheDocument();
+    await waitFor(() => expect(api.broadcastAudience).toHaveBeenCalledWith(
+      'club-demo', expect.objectContaining({ kind: 'COMMERCIAL' }), 't'));
+  });
+
+  it('interrupteur SMS présent et désactivé (« bientôt disponible »)', async () => {
+    renderPage();
+    expect(await screen.findByText(/SMS/)).toBeInTheDocument();
+    expect(screen.getByText(/bientôt disponible/i)).toBeInTheDocument();
+  });
+
+  it('retirer le dernier destinataire désactive l\'envoi (jamais de bascule silencieuse vers tous)', async () => {
+    sessionStorage.setItem('palova:broadcast-recipients', JSON.stringify([{ userId: 'u1', name: 'Ines A.' }]));
+    renderPage();
+    await screen.findByText('Ines A.');
+
+    fireEvent.change(screen.getByPlaceholderText(/titre du message/i), { target: { value: 'T' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: '<p>Corps</p>' } });
+
+    // Formulaire valide + destinataire présent => Envoyer est activable.
+    expect(screen.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Retirer Ines A./ }));
+    expect(screen.getByText(/Aucun destinataire/)).toBeInTheDocument();
+    // Plus aucun destinataire => Envoyer doit être désactivé, pas de bascule silencieuse.
+    expect(screen.getByRole('button', { name: /envoyer/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Revenir à tous les membres/ }));
+    expect(screen.getByText(/Tous les membres actifs/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
   });
 });

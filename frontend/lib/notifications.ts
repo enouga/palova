@@ -4,7 +4,7 @@ import { ACCENTS } from '@/lib/theme';
 
 export type NotifCategory =
   | 'MY_GAMES' | 'OPEN_MATCH_CHAT' | 'DIRECT_MESSAGES' | 'MY_REGISTRATIONS' | 'MY_MATCHES' | 'PAYMENTS'
-  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL' | 'MODERATION';
+  | 'CLUB_MESSAGES' | 'ORGANIZER' | 'REMINDERS' | 'SOCIAL' | 'MODERATION' | 'CLUB_OFFERS';
 export type NotifChannel = 'INAPP' | 'PUSH' | 'EMAIL';
 
 export interface CategoryMeta { key: NotifCategory; label: string; desc: string; staffOnly?: boolean }
@@ -18,6 +18,7 @@ export const CATEGORY_META: CategoryMeta[] = [
   { key: 'MY_MATCHES', label: 'Mes matchs', desc: 'Confirmation de résultat, litige' },
   { key: 'PAYMENTS', label: 'Paiements', desc: 'Remboursements' },
   { key: 'CLUB_MESSAGES', label: 'Messages du club', desc: "Annonces de l’équipe du club" },
+  { key: 'CLUB_OFFERS', label: 'Offres du club', desc: 'Promotions et offres commerciales de vos clubs' },
   { key: 'ORGANIZER', label: 'Activité de mes events', desc: "Inscriptions/désinscriptions sur ce que j’organise", staffOnly: true },
   { key: 'MODERATION', label: 'Signalements', desc: 'Un message du chat de partie a été signalé', staffOnly: true },
   { key: 'REMINDERS', label: 'Rappels', desc: 'Avant une partie ou un event' },

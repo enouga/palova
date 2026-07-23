@@ -54,6 +54,8 @@ jest.mock('../lib/api', () => ({
     adminRemoveMember: jest.fn(),
     getMyProfile: jest.fn(),
     adminGetSubscriptionPlans: jest.fn(),
+    // Carte « Messages » : historique des diffusions déjà reçues par ce membre.
+    adminGetMemberBroadcasts: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
@@ -147,6 +149,9 @@ beforeEach(() => {
   (api.adminRemoveMember as jest.Mock).mockResolvedValue({ ok: true });
   (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'viewer-1' });
   (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([]);
+  (api.adminGetMemberBroadcasts as jest.Mock).mockResolvedValue([
+    { id: 'b1', title: 'Promo carnets', kind: 'COMMERCIAL', createdAt: '2026-07-20T10:00:00Z' },
+  ]);
 });
 
 // ───────────────────────── Identité, hero, badges ─────────────────────────
@@ -696,6 +701,21 @@ it('hero : téléphone cliquable quand renseigné, absent sinon', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   expect(screen.getByRole('link', { name: '0611009030' })).toHaveAttribute('href', 'tel:0611009030');
+});
+
+// ───────────────────────── Carte « Messages » ─────────────────────────
+
+it('carte Contact : « Envoyer un message » dépose le destinataire et navigue vers le composer', async () => {
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: /Envoyer un message/ }));
+  expect(JSON.parse(sessionStorage.getItem('palova:broadcast-recipients') ?? 'null'))
+    .toEqual([{ userId: 'u1', name: 'Jean D.' }]);
+  expect(mockPush).toHaveBeenCalledWith('/admin/broadcast');
+});
+
+it('carte Contact : liste les derniers messages reçus', async () => {
+  renderPage();
+  expect(await screen.findByText('Promo carnets')).toBeInTheDocument();
 });
 
 // ───────────────────────── Erreur de chargement ─────────────────────────
