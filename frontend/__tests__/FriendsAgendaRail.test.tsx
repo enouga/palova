@@ -34,3 +34,8 @@ it('tournoi → /tournois/:id', () => {
   fireEvent.click(screen.getByText('P100'));
   expect(push).toHaveBeenCalledWith('/tournois/t1');
 });
+
+it('affiche le compteur de résultats', () => {
+  render(<FriendsAgendaRail items={[item, { ...item, id: 'r2', kind: 'event' as const, label: 'Soirée padel' }]} timezone="Europe/Paris" />);
+  expect(screen.getByText('2 résultats')).toBeInTheDocument();
+});
