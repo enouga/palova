@@ -29,16 +29,28 @@ const items: NationalTournament[] = [
 ];
 
 describe('resolveDateWindow', () => {
-  it('preset days30 = [now, now+30j]', () => {
-    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'days30' }, NOW)!;
+  it('preset today = [now, fin de journée locale]', () => {
+    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'today' }, NOW)!;
     expect(w.from.getTime()).toBe(NOW.getTime());
-    expect(w.to!.getTime()).toBe(NOW.getTime() + 30 * 86_400_000);
+    expect(w.to!.getTime()).toBe(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate(), 23, 59, 59, 999).getTime());
+  });
+  it("preset thisWeek un mercredi → jusqu'à dimanche 23:59:59.999 (même semaine)", () => {
+    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'thisWeek' }, NOW)!;
+    expect(w.from.getTime()).toBe(NOW.getTime());
+    // NOW est un mercredi (cf. commentaire ligne 7) : +4 jours = dimanche.
+    expect(w.to!.getTime()).toBe(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 4, 23, 59, 59, 999).getTime());
+  });
+  it('preset thisWeek un dimanche en cours → ce jour seul', () => {
+    const sunday = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 4, 10, 0, 0);
+    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'thisWeek' }, sunday)!;
+    expect(w.from.getTime()).toBe(sunday.getTime());
+    expect(w.to!.getTime()).toBe(new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59, 999).getTime());
   });
   it('aucun preset ni plage → null', () => {
     expect(resolveDateWindow(emptyCalendarState(), NOW)).toBeNull();
   });
   it('plage custom from/to prime sur le preset', () => {
-    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'days30', from: '2026-07-10', to: '2026-07-15' }, NOW)!;
+    const w = resolveDateWindow({ ...emptyCalendarState(), datePreset: 'today', from: '2026-07-10', to: '2026-07-15' }, NOW)!;
     expect(w.from.getFullYear()).toBe(2026);
     expect(w.to).not.toBeNull();
   });
