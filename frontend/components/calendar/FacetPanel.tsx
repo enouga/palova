@@ -5,16 +5,10 @@ import { inkOn } from '@/lib/theme';
 import { Icon } from '@/components/ui/Icon';
 import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { DateRangeChip } from '@/components/calendar/DateRangeChip';
-import { CalendarFilterState, DatePreset, calendarFacets } from '@/lib/tournamentCalendar';
+import { CalendarFilterState, DatePreset, DATE_PRESETS, calendarFacets } from '@/lib/tournamentCalendar';
 import { TournamentGender } from '@/lib/api';
 
 const GENDER_LABEL: Record<string, string> = { MEN: 'Messieurs', WOMEN: 'Dames', MIXED: 'Mixte' };
-const PRESETS: { key: DatePreset; label: string }[] = [
-  { key: 'weekend', label: 'Ce week-end' },
-  { key: 'thisMonth', label: 'Ce mois-ci' },
-  { key: 'days30', label: '30 jours' },
-  { key: 'months3', label: '3 mois' },
-];
 const DEPT_VISIBLE = 8; // nombre de départements montrés avant « + tous »
 
 type Th = ReturnType<typeof useTheme>['th'];
@@ -52,7 +46,7 @@ export function FacetPanel({ facets, state, onToggleDept, onToggleCategory, onTo
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
           <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
-            {PRESETS.map((p) => (
+            {DATE_PRESETS.map((p) => (
               <FacetChip key={p.key} label={p.label} tint={FILTER_TINTS.quand} active={state.datePreset === p.key && !state.from && !state.to}
                 onClick={() => onSetPreset(state.datePreset === p.key ? null : p.key)} />
             ))}
