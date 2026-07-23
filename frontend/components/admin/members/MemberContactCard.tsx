@@ -26,9 +26,13 @@ export function MemberContactCard({ userId, firstName, lastName, received }: {
     router.push('/admin/broadcast');
   };
 
+  // Le badge doit refléter le nombre de lignes réellement affichées (≤ 3), pas le total
+  // renvoyé par le backend (jusqu'à 10) — sinon le compteur ment sur ce qui est visible.
+  const shown = received.slice(0, 3);
+
   return (
     <section aria-label="Messages" style={memberCardStyle(th)}>
-      <Kicker color={MEMBER_CARD_TINTS.green}>Messages{received.length ? ` · ${received.length}` : ''}</Kicker>
+      <Kicker color={MEMBER_CARD_TINTS.green}>Messages{shown.length ? ` · ${shown.length}` : ''}</Kicker>
       <button
         onClick={message}
         style={{
@@ -41,7 +45,7 @@ export function MemberContactCard({ userId, firstName, lastName, received }: {
 
       {received.length > 0 ? (
         <div style={{ marginTop: 12, borderTop: `1px solid ${th.line}`, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {received.slice(0, 3).map((b) => (
+          {shown.map((b) => (
             <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</span>
               <span style={{ flexShrink: 0 }}>{fmt(b.createdAt)}</span>
