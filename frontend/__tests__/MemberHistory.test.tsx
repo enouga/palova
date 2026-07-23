@@ -452,6 +452,37 @@ it('rôle & accès : re-sélectionner le rôle courant = no-op (pas de PATCH)', 
   expect(api.adminSetMemberStaffRole).not.toHaveBeenCalled();
 });
 
+it('rôle & accès : lecture seule sur le gérant (OWNER) — le texte remplace le Segmented, Coach reste cliquable', async () => {
+  // canEditRole = canManageStaff && viewer != null && staffRole !== 'OWNER' && userId !== viewer.userId
+  // → cible OWNER : le Segmented Membre/Staff/Admin disparaît au profit d'un texte lecture seule,
+  // mais les cases Coach/Juge-arbitre restent gérées par canManageStaff seul (pas par canEditRole).
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({ ...HISTORY, member: { ...HISTORY.member, staffRole: 'OWNER' } });
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  const group = screen.getByRole('group', { name: 'Rôle de Jean Dupont' });
+  expect(within(group).queryByRole('button', { name: 'Staff' })).toBeNull();
+  expect(within(group).queryByRole('button', { name: 'Membre' })).toBeNull();
+  expect(within(group).getByText('Gérant')).toBeInTheDocument();
+  // Coach/Juge-arbitre vivent hors du `role="group"` du sélecteur de rôle (bloc sœur, même
+  // garde canManageStaff) — gated indépendamment de canEditRole, donc toujours cliquables ici.
+  const coach = screen.getByRole('checkbox', { name: /Coach/ });
+  expect(coach).toBeInTheDocument();
+  fireEvent.click(coach);
+  await waitFor(() => expect(api.adminSetMemberCoach).toHaveBeenCalledWith('club-1', 'u1', true, 'tok'));
+});
+
+it('rôle & accès : lecture seule quand la cible est le viewer lui-même — Coach reste cliquable', async () => {
+  // Même branche canEditRole, deuxième condition : member.userId === viewer.userId.
+  (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'u1' }); // viewer = la cible ('u1')
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  const group = await waitFor(() => screen.getByRole('group', { name: 'Rôle de Jean Dupont' }));
+  expect(within(group).queryByRole('button', { name: 'Membre' })).toBeNull();
+  expect(within(group).queryByRole('button', { name: 'Staff' })).toBeNull();
+  expect(within(group).getByText('Membre')).toBeInTheDocument(); // staffRole null (fixture par défaut)
+  expect(screen.getByRole('checkbox', { name: /Coach/ })).toBeInTheDocument();
+});
+
 it('rôle & accès : cocher « Coach » appelle adminSetMemberCoach puis recharge la fiche', async () => {
   renderPage('ADMIN');
   await screen.findByText('Jean Dupont');
