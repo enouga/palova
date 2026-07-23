@@ -5,26 +5,23 @@ import { useAuth } from '@/lib/useAuth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { FacetChip, FacetGroup, FILTER_TINTS } from '@/components/ui/FacetChip';
 import { NationalMatchCard } from '@/components/platform/NationalMatchCard';
-import { filterNationalMatches, sortMatchesByDistance, DiscoverPeriod, LocationQuery } from '@/lib/discover';
+import { filterNationalMatches, sortMatchesByDistance, LocationQuery } from '@/lib/discover';
+import { DatePreset, DATE_PRESETS } from '@/lib/tournamentCalendar';
+import { DateRangeChip } from '@/components/calendar/DateRangeChip';
 import { useScrollRail } from '@/lib/useScrollRail';
 import { RailArrows } from '@/components/ui/RailArrows';
-
-const PERIOD_OPTIONS: { value: DiscoverPeriod; label: string }[] = [
-  { value: 'today', label: "Aujourd'hui" },
-  { value: 'weekend', label: 'Week-end' },
-  { value: 'all', label: '14 jours' },
-];
 
 // Rail de découverte, pas un flux exhaustif : on plafonne l'affichage (comme les autres
 // rails de la vitrine — OpenMatchesShowcase à 6, UpcomingTournaments à 4).
 const MAX_VISIBLE = 9;
 
-// Onglet « Parties » de la page /decouvrir : rail de parties ouvertes nationales
-// (GET /api/open-matches/national, chargées par le parent) filtrées par période/localisation/
-// niveau et triées par distance. Même traitement compteur+flèches que le rail de l'accueil
-// (NationalOpenMatches) — cette page EST déjà la vue complète, pas de lien "voir tout".
-// Pur côté données — `matches`/`location`/`coords`/`now` arrivent en props, seuls
-// `period`/`levelOn`/`rating` sont un état local à ce composant. `onCount` (optionnel)
+// Onglet « Parties » de la page /decouvrir : étagère 2 lignes de parties ouvertes nationales
+// (GET /api/open-matches/national, chargées par le parent) filtrées par date/localisation/
+// niveau et triées par distance. Le sélecteur de date (puces Aujourd'hui/Cette semaine/Ce
+// mois-ci + calendrier « Dates ») est EXACTEMENT celui de la section Tournois (DATE_PRESETS/
+// DateRangeChip partagés, cf. lib/tournamentCalendar.ts) — un seul sélecteur, pas deux
+// comportements sous un même nom. Pur côté données — `matches`/`location`/`coords`/`now`
+// arrivent en props, l'état de date/niveau est local à ce composant. `onCount` (optionnel)
 // reporte au parent le nombre de cartes affichées après filtrage — pas appelé tant que
 // `matches`/`now` ne sont pas chargés (compteur inconnu).
 export function DiscoverMatches({
@@ -44,7 +41,9 @@ export function DiscoverMatches({
 }) {
   const { th } = useTheme();
   const { token } = useAuth();
-  const [period, setPeriod] = useState<DiscoverPeriod>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset | null>(null);
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
   const [levelOn, setLevelOn] = useState(false);
   const [rating, setRating] = useState<MyRating | null>(null);
 
@@ -60,7 +59,7 @@ export function DiscoverMatches({
   // calculé AVANT les hooks ci-dessous pour respecter les règles des hooks (ils doivent être
   // appelés à chaque rendu, jamais conditionnellement, donc avant l'early return plus bas).
   const ranked = matches != null && now != null
-    ? sortMatchesByDistance(filterNationalMatches(matches, { period, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
+    ? sortMatchesByDistance(filterNationalMatches(matches, { datePreset, dateFrom, dateTo, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
     : null;
 
   useEffect(() => {
@@ -86,9 +85,12 @@ export function DiscoverMatches({
       <div style={{ borderRadius: 16, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px 26px', padding: '12px 14px' }}>
           <FacetGroup label="Quand" tint={FILTER_TINTS.quand}>
-            {PERIOD_OPTIONS.map((o) => (
-              <FacetChip key={o.value} label={o.label} tint={FILTER_TINTS.quand} active={period === o.value} onClick={() => setPeriod(o.value)} />
+            {DATE_PRESETS.map((p) => (
+              <FacetChip key={p.key} label={p.label} tint={FILTER_TINTS.quand}
+                active={datePreset === p.key && !dateFrom && !dateTo}
+                onClick={() => setDatePreset(datePreset === p.key ? null : p.key)} />
             ))}
+            <DateRangeChip from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} tint={FILTER_TINTS.quand} />
           </FacetGroup>
           {levelChipVisible && (
             <FacetGroup label="Niveau" tint={FILTER_TINTS.niveau}>
@@ -113,11 +115,15 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div>
+          {/* grid-auto-columns en calc(50% - gap/2) — toujours 2 vignettes pleinement
+              visibles dans la largeur du conteneur, même traitement que Tournois/Clubs/
+              Prochains events. */}
+          <style>{`.discover-matches-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:calc(50% - 7px);gap:14px;align-items:start}`}</style>
           <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginBottom: 4 }}>{count}</div>
           <div style={{ position: 'relative', margin: '0 -20px' }}>
-            <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 14, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+            <div ref={railRef} className="sp-scroll-x discover-matches-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
               {list.map((r) => (
-                <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} style={{ flex: '0 0 270px', scrollSnapAlign: 'start' }} />
+                <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} style={{ scrollSnapAlign: 'start' }} />
               ))}
             </div>
             <RailArrows edges={edges} onPrev={() => scrollByPage(-1)} onNext={() => scrollByPage(1)} prevLabel="Parties précédentes" nextLabel="Parties suivantes" fadeBottom={8} />
