@@ -124,7 +124,7 @@ describe('TournamentFinder', () => {
     expect((container.firstChild as HTMLElement).style.minHeight).toBe('');
   });
 
-  it('hideTitle : grille 4 colonnes et plafonnée à 8, la page /tournois autonome reste complète', async () => {
+  it('hideTitle : étagère 2 lignes plafonnée à 8, la page /tournois autonome reste complète', async () => {
     const many: NationalTournament[] = Array.from({ length: 15 }, (_, i) => ({
       ...NAT[0], id: `t${i}`, name: `Tournoi ${i}`,
     }));
@@ -135,6 +135,7 @@ describe('TournamentFinder', () => {
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(8));
     expect(screen.getAllByText(/^Tournoi \d+$/)).toHaveLength(8);
     expect(container.querySelector('.discover-tournaments-grid')).not.toBeNull();
+    expect(screen.getByText('8 tournois')).toBeInTheDocument();
 
     // La page autonome (pas de hideTitle) ne tronque rien.
     rerender(<ThemeProvider><TournamentFinder items={many} /></ThemeProvider>);
