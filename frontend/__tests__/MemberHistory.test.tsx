@@ -69,7 +69,8 @@ const HISTORY: MemberHistory = {
   reservations: [
     {
       id: 'r1', status: 'CONFIRMED', type: 'COURT', startTime: '2026-06-15T18:00:00.000Z', endTime: '2026-06-15T19:00:00.000Z',
-      cancelledAt: null, lateCancel: false, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '36.00',
+      cancelledAt: null, lateCancel: false, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true,
+      attributedAmount: '36.00', dueAmount: '36.00', // entièrement réglée → « Payé X € ✓ »
       participants: [
         { userId: 'u1', firstName: 'Jean', lastName: 'Dupont', isOrganizer: true },
         { userId: 'bob', firstName: 'Bob', lastName: 'Bidon', isOrganizer: false },
@@ -78,7 +79,15 @@ const HISTORY: MemberHistory = {
     },
     {
       id: 'r2', status: 'CANCELLED', type: 'COURT', startTime: '2026-06-10T18:00:00.000Z', endTime: '2026-06-10T19:00:00.000Z',
-      cancelledAt: '2026-06-10T12:00:00.000Z', lateCancel: true, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '0.00',
+      cancelledAt: '2026-06-10T12:00:00.000Z', lateCancel: true, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true,
+      attributedAmount: '0.00', dueAmount: '25.00',
+      participants: [{ userId: 'u1', firstName: 'Jean', lastName: 'Dupont', isOrganizer: true }],
+      match: null,
+    },
+    {
+      id: 'r3', status: 'CONFIRMED', type: 'COURT', startTime: '2026-06-18T18:00:00.000Z', endTime: '2026-06-18T19:00:00.000Z',
+      cancelledAt: null, lateCancel: false, resourceName: 'Court 2', sportKey: 'padel', isOrganizer: true,
+      attributedAmount: '10.00', dueAmount: '25.00', // réglée partiellement → doit afficher « Reste 15,00 € », jamais « Payé ✓ »
       participants: [{ userId: 'u1', firstName: 'Jean', lastName: 'Dupont', isOrganizer: true }],
       match: null,
     },
@@ -428,6 +437,14 @@ it('dernières réservations : ligne annulée estompée avec mention tardive', a
   expect(await screen.findByText(/Annulée · tardive/)).toBeInTheDocument();
   // la résa confirmée avec match saisi affiche aussi le résultat (V/D + score)
   expect(screen.getByText(/V 6-3 6-4/)).toBeInTheDocument();
+});
+
+it('dernières réservations : une résa partiellement réglée affiche « Reste X € », jamais « Payé ✓ »', async () => {
+  renderPage();
+  // r3 : payé 10,00 € sur 25,00 € dus → doit afficher le reste, pas une fausse coche verte.
+  expect(await screen.findByText(/Reste 15,00 €/)).toBeInTheDocument();
+  // r1 : intégralement réglée (36,00 € payés = 36,00 € dus) → reste « Payé ... ✓ ».
+  expect(screen.getByText(/Payé 36,00 € ✓/)).toBeInTheDocument();
 });
 
 // ───────────────────────── Carte « Rôle & accès » ─────────────────────────

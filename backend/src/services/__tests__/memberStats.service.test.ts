@@ -101,6 +101,7 @@ describe('MemberStatsService.getMemberHistory', () => {
     expect(out.finance.paymentsByMethod.CARD).toBe('6.00');
     expect(out.finance.averageBasket).toBe('18.00');
     expect(out.reservations.find((r) => r.id === 'r2')!.attributedAmount).toBe('6.00');
+    expect(out.reservations.find((r) => r.id === 'r2')!.dueAmount).toBe('10.00'); // part due (share) ≠ payé net
     expect(out.counts.confirmed).toBe(2);
   });
 

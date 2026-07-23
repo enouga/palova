@@ -28,6 +28,7 @@ export interface MemberHistoryReservation {
   sportKey: string | null;
   isOrganizer: boolean;
   attributedAmount: string;      // argent net (string décimale) attribué à ce joueur sur cette résa
+  dueAmount: string;             // part due par ce joueur sur cette résa (string décimale)
   participants: Array<{ userId: string; firstName: string; lastName: string; isOrganizer: boolean }>;
   match: { winningTeam: number | null; myTeam: number | null; sets: [number, number][]; competitive: boolean } | null;
 }
@@ -264,6 +265,7 @@ export class MemberStatsService {
         cancelledAt: r.cancelledAt ? r.cancelledAt.toISOString() : null, lateCancel,
         resourceName: r.resource.name, sportKey, isOrganizer,
         attributedAmount: euros(attrCents),
+        dueAmount: euros(myDue),
         participants: r.participants.map((p) => ({
           userId: p.userId, firstName: p.user.firstName, lastName: p.user.lastName, isOrganizer: p.isOrganizer,
         })),

@@ -1558,6 +1558,7 @@ export interface MemberHistoryReservation {
   sportKey: string | null;
   isOrganizer: boolean;
   attributedAmount: string;
+  dueAmount: string;
   participants: Array<{ userId: string; firstName: string; lastName: string; isOrganizer: boolean }>;
   match: { winningTeam: number | null; myTeam: number | null; sets: [number, number][]; competitive: boolean } | null;
 }
