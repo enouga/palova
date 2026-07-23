@@ -280,7 +280,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {visibleSections.map((sec, i) => {
             const isCollapsed = sec.title ? collapsedSections.includes(sec.title) : false;
             return (
-              <div key={sec.title ?? 'top'} role="group" aria-label={sec.title} style={{ display: 'contents' }}>
+              <div key={sec.title ?? `untitled-${i}`} role="group" aria-label={sec.title} style={{ display: 'contents' }}>
                 {sec.title && (
                   <button type="button" onClick={() => toggleSection(sec.title!)} aria-expanded={!isCollapsed}
                     title={isCollapsed ? `Déplier ${sec.title}` : `Replier ${sec.title}`}
