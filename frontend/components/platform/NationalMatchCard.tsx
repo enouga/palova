@@ -9,6 +9,7 @@ import { formatDateShort, formatDateShortTimeRange, formatHourRange } from '@/li
 import { colorForSeed } from '@/lib/playerColors';
 import { distanceLabel } from '@/lib/discover';
 import { Avatar } from '@/components/ui/Avatar';
+import { Chip } from '@/components/ui/atoms';
 
 // Carte présentationnelle d'une partie ouverte nationale, partagée entre le rail vedette de
 // la vitrine (NationalOpenMatches, snap-scroll) et la grille de la future page /decouvrir
@@ -68,7 +69,15 @@ export function NationalMatchCard({
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{dateLabel}</div>
         <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{timeLabel}</div>
         <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
-          {m.resourceName} · {level ?? 'Tous niveaux'}{genderLabel ? ` · ${genderLabel}` : ''}
+          {m.resourceName} · {level ?? 'Tous niveaux'}
+        </div>
+        {/* Type (toujours) + genre (si féminine/mixte) en chips — mêmes libellés que /parties :
+            « Pour de vrai » (compétitif, défaut) / « Pour le fun » (competitive === false). */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {m.competitive === false
+            ? <Chip tone="line">Pour le fun</Chip>
+            : <Chip tone="accent">Pour de vrai</Chip>}
+          {genderLabel && <Chip tone="line">{genderLabel}</Chip>}
         </div>
       </div>
 

@@ -13,6 +13,8 @@ export interface DiscoverMatchFilter {
   datePreset: DatePreset | null;
   dateFrom: string | null; // 'YYYY-MM-DD'
   dateTo: string | null;   // 'YYYY-MM-DD'
+  kind: 'all' | 'competitive' | 'friendly';   // Pour de vrai / Pour le fun
+  gender: 'all' | 'WOMEN' | 'MIXED';          // Féminine / Mixte
   location: LocationQuery;
   myLevel: number | null;
 }
@@ -85,6 +87,10 @@ export function filterNationalMatches(
     }
     if (!locOk(m)) return false;
     if (levelWin && !rangesOverlap(m.targetLevelMin, m.targetLevelMax, levelWin[0], levelWin[1])) return false;
+    // Type : competitive absent/true = « Pour de vrai », false = « Pour le fun » (miroir de
+    // la logique de /parties, OpenMatches.tsx).
+    if (f.kind !== 'all' && (m.competitive === false) !== (f.kind === 'friendly')) return false;
+    if (f.gender !== 'all' && (m.gender ?? null) !== f.gender) return false;
     return true;
   });
 }

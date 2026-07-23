@@ -42,7 +42,7 @@ function makeMatch(over: Partial<NationalOpenMatch> = {}): NationalOpenMatch {
 const DAY = 86_400_000;
 
 describe('filterNationalMatches — date', () => {
-  const base: DiscoverMatchFilter = { datePreset: 'today', dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: null };
+  const base: DiscoverMatchFilter = { datePreset: 'today', dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it('match dans 2 h → gardé en today', () => {
     const m = makeMatch({ startTime: new Date(NOW.getTime() + 2 * 3_600_000).toISOString() });
@@ -75,7 +75,7 @@ describe('filterNationalMatches — date', () => {
 });
 
 describe('filterNationalMatches — ville', () => {
-  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: null };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
 
   it("insensible accents/casse : 'sete' trouve « Sète »", () => {
     const match = makeMatch({ club: makeClub({ city: 'Sète' }) });
@@ -120,7 +120,7 @@ describe('filterNationalMatches — ville', () => {
 });
 
 describe('filterNationalMatches — niveau', () => {
-  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, location: { city: null, deptCodes: [] }, myLevel: 6.2 };
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: 6.2 };
 
   it('myLevel 6.2 → fourchette [5,7] : garde une partie 4–6 (chevauchement)', () => {
     const m = makeMatch({ targetLevelMin: 4, targetLevelMax: 6 });
@@ -145,6 +145,46 @@ describe('filterNationalMatches — niveau', () => {
   it('myLevel 8 → fourchette clampée [7,8] (pas [7,9], niveau max = 8) : exclut une partie 9–9', () => {
     const m = makeMatch({ targetLevelMin: 9, targetLevelMax: 9 });
     expect(filterNationalMatches([m], { ...base, myLevel: 8 }, NOW)).toEqual([]);
+  });
+});
+
+describe('filterNationalMatches — type (competitive) et genre', () => {
+  const base: DiscoverMatchFilter = { datePreset: null, dateFrom: null, dateTo: null, kind: 'all', gender: 'all', location: { city: null, deptCodes: [] }, myLevel: null };
+
+  it("kind 'competitive' garde les parties compétitives (competitive true ou absent)", () => {
+    const comp = makeMatch({ id: 'c', competitive: true });
+    const undef = makeMatch({ id: 'u' }); // competitive absent → traité compétitif (défaut)
+    const fun = makeMatch({ id: 'f', competitive: false });
+    const out = filterNationalMatches([comp, undef, fun], { ...base, kind: 'competitive' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['c', 'u']);
+  });
+
+  it("kind 'friendly' ne garde que les parties pour le fun (competitive === false)", () => {
+    const comp = makeMatch({ id: 'c', competitive: true });
+    const undef = makeMatch({ id: 'u' });
+    const fun = makeMatch({ id: 'f', competitive: false });
+    const out = filterNationalMatches([comp, undef, fun], { ...base, kind: 'friendly' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['f']);
+  });
+
+  it("genre 'WOMEN' ne garde que les parties féminines", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN' });
+    const mx = makeMatch({ id: 'x', gender: 'MIXED' });
+    const open = makeMatch({ id: 'o', gender: null });
+    const out = filterNationalMatches([w, mx, open], { ...base, gender: 'WOMEN' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['w']);
+  });
+
+  it("genre 'MIXED' ne garde que les parties mixtes", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN' });
+    const mx = makeMatch({ id: 'x', gender: 'MIXED' });
+    const out = filterNationalMatches([w, mx], { ...base, gender: 'MIXED' }, NOW);
+    expect(out.map((m) => m.id)).toEqual(['x']);
+  });
+
+  it("kind/genre 'all' → aucun filtre (une partie féminine + pour le fun passe)", () => {
+    const w = makeMatch({ id: 'w', gender: 'WOMEN', competitive: false });
+    expect(filterNationalMatches([w], base, NOW)).toEqual([w]);
   });
 });
 

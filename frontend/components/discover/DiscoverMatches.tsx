@@ -44,6 +44,8 @@ export function DiscoverMatches({
   const [datePreset, setDatePreset] = useState<DatePreset | null>(null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [kind, setKind] = useState<'all' | 'competitive' | 'friendly'>('all');
+  const [gender, setGender] = useState<'all' | 'WOMEN' | 'MIXED'>('all');
   const [levelOn, setLevelOn] = useState(false);
   const [rating, setRating] = useState<MyRating | null>(null);
 
@@ -59,7 +61,7 @@ export function DiscoverMatches({
   // calculé AVANT les hooks ci-dessous pour respecter les règles des hooks (ils doivent être
   // appelés à chaque rendu, jamais conditionnellement, donc avant l'early return plus bas).
   const ranked = matches != null && now != null
-    ? sortMatchesByDistance(filterNationalMatches(matches, { datePreset, dateFrom, dateTo, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
+    ? sortMatchesByDistance(filterNationalMatches(matches, { datePreset, dateFrom, dateTo, kind, gender, location, myLevel }, now), coords).slice(0, MAX_VISIBLE)
     : null;
 
   useEffect(() => {
@@ -91,6 +93,16 @@ export function DiscoverMatches({
                 onClick={() => setDatePreset(datePreset === p.key ? null : p.key)} />
             ))}
             <DateRangeChip from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} tint={FILTER_TINTS.quand} />
+          </FacetGroup>
+          <FacetGroup label="Type de partie" tint={FILTER_TINTS.typePartie}>
+            <FacetChip label="Toutes" tint={FILTER_TINTS.typePartie} active={kind === 'all'} onClick={() => setKind('all')} />
+            <FacetChip label="Pour de vrai" tint={FILTER_TINTS.typePartie} active={kind === 'competitive'} onClick={() => setKind('competitive')} />
+            <FacetChip label="Pour le fun" tint={FILTER_TINTS.typePartie} active={kind === 'friendly'} onClick={() => setKind('friendly')} />
+          </FacetGroup>
+          <FacetGroup label="Genre" tint={FILTER_TINTS.genre}>
+            <FacetChip label="Tous" tint={FILTER_TINTS.genre} active={gender === 'all'} onClick={() => setGender('all')} />
+            <FacetChip label="Féminine" tint={FILTER_TINTS.genre} active={gender === 'WOMEN'} onClick={() => setGender('WOMEN')} />
+            <FacetChip label="Mixte" tint={FILTER_TINTS.genre} active={gender === 'MIXED'} onClick={() => setGender('MIXED')} />
           </FacetGroup>
           {levelChipVisible && (
             <FacetGroup label="Niveau" tint={FILTER_TINTS.niveau}>

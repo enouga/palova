@@ -76,6 +76,32 @@ describe('DiscoverMatches', () => {
     expect(screen.getByRole('button', { name: "Aujourd'hui" })).toBeInTheDocument();
   });
 
+  it('filtre par type de partie (Pour le fun)', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'c', competitive: true }),
+        makeMatch({ id: 'f', competitive: false, club: { ...makeMatch().club, name: 'Fun Club' } }),
+      ],
+    });
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Pour le fun' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByText('Fun Club')).toBeInTheDocument();
+  });
+
+  it('filtre par genre (Féminine)', () => {
+    wrap({
+      matches: [
+        makeMatch({ id: 'w', gender: 'WOMEN' }),
+        makeMatch({ id: 'm', gender: 'MIXED', club: { ...makeMatch().club, name: 'Mixte Club' } }),
+      ],
+    });
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Féminine' }));
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.queryByText('Mixte Club')).not.toBeInTheDocument();
+  });
+
   it('chip Aujourd\'hui filtre les parties hors de la journée', () => {
     wrap({
       now: NOW,
