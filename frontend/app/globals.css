@@ -279,15 +279,20 @@ button:not([disabled]):active { transform: translateY(0) scale(.97); filter: bri
   .pl-pinpop { animation: none; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── Fiche membre 360 (admin) : cockpit 2 colonnes ≥ 900px, empilé avant
-   (bascule 100 % CSS, pas de useIsDesktop → aucun flash). Colonne de gauche
-   (identité/accès) collante en desktop ; colonne de droite = cartes cœur
-   (résas, portefeuille, aperçus) en grille 2 col ≥ 640px. ── */
-.mb-cols { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
-@media (min-width: 900px) {
-  .mb-cols { flex-direction: row; align-items: flex-start; }
-  .mb-left { flex: 0 0 340px; position: sticky; top: 12px; }
-  .mb-right { flex: 1; min-width: 0; }
+/* ── Fiche membre 360 (admin) : grille cockpit « carte de joueur » — 1 colonne
+   en mobile, 2 colonnes ≥ 700px, 3 colonnes ≥ 1080px (bascule 100 % CSS, pas de
+   useIsDesktop → aucun flash). `.mb-wide` = carte large (dernières réservations)
+   qui s'étale sur toute la rangée en 2 col et sur 2 colonnes en 3 col. ── */
+.mb-grid { display: grid; grid-template-columns: 1fr; gap: 13px; align-items: start; }
+.mb-col { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+@media (min-width: 700px) {
+  .mb-grid { grid-template-columns: 1fr 1fr; }
+  .mb-wide { grid-column: 1 / -1; }
 }
-.mb-grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
-@media (min-width: 640px) { .mb-grid2 { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1080px) {
+  .mb-grid { grid-template-columns: 1.1fr 1fr 1fr; }
+  .mb-wide { grid-column: span 2; }
+}
+/* Rangée des « portes » du détail (Activité / Finances / Niveau / Fidélité). */
+.mb-doors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 900px) { .mb-doors { grid-template-columns: repeat(4, 1fr); } }

@@ -6,6 +6,7 @@ import { ACCENTS } from '@/lib/theme';
 import { MemberHistory } from '@/lib/api';
 import { matchOutcome, reservationPaymentBadge } from '@/lib/memberStats';
 import { toCents } from '@/lib/caisse';
+import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 
 const TYPE_FR: Record<string, string> = { COURT: 'Terrain', COACHING: 'Cours', TOURNAMENT: 'Tournoi', EVENT: 'Event' };
 const fmtRange = (s: string, e: string) => {
@@ -20,11 +21,11 @@ export function MemberReservationsCard({ data, onSeeAll }: { data: MemberHistory
   const rows = data.reservations.slice(0, 5);
   const me = data.member.userId;
   return (
-    <section aria-label="Dernières réservations" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: 0, color: th.text }}>Dernières réservations</h2>
-        <button onClick={onSeeAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>Tout l&apos;historique →</button>
-      </div>
+    <section aria-label="Dernières réservations" style={memberCardStyle(th)}>
+      <Kicker
+        color={MEMBER_CARD_TINTS.blue}
+        right={<button onClick={onSeeAll} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>Tout l&apos;historique →</button>}
+      >Dernières réservations</Kicker>
       {rows.length === 0 && <div style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, marginTop: 10 }}>Aucune réservation.</div>}
       {rows.map((r) => {
         const cancelled = r.status === 'CANCELLED';

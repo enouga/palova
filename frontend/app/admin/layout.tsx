@@ -6,7 +6,7 @@ import { useAuth, logout } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { api, assetUrl } from '@/lib/api';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS, inkOn } from '@/lib/theme';
+import { ACCENTS, inkOn, shade } from '@/lib/theme';
 import { ThemeToggle } from '@/components/ui/atoms';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -23,14 +23,6 @@ export function useAdminChrome() { return useContext(AdminChromeContext); }
 const SIDEBAR_KEY = 'palova:admin-sidebar';
 // Sections du menu repliées (liste de titres), persistée comme le repli global.
 const SECTIONS_KEY = 'palova:admin-sidebar-sections';
-
-// Assombrit (factor<1) ou éclaircit (>1) une couleur hex #rrggbb. Sert à rendre les
-// titres de section colorés lisibles sur fond clair sans perdre la teinte.
-function shade(hex: string, factor: number): string {
-  const n = parseInt(hex.replace('#', ''), 16);
-  const ch = (shift: number) => Math.max(0, Math.min(255, Math.round(((n >> shift) & 255) * factor)));
-  return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
-}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

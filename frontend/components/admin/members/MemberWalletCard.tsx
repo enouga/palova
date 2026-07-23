@@ -4,6 +4,7 @@
 // restent montés par la page), elle se contente d'émettre les intentions.
 import { useTheme } from '@/lib/ThemeProvider';
 import { MemberHistory } from '@/lib/api';
+import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 
 export function MemberWalletCard({ data, onSubAction, onPkgAction }: {
   data: MemberHistory;
@@ -16,8 +17,8 @@ export function MemberWalletCard({ data, onSubAction, onPkgAction }: {
   const line = { display: 'flex', justifyContent: 'space-between', gap: 8, padding: '5px 0', borderBottom: `1px solid ${th.line}`, fontFamily: th.fontUI, fontSize: 13, color: th.text } as const;
   const ghost = { border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 9, padding: '5px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.accent } as const;
   return (
-    <section aria-label="Abonnement et soldes" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow }}>
-      <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: '0 0 8px', color: th.text }}>Abonnement &amp; soldes</h2>
+    <section aria-label="Abonnement et soldes" style={memberCardStyle(th)}>
+      <Kicker color={MEMBER_CARD_TINTS.green}>Abonnement &amp; soldes</Kicker>
       {sub ? (
         <>
           <div style={line}><span>{sub.planName}</span><b>→ {fmtDate(sub.expiresAt)}</b></div>

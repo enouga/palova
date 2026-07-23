@@ -7,6 +7,7 @@ import { ACCENTS } from '@/lib/theme';
 import { MemberHistory } from '@/lib/api';
 import { Segmented } from '@/components/ui/atoms';
 import { STAFF_LABEL, StaffRole } from '@/lib/members';
+import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 
 type RoleSeg = 'NONE' | 'STAFF' | 'ADMIN';
 const toSeg = (r: MemberHistory['member']['staffRole']): RoleSeg => (r === 'ADMIN' ? 'ADMIN' : r === 'STAFF' ? 'STAFF' : 'NONE');
@@ -37,8 +38,8 @@ export function MemberAccessCard({ member, viewer, canManageStaff, onSetRole, on
   const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', margin: '10px 0 4px' };
 
   return (
-    <section aria-label="Rôle et accès" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: 0, color: th.text }}>Rôle &amp; accès</h2>
+    <section aria-label="Rôle et accès" style={{ ...memberCardStyle(th), display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Kicker color={MEMBER_CARD_TINTS.violet}>Rôle &amp; accès</Kicker>
       {canManageStaff && (
         <div role="group" aria-label={`Rôle de ${member.firstName} ${member.lastName}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={label}>Rôle</span>

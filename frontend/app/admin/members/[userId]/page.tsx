@@ -9,10 +9,13 @@ import { useAuth } from '@/lib/useAuth';
 import { useClub } from '@/lib/ClubProvider';
 import { isClubAdmin, useAdminRole } from '@/lib/adminRole';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ACCENTS, dangerBanner } from '@/lib/theme';
-import { Chip, BackButton, Segmented, Btn } from '@/components/ui/atoms';
+import { ACCENTS, dangerBanner, inkOn } from '@/lib/theme';
+import { Chip, BackButton, Btn } from '@/components/ui/atoms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Avatar } from '@/components/ui/Avatar';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { HERO_GRADIENT, HERO_INK, HERO_INK_MUTED } from '@/components/agenda/AgendaHero';
+import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 import { colorForSeed } from '@/lib/playerColors';
 import { fmtEuros, toCents } from '@/lib/caisse';
 import { LevelHistoryChart } from '@/components/player/LevelHistoryChart';
@@ -34,6 +37,15 @@ import {
 } from '@/lib/memberStats';
 
 type DetailTab = 'activite' | 'finances' | 'niveau' | 'fidelite';
+
+// Les quatre « portes » du bloc détails complets (repliées par défaut — c'est ce bloc
+// qui faisait les deux tiers de la hauteur de page ; on n'en paie le scroll que sur demande).
+const DETAIL_DOORS: { key: DetailTab; label: string; icon: IconName; tint: string }[] = [
+  { key: 'activite', label: 'Activité', icon: 'chart', tint: MEMBER_CARD_TINTS.blue },
+  { key: 'finances', label: 'Finances', icon: 'euro', tint: MEMBER_CARD_TINTS.green },
+  { key: 'niveau', label: 'Niveau', icon: 'ball', tint: MEMBER_CARD_TINTS.violet },
+  { key: 'fidelite', label: 'Fidélité', icon: 'user', tint: MEMBER_CARD_TINTS.amber },
+];
 
 const money = (v: string) => fmtEuros(toCents(v));
 const fmtDate = (iso: string) =>
@@ -61,7 +73,7 @@ const STAFF_ERRORS: Record<string, string> = {
 function StatCard({ label, value, unit, hint, accent, danger }: { label: string; value: string | number; unit?: string; hint?: string; accent?: boolean; danger?: boolean }) {
   const { th } = useTheme();
   return (
-    <div style={{ flex: 1, minWidth: 140, background: th.surface, borderRadius: 18, padding: '16px 18px', boxShadow: `inset 0 0 0 1px ${th.line}` }}>
+    <div style={{ flex: 1, minWidth: 140, background: th.surface, borderRadius: 18, padding: '16px 18px', boxShadow: th.shadow }}>
       <span style={{ fontFamily: th.fontUI, fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', color: th.textMute }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 10 }}>
         <span style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 32, lineHeight: 0.9, color: danger ? th.danger : accent ? th.accent : th.text, letterSpacing: -0.5 }}>{value}</span>
@@ -75,7 +87,7 @@ function StatCard({ label, value, unit, hint, accent, danger }: { label: string;
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const { th } = useTheme();
   return (
-    <div style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: `inset 0 0 0 1px ${th.line}`, marginTop: 14 }}>
+    <div style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow, marginTop: 14 }}>
       <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 17, margin: '0 0 14px', color: th.text }}>{title}</h2>
       {children}
     </div>
@@ -109,7 +121,8 @@ export default function MemberHistoryPage() {
   // post-chargement (rôle, blocage, notes…) : un canal distinct pour ne pas faire disparaître
   // tout le cockpit derrière un bandeau plein écran quand une simple action échoue.
   const [actionError, setActionError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<DetailTab>('activite');
+  // null = bloc détails replié (défaut) : on n'affiche les tableaux/graphes qu'à la demande.
+  const [detail, setDetail] = useState<DetailTab | null>(null);
   const [watch, setWatch] = useState(false);
   const [onlyLate, setOnlyLate] = useState(false);
   const [noteBody, setNoteBody] = useState('');
@@ -259,6 +272,9 @@ export default function MemberHistoryPage() {
 
   const row: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 12 };
   const td: CSSProperties = { padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, color: th.text, whiteSpace: 'nowrap' };
+  // Chips du hero brume bleue : encre fixe sur pastille translucide (statuts) ou corail (alertes).
+  const heroChip: CSSProperties = { background: 'rgba(255,255,255,.72)', color: HERO_INK, borderRadius: 999, padding: '3px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700 };
+  const heroAlertChip: CSSProperties = { background: ACCENTS.coral, color: inkOn(ACCENTS.coral), borderRadius: 999, padding: '3px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700 };
 
   if (loading) return <div style={{ padding: '32px 0', fontFamily: th.fontUI, color: th.textFaint }}>Chargement…</div>;
   if (error) return (
@@ -298,53 +314,59 @@ export default function MemberHistoryPage() {
     <div>
       <BackButton href="/admin/members" label="Membres" />
 
-      {/* Hero identité */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '16px 0 12px', flexWrap: 'wrap' }}>
-        <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl} size={56} color={colorForSeed(m.userId)} />
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 30, letterSpacing: -0.5, margin: 0, color: th.text }}>{m.firstName} {m.lastName}</h1>
-          <div style={{ fontFamily: th.fontUI, fontSize: 13.5, color: th.textMute, marginTop: 3 }}>
-            <a href={`mailto:${m.email}`} style={{ color: 'inherit' }}>{m.email}</a>
-            {m.phone && <> · <a href={`tel:${m.phone}`} style={{ color: 'inherit' }}>{m.phone}</a></>}
-            {m.city && <> · {m.city}</>}
-            {' '}· membre depuis {fmtDate(m.since)}
+      {/* Hero « carte de joueur » — brume bleue à encres fixes (lisible clair + sombre),
+          alertes fondues en chips corail (plus de bandeau séparé). */}
+      <div style={{ background: HERO_GRADIENT, borderRadius: 20, padding: '18px 22px', margin: '14px 0 14px', position: 'relative', overflow: 'hidden' }}>
+        <div aria-hidden style={{ position: 'absolute', right: -34, top: -52, width: 180, height: 180, border: '16px solid rgba(255,255,255,.3)', borderRadius: '50%' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', position: 'relative' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar firstName={m.firstName} lastName={m.lastName} avatarUrl={m.avatarUrl} size={64} color={colorForSeed(m.userId)} />
+            {levelEnabled && game.level != null && (
+              <span style={{
+                position: 'absolute', bottom: -5, right: -10, background: HERO_INK, color: '#fff',
+                borderRadius: 8, padding: '2px 8px', fontFamily: th.fontUI, fontSize: 11.5, fontWeight: 800,
+                border: '2px solid #dde9f7', whiteSpace: 'nowrap',
+              }}>Niv. {game.level.toFixed(1)}</span>
+            )}
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {m.isSubscriber && <Chip tone="accent">Abonné</Chip>}
-          {m.hasActivePackage && <Chip tone="accent">Carnet actif</Chip>}
-          <Chip tone={m.status === 'BLOCKED' ? 'line' : 'accent'}>{m.status === 'BLOCKED' ? 'Bloqué' : 'Actif'}</Chip>
-          {levelEnabled && game.level != null && <Chip tone="mute">Niv. {game.level.toFixed(1)}</Chip>}
-          {loyalty.atRisk && (
-            <span style={{ fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: '#fff', background: ACCENTS.coral, borderRadius: 999, padding: '4px 11px' }}>
-              ⚠ À risque
-            </span>
-          )}
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h1 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 27, letterSpacing: -0.5, margin: 0, color: HERO_INK }}>{m.firstName} {m.lastName}</h1>
+            <div style={{ fontFamily: th.fontUI, fontSize: 13, color: HERO_INK_MUTED, marginTop: 3 }}>
+              <a href={`mailto:${m.email}`} style={{ color: 'inherit' }}>{m.email}</a>
+              {m.phone && <> · <a href={`tel:${m.phone}`} style={{ color: 'inherit' }}>{m.phone}</a></>}
+              {m.city && <> · {m.city}</>}
+              {' '}· membre depuis {fmtDate(m.since)}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 9 }}>
+              <span style={heroChip}>{m.status === 'BLOCKED' ? 'Bloqué' : 'Actif'}</span>
+              {m.isSubscriber && <span style={heroChip}>Abonné</span>}
+              {m.hasActivePackage && <span style={heroChip}>Carnet actif</span>}
+              {alerts.map((a) => <span key={a.key} style={heroAlertChip}>⚠ {a.label}</span>)}
+              {loyalty.atRisk && <span style={heroAlertChip}>⚠ À risque</span>}
+            </div>
+          </div>
           <button
             onClick={toggleWatch}
             aria-pressed={watch}
             style={{
-              cursor: 'pointer', borderRadius: 999, padding: '5px 12px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
-              border: watch ? 'none' : `1px solid ${th.line}`,
-              background: watch ? ACCENTS.coral : 'transparent',
-              color: watch ? '#fff' : th.textMute,
+              cursor: 'pointer', borderRadius: 999, padding: '6px 13px', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700,
+              border: watch ? 'none' : `1px solid rgba(24,21,14,0.3)`,
+              background: watch ? ACCENTS.coral : 'rgba(255,255,255,.55)',
+              color: watch ? inkOn(ACCENTS.coral) : HERO_INK,
+              alignSelf: 'flex-start', flexShrink: 0,
             }}
           >👁 {watch ? 'À surveiller' : 'Marquer à surveiller'}</button>
         </div>
       </div>
 
-      {/* Bandeau d'alertes (impayé / carnet presque vide / abonnement qui expire) */}
-      {alerts.length > 0 && (
-        <div style={{ ...dangerBanner(th), display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
-          {alerts.map((a) => <span key={a.key}>⚠ {a.label}</span>)}
-        </div>
-      )}
       {actionError && <div style={{ ...dangerBanner(th), marginBottom: 12 }}>{actionError}</div>}
 
-      <div className="mb-cols">
-        {/* ───────── Colonne gauche : profil, accès, contact, notes ───────── */}
-        <div className="mb-left" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <MemberProfileCard member={m} onSave={saveProfile} error={null} />
+      <div className="mb-grid">
+        {/* ───────── Colonne 1 : profil éditable ───────── */}
+        <MemberProfileCard member={m} onSave={saveProfile} error={null} />
+
+        {/* ───────── Colonne 2 : accès + notes ───────── */}
+        <div className="mb-col">
           <MemberAccessCard
             member={m}
             viewer={viewerUserId ? { userId: viewerUserId } : null}
@@ -357,23 +379,11 @@ export default function MemberHistoryPage() {
             onDelete={() => setConfirmRemove(true)}
           />
 
-          {/* Contact — email/tel cliquables (le bouton « Envoyer un message » arrive avec la
-              spec messages ciblés, hors périmètre ici). */}
-          <section aria-label="Contact" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow }}>
-            <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: '0 0 8px', color: th.text }}>Contact</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: th.fontUI, fontSize: 13.5 }}>
-              <a href={`mailto:${m.email}`} style={{ color: th.accent, fontWeight: 600 }}>{m.email}</a>
-              {m.phone
-                ? <a href={`tel:${m.phone}`} style={{ color: th.accent, fontWeight: 600 }}>{m.phone}</a>
-                : <span style={{ color: th.textFaint }}>Pas de téléphone renseigné.</span>}
-            </div>
-          </section>
-
-          {/* Notes (commentaires staff) — reprend le contenu de l'ex-onglet Notes. */}
-          <section aria-label="Notes du staff" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow }}>
-            <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: '0 0 12px', color: th.text }}>
-              Notes{notes.length ? ` (${notes.length})` : ''}
-            </h2>
+          {/* Notes (commentaires staff) — reprend le contenu de l'ex-onglet Notes.
+              (Le contact email/tel vit dans le hero ; le bouton « Envoyer un message »
+              arrive avec la spec messages ciblés, hors périmètre ici.) */}
+          <section aria-label="Notes du staff" style={memberCardStyle(th)}>
+            <Kicker color={MEMBER_CARD_TINTS.teal}>Notes{notes.length ? ` · ${notes.length}` : ''}</Kicker>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
               <textarea
                 value={noteBody}
@@ -415,36 +425,54 @@ export default function MemberHistoryPage() {
           </section>
         </div>
 
-        {/* ───────── Colonne droite : aperçus + le plus (détails complets) ───────── */}
-        <div className="mb-right" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="mb-grid2">
-            <MemberUpcomingCard data={data} />
-            <MemberWalletCard data={data} onSubAction={openSubAction} onPkgAction={(mode, bal) => setPkgAction({ mode, bal })} />
-          </div>
+        {/* ───────── Colonne 3 : à venir + portefeuille ───────── */}
+        <div className="mb-col">
+          <MemberUpcomingCard data={data} />
+          <MemberWalletCard data={data} onSubAction={openSubAction} onPkgAction={(mode, bal) => setPkgAction({ mode, bal })} />
+        </div>
 
+        {/* ───────── Rangée 2 : réservations (large) + argent/fidélité ───────── */}
+        <div className="mb-wide">
           <MemberReservationsCard data={data} onSeeAll={() => openDetail('activite')} />
+        </div>
+        <div className="mb-col">
+          <MemberPaymentsCard data={data} onCollect={() => router.push('/admin/encaissement')} />
+          <MemberLoyaltyCard data={data} />
+        </div>
+      </div>
 
-          <div className="mb-grid2">
-            <MemberPaymentsCard data={data} onCollect={() => router.push('/admin/encaissement')} />
-            <MemberLoyaltyCard data={data} />
-          </div>
+      {/* ───────── Les portes du détail (repliées par défaut) — cliquer ouvre le bloc
+          correspondant sous la rangée, re-cliquer referme. ───────── */}
+      <div ref={detailRef}>
+        <div className="mb-doors">
+          {DETAIL_DOORS.map((d) => {
+            const open = detail === d.key;
+            return (
+              <button
+                key={d.key}
+                onClick={() => setDetail(open ? null : d.key)}
+                aria-expanded={open}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', cursor: 'pointer',
+                  background: th.surface, border: 'none', borderRadius: 14, padding: '12px 14px',
+                  boxShadow: open ? `inset 0 0 0 2px ${d.tint}, ${th.shadow}` : th.shadow,
+                  fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700, color: th.text,
+                }}
+              >
+                <span aria-hidden style={{
+                  width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: `${d.tint}26`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon name={d.icon} size={16} color={d.tint} />
+                </span>
+                {d.label}
+                <span aria-hidden style={{ marginLeft: 'auto', color: th.textFaint, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+              </button>
+            );
+          })}
+        </div>
 
-          {/* ───────── Le plus — détails complets ───────── */}
-          <div ref={detailRef}>
-            <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 20, letterSpacing: -0.3, margin: '6px 0 12px', color: th.text }}>
-              Le plus — détails complets
-            </h2>
-            <Segmented<DetailTab>
-              value={detail}
-              onChange={setDetail}
-              options={[
-                { value: 'activite', label: 'Activité' },
-                { value: 'finances', label: 'Finances' },
-                { value: 'niveau', label: 'Niveau' },
-                { value: 'fidelite', label: 'Fidélité' },
-              ]}
-            />
-
+        {detail != null && (
             <div style={{ marginTop: 16 }}>
               {/* ───────── Activité & réservations ───────── */}
               {detail === 'activite' && (
@@ -691,8 +719,7 @@ export default function MemberHistoryPage() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {pkgAction && token && clubId && (

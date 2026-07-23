@@ -156,20 +156,38 @@ it('affiche identité, badge « à risque » et chip « Carnet actif »', async 
   await screen.findByText('Jean Dupont');
   expect(screen.getByText('⚠ À risque')).toBeInTheDocument();
   expect(screen.getByText('Carnet actif')).toBeInTheDocument();
-  expect(screen.getByText('Habitudes de jeu')).toBeInTheDocument();
 });
 
-// ───────────────────────── Détail « Activité » (onglet par défaut) ─────────────────────────
+it('hero : email cliquable (mailto)', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  expect(screen.getByRole('link', { name: 'j@d.fr' })).toHaveAttribute('href', 'mailto:j@d.fr');
+});
+
+// ───────────────── Détail « Activité » (porte repliée par défaut, ouverte au clic) ─────────────────
+
+it('détails : repliés par défaut, la porte Activité ouvre puis referme', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  // Replié au montage : rien des tableaux/graphes n'est rendu (c'est ce bloc qui faisait la hauteur).
+  expect(screen.queryByText('Habitudes de jeu')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
+  expect(screen.getByText('Habitudes de jeu')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
+  expect(screen.queryByText('Habitudes de jeu')).toBeNull();
+});
 
 it('activité : compteur d\'annulations tardives', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
   expect(screen.getByText('Annulations tardives')).toBeInTheDocument();
 });
 
 it('activité : No-show facturés à 0 → hint "aucun", ton neutre', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
   expect(screen.getByText('No-show facturés')).toBeInTheDocument();
   expect(screen.getByText('aucun')).toBeInTheDocument();
 });
@@ -182,6 +200,7 @@ it('activité : No-show facturés > 0 → récidive visible, ton coral', async (
   });
   renderPage();
   await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Activité' }));
   expect(screen.getByText('No-show facturés')).toBeInTheDocument();
   const value = screen.getByText('3');
   expect(value).toHaveStyle({ color: '#b23c17' }); // th.danger (thème clair, AA sur fond blanc)
@@ -588,16 +607,15 @@ it('wallet : abonnement affiché, « Renouveler » ouvre SubscriptionActions ave
   expect(api.adminGetSubscriptionPlans).toHaveBeenCalledWith('club-1', 'tok');
 });
 
-// ───────────────────────── Carte « Contact » ─────────────────────────
+// ───────────────────────── Contact (dans le hero) ─────────────────────────
 
-it('contact : lien mailto affiché, repli « pas de téléphone » si absent', async () => {
+it('hero : téléphone cliquable quand renseigné, absent sinon', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY, member: { ...HISTORY.member, phone: '0611009030' },
+  });
   renderPage();
   await screen.findByText('Jean Dupont');
-  // le hero porte aussi un lien mailto identique — on scope à la carte Contact pour éviter
-  // un match ambigu sur le même libellé "j@d.fr".
-  const contact = screen.getByRole('region', { name: 'Contact' });
-  expect(within(contact).getByRole('link', { name: 'j@d.fr' })).toHaveAttribute('href', 'mailto:j@d.fr');
-  expect(within(contact).getByText('Pas de téléphone renseigné.')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '0611009030' })).toHaveAttribute('href', 'tel:0611009030');
 });
 
 // ───────────────────────── Erreur de chargement ─────────────────────────

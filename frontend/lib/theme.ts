@@ -26,6 +26,17 @@ export const ACCENTS = {
 
 export type AccentKey = keyof typeof ACCENTS;
 
+/**
+ * Assombrit (factor<1) ou éclaircit (>1) une couleur hex #rrggbb. Sert à rendre un
+ * texte teinté lisible sur fond clair sans perdre la teinte (titres de section de la
+ * sidebar admin, kickers des cartes de la fiche membre).
+ */
+export function shade(hex: string, factor: number): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const ch = (shift: number) => Math.max(0, Math.min(255, Math.round(((n >> shift) & 255) * factor)));
+  return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
+}
+
 /** Pick legible ink for text/icons sitting on top of an accent fill. */
 export function inkOn(hex: string): string {
   const h = hex.replace('#', '');

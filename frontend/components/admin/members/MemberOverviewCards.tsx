@@ -6,18 +6,17 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { MemberHistory } from '@/lib/api';
 import { fmtEuros, toCents } from '@/lib/caisse';
 import { lastVisitLabel, cancellationLabel } from '@/lib/memberStats';
+import { Kicker, MEMBER_CARD_TINTS, memberCardStyle } from '@/components/admin/members/memberCardUi';
 
 const KIND_FR: Record<string, string> = { reservation: 'résa', tournament: 'tournoi', event: 'event', lesson: 'cours' };
 const STATUS_FR: Record<string, string> = { CONFIRMED: 'inscrit', WAITLISTED: 'en attente' };
 
-function Card({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+function Card({ title, tint, action, children }: { title: string; tint: string; action?: ReactNode; children: ReactNode }) {
   const { th } = useTheme();
   return (
-    <section aria-label={title} style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: 0, color: th.text }}>{title}</h2>{action}
-      </div>
-      <div style={{ marginTop: 8 }}>{children}</div>
+    <section aria-label={title} style={memberCardStyle(th)}>
+      <Kicker color={tint} right={action}>{title}</Kicker>
+      {children}
     </section>
   );
 }
@@ -26,7 +25,7 @@ export function MemberUpcomingCard({ data }: { data: MemberHistory }) {
   const { th } = useTheme();
   const fmt = (iso: string) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
   return (
-    <Card title="À venir">
+    <Card title="À venir" tint={MEMBER_CARD_TINTS.amber}>
       {data.upcoming.length === 0 && <span style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint }}>Rien de prévu.</span>}
       {data.upcoming.map((u) => (
         <div key={`${u.kind}-${u.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '4px 0', fontFamily: th.fontUI, fontSize: 13, color: th.text }}>
@@ -42,7 +41,7 @@ export function MemberPaymentsCard({ data, onCollect }: { data: MemberHistory; o
   const { th } = useTheme();
   const due = toCents(data.finance.outstanding);
   return (
-    <Card title="Paiements" action={<button onClick={onCollect} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>Encaisser →</button>}>
+    <Card title="Paiements" tint={MEMBER_CARD_TINTS.coral} action={<button onClick={onCollect} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: th.fontUI, fontSize: 12.5, fontWeight: 700, color: th.accent }}>Encaisser →</button>}>
       <div style={{ fontFamily: th.fontDisplay, fontWeight: 700, fontSize: 26, color: due > 0 ? th.danger : th.text }}>
         {due > 0 ? `${fmtEuros(due)} dus` : 'Soldé ✓'}
       </div>
@@ -56,7 +55,7 @@ export function MemberLoyaltyCard({ data }: { data: MemberHistory }) {
   const l = data.loyalty;
   const row = { display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontFamily: th.fontUI, fontSize: 13, color: th.text } as const;
   return (
-    <Card title="Fidélité & habitudes">
+    <Card title="Fidélité & habitudes" tint={MEMBER_CARD_TINTS.teal}>
       <div style={row}><span>Fréquence</span><b>{l.playsPerMonth} résas/mois</b></div>
       <div style={row}><span>Dernière visite</span><b>{lastVisitLabel(l.daysSinceLastVisit)}</b></div>
       <div style={row}><span>Annulations</span><b>{cancellationLabel(l.cancellationRate)}{data.counts.lateCancelled > 0 ? ` (${data.counts.lateCancelled} tardives)` : ''}</b></div>
