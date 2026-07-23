@@ -530,6 +530,10 @@ model User {
   sex                   Sex?
   birthDate             DateTime? @map("birth_date") @db.Date
   avatarUrl             String?   @map("avatar_url")
+  // Adresse postale du joueur (fichier adhérents — saisie par le joueur ou le staff du club).
+  address               String?
+  postalCode            String?   @map("postal_code")
+  city                  String?
   /// Préférence de langue (fr/en/es) — l'interface reste en français pour l'instant.
   locale                String?   @default("fr")
   showInLeaderboard     Boolean   @default(false) @map("show_in_leaderboard")
