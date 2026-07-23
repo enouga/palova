@@ -1517,6 +1517,62 @@ describe('ClubService — updateMembership (garde staff sur status BLOCKED)', ()
   });
 });
 
+describe('ClubService — updateMembership (profil élargi)', () => {
+  beforeEach(() => {
+    prismaMock.clubMembership.findUnique.mockResolvedValue({ clubId: 'club-demo', userId: 'u1' } as any);
+    prismaMock.clubMembership.update.mockResolvedValue({ id: 'mb1' } as any);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1' } as any);
+    prismaMock.memberNote.create.mockResolvedValue({ id: 'n1' } as any);
+  });
+
+  it('écrit prénom/nom/naissance/sexe/adresse/CP/ville sur le User', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', {
+      firstName: ' Ines ', lastName: 'Andre', birthDate: '1992-09-04', sex: 'FEMALE',
+      address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
+    } as any);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'u1' },
+      data: expect.objectContaining({
+        firstName: 'Ines', lastName: 'Andre', sex: 'FEMALE',
+        address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
+        birthDate: new Date('1992-09-04'),
+      }),
+    }));
+  });
+
+  it('refuse un prénom vide et une date invalide', async () => {
+    const svc = new ClubService();
+    await expect(svc.updateMembership('club-demo', 'mb1', { firstName: '  ' } as any)).rejects.toThrow('VALIDATION_ERROR');
+    await expect(svc.updateMembership('club-demo', 'mb1', { birthDate: '31/12/1990' } as any)).rejects.toThrow('VALIDATION_ERROR');
+    await expect(svc.updateMembership('club-demo', 'mb1', { sex: 'X' as never } as any)).rejects.toThrow('VALIDATION_ERROR');
+  });
+
+  it('chaîne vide → null (adresse effacée), et ne touche pas le User sans champ User', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', { address: '  ', note: 'x' } as any);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ address: null }),
+    }));
+    (prismaMock.user.update as jest.Mock).mockClear();
+    await new ClubService().updateMembership('club-demo', 'mb1', { note: 'y' });
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('trace la modification par une note automatique portée par le staff appelant', async () => {
+    await new ClubService().updateMembership('club-demo', 'mb1', { phone: '0611009030', city: 'Toulouse' } as any, 'staff-1');
+    expect(prismaMock.memberNote.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        clubId: 'club-demo', userId: 'u1', authorId: 'staff-1',
+        body: expect.stringContaining('✎ Profil modifié'),
+      }),
+    });
+  });
+
+  it("un échec de la note automatique n'annule pas la mise à jour", async () => {
+    prismaMock.memberNote.create.mockRejectedValue(new Error('db down'));
+    await expect(new ClubService().updateMembership('club-demo', 'mb1', { phone: '06' }, 'staff-1')).resolves.toBeDefined();
+  });
+});
+
 describe('ClubService — facette juge-arbitre', () => {
   let service: ClubService;
   beforeEach(() => { service = new ClubService(); });

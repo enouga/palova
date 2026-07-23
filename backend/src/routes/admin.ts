@@ -417,8 +417,12 @@ router.patch('/members/:id/blocked', async (req: ClubScopedRequest, res: Respons
 
 router.patch('/members/:id', async (req: ClubScopedRequest, res: Response, next: NextFunction) => {
   try {
-    const { isSubscriber, membershipNo, status, note, phone } = req.body;
-    res.json(await clubService.updateMembership(req.membership!.clubId, asString(req.params.id), { isSubscriber, membershipNo, status, note, phone }));
+    const { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city } = req.body;
+    res.json(await clubService.updateMembership(
+      req.membership!.clubId, asString(req.params.id),
+      { isSubscriber, membershipNo, status, note, phone, firstName, lastName, birthDate, sex, address, postalCode, city },
+      req.user!.id,
+    ));
   } catch (err) { handleError(err, res, next); }
 });
 
