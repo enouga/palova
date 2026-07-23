@@ -1,7 +1,10 @@
 import {
   methodLabel, monthShort, weekdayLabel, winRate, lastVisitLabel, cancellationLabel, tenureLabel,
   revenueChartModel, heatmapModel, donutSegments,
-  memberAlerts, reservationPaymentBadge, matchOutcome,
+  memberAlerts, reservationPaymentBadge, reservationPaymentState, matchOutcome,
+  filterMemberReservations, reservationFacetCounts, reservationFacetsPresent,
+  emptyReservationFilter, reservationFilterActive,
+  type ReservationType, type ReservationStatusFacet, type ReservationPaymentFacet,
 } from '@/lib/memberStats';
 
 describe('libellés', () => {
@@ -114,5 +117,82 @@ describe('reservationPaymentBadge / matchOutcome', () => {
     expect(matchOutcome({ winningTeam: 1, myTeam: 1, sets: [[6, 3], [6, 4]], competitive: true })).toEqual({ won: true, score: '6-3 6-4' });
     expect(matchOutcome({ winningTeam: 2, myTeam: 1, sets: [[4, 6]], competitive: true })).toEqual({ won: false, score: '4-6' });
     expect(matchOutcome(null)).toBeNull();
+  });
+});
+
+// ───────────────────────── Filtres de l'historique des réservations ─────────────────────────
+
+// Jeu de lignes couvrant les trois dimensions : un terrain payé, un cours dû, un tournoi
+// annulé tardivement (donc « off » côté paiement).
+type Row = {
+  id: string; type: string; status: string; lateCancel: boolean; attributedAmount: string; dueAmount: string;
+};
+const ROWS: Row[] = [
+  { id: 'a', type: 'COURT', status: 'CONFIRMED', lateCancel: false, attributedAmount: '36.00', dueAmount: '36.00' },     // Terrain · Confirmée · Réglée
+  { id: 'b', type: 'COACHING', status: 'CONFIRMED', lateCancel: false, attributedAmount: '10.00', dueAmount: '25.00' },  // Cours · Confirmée · Reste dû
+  { id: 'c', type: 'TOURNAMENT', status: 'CANCELLED', lateCancel: true, attributedAmount: '0.00', dueAmount: '25.00' },  // Tournoi · Annulée+Tardive · off
+];
+
+describe('reservationPaymentState', () => {
+  it('annulée → off, dû non couvert → due, sinon paid', () => {
+    expect(reservationPaymentState({ status: 'CANCELLED', attributedCents: 0, dueCents: 2500 })).toBe('off');
+    expect(reservationPaymentState({ status: 'CONFIRMED', attributedCents: 1000, dueCents: 2500 })).toBe('due');
+    expect(reservationPaymentState({ status: 'CONFIRMED', attributedCents: 2500, dueCents: 2500 })).toBe('paid');
+    expect(reservationPaymentState({ status: 'CONFIRMED', attributedCents: 0, dueCents: 0 })).toBe('paid');
+  });
+});
+
+describe('filterMemberReservations', () => {
+  const s = (over: Partial<{ types: ReservationType[]; statuses: ReservationStatusFacet[]; payments: ReservationPaymentFacet[] }>) => ({
+    types: new Set(over.types ?? []), statuses: new Set(over.statuses ?? []), payments: new Set(over.payments ?? []),
+  });
+  it('vide → tout passe', () => {
+    expect(filterMemberReservations(ROWS, emptyReservationFilter()).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+  });
+  it('Type : OU intra-groupe', () => {
+    expect(filterMemberReservations(ROWS, s({ types: ['COURT', 'COACHING'] })).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+  it('Statut : « Annulée » et « Tardive » sont un sous-ensemble cohérent', () => {
+    expect(filterMemberReservations(ROWS, s({ statuses: ['cancelled'] })).map((r) => r.id)).toEqual(['c']);
+    expect(filterMemberReservations(ROWS, s({ statuses: ['late'] })).map((r) => r.id)).toEqual(['c']);
+    expect(filterMemberReservations(ROWS, s({ statuses: ['confirmed'] })).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+  it('Paiement : réglée vs reste dû (annulée exclue des deux)', () => {
+    expect(filterMemberReservations(ROWS, s({ payments: ['paid'] })).map((r) => r.id)).toEqual(['a']);
+    expect(filterMemberReservations(ROWS, s({ payments: ['due'] })).map((r) => r.id)).toEqual(['b']);
+  });
+  it('ET inter-groupes', () => {
+    expect(filterMemberReservations(ROWS, s({ types: ['COACHING'], payments: ['due'] })).map((r) => r.id)).toEqual(['b']);
+    expect(filterMemberReservations(ROWS, s({ types: ['COURT'], payments: ['due'] })).map((r) => r.id)).toEqual([]);
+  });
+});
+
+describe('reservationFacetCounts', () => {
+  it('une facette ne se contraint jamais elle-même', () => {
+    // Paiement « due » sélectionné : les compteurs Type restent évalués SANS la contrainte Type,
+    // mais AVEC la contrainte Paiement → seul le cours (b) compte.
+    const c = reservationFacetCounts(ROWS, { types: new Set(), statuses: new Set(), payments: new Set(['due'] as ReservationPaymentFacet[]) });
+    expect(c.types).toEqual({ COURT: 0, COACHING: 1, TOURNAMENT: 0, EVENT: 0 });
+    // Le compteur Paiement s'évalue lui SANS sa propre contrainte → paid 1, due 1.
+    expect(c.payments).toEqual({ paid: 1, due: 1 });
+  });
+  it('sans filtre : compte brut de chaque facette', () => {
+    const c = reservationFacetCounts(ROWS, emptyReservationFilter());
+    expect(c.types).toEqual({ COURT: 1, COACHING: 1, TOURNAMENT: 1, EVENT: 0 });
+    expect(c.statuses).toEqual({ confirmed: 2, cancelled: 1, late: 1 });
+    expect(c.payments).toEqual({ paid: 1, due: 1 });
+  });
+});
+
+describe('reservationFacetsPresent / reservationFilterActive', () => {
+  it('ne liste que les facettes réellement présentes, dans l\'ordre canonique', () => {
+    const p = reservationFacetsPresent(ROWS);
+    expect(p.types).toEqual(['COURT', 'COACHING', 'TOURNAMENT']); // pas EVENT (absent)
+    expect(p.statuses).toEqual(['confirmed', 'cancelled', 'late']);
+    expect(p.payments).toEqual(['paid', 'due']);
+  });
+  it('reservationFilterActive', () => {
+    expect(reservationFilterActive(emptyReservationFilter())).toBe(false);
+    expect(reservationFilterActive({ types: new Set(['COURT'] as ReservationType[]), statuses: new Set(), payments: new Set() })).toBe(true);
   });
 });

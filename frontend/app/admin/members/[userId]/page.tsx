@@ -34,7 +34,12 @@ import { SubscriptionActions } from '@/components/admin/subscriptions/Subscripti
 import { StaffRole } from '@/lib/members';
 import {
   winRate, lastVisitLabel, cancellationLabel, tenureLabel, weekdayLabel, methodLabel, memberAlerts,
+  filterMemberReservations, reservationFacetCounts, reservationFacetsPresent, emptyReservationFilter,
+  reservationFilterActive,
+  RESERVATION_TYPE_LABELS, RESERVATION_STATUS_LABELS, RESERVATION_PAYMENT_LABELS,
+  type ReservationFilterState, type ReservationType, type ReservationStatusFacet, type ReservationPaymentFacet,
 } from '@/lib/memberStats';
+import { FacetChip, FacetGroup } from '@/components/ui/FacetChip';
 
 type DetailTab = 'activite' | 'finances' | 'niveau' | 'fidelite';
 
@@ -49,6 +54,20 @@ const DETAIL_DOORS: { key: DetailTab; label: string; icon: IconName; tint: strin
   { key: 'niveau', label: 'Niveau', icon: 'ball', tint: MEMBER_CARD_TINTS.violet },
   { key: 'fidelite', label: 'Fidélité', icon: 'user', tint: MEMBER_CARD_TINTS.amber },
 ];
+
+// Toggle immuable d'une facette dans un des trois Sets (nouvelle référence → re-render propre).
+function toggleResvFacet(
+  state: ReservationFilterState,
+  dim: 'types' | 'statuses' | 'payments',
+  value: ReservationType | ReservationStatusFacet | ReservationPaymentFacet,
+): ReservationFilterState {
+  const next: ReservationFilterState = {
+    types: new Set(state.types), statuses: new Set(state.statuses), payments: new Set(state.payments),
+  };
+  const set = next[dim] as Set<string>;
+  if (set.has(value)) set.delete(value); else set.add(value);
+  return next;
+}
 
 const money = (v: string) => fmtEuros(toCents(v));
 const fmtDate = (iso: string) =>
@@ -130,7 +149,9 @@ export default function MemberHistoryPage() {
   // accumule des dizaines de notes — la carte ne doit pas s'allonger avec lui).
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [watch, setWatch] = useState(false);
-  const [onlyLate, setOnlyLate] = useState(false);
+  // Filtre multi-facettes de l'historique des réservations (Type · Statut · Paiement) —
+  // remplace l'ancienne case « Annulations tardives seulement » (absorbée par la chip « Tardive »).
+  const [resvFilter, setResvFilter] = useState<ReservationFilterState>(emptyReservationFilter);
   const [noteBody, setNoteBody] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -278,7 +299,10 @@ export default function MemberHistoryPage() {
   };
 
   const row: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 12 };
-  const td: CSSProperties = { padding: '9px 12px', fontFamily: th.fontUI, fontSize: 13, color: th.text, whiteSpace: 'nowrap' };
+  // Cellule condensée : padding vertical réduit + police 12,5 → ~2× plus de lignes visibles.
+  const td: CSSProperties = { padding: '4px 10px', fontFamily: th.fontUI, fontSize: 12.5, color: th.text, whiteSpace: 'nowrap' };
+  // Teintes des trois groupes de filtres de l'historique (langage « Où jouer »).
+  const RESV_TINT = { type: ACCENTS.blue, statut: ACCENTS.coral, paiement: ACCENTS.emerald };
   // Chips du hero brume bleue : encre fixe sur pastille translucide (statuts) ou corail (alertes).
   const heroChip: CSSProperties = { background: 'rgba(255,255,255,.72)', color: HERO_INK, borderRadius: 999, padding: '3px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700 };
   const heroAlertChip: CSSProperties = { background: ACCENTS.coral, color: inkOn(ACCENTS.coral), borderRadius: 999, padding: '3px 10px', fontFamily: th.fontUI, fontSize: 12, fontWeight: 700 };
@@ -294,7 +318,10 @@ export default function MemberHistoryPage() {
 
   const m = data.member;
   const { counts, finance, game, loyalty, favorites } = data;
-  const reservations = onlyLate ? data.reservations.filter((r) => r.lateCancel) : data.reservations;
+  const reservations = filterMemberReservations(data.reservations, resvFilter);
+  const facetCounts = reservationFacetCounts(data.reservations, resvFilter);
+  const facetsPresent = reservationFacetsPresent(data.reservations);
+  const filterActive = reservationFilterActive(resvFilter);
 
   const alerts = memberAlerts({
     outstandingCents: toCents(finance.outstanding),
@@ -521,39 +548,90 @@ export default function MemberHistoryPage() {
                   </Section>
 
                   <Section title="Historique des réservations">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, fontFamily: th.fontUI, fontSize: 13, color: th.textMute, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} style={{ width: 16, height: 16, accentColor: th.accent, cursor: 'pointer' }} />
-                      Annulations tardives seulement
-                    </label>
-                    {reservations.length === 0 ? (
-                      <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, margin: 0 }}>{onlyLate ? 'Aucune annulation tardive.' : 'Aucune réservation.'}</p>
-                    ) : (
-                      <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
-                          <thead>
-                            <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
-                              {['Date', 'Terrain', 'Type', 'Statut', 'Montant'].map((h) => (
-                                <th key={h} style={{ padding: '8px 12px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reservations.map((r) => (
-                              <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: r.status === 'CANCELLED' ? 0.6 : 1 }}>
-                                <td style={td}>{fmtDateTime(r.startTime)}</td>
-                                <td style={td}>{r.resourceName}</td>
-                                <td style={td}>{TYPE_FR[r.type] ?? r.type}</td>
-                                <td style={td}>
-                                  <Chip tone={r.status === 'CANCELLED' ? 'line' : 'accent'}>
-                                    {STATUS_FR[r.status] ?? r.status}{r.lateCancel ? ' (tardive)' : ''}
-                                  </Chip>
-                                </td>
-                                <td style={{ ...td, fontWeight: 600 }}>{money(r.attributedAmount)}</td>
-                              </tr>
+                    {/* Barre de filtres — tiroir compact partagé (langage « Où jouer ») : une
+                        chip par facette présente, compteur live, actif = pill pleine teintée.
+                        Une dimension sans aucune facette présente n'affiche pas son groupe. */}
+                    <div style={{ borderRadius: 14, background: th.bgElev, boxShadow: `inset 0 0 0 1px ${th.line}`, marginBottom: 14 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px', padding: '11px 13px' }}>
+                        {facetsPresent.types.length > 0 && (
+                          <FacetGroup label="Type" tint={RESV_TINT.type}>
+                            {facetsPresent.types.map((t: ReservationType) => (
+                              <FacetChip
+                                key={t} label={RESERVATION_TYPE_LABELS[t]} tint={RESV_TINT.type}
+                                count={facetCounts.types[t]} active={resvFilter.types.has(t)}
+                                onClick={() => setResvFilter((s) => toggleResvFacet(s, 'types', t))}
+                              />
                             ))}
-                          </tbody>
-                        </table>
+                          </FacetGroup>
+                        )}
+                        {facetsPresent.statuses.length > 0 && (
+                          <FacetGroup label="Statut" tint={RESV_TINT.statut}>
+                            {facetsPresent.statuses.map((st: ReservationStatusFacet) => (
+                              <FacetChip
+                                key={st} label={RESERVATION_STATUS_LABELS[st]} tint={RESV_TINT.statut}
+                                count={facetCounts.statuses[st]} active={resvFilter.statuses.has(st)}
+                                onClick={() => setResvFilter((s) => toggleResvFacet(s, 'statuses', st))}
+                              />
+                            ))}
+                          </FacetGroup>
+                        )}
+                        {facetsPresent.payments.length > 0 && (
+                          <FacetGroup label="Paiement" tint={RESV_TINT.paiement}>
+                            {facetsPresent.payments.map((pf: ReservationPaymentFacet) => (
+                              <FacetChip
+                                key={pf} label={RESERVATION_PAYMENT_LABELS[pf]} tint={RESV_TINT.paiement}
+                                count={facetCounts.payments[pf]} active={resvFilter.payments.has(pf)}
+                                onClick={() => setResvFilter((s) => toggleResvFacet(s, 'payments', pf))}
+                              />
+                            ))}
+                          </FacetGroup>
+                        )}
                       </div>
+                    </div>
+
+                    {reservations.length === 0 ? (
+                      <p style={{ fontFamily: th.fontUI, fontSize: 13, color: th.textFaint, margin: 0 }}>
+                        {filterActive ? 'Aucune réservation ne correspond aux filtres.' : 'Aucune réservation.'}
+                        {filterActive && (
+                          <> <button onClick={() => setResvFilter(emptyReservationFilter())} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.accent }}>Effacer les filtres</button></>
+                        )}
+                      </p>
+                    ) : (
+                      <>
+                        <div style={{ overflowX: 'auto', maxHeight: 560, overflowY: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                            <thead>
+                              <tr style={{ borderBottom: `1px solid ${th.line}`, textAlign: 'left' }}>
+                                {['Date', 'Terrain', 'Type', 'Statut', 'Montant'].map((h) => (
+                                  <th key={h} style={{ padding: '6px 10px', fontFamily: th.fontUI, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, color: th.textMute, position: 'sticky', top: 0, background: th.surface }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {reservations.map((r) => {
+                                const cancelled = r.status === 'CANCELLED';
+                                return (
+                                  <tr key={r.id} style={{ borderBottom: `1px solid ${th.line}`, opacity: cancelled ? 0.72 : 1 }}>
+                                    <td style={td}>{fmtDateTime(r.startTime)}</td>
+                                    <td style={td}>{r.resourceName}</td>
+                                    <td style={td}>{TYPE_FR[r.type] ?? r.type}</td>
+                                    <td style={td}>
+                                      <span style={{ color: cancelled ? ACCENTS.coral : th.textMute, fontWeight: cancelled ? 700 : 500 }}>
+                                        {STATUS_FR[r.status] ?? r.status}{r.lateCancel ? ' · tardive' : ''}
+                                      </span>
+                                    </td>
+                                    <td style={{ ...td, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{money(r.attributedAmount)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textFaint, marginTop: 10 }}>
+                          {reservations.length} réservation{reservations.length > 1 ? 's' : ''} affichée{reservations.length > 1 ? 's' : ''}
+                          {filterActive && <> sur {data.reservations.length} · <button onClick={() => setResvFilter(emptyReservationFilter())} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: th.fontUI, fontSize: 12, fontWeight: 700, color: th.accent }}>Effacer</button></>}
+                        </div>
+                      </>
                     )}
                   </Section>
                 </>
