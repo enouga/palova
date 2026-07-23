@@ -12,6 +12,20 @@ describe('DataExportService', () => {
     expect(typeof out.generatedAt).toBe('string');
   });
 
+  it("le profil exporté inclut l'adresse postale (rue/CP/ville)", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1', email: 'e@x.fr', address: '12 rue du Padel', postalCode: '75001', city: 'Paris',
+    } as never);
+    const out = await new DataExportService().buildExport('u1');
+    expect(out.profile).toEqual(expect.objectContaining({
+      address: '12 rue du Padel', postalCode: '75001', city: 'Paris',
+    }));
+    const profileCall = prismaMock.user.findUnique.mock.calls[0][0] as any;
+    expect(profileCall?.select).toEqual(expect.objectContaining({
+      address: true, postalCode: true, city: true,
+    }));
+  });
+
   it('les requêtes messages ne ciblent que les messages ENVOYÉS par le demandeur', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1' } as never);
     await new DataExportService().buildExport('u1');
