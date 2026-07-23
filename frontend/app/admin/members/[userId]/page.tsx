@@ -124,13 +124,24 @@ export default function MemberHistoryPage() {
   // Garde anti-race : un reload (onSaved après correction de niveau) peut chevaucher
   // un chargement en cours ; on ignore le résultat d'une requête périmée.
   const reqIdRef = useRef(0);
+  // userId pour lequel on a déjà des données affichées — sert à distinguer le chargement
+  // initial (plein écran « Chargement… » légitime) d'un reload déclenché par une mutation
+  // réussie (rôle, coach, blocage…) : ce dernier ne doit PAS faire disparaître tout le
+  // cockpit derrière l'écran de chargement (juste rafraîchir les données une fois arrivées).
+  // Un ref (pas un état) évite d'avoir à ajouter `data` aux deps de `load` — ce qui
+  // recréerait son identité à chaque reload et bouclerait l'effet de montage ci-dessous.
+  const loadedForRef = useRef<string | null>(null);
   // Ancre de scroll du bloc « Le plus — détails complets » (cible du lien « Tout l'historique → »).
   const detailRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (!token || !clubId || !userId) return;
     const reqId = ++reqIdRef.current;
-    setLoading(true);
+    // Plein écran « Chargement… » seulement pour le tout premier chargement de CE membre
+    // (loadedForRef pas encore posé sur ce userId) — un reload déclenché par une mutation
+    // réussie (rôle, coach, blocage…) sur un membre déjà affiché ne doit pas faire
+    // disparaître le cockpit, juste rafraîchir les données une fois la réponse arrivée.
+    if (loadedForRef.current !== userId) setLoading(true);
     try {
       setError(null);
       const [h, n, lvl] = await Promise.all([
@@ -144,6 +155,7 @@ export default function MemberHistoryPage() {
       ]);
       if (reqId !== reqIdRef.current) return; // réponse périmée : un reload plus récent a pris la main
       setData(h); setNotes(n); setLevelData(lvl); setWatch(h.member.watch);
+      loadedForRef.current = userId;
     } catch (e) {
       if (reqId !== reqIdRef.current) return;
       setError((e as Error).message === 'MEMBER_NOT_FOUND' ? 'Membre introuvable dans ce club.' : (e as Error).message);
