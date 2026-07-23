@@ -46,6 +46,7 @@ describe('GET /api/unsubscribe', () => {
     const res = await request(app).get(`/api/unsubscribe?token=${unsubscribeToken('u1')}&cat=offers&action=resubscribe`);
     expect(res.status).toBe(200);
     expect(prismaMock.notificationPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId_category_channel: { userId: 'u1', category: 'CLUB_OFFERS', channel: 'EMAIL' } },
       update: { enabled: true },
     }));
   });
