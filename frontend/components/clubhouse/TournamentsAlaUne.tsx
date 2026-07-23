@@ -15,20 +15,24 @@ function formatDay(iso: string, tz: string): string {
 }
 
 // « Prochains events » : tournois + animations fusionnés (nom de fichier historique conservé).
-// Chaque ligne : nom + chip compte à rebours, badge + date, mini-jauge de remplissage et urgence.
-// `now` null avant le mount (hydration-safe) : les countdowns n'apparaissent qu'ensuite.
+// Chaque carte : nom + chip compte à rebours, badge + date, mini-jauge de remplissage et
+// urgence. Grille responsive (1 colonne mobile, 2 ≥560px, 4 ≥900px — « 2 lignes de 4 » sur
+// desktop) : la section est pleine largeur (cf. ClubHouse.tsx), plus jamais partagée à
+// mi-largeur avec « Vos réservations ». `now` null avant le mount (hydration-safe) : les
+// countdowns n'apparaissent qu'ensuite.
 export function TournamentsAlaUne({ items, timezone, now = null, multiSport = false }: { items: AgendaItem[]; timezone: string; now?: Date | null; multiSport?: boolean }) {
   const { th } = useTheme();
   if (items.length === 0) return null;
   return (
     <div style={{ ...cardStyle(th), padding: '16px' }}>
+      <style>{`.ta-grid{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:560px){.ta-grid{grid-template-columns:1fr 1fr}}@media(min-width:900px){.ta-grid{grid-template-columns:1fr 1fr 1fr 1fr}}`}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
         <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 9, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: th.mode === 'floodlit' ? `${ACCENTS.apricot}26` : `${ACCENTS.apricot}40` }}>
           <Icon name="trophy" size={15} color={th.mode === 'floodlit' ? ACCENTS.apricot : th.ink} />
         </span>
         <span style={{ fontFamily: th.fontUI, fontWeight: 800, fontSize: 14, color: th.text }}>Prochains events</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div className="ta-grid">
         {items.filter((item) => item.source !== 'lesson').map((item) => {
           const isT = item.source === 'tournament';
           const id = isT ? item.tournament.id : item.event.id;

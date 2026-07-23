@@ -65,4 +65,9 @@ describe('TournamentsAlaUne', () => {
     wrap(items([e({ endTime: null })])); // 18:00Z = 20h00 à Paris
     expect(screen.getByText(/· 20h00$/)).toBeInTheDocument();
   });
+
+  it('rend les items dans une grille responsive (classe ta-grid)', () => {
+    const { container } = wrap(items([t({}), t({ id: 't2', name: 'P200' })]));
+    expect(container.querySelector('.ta-grid')).toBeInTheDocument();
+  });
 });
