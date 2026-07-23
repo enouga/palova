@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import MemberHistoryPage from '../app/admin/members/[userId]/page';
 import { ThemeProvider } from '../lib/ThemeProvider';
 import { AdminRoleContext } from '../lib/adminRole';
@@ -10,7 +10,22 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
 }));
 jest.mock('../lib/useAuth', () => ({ useAuth: () => ({ token: 'tok', ready: true }) }));
-jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: { id: 'club-1' } }) }));
+
+// Club mutable : la plupart des tests utilisent le club par défaut (niveau actif, 1 sport
+// « Padel ») ; le test « système désactivé » le bascule avant renderPage(). Une variable
+// (plutôt qu'un objet figé dans le factory) permet cette bascule par test — la fabrique
+// jest.mock() est hoisted mais lit `mockClub` à chaque appel de useClub().
+let mockClub: Record<string, unknown> | null = {
+  id: 'club-1', name: 'Padel Arena Paris', slug: 'padel-arena-paris', levelSystemEnabled: true,
+  clubSports: [{ sport: { key: 'padel', name: 'Padel' } }],
+};
+jest.mock('../lib/ClubProvider', () => ({ useClub: () => ({ club: mockClub }) }));
+
+// Le rôle du viewer (gating de la carte « Rôle & accès » + du bloc niveau ADMIN) est posé
+// par AdminRoleContext (layout /admin), pas par un appel getMyClubs — la page ne l'appelle
+// plus (contrairement à des versions antérieures). `getMyProfile` reste nécessaire : il
+// alimente `viewerUserId`, utilisé par la carte Accès pour interdire l'édition de son
+// propre rôle.
 jest.mock('../lib/api', () => ({
   api: {
     adminGetMemberHistory: jest.fn(),
@@ -18,21 +33,50 @@ jest.mock('../lib/api', () => ({
     adminAddMemberNote: jest.fn(),
     adminDeleteMemberNote: jest.fn(),
     adminSetMemberWatch: jest.fn(),
-    // Onglet Niveau fusionné (lots C+D) : la fiche charge aussi le niveau (override admin).
+    // Bloc « Niveau » du détail : niveau courant par sport + historique des corrections +
+    // formulaire de correction manuelle (LevelOverrideForm, réservé ADMIN).
     adminGetMemberLevel: jest.fn(),
-    // Recharge/correction d'un solde + rôle du viewer (gating « Corriger »).
-    getMyClubs: jest.fn(),
+    adminSetMemberLevel: jest.fn(),
+    // Recharge/correction d'un solde prépayé (détail Finances).
     adminRechargePackage: jest.fn(),
     adminAdjustPackage: jest.fn(),
+    // Cockpit : profil éditable, rôle & accès, identité du viewer, forfaits (WalletCard).
+    adminUpdateMember: jest.fn(),
+    adminSetMemberStaffRole: jest.fn(),
+    adminSetMemberCoach: jest.fn(),
+    adminSetMemberReferee: jest.fn(),
+    adminSetMemberBlocked: jest.fn(),
+    adminRemoveMember: jest.fn(),
+    getMyProfile: jest.fn(),
+    adminGetSubscriptionPlans: jest.fn(),
   },
   assetUrl: (u: string | null) => u,
 }));
 
 const HISTORY: MemberHistory = {
-  member: { userId: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@d.fr', phone: null, avatarUrl: null, isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: true, since: '2026-01-01T00:00:00.000Z' },
+  member: {
+    userId: 'u1', firstName: 'Jean', lastName: 'Dupont', email: 'j@d.fr', phone: null, avatarUrl: null,
+    isSubscriber: false, membershipNo: null, status: 'ACTIVE', watch: false, hasActivePackage: true, since: '2026-01-01T00:00:00.000Z',
+    membershipId: 'mb1', birthDate: '1992-09-04', sex: 'FEMALE',
+    address: '12 rue des Sports', postalCode: '31000', city: 'Toulouse',
+    staffRole: null, isCoach: false, isReferee: false, note: null,
+  },
   reservations: [
-    { id: 'r1', status: 'CONFIRMED', type: 'COURT', startTime: '2026-06-15T18:00:00.000Z', endTime: '2026-06-15T19:00:00.000Z', cancelledAt: null, lateCancel: false, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '36.00' },
-    { id: 'r2', status: 'CANCELLED', type: 'COURT', startTime: '2026-06-10T18:00:00.000Z', endTime: '2026-06-10T19:00:00.000Z', cancelledAt: '2026-06-10T12:00:00.000Z', lateCancel: true, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '0.00' },
+    {
+      id: 'r1', status: 'CONFIRMED', type: 'COURT', startTime: '2026-06-15T18:00:00.000Z', endTime: '2026-06-15T19:00:00.000Z',
+      cancelledAt: null, lateCancel: false, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '36.00',
+      participants: [
+        { userId: 'u1', firstName: 'Jean', lastName: 'Dupont', isOrganizer: true },
+        { userId: 'bob', firstName: 'Bob', lastName: 'Bidon', isOrganizer: false },
+      ],
+      match: { winningTeam: 1, myTeam: 1, sets: [[6, 3], [6, 4]], competitive: true },
+    },
+    {
+      id: 'r2', status: 'CANCELLED', type: 'COURT', startTime: '2026-06-10T18:00:00.000Z', endTime: '2026-06-10T19:00:00.000Z',
+      cancelledAt: '2026-06-10T12:00:00.000Z', lateCancel: true, resourceName: 'Court 1', sportKey: 'padel', isOrganizer: true, attributedAmount: '0.00',
+      participants: [{ userId: 'u1', firstName: 'Jean', lastName: 'Dupont', isOrganizer: true }],
+      match: null,
+    },
   ],
   counts: { total: 2, confirmed: 1, cancelled: 1, lateCancelled: 1, noShow: 0, upcoming: 0, noShowCharged: 0 },
   noShowChargedLastAt: null,
@@ -50,6 +94,8 @@ const HISTORY: MemberHistory = {
     wins: 3, losses: 1, frequentPartners: [{ userId: 'bob', firstName: 'Bob', lastName: 'B', count: 3 }],
   },
   loyalty: { firstVisitAt: '2026-05-01T10:00:00.000Z', lastVisitAt: '2026-06-15T18:00:00.000Z', daysSinceLastVisit: 60, tenureDays: 170, playsPerMonth: 2, cancellationRate: 0.5, atRisk: true },
+  upcoming: [{ kind: 'tournament', id: 't1', title: 'P100 Dames', startTime: '2099-07-26T08:00:00Z', status: 'CONFIRMED' }],
+  subscription: { id: 's1', planId: 'pl1', planName: 'Padel illimité', expiresAt: '2099-08-10T00:00:00Z', monthlyPriceSnapshot: '39', sportKeys: ['padel'] },
 };
 
 // Rôle du viewer via le contexte posé par le layout /admin (défaut ADMIN : comportement historique).
@@ -60,14 +106,36 @@ const renderPage = (role: 'OWNER' | 'ADMIN' | 'STAFF' | null = 'ADMIN') => rende
 const balEntries = { id: 'pk1', kind: 'ENTRIES' as const, name: 'Carnet 10', creditsRemaining: 3, amountRemaining: null, purchasedAt: '2026-06-01T00:00:00.000Z', expiresAt: null };
 const withBalance = (): MemberHistory => ({ ...HISTORY, finance: { ...HISTORY.finance, prepaid: { balances: [balEntries], consumption: [] } } });
 
+// Le bouton « Enregistrer » de MemberProfileCard (colonne gauche, toujours monté) et celui de
+// LevelOverrideForm (détail Niveau) portent EXACTEMENT le même libellé — on scope au
+// conteneur du formulaire de correction pour cibler sans ambiguïté celui du niveau.
+const levelForm = () => screen.getByText('Corriger le niveau').closest('div') as HTMLElement;
+
 beforeEach(() => {
+  jest.clearAllMocks();
+  mockClub = {
+    id: 'club-1', name: 'Padel Arena Paris', slug: 'padel-arena-paris', levelSystemEnabled: true,
+    clubSports: [{ sport: { key: 'padel', name: 'Padel' } }],
+  };
   (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(HISTORY);
   (api.adminGetMemberNotes as jest.Mock).mockResolvedValue([]);
   (api.adminAddMemberNote as jest.Mock).mockResolvedValue({ id: 'n1', body: 'Joueur sympa', createdAt: '2026-06-23T14:00:00.000Z', author: { firstName: 'Sarah', lastName: 'P' } });
   (api.adminSetMemberWatch as jest.Mock).mockResolvedValue({ userId: 'u1', watch: true });
   (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({ levels: {}, history: [] });
-  (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'ADMIN' }]);
+  (api.adminSetMemberLevel as jest.Mock).mockResolvedValue({ calibrated: true, level: 5, tier: 'Confirmé', isProvisional: false, reliability: 95, matchesPlayed: 0 });
+  (api.adminRechargePackage as jest.Mock).mockResolvedValue({ package: {}, payment: {} });
+  (api.adminAdjustPackage as jest.Mock).mockResolvedValue({ package: {} });
+  (api.adminUpdateMember as jest.Mock).mockResolvedValue({});
+  (api.adminSetMemberStaffRole as jest.Mock).mockResolvedValue({ userId: 'u1', staffRole: 'STAFF' });
+  (api.adminSetMemberCoach as jest.Mock).mockResolvedValue({ userId: 'u1', isCoach: true });
+  (api.adminSetMemberReferee as jest.Mock).mockResolvedValue({ userId: 'u1', isReferee: true });
+  (api.adminSetMemberBlocked as jest.Mock).mockResolvedValue({});
+  (api.adminRemoveMember as jest.Mock).mockResolvedValue({ ok: true });
+  (api.getMyProfile as jest.Mock).mockResolvedValue({ id: 'viewer-1' });
+  (api.adminGetSubscriptionPlans as jest.Mock).mockResolvedValue([]);
 });
+
+// ───────────────────────── Identité, hero, badges ─────────────────────────
 
 it('affiche identité, badge « à risque » et chip « Carnet actif »', async () => {
   renderPage();
@@ -77,20 +145,22 @@ it('affiche identité, badge « à risque » et chip « Carnet actif »', async 
   expect(screen.getByText('Habitudes de jeu')).toBeInTheDocument();
 });
 
-it('onglet Activité : compteur d\'annulations tardives', async () => {
+// ───────────────────────── Détail « Activité » (onglet par défaut) ─────────────────────────
+
+it('activité : compteur d\'annulations tardives', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   expect(screen.getByText('Annulations tardives')).toBeInTheDocument();
 });
 
-it('onglet Activité : No-show facturés à 0 → hint "aucun", ton neutre', async () => {
+it('activité : No-show facturés à 0 → hint "aucun", ton neutre', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   expect(screen.getByText('No-show facturés')).toBeInTheDocument();
   expect(screen.getByText('aucun')).toBeInTheDocument();
 });
 
-it('onglet Activité : No-show facturés > 0 → récidive visible, ton coral', async () => {
+it('activité : No-show facturés > 0 → récidive visible, ton coral', async () => {
   (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
     ...HISTORY,
     counts: { ...HISTORY.counts, noShowCharged: 3 },
@@ -104,7 +174,9 @@ it('onglet Activité : No-show facturés > 0 → récidive visible, ton coral', 
   expect(screen.getByText(/dernier le/i)).toBeInTheDocument();
 });
 
-it('bascule sur Finances et formate les montants', async () => {
+// ───────────────────────── Détail « Finances » ─────────────────────────
+
+it('finances : bascule sur l\'onglet et formate les montants', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
@@ -114,7 +186,46 @@ it('bascule sur Finances et formate les montants', async () => {
   expect(screen.getByText("Chiffre d'affaires par mois")).toBeInTheDocument();
 });
 
-it('onglet Niveau : partenaires fréquents + courbe de progression', async () => {
+it('finances : recharger un solde appelle adminRechargePackage', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  // « Recharger Carnet 10 » (aria-label) est distinct du bouton texte « Recharger » de
+  // MemberWalletCard (colonne droite, toujours monté lui aussi) — pas de collision de nom.
+  fireEvent.click(await screen.findByRole('button', { name: 'Recharger Carnet 10' }));
+  fireEvent.change(await screen.findByLabelText('Entrées à ajouter'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('Montant encaissé (€)'), { target: { value: '100' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await waitFor(() => expect(api.adminRechargePackage).toHaveBeenCalledWith(
+    'club-1', 'u1', 'pk1', expect.objectContaining({ addEntries: 5, price: 100 }), 'tok'));
+});
+
+it('finances : « Corriger » disponible pour tout staff', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  renderPage('STAFF');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  expect(await screen.findByRole('button', { name: 'Recharger Carnet 10' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Corriger Carnet 10' })).toBeInTheDocument();
+});
+
+it('finances : un ADMIN corrige un solde (adminAdjustPackage)', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Corriger Carnet 10' }));
+  fireEvent.change(await screen.findByLabelText("Nouveau nombre d'entrées"), { target: { value: '8' } });
+  fireEvent.change(screen.getByLabelText('Motif de la correction'), { target: { value: 'erreur' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await waitFor(() => expect(api.adminAdjustPackage).toHaveBeenCalledWith(
+    'club-1', 'u1', 'pk1', { newCredits: 8, reason: 'erreur' }, 'tok'));
+});
+
+// ───────────────────────── Détail « Niveau » — jeu + gating admin ─────────────────────────
+
+it('niveau : partenaires fréquents + courbe de progression', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
@@ -123,16 +234,28 @@ it('onglet Niveau : partenaires fréquents + courbe de progression', async () =>
   expect(screen.getByLabelText('Courbe de progression du niveau')).toBeInTheDocument();
 });
 
-it('onglet Niveau : viewer ADMIN → formulaire « Corriger le niveau » présent, niveau admin chargé', async () => {
+it('niveau : viewer ADMIN → niveau courant, historique et formulaire de correction chargés', async () => {
+  (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({
+    levels: { padel: { level: 4.2, tier: 'Confirmé', isProvisional: false, reliability: 88 } },
+    history: [
+      { id: 'h1', previousLevel: 3.5, newLevel: 4.2, reason: 'Recalage manuel', createdAt: '2026-06-10T10:00:00Z', staffFirstName: 'Bob', staffLastName: 'Staff', sportKey: 'padel', sportName: 'Padel' },
+    ],
+  });
   renderPage();
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
-  await screen.findByText('Corriger le niveau');
+  expect(await screen.findByText('Corriger le niveau')).toBeInTheDocument();
   expect(api.adminGetMemberLevel).toHaveBeenCalledWith('club-1', 'u1', 'tok');
+  // niveau courant par sport + palier
+  expect(screen.getByText('4.2')).toBeInTheDocument();
+  expect(screen.getByText('Confirmé')).toBeInTheDocument();
+  // historique des corrections : ancien → nouveau + motif + auteur
+  expect(screen.getByText('3.5 → 4.2')).toBeInTheDocument();
+  expect(screen.getByText(/Recalage manuel/)).toBeInTheDocument();
+  expect(screen.getByText(/Bob Staff/)).toBeInTheDocument();
 });
 
-it('onglet Niveau : viewer STAFF → blocs admin masqués et niveau admin non chargé (la route répond 403)', async () => {
-  (api.adminGetMemberLevel as jest.Mock).mockClear(); // la suite n'a pas de clearAllMocks : purge les appels des tests précédents
+it('niveau : viewer STAFF → blocs admin masqués et niveau admin non chargé (la route répond 403)', async () => {
   renderPage('STAFF');
   await screen.findByText('Jean Dupont');
   fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
@@ -143,16 +266,119 @@ it('onglet Niveau : viewer STAFF → blocs admin masqués et niveau admin non ch
   expect(api.adminGetMemberLevel).not.toHaveBeenCalled();
 });
 
-it('onglet Notes : ajouter un commentaire appelle l\'API et l\'affiche', async () => {
+// ───────────────────────── Détail « Niveau » — correction manuelle (LevelOverrideForm) ─────────────────────────
+// Ces cas viennent de l'ex-AdminMemberLevel.test.tsx : il n'existe pas de suite dédiée à
+// LevelOverrideForm.tsx, donc sa validation/arrondi/mapping d'erreurs ne sont exercés qu'ici.
+
+it('niveau : soumettre la correction appelle adminSetMemberLevel et recharge la fiche', async () => {
   renderPage();
   await screen.findByText('Jean Dupont');
-  fireEvent.click(screen.getByRole('button', { name: /Notes/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  expect(api.adminGetMemberLevel).toHaveBeenCalledTimes(1);
+
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText(/Motif/i), { target: { value: 'décision comité' } });
+  fireEvent.click(within(levelForm()).getByRole('button', { name: /Enregistrer/i }));
+
+  await waitFor(() => expect(api.adminSetMemberLevel).toHaveBeenCalledWith(
+    'club-1', 'u1', { sportKey: 'padel', level: 5, reason: 'décision comité' }, 'tok',
+  ));
+  // rechargement de la fiche après succès (2e appel adminGetMemberLevel)
+  await waitFor(() => expect(api.adminGetMemberLevel).toHaveBeenCalledTimes(2));
+});
+
+it('niveau : système de niveau désactivé → correction masquée, niveau jamais chargé', async () => {
+  mockClub = { id: 'club-1', levelSystemEnabled: false, clubSports: [] };
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  expect(screen.queryByText('Corriger le niveau')).not.toBeInTheDocument();
+  expect(api.adminGetMemberLevel).not.toHaveBeenCalled();
+});
+
+it('niveau : mappe une erreur 403 (FORBIDDEN) en message français', async () => {
+  (api.adminSetMemberLevel as jest.Mock).mockRejectedValue(new Error('FORBIDDEN'));
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '5' } });
+  fireEvent.click(within(levelForm()).getByRole('button', { name: /Enregistrer/i }));
+  expect(await screen.findByText('Réservé aux administrateurs du club.')).toBeInTheDocument();
+});
+
+it('niveau : affiche une confirmation de succès, effacée dès l\'édition suivante', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '5' } });
+  fireEvent.click(within(levelForm()).getByRole('button', { name: /Enregistrer/i }));
+  expect(await screen.findByText('Niveau corrigé.')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '6' } });
+  expect(screen.queryByText('Niveau corrigé.')).not.toBeInTheDocument();
+});
+
+it('niveau : arrondit le niveau au dixième avant l\'envoi', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '4.25' } });
+  fireEvent.click(within(levelForm()).getByRole('button', { name: /Enregistrer/i }));
+  await waitFor(() => expect(api.adminSetMemberLevel).toHaveBeenCalledWith(
+    'club-1', 'u1', { sportKey: 'padel', level: 4.3, reason: undefined }, 'tok',
+  ));
+});
+
+it('niveau : niveaux vides → message « aucun niveau » mais formulaire quand même disponible', async () => {
+  (api.adminGetMemberLevel as jest.Mock).mockResolvedValue({
+    levels: {},
+    history: [
+      { id: 'h1', previousLevel: null, newLevel: 4, reason: null, createdAt: '2026-06-10T10:00:00Z', staffFirstName: 'Bob', staffLastName: 'Staff', sportKey: 'padel', sportName: 'Padel' },
+    ],
+  });
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  expect(await screen.findByText(/Aucun niveau enregistré/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Niveau \(0–8\)/i)).toBeInTheDocument();
+  expect(screen.getByText('— → 4.0')).toBeInTheDocument();
+});
+
+it('niveau : échec de chargement du niveau → la fiche reste lisible (nom, « aucun niveau »)', async () => {
+  (api.adminGetMemberLevel as jest.Mock).mockRejectedValue(new Error('BOOM'));
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  expect(await screen.findByText(/Aucun niveau enregistré/i)).toBeInTheDocument();
+});
+
+it('niveau : rejette côté client un niveau invalide (9) sans appeler l\'API', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(screen.getByRole('button', { name: 'Niveau' }));
+  await screen.findByText('Corriger le niveau');
+  fireEvent.change(screen.getByLabelText(/Niveau \(0–8\)/i), { target: { value: '9' } });
+  fireEvent.click(within(levelForm()).getByRole('button', { name: /Enregistrer/i }));
+  expect(await screen.findByText('Niveau invalide (doit être entre 0 et 8).')).toBeInTheDocument();
+  expect(api.adminSetMemberLevel).not.toHaveBeenCalled();
+});
+
+// ───────────────────────── Carte « Notes » (colonne gauche) ─────────────────────────
+
+it('notes : ajouter un commentaire appelle l\'API et l\'affiche', async () => {
+  renderPage();
+  await screen.findByText('Jean Dupont');
   const ta = await screen.findByPlaceholderText(/Ajouter un commentaire/);
   fireEvent.change(ta, { target: { value: 'Joueur sympa' } });
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
   await waitFor(() => expect(api.adminAddMemberNote).toHaveBeenCalledWith('club-1', 'u1', 'Joueur sympa', 'tok'));
   expect(await screen.findByText('Joueur sympa')).toBeInTheDocument();
 });
+
+// ───────────────────────── Hero : « à surveiller » ─────────────────────────
 
 it('toggle « à surveiller » appelle l\'API', async () => {
   renderPage();
@@ -161,46 +387,54 @@ it('toggle « à surveiller » appelle l\'API', async () => {
   await waitFor(() => expect(api.adminSetMemberWatch).toHaveBeenCalledWith('club-1', 'u1', true, 'tok'));
 });
 
-it('onglet Finances : recharger un solde appelle adminRechargePackage', async () => {
-  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
-  (api.adminRechargePackage as jest.Mock).mockResolvedValue({ package: {}, payment: {} });
+// ───────────────────────── Cockpit : carte Profil ─────────────────────────
+
+it('cockpit : profil pré-rempli et enregistrement via adminUpdateMember', async () => {
   renderPage();
-  await screen.findByText('Jean Dupont');
-  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
-  await screen.findByText('Carnet 10');
-  fireEvent.click(screen.getByRole('button', { name: 'Recharger Carnet 10' }));
-  fireEvent.change(await screen.findByLabelText('Entrées à ajouter'), { target: { value: '5' } });
-  fireEvent.change(screen.getByLabelText('Montant encaissé (€)'), { target: { value: '100' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
-  await waitFor(() => expect(api.adminRechargePackage).toHaveBeenCalledWith(
-    'club-1', 'u1', 'pk1', expect.objectContaining({ addEntries: 5, price: 100 }), 'tok'));
+  const addr = await screen.findByLabelText('Adresse');
+  expect(addr).toHaveValue('12 rue des Sports');
+  fireEvent.change(addr, { target: { value: '1 avenue du Club' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ address: '1 avenue du Club', city: 'Toulouse' }), 'tok'));
 });
 
-it('onglet Finances : « Corriger » disponible pour tout staff', async () => {
-  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
-  (api.getMyClubs as jest.Mock).mockResolvedValue([{ clubId: 'club-1', role: 'STAFF' }]);
+// ───────────────────────── Bandeau d'alertes ─────────────────────────
+
+it("bandeau d'alertes : reste dû + abonnement qui expire", async () => {
+  // Fenêtre calculée au runtime (5 j) : robuste indépendamment de la date système du CI.
+  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString();
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY,
+    finance: { ...HISTORY.finance, outstanding: '12.00' },
+    subscription: { ...HISTORY.subscription!, expiresAt: soon },
+  });
   renderPage();
-  await screen.findByText('Jean Dupont');
-  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
-  await screen.findByText('Carnet 10');
-  expect(screen.getByRole('button', { name: 'Recharger Carnet 10' })).toBeInTheDocument();
-  expect(await screen.findByRole('button', { name: 'Corriger Carnet 10' })).toBeInTheDocument();
+  // Le bandeau d'alertes utilise "12,00 € dus" (fmtCents) — distinct du "12 € dus" de la
+  // carte Paiements (fmtEuros, sans décimales) : la regex évite un match ambigu.
+  expect(await screen.findByText(/12,00 € dus/)).toBeInTheDocument();
+  expect(screen.getByText(/expire dans/)).toBeInTheDocument();
 });
 
-it('onglet Finances : un ADMIN corrige un solde (adminAdjustPackage)', async () => {
-  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue(withBalance());
-  (api.adminAdjustPackage as jest.Mock).mockResolvedValue({ package: {} });
+// ───────────────────────── Carte « Dernières réservations » ─────────────────────────
+
+it('dernières réservations : ligne annulée estompée avec mention tardive', async () => {
   renderPage();
-  await screen.findByText('Jean Dupont');
-  fireEvent.click(screen.getByRole('button', { name: 'Finances' }));
-  await screen.findByText('Carnet 10');
-  fireEvent.click(await screen.findByRole('button', { name: 'Corriger Carnet 10' }));
-  fireEvent.change(await screen.findByLabelText("Nouveau nombre d'entrées"), { target: { value: '8' } });
-  fireEvent.change(screen.getByLabelText('Motif de la correction'), { target: { value: 'erreur' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
-  await waitFor(() => expect(api.adminAdjustPackage).toHaveBeenCalledWith(
-    'club-1', 'u1', 'pk1', { newCredits: 8, reason: 'erreur' }, 'tok'));
+  expect(await screen.findByText(/Annulée · tardive/)).toBeInTheDocument();
+  // la résa confirmée avec match saisi affiche aussi le résultat (V/D + score)
+  expect(screen.getByText(/V 6-3 6-4/)).toBeInTheDocument();
 });
+
+// ───────────────────────── Carte « Rôle & accès » ─────────────────────────
+
+it('rôle & accès : changer le rôle appelle adminSetMemberStaffRole', async () => {
+  renderPage('ADMIN');
+  await screen.findByText('Jean Dupont');
+  fireEvent.click(await screen.findByRole('button', { name: 'Staff' }));
+  await waitFor(() => expect(api.adminSetMemberStaffRole).toHaveBeenCalledWith('club-1', 'u1', 'STAFF', 'tok'));
+});
+
+// ───────────────────────── Erreur de chargement ─────────────────────────
 
 it('membre introuvable → message d\'erreur', async () => {
   (api.adminGetMemberHistory as jest.Mock).mockRejectedValueOnce(new Error('MEMBER_NOT_FOUND'));
