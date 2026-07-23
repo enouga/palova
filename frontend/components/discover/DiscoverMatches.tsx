@@ -115,12 +115,17 @@ export function DiscoverMatches({
         </div>
       ) : (
         <div>
-          {/* Étagère 2 lignes : cartes à largeur fixe (270px, même densité que le rail 1 ligne)
-              réparties sur 2 rangées qui défilent horizontalement (grid-auto-flow: column). */}
-          <style>{`.discover-matches-grid{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:270px;gap:14px;align-items:start}`}</style>
+          {/* Étagère : cartes à largeur fixe (270px). 2 rangées quand il y a assez de parties,
+              mais UNE seule ligne à ≤ 2 (sinon grid-auto-flow: column empilerait les 2 cartes en
+              une colonne étroite). align-items: stretch + CTA en bas (NationalMatchCard) →
+              hauteurs égales par rangée, les boutons s'alignent même si une carte est plus haute. */}
           <div style={{ textAlign: 'right', fontFamily: th.fontUI, fontSize: 13, fontWeight: 700, color: th.text, marginBottom: 4 }}>{count}</div>
           <div style={{ position: 'relative', margin: '0 -20px' }}>
-            <div ref={railRef} className="sp-scroll-x discover-matches-grid" style={{ padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
+            <div ref={railRef} className="sp-scroll-x" style={{
+              display: 'grid', gridTemplateRows: `repeat(${list.length <= 2 ? 1 : 2}, auto)`,
+              gridAutoFlow: 'column', gridAutoColumns: '270px', gap: 14, alignItems: 'stretch',
+              padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20,
+            }}>
               {list.map((r) => (
                 <NationalMatchCard key={r.match.id} match={r.match} distanceKm={r.distanceKm} style={{ scrollSnapAlign: 'start' }} />
               ))}

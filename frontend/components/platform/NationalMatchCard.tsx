@@ -5,7 +5,7 @@ import { useTheme } from '@/lib/ThemeProvider';
 import { ACCENTS } from '@/lib/theme';
 import { matchSeats } from '@/lib/clubhouse';
 import { rangeLabel } from '@/lib/levelMatch';
-import { formatDateShortTimeRange } from '@/lib/tournament';
+import { formatDateShort, formatDateShortTimeRange, formatHourRange } from '@/lib/tournament';
 import { colorForSeed } from '@/lib/playerColors';
 import { distanceLabel } from '@/lib/discover';
 import { Avatar } from '@/components/ui/Avatar';
@@ -29,6 +29,11 @@ export function NationalMatchCard({
     ? rangeLabel(m.targetLevelMin, m.targetLevelMax) : null;
   const genderLabel = m.gender === 'WOMEN' ? 'Féminine' : m.gender === 'MIXED' ? 'Mixte' : null;
   const when = formatDateShortTimeRange(m.startTime, m.endTime, m.club.timezone);
+  // Date et heure sur 2 lignes distinctes (nowrap chacune) → hauteur de carte CONSTANTE,
+  // que le libellé soit court ou long. Un seul champ `when` laissait l'heure passer à la
+  // ligne selon la longueur du texte → cartes de hauteurs différentes qui « sautent ».
+  const dateLabel = formatDateShort(m.startTime, m.club.timezone);
+  const timeLabel = formatHourRange(m.startTime, m.endTime, m.club.timezone);
   return (
     <a
       href={clubUrl(m.club.slug, `/parties/${m.id}`)}
@@ -60,7 +65,8 @@ export function NationalMatchCard({
       </div>
 
       <div>
-        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text }}>{when}</div>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{dateLabel}</div>
+        <div style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 18, letterSpacing: -0.2, color: th.text, whiteSpace: 'nowrap' }}>{timeLabel}</div>
         <div style={{ fontFamily: th.fontUI, fontSize: 12.5, color: th.textMute, marginTop: 3 }}>
           {m.resourceName} · {level ?? 'Tous niveaux'}{genderLabel ? ` · ${genderLabel}` : ''}
         </div>
@@ -90,7 +96,11 @@ export function NationalMatchCard({
         </span>
       </div>
 
+      {/* marginTop:auto → le CTA descend en bas quand la carte est étirée (align-items:stretch
+          de l'étagère) : les boutons « Rejoindre » d'une même rangée s'alignent, même si une
+          carte est plus haute (méta sur 2 lignes). Cartes non étirées : aucun effet. */}
       <span style={{
+        marginTop: 'auto',
         textAlign: 'center', borderRadius: 11, padding: '10px 12px',
         fontFamily: th.fontUI, fontSize: 13.5, fontWeight: 700,
         background: th.accent, color: th.onAccent,
