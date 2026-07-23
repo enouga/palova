@@ -7,14 +7,14 @@ import { MemberHistory, UpdateMemberBody } from '@/lib/api';
 
 export interface ProfileDraft {
   firstName: string; lastName: string; phone: string; address: string; postalCode: string; city: string;
-  birthDate: string; sex: 'MALE' | 'FEMALE' | ''; membershipNo: string;
+  birthDate: string; sex: 'MALE' | 'FEMALE' | ''; membershipNo: string; note: string;
 }
 
 export function draftFromMember(m: MemberHistory['member']): ProfileDraft {
   return {
     firstName: m.firstName, lastName: m.lastName, phone: m.phone ?? '',
     address: m.address ?? '', postalCode: m.postalCode ?? '', city: m.city ?? '',
-    birthDate: m.birthDate ?? '', sex: m.sex ?? '', membershipNo: m.membershipNo ?? '',
+    birthDate: m.birthDate ?? '', sex: m.sex ?? '', membershipNo: m.membershipNo ?? '', note: m.note ?? '',
   };
 }
 
@@ -24,6 +24,7 @@ export function bodyFromDraft(d: ProfileDraft): UpdateMemberBody {
     phone: d.phone.trim() || null, address: d.address.trim() || null,
     postalCode: d.postalCode.trim() || null, city: d.city.trim() || null,
     birthDate: d.birthDate || null, sex: d.sex || null, membershipNo: d.membershipNo.trim() || null,
+    note: d.note.trim() || null,
   };
 }
 
@@ -66,6 +67,7 @@ export function MemberProfileCard({ member, onSave, error }: {
         </div>
       </div>
       <span style={label}>N° licence / adhérent</span><input aria-label="N° licence / adhérent" value={draft.membershipNo} onChange={(e) => set('membershipNo', e.target.value)} style={input} />
+      <span style={label}>Note</span><textarea aria-label="Note" value={draft.note} onChange={(e) => set('note', e.target.value)} rows={2} style={{ ...input, resize: 'vertical' }} />
       <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 8 }}>L&apos;email ({member.email}) ne peut être modifié que par le joueur.</div>
       <button onClick={save} disabled={busy} style={{ width: '100%', border: 'none', cursor: busy ? 'default' : 'pointer', borderRadius: 11, padding: 11, marginTop: 10, fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, background: th.accent, color: th.onAccent, opacity: busy ? 0.5 : 1 }}>
         {busy ? 'Enregistrement…' : 'Enregistrer'}

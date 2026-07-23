@@ -413,6 +413,19 @@ it('cockpit : profil pré-rempli et enregistrement via adminUpdateMember', async
     'club-1', 'mb1', expect.objectContaining({ address: '1 avenue du Club', city: 'Toulouse' }), 'tok'));
 });
 
+it('cockpit : la note libre du membre (ClubMembership.note) est pré-remplie et enregistrée', async () => {
+  (api.adminGetMemberHistory as jest.Mock).mockResolvedValue({
+    ...HISTORY, member: { ...HISTORY.member, note: 'Client fidèle, préfère le court 1.' },
+  });
+  renderPage();
+  const noteField = await screen.findByLabelText('Note');
+  expect(noteField).toHaveValue('Client fidèle, préfère le court 1.');
+  fireEvent.change(noteField, { target: { value: 'Client fidèle, allergique aux tickets CE.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(api.adminUpdateMember).toHaveBeenCalledWith(
+    'club-1', 'mb1', expect.objectContaining({ note: 'Client fidèle, allergique aux tickets CE.' }), 'tok'));
+});
+
 // ───────────────────────── Bandeau d'alertes ─────────────────────────
 
 it("bandeau d'alertes : reste dû + abonnement qui expire", async () => {
