@@ -33,7 +33,8 @@ export function MemberWalletCard({ data, onSubAction, onPkgAction }: {
           <div key={b.id} style={line}>
             <span>{b.name}</span>
             <span><b>{b.kind === 'ENTRIES' ? `${b.creditsRemaining ?? 0} rest.` : `${b.amountRemaining ?? '0.00'} €`}</b>
-              {' '}<button style={ghost} onClick={() => onPkgAction('recharge', b)}>Recharger</button></span>
+              {' '}<button style={ghost} onClick={() => onPkgAction('recharge', b)}>Recharger</button>
+              {' '}<button style={ghost} onClick={() => onPkgAction('adjust', b)}>Ajuster</button></span>
           </div>
         ))}
       </div>

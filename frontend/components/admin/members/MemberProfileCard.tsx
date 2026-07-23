@@ -65,7 +65,7 @@ export function MemberProfileCard({ member, onSave, error }: {
           </select>
         </div>
       </div>
-      <span style={label}>N° licence / adhérent</span><input aria-label="N° adhérent" value={draft.membershipNo} onChange={(e) => set('membershipNo', e.target.value)} style={input} />
+      <span style={label}>N° licence / adhérent</span><input aria-label="N° licence / adhérent" value={draft.membershipNo} onChange={(e) => set('membershipNo', e.target.value)} style={input} />
       <div style={{ fontFamily: th.fontUI, fontSize: 11.5, color: th.textFaint, marginTop: 8 }}>L&apos;email ({member.email}) ne peut être modifié que par le joueur.</div>
       <button onClick={save} disabled={busy} style={{ width: '100%', border: 'none', cursor: busy ? 'default' : 'pointer', borderRadius: 11, padding: 11, marginTop: 10, fontFamily: th.fontUI, fontSize: 14, fontWeight: 700, background: th.accent, color: th.onAccent, opacity: busy ? 0.5 : 1 }}>
         {busy ? 'Enregistrement…' : 'Enregistrer'}

@@ -33,19 +33,26 @@ export function MemberAccessCard({ member, viewer, canManageStaff, onSetRole, on
   const canEditRole = canManageStaff && viewer != null && member.staffRole !== 'OWNER' && member.userId !== viewer.userId;
   const ghost: CSSProperties = { border: `1px solid ${th.line}`, background: 'transparent', cursor: 'pointer', borderRadius: 10, padding: '9px 13px', fontFamily: th.fontUI, fontSize: 13, fontWeight: 600, color: th.textMute };
   const check: CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontFamily: th.fontUI, fontSize: 14, color: th.text };
+  // Même style que le label de MemberProfileCard.tsx (petites capitales, teinte mute).
+  const label: CSSProperties = { fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, color: th.textMute, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', margin: '10px 0 4px' };
 
   return (
     <section aria-label="Rôle et accès" style={{ background: th.surface, borderRadius: 18, padding: 18, boxShadow: th.shadow, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <h2 style={{ fontFamily: th.fontDisplay, fontWeight: 600, fontSize: 16, margin: 0, color: th.text }}>Rôle &amp; accès</h2>
-      {canManageStaff && (canEditRole ? (
-        <>
-          <Segmented<RoleSeg> value={toSeg(member.staffRole)} onChange={(s) => onSetRole(fromSeg(s))}
-            options={[{ value: 'NONE', label: 'Membre' }, { value: 'STAFF', label: 'Staff' }, { value: 'ADMIN', label: 'Admin' }]} />
-          <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{ROLE_HINT[toSeg(member.staffRole)]}</span>
-        </>
-      ) : (
-        <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text }}>{member.staffRole ? STAFF_LABEL[member.staffRole] : 'Membre'}</span>
-      ))}
+      {canManageStaff && (
+        <div role="group" aria-label={`Rôle de ${member.firstName} ${member.lastName}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={label}>Rôle</span>
+          {canEditRole ? (
+            <>
+              <Segmented<RoleSeg> value={toSeg(member.staffRole)} onChange={(s) => onSetRole(fromSeg(s))}
+                options={[{ value: 'NONE', label: 'Membre' }, { value: 'STAFF', label: 'Staff' }, { value: 'ADMIN', label: 'Admin' }]} />
+              <span style={{ fontFamily: th.fontUI, fontSize: 12, color: th.textMute }}>{ROLE_HINT[toSeg(member.staffRole)]}</span>
+            </>
+          ) : (
+            <span style={{ fontFamily: th.fontUI, fontSize: 14, fontWeight: 600, color: th.text }}>{member.staffRole ? STAFF_LABEL[member.staffRole] : 'Membre'}</span>
+          )}
+        </div>
+      )}
       {canManageStaff && (
         <>
           <label style={check}><input type="checkbox" checked={member.isCoach} onChange={(e) => onSetCoach(e.target.checked)} style={{ width: 18, height: 18, accentColor: th.accent }} /> Coach — anime des cours</label>
