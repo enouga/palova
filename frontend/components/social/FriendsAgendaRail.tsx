@@ -26,7 +26,9 @@ export function FriendsAgendaRail({ items, timezone }: { items: FriendsAgendaIte
     <section aria-label="Ça joue bientôt">
       <SectionHeader title="Ça joue bientôt" count={count} />
       <div style={{ position: 'relative', margin: '0 -20px' }}>
-        <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '4px 20px 8px', scrollSnapType: 'x proximity' }}>
+        {/* scrollPaddingLeft = padding-left : sans lui, le snap cale la 1re carte sur le bord du
+            snapport dès le montage et mange le padding → carte tronquée + flèche gauche fantôme. */}
+        <div ref={railRef} className="sp-scroll-x" style={{ display: 'flex', gap: 10, padding: '4px 20px 8px', scrollSnapType: 'x proximity', scrollPaddingLeft: 20 }}>
           {items.map((it) => (
             <button key={`${it.kind}-${it.id}`} type="button" onClick={() => router.push(HREF[it.kind](it.id))}
               style={{ ...cardStyle(th), scrollSnapAlign: 'start', flex: '0 0 auto', width: 190,
